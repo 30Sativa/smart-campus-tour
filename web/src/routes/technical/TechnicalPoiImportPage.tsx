@@ -57,7 +57,7 @@ export default function TechnicalPoiImportPage() {
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="POI" title="Kiểm chứng POI" description="Ghi kết quả kiểm tra tại chỗ cho POI Staff đã gửi, gắn với đúng revision và version map. Đây là bằng chứng người kiểm tra nhập, không phải dữ liệu robot tự gửi." />
+      <PageHeader eyebrow="POI" title="Kiểm chứng POI" description="Ghi kết quả kiểm tra tại chỗ cho POI Staff đã gửi, gắn với đúng phiên bản POI và phiên bản bản đồ. Đây là bằng chứng người kiểm tra nhập, không phải dữ liệu robot tự gửi." />
 
       {!proposals.isPending && !proposals.error && (
         <div className="mb-3">
@@ -70,7 +70,7 @@ export default function TechnicalPoiImportPage() {
       )}
 
       <section className={panelClass} aria-label="Danh sách kiểm chứng POI">
-        <PanelHead title={filterText[filter].title} description="Nạp trực tiếp từ backend. POI nhập từ tệp có verified: false cũng nằm trong hàng chờ này." />
+        <PanelHead title={filterText[filter].title} description="POI nhập từ tệp mà chưa được kiểm tra thực tế cũng nằm trong hàng chờ này." />
         {filter !== 'pending' && allProposals.isError && <div role="alert" className="space-y-2 border-b border-[#eef1f4] p-4 text-[13px] text-[#b23e31]"><p>{errorText(allProposals.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void allProposals.refetch()}>Tải lại danh sách POI</button></div>}
         {proposals.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p> : proposals.error ? <p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(proposals.error)}</p> : (
           <div className="relative overflow-x-auto">
@@ -92,8 +92,8 @@ export default function TechnicalPoiImportPage() {
       </section>
 
       {viewing && <PoiDetailModal row={viewing} mapName={mapName(viewing.revision.mapKey)} onClose={() => setViewing(null)} onRecord={() => { setViewing(null); setSelected(viewing) }} />}
-      {selected?.recordable && <VerifyModal key={selected.proposalId} proposal={selected} onClose={() => setSelected(null)} />}
-      {selected && !selected.recordable && <PoiResultModal key={selected.proposalId} proposalId={selected.proposalId} revision={selected.revision} onClose={() => setSelected(null)} />}
+      {selected?.recordable && <VerifyModal key={selected.proposalId} proposal={selected} mapName={mapName(selected.revision.mapKey)} onClose={() => setSelected(null)} />}
+      {selected && !selected.recordable && <PoiResultModal key={selected.proposalId} proposalId={selected.proposalId} revision={selected.revision} mapName={mapName(selected.revision.mapKey)} onClose={() => setSelected(null)} />}
     </TechnicalPage>
   )
 }
@@ -130,7 +130,7 @@ function PoiDetailModal({ row, mapName, onClose, onRecord }: { row: PoiRow; mapN
   )
 }
 
-function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem; onClose: () => void }) {
+function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerificationQueueItem; mapName: string; onClose: () => void }) {
   const verify = useVerifyPoi()
   const robots = usePhysicalRobots()
   const [robotCode, setRobotCode] = useState('')
@@ -185,7 +185,7 @@ function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem
   }
 
   return (
-    <Modal open size="lg" title={`Kiểm tra ${revision.name}`} description={`${revision.mapKey}, revision ${revision.revisionNumber} · camera ${revision.cameraPreset}. Đạt khi cả bốn kiểm tra đều đạt.`} onClose={onClose}
+    <Modal open size="lg" title={`Kiểm tra ${revision.name}`} description={`${mapName}, phiên bản POI ${revision.revisionNumber}, camera ${cameraPresetLabel[revision.cameraPreset] ?? revision.cameraPreset}. Đạt khi cả bốn kiểm tra đều đạt.`} onClose={onClose}
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="poi-verify-form" className="space-y-3.5" onSubmit={submit}>
         <div>
@@ -193,7 +193,7 @@ function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
           {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {revision.mapKey}. Ghi kiểm tra triển khai đạt ở trang Quản lý bản đồ rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
-        <ResultToggle id="verify-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này, sửa POI và gửi lại revision mới." />
+        <ResultToggle id="verify-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này, sửa POI và gửi lại phiên bản mới." />
         <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm"><p className="font-medium">Nội dung thuyết minh, chỉ đọc</p><p className="mt-1 whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</p>{revision.fallbackVideoUrl && <p className="mt-2 break-all text-xs text-[#64748b]">Video dự phòng: {revision.fallbackVideoUrl}</p>}</div>
         <div className="space-y-2">
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
@@ -203,13 +203,13 @@ function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem
         {resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="verify-reason">Lý do không đạt</label><input id="verify-reason" aria-invalid={Boolean(errors.reason)} className={`${inputClass} mt-1`} required maxLength={1000} value={reason} onChange={(event) => { setReason(event.target.value); changed() }} />{errors.reason && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.reason}</p>}</div>}
         <div><label className={labelClass} htmlFor="verify-evidence">Ghi chú bằng chứng</label><textarea id="verify-evidence" rows={3} aria-invalid={Boolean(errors.evidenceNote)} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={(event) => { setEvidence(event.target.value); changed() }} />{errors.evidenceNote && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.evidenceNote}</p>}</div>
         {errors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errors.form}</p>}
-        <Note>Bản ghi gắn với revision {revision.revisionNumber}. Nếu Staff sửa POI trong lúc bạn kiểm tra, máy chủ sẽ từ chối và bạn cần mở lại.</Note>
+        <Note>Bản ghi gắn với phiên bản POI {revision.revisionNumber}. Nếu Staff sửa POI trong lúc bạn kiểm tra, máy chủ sẽ từ chối và bạn cần mở lại.</Note>
       </form>
     </Modal>
   )
 }
 
-function PoiResultModal({ proposalId, revision, onClose }: { proposalId: string; revision: PoiRevision; onClose: () => void }) {
+function PoiResultModal({ proposalId, revision, mapName, onClose }: { proposalId: string; revision: PoiRevision; mapName: string; onClose: () => void }) {
   const history = usePoiHistory(proposalId)
   const records = [...(history.data?.verificationRecords ?? [])].sort((a, b) => b.checkedAt.localeCompare(a.checkedAt))
   const observations = (record: (typeof records)[number]) => [
@@ -219,7 +219,7 @@ function PoiResultModal({ proposalId, revision, onClose }: { proposalId: string;
     { label: 'Camera preset được xác nhận', passed: record.cameraPresetConfirmed },
   ]
   return (
-    <Modal open size="lg" title={`Kết quả ${revision.name}`} description={`${revision.mapKey}, revision ${revision.revisionNumber} · camera ${revision.cameraPreset}.`} onClose={onClose}
+    <Modal open size="lg" title={`Kết quả ${revision.name}`} description={`${mapName}, phiên bản POI ${revision.revisionNumber}, camera ${cameraPresetLabel[revision.cameraPreset] ?? revision.cameraPreset}.`} onClose={onClose}
       footer={<div className="flex justify-end"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button></div>}>
       <div className="space-y-3">
         {history.isPending && <p role="status" className="text-sm text-[#64748b]">Đang tải kết quả…</p>}
@@ -227,8 +227,8 @@ function PoiResultModal({ proposalId, revision, onClose }: { proposalId: string;
         {records.map(record => {
           const effective = record.proposalRevisionId === revision.verificationSourceRevisionId
           return (
-            <section key={record.id} aria-label={`Kết quả revision ${record.revisionNumber}`} className="rounded-lg border border-[#e2e8f0] p-3 text-[13px] text-[#334155]">
-              <div className="flex flex-wrap items-center gap-2"><ToneBadge tone={record.resultCode === 'PASS' ? 'ok' : 'danger'}>{record.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'}</ToneBadge><span className="font-semibold text-[#0f172a]">Revision {record.revisionNumber}</span><ToneBadge tone="muted">{verificationMethodLabel[record.verificationMethod] ?? record.verificationMethod}</ToneBadge>{effective && <ToneBadge tone="info">Đang áp dụng</ToneBadge>}</div>
+            <section key={record.id} aria-label={`Kết quả phiên bản ${record.revisionNumber}`} className="rounded-lg border border-[#e2e8f0] p-3 text-[13px] text-[#334155]">
+              <div className="flex flex-wrap items-center gap-2"><ToneBadge tone={record.resultCode === 'PASS' ? 'ok' : 'danger'}>{record.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'}</ToneBadge><span className="font-semibold text-[#0f172a]">Phiên bản {record.revisionNumber}</span><ToneBadge tone="muted">{verificationMethodLabel[record.verificationMethod] ?? record.verificationMethod}</ToneBadge>{effective && <ToneBadge tone="info">Đang áp dụng</ToneBadge>}</div>
               <p className="mt-1.5 text-xs text-[#64748b]">Robot <span className="font-mono">{record.robotCode}</span> · {stamp(record.checkedAt)}</p>
               {record.verificationMethod === 'POSE_CAPTURE'
                 ? <p className="mt-2 text-xs">Pose được ghi từ robot khi đang ở đúng điểm. Không có quan sát tới nơi, dừng, localization hay camera.{record.sourceFileSha256 && <span className="mt-0.5 block break-all font-mono text-[11px] text-[#64748b]">SHA-256 {record.sourceFileSha256}</span>}</p>
@@ -238,8 +238,8 @@ function PoiResultModal({ proposalId, revision, onClose }: { proposalId: string;
             </section>
           )
         })}
-        {revision.verificationSourceRevisionId && revision.verificationSourceRevisionId !== revision.id && <Note>Revision {revision.revisionNumber} chỉ đổi nội dung nên giữ kết quả của revision đã kiểm chứng.</Note>}
-        <Note>Kết quả đã ghi không sửa hay thu hồi được. Muốn kiểm tra lại, Staff tạo revision mới đổi vị trí, hướng, camera hoặc map rồi gửi lại, POI sẽ quay về Chờ kiểm chứng.</Note>
+        {revision.verificationSourceRevisionId && revision.verificationSourceRevisionId !== revision.id && <Note>Phiên bản {revision.revisionNumber} chỉ đổi nội dung nên giữ kết quả của phiên bản đã kiểm chứng.</Note>}
+        <Note>Kết quả đã ghi không sửa hay thu hồi được. Muốn kiểm tra lại, Staff tạo phiên bản mới đổi vị trí, hướng, camera hoặc bản đồ rồi gửi lại, POI sẽ quay về Chờ kiểm chứng.</Note>
       </div>
     </Modal>
   )

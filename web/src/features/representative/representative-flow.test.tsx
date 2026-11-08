@@ -134,6 +134,31 @@ describe('Representative real HTTP contract', () => {
     expect(screen.getByRole('button', { name: 'Sửa và gửi lại' })).toBeDisabled()
     expect(screen.queryByRole('link', { name: 'Sửa và gửi lại' })).toBeNull()
   })
+  const systemCancel = 'Không bắt đầu trong khung giờ, hệ thống tự huỷ.'
+  const friendlyCancel = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Nhà trường sẽ liên hệ nếu sắp xếp lại.'
+
+  it('shows a cancelled Tour as cancelled, with no actions, deadline or lock message', async () => {
+    registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: systemCancel }
+    registration.allowedActions = { edit: { allowed: false, reason: 'Tour đã khóa đăng ký' }, resubmit: { allowed: false, reason: 'Tour đã khóa đăng ký' }, cancel: { allowed: false, reason: 'Tour đã khóa đăng ký' } }
+    renderAt('/dai-dien/dang-ky/registration')
+    expect(await screen.findByText('Buổi tham quan đã bị huỷ')).toBeInTheDocument()
+    expect(screen.getAllByText(friendlyCancel).length).toBeGreaterThan(0)
+    expect(screen.queryByText(systemCancel)).toBeNull()
+    expect(screen.queryByText('Hạn đăng ký và thêm dòng')).toBeNull()
+    expect(screen.queryByText('Tour đã khóa đăng ký')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Hủy đăng ký' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Sửa/ })).toBeNull()
+    expect(screen.queryByRole('link', { name: /Sửa/ })).toBeNull()
+    expect(screen.getAllByRole('link', { name: 'Xem buổi tham quan' }).some(link => link.getAttribute('href') === '/dai-dien/buoi/tour')).toBe(true)
+  })
+
+  it('keeps the update time away from the cancel reason on the overview', async () => {
+    registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: systemCancel }
+    renderAt('/dai-dien')
+    expect((await screen.findAllByText(friendlyCancel)).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/^Cập nhật/)).toBeNull()
+  })
+
   it('shows a registration error instead of an infinite loading skeleton', async () => {
     missingRegistration = true
     renderAt('/dai-dien/dang-ky/registration/sua')

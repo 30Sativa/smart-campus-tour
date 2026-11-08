@@ -47,7 +47,7 @@ export default function TechnicalConfirmationsPage() {
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="Tuyến" title="Xác nhận toàn tuyến" description="Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Đây là bằng chứng người kiểm tra nhập, không chứng minh robot đã chạy thật và không tự làm tuyến READY." />
+      <PageHeader eyebrow="Tuyến" title="Xác nhận toàn tuyến" description="Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Đây là bằng chứng người kiểm tra nhập, không chứng minh robot đã chạy thật và không tự cho phép tạo Tour." />
 
       {!queue.isPending && !queue.error && (
         <div className="mb-3">
@@ -85,7 +85,7 @@ export default function TechnicalConfirmationsPage() {
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <Note tone="danger"><b>Thay đổi ảnh hưởng di chuyển</b> (thêm, bớt, đổi thứ tự điểm dừng, đổi map) không thừa hưởng xác nhận cũ.</Note>
-        <Note tone="ok"><b>Chỉ sửa thuyết minh</b> thì giữ xác nhận, không cần chạy lại navigation.</Note>
+        <Note tone="ok"><b>Chỉ sửa thuyết minh</b> thì giữ xác nhận, không cần chạy lại đường đi.</Note>
       </div>
 
       {dialog?.view === 'record' && <RecordRouteTestModal key={dialog.route.revisionId} route={dialog.route} onClose={() => setDialog(null)} />}

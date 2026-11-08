@@ -1,3 +1,4 @@
+import { roleLabel } from '../../../../auth/roles'
 import { formatStamp } from '../../admin-format'
 import { AdminStatusBadge } from '../../AdminUi'
 import { buttonClass, rowClass, tdClass, thClass } from '../../../../components/ui/ui-classes'
@@ -46,7 +47,7 @@ function SortHeading({ field, label, sort, onSort }: {
 }
 
 function RoleValue({ role }: { role: AccountListItem['role'] }) {
-  return role === null ? <AdminStatusBadge status="invalid-role" /> : <span className="inline-flex rounded-full border border-[#cfe1fb] bg-[#eef5ff] px-2 py-px text-[11px] font-bold whitespace-nowrap text-[#2f62b8]">{role === 'TechnicalStaff' ? 'Technical Staff' : role}</span>
+  return role === null ? <AdminStatusBadge status="invalid-role" /> : <span className="inline-flex rounded-full border border-[#cfe1fb] bg-[#eef5ff] px-2 py-px text-[11px] font-bold whitespace-nowrap text-[#2f62b8]">{roleLabel(role)}</span>
 }
 
 function AccountAction({ account, onAction, onEdit }: { account: AccountListItem; onAction: AccountTableProps['onLifecycleAction']; onEdit: AccountTableProps['onEdit'] }) {

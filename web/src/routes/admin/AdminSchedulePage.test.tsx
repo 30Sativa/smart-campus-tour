@@ -64,6 +64,17 @@ describe('Admin operating calendar', () => {
     expect(screen.getByRole('button', { name: 'Khoá cả ngày 2099-01-07' })).toBeInTheDocument()
   })
 
+  it('marks a shift that already ended today as past, keeps later shifts and the day closable', async () => {
+    // Monday 11:00 in Vietnam: Ca sáng ended at 10:00, Ca chiều 1 has not started.
+    vi.setSystemTime(new Date('2099-01-05T04:00:00Z'))
+    show()
+    await screen.findByRole('table', { name: 'Lịch vận hành' })
+    expect(screen.queryByRole('button', { name: 'Khoá Ca sáng 2099-01-05' })).not.toBeInTheDocument()
+    expect(screen.getAllByText('Đã qua')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Khoá Ca chiều 1 2099-01-05' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Khoá cả ngày 2099-01-05' })).toBeInTheDocument()
+  })
+
   it('closes one shift with a required reason', async () => {
     show()
     await screen.findByRole('table', { name: 'Lịch vận hành' })

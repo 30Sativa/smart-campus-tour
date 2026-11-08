@@ -75,6 +75,8 @@ describe('Admin Account Management', () => {
 
     expect(await screen.findByRole('heading', { name: 'Quản lý tài khoản' })).toBeInTheDocument()
     expect((await screen.findAllByText('staff.user')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Nhân viên vận hành').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Staff', { selector: 'span' })).toBeNull()
     expect(requestExists(fetchMock, (url) => url.pathname === '/api/admin/accounts' && url.searchParams.get('page') === '1' && url.searchParams.get('size') === '20')).toBe(true)
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm tài khoản' }), { target: { value: 'Nguyen' } })

@@ -52,7 +52,8 @@ export default function AdminSchedulePage() {
     else create.mutate({ requestId: requestId(`close:${target.date}:${target.shift?.code ?? ''}:${reason.trim()}`), date: target.date, shiftCode: target.shift?.code ?? null, reason: reason.trim() }, done)
   }
   const columns = shifts.data?.days[0]?.shifts ?? []
-  const today = campusDay(new Date())
+  const now = new Date()
+  const today = campusDay(now)
 
   return <AdminPage>
     <PageHeader eyebrow="Cấu hình" title="Lịch vận hành" description="Khoá cả ngày hoặc một ca khi nghỉ lễ, bảo trì. Staff không tạo được Tour vào ca bị khoá và thấy lý do trên Lịch Tour." />
@@ -80,7 +81,7 @@ export default function AdminSchedulePage() {
               {day.shifts.map(shift => <td key={shift.code} className={tdClass}>
                 {dayBlock ? <span className="text-xs text-[#64748b]">Khoá theo ngày</span>
                   : shift.block ? <Closed reason={shift.block.reason} label={`Gỡ khoá ${shift.name} ${day.date}`} onRemove={() => open({ kind: 'remove', date: day.date, shift, block: shift.block! })} />
-                  : past ? <PastDay />
+                  : past || new Date(shift.endsAt) <= now ? <PastDay />
                   : <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Khoá ${shift.name} ${day.date}`} onClick={() => open({ kind: 'close', date: day.date, shift })}><Lock size={13} aria-hidden="true" />Khoá ca</button>}
               </td>)}
               <td className={tdClass}>

@@ -43,8 +43,9 @@ const ENTITY_LABELS: Record<string, string> = {
   Invitation: 'Lời mời', Route: 'Tuyến', RouteRevision: 'Phiên bản tuyến', Poi: 'POI', PoiProposal: 'POI', PoiProposalRevision: 'Phiên bản POI',
   MapVersion: 'Bản đồ', Robot: 'Robot', PoiImport: 'Nhập POI', TourScheduleBlock: 'Khoá lịch',
 }
-const RESULT_LABELS: Record<string, { label: string; tone: 'ok' | 'danger' | 'muted' }> = {
+const RESULT_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'danger' | 'muted' }> = {
   SUCCESS: { label: 'Thành công', tone: 'ok' }, PASS: { label: 'Đạt', tone: 'ok' }, FAIL: { label: 'Không đạt', tone: 'danger' },
+  SYSTEM_NO_START: { label: 'Tự huỷ: không bắt đầu đúng giờ', tone: 'warn' },
   DRAFT: { label: 'Bản nháp', tone: 'muted' }, SUBMITTED: { label: 'Đã gửi', tone: 'muted' }, IMPORTED: { label: 'Đã nhập', tone: 'ok' },
 }
 
