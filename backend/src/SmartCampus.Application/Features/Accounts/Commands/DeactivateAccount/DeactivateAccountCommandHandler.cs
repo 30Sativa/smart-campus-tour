@@ -1,3 +1,4 @@
+using System.Globalization;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
@@ -21,6 +22,12 @@ public sealed class DeactivateAccountCommandHandler(
         if (!user.IsActive)
             return Unit.Value;
 
+        // Under the User root lock an Operator change also takes, so a new assignment cannot slip past this check.
+        var usages = await accountRepository.ListAccountUsageAsync(user.Id, cancellationToken);
+        if (usages.Count > 0)
+            throw new ConflictException("Chưa vô hiệu hóa được vì tài khoản này còn được dùng ở các mục dưới đây.", "ACCOUNT_IN_USE",
+                blockers: usages.Select(Blocker).ToArray());
+
         var now = timeProvider.GetUtcNow();
         user.IsActive = false;
         user.UpdatedAt = now;
@@ -40,5 +47,13 @@ public sealed class DeactivateAccountCommandHandler(
         });
 
         return Unit.Value;
+    }
+
+    private static ConflictBlocker Blocker(AccountUsage usage)
+    {
+        var at = usage.ScheduledStartAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+        return usage.IsOperator
+            ? new("TOUR_OPERATOR", $"Đang vận hành Tour {usage.TourName} lúc {at}. Staff cần đổi người vận hành hoặc huỷ Tour này trước.")
+            : new("ACTIVE_REGISTRATION", $"Đoàn {usage.GroupName} còn đăng ký Tour {usage.TourName} lúc {at}. Đại diện cần huỷ đăng ký hoặc chờ Tour kết thúc.");
     }
 }

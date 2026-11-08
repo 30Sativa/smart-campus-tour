@@ -23,6 +23,8 @@ using SmartCampus.Application.Features.Tours.Commands.ReopenTour;
 using SmartCampus.Application.Features.Tours.Commands.RetryTourLeg;
 using SmartCampus.Application.Features.Tours.Commands.StartTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
+using SmartCampus.Application.Features.Tours.Commands.ChangeTourCapacity;
+using SmartCampus.Application.Features.Tours.Commands.ChangeTourOperator;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
@@ -88,6 +90,14 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTourRequest request, CancellationToken ct) =>
         Success(await sender.Send(new UpdateTourCommand(id, User.GetRequiredUserId(), request), ct), "Tour updated.");
+
+    [HttpPost("{id:guid}/capacity")]
+    public async Task<IActionResult> ChangeCapacity(Guid id, [FromBody] ChangeTourCapacityRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new ChangeTourCapacityCommand(id, User.GetRequiredUserId(), request), ct), "Tour capacity changed.");
+
+    [HttpPost("{id:guid}/operator")]
+    public async Task<IActionResult> ChangeOperator(Guid id, [FromBody] ChangeTourOperatorRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new ChangeTourOperatorCommand(id, User.GetRequiredUserId(), request), ct), "Tour operator changed.");
 
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelTourRequest request, CancellationToken ct) =>

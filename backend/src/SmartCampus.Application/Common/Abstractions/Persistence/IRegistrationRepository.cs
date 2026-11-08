@@ -21,6 +21,8 @@ public interface IRegistrationRepository
     Task<Guid?> FindSubmissionAsync(Guid owner, Guid tour, Guid key, CancellationToken ct);
     Task<bool> HasRegistrationForRepresentativeTourAsync(Guid owner, Guid tour, CancellationToken ct);
     Task<bool> HasPendingDecisionsAsync(Guid tour, CancellationToken ct);
+    /// <summary>Active PENDING and ACCEPTED rows of the Tour (BR-26); caller holds the Tour root lock.</summary>
+    Task<int> CountHeldSeatsAsync(Guid tour, Guid? excludingRegistration, CancellationToken ct);
     Task<AuditLog?> FindMutationAsync(Guid tour, Guid requestId, CancellationToken ct);
     Task<AuditLog?> FindEmailCorrectionAsync(Guid tour, Guid requestId, CancellationToken ct);
     Task<bool> HasLaterEmailCorrectionAsync(Guid tour, Guid row, long receiptId, CancellationToken ct);

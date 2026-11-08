@@ -1133,6 +1133,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.RowVersion)
                 .IsRowVersion()
                 .IsConcurrencyToken();
+            entity.Property(e => e.Capacity).HasDefaultValue(20);
             entity.Property(e => e.ScheduledStartAt).HasPrecision(3);
             entity.Property(e => e.StartedAt).HasPrecision(3);
             entity.Property(e => e.State)

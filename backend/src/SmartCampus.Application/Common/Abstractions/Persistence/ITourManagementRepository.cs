@@ -60,6 +60,14 @@ public interface ITourManagementRepository
     /// reservation's EndsAt, never before ScheduledStartAt + startLateLimit, which alone applies without a reservation.
     /// </summary>
     Task<IReadOnlyList<Guid>> ListOverdueUnstartedTourIdsAsync(DateTimeOffset now, TimeSpan startLateLimit, CancellationToken ct);
+    /// <summary>SCHEDULED/READY Tours past T-24h that still hold an undecided row or email change, unlocked, soonest first (BR-05).</summary>
+    Task<IReadOnlyList<Guid>> ListToursWithExpirableDecisionsAsync(DateTimeOffset expiresAtOrBefore, CancellationToken ct);
+    /// <summary>Tracked active PENDING rows of the Tour; caller holds the Tour root lock.</summary>
+    Task<IReadOnlyList<RosterRow>> LoadPendingRowsAsync(Guid tourId, CancellationToken ct);
+    /// <summary>Tracked PENDING email changes of the Tour's active rows, with their row; caller holds the Tour root lock.</summary>
+    Task<IReadOnlyList<RosterEmailChangeRequest>> LoadPendingEmailChangesAsync(Guid tourId, CancellationToken ct);
+    /// <summary>Takes the update lock account deactivation takes, held through commit. Call after the Tour root lock.</summary>
+    Task LockAccountAsync(Guid userId, CancellationToken ct);
     Task MarkRobotNeedsInspectionAsync(Guid robotId, CancellationToken ct);
     /// <summary>Clears the hold only if the robot still has this version; false when it changed.</summary>
     Task<bool> ReleaseInspectionAsync(Guid robotId, byte[] expectedRowVersion, CancellationToken ct);

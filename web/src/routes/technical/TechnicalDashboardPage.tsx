@@ -90,6 +90,7 @@ export default function TechnicalDashboardPage() {
               tone={kpis.disconnectedRobots > 0 ? 'warn' : 'plain'} to="/technical/monitoring" />
             <KpiTile label="Robot chờ kiểm tra tại chỗ" value={kpis.heldForInspectionCount} tone={kpis.heldForInspectionCount > 0 ? 'warn' : 'plain'} to="/technical/robots" />
             <KpiTile label="POI chờ kiểm chứng" value={kpis.pendingPoiVerificationsCount} to="/technical/poi-import" />
+            <KpiTile label="Tuyến cần chạy lại" value={kpis.routeRerunsCount ?? 0} tone={kpis.routeRerunsCount ? 'warn' : 'plain'} to="/technical/confirmations" />
             <KpiTile label="Tuyến chờ chạy thử" value={kpis.pendingRouteTestsCount} note={`${kpis.activeMapVersionsCount} phiên bản bản đồ hợp lệ`} to="/technical/confirmations" />
           </KpiRow>
 

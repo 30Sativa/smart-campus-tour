@@ -183,6 +183,8 @@ public sealed class TechnicalStaffAccountTests
         public void AddRefreshToken(RefreshToken token) { token.User = User!; User!.RefreshTokens.Add(token); }
         public Task<bool> NormalizedUsernameExistsAsync(string username, CancellationToken cancellationToken = default) =>
             Task.FromResult(User?.NormalizedUsername == username);
+        public Task<IReadOnlyList<SmartCampus.Application.Common.Abstractions.Persistence.AccountUsage>> ListAccountUsageAsync(Guid userId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<SmartCampus.Application.Common.Abstractions.Persistence.AccountUsage>>([]);
         public void AddAccount(User user) => User = user;
         public void AddAuditLog(AuditLog audit) => Audit.Add(audit);
         public Task<PagedResult<AccountListEntry>> ListAccountsAsync(string? search, AccountSort sort, int page, int pageSize,

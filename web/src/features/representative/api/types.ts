@@ -10,6 +10,8 @@ export type RepresentativeTour = {
   routeName: string; stops: { order: number; name: string; description: string | null }[]; register: ActionGate
   /** Why Staff cancelled it; null unless the Tour is cancelled. */
   cancelReason?: string | null
+  /** Seats of the Tour (BR-26). An older server omits them. */
+  capacity?: number; remainingSeats?: number
 }
 export type RegistrationSummary = {
   id: string; tourId: string; tourName: string; tourScheduledStartAt: string; tourState: TourState
@@ -22,14 +24,14 @@ export type RegistrationSummary = {
 /** "Đăng ký của tôi" halves: still in play, or ended (cancelled, Tour cancelled, refused with no way back). */
 export type RegistrationGroup = 'active' | 'closed'
 export type RepresentativeRosterRow = RosterRow & {
-  id?: string; rowVersion?: string; participationState?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'REMOVED'
+  id?: string; rowVersion?: string; participationState?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'REMOVED' | 'EXPIRED'
   reviewReason?: string | null; reviewedAt?: string | null; canRequestEmailChange?: boolean
   canRemove?: boolean; invitationRowVersion?: string | null
 }
 export type RegistrationRosterInput = RosterRow & { rowId?: string | null }
 export type RosterEmailChange = {
   id: string; registrationId: string; rowId: string; rowNumber: number; currentEmail: string; proposedEmail: string
-  state: 'PENDING' | 'ACCEPTED' | 'REJECTED'; requestedByUserId: string; createdAt: string
+  state: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED'; requestedByUserId: string; createdAt: string
   reviewedAt: string | null; reviewedByUserId: string | null; reviewReason: string | null
   rowVersion: string; tourRowVersion: string; registrationRowVersion: string; rosterRowVersion: string; canReview: boolean
 }

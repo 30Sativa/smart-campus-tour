@@ -69,6 +69,8 @@ public partial class Tour
 
     public Guid? LastArrivedRevisionStopId { get; set; }
 
+    public int Capacity { get; set; }
+
     public virtual Route ActiveRoute { get; set; } = null!;
 
     public virtual Robot? AssignedRobot { get; set; }

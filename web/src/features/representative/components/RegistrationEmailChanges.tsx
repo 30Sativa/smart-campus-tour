@@ -70,7 +70,7 @@ export function RegistrationEmailChanges({ registration, selectedRow, selectRow,
     {query.data && !query.error && <Panel title="Lịch sử yêu cầu">
       {!query.data.length ? <p className="rep-hint">Chưa có yêu cầu đổi email.</p> : <div className="rep-history">{query.data.map(item => <article key={item.id} className="rep-list-row">
         <h3>Dòng {item.rowNumber}: {item.currentEmail}</h3><p>Email đề xuất: {item.proposedEmail}</p>
-        <p className={`rep-badge rep-badge--${item.state === 'PENDING' ? 'warning' : item.state === 'ACCEPTED' ? 'success' : 'danger'}`}>{item.state === 'PENDING' ? 'Chờ Staff duyệt' : item.state === 'ACCEPTED' ? 'Đã chấp thuận' : 'Bị từ chối'}</p>
+        <p className={`rep-badge rep-badge--${item.state === 'PENDING' ? 'warning' : item.state === 'ACCEPTED' ? 'success' : 'danger'}`}>{item.state === 'PENDING' ? 'Chờ Staff duyệt' : item.state === 'ACCEPTED' ? 'Đã chấp thuận' : item.state === 'EXPIRED' ? 'Đã hết hạn' : 'Bị từ chối'}</p>
         <p className="rep-hint">Yêu cầu lúc {formatDateTime(item.createdAt)}</p>{item.reviewedAt && <p className="rep-hint">Xét duyệt lúc {formatDateTime(item.reviewedAt)}</p>}{item.reviewReason && <p>Lý do: {item.reviewReason}</p>}
       </article>)}</div>}
     </Panel>}

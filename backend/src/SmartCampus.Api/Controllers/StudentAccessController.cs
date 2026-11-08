@@ -30,7 +30,8 @@ public sealed class StudentAccessController(ISender sender, IConfiguration confi
         // Register before dispatch: exception middleware may clear existing headers.
         if (operation == "leave")
             Response.OnStarting(() => { Response.Cookies.Delete(name, options); return Task.CompletedTask; });
-        var result = await sender.Send(new AccessTourCommand(tourId, operation, code, Request.Cookies[name], Request.Cookies[deviceName]), ct);
+        var result = await sender.Send(new AccessTourCommand(tourId, operation, code, Request.Cookies[name], Request.Cookies[deviceName],
+            HttpContext.Connection.RemoteIpAddress?.ToString()), ct);
         if (operation != "leave" && result.Token is not null) {
             options.Expires = result.Info!.InvitationExpiresAt;
             Response.Cookies.Append(name, result.Token, options);

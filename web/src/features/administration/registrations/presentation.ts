@@ -1,6 +1,9 @@
 const timeFormat = new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 export const reviewTime = (value: string) => `${timeFormat.format(new Date(value))} (UTC+7)`
 
+/** T-24h (BR-05): an undecided row expires here. Display only; the server decides. */
+export const pendingExpiresAt = (tourStart: string) => new Date(new Date(tourStart).getTime() - 24 * 3600_000).toISOString()
+
 /** Calendar dates refer to Vietnam time; the server's upper boundary is exclusive. */
 export function dateBoundary(day: string, end = false) {
   if (!day) return undefined

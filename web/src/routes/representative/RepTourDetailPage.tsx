@@ -31,6 +31,7 @@ export default function RepTourDetailPage() {
             { label: 'Thời gian dự kiến', value: formatDateTime(tour.scheduledStartAt) },
             { label: 'Hạn đăng ký', value: formatDateTime(registrationClosesAt(tour.scheduledStartAt).toISOString()) },
             { label: 'Tuyến tham quan', value: tour.routeName },
+            ...(tour.capacity != null && tour.remainingSeats != null ? [{ label: 'Chỗ', value: `Còn ${tour.remainingSeats}/${tour.capacity} chỗ` }] : []),
           ]} />
         </Panel>
         <RouteMap tour={tour} />

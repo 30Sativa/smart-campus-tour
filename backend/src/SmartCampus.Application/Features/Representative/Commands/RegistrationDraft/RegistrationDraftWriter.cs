@@ -62,7 +62,9 @@ internal static class RegistrationDraftWriter
                 existing.DisplayName = row.DisplayName.Trim();
                 existing.Email = RegistrationEmail.Normalize(row.Email);
                 existing.ClassName = string.IsNullOrWhiteSpace(row.ClassName) ? null : row.ClassName.Trim();
-                if (resetRowsForResubmit || changed && existing.ParticipationState == RosterParticipationStates.Rejected)
+                // An expired row stays expired: its decision window is over (BR-05).
+                if (existing.ParticipationState != RosterParticipationStates.Expired &&
+                    (resetRowsForResubmit || changed && existing.ParticipationState == RosterParticipationStates.Rejected))
                 {
                     existing.ParticipationState = RosterParticipationStates.Pending;
                     existing.ReviewedAt = null;

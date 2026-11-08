@@ -8,7 +8,7 @@ export type TourInput = {
 }
 export type CreateTourInput = {
   name: string; description: string | null; routeRevisionId: string; robotCode: string
-  operatorUserId: string; scheduledStartAt: string; fallbackVideoUrl: string | null
+  operatorUserId: string; scheduledStartAt: string; fallbackVideoUrl: string | null; capacity: number
 }
 export type TourOperator = { userId: string; fullName: string; username: string }
 export type TourRobotOption = { robotCode: string; displayName: string | null; usable: boolean; blockReason: string | null }
@@ -19,6 +19,8 @@ export type TourSummary = {
   /** When registration closes, from a server that sends it. Absent otherwise: see `registrationClosesAtOf`. */
   registrationClosesAt?: string | null
   rowVersion: string; registrationCount: number; invitationCount: number; routeRevisionId: string | null
+  /** Seats of the Tour and the rows holding one (BR-26). An older server omits them. */
+  capacity?: number; heldSeats?: number
   /** The active robot hold. Null for a legacy Tour and once a Tour is cancelled. */
   reservation?: TourReservation | null
   /** Read-only run situation from the list query. An older server omits it; then read the detail. */
@@ -47,6 +49,7 @@ export type TourDetails = {
   permissions: {
     canEditMetadata: boolean; canChangeScheduleAndRoute: boolean; canCancel: boolean
     canMarkReady?: boolean; canReopen?: boolean; readyBlockers?: TourBlocker[] | null
+    canChangeCapacity?: boolean; canChangeOperator?: boolean; maxCapacity?: number
   }
   /** The run state; every field but `state` stays null until Start (ADR-0043). */
   execution?: TourExecution | null
@@ -103,6 +106,7 @@ export type TourSlots = {
   routeRevisionId: string; robotCode: string; measuredDurationSeconds: number | null; expectedDurationSeconds: number | null
   days: { date: string; slots: TourSlot[] }[]
   recommendedMaxSeconds: number
+  maxCapacity?: number
 }
 /** A configured shift on one day, for the calendar before a route or robot is chosen. */
 export type TourShift = { code: string; name: string; startsAt: string; endsAt: string; tourStartsAt: string; time: string; maxDurationSeconds: number; block: TourShiftBlock | null }

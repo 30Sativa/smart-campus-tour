@@ -6,6 +6,7 @@ import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../../featu
 import { newRequestId, useTour, useUpdateTour } from '../../../features/administration/tours/hooks'
 import { tourError } from '../../../features/administration/tours/tour-messages'
 import { TourForm } from '../../../features/administration/tours/TourForm'
+import { TourSeatsAndOperatorPanel } from '../../../features/administration/tours/TourSeatsAndOperatorPanel'
 import type { TourInput } from '../../../features/administration/tours/types'
 import { notify } from '../../../components/ui/toast-store'
 
@@ -45,5 +46,6 @@ export default function StaffManageTourEditPage() {
         fixedStops={data.routeRevision?.stops.map(stop => ({ order: stop.stopOrder, name: stop.name, dwellSeconds: stop.dwellSeconds }))}
         scheduleLocked={!data.permissions.canChangeScheduleAndRoute}
         submitLabel="Lưu thay đổi" busy={update.isPending} error={update.isError ? tourError(update.error) : null} cancelTo={back} onSubmit={submit} />}
+    {data && <TourSeatsAndOperatorPanel key={data.tour.rowVersion} detail={data} />}
   </AdminPage>
 }

@@ -284,7 +284,7 @@ public sealed class TourReadySqlTests
         }
 
         public async Task<Guid> CreateTour(DateTimeOffset start) =>
-            (await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new("Tour READY", null, Route.RevisionId, Robot, operatorId, start, null))))).Id;
+            (await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new("Tour READY", null, Route.RevisionId, Robot, operatorId, start, null, 20))))).Id;
 
         public async Task<TResponse> Send<TResponse>(IRequest<TResponse> request)
         {

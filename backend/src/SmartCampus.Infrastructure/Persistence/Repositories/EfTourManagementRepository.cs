@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Models;
+using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Entities;
@@ -25,7 +26,10 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
             t.RobotCommands.Where(c => c.LegId == t.CurrentLegId && c.Kind == RobotCommandKinds.GoTo).Select(c => c.State).FirstOrDefault(),
             t.RobotCommands.Any(c => c.Kind == RobotCommandKinds.GoTo && c.State == RobotCommandStates.Unknown)),
         // The assigned Operator (ADR-0034); a legacy Tour has none. CreatedByUserId is attribution, never this.
-        t.OperatorUser == null ? null : new RouteTestParticipantView(t.OperatorUser.Id, t.OperatorUser.FullName, t.OperatorUser.Username));
+        t.OperatorUser == null ? null : new RouteTestParticipantView(t.OperatorUser.Id, t.OperatorUser.FullName, t.OperatorUser.Username),
+        null, t.Capacity,
+        t.GroupRegistrations.SelectMany(r => r.RosterRows).Count(row => row.IsActive && (row.ParticipationState == RosterParticipationStates.Pending || row.ParticipationState == RosterParticipationStates.Accepted)),
+        t.ScheduledStartAt.AddHours(-TourSchedule.RegistrationCloseHours));
 
     public Task LockRequestAsync(Guid actor, Guid requestId, CancellationToken ct)
     {
@@ -44,7 +48,8 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
             a.Action == TourLifecycleEvents.Ready || a.Action == TourLifecycleEvents.Reopened ||
             a.Action == TourLifecycleEvents.Started || a.Action == TourLifecycleEvents.Next ||
             a.Action == TourLifecycleEvents.EndedEarly || a.Action == TourLifecycleEvents.LegRetried ||
-            a.Action == TourLifecycleEvents.CommandReconciled), ct);
+            a.Action == TourLifecycleEvents.CommandReconciled ||
+            a.Action == TourLifecycleEvents.CapacityChanged || a.Action == TourLifecycleEvents.OperatorChanged), ct);
 
     public async Task<PagedResult<TourSummary>> ListAsync(TourListRequest request, CancellationToken ct)
     {
@@ -166,6 +171,27 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         return candidates.Select(t => (t.Id, HoldEndsAt: TourAutoCancel.HoldEndsAt(t.ScheduledStartAt, t.EndsAt, startLateLimit)))
             .Where(t => t.HoldEndsAt <= now).OrderBy(t => t.HoldEndsAt).ThenBy(t => t.Id).Select(t => t.Id).ToArray();
     }
+
+    public async Task<IReadOnlyList<Guid>> ListToursWithExpirableDecisionsAsync(DateTimeOffset expiresAtOrBefore, CancellationToken ct)
+    {
+        var scheduledBy = expiresAtOrBefore + TourSchedule.PendingDecisionClose;
+        return await db.Tours.AsNoTracking().Where(t => (t.State == "SCHEDULED" || t.State == "READY") && t.ScheduledStartAt <= scheduledBy &&
+                t.GroupRegistrations.SelectMany(r => r.RosterRows).Any(row => row.IsActive &&
+                    (row.ParticipationState == RosterParticipationStates.Pending ||
+                     row.EmailChangeRequests.Any(request => request.State == RosterParticipationStates.Pending))))
+            .OrderBy(t => t.ScheduledStartAt).ThenBy(t => t.Id).Select(t => t.Id).ToArrayAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<RosterRow>> LoadPendingRowsAsync(Guid tourId, CancellationToken ct) =>
+        await db.RosterRows.Where(row => row.Registration.TourId == tourId && row.IsActive &&
+            row.ParticipationState == RosterParticipationStates.Pending).ToArrayAsync(ct);
+
+    public async Task<IReadOnlyList<RosterEmailChangeRequest>> LoadPendingEmailChangesAsync(Guid tourId, CancellationToken ct) =>
+        await db.RosterEmailChangeRequests.Include(request => request.RosterRow).Where(request => request.State == RosterParticipationStates.Pending &&
+            request.RosterRow.IsActive && request.RosterRow.Registration.TourId == tourId).ToArrayAsync(ct);
+
+    public Task LockAccountAsync(Guid userId, CancellationToken ct) =>
+        db.Database.ExecuteSqlInterpolatedAsync($"DECLARE @id uniqueidentifier; SELECT @id = Id FROM dbo.Users WITH (UPDLOCK, ROWLOCK) WHERE Id = {userId};", ct);
 
     public Task MarkRobotNeedsInspectionAsync(Guid robotId, CancellationToken ct) =>
         db.Robots.Where(r => r.Id == robotId).ExecuteUpdateAsync(set => set.SetProperty(r => r.NeedsInspection, true), ct);

@@ -24,6 +24,13 @@ public sealed class ResendInvitationEmailSender(HttpClient client, InvitationCon
             "Thông báo hủy buổi tham quan CampusTour", html, text, ct);
     }
 
+    public async Task<EmailSendResult> SendRosterExpiredAsync(RosterExpiredEmail email, CancellationToken ct)
+    {
+        var (html, text) = RosterExpiredEmailTemplate.Render(email, configuration.SupportEmail);
+        return await PostAsync($"campus-tour/roster-expiry/{email.AttemptId:D}/{email.RegistrationId:D}", email.Recipient,
+            RosterExpiredEmailTemplate.Subject, html, text, ct);
+    }
+
     private async Task<EmailSendResult> PostAsync(string idempotencyKey, string recipient, string subject, string html, string text, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.resend.com/emails");

@@ -86,6 +86,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0044](0044-robot-command-terminal-outcome-check.md) | Close the NULL outcome CHECK hole for terminal robot commands; preserve v1.14 and upgrade through v1.15 | corrective implementation of ADR-0042/0043, 2026-11-04 |
 | [0045](0045-operator-head-control.md) | The assigned Operator of a RUNNING Tour turns the PAN/TILT head with buttons over a separate in-memory, long-polled Fleet Head v1 contract; nothing persisted | proposed 2026-11-05 (team member Sơn), behind flags off by default; pending owner acceptance |
 | [0046](0046-admin-account-password-reset.md) | Admin resets a managed account's password; Admin targets refused, refresh tokens revoked, audited; username and role stay immutable | proposed 2026-11-06, pending owner approval, not implemented |
+| [0048](0048-tour-capacity-operator-change-and-t24-expiry.md) | Tour capacity (schema v1.18), Staff changes the Operator before Start, Admin cannot deactivate an account still in use, T-24h expiry of undecided items, and the invitation code guard | accepted 2026-11-08 by the owner, implemented |
 | [0047](0047-system-auto-cancel-of-unstarted-tours.md) | The system cancels a SCHEDULED/READY Tour whose robot hold ended without a Start; schema v1.17 lets the system release a reservation with no user | accepted 2026-11-08 by the owner (schema option), implemented |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:

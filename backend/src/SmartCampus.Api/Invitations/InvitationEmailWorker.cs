@@ -7,7 +7,7 @@ using SmartCampus.Application.Features.Invitations.Commands.DeliverEmail;
 namespace SmartCampus.Api.Invitations;
 
 public sealed class InvitationEmailWorker(IServiceScopeFactory scopes, InvitationSettings settings, TimeProvider clock,
-    TourCancelNoticeDispatcher cancelNotices, ILogger<InvitationEmailWorker> logger) : BackgroundService
+    TourCancelNoticeDispatcher cancelNotices, RosterExpiryNoticeDispatcher expiryNotices, ILogger<InvitationEmailWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -45,6 +45,7 @@ public sealed class InvitationEmailWorker(IServiceScopeFactory scopes, Invitatio
                 }
                 currentAttempt = null;
                 await cancelNotices.DispatchPendingAsync(stoppingToken);
+                await expiryNotices.DispatchPendingAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception error) { logger.LogWarning("Invitation scan/attempt {AttemptId} failed ({ErrorType}); pending requests remain persisted.", currentAttempt, error.GetType().Name); }

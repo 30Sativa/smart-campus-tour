@@ -4,4 +4,4 @@ public sealed record RosterEmailChangeView(Guid Id, Guid RegistrationId, Guid Ro
     string CurrentEmail, string ProposedEmail, string State, Guid RequestedByUserId, DateTimeOffset CreatedAt,
     DateTimeOffset? ReviewedAt, Guid? ReviewedByUserId, string? ReviewReason, string RowVersion,
     string TourRowVersion, string RegistrationRowVersion, string RosterRowVersion,
-    bool CanReview);
+    bool CanReview, DateTimeOffset ExpiresAt);

@@ -51,8 +51,8 @@ def main() -> int:
     db_source_sha = manifest.get("db_init_source_sha")
     if not isinstance(db_source_sha, str) or not SHA_PATTERN.fullmatch(db_source_sha):
         return fail("release manifest field db_init_source_sha must be a full lowercase commit SHA independent of source_sha.")
-    if manifest.get("database_schema_version") != "1.17":
-        return fail("release manifest database_schema_version must be the supported value 1.17.")
+    if manifest.get("database_schema_version") != "1.18":
+        return fail("release manifest database_schema_version must be the supported value 1.18.")
 
     try:
         with output_path.open("a", encoding="utf-8", newline="\n") as output:

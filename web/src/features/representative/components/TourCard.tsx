@@ -17,6 +17,7 @@ export function TourCard({ tour, compact = false }: { tour: RepresentativeTour; 
     </div>
     <dl className="rep-tour-meta">
       <div><dt>Thời gian</dt><dd>{formatDateTime(tour.scheduledStartAt)}</dd></div>
+      {tour.capacity != null && tour.remainingSeats != null && <div><dt>Chỗ</dt><dd>Còn {tour.remainingSeats}/{tour.capacity} chỗ</dd></div>}
       <div><dt>Hạn đăng ký</dt><dd>{formatDateTime(registrationClosesAt(tour.scheduledStartAt).toISOString())}</dd></div>
     </dl>
     <div className="rep-stack">

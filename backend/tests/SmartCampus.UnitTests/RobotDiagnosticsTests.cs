@@ -267,6 +267,9 @@ public sealed class RobotDiagnosticsTests
         {
             if (request is ListPoiVerificationQueueQuery)
                 return Task.FromResult((TResponse)(object)new List<PoiVerificationQueueItem>());
+            if (request is ListRouteRerunQueueQuery)
+                return Task.FromResult((TResponse)(object)new List<RouteRevisionView>());
+
             if (request is ListRouteRevisionQueueQuery)
                 return Task.FromResult((TResponse)(object)new List<RouteRevisionView>());
 

@@ -1,4 +1,4 @@
--- SQLCMD input: SchemaHash is the current v1.17 snapshot hash; prior hashes are used only for controlled upgrades.
+-- SQLCMD input: SchemaHash is the current v1.18 snapshot hash; prior hashes are used only for controlled upgrades.
 -- Upgrade paths preserve the original bootstrap hash and advance only CampusTourSchemaVersion.
 SET NOCOUNT ON;
 DECLARE @hash nvarchar(64) = (
@@ -13,6 +13,7 @@ DECLARE @v18 nvarchar(64) = N'$(SchemaHashV18)';
 DECLARE @v110 nvarchar(64) = N'$(SchemaHashV110)';
 DECLARE @v111 nvarchar(64) = N'$(SchemaHashV111)';
 DECLARE @v112 nvarchar(64) = N'$(SchemaHashV112)';
+DECLARE @v117 nvarchar(64) = N'$(SchemaHashV117)';
 DECLARE @v116 nvarchar(64) = N'$(SchemaHashV116)';
 DECLARE @v115 nvarchar(64) = N'$(SchemaHashV115)';
 DECLARE @v114 nvarchar(64) = N'$(SchemaHashV114)';
@@ -65,6 +66,7 @@ DECLARE @knownPriorHash bit = CASE WHEN @hash IN (
     @v114,
     @v115,
     @v116,
+    @v117,
     @v17,
     @v16,
     @v14,
@@ -164,8 +166,23 @@ DECLARE @v117ObjectsPresent bit = CASE WHEN @v116ObjectsPresent = 1 AND
         AND name=N'CK_TourRobotReservations_Release_Actor' AND is_disabled=0 AND is_not_trusted=0)
     THEN 1 ELSE 0 END;
 
-IF @schemaVersion = N'1.17' AND @v117ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
+-- v1.18 (ADR-0048): Tour capacity and the EXPIRED state of roster rows and email-change requests.
+DECLARE @v118ObjectsPresent bit = CASE WHEN @v117ObjectsPresent = 1 AND
+    COL_LENGTH(N'dbo.Tours', N'Capacity') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Tours')
+        AND name=N'CK_Tours_Capacity' AND is_disabled=0 AND is_not_trusted=0) AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RosterRows')
+        AND name=N'CK_RosterRows_ParticipationState' AND is_disabled=0 AND is_not_trusted=0 AND definition LIKE N'%EXPIRED%') AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RosterEmailChangeRequests')
+        AND name=N'CK_RosterEmailChangeRequests_State' AND is_disabled=0 AND is_not_trusted=0 AND definition LIKE N'%EXPIRED%')
+    THEN 1 ELSE 0 END;
+
+IF @schemaVersion = N'1.18' AND @v118ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
     SELECT 'READY';
+ELSE IF @schemaVersion = N'1.18'
+    THROW 51001, 'Database schema version marker is 1.18 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+ELSE IF @schemaVersion = N'1.17' AND @v117ObjectsPresent = 1 AND (@hash = @v117 OR @knownPriorHash = 1)
+    SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.17'
     THROW 51001, 'Database schema version marker is 1.17 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
 ELSE IF @schemaVersion = N'1.16' AND @v116ObjectsPresent = 1 AND (@hash = @v116 OR @knownPriorHash = 1)

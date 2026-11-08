@@ -5,6 +5,9 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Common.Abstractions.Persistence;
 
+/// <summary>One thing that still depends on an account: a Tour it operates, or a live registration it represents.</summary>
+public sealed record AccountUsage(bool IsOperator, string TourName, DateTimeOffset ScheduledStartAt, string? GroupName);
+
 public interface IAccountRepository
 {
     Task<PagedResult<AccountListEntry>> ListAccountsAsync(
@@ -23,6 +26,9 @@ public interface IAccountRepository
     Task<User?> FindForManagementAsync(
         Guid userId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>What deactivating this account would strand; the caller holds the User root lock.</summary>
+    Task<IReadOnlyList<AccountUsage>> ListAccountUsageAsync(Guid userId, CancellationToken cancellationToken = default);
 
     void AddAccount(User user);
 

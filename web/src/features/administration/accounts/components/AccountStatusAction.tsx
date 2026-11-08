@@ -1,7 +1,7 @@
 import { ConfirmationDialog } from '../../../../components/ui/ConfirmationDialog'
 import { notify } from '../../../../components/ui/toast-store'
 import { useDeactivateAccount, useReactivateAccount } from '../hooks'
-import { accountRequestError } from '../errors'
+import { accountInUseBlockers, accountRequestError } from '../errors'
 import type { AccountLifecycleAction } from './AccountTable'
 import type { AccountListItem } from '../types'
 
@@ -15,6 +15,7 @@ export function AccountStatusAction({ account, action, onClose, onCompleted }: {
   const reactivate = useReactivateAccount()
   const mutation = action === 'deactivate' ? deactivate : reactivate
   const isDeactivation = action === 'deactivate'
+  const blockers = accountInUseBlockers(mutation.error)
 
   return (
     <ConfirmationDialog
@@ -40,6 +41,10 @@ export function AccountStatusAction({ account, action, onClose, onCompleted }: {
       onCancel={onClose}
     >
       <p className="rounded-xl bg-[#f8fafc] px-3 py-2 text-sm font-semibold text-[#334155]">{account.fullName} · {account.username}</p>
+      {blockers.length > 0 && <div className="mt-2 text-sm text-[#334155]">
+        <ul className="list-disc space-y-1 pl-5">{blockers.map(blocker => <li key={blocker}>{blocker}</li>)}</ul>
+        <p className="mt-2 text-[#64748b]">Admin không tự xử lý được các mục này. Hãy báo Staff hoặc Đại diện trường xử lý xong rồi vô hiệu hóa lại.</p>
+      </div>}
     </ConfirmationDialog>
   )
 }

@@ -53,6 +53,11 @@ export function useRouteTestQueue() {
   return useQuery({ queryKey: [...keys.routeTests, 'queue'], queryFn: technicalApi.listRouteTestQueue })
 }
 
+/** Routes whose PASS was measured the old way and cannot be scheduled until a new run is recorded (ADR-0048). */
+export function useRouteRerunQueue() {
+  return useQuery({ queryKey: [...keys.routeTests, 'rerun'], queryFn: technicalApi.listRouteRerunQueue })
+}
+
 /** Current revisions, the only place recorded route results can be listed from. */
 export function useSubmittedRoutes() {
   return useQuery({ queryKey: [...keys.routeTests, 'routes'], queryFn: () => versionedRoutesApi.list() })

@@ -25,10 +25,11 @@ public sealed record TechnicalKpiSummary(
     int HeldForInspectionCount,
     int PendingPoiVerificationsCount,
     int PendingRouteTestsCount,
-    int ActiveMapVersionsCount);
+    int ActiveMapVersionsCount,
+    int RouteRerunsCount = 0);
 
 public sealed record TechnicalActionItem(
-    string Type, // "HELD_ROBOT", "MAP_MISMATCH", "POI_QUEUE", "ROUTE_QUEUE"
+    string Type, // "HELD_ROBOT", "MAP_MISMATCH", "POI_QUEUE", "ROUTE_QUEUE", "ROUTE_RERUN"
     string Severity, // "DANGER", "WARNING", "INFO"
     string Title,
     string Description,
@@ -88,6 +89,7 @@ public sealed class GetTechnicalDashboardQueryHandler(
         // Fetch pending queues
         var poiQueue = await sender.Send(new ListPoiVerificationQueueQuery(null), cancellationToken);
         var routeQueue = await sender.Send(new ListRouteRevisionQueueQuery(), cancellationToken);
+        var routeReruns = await sender.Send(new ListRouteRerunQueueQuery(), cancellationToken);
 
         var actionItems = new List<TechnicalActionItem>();
 
@@ -224,6 +226,17 @@ public sealed class GetTechnicalDashboardQueryHandler(
                 "/technical/confirmations"));
         }
 
+        if (routeReruns.Count > 0)
+        {
+            actionItems.Add(new TechnicalActionItem(
+                "ROUTE_RERUN",
+                "WARNING",
+                $"{routeReruns.Count} tuyến cần chạy lại",
+                "Lần chạy đạt của các tuyến này đo theo cách cũ nên chưa xếp lịch được. Cần ghi một lần chạy mới.",
+                null,
+                "/technical/confirmations"));
+        }
+
         var kpis = new TechnicalKpiSummary(
             TotalRobots: robotSummaries.Count,
             ConnectedRobots: connectedCount,
@@ -233,7 +246,8 @@ public sealed class GetTechnicalDashboardQueryHandler(
             HeldForInspectionCount: heldCount,
             PendingPoiVerificationsCount: poiQueue.Count,
             PendingRouteTestsCount: routeQueue.Count,
-            ActiveMapVersionsCount: activeMaps.Count(m => m.ValidationStatus == "VALID"));
+            ActiveMapVersionsCount: activeMaps.Count(m => m.ValidationStatus == "VALID"),
+            RouteRerunsCount: routeReruns.Count);
 
         return new TechnicalDashboardDto(now, kpis, actionItems, robotSummaries);
     }

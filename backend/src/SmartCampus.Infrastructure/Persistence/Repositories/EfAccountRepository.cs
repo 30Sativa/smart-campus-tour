@@ -3,6 +3,7 @@ using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Models;
 using SmartCampus.Application.Features.Accounts.Queries.GetAccounts;
 using SmartCampus.Application.Features.Accounts.Queries.GetAccounts.Dtos;
+using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Infrastructure.Persistence.Repositories;
@@ -61,6 +62,20 @@ public sealed class EfAccountRepository(ApplicationDbContext dbContext) : IAccou
             .Include(user => user.UserRoles)
             .Include(user => user.RefreshTokens.Where(token => token.RevokedAt == null))
             .SingleOrDefaultAsync(user => user.Id == userId, cancellationToken);
+
+    public async Task<IReadOnlyList<AccountUsage>> ListAccountUsageAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var operated = await dbContext.Tours.AsNoTracking()
+            .Where(tour => tour.OperatorUserId == userId && (tour.State == "SCHEDULED" || tour.State == "READY"))
+            .Select(tour => new AccountUsage(true, tour.Name, tour.ScheduledStartAt, null)).ToArrayAsync(cancellationToken);
+        var represented = await dbContext.GroupRegistrations.AsNoTracking()
+            .Where(registration => registration.RepresentativeUserId == userId &&
+                (registration.State == RegistrationStates.Submitted || registration.State == RegistrationStates.Approved) &&
+                (registration.Tour.State == "SCHEDULED" || registration.Tour.State == "READY" || registration.Tour.State == "RUNNING"))
+            .Select(registration => new AccountUsage(false, registration.Tour.Name, registration.Tour.ScheduledStartAt, registration.GroupName))
+            .ToArrayAsync(cancellationToken);
+        return operated.Concat(represented).OrderBy(usage => usage.ScheduledStartAt).ToArray();
+    }
 
     public void AddAccount(User user) => dbContext.Users.Add(user);
 

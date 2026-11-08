@@ -5,7 +5,7 @@ import { buttonClass, inputClass, rowClass, tdClass, thClass } from '../../../co
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { useRegistrationReviews } from '../../../features/administration/registrations/hooks'
 import { ReviewDrawer } from '../../../features/administration/registrations/components/ReviewDrawer'
-import { dateBoundary, reviewTime } from '../../../features/administration/registrations/presentation'
+import { dateBoundary, pendingExpiresAt, reviewTime } from '../../../features/administration/registrations/presentation'
 import { ReviewStateBadge } from '../../../features/administration/registrations/components/ReviewStateBadge'
 import { isRegistrationState, REGISTRATION_STATE_LABEL, REGISTRATION_STATES, type RegistrationState } from '../../../features/registrations/registration-state'
 import { useReviewParam } from '../../../features/administration/use-review-param'
@@ -67,7 +67,7 @@ export default function StaffManageRegistrationsPage({ mode }: { mode: 'pending'
             <thead className="border-b border-[#e2e8f0]"><tr>{['Đoàn / Trường', 'Tour', 'Đại diện', 'Dòng lời mời', mode === 'pending' ? 'Đã chờ' : 'Trạng thái', ''].map((label, i) => <th key={i} scope="col" className={thClass}>{label}</th>)}</tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">{rows.map(reg => <tr key={reg.id} onClick={() => open(reg.id)} className={`${rowClass} cursor-pointer`}>
               <td className={tdClass}><p className="font-semibold text-[#0f172a]">{reg.groupName}</p><p className="text-[11.5px] text-[#64748b]">{reg.schoolName}</p></td>
-              <td className={tdClass}><p>{reg.tourName}</p><p className="text-[11.5px] text-[#64748b]">{reviewTime(reg.tourScheduledStartAt)}</p></td>
+              <td className={tdClass}><p>{reg.tourName}</p><p className="text-[11.5px] text-[#64748b]">{reviewTime(reg.tourScheduledStartAt)}</p>{reg.state === 'SUBMITTED' && <p className="text-[11.5px] text-[#92400e]">Hết hạn lúc {reviewTime(pendingExpiresAt(reg.tourScheduledStartAt))}</p>}</td>
               <td className={tdClass}>{reg.representativeName}</td><td className={`${tdClass} tabular-nums`}>{reg.rowCount}</td>
               <td className={tdClass}>{mode === 'pending' ? <Waited since={reg.submittedAt} /> : <ReviewStateBadge state={reg.state} />}</td>
               <td className={`${tdClass} text-right`}><button type="button" onClick={(event) => { event.stopPropagation(); open(reg.id) }} className={buttonClass(reg.state === 'SUBMITTED' ? 'primary' : 'secondary', 'sm')}>Xem & duyệt<span className="sr-only"> {reg.groupName}</span></button></td>

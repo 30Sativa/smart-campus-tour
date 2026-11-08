@@ -577,7 +577,7 @@ public sealed class TourManagementEndpointTests
         public ApplicationDbContext Context() => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options);
         public TourInput Input() => new("SQL Tour", null, Route.Id, Now.AddDays(10), null);
         public CreateTourInput CreateInput() => new("SQL Tour", null, Guid.NewGuid(), "no-such-robot", AdminId,
-            TourSchedule.SlotStart(DateOnly.FromDateTime(Now.UtcDateTime).AddDays(10), new TimeOnly(8, 15)), null);
+            TourSchedule.SlotStart(DateOnly.FromDateTime(Now.UtcDateTime).AddDays(10), new TimeOnly(8, 15)), null, 20);
         public CreateTourRequest CreateRequest() => new(Guid.NewGuid(), CreateInput());
         public static async Task<Fixture> Create()
         {

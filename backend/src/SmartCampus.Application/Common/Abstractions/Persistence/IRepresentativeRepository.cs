@@ -8,8 +8,8 @@ namespace SmartCampus.Application.Common.Abstractions.Persistence;
 
 public interface IRepresentativeRepository
 {
-    Task<PagedResult<TourReadModel>> ListToursAsync(RepresentativeListRequest request, CancellationToken ct);
+    Task<PagedResult<TourReadModel>> ListToursAsync(RepresentativeListRequest request, DateTimeOffset now, CancellationToken ct);
     Task<TourReadModel?> GetTourAsync(Guid id, Guid owner, CancellationToken ct);
     Task<PagedResult<RegistrationListItem>> ListRegistrationsAsync(Guid owner, RepresentativeListRequest request, CancellationToken ct);
-    Task<RegistrationReadModel?> GetRegistrationAsync(Guid id, Guid owner, CancellationToken ct);
+    Task<RegistrationReadModel?> GetRegistrationAsync(Guid id, Guid owner, DateTimeOffset now, CancellationToken ct);
 }
