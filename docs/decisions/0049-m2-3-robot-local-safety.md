@@ -1,8 +1,8 @@
 # ADR-0049: M2.3 robot-local safety before a physical robot accepts fleet commands
 
-- **Status:** Proposed 08/11/2026. Pending the repository owner's acceptance. **Not implemented**: no permit topic,
-  motion gate, readiness source, map content check or dispatch writer exists yet. Every number below is a proposal to
-  be measured at GATE A.
+- **Status:** Accepted 08/11/2026 by the repository owner, with the changes recorded here. **Not implemented**: no
+  permit topic, motion gate, readiness source, map content check or dispatch writer exists yet. Every number below is
+  accepted as a target and must be measured at GATE A. Acceptance does not authorize physical motion.
 - **Supplements:** ADR-0042 (M2 command transport, D-items on `IsDispatchEnabled`), ADR-0043 D11/D13.
 - **Related:** `docs/architecture.md` §3.5, §3.6, §6; ADR-0008, ADR-0019, ADR-0021, ADR-0040;
   `docs/requirements/campus-tour-scope.md` §7; `robot/docs/robot-baseline-2026-11-02.md`.
@@ -29,9 +29,9 @@ within 2 s. These need physical evidence.
 
 | Fact | Source | Consequence |
 |---|---|---|
-| The hardware E-stop does not work. `/emergency_stop_state` is software-only and no E-stop input reaches the STM32. | `robot-baseline-2026-11-02.md:85`, `mode_manager_node.py`, `PIN_MAP.md`, `PROTOCOL_FB.md` | **GATE A cannot pass today** (Open question 2). |
-| No document states what PA10 (contactor) powers. `contactor/state` is the commanded state, not the real contact. It turns ON at every STM32 boot. | `HEAD_CONTROL.md:65-66`, `PIN_MAP.md:66-73`, `WIRING_MOTOR_245.md` | Not used in `motionReady` (Open question 3). |
-| `PackageSha256` is over the whole uploaded ZIP. The robot holds only extracted files and the backend gives it no map data. | `MapPackageValidator.cs:72`, `backend/docs/map-poi-versioning.md:102` | The hash cannot be recomputed from yaml + pgm (Decision 4, Open question 1). |
+| The 02/11 baseline says the hardware E-stop does not work. The owner stated on 08/11 that the hardware E-stop now works and that PA10, through connector `J_3V3_AUX` (pin 1 PA10, pin 2 GND), belongs to it. No measurement is recorded yet. `/emergency_stop_state` is software-only and no E-stop input reaches the STM32. | `robot-baseline-2026-11-02.md:85`, owner statement, PCB layout, `mode_manager_node.py`, `PIN_MAP.md`, `PROTOCOL_FB.md` | **A10 must record the measurement**, and nothing may run on the floor until it passes (Decisions 9 and 10). |
+| `contactor/state` is the commanded state of PA10, not the real contact, so it stays 1 while the E-stop is pressed. PA10 turns ON at every STM32 boot. The circuit after `J_3V3_AUX` is not documented. | `HEAD_CONTROL.md:65-66`, `PIN_MAP.md:66-73`, `contactor.c` | Not in `motionReady`. Software never uses `contactor/set` as a stop. A10 measures the real effect on motor power. |
+| `PackageSha256` is over the whole uploaded ZIP. The robot holds only extracted files and the backend gives it no map data. | `MapPackageValidator.cs:72`, `backend/docs/map-poi-versioning.md:102` | The hash cannot be recomputed from yaml + pgm (Decision 4). |
 | `mode_manager`'s latch is in memory, and its release clears stored commands only. Its Nav2 cancel is one-shot, untargeted and skipped if the service is not ready. | `mode_manager_node.py:57,130-139,206-215` | Starts latched in fleet mode. A reset must prove no goal is alive. |
 | Any graph participant can call a ROS service. | `HEAD_CONTROL.md:140-141` | "Only a human resets" is a procedure plus static tests, not an enforced property. |
 | Wheel odometry counts generated STEP pulses, not encoders. | `robot_control/README.md:332-336` | Odometry does not show that a wheel moved. Standstill at GATE A is measured externally. |
@@ -40,7 +40,7 @@ within 2 s. These need physical evidence.
 
 ## Decision
 
-Tags: **[SRS]**, **[ADR-n]** inherited; **[Design]** proposed here.
+Tags: **[SRS]**, **[ADR-n]** inherited; **[Design]** decided here.
 
 ### 1. Motion permit and gate [Design]
 
@@ -88,7 +88,7 @@ controller is the authority, and the E-stop still blocks them. `motionReady` is 
 
 ### 2. Coverage and time budget [SRS for the 3 s, Design for the split]
 
-| Symbol | Proposed | Meaning |
+| Symbol | Target | Meaning |
 |---|---|---|
 | `T_link` | 1.5 s | Age of the last successful poll at which the permit goes false |
 | `T_permit` | 0.6 s | Age at which `mode_manager` treats the permit as expired (3 publish periods) |
@@ -126,8 +126,10 @@ Each is `true`, `false`, or `null` when a source has no data. The backend treats
 | Nav2 available | `navigate_to_pose` action server ready |
 | Exactly one sender | Decision 5 |
 | Map verified | Decision 4 |
+| Hardware E-stop released (only from step 3.4) | `hardware_estop_state` |
 
-The contactor is excluded until Open question 3 is answered. Even then, `contactor/state` is only the commanded state.
+Contactor PA10 is not in `motionReady`: `contactor/state` is only the commanded state and cannot show a pressed E-stop.
+Software does not use `contactor/set` as a stop mechanism (Decision 10).
 
 `faultCode` carries the first active of, in this order: `MOTION_GATE_LATCHED`, `MOTION_GATE_DISABLED`, `ESTOP_ENGAGED`,
 `FOREIGN_NAV_GOAL`, `UNOWNED_GOAL_AT_STARTUP`, `MAP_CONTENT_MISMATCH`, `MAP_EVIDENCE_MISSING`, `STM32_LINK_STALE`,
@@ -136,14 +138,14 @@ The contactor is excluded until Open question 3 is answered. Even then, `contact
 The bridge also refuses a GoTo locally with the same checks, because the backend can hand one out up to `AcceptBy` after
 readiness went false. Step 3.3 adds the backend recheck.
 
-### 4. Map content check [Design; Open question 1]
+### 4. Map content check [Design]
 
 The robot cannot recompute `PackageSha256` from extracted files: the ZIP's metadata, compression and order are in the
-hash. **Proposed option A:**
+hash. **Option A applies to GATE A and M2.4:**
 
 1. Technical Staff place the exact uploaded ZIP on the robot and extract the map from it.
-2. New bridge parameters: `map_package_path` and `map_package_sha256`. The hash is copied from the Technical web next to
-   `FLEET_ROBOT_MAP_KEY`.
+2. New bridge parameters: `map_package_path` and `map_package_sha256`. Technical Staff copy `map_key` and the hash from
+   the **same MapVersion row** on the Technical web, and a second person checks both against that row.
 3. When `commands_enabled`, the bridge hashes the ZIP and compares it with the parameter.
 4. It reads `yaml_filename` from `map_server` by parameter service, so it checks what was **actually loaded**, not what
    config claims.
@@ -153,9 +155,8 @@ hash. **Proposed option A:**
 Any failure: `MAP_CONTENT_MISMATCH`, or `MAP_EVIDENCE_MISSING` when a file or parameter is absent, `motionReady=false`,
 and GoTo refused with `MAP_MISMATCH`. The check reruns before accepting each GoTo from a cached result no older than 5 s.
 
-Limit of option A: the expected hash is hand-copied, so a pairing mistake (key of version 2, hash of version 1) is not
-caught. **Option B** closes that gap with a robot-authenticated source of the hash, such as `mapPackageSha256` on GoTo.
-That is a public contract change, revises ADR-0042's omission of `mapChecksum`, and needs a backend PR.
+Limit of option A: the expected hash is hand-copied, so software cannot catch a pairing mistake (key of version 2, hash
+of version 1). The two-person check is the control. Option B is a follow-up (see the end of this ADR).
 
 ### 5. One goal sender [ADR-0042, Design]
 
@@ -191,8 +192,8 @@ telemetry-only must be corrected.
 | 8 | Foreign goal (RViz, `route_test.py`) | Decision 5 | Unit; Gazebo CLI goal; GATE A | Fault in telemetry; latch; foreign goal not cancelled by the bridge |
 | 9 | Wrong map, same `map_key` | Decision 4 | Unit; Gazebo altered file; GATE A | GoTo refused, fault reported |
 | 10 | Not localized | Decision 3 | Unit; Gazebo no initial pose; GATE A | `localized` null or false, Start refused |
-| 11 | Physical E-stop | Hardware only. **Not installed.** Software cannot see it | GATE A | Motor power cut with server off; attendant ≤ 2 s; no motion on release |
-| 12 | Person-sized obstacle | Nav2 costmap. Unchanged here | GATE A, dummy only | Stops ≥ 0.3 m at 0.2 m/s |
+| 11 | Physical E-stop | Hardware only, through the existing PA10 chain. Reported working by the owner, **no measurement recorded yet**. Software cannot see it until step 3.4. Operating rule in Decision 10 until then | A10 | Motor power cut with server off; no motion on release |
+| 12 | Person-sized obstacle | Nav2 costmap. Unchanged here. **Expected to fail** (Decision 9) | A11, dummy only | Stops ≥ 0.3 m at 0.2 m/s |
 | 13 | Cancel delayed or lost | Gate holds independently of cancel | Unit; Gazebo with Nav2 stalled | `cmd_vel=0` while the goal stays active |
 | 14 | `commands_enabled` with no gate | `DISABLED` makes `motionReady` false | Unit | GoTo refused |
 | 15 | Direct `/cmd_vel` publisher | **Not covered.** Convention and existing static tests only | Static | Recorded residual risk |
@@ -207,7 +208,7 @@ existing warning at `node.py:124-126` becomes a startup refusal when `commands_e
 
 | Switch | Who | Requires | Scope |
 |---|---|---|---|
-| `IsDispatchEnabled` | TechnicalStaff through the step 3.3 endpoint | Signed GATE A evidence as `evidenceRef`; active robot, credential, assigned map, latest deployment check PASS on that map, no `NeedsInspection` | Durable, per robot |
+| `IsDispatchEnabled` | TechnicalStaff through the step 3.3 endpoint | Signed GATE A-command record as `evidenceRef`, stating which steps it covers; active robot, credential, assigned map, latest deployment check PASS on that map, no `NeedsInspection` | Durable, per robot. With A1 to A9 only, it covers B1 and must be set false afterwards until the A10 evidence exists |
 | `FleetCommands:Enabled` | Whoever runs the test environment, for one agreed session | Attendant present; environment variable plus restart | Test environment only |
 | `commands_enabled` + `require_motion_permit` | Robot operator, for one attended session | Set together in one params profile, never one alone | Session |
 
@@ -215,7 +216,8 @@ Agents never set any of these on a real robot or a shared environment.
 
 **Emergency order:**
 
-1. Physical E-stop. Until it exists, the session may not run under load.
+1. Physical E-stop. Until A10 has passed, nothing runs on the floor. Do not release it until the Decision 10 operating
+   rule is met.
 2. `ros2 service call .../emergency_stop std_srvs/srv/SetBool "{data: true}"` from the robot.
 3. Set `IsDispatchEnabled` false.
 4. Revoke the robot credential if needed.
@@ -224,13 +226,22 @@ Steps 3 and 4 block new motion. They do not stop a moving robot.
 
 ### 9. GATE A checklist
 
-The step `m2-3d` kit expands this with measurement boxes. Run on the commit under test, with an attendant at the E-stop.
+The step `m2-3d` kit expands this with measurement boxes. Run on the commit under test, with an attendant present.
 Record every run in a new `$HOME/amr_logs/runs/` directory.
 
-**Preconditions:** Open questions 2 and 3 closed; hardware E-stop installed; initial pose set; both flags set for the
-session only.
+GATE A is split in two. Each part has its own record:
 
-**Phase 1, wheels raised.** Start a GoTo, then apply each event. Capture timestamps of `cmd_vel`, `motion_permit`,
+| Part | Steps | Required before |
+|---|---|---|
+| **GATE A-command** | A1 to A9 | M2.4, including B1 (wheels raised, attendant present) |
+| **GATE A-command** | A10 and the floor repeats A1F to A4F | B2 (running on the floor) |
+| **GATE A-person** | A11 and A12 | M2.5, per SRS §7 "before outside-team viewing" |
+
+**Preconditions for every run:** initial pose set; both flags set for the session only; Technical Staff copied `map_key`
+and the hash from the same MapVersion row on the Technical web, and a second person checked both against that row.
+A10, the floor repeats and GATE A-person also need the E-stop chain on PA10 connected.
+
+**Part 1, wheels raised.** Start a GoTo, then apply each event. Capture timestamps of `cmd_vel`, `motion_permit`,
 `motion_gate_state`, `emergency_stop_state` and telemetry.
 
 | Step | Event | Measure | PASS |
@@ -244,18 +255,59 @@ session only.
 | A7 | Foreign goal by CLI | Fault, latch | `FOREIGN_NAV_GOAL`, no cancel |
 | A8 | Wrong map, same key | GoTo response | Refused, `MAP_CONTENT_MISMATCH` |
 | A9 | No initial pose | Telemetry, Start | null or false, Start refused |
-| A10 | Physical E-stop, server off | Motor power, release behaviour | Power cut, no motion on release |
+| A10 | Physical E-stop, server off | Supply voltage at the wheel drivers (HBS57H) on press and on release; wheels free or unable to turn | Drive supply measured off while pressed. Before step 3.4: released only under the Decision 10 rule, no motion. After step 3.4: also released with a goal alive, gate stays LATCHED(ESTOP), no motion |
 
-**Phase 2, low speed on the floor (0.2 m/s), attendant within reach, area cleared of people.** Repeat A1 to A4 with
-external standstill measurement (video with a timer, or a marked floor).
+**Part 2, low speed on the floor (0.2 m/s), attendant within reach, area cleared of people, after A10 passed.** A1F to
+A4F repeat A1 to A4 with external standstill measurement (video with a timer, or a marked floor).
+
+**Part 3, GATE A-person.**
 
 | Step | Event | Measure | PASS |
 |---|---|---|---|
 | A11 | Person-sized **dummy** in the path | Stopping gap | ≥ 0.3 m, three of three runs |
 | A12 | Attendant to E-stop | Time from a call to the press | ≤ 2 s |
 
+**A11 is expected to FAIL today.** In the 02/11 baseline the robot stopped 0.15 m from a foot, resumed 0.3 s later and ran
+over it. Passing needs separate person-detection and slow-down work, which is outside M2.3.
+
 **Logs required:** the capture directory, the backend `RobotCommands` and `TourEvents` rows, tested commit, operator name
-and every measured number. Any single FAIL fails the gate.
+and every measured number. Any single FAIL fails that part.
+
+### 10. Step 3.4: hardware E-stop input (firmware and `stm32_bridge`)
+
+**Current hardware, kept as built.** A team member feeds the E-stop chain from PA10 through `J_3V3_AUX`. This ADR does not
+change that circuit or the firmware that drives it (`CONTACTOR_ON_AT_BOOT = 1`, `contactor_on_at_startup` true). As the
+code stands:
+
+- Pressing the button is handled in hardware only. The firmware has no E-stop logic and keeps generating STEP pulses.
+- On release, PA10 is still high, so power returns at once with no reset.
+- After an STM32 reset or flash, PA10 goes high again at boot with no human confirmation.
+- PA10 is an output, so it cannot sense the button. Step 3.4 needs a separate input.
+
+Wheel odometry counts generated STEP pulses. If the E-stop cuts motor power while the firmware keeps generating pulses,
+odometry goes wrong and the robot jerks on release. Software also cannot see the press today.
+
+Step 3.4 adds:
+
+1. An auxiliary contact of the E-stop wired to an STM32 input.
+2. While pressed, the firmware stops generating STEP pulses and reports the state in the FB frame. `PROTOCOL_FB.md` stays
+   the source of truth for that field.
+3. `stm32_bridge` publishes `hardware_estop_state` (`std_msgs/Bool`).
+4. `mode_manager` enters LATCHED(ESTOP) on receiving it. The Decision 1 reset refuses while it is pressed.
+5. `fleet_bridge` adds it to `motionReady`, with `faultCode` `ESTOP_ENGAGED`.
+
+**A person must confirm the wiring before any code is written.** Step 3.4 stops first to ask for the input pin. Pin
+configuration follows `robot/AGENTS.md` §5 (`.ioc`, no hand edits to generated files), and flashing stays manual.
+The result is reported as READY FOR HARDWARE TEST.
+
+**Operating rule until step 3.4 is complete:** do not release the E-stop until End Early has been done and the action
+status shows no remaining goal.
+
+### 11. Simulation gates for steps 3.1 and 3.2
+
+The implementation workstation has no ROS 2 or Gazebo. Steps 3.1 and 3.2 deliver the code, unit tests, and exact Gazebo
+commands and scenarios, then stop. The team runs them on an Ubuntu VM and returns the logs as **GATE S3.1** and **GATE
+S3.2**. Neither is PASS without logs.
 
 ## Consequences
 
@@ -263,8 +315,10 @@ and every measured number. Any single FAIL fails the gate.
   up to 15 s, this will happen on long routes. The attendant is already required. If GATE A shows it is unworkable, the
   remedy is network coverage or a changed requirement, not a looser latch.
 - A hard stop from the gate skips smoother deceleration, as the software E-stop already does.
-- New ROS interfaces: `motion_permit`, `motion_gate_state`, `motion_inhibit_reset`. They are `robot/`-internal, so they
-  stay out of `bus_interfaces`, but must be recorded in `docs/architecture.md`.
+- New ROS interfaces: `motion_permit`, `motion_gate_state`, `motion_inhibit_reset` and, from step 3.4,
+  `hardware_estop_state`. They are `robot/`-internal, so they stay out of `bus_interfaces`, and are recorded in
+  `docs/architecture.md` §6.
+- M2.5 stays blocked until A11 passes, which needs person-detection and slow-down work not yet planned in M2.3.
 - `fleet_bridge/test/test_worker.py:586-599` forbids `create_publisher` and restricts action imports. Step 3.1 changes
   this guard with a stated reason, allowing exactly `motion_permit` and still forbidding `cmd_vel` and `cancel_all`.
 - `test_launch_defaults.py:47` keeps `commands_enabled` out of launch arguments, so the fleet profile is a params file.
@@ -275,18 +329,21 @@ and every measured number. Any single FAIL fails the gate.
 - Physical stopping behaviour, Nav2 behaviour with output held at zero, and false-trip rate are unknown until GATE A.
 - A person with shell access on the robot can still call the reset service or publish to `/cmd_vel`.
 
-## Open questions (owner decision required)
+## Accepted by the owner on 08/11/2026
 
-1. **Map hash source.** Option A (ZIP kept on the robot, hash copied by hand, no API change) or option B (backend gives
-   the robot the hash, contract change). Proposal: A for GATE A and M2.4, B if the pairing risk proves real.
-2. **Hardware E-stop.** The 02/11 baseline says it does not work. Has that changed, what does the current switch cut, and
-   who installs a real one? Its release behaviour also matters: with no input to the STM32, software cannot see a press,
-   so motors can move again on release if a goal is alive. Wiring an auxiliary contact to the STM32 would be a separate
-   firmware task.
-3. **Contactor load.** What does PA10 actually switch? It needs the wiring or someone who built it. Until then it is
-   excluded from `motionReady` and is not a stop mechanism.
-4. **`docs/architecture.md`.** Root `AGENTS.md` requires new interfaces to be recorded there, while the task forbids a
-   second top-level folder per PR. Proposal: add the record to this docs PR once the ADR is accepted, so 3.1 stays inside
-   `robot/`.
-5. **Values and deviations to accept:** `T_link`, `T_permit`, the localization limits, permit from poll only, LATCHED(BOOT)
-   requiring a human arm in every session, and teleop staying live under a latch.
+`T_link` 1.5 s, `T_permit` 0.6 s and the 2.7 s budget (to be measured at GATE A); permit from successful polls only;
+LATCHED(BOOT); reset refused while a goal is alive; `motion_gate_state`; teleop stays live under a latch while the
+E-stop still blocks it.
+
+## Follow-up
+
+**Map hash option B.** Give the robot the hash from a robot-authenticated source, such as `mapPackageSha256` on GoTo, so
+software catches a mis-paired key and hash. This is a public contract change, revises ADR-0042's omission of
+`mapChecksum`, and needs a backend PR. It is not part of GATE A or M2.4.
+
+## Still open
+
+1. **Measured E-stop evidence.** The owner reports that the E-stop works and keeps the circuit as the team member built
+   it. SRS §7 needs physical evidence, so A10 records the wheel drive supply on press and release. If it is not cut, A10
+   fails and the circuit needs the team member's fix.
+2. **Step 3.4 wiring (the team member who built the circuit).** The auxiliary contact and the STM32 input pin.
