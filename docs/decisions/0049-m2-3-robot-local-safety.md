@@ -2,7 +2,8 @@
 
 - **Status:** Accepted 08/11/2026 by the repository owner, with the changes recorded here. **Not implemented**: no
   permit topic, motion gate, readiness source, map content check or dispatch writer exists yet. Every number below is
-  accepted as a target and must be measured at GATE A. Acceptance does not authorize physical motion.
+  accepted as a target and must be measured at GATE A. Acceptance does not authorize physical motion. Amended
+  08/11/2026 by the owner during step 3.2: the `faultCode` order (Decision 3) and the monitored actions (Decision 5).
 - **Supplements:** ADR-0042 (M2 command transport, D-items on `IsDispatchEnabled`), ADR-0043 D11/D13.
 - **Related:** `docs/architecture.md` §3.5, §3.6, §6; ADR-0008, ADR-0019, ADR-0021, ADR-0040;
   `docs/requirements/campus-tour-scope.md` §7; `robot/docs/robot-baseline-2026-11-02.md`.
@@ -131,9 +132,10 @@ Each is `true`, `false`, or `null` when a source has no data. The backend treats
 Contactor PA10 is not in `motionReady`: `contactor/state` is only the commanded state and cannot show a pressed E-stop.
 Software does not use `contactor/set` as a stop mechanism (Decision 10).
 
-`faultCode` carries the first active of, in this order: `MOTION_GATE_LATCHED`, `MOTION_GATE_DISABLED`, `ESTOP_ENGAGED`,
-`FOREIGN_NAV_GOAL`, `UNOWNED_GOAL_AT_STARTUP`, `MAP_CONTENT_MISMATCH`, `MAP_EVIDENCE_MISSING`, `STM32_LINK_STALE`,
-`NAV2_UNAVAILABLE`, `TF_STALE`. Absence of a code is not readiness evidence [§3.5].
+`faultCode` carries the first active of, in this order: `ESTOP_ENGAGED`, `FOREIGN_NAV_GOAL`, `UNOWNED_GOAL_AT_STARTUP`,
+`MAP_CONTENT_MISMATCH`, `MAP_EVIDENCE_MISSING`, `MOTION_GATE_DISABLED`, `STM32_LINK_STALE`, `NAV2_UNAVAILABLE`,
+`TF_STALE`, `MOTION_GATE_LATCHED`. Root causes come first: a latched gate is a consequence, and reporting it first would
+hide the code that A7 and A8 must observe. Absence of a code is not readiness evidence [§3.5].
 
 The bridge also refuses a GoTo locally with the same checks, because the backend can hand one out up to `AcceptBy` after
 readiness went false. Step 3.3 adds the backend recheck.
@@ -163,9 +165,12 @@ of version 1). The two-person check is the control. Option B is a follow-up (see
 When `commands_enabled`:
 
 - The bridge sets its own `goal_uuid` in `send_goal_async`, so status arriving before the goal response is not misread.
-- It subscribes to `<action>/_action/status` for the existing `BUSY_ACTIONS` list in `initialpose_guard.py`, because
-  `navigate_to_pose` is not the only path to `cmd_vel`. It uses `count_publishers`, since a crashed server leaves its
-  last status latched.
+- It subscribes to `<action>/_action/status` for the actions in the `BUSY_ACTIONS` list of `initialpose_guard.py`,
+  because `navigate_to_pose` is not the only path to `cmd_vel`. It uses `count_publishers`, since a crashed server
+  leaves its last status latched.
+- `navigate_to_pose`, `navigate_through_poses`, `follow_waypoints` and `go_to_stop` can only come from an outside sender.
+  `bt_navigator` itself sends `follow_path`, `spin`, `backup`, `drive_on_heading`, `wait` and `assisted_teleop` while it
+  runs a goal, so those count only when no navigation goal has been active for 1 s.
 - An active goal (status 1, 2 or 3) with a UUID that is not the bridge's: `FOREIGN_NAV_GOAL`, `motionReady=false`, permit
   false, so the gate latches.
 - The bridge never cancels a goal it does not own.
