@@ -111,9 +111,9 @@ export default function StaffManagePoiFormPage() {
         await queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposals'] })
       }
       const submitted = action === 'submit'
-      if (created) celebrate({ title: `Đã tạo POI “${body.name}”`, detail: submitted ? 'Đã gửi kiểm chứng. POI dùng được cho tuyến khi kỹ thuật xác nhận PASS.' : 'Đã lưu bản nháp. Gửi kiểm chứng để kỹ thuật xác nhận PASS trước khi dùng cho tuyến.' })
+      if (created) celebrate({ title: `Đã tạo POI “${body.name}”`, detail: submitted ? 'Đã gửi kiểm chứng. POI dùng được cho tuyến khi kỹ thuật xác nhận đạt.' : 'Đã lưu bản nháp. Gửi kiểm chứng để kỹ thuật xác nhận đạt trước khi dùng cho tuyến.' })
       else notify(submitted
-        ? { title: `Đã gửi kiểm chứng POI “${body.name}”`, detail: 'Chờ kỹ thuật xác nhận. Gửi kiểm chứng chưa tạo kết quả PASS.' }
+        ? { title: `Đã gửi kiểm chứng POI “${body.name}”`, detail: 'Chờ kỹ thuật xác nhận. Gửi kiểm chứng chưa có nghĩa là đã đạt.' }
         : { title: `Đã lưu POI “${body.name}”`, detail: 'Bản nháp; chưa gửi kiểm chứng.' })
       if (!poiId) navigate(`/staff/manage/pois/${result.id}`, { replace: true, ...AFTER_SAVE })
     } catch (cause) {

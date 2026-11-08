@@ -58,7 +58,7 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
       {tour.state === 'SCHEDULED' ? <>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold text-[#0f172a]">Chốt Tour (READY)</h2>
+            <h2 className="text-[15px] font-semibold text-[#0f172a]">Chốt Tour</h2>
             <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Chốt khóa đăng ký và cấu hình để chuẩn bị bắt đầu. Chốt không nhận robot, không bắt đầu Tour và không gửi lệnh nào tới robot.</p>
           </div>
           {supported && <button type="button" className={buttonClass('primary', 'sm')} disabled={!permissions.canMarkReady} onClick={() => { markReady.reset(); setDialog('ready') }}

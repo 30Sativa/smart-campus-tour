@@ -98,10 +98,10 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
   const names = confirm?.rows.map(row => row.displayName).join(', ')
   return <>
     <Drawer open wide="xl" title={reg?.summary.groupName ?? 'Đăng ký đoàn'} description={reg ? `${reg.summary.tourName} · ${reviewTime(reg.summary.tourScheduledStartAt)}` : undefined}
-      onClose={close} footer={reg && needsReload && <div className="flex justify-end"><p className="text-sm text-slate-600">Tải lại dữ liệu và xem snapshot mới trước khi xét duyệt tiếp.</p></div>}>
+      onClose={close} footer={reg && needsReload && <div className="flex justify-end"><p className="text-sm text-slate-600">Tải lại dữ liệu và xem thông tin mới nhất trước khi xét duyệt tiếp.</p></div>}>
       {query.isLoading && <p aria-busy="true">Đang tải đăng ký…</p>}
       {query.isError && <Notice tone="danger" action={<button className={buttonClass('secondary', 'sm')} onClick={() => void reload()}>Thử lại</button>}>Không tải được đăng ký này.</Notice>}
-      {needsReload && <Notice tone="warn" action={<button className={buttonClass('secondary', 'sm')} disabled={query.isFetching} onClick={() => void reload()}>Tải lại</button>}>Dữ liệu đã thay đổi hoặc Tour đã khóa. Quyết định chưa được gửi lại. Tải lại và xem snapshot mới trước khi tiếp tục.</Notice>}
+      {needsReload && <Notice tone="warn" action={<button className={buttonClass('secondary', 'sm')} disabled={query.isFetching} onClick={() => void reload()}>Tải lại</button>}>Dữ liệu đã thay đổi hoặc Tour đã khóa. Quyết định chưa được gửi lại. Tải lại và xem thông tin mới nhất trước khi tiếp tục.</Notice>}
       {error && <Notice tone="danger">{error.message}{error.fields.length > 0 && <ul className="mt-2 list-disc pl-5">{[...new Set(error.fields)].map(value => <li key={value}>{value}</li>)}</ul>}</Notice>}
       {reg && !query.isError && <div className="mt-1 space-y-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#475569]">
@@ -147,7 +147,7 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
                 {row.participationState === 'PENDING' && (row.canApprove && row.canReject
                   ? <div className="flex gap-2"><button className={buttonClass('primary', 'sm')} disabled={!canWrite} onClick={() => setConfirm({ action: 'accept', rows: [row] })}>Chấp nhận <span className="sr-only">{row.displayName}</span></button>
                     <button className={buttonClass('danger', 'sm')} disabled={!canWrite} onClick={() => setConfirm({ action: 'reject', rows: [row] })}>Từ chối <span className="sr-only">{row.displayName}</span></button></div>
-                  : <p className="text-xs text-slate-500">{needsReload ? 'Cần tải lại snapshot.' : reg.summary.tourState !== 'SCHEDULED' ? 'Tour không mở xét duyệt.' : 'Không có quyền xét duyệt dòng này.'}</p>)}
+                  : <p className="text-xs text-slate-500">{needsReload ? 'Cần tải lại dữ liệu.' : reg.summary.tourState !== 'SCHEDULED' ? 'Tour không mở xét duyệt.' : 'Không có quyền xét duyệt dòng này.'}</p>)}
               </div>} />
             <button className={buttonClass('secondary', 'sm')} disabled={!canWrite} onClick={() => void reload()}>Tải lại đăng ký</button>
           </>}

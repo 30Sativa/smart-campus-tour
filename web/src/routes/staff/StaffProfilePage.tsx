@@ -17,7 +17,7 @@ import { nextStep } from '../../features/staff/operations/next-step'
 /** What a Staff account may do, and what belongs to another role (ADR-0020, ADR-0042 §6). */
 const CAN = [
   'Chuẩn bị Tour: POI, tuyến, duyệt đăng ký, tạo Tour',
-  'Chốt Tour (READY) và mở lại khi chưa bắt đầu',
+  'Chốt Tour và mở lại khi chưa bắt đầu',
   'Kiểm tra điều kiện và bắt đầu Tour mình được giao vận hành',
   'Đi tiếp tại POI của Tour mình được giao vận hành',
 ]

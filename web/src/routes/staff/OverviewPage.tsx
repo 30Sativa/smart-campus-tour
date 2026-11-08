@@ -17,13 +17,13 @@ import { ToneBadge } from '../../features/staff/operations/OperationParts'
 import { operatorLabel, useMineFilter } from '../../features/staff/operations/mine'
 import type { TourSummary } from '../../features/administration/tours/types'
 
-const CONNECTION_TEXT = { connecting: 'Đang kết nối kênh robot…', connected: 'Kênh robot đang nhận báo cáo.', reconnecting: 'Đang kết nối lại kênh robot…', disconnected: 'Mất kết nối kênh robot, đang thử lại.' } as const
+const CONNECTION_TEXT = { connecting: 'Đang kết nối cập nhật trực tiếp…', connected: 'Đã kết nối cập nhật trực tiếp.', reconnecting: 'Đang kết nối lại cập nhật trực tiếp…', disconnected: 'Mất kết nối cập nhật trực tiếp, đang thử lại.' } as const
 
 type Read = { isRefetchError: boolean; dataUpdatedAt: number }
 
 /**
  * When the Tour data on this page was last read, and whether it may be out of
- * date. Tours are polled, not pushed, so the robot channel's state says nothing
+ * date. Tours are polled, not pushed, so the live connection's state says nothing
  * about them. Uses the oldest of the reads the page is built from.
  */
 function TourFreshness({ reads, now }: { reads: Read[]; now: number }) {
@@ -141,7 +141,7 @@ function RobotReports() {
   const fleet = useFleetTelemetry()
   const connection = useFleetConnection(store => store.state)
   return <section className={panelClass} aria-label="Robot">
-    <PanelHead title="Robot" description="Robot tự báo qua kênh robot. Báo cáo gần đây không có nghĩa robot đã sẵn sàng." action={<Link to="/staff/robot" className={buttonClass('ghost', 'sm')}>Robot & thiết bị</Link>} />
+    <PanelHead title="Robot" description="Robot tự báo về máy chủ. Báo cáo gần đây không có nghĩa robot đã sẵn sàng." action={<Link to="/staff/robot" className={buttonClass('ghost', 'sm')}>Robot & thiết bị</Link>} />
     <div className="space-y-2 p-4">
       {connection !== 'connected' && <p role="status" className="text-xs font-semibold text-[#7d5310]">{CONNECTION_TEXT[connection]}</p>}
       {!fleet ? <p className="text-sm text-[#64748b]">Chưa nhận được báo cáo nào.</p>

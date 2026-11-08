@@ -21,7 +21,7 @@ export const CHECK_GROUP_LABEL: Record<CheckGroup, string> = {
 
 /** Start check ids of `TourStartPreflight`, in the order an operator reads them. */
 const CHECKS: Record<string, { label: string; group: CheckGroup }> = {
-  tourReady: { label: 'Tour đã chốt (READY)', group: 'tour' },
+  tourReady: { label: 'Tour đã chốt', group: 'tour' },
   callerIsOperator: { label: 'Bạn là người vận hành của Tour', group: 'tour' },
   withinStartWindow: { label: 'Trong khung giờ được bắt đầu', group: 'tour' },
   reservationActive: { label: 'Tour đang giữ chỗ robot', group: 'tour' },

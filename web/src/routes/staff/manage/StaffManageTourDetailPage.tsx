@@ -12,7 +12,7 @@ import { useMapVersions } from '../../../features/technical/technical-hooks'
 import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
 import { campusShortDate } from '../../../features/administration/tours/tour-calendar'
 import { overdueStartLabel } from '../../../features/administration/tours/overdue-start'
-import { TOUR_STATE_LABEL, tourError } from '../../../features/administration/tours/tour-messages'
+import { isRegistrationClosed, tourError, tourStateLabel } from '../../../features/administration/tours/tour-messages'
 import { TourReadyPanel } from '../../../features/administration/tours/TourReadyPanel'
 import { TourStepper } from '../../../features/staff/operations/TourStepper'
 
@@ -48,18 +48,18 @@ export default function StaffManageTourDetailPage() {
 
   return <AdminPage>
     <TourStepper detail={data} page="prepare" />
-    <PageHeader eyebrow={`Tour · ${TOUR_STATE_LABEL[tour.state]}`} title={tour.name} description={tour.description ?? 'Chưa có mô tả.'} action={<div className="flex flex-wrap gap-2">
+    <PageHeader eyebrow={`Tour · ${tourStateLabel(tour, now)}`} title={tour.name} description={tour.description ?? 'Chưa có mô tả.'} action={<div className="flex flex-wrap gap-2">
       {permissions.canEditMetadata && <Link to={`/staff/manage/tours/${tour.id}/edit`} className={buttonClass('primary')}>Sửa</Link>}
       {permissions.canCancel && <button type="button" className={buttonClass('danger')} onClick={() => { cancel.reset(); setConfirming(true) }}>Hủy Tour</button>}
     </div>} />
-    {tour.state === 'SCHEDULED' && <div className="mb-3"><Notice tone="info">Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.</Notice></div>}
+    {tour.state === 'SCHEDULED' && <div className="mb-3"><Notice tone="info">{isRegistrationClosed(tour, now) ? 'Đã đóng đăng ký, Đại diện trường không thêm đoàn mới được nữa. Duyệt nốt đơn còn chờ ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.' : 'Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.'}</Notice></div>}
     {overdue && <div className="mb-3"><Notice tone="warn">{overdue}. Hệ thống tự huỷ Tour không được Start trong khung giờ.</Notice></div>}
     <TourReadyPanel detail={data} />
 
     <section className={`${panelClass} p-4`} aria-label="Thông tin Tour">
       <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <Item label="Thời gian dự kiến" value={formatSlot(tour.scheduledStartAt)} />
-        <Item label="Trạng thái" value={TOUR_STATE_LABEL[tour.state]} />
+        <Item label="Trạng thái" value={tourStateLabel(tour, now)} />
         <Item label="Đăng ký / lời mời" value={`${tour.registrationCount} đoàn · ${tour.invitationCount} lời mời`} />
         <Item label="Tạo lúc" value={formatStamp(tour.createdAt)} />
         {reservation && <Item label="Robot" value={reservation.robotCode} />}

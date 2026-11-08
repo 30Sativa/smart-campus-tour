@@ -237,7 +237,7 @@ describe('Staff versioned Route workflow', () => {
     currentRoute = tested
     const ready = renderAt('/staff/manage/routes/route-1')
     expect(await screen.findByText(/Dùng được để tạo Tour/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Tạo Tour' })).toHaveAttribute('href', '/staff/manage/tours/new')
+    expect(screen.getByRole('link', { name: 'Tạo Tour' })).toHaveAttribute('href', '/staff/manage/tours/new?route=route-rev-1')
     expect(screen.queryByText(/Chưa xếp lịch/)).not.toBeInTheDocument()
     ready.unmount()
 

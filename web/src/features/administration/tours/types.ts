@@ -16,6 +16,8 @@ export type TourReservation = { robotCode: string; startsAt: string; endsAt: str
 export type TourSummary = {
   id: string; name: string; description: string | null; routeId: string; routeName: string; activeRouteId: string
   scheduledStartAt: string; state: TourState; createdByUserId: string; createdAt: string; updatedAt: string | null
+  /** When registration closes, from a server that sends it. Absent otherwise: see `registrationClosesAtOf`. */
+  registrationClosesAt?: string | null
   rowVersion: string; registrationCount: number; invitationCount: number; routeRevisionId: string | null
   /** The active robot hold. Null for a legacy Tour and once a Tour is cancelled. */
   reservation?: TourReservation | null

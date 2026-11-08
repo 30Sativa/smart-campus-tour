@@ -1,15 +1,15 @@
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, Info, Lock, Map as MapIcon, Plus, Search, SlidersHorizontal, Timer, Bot, Users } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, FileText, Info, Lock, Map as MapIcon, Plus, Search, SlidersHorizontal, Timer, Bot, Users } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { LoadingPanel } from '../../components/ui/ConsolePrimitives'
 import { Drawer } from '../../components/ui/Drawer'
 import { buttonClass } from '../../components/ui/ui-classes'
-import { useTourCalendar, useTourShifts } from '../../features/administration/tours/hooks'
+import { useTour, useTourCalendar, useTourShifts } from '../../features/administration/tours/hooks'
 import { TourListPanel } from '../../features/administration/tours/TourListPanel'
 import { campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
-import { TOUR_STATE_LABEL, tourError } from '../../features/administration/tours/tour-messages'
+import { REGISTRATION_CLOSED_LABEL, TOUR_STATE_FILTER_LABEL, TOUR_STATE_LABEL, isRegistrationClosed, tourError, tourStateLabel } from '../../features/administration/tours/tour-messages'
 import { overdueStartLabel } from '../../features/administration/tours/overdue-start'
-import type { TourShift, TourState, TourSummary } from '../../features/administration/tours/types'
+import type { TourReservation, TourShift, TourState, TourSummary } from '../../features/administration/tours/types'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 
 const dayKey = (date: Date) =>
@@ -44,19 +44,30 @@ const CHIP: Record<TourState, string> = {
 const DOT: Record<TourState, string> = {
   SCHEDULED: 'bg-[#f6ddb0]', READY: 'bg-[#cfe0fb]', RUNNING: 'bg-[#a9c8f8]', COMPLETED: 'bg-[#e2e8f0]', CANCELLED: 'bg-white ring-1 ring-[#e2e8f0]',
 }
+/** A SCHEDULED Tour past the close of registration: a deeper shade of the same colour, named in the legend. */
+const CLOSED_CHIP = 'border-[#e8cf94] bg-[#fdf0d2] text-[#2d3748]'
+const CLOSED_DOT = 'bg-[#e3bd72]'
+const chipOf = (tour: TourSummary, now: number) => isRegistrationClosed(tour, now) ? CLOSED_CHIP : CHIP[tour.state]
+const LEGEND: Array<[string, string]> = [[DOT.SCHEDULED, TOUR_STATE_LABEL.SCHEDULED], [CLOSED_DOT, REGISTRATION_CLOSED_LABEL],
+  ...STATES.filter(state => state !== 'SCHEDULED').map((state): [string, string] => [DOT[state], TOUR_STATE_LABEL[state]])]
 const struck = (tour: TourSummary) => tour.state === 'CANCELLED' ? 'line-through' : ''
 
-const durationOf = (tour: TourSummary) => tour.reservation?.expectedDurationSeconds ?? tour.reservation?.measuredDurationSeconds ?? 3600
-const endOf = (tour: TourSummary) => new Date(new Date(tour.scheduledStartAt).getTime() + durationOf(tour) * 1000).toISOString()
-const span = (tour: TourSummary) => `${campusTime(tour.scheduledStartAt)} - ${campusTime(endOf(tour))}`
+/** Only a robot hold knows a Tour's length. The list drops the hold of a cancelled or finished Tour, and no length is ever assumed. */
+const durationOf = (hold: TourReservation | null | undefined) => (hold?.expectedDurationSeconds ?? hold?.measuredDurationSeconds) || null
+/** Start and end when the length is known, otherwise the start alone. */
+const span = (tour: TourSummary, hold = tour.reservation) => {
+  const seconds = durationOf(hold)
+  return seconds ? `${campusTime(tour.scheduledStartAt)} - ${campusTime(new Date(new Date(tour.scheduledStartAt).getTime() + seconds * 1000).toISOString())}` : campusTime(tour.scheduledStartAt)
+}
 
 const LEAD_TIME_MS = 72 * 3600_000
 const instant = (value: string) => new Date(value).getTime()
 /** A shift still takes a new Tour: not closed by Admin, no live Tour holds it and its Tour start is at least 72 hours away (docs/lich-tour-theo-ca.md §3, §5). */
 const openShift = (shift: TourShift, tours: TourSummary[], now: number) =>
-  !shift.block && instant(shift.tourStartsAt) - now >= LEAD_TIME_MS && !tours.some(tour => tour.state !== 'CANCELLED' &&
-    instant(tour.reservation ? tour.reservation.startsAt : tour.scheduledStartAt) < instant(shift.endsAt) &&
-    instant(tour.reservation ? tour.reservation.endsAt : endOf(tour)) > instant(shift.startsAt))
+  !shift.block && instant(shift.tourStartsAt) - now >= LEAD_TIME_MS && !tours.some(tour => tour.state !== 'CANCELLED' && (tour.reservation
+    ? instant(tour.reservation.startsAt) < instant(shift.endsAt) && instant(tour.reservation.endsAt) > instant(shift.startsAt)
+    // No hold means no known length, so the Tour takes only the shift it starts in.
+    : startsIn(tour, shift)))
 const createHref = (day: string, shift: TourShift) => `/staff/manage/tours/new?date=${day}&shift=${encodeURIComponent(shift.code)}`
 const shiftSpan = (shift: TourShift) => `${campusTime(shift.startsAt)}-${campusTime(shift.endsAt)}`
 /** `2099-01-05` as people read it: 05/01/2099. */
@@ -187,7 +198,7 @@ export default function SchedulePage() {
           </select>
           <select aria-label="Lọc theo trạng thái" value={stateFilter} onChange={event => set({ state: event.target.value || null })} className={`${control} w-full min-w-44 sm:w-auto`}>
             <option value="">Trạng thái: Tất cả</option>
-            {STATES.map(state => <option key={state} value={state}>Trạng thái: {TOUR_STATE_LABEL[state]}</option>)}
+            {STATES.map(state => <option key={state} value={state}>Trạng thái: {TOUR_STATE_FILTER_LABEL[state]}</option>)}
           </select>
           <label className={`${control} flex min-w-48 flex-1 items-center gap-2 focus-within:ring-2 focus-within:ring-[#5b9dc9]`}>
             <Search size={16} aria-hidden="true" className="shrink-0 text-[#a0aec0]" />
@@ -206,7 +217,7 @@ export default function SchedulePage() {
 
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-[#718096]">
           <ul aria-label="Chú thích trạng thái" className="flex flex-wrap gap-x-3.5 gap-y-1">
-            {STATES.map(state => <li key={state} className="flex items-center gap-1.5"><span aria-hidden="true" className={`size-2.5 rounded-full ${DOT[state]}`} />{TOUR_STATE_LABEL[state]}</li>)}
+            {LEGEND.map(([dot, label]) => <li key={label} className="flex items-center gap-1.5"><span aria-hidden="true" className={`size-2.5 rounded-full ${dot}`} />{label}</li>)}
           </ul>
           <span>Giờ Việt Nam (UTC+7)</span>
         </div>
@@ -294,11 +305,11 @@ function TourCard({ tour, outside = false, showRobot, onSelect }: { tour: TourSu
   const [now] = useState(() => Date.now())
   const overdue = overdueStartLabel(tour, tour.reservation, now)
   return <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" title={tour.name}
-    aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${TOUR_STATE_LABEL[tour.state]}${robot ? `, robot ${robot}` : ''}`}
-    className={`block w-full rounded-lg border px-1.5 py-1 text-left transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${CHIP[tour.state]} ${focus}`}>
+    aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}${robot ? `, robot ${robot}` : ''}`}
+    className={`block w-full rounded-lg border px-1.5 py-1 text-left transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${chipOf(tour, now)} ${focus}`}>
     <span className="flex flex-wrap gap-x-1.5 text-[11px] tabular-nums opacity-80">{campusTime(tour.scheduledStartAt)}{robot && <span className="font-mono whitespace-nowrap">{robot}</span>}</span>
     <span className={`line-clamp-2 text-xs font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
-    <span className="mt-1 inline-block rounded bg-white/70 px-1 text-[10.5px] font-semibold">{TOUR_STATE_LABEL[tour.state]}</span>
+    <span className="mt-1 inline-block rounded bg-white/70 px-1 text-[10.5px] font-semibold">{tourStateLabel(tour, now)}</span>
     {overdue && <span className="mt-1 block text-[10.5px] font-semibold text-[#9d3428]">{overdue}</span>}
   </button>
 }
@@ -343,30 +354,37 @@ function ShiftCard({ day, shift, tours, open, onSelect }: { day: string; shift: 
 
 /** Tours of one shift, by robot: the same facts the day's robot view gave, with nothing cut short. */
 function TourRows({ tours, outside = false, onSelect }: { tours: TourSummary[]; outside?: boolean; onSelect: (id: string) => void }) {
+  const [now] = useState(() => Date.now())
   return <ul aria-label="Tour trong ca" className="mt-2.5 space-y-2">{tours.map(tour => <li key={tour.id}>
-    <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${TOUR_STATE_LABEL[tour.state]}`}
-      className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-left text-sm transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${CHIP[tour.state]} ${focus}`}>
+    <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}`}
+      className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-left text-sm transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${chipOf(tour, now)} ${focus}`}>
       <span className="font-semibold tabular-nums">{span(tour)}</span>
       <span className="min-w-0 flex-1 basis-48"><span className={`block font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
         <span className="block text-xs break-words opacity-80">{tour.routeName} · {tour.reservation ? `robot ${tour.reservation.robotCode} · giữ ${campusTime(tour.reservation.startsAt)} - ${campusTime(tour.reservation.endsAt)}` : 'không giữ robot'}</span></span>
-      <span className="rounded bg-white/70 px-1.5 text-[11px] font-semibold whitespace-nowrap">{TOUR_STATE_LABEL[tour.state]}</span>
+      <span className="rounded bg-white/70 px-1.5 text-[11px] font-semibold whitespace-nowrap">{tourStateLabel(tour, now)}</span>
     </button>
   </li>)}</ul>
 }
 
-/** The chosen Tour: its time, robot hold and where to go next. */
+/** The chosen Tour: its time, robot hold and where to go next. An ended Tour reads its detail, the only place its released hold and end reason are. */
 function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void }) {
-  const hold = tour.reservation
+  const ended = tour.state === 'CANCELLED' || tour.state === 'COMPLETED'
+  const detail = useTour(ended ? tour.id : undefined)
+  const hold = ended ? detail.data?.reservation ?? tour.reservation : tour.reservation
   const [now] = useState(() => Date.now())
   const overdue = overdueStartLabel(tour, hold, now)
+  const seconds = durationOf(hold)
+  const loading = ended && detail.isPending
+  const endReason = ended ? detail.data?.endReason : null
   const rows: Array<[typeof Clock, string, ReactNode]> = [
     [CalendarDays, 'Ngày tổ chức', new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(tour.scheduledStartAt))],
-    [Clock, 'Thời gian Tour', span(tour)],
-    [Bot, 'Robot', hold?.robotCode ?? '-'],
-    [CalendarDays, 'Giữ chỗ robot', hold ? `${campusTime(hold.startsAt)} - ${campusTime(hold.endsAt)}` : 'Không giữ robot'],
-    [Timer, 'Thời lượng dự kiến', `${Math.round(durationOf(tour) / 60)} phút`],
+    [Clock, 'Thời gian Tour', span(tour, hold)],
+    [Bot, 'Robot', hold?.robotCode ?? (loading ? 'Đang tải…' : '-')],
+    [CalendarDays, hold?.releasedAt ? 'Khung giữ đã trả' : 'Giữ chỗ robot', hold ? `${campusTime(hold.startsAt)} - ${campusTime(hold.endsAt)}` : loading ? 'Đang tải…' : 'Không giữ robot'],
+    ...(seconds ? [[Timer, 'Thời lượng dự kiến', `${Math.round(seconds / 60)} phút`] as [typeof Clock, string, ReactNode]] : []),
     [MapIcon, 'Tuyến', tour.routeName],
     [Users, 'Đăng ký', `${tour.registrationCount} đoàn`],
+    ...(endReason ? [[FileText, 'Lý do kết thúc', endReason] as [typeof Clock, string, ReactNode]] : []),
   ]
   return (
     <Drawer open title="Buổi đang chọn" onClose={onClose} footer={<>
@@ -374,8 +392,10 @@ function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void 
       <Link to="/staff/manage/registrations" className={`mt-3 block rounded-md text-center text-sm font-semibold text-[#2d3748] underline-offset-4 hover:underline ${focus}`}>Xem đăng ký</Link>
     </>}>
       <p className={`text-lg leading-snug font-bold break-words text-[#2d3748] ${struck(tour)}`}>{tour.name}</p>
-      <span className={`mt-2 inline-block rounded-lg border px-2.5 py-0.5 text-xs font-semibold ${CHIP[tour.state]}`}>{TOUR_STATE_LABEL[tour.state]}</span>
+      <span className={`mt-2 inline-block rounded-lg border px-2.5 py-0.5 text-xs font-semibold ${chipOf(tour, now)}`}>{tourStateLabel(tour, now)}</span>
       {overdue && <p role="status" className="mt-2 rounded-lg border border-[#f5c8c2] bg-[#fff4f2] px-2.5 py-1 text-xs font-semibold text-[#9d3428]">{overdue}</p>}
+      {detail.isError && <p role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#f5c8c2] bg-[#fff4f2] px-2.5 py-1.5 text-xs font-semibold text-[#9d3428]">
+        Không tải được chi tiết kết thúc của Tour.<button type="button" onClick={() => void detail.refetch()} className={buttonClass('secondary', 'sm')}>Thử lại</button></p>}
       <dl className="mt-4 divide-y divide-[#eef2f6]">
         {rows.map(([Icon, label, value]) => (
           <div key={label} className="flex items-center gap-3 py-2.5 text-sm">

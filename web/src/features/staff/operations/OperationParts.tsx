@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { toneClass, type StatusTone } from '../../../components/ui/status-tone'
-import type { TourCommand, TourDetails, TourState } from '../../administration/tours/types'
-import { TOUR_STATE_LABEL } from '../../administration/tours/tour-messages'
+import type { TourCommand, TourDetails, TourState, TourSummary } from '../../administration/tours/types'
+import { tourStateLabel } from '../../administration/tours/tour-messages'
 import { formatTime } from '../formatters'
 import { useNow } from '../use-now'
 import { telemetryAge, useFleetConnection, useFleetRobot } from './fleet-telemetry'
@@ -17,8 +17,9 @@ export function ToneBadge({ tone, children }: { tone: StatusTone; children: Reac
 
 const STATE_TONE: Record<TourState, StatusTone> = { SCHEDULED: 'info', READY: 'ok', RUNNING: 'info', COMPLETED: 'muted', CANCELLED: 'danger' }
 /** The Tour's own state, in the same words as Tour preparation. */
-export function TourStateBadge({ state }: { state: TourState }) {
-  return <ToneBadge tone={STATE_TONE[state] ?? 'muted'}>{TOUR_STATE_LABEL[state] ?? 'Trạng thái khác'}</ToneBadge>
+export function TourStateBadge({ tour }: { tour: Pick<TourSummary, 'state' | 'scheduledStartAt' | 'registrationClosesAt'> }) {
+  const [now] = useState(() => Date.now())
+  return <ToneBadge tone={STATE_TONE[tour.state] ?? 'muted'}>{tourStateLabel(tour, now) ?? 'Trạng thái khác'}</ToneBadge>
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -70,7 +71,7 @@ export function ExecutionPanel({ detail, now }: { detail: TourDetails; now: numb
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <TourStateBadge state={state} />
+        <TourStateBadge tour={detail.tour} />
         {running && execution?.operationalStatus && <ToneBadge tone={OPERATIONAL_LABEL[execution.operationalStatus].tone}>{OPERATIONAL_LABEL[execution.operationalStatus].label}</ToneBadge>}
         {running && execution?.currentStep && <ToneBadge tone="info">{STEP_LABEL[execution.currentStep] ?? 'Bước khác'}</ToneBadge>}
       </div>

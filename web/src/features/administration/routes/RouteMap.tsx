@@ -60,11 +60,11 @@ export function RouteMap({ mapVersionId, stops, start, end, candidates = [], onT
       {stops.map((point, index) => pin(point, String(index + 1), STOP, true))}
     </svg>
     <figcaption className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#64748b]">
-      <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="size-2.5 rounded-[3px] bg-[#15803d]" />B: điểm bắt đầu</span>
-      <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="size-2.5 rounded-full bg-[#173b5f]" />Điểm dừng theo thứ tự</span>
+      {start && <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="size-2.5 rounded-[3px] bg-[#15803d]" />B: điểm bắt đầu</span>}
+      {stops.length > 0 && <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="size-2.5 rounded-full bg-[#173b5f]" />Điểm dừng theo thứ tự</span>}
       {endFlag && <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="size-2.5 rounded-[3px] bg-[#b45309]" />K: điểm kết thúc</span>}
       {candidates.length > 0 && <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="size-2.5 rounded-full bg-[#94a3b8]" />POI đạt, chưa chọn</span>}
-      <span>Đường nối chỉ thứ tự đi, không phải đường robot chạy.</span>
+      {path.length > 1 && <span>Đường nối chỉ thứ tự đi, không phải đường robot chạy.</span>}
     </figcaption>
   </figure>
 }

@@ -8,6 +8,7 @@ import { useMapVersions } from '../../technical/technical-hooks'
 import { useTestedRoutes, useTourOperators, useTourRobots, useTourSlots } from './hooks'
 import { campusDay, campusShortDate, campusStamp, campusTime, formatDuration } from './tour-calendar'
 import { tourError } from './tour-messages'
+import type { VersionedRoute } from '../routes/versioned-api'
 import type { CreateTourInput, TourSlot } from './types'
 
 const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/
@@ -17,15 +18,20 @@ const tourEnd = (slot: TourSlot) => new Date(new Date(slot.startsAt).getTime() +
 const shiftLabel = (slot: TourSlot) =>
   `${slot.shiftName} · ${slot.time}-${campusTime(tourEnd(slot))} · Giữ robot ${campusTime(slot.reservationStartsAt!)}-${campusTime(slot.reservationEndsAt!)}`
 
+/** Why this route cannot be chosen (docs/lich-tour-theo-ca.md §4); null when it can. UNKNOWN is a PASS measured the old way, which cannot size a shift. */
+const routeBlockReason = (route: VersionedRoute) =>
+  route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? scheduleFitLabel(route)!.text : route.scheduleFit === 'UNKNOWN' ? 'Cần chạy thử lại' : null
+
 /**
  * A new Tour names one tested route revision, one physical robot, one Operator and one free shift
- * (ADR-0034, docs/lich-tour-theo-ca.md §3). `?date=YYYY-MM-DD&shift=S1` picks the day and shift in advance.
+ * (ADR-0034, docs/lich-tour-theo-ca.md §3). `?date=YYYY-MM-DD&shift=S1` picks the day and shift in advance, `?route=<revisionId>` the route.
  */
 export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error: string | null; onSubmit: (input: CreateTourInput) => void }) {
   const [params] = useSearchParams()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [routeRevisionId, setRouteRevisionId] = useState('')
+  // Null until Staff picks: until then the route comes from `?route=`, once the list says it can be chosen.
+  const [pickedRouteId, setPickedRouteId] = useState<string | null>(null)
   const [robotCode, setRobotCode] = useState('')
   const [operatorUserId, setOperatorUserId] = useState('')
   const [date, setDate] = useState(() => DATE_PARAM.test(params.get('date') ?? '') ? params.get('date')! : '')
@@ -33,6 +39,10 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   const [video, setVideo] = useState('')
   const [clientError, setClientError] = useState('')
   const routes = useTestedRoutes()
+  const linkedRouteId = params.get('route')
+  const linkedRoute = linkedRouteId ? routes.data?.find(route => route.revisionId === linkedRouteId) : undefined
+  const linkedUsable = linkedRoute != null && routeBlockReason(linkedRoute) === null
+  const routeRevisionId = pickedRouteId ?? (linkedUsable ? linkedRoute.revisionId : '')
   const robots = useTourRobots(routeRevisionId)
   const operators = useTourOperators()
   const slots = useTourSlots(routeRevisionId, robotCode, date)
@@ -62,15 +72,18 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
       {(clientError || error) && <Notice tone="danger">{clientError || error}</Notice>}
       <label className="block text-sm">Tên Tour<input required maxLength={150} className={inputClass} value={name} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Tham quan từ xa · Sáng thứ Bảy" /></label>
       <label className="block text-sm">Mô tả<textarea maxLength={1000} rows={3} className={inputClass} value={description} onChange={e => setDescription(e.target.value)} placeholder="Nội dung ngắn đại diện trường sẽ thấy khi đăng ký." /></label>
-      <label className="block text-sm">Tuyến đã kiểm chứng<select title="" required aria-label="Tuyến đã kiểm chứng" className={inputClass} value={routeRevisionId} disabled={routes.isPending} onChange={e => { setRouteRevisionId(e.target.value); setRobotCode('') }}>
+      <label className="block text-sm">Tuyến đã kiểm chứng<select title="" required aria-label="Tuyến đã kiểm chứng" className={inputClass} value={routeRevisionId} disabled={routes.isPending} onChange={e => { setPickedRouteId(e.target.value); setRobotCode('') }}>
         <option value="">— Chọn tuyến —</option>
         {/* docs/lich-tour-theo-ca.md §4: a route no shift can hold is shown but cannot be chosen. */}
-        {routes.data?.map(route => <option key={route.revisionId} value={route.revisionId} disabled={route.scheduleFit === 'TOO_LONG_FOR_SHIFT'}>
-          {route.name} · {route.stops.length} điểm dừng{route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? ` (${scheduleFitLabel(route)!.text})` : ''}</option>)}
+        {routes.data?.map(route => {
+          const blocked = routeBlockReason(route)
+          return <option key={route.revisionId} value={route.revisionId} disabled={blocked !== null}>{route.name} · {route.stops.length} điểm dừng{blocked ? ` (${blocked})` : ''}</option>
+        })}
       </select>
         {routes.isError ? <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh mục tuyến.</span>
+          : linkedRouteId && routes.data && !linkedUsable && pickedRouteId === null ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Tuyến vừa mở chưa dùng được để tạo Tour. Chọn tuyến khác.</span>
           : routes.data?.length === 0 ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có tuyến nào chạy thử đạt. Gửi kiểm chứng ở Danh mục tuyến và chờ Kỹ thuật ghi kết quả.</span>
-          : <span className="mt-1 block text-xs text-[#64748b]">Chỉ hiện tuyến đã gửi kiểm chứng và có kết quả chạy thử đạt. Tuyến quá dài cho 1 ca không chọn được.</span>}</label>
+          : <span className="mt-1 block text-xs text-[#64748b]">Chỉ hiện tuyến đã gửi kiểm chứng và có kết quả chạy thử đạt. Tuyến quá dài cho 1 ca hoặc cần chạy thử lại thì chưa chọn được.</span>}</label>
       <label className="block text-sm">Robot<select title="" required aria-label="Robot" className={inputClass} value={robotCode} disabled={!routeRevisionId || robots.isPending} onChange={e => setRobotCode(e.target.value)}>
         <option value="">— Chọn robot vật lý —</option>
         {robots.data?.map(robot => <option key={robot.robotCode} value={robot.robotCode} disabled={!robot.usable}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}{robot.blockReason ? ` (${robot.blockReason})` : ''}</option>)}
