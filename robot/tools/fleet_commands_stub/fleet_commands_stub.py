@@ -35,6 +35,16 @@ class StubState:
         self.commands: list[dict] = []
         self.results: list[dict] = []
         self.delivered_to: dict[str, str] = {}
+        self.print_readiness = False
+        self._last_readiness: tuple | None = None
+
+    def note_readiness(self, report: dict) -> None:
+        """Print readiness telemetry when it changes. Caller holds the lock."""
+        fields = tuple(report.get(key) for key in ('status', 'localized', 'motionReady', 'faultCode'))
+        if self.print_readiness and fields != self._last_readiness:
+            self._last_readiness = fields
+            print(json.dumps({'readiness': dict(zip(('status', 'localized', 'motionReady', 'faultCode'), fields))}),
+                  flush=True)
 
     def add_goto(self, x: float, y: float, yaw: float, leg_id: str | None = None, accept_sec: float = 30.0) -> dict:
         now = datetime.now(timezone.utc)
@@ -90,6 +100,7 @@ def make_handler(state: StubState):
             with state.lock:
                 state.stream_id = body['streamId']
                 state.reports.append(body)
+                state.note_readiness(body)
             self._reply(200, {'success': True, 'data': {'accepted': True, 'duplicate': False, 'commands': []}})
 
         def _poll(self, body):
@@ -141,9 +152,12 @@ def main() -> int:
     parser.add_argument('--goto-delay-sec', type=float, default=0.0,
                         help='Wait this long after the first report before offering the GoTo, '
                              'so the motion gate can be reset first (ADR-0049).')
+    parser.add_argument('--print-readiness', action='store_true',
+                        help='Print status, localized, motionReady and faultCode whenever they change.')
     args = parser.parse_args()
     with open(args.credential_file, encoding='utf-8') as file:
         state = StubState(args.robot_code, file.read().strip(), args.map_key)
+    state.print_readiness = args.print_readiness
     server = serve(state, args.port)
     print(f'stub listening on http://127.0.0.1:{server.server_port}{SYNC_PATH}', flush=True)
     while state.stream_id is None:

@@ -49,6 +49,15 @@ class FleetBridgeNode(Node):
         # ADR-0049 T_link and permit period; used only when commands_enabled is true.
         self.declare_parameter('motion_permit_link_timeout_sec', 1.5)
         self.declare_parameter('motion_permit_period_sec', 0.2)
+        # ADR-0049 readiness; used only when commands_enabled is true. Limits are to be measured at GATE A.
+        self.declare_parameter('readiness_odometry_topic', 'wheel/odom')
+        self.declare_parameter('map_package_path', '')
+        self.declare_parameter('map_package_sha256', '')
+        self.declare_parameter('map_server_name', 'map_server')
+        self.declare_parameter('localized_max_tf_age_sec', 1.0)
+        self.declare_parameter('localized_max_xy_variance', 0.09)
+        self.declare_parameter('localized_max_yaw_variance', 0.05)
+        self.declare_parameter('motion_ready_max_odom_age_sec', 0.5)
         # ADR-0045 Operator head buttons; off by default, independent of commands_enabled.
         self.declare_parameter('head_enabled', False)
         self.declare_parameter('head_base_url', '')
@@ -125,12 +134,19 @@ class FleetBridgeNode(Node):
         self._command_worker = None
         commands_enabled = bool(self.get_parameter('commands_enabled').value)
         if commands_enabled and report_period_sec >= 2.0:
-            self.get_logger().warning(
-                'report_period_sec is not below the backend telemetry limit (2 s); polls will be refused.')
+            raise RuntimeError('report_period_sec must be below the backend telemetry limit (2 s) '
+                               'when commands_enabled is true; the fleet command profile uses 0.5.')
+
+        self._readiness = None
+        if commands_enabled:
+            self._readiness = self._create_readiness_monitor()
 
         def create_navigator():
             from .nav2 import Nav2Navigator  # Nav2 types are needed only on this path.
-            return Nav2Navigator(self)
+            return Nav2Navigator(self, on_goal_id=self._readiness.goals.mark_own)
+
+        def goto_guard():
+            return self._readiness.view().goto_refusal
 
         def create_transport():
             base = str(self.get_parameter('command_base_url').value).strip() or commands_url_from_sync_url(backend_url)
@@ -144,17 +160,19 @@ class FleetBridgeNode(Node):
             commands_enabled, create_navigator, create_transport,
             CommandWorkerConfig(float(self.get_parameter('command_poll_period_sec').value), retry_max_sec,
                                 link_timeout_sec),
-            map_key, frame_id, lambda: report_state.stream_id, self.get_logger().warning)
+            map_key, frame_id, lambda: report_state.stream_id, self.get_logger().warning, goto_guard)
         if path is not None:
             self._commands, self._command_worker = path
             # Imported only here: the telemetry-only bridge publishes nothing.
             from .motion_permit import MotionPermit
             from .motion_permit_ros import MotionPermitPublisher
             commands, command_worker = path
+            self._readiness.attach_navigator(commands.navigator)
             self._motion_permit_publisher = MotionPermitPublisher(
                 self,
                 MotionPermit(link_timeout_sec, lambda: command_worker.last_poll_success, commands.has_active_leg,
-                             lambda: commands.interrupt_leg('LOCAL_LINK_LOSS')),
+                             lambda: commands.interrupt_leg('LOCAL_LINK_LOSS'),
+                             allowed=lambda: self._readiness.view().permit_allowed),
                 permit_period_sec)
 
         self._head_worker = None
@@ -196,6 +214,25 @@ class FleetBridgeNode(Node):
             'Fleet Bridge started with commands enabled; do not run another goal sender on this robot.'
             if self._command_worker is not None else
             'Fleet Bridge started in telemetry-only mode; HTTPS runs on a background thread.')
+
+    def _create_readiness_monitor(self):
+        # Imported only here: the telemetry-only bridge keeps reporting null readiness.
+        from .readiness import ReadinessLimits
+        from .readiness_ros import ReadinessMonitor, ReadinessSources
+
+        limits = ReadinessLimits(
+            tf_max_age_sec=float(self.get_parameter('localized_max_tf_age_sec').value),
+            max_xy_variance=float(self.get_parameter('localized_max_xy_variance').value),
+            max_yaw_variance=float(self.get_parameter('localized_max_yaw_variance').value),
+            odom_max_age_sec=float(self.get_parameter('motion_ready_max_odom_age_sec').value),
+        )
+        sources = ReadinessSources(
+            odometry_topic=str(self.get_parameter('readiness_odometry_topic').value).strip(),
+            map_package_path=str(self.get_parameter('map_package_path').value).strip(),
+            map_package_sha256=str(self.get_parameter('map_package_sha256').value).strip(),
+            map_server_name=str(self.get_parameter('map_server_name').value).strip(),
+        )
+        return ReadinessMonitor(self, limits, sources)
 
     def _create_diagnostics_worker(self, backend_url, robot_code, credential, request_timeout_sec,
                                    retry_max_sec):
@@ -262,6 +299,8 @@ class FleetBridgeNode(Node):
                 rclpy.time.Time(),
                 timeout=Duration(seconds=0.0),
             )
+            if self._readiness is not None:
+                self._readiness.note_tf_stamp(transform.header.stamp)
             observation = pose_from_transform(
                 transform,
                 datetime.now(timezone.utc),
@@ -296,7 +335,14 @@ class FleetBridgeNode(Node):
         # Without the command path there is no authoritative execution-state source or backend legId.
         if self._commands is None:
             return {'pose': pose, 'status': 'UNKNOWN'}
-        return {'pose': pose, **self._commands.snapshot()}
+        snapshot = {'pose': pose, **self._commands.snapshot()}
+        readiness = self._readiness.view()
+        # A goal nobody here owns may be moving the robot, so this bridge cannot claim to be idle.
+        if snapshot['status'] == 'IDLE' and readiness.unowned_goal is not None:
+            snapshot['status'] = 'UNKNOWN'
+        snapshot.update(localized=readiness.localized, motion_ready=readiness.motion_ready,
+                        fault_code=readiness.fault_code)
+        return snapshot
 
     def _on_worker_state(self, state: str, reason: str):
         if state == 'connected':

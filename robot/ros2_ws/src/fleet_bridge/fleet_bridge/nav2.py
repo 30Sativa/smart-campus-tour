@@ -9,16 +9,19 @@ from __future__ import annotations
 
 import math
 import queue
+import uuid
 
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
+from unique_identifier_msgs.msg import UUID
 
 
 class Nav2Navigator:
-    def __init__(self, node, drain_period_sec: float = 0.05):
+    def __init__(self, node, drain_period_sec: float = 0.05, on_goal_id=None):
         self._node = node
+        self._on_goal_id = on_goal_id or (lambda goal_id: None)
         self._client = ActionClient(node, NavigateToPose, 'navigate_to_pose')
         self._work: queue.SimpleQueue = queue.SimpleQueue()
         self._handle = None
@@ -30,6 +33,9 @@ class Nav2Navigator:
 
     def cancel(self) -> None:
         self._work.put(self._cancel)
+
+    def server_ready(self) -> bool:
+        return self._client.server_is_ready()
 
     def _drain(self) -> None:
         while True:
@@ -53,7 +59,10 @@ class Nav2Navigator:
         goal.pose.pose.position.y = y
         goal.pose.pose.orientation.z = math.sin(yaw / 2.0)
         goal.pose.pose.orientation.w = math.cos(yaw / 2.0)
-        future = self._client.send_goal_async(goal)
+        # The id is chosen here so the status of this goal is never mistaken for a foreign one.
+        goal_id = uuid.uuid4().bytes
+        self._on_goal_id(goal_id)
+        future = self._client.send_goal_async(goal, goal_uuid=UUID(uuid=list(goal_id)))
         future.add_done_callback(lambda done: self._on_goal(done, on_response, on_result))
 
     def _on_goal(self, future, on_response, on_result) -> None:

@@ -90,11 +90,8 @@ full). The round counts as healthy only when both the results and the poll succe
 otherwise the next round backs off.
 
 **Operating rule:** while `commands_enabled` is true, do not run `route_test.py` or send
-goals from RViz. One goal sender per robot (`docs/architecture.md` §3.5). Nothing enforces
-this yet; enforcement is M2.3.
-
-`report_period_sec` must be below the backend's 2 s telemetry limit or polls are refused
-with `STREAM_NOT_CURRENT`; the node warns at startup.
+goals from RViz. One goal sender per robot (`docs/architecture.md` §3.5). `route_test.py`
+refuses to run, and any other goal trips the checks below.
 
 **Motion permit (ADR-0049).** With `commands_enabled`, the bridge publishes `motion_permit`
 (`std_msgs/Bool`, RELIABLE, VOLATILE) every `motion_permit_period_sec` (0.2 s). It is `true`
@@ -105,10 +102,24 @@ its own goal, holds the permit false until Nav2 ends that leg, and reports `FAIL
 `require_motion_permit: true`, and a person clears its latch with `motion_inhibit_reset`.
 If Nav2's result cannot be read, no terminal result is sent and telemetry reports `UNKNOWN`.
 
-Limits left to M2.3:
+**Readiness (ADR-0049).** With `commands_enabled` the bridge reports real `localized`,
+`motionReady` and `faultCode`, and refuses a GoTo locally by the same rules. A source with no
+data gives null. `report_period_sec` must be below 2.0 or the node refuses to start; the
+fleet command profile uses 0.5. The telemetry-only path keeps reporting null.
 
-- A restart starts a new stream and remembers nothing, so it never re-runs a command. It
-  also does not cancel goals: a goal left by a crashed bridge keeps running (no blind
-  cancel-all, ADR-0008). `mode_manager` holds it at zero; detecting it in the bridge is step 3.2.
-- `localized` and `motionReady` are still reported as null, so a real backend Start fails
-  those checks until M2.3 gives them robot-side sources.
+`localized` needs an AMCL pose, a TF `map -> base_footprint` whose stamp advanced within 1 s,
+and AMCL variance within `localized_max_xy_variance` (0.09) and `localized_max_yaw_variance`
+(0.05). These limits are to be measured at GATE A: AMCL does not update while stationary, and
+RViz's default initial pose has variances of 0.25 and 0.0685, so `localized` stays false until
+the robot has moved a little.
+
+The map check needs `map_package_path` (the exact uploaded ZIP) and `map_package_sha256`, copied
+with `map_key` from the same MapVersion row and checked by a second person. It reads
+`yaml_filename` from `map_server` and compares that yaml and its `image:` file with the ZIP.
+
+**Goals this bridge did not send** give `FOREIGN_NAV_GOAL`, or `UNOWNED_GOAL_AT_STARTUP` if found
+at startup: telemetry `UNKNOWN`, `motionReady` false, permit false. The bridge never cancels
+them. `follow_path`, `spin` and the other actions `bt_navigator` sends itself count only when
+no navigation goal is active for 1 s.
+
+A restart starts a new stream and remembers nothing, so it never re-runs a command.

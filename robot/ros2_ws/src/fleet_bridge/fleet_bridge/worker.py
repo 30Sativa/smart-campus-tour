@@ -79,6 +79,9 @@ class ReportState:
             snapshot.get('pose'),
             str(snapshot.get('status', 'UNKNOWN')),
             snapshot.get('leg_id'),
+            snapshot.get('localized'),
+            snapshot.get('motion_ready'),
+            snapshot.get('fault_code'),
         )
         self.pending_body = serialize_report(report)
         self.pending_created_monotonic = monotonic_now

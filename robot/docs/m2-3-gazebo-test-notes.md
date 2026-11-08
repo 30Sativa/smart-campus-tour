@@ -8,7 +8,7 @@ Gom mọi việc phải chạy trên Ubuntu 22.04 có ROS 2 Humble + Gazebo Clas
 |---|---|---|
 | A. Chuẩn bị và kiểm tra môi trường | Sẵn sàng | Ngay trên branch này |
 | B. GATE S3.1 | Sẵn sàng | Ngay trên branch này |
-| C. GATE S3.2 | Kịch bản nháp, chưa có code | Sau khi có PR bước 3.2 |
+| C. GATE S3.2 | Sẵn sàng | Ngay trên branch này |
 
 Không tính PASS nếu chưa có log.
 
@@ -30,7 +30,17 @@ Tạo credential cho stub. `X Y YAW` là một điểm trống, xa robot, trên 
 echo test-credential > /tmp/fleet.cred && chmod 600 /tmp/fleet.cred
 ```
 
-Kiểm tra luồng cũ, chưa bật gate. Mỗi khối một terminal, đợi Nav2 active ở terminal 1 rồi mới chạy tiếp:
+Từ bước 3.2 bridge kiểm nội dung map, nên tạo gói ZIP từ map mô phỏng. Chạy từ gốc repo, mỗi terminal chạy bridge đều cần `MAP_SHA`:
+
+```bash
+(cd robot/ros2_ws/src/robot_navigation/maps && python3 -m zipfile -c /tmp/sim_map.zip warehouse_12x12.yaml warehouse_12x12.pgm)
+```
+
+```bash
+export MAP_SHA=$(sha256sum /tmp/sim_map.zip | cut -d' ' -f1) && echo $MAP_SHA
+```
+
+Kiểm tra luồng cũ, chưa bật gate. Mỗi khối một terminal, đợi Nav2 active ở terminal 1 rồi mới chạy tiếp. Tìm topic odom của mô phỏng bằng `ros2 topic list | grep odom`; thường là `/diff_drive_controller/odom`, khác thì sửa trong lệnh bridge.
 
 ```bash
 ros2 launch robot_navigation sim_navigation.launch.py
@@ -46,10 +56,17 @@ FLEET_ROBOT_CREDENTIAL_FILE=/tmp/fleet.cred \
 ros2 run fleet_bridge fleet_bridge --ros-args \
   --params-file robot/ros2_ws/src/fleet_bridge/config/fleet_bridge.yaml \
   -p commands_enabled:=true -p report_period_sec:=0.5 \
-  -p backend_url:=$FLEET_SYNC_URL -p robot_code:=$FLEET_ROBOT_CODE -p map_key:=$FLEET_ROBOT_MAP_KEY
+  -p backend_url:=$FLEET_SYNC_URL -p robot_code:=$FLEET_ROBOT_CODE -p map_key:=$FLEET_ROBOT_MAP_KEY \
+  -p readiness_odometry_topic:=/diff_drive_controller/odom \
+  -p map_package_path:=/tmp/sim_map.zip -p map_package_sha256:=$MAP_SHA \
+  -p localized_max_xy_variance:=0.3 -p localized_max_yaw_variance:=0.1
 ```
 
-| Kiểm tra | Mong đợi |
+Đây là **lệnh bridge chuẩn** cho mọi ca dưới, trừ khi ca đó ghi khác. Hai giới hạn variance được nới vì AMCL mô phỏng seed với 0.25 và 0.0685, lớn hơn mặc định 0.09 và 0.05.
+
+Từ bước 3.2, gate phải `OPEN` thì GoTo mới được nhận, nên chỉ phần B và C chạy trọn vẹn. Trên commit của bước 3.1 lệnh này vẫn chạy, các tham số mới bị bỏ qua.
+
+| Kiểm tra (trên commit bước 3.1, chưa bật gate) | Mong đợi |
 |---|---|
 | Chạy GoTo | Stub in `ACCEPTED`, rồi `TERMINAL` với `ARRIVED`, và thoát 0 |
 | Thêm `--cancel-after-sec 3` cho stub | `TERMINAL` với `CANCELLED`, hoặc `ARRIVED` nếu robot tới trước |
@@ -140,18 +157,56 @@ ros2 service call /navigate_to_pose/_action/cancel_goal action_msgs/srv/CancelGo
 - Thời gian dừng của từng ca: lấy mốc trong `*_event.txt`, so với dòng `cmd_vel` bằng 0 đầu tiên và lúc odom về 0.
 - Real-time factor của Gazebo. `mode_manager` dùng sim time, nên factor dưới 1 sẽ làm số đo theo đồng hồ thật dài ra.
 
-## C. GATE S3.2: readiness (nháp)
+## C. GATE S3.2: readiness
 
-Lệnh chính xác sẽ được bổ sung cùng PR 3.2.
+Dùng terminal 1 có `require_motion_permit:=true`, trừ ca ghi khác. Chạy stub với `--print-readiness` để xem telemetry; stub in một dòng mỗi khi `status`, `localized`, `motionReady` hoặc `faultCode` đổi:
 
-| Ca | Sự kiện | PASS |
+```bash
+python3 robot/tools/fleet_commands_stub/fleet_commands_stub.py --robot-code robot_01 --credential-file /tmp/fleet.cred --map-key sim-map --goto X Y YAW --goto-delay-sec 40 --timeout-sec 300 --print-readiness
+```
+
+| Ca | Làm gì | PASS |
 |---|---|---|
-| S6 | Chưa có initial pose | `localized` null hoặc false |
-| S7 | Bật E-stop phần mềm | `motionReady` false, `faultCode` `ESTOP_ENGAGED` |
-| S8 | Gửi goal bằng RViz hoặc CLI khi bridge đang nhận lệnh | `FOREIGN_NAV_GOAL`, gate `LATCHED`, bridge không cancel goal đó |
-| S9 | File map khác nội dung, cùng `map_key` | GoTo bị từ chối, `MAP_CONTENT_MISMATCH` |
+| S6a | Chạy stub và bridge **trước** khi launch mô phỏng | `localized: null`, `motionReady: null` |
+| S6b | Launch mô phỏng, bridge chạy **không** có hai tham số variance; không di chuyển robot, không reset | `localized` khác `true`; khi GoTo tới, stub in `REJECTED` với `NOT_LOCALIZED` hoặc lý do readiness khác |
+| S7 | Gate `OPEN`, rồi bật E-stop phần mềm (lệnh bên dưới) | `motionReady: false`, `faultCode: ESTOP_ENGAGED`, gate `LATCHED:ESTOP` |
+| S7b | Tắt E-stop | Gate vẫn `LATCHED:ESTOP`, `faultCode: MOTION_GATE_LATCHED` |
+| S8 | Gate `OPEN`, chưa có GoTo, gửi goal bằng CLI (lệnh bên dưới) | `FOREIGN_NAV_GOAL`, `status: UNKNOWN`, gate `LATCHED:PERMIT_LOST`, terminal gửi goal vẫn đang chờ (bridge không cancel goal đó) |
+| S8b | Khi goal lạ còn chạy, kill bridge rồi chạy lại | `UNOWNED_GOAL_AT_STARTUP`, `status: UNKNOWN`, goal vẫn còn |
+| S9 | Launch với map đã sửa (lệnh bên dưới), bridge dùng `MAP_SHA` gốc | `faultCode: MAP_CONTENT_MISMATCH`, GoTo `REJECTED` với `MAP_MISMATCH` |
+| S10 | Khi bridge đang chạy lệnh chuẩn, chạy `route_test.py` | In `Tu choi chay: fleet_bridge dang nhan lenh`, không gửi goal |
 
-Lưu ý cho S6: `sim_navigation.launch.py` hiện đặt cứng `set_initial_pose` là true và seed AMCL tại (0,0,0), nên bước 3.2 phải có cách tắt.
+Bật và tắt E-stop phần mềm (S7, S7b):
+
+```bash
+ros2 service call /emergency_stop std_srvs/srv/SetBool "{data: true}"
+```
+
+```bash
+ros2 service call /emergency_stop std_srvs/srv/SetBool "{data: false}"
+```
+
+Goal lạ (S8). Sau khi xong ca, kết thúc goal bằng lệnh cancel ở phần B:
+
+```bash
+ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{pose: {header: {frame_id: map}, pose: {position: {x: X, y: Y}, orientation: {w: 1.0}}}}"
+```
+
+Map đã sửa (S9). Chạy từ gốc repo, rồi launch thay cho terminal 1:
+
+```bash
+mkdir -p /tmp/altered && cp robot/ros2_ws/src/robot_navigation/maps/warehouse_12x12.* /tmp/altered/ && printf '\0' >> /tmp/altered/warehouse_12x12.pgm
+```
+
+```bash
+ros2 launch robot_navigation sim_navigation.launch.py require_motion_permit:=true map:=/tmp/altered/warehouse_12x12.yaml
+```
+
+Route test (S10), dùng một file tuyến hợp lệ bất kỳ:
+
+```bash
+python3 robot/tools/route_test/route_test.py ROUTE.yaml --action /navigate_to_pose --no-confirm
+```
 
 ## Gửi lại sau khi chạy
 

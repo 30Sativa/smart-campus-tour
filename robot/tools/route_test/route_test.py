@@ -55,6 +55,9 @@ ACCEPT_TIMEOUT_S = 10.0
 LATE_ACCEPT_WAIT_S = 10.0
 CANCEL_ACK_TIMEOUT_S = 5.0
 CANCEL_RESULT_TIMEOUT_S = 10.0
+BRIDGE_QUERY_TIMEOUT_S = 3.0
+GOAL_STATUS_WAIT_S = 1.0
+STATUS_ACTIVE = (1, 2, 3)
 START_WARN_M = 1.0
 VN_TZ = timezone(timedelta(hours=7))  # logging.md: ten thu muc theo gio Viet Nam
 ESTOP_BANNER = '\n'.join(('', '!' * 62,
@@ -479,6 +482,27 @@ def run_legs(plan, execute, log, stop_event, log_fn, default_timeout, legs_out):
     return None
 
 
+def command_bridge_service(action):
+    """Service get_parameters cua fleet_bridge, cung namespace voi action Nav2."""
+    return f'{action.rpartition("/")[0]}/fleet_bridge/get_parameters'
+
+
+def bridge_start_refusal(commands_enabled, active_goals, no_command_bridge):
+    """Mot robot chi co mot ben gui goal (ADR-0049). Tra ly do tu choi, hoac None neu duoc chay.
+
+    commands_enabled: True/False tu fleet_bridge, None neu khong co tra loi.
+    --no-command-bridge chi bo qua truong hop khong co tra loi, khong bao gio bo qua True.
+    """
+    if commands_enabled is True:
+        return 'Tu choi chay: fleet_bridge dang nhan lenh (commands_enabled=true).'
+    if commands_enabled is None and not no_command_bridge:
+        return ('Tu choi chay: khong hoi duoc fleet_bridge. Neu chac chan khong co bridge nhan lenh, '
+                'chay lai voi --no-command-bridge.')
+    if active_goals:
+        return f'Tu choi chay: Nav2 con {active_goals} goal dang chay.'
+    return None
+
+
 def start_offset(route, pose):
     """Khoang cach robot toi START; chi de canh bao, khong chan chay."""
     if pose is None:
@@ -490,10 +514,13 @@ def start_offset(route, pose):
 def run_route(route, plan, args):
     try:
         import rclpy
+        from action_msgs.msg import GoalStatusArray
         from nav2_msgs.action import NavigateToPose
+        from rcl_interfaces.srv import GetParameters
         from rclpy.action import ActionClient
         from rclpy.duration import Duration
         from rclpy.executors import SingleThreadedExecutor
+        from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
         from rclpy.signals import SignalHandlerOptions
         from rclpy.time import Time
         from tf2_ros import Buffer, TransformListener
@@ -543,6 +570,37 @@ def run_route(route, plan, args):
         goal.pose.pose.orientation.z, goal.pose.pose.orientation.w = quat_from_yaw(target['yaw'])
         return goal
 
+    def read_commands_enabled():
+        param_client = node.create_client(GetParameters, command_bridge_service(args.action))
+        try:
+            if not param_client.wait_for_service(timeout_sec=BRIDGE_QUERY_TIMEOUT_S):
+                return None
+            request = GetParameters.Request()
+            request.names = ['commands_enabled']
+            future = param_client.call_async(request)
+            if wait_future(future, BRIDGE_QUERY_TIMEOUT_S) != 'done' or future.result() is None:
+                return None
+            values = future.result().values
+            return bool(values[0].bool_value) if values and values[0].type == 1 else None  # 1 = PARAMETER_BOOL
+        finally:
+            node.destroy_client(param_client)
+
+    def count_active_goals():
+        received = threading.Event()
+        counted = [0]
+
+        def on_status(msg):
+            counted[0] = sum(1 for item in msg.status_list if item.status in STATUS_ACTIVE)
+            received.set()
+
+        qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                         durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        subscription = node.create_subscription(GoalStatusArray, f'{args.action}/_action/status',
+                                                on_status, qos)
+        received.wait(GOAL_STATUS_WAIT_S)  # Nav2 chua tung co goal thi khong co status nao
+        node.destroy_subscription(subscription)
+        return counted[0]
+
     runner = Nav2GoalRunner(client, make_goal, get_pose, say)
     stop_event = threading.Event()
     legs_out = []
@@ -585,9 +643,14 @@ def run_route(route, plan, args):
                                                   'dwell_s')},
                              timeout_s=leg_timeout(leg, args.leg_timeout))
                         for leg in plan['legs']])
+        refusal = (bridge_start_refusal(read_commands_enabled(), count_active_goals(), args.no_command_bridge)
+                   if server_ok else None)
         if not server_ok:
             say('Khong thay Nav2 action server. Kiem tra ten action (ros2 action list).')
             stop_reason = 'nav2_unavailable'
+        elif refusal is not None:
+            say(refusal)
+            stop_reason = 'command_bridge_guard'
         else:
             if offset['pose'] is None:
                 say(f'Canh bao: chua doc duoc TF {route["frame_id"]} -> {BASE_FRAME}.')
@@ -637,6 +700,8 @@ def parse_args(argv):
     p.add_argument('--with-end', action='store_true',
                    help='van chay chang ket thuc khi dung --max-points')
     p.add_argument('--dry-run', action='store_true', help='chi in ke hoach, khong can ROS')
+    p.add_argument('--no-command-bridge', action='store_true',
+                   help='nguoi van hanh xac nhan khong co fleet_bridge nhan lenh khi khong hoi duoc bridge')
     p.add_argument('--no-confirm', action='store_true', help='bo buoc nhan Enter')
     p.add_argument('--log-dir', help='noi tao thu muc log, mac dinh $AMR_RUN_DIR '
                                      'hoac ~/amr_logs/runs')
