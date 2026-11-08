@@ -365,3 +365,27 @@ Cập nhật sau mỗi phần: đã làm gì, kiểm tra bằng gì, chỗ nào 
 
 **Chưa chạy được:** `scripts/verify robot`, `scripts/verify ai-assistant` (thiếu môi trường trên máy này; đợt này không sửa hai thư
 mục đó), `backend/scripts/test-db-upgrade` và `backend/scripts/test-deployment` (cần Docker).
+
+## 11. Tự huỷ Tour quá giờ
+
+Nguồn: SRS v0.2 BR-24, UC-TOUR-07, BR-27, FR-40, AC-19; quyết định kỹ thuật ở ADR-0047.
+
+- **Khi nào:** Start chỉ được nhận trong [T, T+15'] (`TourStartPreflight`, `FleetCommands:StartLateLimitMinutes`). Tour còn
+  `SCHEDULED`/`READY`, chưa có dấu vết vận hành (cùng điều kiện Staff Cancel dùng), đến hết khung giữ robot thì hệ thống tự huỷ.
+  Hết khung giữ là `EndsAt` của reservation đang hiệu lực; Tour không có reservation thì là T+15'. Mốc này không bao giờ sớm
+  hơn T+15', nên hệ thống không lấy mất Tour mà Staff còn Start được.
+- **Ai chạy:** `TourAutoCancelWorker` ở Api, mỗi 60 giây. Nó liệt kê Tour quá hạn rồi gửi một command cho mỗi Tour, mỗi Tour một
+  transaction. Không gửi lệnh nào cho robot; Tour `RUNNING`, `COMPLETED`, `CANCELLED` không bị đụng tới.
+- **Làm gì:** đúng phần lõi của Staff Cancel: huỷ đơn đang chờ duyệt, thu hồi lời mời, đóng phiên xem, nhả reservation, xếp
+  email thông báo huỷ cho đoàn `SUBMITTED`/`APPROVED`. `EndReason` là "Không bắt đầu trong khung giờ, hệ thống tự huỷ."
+- **Không có người thao tác:** các audit ghi `ActorUserId = NULL`; receipt `TOUR_CANCELLED` có ResultCode `SYSTEM_NO_START`.
+  Reservation được nhả với `ReleasedByUserId = NULL`: schema v1.17 đổi CHECK thành `CK_TourRobotReservations_Release_Actor`
+  để cho phép việc này.
+- **Đua với Staff:** command lấy khoá Tour giống Start và Cancel rồi mới kiểm lại điều kiện. Bên tới sau thấy kết quả của bên
+  trước: Staff Cancel tới sau nhận 409, job tới sau bỏ qua. Chạy lại không huỷ hai lần và không xếp email hai lần.
+- **Tồn đọng:** Tour hết khung giữ hơn 24 giờ trước lượt chạy vẫn bị huỷ nhưng không xếp email; receipt ghi
+  `notice = SKIPPED_BACKLOG` và worker ghi số lượng vào log.
+- **Web:** Lịch Tour (thẻ Tour, popup chi tiết) và trang chi tiết Tour hiện "Quá giờ bắt đầu · tự huỷ lúc HH:mm" cho Tour
+  `SCHEDULED`/`READY` đã quá T+15'. Nhãn chỉ để hiển thị, quyết định do server.
+- **Khi triển khai:** cần nâng cấp database lên v1.17 (patch `upgrade-v1.16-to-v1.17-system-reservation-release.sql`) trước hoặc
+  cùng API này, theo đường nâng cấp có backup như v1.16.

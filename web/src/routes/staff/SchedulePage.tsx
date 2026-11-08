@@ -8,6 +8,7 @@ import { useTourCalendar, useTourShifts } from '../../features/administration/to
 import { TourListPanel } from '../../features/administration/tours/TourListPanel'
 import { campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
 import { TOUR_STATE_LABEL, tourError } from '../../features/administration/tours/tour-messages'
+import { overdueStartLabel } from '../../features/administration/tours/overdue-start'
 import type { TourShift, TourState, TourSummary } from '../../features/administration/tours/types'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 
@@ -283,12 +284,15 @@ function ShiftCell({ day, shift, tours, open, showRobot, onSelect, className }: 
 
 function TourCard({ tour, outside = false, showRobot, onSelect }: { tour: TourSummary; outside?: boolean; showRobot: boolean; onSelect: (id: string) => void }) {
   const robot = showRobot ? tour.reservation?.robotCode : undefined
+  const [now] = useState(() => Date.now())
+  const overdue = overdueStartLabel(tour, tour.reservation, now)
   return <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" title={tour.name}
     aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${TOUR_STATE_LABEL[tour.state]}${robot ? `, robot ${robot}` : ''}`}
     className={`block w-full rounded-lg border px-1.5 py-1 text-left transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${CHIP[tour.state]} ${focus}`}>
     <span className="flex flex-wrap gap-x-1.5 text-[11px] tabular-nums opacity-80">{campusTime(tour.scheduledStartAt)}{robot && <span className="font-mono whitespace-nowrap">{robot}</span>}</span>
     <span className={`line-clamp-2 text-xs font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
     <span className="mt-1 inline-block rounded bg-white/70 px-1 text-[10.5px] font-semibold">{TOUR_STATE_LABEL[tour.state]}</span>
+    {overdue && <span className="mt-1 block text-[10.5px] font-semibold text-[#9d3428]">{overdue}</span>}
   </button>
 }
 
@@ -346,6 +350,8 @@ function TourRows({ tours, outside = false, onSelect }: { tours: TourSummary[]; 
 /** The chosen Tour: its time, robot hold and where to go next. */
 function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void }) {
   const hold = tour.reservation
+  const [now] = useState(() => Date.now())
+  const overdue = overdueStartLabel(tour, hold, now)
   const rows: Array<[typeof Clock, string, ReactNode]> = [
     [CalendarDays, 'Ngày tổ chức', new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(tour.scheduledStartAt))],
     [Clock, 'Thời gian Tour', span(tour)],
@@ -362,6 +368,7 @@ function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void 
     </>}>
       <p className={`text-lg leading-snug font-bold break-words text-[#2d3748] ${struck(tour)}`}>{tour.name}</p>
       <span className={`mt-2 inline-block rounded-lg border px-2.5 py-0.5 text-xs font-semibold ${CHIP[tour.state]}`}>{TOUR_STATE_LABEL[tour.state]}</span>
+      {overdue && <p role="status" className="mt-2 rounded-lg border border-[#f5c8c2] bg-[#fff4f2] px-2.5 py-1 text-xs font-semibold text-[#9d3428]">{overdue}</p>}
       <dl className="mt-4 divide-y divide-[#eef2f6]">
         {rows.map(([Icon, label, value]) => (
           <div key={label} className="flex items-center gap-3 py-2.5 text-sm">

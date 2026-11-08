@@ -306,9 +306,24 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV116SnapshotAndMarker()
+    public async Task Bootstrap_AcceptsVerifiedV117SnapshotAndMarker()
     {
-        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.16.sql", "1.16"));
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.17.sql", "1.17"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_RefusesAV117MarkerWithoutTheTrustedSystemReleaseCheck()
+    {
+        foreach (var sql in new[]
+        {
+            "ALTER TABLE dbo.TourRobotReservations DROP CONSTRAINT CK_TourRobotReservations_Release_Actor;",
+            "ALTER TABLE dbo.TourRobotReservations NOCHECK CONSTRAINT CK_TourRobotReservations_Release_Actor;",
+            "ALTER TABLE dbo.TourRobotReservations WITH CHECK ADD CONSTRAINT CK_TourRobotReservations_Release_Complete CHECK ((ReleasedAt IS NULL AND ReleasedByUserId IS NULL) OR (ReleasedAt IS NOT NULL AND ReleasedByUserId IS NOT NULL));"
+        })
+        {
+            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.17.sql", "1.17", sql));
+            Assert.Equal(51001, error.Number);
+        }
     }
 
     [SchemaV11Fact]
@@ -322,7 +337,7 @@ public sealed class DeploymentDatabaseTests
             "ALTER TABLE dbo.RobotCommands DROP CONSTRAINT CK_RobotCommands_Outcome; ALTER TABLE dbo.RobotCommands WITH CHECK ADD CONSTRAINT CK_RobotCommands_Outcome CHECK ((State IN ('ARRIVED','FAILED','CANCELLED') AND Outcome=State) OR (State NOT IN ('ARRIVED','FAILED','CANCELLED') AND Outcome IS NULL));"
         })
         {
-            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.16.sql", "1.16", sql));
+            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.17.sql", "1.17", sql));
             Assert.Equal(51001, error.Number);
         }
     }
@@ -330,6 +345,7 @@ public sealed class DeploymentDatabaseTests
     [SchemaV11Fact]
     public async Task Bootstrap_VerifiedV19SnapshotAndMarkerRequiresUpgrade()
     {
+        Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.16.sql", "1.16"));
         Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.15.sql", "1.15"));
         Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.14.sql", "1.14"));
         Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.13.sql", "1.13"));
@@ -346,7 +362,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     // Bootstraps the snapshot with its own hash and version markers, then runs the guard with every
-    // variable bound exactly as init-db.sh binds it for the current v1.16 release.
+    // variable bound exactly as init-db.sh binds it for the current v1.17 release.
     private static async Task<object?> RunCurrentGuardAsync(string snapshot, string version, string? alteration = null)
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync(snapshot);
@@ -368,7 +384,8 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV14)", await SnapshotHashAsync("snapshot-v1.4.sql"))
             .Replace("$(SchemaHashV114)", await SnapshotHashAsync("snapshot-v1.14.sql"))
             .Replace("$(SchemaHashV115)", await SnapshotHashAsync("snapshot-v1.15.sql"))
-            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.16.sql"));
+            .Replace("$(SchemaHashV116)", await SnapshotHashAsync("snapshot-v1.16.sql"))
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.17.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();
     }

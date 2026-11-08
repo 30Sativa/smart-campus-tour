@@ -11,7 +11,7 @@ public static class RegistrationAudit
     public const string CancelledAuditAction = "REGISTRATION_CANCELLED";
     public const string ApprovedAuditAction = "REGISTRATION_APPROVED";
     public const string RejectedAuditAction = "REGISTRATION_REJECTED";
-    public static AuditLog Create(GroupRegistration registration, Guid actor, string action, DateTimeOffset now, Guid? key = null) =>
+    public static AuditLog Create(GroupRegistration registration, Guid? actor, string action, DateTimeOffset now, Guid? key = null) =>
         new()
         {
             ActorUserId = actor, TourId = registration.TourId, CorrelationId = key, Action = action,

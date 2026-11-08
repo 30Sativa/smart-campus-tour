@@ -55,6 +55,11 @@ public interface ITourManagementRepository
     /// <summary>The Tour of the robot's open command, unlocked, so a poll knows which root lock to take first.</summary>
     Task<Guid?> FindOpenCommandTourAsync(Guid robotId, CancellationToken ct);
     Task<IReadOnlyList<Guid>> ListRunningTourIdsAsync(CancellationToken ct);
+    /// <summary>
+    /// SCHEDULED/READY Tours whose robot hold ended by now (ADR-0047), unlocked candidates oldest first: the active
+    /// reservation's EndsAt, never before ScheduledStartAt + startLateLimit, which alone applies without a reservation.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ListOverdueUnstartedTourIdsAsync(DateTimeOffset now, TimeSpan startLateLimit, CancellationToken ct);
     Task MarkRobotNeedsInspectionAsync(Guid robotId, CancellationToken ct);
     /// <summary>Clears the hold only if the robot still has this version; false when it changed.</summary>
     Task<bool> ReleaseInspectionAsync(Guid robotId, byte[] expectedRowVersion, CancellationToken ct);

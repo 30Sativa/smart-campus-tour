@@ -99,6 +99,7 @@ if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
     // Recovery first: it must finish before the server, and before the first sweep.
     builder.Services.AddHostedService<SmartCampus.Api.Hubs.FleetCommandRestartRecovery>();
     builder.Services.AddHostedService<SmartCampus.Api.Hubs.FleetCommandSweeper>();
+    builder.Services.AddHostedService<SmartCampus.Api.Tours.TourAutoCancelWorker>();
 }
 if (initialAdminSeedCommand.Requested || !simulationPreviewEnabled)
 {
