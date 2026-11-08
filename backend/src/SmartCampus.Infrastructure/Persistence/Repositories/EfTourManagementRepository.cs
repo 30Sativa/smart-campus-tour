@@ -152,6 +152,21 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public async Task<IReadOnlyList<Guid>> ListRunningTourIdsAsync(CancellationToken ct) =>
         await db.Tours.AsNoTracking().Where(t => t.State == TourRuntime.Running).Select(t => t.Id).ToArrayAsync(ct);
 
+    public async Task<IReadOnlyList<Guid>> ListOverdueUnstartedTourIdsAsync(DateTimeOffset now, TimeSpan startLateLimit, CancellationToken ct)
+    {
+        // The hold never ends before the Start window closes, so that bound alone narrows the scan in SQL.
+        var startedBy = now - startLateLimit;
+        var candidates = await db.Tours.AsNoTracking()
+            .Where(t => (t.State == "SCHEDULED" || t.State == "READY") && t.ScheduledStartAt <= startedBy)
+            .Select(t => new
+            {
+                t.Id, t.ScheduledStartAt,
+                EndsAt = t.TourRobotReservations.Where(r => r.ReleasedAt == null).Select(r => (DateTimeOffset?)r.EndsAt).FirstOrDefault()
+            }).ToArrayAsync(ct);
+        return candidates.Select(t => (t.Id, HoldEndsAt: TourAutoCancel.HoldEndsAt(t.ScheduledStartAt, t.EndsAt, startLateLimit)))
+            .Where(t => t.HoldEndsAt <= now).OrderBy(t => t.HoldEndsAt).ThenBy(t => t.Id).Select(t => t.Id).ToArray();
+    }
+
     public Task MarkRobotNeedsInspectionAsync(Guid robotId, CancellationToken ct) =>
         db.Robots.Where(r => r.Id == robotId).ExecuteUpdateAsync(set => set.SetProperty(r => r.NeedsInspection, true), ct);
 

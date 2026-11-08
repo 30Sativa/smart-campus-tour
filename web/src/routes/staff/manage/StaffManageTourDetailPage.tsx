@@ -9,6 +9,7 @@ import { formatSlot, formatStamp } from '../../../features/administration/admin-
 import { passedAt } from '../../../features/administration/routes/route-messages'
 import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
 import { campusShortDate } from '../../../features/administration/tours/tour-calendar'
+import { overdueStartLabel } from '../../../features/administration/tours/overdue-start'
 import { TOUR_STATE_LABEL, tourError } from '../../../features/administration/tours/tour-messages'
 import { TourReadyPanel } from '../../../features/administration/tours/TourReadyPanel'
 import { TourStepper } from '../../../features/staff/operations/TourStepper'
@@ -25,11 +26,13 @@ export default function StaffManageTourDetailPage() {
   const cancel = useCancelTour()
   const [confirming, setConfirming] = useState(false)
   const [requestId, setRequestId] = useState(newRequestId)
+  const [now] = useState(() => Date.now())
   const data = detail.data
   if (detail.isError) return <AdminPage><AdminErrorPanel title={tourError(detail.error)} onRetry={() => void detail.refetch()} /></AdminPage>
   if (!data) return <AdminPage><SkeletonRows rows={5} label="Đang tải Tour" /></AdminPage>
   const { tour, route, routeRevision, operator, reservation, permissions } = data
   const routePassedAt = routeRevision && passedAt(routeRevision)
+  const overdue = overdueStartLabel(tour, reservation, now)
 
   const confirmCancel = async (reason: string) => {
     try {
@@ -47,6 +50,7 @@ export default function StaffManageTourDetailPage() {
       {permissions.canCancel && <button type="button" className={buttonClass('danger')} onClick={() => { cancel.reset(); setConfirming(true) }}>Hủy Tour</button>}
     </div>} />
     {tour.state === 'SCHEDULED' && <div className="mb-3"><Notice tone="info">Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.</Notice></div>}
+    {overdue && <div className="mb-3"><Notice tone="warn">{overdue}. Hệ thống tự huỷ Tour không được Start trong khung giờ.</Notice></div>}
     <TourReadyPanel detail={data} />
 
     <section className={`${panelClass} p-4`} aria-label="Thông tin Tour">
