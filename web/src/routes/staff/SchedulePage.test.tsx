@@ -29,6 +29,7 @@ let urls: URL[] = []
 let status = 200
 let shiftStatus = 200
 let tourRows: unknown[] = []
+let tourDetail: unknown = null
 
 function Location() {
   const { search } = useLocation()
@@ -44,15 +45,58 @@ describe('Staff Tour calendar', () => {
     shiftStatus = 200
     tourRows = [session, evening]
     blockedDate = ''
+    tourDetail = null
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), 'http://localhost')
       urls.push(url)
+      if (tourDetail && url.pathname === '/api/staff/manage/tours/tour-1') return new Response(JSON.stringify({ success: true, data: tourDetail }), { status: 200 })
       if (url.pathname === '/api/staff/manage/tours/shifts')
         return new Response(JSON.stringify({ success: shiftStatus === 200, message: 'Không tải được.', data: { days: shiftDays(url.searchParams.get('from')!, url.searchParams.get('to')!), recommendedMaxSeconds: 3600 } }), { status: shiftStatus })
       return new Response(JSON.stringify({ success: status === 200, message: 'Không tải được.', data: tourRows, pagination: { page: 1, pageSize: 100, totalItems: tourRows.length, totalPages: 1 } }), { status })
     }))
   })
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+  it('prints only the start of a Tour whose length is unknown, never an assumed hour', async () => {
+    tourRows = [{ ...session, reservation: null }]
+    show('/staff/schedule?date=2099-01-05&tour=tour-1')
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Thời gian Tour').nextSibling).toHaveTextContent(/^09:00$/)
+    expect(within(dialog).queryByText('Thời lượng dự kiến')).not.toBeInTheDocument()
+    expect(dialog).not.toHaveTextContent('60 phút')
+    expect(await screen.findByRole('button', { name: /^09:00 Tour sáng thật/ })).toBeInTheDocument()
+  })
+
+  it('reads an ended Tour from its detail: the end reason, robot, released hold and real length', async () => {
+    const cancelled = { ...session, state: 'CANCELLED', reservation: null }
+    tourRows = [cancelled]
+    tourDetail = { tour: cancelled, reservation: { robotCode: 'amr-07', startsAt: '2099-01-05T01:00:00Z', endsAt: '2099-01-05T03:00:00Z', measuredDurationSeconds: 5400, expectedDurationSeconds: 6000, releasedAt: '2099-01-05T04:00:00Z' }, endReason: 'Robot bảo trì đột xuất' }
+    show('/staff/schedule?date=2099-01-05&tour=tour-1')
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText('Robot bảo trì đột xuất')).toBeInTheDocument()
+    expect(within(dialog).getByText('Lý do kết thúc')).toBeInTheDocument()
+    expect(within(dialog).getByText('amr-07')).toBeInTheDocument()
+    expect(within(dialog).getByText('Khung giữ đã trả').nextSibling).toHaveTextContent('08:00 - 10:00')
+    expect(within(dialog).getByText('Thời lượng dự kiến').nextSibling).toHaveTextContent('100 phút')
+    expect(within(dialog).getByText('Thời gian Tour').nextSibling).toHaveTextContent('09:00 - 10:40')
+  })
+
+  it('does not read the detail of a Tour that has not ended', async () => {
+    show('/staff/schedule?date=2099-01-05&tour=tour-1')
+    await screen.findByRole('dialog')
+    expect(urls.some(url => url.pathname === '/api/staff/manage/tours/tour-1')).toBe(false)
+  })
+
+  it('names a SCHEDULED Tour by whether registration is still open, in the card, popup and legend', async () => {
+    tourRows = [session, { ...evening, registrationClosesAt: '2020-01-01T00:00:00Z' }]
+    show('/staff/schedule?date=2099-01-05&tour=tour-2')
+    expect(await screen.findByRole('button', { name: /Tour sáng thật, Đang nhận đăng ký/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Tour tối cũ, Đã đóng đăng ký/ })).toBeInTheDocument()
+    expect(within(await screen.findByRole('dialog')).getByText('Đã đóng đăng ký')).toBeInTheDocument()
+    const legend = within(screen.getByRole('list', { name: 'Chú thích trạng thái' }))
+    expect(legend.getByText('Đang nhận đăng ký')).toBeInTheDocument()
+    expect(legend.getByText('Đã đóng đăng ký')).toBeInTheDocument()
+  })
 
   it('reads the week from the live Tour API, in campus time', async () => {
     show()

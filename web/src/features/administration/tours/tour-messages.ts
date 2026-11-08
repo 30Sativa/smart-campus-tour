@@ -1,9 +1,26 @@
 import { ApiError } from '../../../api/client'
-import type { TourState } from './types'
+import type { TourState, TourSummary } from './types'
 
 export const TOUR_STATE_LABEL: Record<TourState, string> = {
   SCHEDULED: 'Đang nhận đăng ký', READY: 'Đã chốt', RUNNING: 'Đang diễn ra', COMPLETED: 'Đã kết thúc', CANCELLED: 'Đã hủy',
 }
+
+/** The filter picks every SCHEDULED Tour, whether or not its registration has closed, so it cannot use a word for only one half. */
+export const TOUR_STATE_FILTER_LABEL: Record<TourState, string> = { ...TOUR_STATE_LABEL, SCHEDULED: 'Chưa chốt' }
+
+export const REGISTRATION_CLOSED_LABEL = 'Đã đóng đăng ký'
+/** Backend `TourSchedule.RegistrationClose`; used only for a server that does not send `registrationClosesAt`. */
+const REGISTRATION_CLOSE_MS = 48 * 3600_000
+type TourTiming = Pick<TourSummary, 'state' | 'scheduledStartAt' | 'registrationClosesAt'>
+
+export const registrationClosesAtOf = (tour: Pick<TourTiming, 'scheduledStartAt' | 'registrationClosesAt'>) =>
+  tour.registrationClosesAt ? new Date(tour.registrationClosesAt).getTime() : new Date(tour.scheduledStartAt).getTime() - REGISTRATION_CLOSE_MS
+
+/** Display only: a SCHEDULED Tour past the close of registration. The Tour's state does not change at this mark. */
+export const isRegistrationClosed = (tour: TourTiming, now: number) => tour.state === 'SCHEDULED' && now >= registrationClosesAtOf(tour)
+
+/** The state as Staff reads it: SCHEDULED says whether groups can still register. */
+export const tourStateLabel = (tour: TourTiming, now: number) => isRegistrationClosed(tour, now) ? REGISTRATION_CLOSED_LABEL : TOUR_STATE_LABEL[tour.state]
 
 const CONFLICTS: Record<string, string> = {
   STALE_VERSION: 'Tour đã thay đổi. Nội dung đang nhập vẫn được giữ; tải lại trang để lấy phiên bản mới.',

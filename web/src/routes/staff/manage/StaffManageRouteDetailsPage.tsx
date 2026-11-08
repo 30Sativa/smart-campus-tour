@@ -66,7 +66,7 @@ export default function StaffManageRouteDetailsPage() {
   const value = route.data
   const submitMutation = useMutation({ mutationFn: versionedRoutesApi.submit,
     onSuccess: (_, submitted) => {
-      notify({ title: `Đã gửi kiểm chứng tuyến “${submitted.name}”`, detail: 'Chờ kỹ thuật chạy thử. Đây chưa phải kết quả kiểm chứng hay trạng thái READY.' })
+      notify({ title: `Đã gửi kiểm chứng tuyến “${submitted.name}”`, detail: 'Chờ kỹ thuật chạy thử. Đây chưa phải kết quả kiểm chứng và chưa tạo được Tour.' })
       return client.invalidateQueries({ queryKey: ['versioned-routes'], refetchType: 'all' })
     } })
   const maps = useMapVersions()
@@ -101,7 +101,7 @@ export default function StaffManageRouteDetailsPage() {
       {!isCurrentRevision && <Notice tone="warn">{viewedAt ? `Đây là bản lưu ${campusShortStamp(viewedAt)}, chỉ xem được.` : 'Đây là bản lưu cũ, chỉ xem được.'}</Notice>}
       {notice && <div role={submitMutation.isSuccess ? 'status' : undefined}><Note tone={notice.tone}><div className="flex flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 flex-1">{notice.text}</p>
-        {notice.createTour && <Link to="/staff/manage/tours/new" className={buttonClass('secondary', 'sm')}>Tạo Tour</Link>}
+        {notice.createTour && <Link to={`/staff/manage/tours/new?route=${value.revisionId}`} className={buttonClass('secondary', 'sm')}>Tạo Tour</Link>}
         {notice.reopen && <button type="button" className={buttonClass('secondary', 'sm')} disabled={availability.isPending} onClick={() => availability.mutate({ target: value, requestId: crypto.randomUUID(), open: true })}>Mở lại</button>}
       </div></Note></div>}
       {submitMutation.isError && <Notice tone="danger" action={submitMutation.error instanceof ApiError && submitMutation.error.status === 409 ? <button className={buttonClass('secondary', 'sm')} disabled={route.isFetching} onClick={() => void reload()}>Tải lại tuyến</button> : undefined}>{submitMessage(submitMutation.error)}</Notice>}

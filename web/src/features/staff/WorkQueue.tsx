@@ -59,7 +59,7 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
         </QueueSection>
 
         <QueueSection title="Tour chưa chốt" total={notReady} failed={scheduled.isError} loading={scheduled.isPending} onRetry={() => void scheduled.refetch()}
-          note="Tour SCHEDULED cần chốt (READY) trước giờ bắt đầu."
+          note="Tour chưa chốt, cần chốt trước giờ bắt đầu."
           more={<Link to="/staff/schedule?view=list&state=SCHEDULED" className={buttonClass('ghost', 'sm')}>Tất cả</Link>}>
           {scheduled.data?.data.map(tour => <li key={tour.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
             <span className="min-w-0 flex-1">

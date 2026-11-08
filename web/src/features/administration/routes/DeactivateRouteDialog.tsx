@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { formatSlot } from '../admin-format'
-import { TOUR_STATE_LABEL } from '../tours/tour-messages'
+import { tourStateLabel } from '../tours/tour-messages'
 import { routeAvailabilityError } from './route-messages'
 import { versionedRoutesApi, type RouteScheduledTour, type VersionedRoute } from './versioned-api'
 
@@ -21,9 +21,10 @@ export function DeactivateRouteDialog({ route, busy, error, onConfirm, onCancel 
 }
 
 function ScheduledTours({ tours }: { tours: RouteScheduledTour[] }) {
+  const [now] = useState(() => Date.now())
   if (!tours.length) return <p className="text-xs text-[#64748b]">Không có Tour nào đã lên lịch trên tuyến này.</p>
   return <div className="text-sm">
     <p className="font-medium text-[#334155]">{tours.length} Tour đã lên lịch vẫn giữ tuyến này:</p>
-    <ul className="mt-1 max-h-48 space-y-1 overflow-y-auto">{tours.map(tour => <li key={tour.id}><Link to={`/staff/manage/tours/${tour.id}`} className="text-[#2d719e] hover:underline">{tour.name}</Link> <span className="text-xs text-[#64748b]">· {formatSlot(tour.scheduledStartAt)} · {TOUR_STATE_LABEL[tour.state]}</span></li>)}</ul>
+    <ul className="mt-1 max-h-48 space-y-1 overflow-y-auto">{tours.map(tour => <li key={tour.id}><Link to={`/staff/manage/tours/${tour.id}`} className="text-[#2d719e] hover:underline">{tour.name}</Link> <span className="text-xs text-[#64748b]">· {formatSlot(tour.scheduledStartAt)} · {tourStateLabel(tour, now)}</span></li>)}</ul>
   </div>
 }

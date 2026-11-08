@@ -48,7 +48,7 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
   },
   {
     label: 'Lịch sử',
-    items: [{ label: 'Lịch sử phiên', path: '/staff/history', icon: History }],
+    items: [{ label: 'Lịch sử Tour', path: '/staff/history', icon: History }],
   },
 ]
 

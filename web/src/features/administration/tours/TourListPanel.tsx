@@ -7,7 +7,7 @@ import { AdminErrorPanel, EmptyState, SkeletonRows } from '../AdminUi'
 import { formatSlot } from '../admin-format'
 import { useDebouncedValue } from '../use-debounced-value'
 import { useTours } from './hooks'
-import { TOUR_STATE_LABEL, tourError } from './tour-messages'
+import { TOUR_STATE_FILTER_LABEL, TOUR_STATE_LABEL, tourError, tourStateLabel } from './tour-messages'
 import type { TourPhase, TourState } from './types'
 
 const PAGE_SIZE = 20
@@ -40,6 +40,7 @@ export function TourListPanel() {
   const everything = requestedState === 'ALL'
   const tab = state || everything ? null : TABS.find(item => item.phase === params.get('tab')) ?? TABS[0]
   const [page, setPage] = useState(1)
+  const [now] = useState(() => Date.now())
   const term = useDebouncedValue(search, 300)
   const tours = useTours({ search: term, state: state || undefined, phase: tab?.phase, sort: tab?.sort, page, size: PAGE_SIZE })
   const update = (key: 'tab' | 'state', value: string) => { setParams(current => { const next = new URLSearchParams(current); next.delete('tab'); next.delete('state'); if (value) next.set(key, value); return next }, { replace: true }); setPage(1) }
@@ -54,7 +55,7 @@ export function TourListPanel() {
         <label className="flex items-center gap-2 whitespace-nowrap text-sm">Trạng thái<select aria-label="Trạng thái Tour" className={inputClass} value={everything ? 'ALL' : state} onChange={e => update('state', e.target.value)}>
           <option value="">Theo nhóm đang chọn</option>
           <option value="ALL">Tất cả</option>
-          {(Object.keys(TOUR_STATE_LABEL) as TourState[]).map(s => <option key={s} value={s}>{TOUR_STATE_LABEL[s]}</option>)}
+          {(Object.keys(TOUR_STATE_LABEL) as TourState[]).map(s => <option key={s} value={s}>{TOUR_STATE_FILTER_LABEL[s]}</option>)}
         </select></label>
         <SearchField value={search} onChange={v => { setSearch(v); setPage(1) }} label="Tìm Tour" placeholder="Tên Tour" className="min-w-48 flex-1" />
       </div>
@@ -70,7 +71,7 @@ export function TourListPanel() {
             <td className={tdClass}>{tour.routeName}</td>
             <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>
             <td className={tdClass}>{tour.registrationCount ? <CapacityBar value={tour.invitationCount} max={tour.registrationCount} unit="đoàn" /> : <span className="text-xs text-[#94a3b8]">chưa có đoàn</span>}</td>
-            <td className={tdClass}><span className={`inline-flex rounded-full border px-2 py-px text-[11px] font-bold whitespace-nowrap ${STATE_TONE[tour.state]}`}>{TOUR_STATE_LABEL[tour.state]}</span></td>
+            <td className={tdClass}><span className={`inline-flex rounded-full border px-2 py-px text-[11px] font-bold whitespace-nowrap ${STATE_TONE[tour.state]}`}>{tourStateLabel(tour, now)}</span></td>
           </tr>)}</tbody>
         </table></div>}
       {tours.data && <Pagination page={page} pageCount={Math.max(1, tours.data.pagination.totalPages)} total={tours.data.pagination.totalItems} pageSize={PAGE_SIZE} onPage={setPage} label="Tour" />}

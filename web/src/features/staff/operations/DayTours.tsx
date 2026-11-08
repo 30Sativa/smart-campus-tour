@@ -88,7 +88,7 @@ function TourTable({ label, tours, dated = false }: { label: string; tours: Tour
         <td className={tdClass}><span className="block font-semibold text-[#0f172a]">{tour.name}</span><span className="block text-xs text-[#64748b]">{[tour.routeName, operatorLabel(tour, isMine(tour))].filter(Boolean).join(' · ')}</span></td>
         <td className={tdClass}>{robotCode ? <span className="flex flex-col items-start gap-1"><span className="font-mono text-xs">{robotCode}</span>{!dated && !ENDED.includes(tour.state) && <RobotReport robotCode={robotCode} snapshot={snapshot} />}</span> : '-'}</td>
         <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>
-        <td className={tdClass}><TourStateBadge state={tour.state} /></td>
+        <td className={tdClass}><TourStateBadge tour={tour} /></td>
         <td className={tdClass}><Link to={step.to} className={buttonClass(tour.state === 'READY' || tour.state === 'RUNNING' ? 'primary' : 'secondary', 'sm')}>{step.label}</Link></td>
       </tr>
     })}</tbody>

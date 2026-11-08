@@ -67,7 +67,7 @@ function TourConsole({ tourId }: { tourId: string }) {
       <TourStepper detail={detail} page="live" />
       <PageHeader eyebrow="Điều hành trực tiếp" title={summary.name}
         description={`${formatSlot(summary.scheduledStartAt)} · ${detail.routeRevision?.name ?? summary.routeName} · robot ${reservation?.robotCode ?? '-'} · người vận hành ${operator?.fullName ?? '-'}`}
-        action={<><TourStateBadge state={summary.state} /><Link to={`/staff/manage/tours/${summary.id}`} className={buttonClass('secondary', 'sm')}>Thông tin Tour</Link></>} />
+        action={<><TourStateBadge tour={summary} /><Link to={`/staff/manage/tours/${summary.id}`} className={buttonClass('secondary', 'sm')}>Thông tin Tour</Link></>} />
 
       <Freshness stale={stale} updatedAt={tour.dataUpdatedAt} live={live} fetching={tour.isFetching} onRefresh={() => void tour.refetch()} />
 

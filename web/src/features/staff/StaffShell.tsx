@@ -20,15 +20,16 @@ import { STEP_LABEL } from './operations/operation-labels'
 import { isTourOrigin, originNavPath, tourPageId, useTourOriginStore } from './operations/tour-origin'
 
 /**
- * The state of the robot report channel (the `/hubs/operations` socket). It
- * says whether robot reports can arrive, not how fresh the Tour data is: Tours
+ * The state of this browser's live connection to the server (the
+ * `/hubs/operations` socket). It says nothing about whether any robot is
+ * connected, which the Robot page reports, nor how fresh the Tour data is: Tours
  * are polled separately and each page says when they were last read.
  */
 const CONNECTION_LABEL = {
-  connecting: 'Kênh robot: đang kết nối',
-  connected: 'Kênh robot: đang nhận',
-  reconnecting: 'Kênh robot: kết nối lại',
-  disconnected: 'Kênh robot: mất kết nối',
+  connecting: 'Cập nhật trực tiếp: đang kết nối',
+  connected: 'Cập nhật trực tiếp: đã kết nối',
+  reconnecting: 'Cập nhật trực tiếp: đang kết nối lại',
+  disconnected: 'Cập nhật trực tiếp: mất kết nối',
 } as const
 
 /**

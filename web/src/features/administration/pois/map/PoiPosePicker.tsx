@@ -184,7 +184,7 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
   const help = !editable
     ? 'Pose bị khóa. Bạn vẫn có thể phóng to và di chuyển bản đồ.'
     : actualMode === 'position'
-      ? 'Bấm vào ảnh để chọn vị trí. Sau đó chọn hướng thân hoặc nhập yaw bằng số.'
+      ? staff ? 'Bấm vào ảnh để chọn vị trí, sau đó chọn hướng robot nhìn.' : 'Bấm vào ảnh để chọn vị trí. Sau đó chọn hướng thân hoặc nhập yaw bằng số.'
       : actualMode === 'heading'
         ? 'Di chuyển để xem hướng, bấm để chốt. Escape hủy chọn hướng.'
         : 'Kéo để di chuyển bản đồ, cuộn chuột hoặc dùng +/− để phóng to. Phím 1 chọn vị trí, 2 chọn hướng.'
@@ -279,7 +279,7 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
       </div>
 
       <div className="space-y-2.5 pt-3 text-xs leading-5 text-[#718096]">
-        <p className="sr-only">X: {pose.x == null ? 'chưa chọn' : `${pose.x.toFixed(4)} m`}, Y: {pose.y == null ? 'chưa chọn' : `${pose.y.toFixed(4)} m`}, Yaw: {pose.yaw == null ? 'chưa chọn' : `${pose.yaw.toFixed(6)} rad`}</p>
+        {!staff && <p className="sr-only">X: {pose.x == null ? 'chưa chọn' : `${pose.x.toFixed(4)} m`}, Y: {pose.y == null ? 'chưa chọn' : `${pose.y.toFixed(4)} m`}, Yaw: {pose.yaw == null ? 'chưa chọn' : `${pose.yaw.toFixed(6)} rad`}</p>}
         {cellState && <p role="status" className={`flex items-start gap-2 rounded-lg px-3 py-2 font-semibold ${cellState === 'free' && !tooClose ? 'bg-[#f1f5f9] text-[#475569]' : 'bg-[#fbf5e8] text-[#8a6a2e]'}`}>
           {cellState === 'free' && !tooClose ? <CircleCheck size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> : <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />}{tooClose ? clearanceMessage(clearanceMeters!) : CELL_LABELS[cellState]}
         </p>}

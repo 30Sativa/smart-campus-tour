@@ -92,14 +92,14 @@ export default function StartCheckPage() {
     <TourStepper detail={detail} page="start" />
     <PageHeader eyebrow="Kiểm tra trước khi bắt đầu" title={summary.name}
       description={`${formatSlot(summary.scheduledStartAt)} · ${detail.routeRevision?.name ?? summary.routeName} · robot ${reservation?.robotCode ?? 'chưa giữ'} · người vận hành ${operator?.fullName ?? 'chưa giao'}`}
-      action={<TourStateBadge state={summary.state} />} />
+      action={<TourStateBadge tour={summary} />} />
   </>
 
   if (!ready) {
     const running = summary.state === 'RUNNING' || Boolean(detail.startedAt)
     return <StaffPage>{header}
       <div className={`${panelClass} flex flex-wrap items-center justify-between gap-3 p-4`}>
-        <p className="text-sm text-[#334155]">{summary.state === 'SCHEDULED' ? 'Tour chưa được chốt. Chỉ Tour đã chốt (READY) mới kiểm tra và bắt đầu được.' : running ? 'Tour đã bắt đầu. Theo dõi ở màn hình điều hành.' : 'Tour không còn bắt đầu được.'}</p>
+        <p className="text-sm text-[#334155]">{summary.state === 'SCHEDULED' ? 'Tour chưa được chốt. Chỉ Tour đã chốt mới kiểm tra và bắt đầu được.' : running ? 'Tour đã bắt đầu. Theo dõi ở màn hình điều hành.' : 'Tour không còn bắt đầu được.'}</p>
         <Link to={running ? `/staff/live/${summary.id}` : `/staff/manage/tours/${summary.id}`} className={buttonClass('primary', 'sm')}>{running ? 'Mở điều hành' : 'Mở trang chuẩn bị Tour'}</Link>
       </div>
     </StaffPage>

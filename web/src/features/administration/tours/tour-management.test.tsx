@@ -110,6 +110,39 @@ it('offers only robots the chosen route can use, and says why the others are off
   expect(screen.getByRole('option', { name: 'AMR 02 · amr-02 (Robot chưa xác nhận kết nối.)' })).toBeDisabled()
 })
 
+describe('choosing the route of a new Tour', () => {
+  const remeasure = { ...TESTED, revisionId: 'revision-old', name: 'Đo kiểu cũ', scheduleFit: 'UNKNOWN' }
+
+  it('shows a route that must be run again as disabled, with the reason', async () => {
+    api(tour(), [TESTED, remeasure])
+    renderAt('/staff/manage/tours/new')
+    expect(await screen.findByRole('option', { name: 'Đo kiểu cũ · 1 điểm dừng (Cần chạy thử lại)' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })).toBeEnabled()
+  })
+
+  it('selects the route named by ?route=, and loads its robots', async () => {
+    api()
+    renderAt('/staff/manage/tours/new?route=revision-2')
+    await waitFor(() => expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('revision-2'))
+    expect(await screen.findByRole('option', { name: 'AMR 01 · amr-01' })).toBeEnabled()
+  })
+
+  it('does not select a linked route that cannot be used, and says so', async () => {
+    api(tour(), [TESTED, remeasure])
+    renderAt('/staff/manage/tours/new?route=revision-old')
+    expect(await screen.findByText('Tuyến vừa mở chưa dùng được để tạo Tour. Chọn tuyến khác.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('')
+  })
+
+  it('lets Staff change a linked route', async () => {
+    api(tour(), [TESTED, { ...TESTED, revisionId: 'revision-3', name: 'Tuyến khác' }])
+    renderAt('/staff/manage/tours/new?route=revision-2')
+    await waitFor(() => expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('revision-2'))
+    fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-3' } })
+    expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('revision-3')
+  })
+})
+
 describe('live Tour management', () => {
   it('shows the backend message of a JSON 404 and a plain fallback for an empty one', () => {
     expect(tourError(new ApiError(404, JSON.stringify({ success: false, message: 'Không tìm thấy phiên bản tuyến.' })))).toBe('Không tìm thấy phiên bản tuyến.')

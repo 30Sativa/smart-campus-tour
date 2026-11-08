@@ -32,8 +32,9 @@ describe('StaffShell on every page', () => {
       <Route path="/staff" element={<StaffShell />}><Route path="manage/pois" element={<h1>POI</h1>} /></Route>
     </Routes></MemoryRouter></QueryClientProvider>)
     expect(await screen.findByRole('link', { name: /Đang chạy Tour đang chạy\. Mở điều hành trực tiếp/ })).toHaveAttribute('href', '/staff/live/tour-run')
-    // The chip names the robot channel, not the freshness of the Tour data.
-    expect(screen.getByText(/^Kênh robot: /)).toBeInTheDocument()
+    // The chip names this browser's link to the server, not whether a robot is connected.
+    expect(screen.getByText(/^Cập nhật trực tiếp: /)).toBeInTheDocument()
+    expect(screen.queryByText(/^Kênh robot/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Telemetry:/)).not.toBeInTheDocument()
   })
 
