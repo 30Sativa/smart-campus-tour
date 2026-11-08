@@ -62,7 +62,7 @@ public sealed class TourManagementTests
     public void Commands_RejectMissingPayloadsVersionsAndUnsafeUrls()
     {
         var actor = Guid.NewGuid();
-        Assert.False(new CreateTourCommandValidator().Validate(new CreateTourCommand(actor, null!)).IsValid);
+        Assert.False(new CreateTourCommandValidator(TourShiftsFixture.Settings).Validate(new CreateTourCommand(actor, null!)).IsValid);
         Assert.False(new UpdateTourCommandValidator().Validate(new UpdateTourCommand(Guid.NewGuid(), actor, null!)).IsValid);
         Assert.False(new CancelTourCommandValidator().Validate(new CancelTourCommand(Guid.NewGuid(), actor, null!)).IsValid);
         var input = new TourInput("Tour", null, Guid.NewGuid(), DateTimeOffset.FromUnixTimeMilliseconds(2_000_000_000_000), null);

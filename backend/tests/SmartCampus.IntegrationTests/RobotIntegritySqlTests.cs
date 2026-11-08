@@ -395,7 +395,7 @@ public sealed class RobotIntegritySqlTests
         public async Task<Guid> CreateTour(RouteRevisionView route, string robot)
         {
             var start = new DateTimeOffset(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)).ToDateTime(new TimeOnly(8, 15)), TimeSpan.FromHours(7));
-            var created = await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new("Tour robot", null, route.RevisionId, robot, operatorId, start, null))));
+            var created = await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new("Tour robot", null, route.RevisionId, robot, operatorId, start, null, 20))));
             await using var db = Context();
             return (await db.Tours.AsNoTracking().OrderByDescending(tour => tour.CreatedAt).FirstAsync()).Id;
         }

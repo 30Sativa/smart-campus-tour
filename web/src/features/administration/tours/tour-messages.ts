@@ -41,6 +41,7 @@ const CONFLICTS: Record<string, string> = {
   TECHNICAL_CHECK_NOT_PASSED: 'Bản đồ của tuyến không còn kiểm tra kỹ thuật đạt. Nhờ Kỹ thuật kiểm tra lại bản đồ.',
   TECHNICAL_CHECK_PENDING: 'Bản đồ của tuyến chưa có kết quả kiểm tra kỹ thuật.',
   TOUR_LOCKED: 'Tour không còn sửa hoặc hủy được ở trạng thái hiện tại.',
+  CAPACITY_BELOW_HELD: 'Không giảm được sức chứa xuống dưới số chỗ đang được giữ.',
   TOUR_CONFIGURATION_LOCKED: 'Tour đã có đăng ký hoặc lịch sử nên không đổi được lịch và tuyến. Chỉ sửa tên, mô tả.',
   IDEMPOTENCY_CONFLICT: 'Yêu cầu trùng với một thao tác trước đó. Tải lại trang rồi thử lại.',
 }
@@ -61,6 +62,12 @@ export function backendMessage(error: ApiError): string | null {
 }
 
 export const MISSING_ENDPOINT_MESSAGE = 'Không kết nối được chức năng này, có thể máy chủ chưa cập nhật.'
+
+/** "Còn 12/20 chỗ"; null when the server has not sent seats. */
+export function seatsLabel(tour: { capacity?: number; heldSeats?: number }): string | null {
+  if (tour.capacity == null || tour.heldSeats == null) return null
+  return `Còn ${Math.max(0, tour.capacity - tour.heldSeats)}/${tour.capacity} chỗ`
+}
 
 export function tourError(error: unknown): string {
   if (!(error instanceof ApiError)) return 'Không thể kết nối máy chủ. Hãy thử lại.'

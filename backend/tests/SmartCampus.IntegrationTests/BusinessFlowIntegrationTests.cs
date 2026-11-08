@@ -840,14 +840,14 @@ public sealed class BusinessFlowIntegrationTests
             new { requestId = Guid.NewGuid(), configuration = new
                 { name = "Off shift", description = (string?)null, routeRevisionId = routeRevisionId,
                     robotCode = "flow_physical", operatorUserId = operatorId,
-                    scheduledStartAt = firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddMinutes(45),
+                    capacity = 20, scheduledStartAt = firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddMinutes(45),
                     fallbackVideoUrl = (string?)null } });
         Assert.Equal(HttpStatusCode.Conflict, offShift.StatusCode);
         Assert.Equal("TOUR_SLOT_NOT_ALLOWED", (await Body(offShift)).GetProperty("errors").GetProperty("code").GetString());
         using var schedule = await Json(host.Client, HttpMethod.Post, "/api/staff/manage/tours", staffToken,
             new { requestId = Guid.NewGuid(), configuration = new
                 { name = "Scheduled from a tested revision", description = (string?)null, routeRevisionId = routeRevisionId,
-                    robotCode = "flow_physical", operatorUserId = operatorId,
+                    robotCode = "flow_physical", operatorUserId = operatorId, capacity = 20,
                     scheduledStartAt = firstSlot.GetProperty("startsAt").GetDateTimeOffset(),
                     fallbackVideoUrl = (string?)null } });
         Assert.Equal(HttpStatusCode.OK, schedule.StatusCode);
@@ -907,7 +907,7 @@ public sealed class BusinessFlowIntegrationTests
             Assert.Equal(code, (await Body(refused)).GetProperty("errors").GetProperty("code").GetString());
         }
         var newTour = new { requestId = Guid.NewGuid(), configuration = new
-            { name = "On a stopped route", description = (string?)null, routeRevisionId = routeRevisionId, robotCode = "flow_physical", operatorUserId = operatorId,
+            { name = "On a stopped route", description = (string?)null, routeRevisionId = routeRevisionId, robotCode = "flow_physical", operatorUserId = operatorId, capacity = 20,
                 scheduledStartAt = firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddDays(1), fallbackVideoUrl = (string?)null } };
         var routeVersion = Assert.Single((await ListedRoute("?isActive=true")).EnumerateArray()).GetProperty("rowVersion").GetString()!;
         Assert.Empty((await ListedRoute("?isActive=false")).EnumerateArray());

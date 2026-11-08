@@ -19,14 +19,14 @@ cat > "$scratch/bin/docker" <<'EOF'
 #!/bin/bash
 echo "docker $*" >> "$FAKE_LOG"
 if [[ $1 == image ]]; then
-  [[ "$*" == *revision* ]] && echo "$FAKE_SOURCE_SHA" || echo 1.17
+  [[ "$*" == *revision* ]] && echo "$FAKE_SOURCE_SHA" || echo 1.18
   exit 0
 fi
 [[ " $* " == *" --profile db-bootstrap "* ]] || { echo 'db-init profile missing' >&2; exit 90; }
-if [[ "$*" == *"upgrade-db.sh --upgrade-to-v1.17"* ]]; then touch "$FAKE_UPGRADED"; exit 0; fi
+if [[ "$*" == *"upgrade-db.sh --upgrade-to-v1.18"* ]]; then touch "$FAKE_UPGRADED"; exit 0; fi
 if [[ "$*" == *"--check-only"* ]]; then
   [[ ${FAKE_DB_COMPATIBLE:-0} == 1 || -e "$FAKE_UPGRADED" ]] && exit 0
-  echo 'Database schema is older than v1.17.' >&2; exit 1
+  echo 'Database schema is older than v1.18.' >&2; exit 1
 fi
 exit 0
 EOF
@@ -46,7 +46,7 @@ run() {
     CAMPUS_DEPLOY_ROOT="$host" CAMPUS_CONFIG_DIR="$host/config" CAMPUS_STATE_DIR="$host/state" \
     CAMPUS_OPERATION_LOCK="$host/operation.lock" CAMPUS_BACKUP_SCRIPT="$host/backup.sh" \
     CAMPUS_BACKUP_ENV="$host/config/backup.env" CAMPUS_RELEASE_DB_INIT_COMPOSE="$host/db-init.yml" \
-    bash deploy/upgrade-db-schema-ec2.sh "$@" "$image" "$source_sha" 1.17 > "$host/out" 2>&1
+    bash deploy/upgrade-db-schema-ec2.sh "$@" "$image" "$source_sha" 1.18 > "$host/out" 2>&1
 }
 
 setup compatible

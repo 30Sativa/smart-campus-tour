@@ -76,6 +76,12 @@ public sealed class RouteRevisionsController(ISender sender) : ControllerBase
         Ok(new BaseResponse<IReadOnlyList<RouteRevisionView>> { Success = true, Message = "Submitted route revisions retrieved.",
             Data = await sender.Send(new ListRouteRevisionQueueQuery(), ct) });
 
+    [HttpGet("technical/route-verifications/rerun-queue")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<IActionResult> RerunQueue(CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<RouteRevisionView>> { Success = true, Message = "Route revisions needing a new test run retrieved.",
+            Data = await sender.Send(new ListRouteRerunQueueQuery(), ct) });
+
     [HttpGet("technical/route-verifications/participants")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
     public async Task<IActionResult> Participants(CancellationToken ct) =>

@@ -26,9 +26,11 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
         !(r.State == RegistrationStates.Cancelled || r.Tour.State == "CANCELLED" ||
           (r.State == RegistrationStates.Rejected && r.Tour.State != RegistrationGate.OpenTourState));
 
-    public async Task<PagedResult<TourReadModel>> ListToursAsync(RepresentativeListRequest request, CancellationToken ct)
+    public async Task<PagedResult<TourReadModel>> ListToursAsync(RepresentativeListRequest request, DateTimeOffset now, CancellationToken ct)
     {
-        var query = context.Tours.AsNoTracking().Where(t => t.State == RegistrationGate.OpenTourState);
+        // Only Tours still open for registration; one the Representative already joined stays reachable through its detail.
+        var closesAfter = now + Application.Features.Tours.TourSchedule.RegistrationClose;
+        var query = context.Tours.AsNoTracking().Where(t => t.State == RegistrationGate.OpenTourState && t.ScheduledStartAt > closesAfter);
         if (!string.IsNullOrWhiteSpace(request.Search))
             query = query.Where(t => t.Name.Contains(request.Search.Trim()) || t.Route.Name.Contains(request.Search.Trim()));
         var total = await query.LongCountAsync(ct);
@@ -42,7 +44,8 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
         var tours = await query.Skip(Offset(request)).Take(request.Size)
             .Include(t => t.Route).ThenInclude(r => r.RouteStops).ThenInclude(s => s.Poi)
             .Include(t => t.RouteRevision).ThenInclude(r => r!.RouteRevisionStops).ToListAsync(ct);
-        return new(tours.Select(MapTour).ToArray(), request.Page, request.Size, total);
+        var held = await HeldSeatsAsync(tours.Select(t => t.Id).ToArray(), ct);
+        return new(tours.Select(t => MapTour(t, held.GetValueOrDefault(t.Id))).ToArray(), request.Page, request.Size, total);
     }
     public async Task<TourReadModel?> GetTourAsync(Guid id, Guid owner, CancellationToken ct)
     {
@@ -50,14 +53,19 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
             .Where(t => t.Id == id && (t.State == RegistrationGate.OpenTourState || t.GroupRegistrations.Any(r => r.RepresentativeUserId == owner)))
             .Include(t => t.Route).ThenInclude(r => r.RouteStops).ThenInclude(s => s.Poi)
             .Include(t => t.RouteRevision).ThenInclude(r => r!.RouteRevisionStops).SingleOrDefaultAsync(ct);
-        return tour is null ? null : MapTour(tour);
+        return tour is null ? null : MapTour(tour, (await HeldSeatsAsync([tour.Id], ct)).GetValueOrDefault(tour.Id));
     }
-    private static TourReadModel MapTour(Tour tour) => new(tour.Id, tour.Name, tour.Description, tour.ScheduledStartAt,
+    private async Task<Dictionary<Guid, int>> HeldSeatsAsync(Guid[] tourIds, CancellationToken ct) =>
+        await context.RosterRows.AsNoTracking().Where(row => tourIds.Contains(row.Registration.TourId) && row.IsActive &&
+                (row.ParticipationState == RosterParticipationStates.Pending || row.ParticipationState == RosterParticipationStates.Accepted))
+            .GroupBy(row => row.Registration.TourId).Select(group => new { group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.Key, item => item.Count, ct);
+    private static TourReadModel MapTour(Tour tour, int heldSeats) => new(tour.Id, tour.Name, tour.Description, tour.ScheduledStartAt,
         tour.State, tour.RowVersion, tour.Route.Name,
         tour.RouteRevision is { } revision
             ? revision.RouteRevisionStops.OrderBy(s => s.StopOrder).Select(s => new TourStopResponse(s.StopOrder, s.Name, null)).ToArray()
             : tour.Route.RouteStops.OrderBy(s => s.StopOrder).Select(s => new TourStopResponse(s.StopOrder, s.Poi.Name, s.Poi.Description)).ToArray(),
-        tour.State == "CANCELLED" ? tour.EndReason : null);
+        tour.State == "CANCELLED" ? tour.EndReason : null, tour.Capacity, heldSeats);
     public async Task<PagedResult<RegistrationListItem>> ListRegistrationsAsync(Guid owner, RepresentativeListRequest request, CancellationToken ct)
     {
         var query = context.GroupRegistrations.AsNoTracking().Where(r => r.RepresentativeUserId == owner);
@@ -81,7 +89,7 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
         return new(await query.Skip(Offset(request)).Take(request.Size).Select(Summary).ToArrayAsync(ct),
             request.Page, request.Size, total);
     }
-    public async Task<RegistrationReadModel?> GetRegistrationAsync(Guid id, Guid owner, CancellationToken ct)
+    public async Task<RegistrationReadModel?> GetRegistrationAsync(Guid id, Guid owner, DateTimeOffset now, CancellationToken ct)
     {
         await using var snapshot = await RegistrationReadSnapshot.BeginAsync(context, id, owner, ct);
         if (snapshot is null) return null;
@@ -105,7 +113,8 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
                   row.ClassName, row.ParticipationState, RowVersionToken.Encode(row.RowVersion), row.ReviewedAt,
                   row.ReviewedByUserId, row.ReviewReason,
                   row.InvitationVersion == null ? null : RowVersionToken.Encode(row.InvitationVersion),
-                  result.Summary.TourState == "SCHEDULED" && row.ParticipationState == RosterParticipationStates.Accepted,
+                  result.Summary.TourState == "SCHEDULED" && row.ParticipationState == RosterParticipationStates.Accepted &&
+                      now < result.Summary.TourScheduledStartAt - Application.Features.Tours.TourSchedule.PendingDecisionClose,
                   result.Summary.TourState == "SCHEDULED", false, false)).ToArray(),
             result.HasInvitations);
     }

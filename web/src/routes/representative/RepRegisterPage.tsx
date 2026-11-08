@@ -76,6 +76,10 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
   const existingRows = base.registration?.roster.filter(row => row.participationState !== 'REMOVED') ?? []
   const rows = accepted ? matchRosterIdentities(accepted.rows, existingRows) : existingRows.map(rosterInput)
   const diff = base.registration ? rosterReplacement(existingRows, rows) : null
+  // UX only: the server recounts under the Tour lock. Rows this form already holds do not need a new seat.
+  const heldHere = existingRows.filter(row => row.participationState === 'PENDING' || row.participationState === 'ACCEPTED').length
+  const overSeats = base.tour.remainingSeats != null && rows.length - heldHere > base.tour.remainingSeats
+  const seatsMessage = `Danh sách có ${rows.length} dòng, nhưng Tour chỉ còn ${(base.tour.remainingSeats ?? 0) + heldHere} chỗ cho đoàn của bạn. Bớt dòng trước khi tiếp tục.`
   const resubmit = Boolean(base.registration?.allowedActions.resubmit.allowed)
   const gate = base.registration ? resubmit ? base.registration.allowedActions.resubmit : base.registration.allowedActions.edit : base.tour.register
   const title = !base.registration ? 'Đăng ký tham quan' : resubmit ? 'Sửa và gửi lại đăng ký' : 'Chỉnh sửa đăng ký'
@@ -100,7 +104,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
     } catch (failure) {
       const problem = readRepError(failure)
       if (problem.status && problem.status >= 400 && problem.status < 500) setAttempt(null)
-      setError({ message: problem.message, fields: problem.fieldErrors, stale: problem.status === 409 && problem.code !== 'EMAIL_RESERVED', details: Object.entries(problem.fieldErrors).map(([key, value]) => {
+      setError({ message: problem.message, fields: problem.fieldErrors, stale: problem.status === 409 && problem.code !== 'EMAIL_RESERVED', details: Object.entries(problem.fieldErrors).filter(([key]) => key !== 'remainingSeats').map(([key, value]) => {
         const index = /Roster\[(\d+)\]/i.exec(key)
         const field = fields.find(item => key.toLowerCase().endsWith(item.key.toLowerCase()))
         return `${field?.label ?? (index ? `Dòng ${next.input.roster[Number(index[1])]?.rowNumber ?? '?'}` : 'Danh sách')}: ${value}`
@@ -123,6 +127,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
         else if (step === 1) {
           if (!rows.length) setError({ message: 'Xác nhận ít nhất một dòng lời mời trước khi tiếp tục.' })
           else if (diff?.issues.length) setError({ message: 'Kiểm tra thay đổi danh sách trước khi tiếp tục.', details: diff.issues })
+          else if (overSeats) setError({ message: seatsMessage })
           else { setError(null); setStep(2) }
         } else if (!confirmed) setError({ message: 'Xác nhận quyền cung cấp thông tin đăng ký trước khi gửi.' })
         else void send()
@@ -135,6 +140,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
           </label>)}</div><p className="rep-hint">Email liên hệ của đoàn không thay thế email riêng của từng dòng lời mời.</p></Panel>}
           {step === 1 && <Panel title="Danh sách lời mời" action={base.registration && <button type="button" className={repButton('secondary', 'sm')} onClick={() => downloadBytes('CampusTour-danh-sach-hien-tai.xlsx', rosterWorkbookBytes(existingRows))}>Tải danh sách hiện tại</button>}>
             <div className="rep-stack"><ExcelUploader accepted={accepted} onAccept={next => { setAccepted(next); setConfirmed(false) }} existingRows={existingRows} canAddRows={newRosterRowsAllowed(base.tour.scheduledStartAt)} inUse={base.registration ? { count: existingRows.length } : null} />
+              {overSeats && <Callout tone="warn" title="Vượt số chỗ còn lại" role="status">{seatsMessage}</Callout>}
               {base.registration && !accepted && <RosterPreview rows={rows} variant="representative" />}
               {base.registration && <Link className={repButton('ghost', 'sm')} to={`/dai-dien/dang-ky/${base.registration.summary.id}?tab=email-change`}>Yêu cầu đổi email dòng đã chấp nhận</Link>}
             </div>

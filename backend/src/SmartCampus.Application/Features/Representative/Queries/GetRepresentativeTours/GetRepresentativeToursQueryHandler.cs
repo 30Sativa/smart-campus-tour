@@ -5,12 +5,12 @@ using SmartCampus.Application.Common.Models;
 
 namespace SmartCampus.Application.Features.Representative.Queries.GetRepresentativeTours;
 
-public sealed class GetRepresentativeToursQueryHandler(IRepresentativeRepository repository)
+public sealed class GetRepresentativeToursQueryHandler(IRepresentativeRepository repository, TimeProvider clock)
     : IRequestHandler<GetRepresentativeToursQuery, PagedResult<TourResponse>>
 {
     public async Task<PagedResult<TourResponse>> Handle(GetRepresentativeToursQuery query, CancellationToken ct)
     {
-        var page = await repository.ListToursAsync(query.Request, ct);
+        var page = await repository.ListToursAsync(query.Request, clock.GetUtcNow(), ct);
         return new(page.Items.Select(TourResponseMapper.Map).ToArray(), page.Page, page.PageSize, page.TotalItems);
     }
 }

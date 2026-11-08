@@ -42,7 +42,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
             Id = Guid.NewGuid(), Name = input.Name, Description = input.Description, RouteId = revision.RouteId,
             ActiveRouteId = revision.RouteId, RouteRevisionId = revision.Id, OperatorUserId = input.OperatorUserId,
             ScheduledStartAt = input.ScheduledStartAt, State = "SCHEDULED",
-            FallbackVideoUrl = input.FallbackVideoUrl, CreatedByUserId = command.Actor, CreatedAt = now
+            FallbackVideoUrl = input.FallbackVideoUrl, CreatedByUserId = command.Actor, CreatedAt = now, Capacity = input.Capacity
         };
         repository.Add(tour);
         repository.Add(new TourRobotReservation
@@ -53,7 +53,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
             ReservedByUserId = command.Actor, ReservedAt = now
         });
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId, "TOUR_CREATED", fingerprint, now,
-            "name", "description", "routeRevisionId", "operatorUserId", "robotReservation", "scheduledStartAt", "fallbackVideoUrl", "state");
+            "name", "description", "routeRevisionId", "operatorUserId", "robotReservation", "scheduledStartAt", "fallbackVideoUrl", "state", "capacity");
         return new(tour.Id);
     }
 }

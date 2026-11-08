@@ -37,6 +37,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   const [date, setDate] = useState(() => DATE_PARAM.test(params.get('date') ?? '') ? params.get('date')! : '')
   const [shiftCode, setShiftCode] = useState(() => params.get('shift') ?? '')
   const [video, setVideo] = useState('')
+  const [capacity, setCapacity] = useState('20')
   const [clientError, setClientError] = useState('')
   const routes = useTestedRoutes()
   const linkedRouteId = params.get('route')
@@ -63,7 +64,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
     if (busy || !ready || !usable) return
     if (!name.trim()) return setClientError('Nhập tên Tour.')
     setClientError('')
-    onSubmit({ name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, scheduledStartAt: usable.startsAt, fallbackVideoUrl: video.trim() || null })
+    onSubmit({ name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, scheduledStartAt: usable.startsAt, fallbackVideoUrl: video.trim() || null, capacity: Number(capacity) })
   }
 
   return <form onSubmit={submit} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -109,6 +110,8 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
             {picked && !picked.available && <p role="alert" className="text-xs text-[#b23e31]">{picked.shiftName} không dùng được: {picked.reason}. Chọn ca khác.</p>}
           </div>}
       </div>
+      <label className="block text-sm">Sức chứa<input required type="number" min={1} max={slots.data?.maxCapacity ?? 20} step={1} className={inputClass} value={capacity} onChange={e => setCapacity(e.target.value)} />
+        <span className="mt-1 block text-xs text-[#64748b]">Số dòng đăng ký tối đa của cả Tour. Mỗi điểm xem chung tính là 1 chỗ.</span></label>
       <label className="block text-sm">Video dự phòng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
       <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:justify-end">
         <Link to="/staff/schedule" className={buttonClass('secondary')}>Hủy bỏ</Link>
@@ -127,6 +130,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
             <span className="block text-xs text-[#64748b]">Ca này chứa tối đa {formatDuration(usable.maxDurationSeconds)}.</span></Review>
           <Review label="Giữ robot">{campusTime(usable.reservationStartsAt!)} - {campusTime(usable.reservationEndsAt!)}</Review>
           <Review label="Đóng đăng ký">{campusStamp(usable.registrationClosesAt)}</Review>
+          <Review label="Sức chứa">{capacity} chỗ</Review>
         </dl>
         {overRecommended && <div className="mt-3"><Notice tone="warn">Tuyến dài {formatDuration(expected!)}, hơn mức khuyến nghị {formatDuration(slots.data.recommendedMaxSeconds)}. Vẫn tạo được, nhưng nên cân nhắc tuyến ngắn hơn.</Notice></div>}
       </section>}

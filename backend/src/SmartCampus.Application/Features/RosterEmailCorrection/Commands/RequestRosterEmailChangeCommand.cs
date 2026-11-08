@@ -49,6 +49,8 @@ public sealed class RequestRosterEmailChangeCommandHandler(IRegistrationReposito
         RowVersionToken.EnsureCurrent(tour.RowVersion, request.ExpectedTourRowVersion);
         RowVersionToken.EnsureCurrent(registration.RowVersion, request.ExpectedRegistrationRowVersion);
         if (tour.State != "SCHEDULED") throw new ConflictException("Không thể yêu cầu đổi email khi Tour không ở trạng thái SCHEDULED.", "TOUR_LOCKED");
+        if (clock.GetUtcNow() >= tour.ScheduledStartAt - Tours.TourSchedule.PendingDecisionClose)
+            throw new ConflictException("Không thể yêu cầu đổi email trong 24 giờ trước giờ Tour.", "EMAIL_CHANGE_CUTOFF");
         var row = registration.RosterRows.SingleOrDefault(item => item.Id == command.RowId && item.IsActive)
             ?? throw new NotFoundException("Không tìm thấy dòng đăng ký đang hoạt động.");
         RowVersionToken.EnsureCurrent(row.RowVersion, request.ExpectedRowVersion);

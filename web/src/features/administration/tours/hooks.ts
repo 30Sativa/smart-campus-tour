@@ -71,6 +71,16 @@ export function useCancelTour() {
   return useMutation({ mutationFn: ({ id, requestId, rowVersion, reason }: { id: string; requestId: string; rowVersion: string; reason: string }) =>
     toursApi.cancel(id, { requestId, expectedRowVersion: rowVersion, reason }), onSuccess })
 }
+export function useChangeTourCapacity() {
+  const refresh = useInvalidateTours()
+  return useMutation({ mutationFn: ({ id, requestId, rowVersion, capacity }: { id: string; requestId: string; rowVersion: string; capacity: number }) =>
+    toursApi.changeCapacity(id, { requestId, expectedRowVersion: rowVersion, capacity }), onSettled: refresh })
+}
+export function useChangeTourOperator() {
+  const refresh = useInvalidateTours()
+  return useMutation({ mutationFn: ({ id, requestId, rowVersion, operatorUserId }: { id: string; requestId: string; rowVersion: string; operatorUserId: string }) =>
+    toursApi.changeOperator(id, { requestId, expectedRowVersion: rowVersion, operatorUserId }), onSettled: refresh })
+}
 /** SCHEDULED → READY. The server rechecks every READY condition under its locks. */
 export function useMarkTourReady() {
   // A refusal can mean the Tour changed meanwhile (STALE_VERSION), so refresh either way.

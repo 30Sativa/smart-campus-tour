@@ -40,7 +40,12 @@ internal static class TourPreparation
     {
         var noOperationalUse = !usage.HasOperationalHistory && !usage.HasRobotOwnership;
         var edit = tour.CanEditPreparation && noOperationalUse;
-        return new(edit, edit && !usage.LocksScheduleAndRoute, tour.CanCancelBeforeStart && noOperationalUse);
+        var beforeStart = tour.CanCancelBeforeStart && noOperationalUse;
+        return new(edit, edit && !usage.LocksScheduleAndRoute, beforeStart)
+        {
+            CanChangeCapacity = beforeStart,
+            CanChangeOperator = beforeStart && tour.RouteRevisionId is not null
+        };
     }
 
     public static async Task SelectRouteAsync(IRouteManagementRepository routes, Guid id, string expectedVersion, CancellationToken ct)

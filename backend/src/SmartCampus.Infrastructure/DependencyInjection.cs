@@ -93,7 +93,7 @@ public static class DependencyInjection
         services.AddSingleton(_ => new RouteRuleSettings(configuration.GetValue<int?>("Routes:MinStops"),
             configuration.GetValue<decimal?>("Routes:MinStopSeparationMeters")));
         services.AddSingleton(_ => new TourScheduleSettings(configuration.GetSection("Tours:Shifts").Get<TourShiftOption[]>(),
-            configuration.GetValue<int?>("Tours:RecommendedMaxMinutes")));
+            configuration.GetValue<int?>("Tours:RecommendedMaxMinutes"), configuration.GetValue<int?>("Tours:MaxCapacity")));
 
         services.AddScoped<IAuditLogReader, EfAuditLogReader>();
         services.AddScoped<ITourManagementTransaction, EfTourManagementTransaction>();
@@ -105,6 +105,10 @@ public static class DependencyInjection
         var invitationConfiguration = new InvitationConfiguration(configuration);
         services.AddSingleton(invitationConfiguration);
         services.AddSingleton(invitationConfiguration.Settings);
+        services.AddSingleton(new SmartCampus.Application.Features.Invitations.InvitationCodeGuardSettings(
+            configuration.GetValue<int?>("Invitations:CodeGuard:MaxFailures") ?? 5,
+            configuration.GetValue<int?>("Invitations:CodeGuard:WindowMinutes") ?? 10,
+            configuration.GetValue<int?>("Invitations:CodeGuard:LockMinutes") ?? 15));
         services.AddSingleton<IInvitationCodeService, InvitationCodeService>();
         services.AddScoped<IInvitationRepository, EfInvitationRepository>();
         services.AddScoped<IStudentAccessRepository, EfStudentAccessRepository>();

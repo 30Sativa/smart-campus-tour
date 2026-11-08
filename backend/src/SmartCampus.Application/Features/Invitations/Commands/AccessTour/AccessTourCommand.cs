@@ -13,7 +13,7 @@ public sealed record StudentTourInfo(Guid TourId, string TourName, string TourSt
     DateTimeOffset InvitationExpiresAt, string RowType, string? FallbackVideoUrl);
 public sealed record StudentAccessResult(StudentTourInfo? Info, string? Token, string? DeviceToken);
 public sealed record AccessTourCommand(Guid TourId, string Operation, string? AccessCode, string? SessionToken,
-    string? DeviceToken)
+    string? DeviceToken, string? ClientIp = null)
     : IRegistrationMutationCommand<StudentAccessResult>;
 public sealed class AccessTourCommandValidator : AbstractValidator<AccessTourCommand>
 {
@@ -23,7 +23,7 @@ public sealed class AccessTourCommandValidator : AbstractValidator<AccessTourCom
     }
 }
 public sealed class AccessTourCommandHandler(IStudentAccessRepository repository, IRegistrationRepository registrations,
-    IInvitationCodeService codes, InvitationSettings settings, TimeProvider clock)
+    IInvitationCodeService codes, InvitationSettings settings, InvitationCodeGuard guard, TimeProvider clock)
     : IRequestHandler<AccessTourCommand, StudentAccessResult>
 {
     private static UnauthorizedException Invalid() => new("Mã truy cập hoặc phiên không hợp lệ, đã hết hạn hoặc bị thu hồi.");
@@ -32,8 +32,10 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
         if (!settings.Enabled) throw Invalid();
         var tokenHash = command.SessionToken is null ? null : codes.Hash("browser-session:" + command.SessionToken);
         var deviceHash = command.DeviceToken is null ? null : codes.Hash("browser-device:" + command.DeviceToken);
-        var id = command.Operation == "join"
-            ? await repository.FindInvitationIdAsync(command.TourId, codes.Hash(command.AccessCode!), ct)
+        var codeHash = command.Operation == "join" ? codes.Hash(command.AccessCode!) : null;
+        if (codeHash is not null) guard.EnsureNotLocked(codeHash, command.ClientIp);
+        var id = codeHash is not null
+            ? await repository.FindInvitationIdAsync(command.TourId, codeHash, ct)
             : tokenHash is not null
                 ? await repository.FindSessionInvitationIdAsync(command.TourId, tokenHash, ct)
                 : deviceHash is not null
@@ -41,6 +43,7 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
                     : null;
         if (id is null) {
             if (command.Operation == "leave") return new(null, null, null);
+            if (codeHash is not null) guard.RecordFailure(codeHash, command.ClientIp);
             throw Invalid();
         }
         var tour = await registrations.LockTourAsync(command.TourId, ct) ?? throw Invalid();
@@ -55,8 +58,15 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
             return new(null, null, null);
         }
         // Re-check the hash after taking the shared lock: reissue may have won the race.
-        if (command.Operation == "join" && !CryptographicOperations.FixedTimeEquals(invitation.AccessCodeHash, codes.Hash(command.AccessCode!)))
-            throw Invalid();
+        if (codeHash is not null)
+        {
+            if (!CryptographicOperations.FixedTimeEquals(invitation.AccessCodeHash, codeHash))
+            {
+                guard.RecordFailure(codeHash, command.ClientIp);
+                throw Invalid();
+            }
+            guard.Clear(codeHash, command.ClientIp);
+        }
         var allowed = InvitationPolicy.CanSend(tour, invitation.RosterRow.Registration, invitation, now) ||
             tour.State == "CANCELLED" && tour.StartedAt is not null && InvitationPolicy.CanRevoke(tour, invitation.RosterRow.Registration, invitation, now);
         if (!allowed) throw Invalid();

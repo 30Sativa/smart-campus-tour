@@ -45,6 +45,11 @@ public sealed class EfRegistrationRepository(ApplicationDbContext context) : IRe
         await context.RosterEmailChangeRequests.AnyAsync(request => request.RosterRow.IsActive &&
             request.RosterRow.Registration.TourId == tour && request.State == "PENDING", ct);
 
+    public Task<int> CountHeldSeatsAsync(Guid tour, Guid? excludingRegistration, CancellationToken ct) =>
+        context.RosterRows.AsNoTracking().CountAsync(row => row.Registration.TourId == tour && row.IsActive &&
+            (excludingRegistration == null || row.RegistrationId != excludingRegistration) &&
+            (row.ParticipationState == RosterParticipationStates.Pending || row.ParticipationState == RosterParticipationStates.Accepted), ct);
+
     public Task<AuditLog?> FindMutationAsync(Guid tour, Guid requestId, CancellationToken ct) =>
         context.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.TourId == tour && a.CorrelationId == requestId, ct);
 

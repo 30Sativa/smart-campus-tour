@@ -20,17 +20,23 @@ public sealed record TourShift(string Code, string Name, TimeOnly Start, TimeOnl
 public sealed class TourScheduleSettings
 {
     public const int DefaultRecommendedMaxMinutes = 60;
+    /// <summary>BR-26: 20 until NFR-CAP-01 passes, and the 40 of CK_Tours_Capacity is the ceiling either way (ADR-0048).</summary>
+    public const int DefaultMaxCapacity = 20;
+    public const int CapacityCeiling = 40;
     // 15 minutes to prepare, 15 to finish and at least one minute of Tour.
     private static readonly TimeSpan MinShiftLength = TimeSpan.FromMinutes(31);
 
     public IReadOnlyList<TourShift> Shifts { get; }
     public int RecommendedMaxMinutes { get; }
     public int RecommendedMaxSeconds => RecommendedMaxMinutes * 60;
+    public int MaxCapacity { get; }
     /// <summary>The longest Tour any shift can hold; a route needing more fits no shift.</summary>
     public int LongestShiftMaxSeconds => Shifts.Max(TourSchedule.MaxDurationSeconds);
 
-    public TourScheduleSettings(IEnumerable<TourShiftOption>? shifts, int? recommendedMaxMinutes)
+    public TourScheduleSettings(IEnumerable<TourShiftOption>? shifts, int? recommendedMaxMinutes, int? maxCapacity = null)
     {
+        MaxCapacity = maxCapacity ?? DefaultMaxCapacity;
+        if (MaxCapacity is < 1 or > CapacityCeiling) throw new InvalidOperationException("Tours:MaxCapacity must be between 1 and 40.");
         var parsed = (shifts ?? []).Select(Parse).OrderBy(shift => shift.Start).ToArray();
         if (parsed.Length == 0) throw new InvalidOperationException("Tours:Shifts must list at least one shift.");
         if (parsed.Select(shift => shift.Code).Distinct(StringComparer.Ordinal).Count() != parsed.Length)
@@ -79,7 +85,10 @@ public static class TourSchedule
     public const string RemeasureRequired = "ROUTE_TEST_REMEASURE_REQUIRED";
 
     public static readonly TimeSpan LeadTime = TimeSpan.FromHours(72);
-    public static readonly TimeSpan RegistrationClose = TimeSpan.FromHours(48);
+    public const int RegistrationCloseHours = 48;
+    public static readonly TimeSpan RegistrationClose = TimeSpan.FromHours(RegistrationCloseHours);
+    /// <summary>BR-05: from this long before the Tour, what Staff has not decided expires and nothing new may be requested.</summary>
+    public static readonly TimeSpan PendingDecisionClose = TimeSpan.FromHours(24);
     public static readonly TimeSpan ReservationBuffer = TimeSpan.FromMinutes(15);
     // Asia/Ho_Chi_Minh has no daylight saving; a fixed offset needs no time zone data in the runtime image.
     private static readonly TimeSpan CampusOffset = TimeSpan.FromHours(7);

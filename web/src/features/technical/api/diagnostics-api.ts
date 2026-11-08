@@ -11,6 +11,7 @@ export type TechnicalKpiSummary = {
   heldForInspectionCount: number
   pendingPoiVerificationsCount: number
   pendingRouteTestsCount: number
+  routeRerunsCount?: number
   activeMapVersionsCount: number
 }
 

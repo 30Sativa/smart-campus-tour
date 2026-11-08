@@ -59,6 +59,21 @@ public sealed class EfInvitationRepository(ApplicationDbContext context) : IInvi
                 context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == TourCancelNoticeAudit.Started && start.OccurredAt < staleBefore)))
             .OrderBy(a => a.Id).Take(20).Select(a => new EmailWorkItem(a.CorrelationId!.Value,
                 context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == TourCancelNoticeAudit.Started))).ToArrayAsync(ct);
+    public Task<AuditLog?> GetRosterExpiryNoticeAsync(Guid attemptId, CancellationToken ct) =>
+        context.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.CorrelationId == attemptId && a.Action == RosterExpiryNoticeAudit.Requested, ct);
+    public Task<bool> HasRosterExpiryNoticeStartedAsync(Guid attemptId, CancellationToken ct) =>
+        context.AuditLogs.AnyAsync(a => a.CorrelationId == attemptId && a.Action == RosterExpiryNoticeAudit.Started, ct);
+    public Task<bool> HasRosterExpiryNoticeResultAsync(Guid attemptId, CancellationToken ct) =>
+        context.AuditLogs.AnyAsync(a => a.CorrelationId == attemptId &&
+            (a.Action == RosterExpiryNoticeAudit.Sent || a.Action == RosterExpiryNoticeAudit.Failed), ct);
+    public async Task<IReadOnlyList<EmailWorkItem>> PendingRosterExpiryNoticesAsync(DateTimeOffset staleBefore, CancellationToken ct) =>
+        await context.AuditLogs.AsNoTracking().Where(a => a.Action == RosterExpiryNoticeAudit.Requested &&
+            !context.AuditLogs.Any(result => result.CorrelationId == a.CorrelationId &&
+                (result.Action == RosterExpiryNoticeAudit.Sent || result.Action == RosterExpiryNoticeAudit.Failed)) &&
+            (!context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == RosterExpiryNoticeAudit.Started) ||
+                context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == RosterExpiryNoticeAudit.Started && start.OccurredAt < staleBefore)))
+            .OrderBy(a => a.Id).Take(20).Select(a => new EmailWorkItem(a.CorrelationId!.Value,
+                context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == RosterExpiryNoticeAudit.Started))).ToArrayAsync(ct);
     public async Task<IReadOnlyList<TourCancelRecipient>> LoadTourCancelRecipientsAsync(IReadOnlyCollection<Guid> registrationIds, CancellationToken ct) =>
         await context.GroupRegistrations.AsNoTracking().Where(r => registrationIds.Contains(r.Id)).OrderBy(r => r.Id)
             .Select(r => new TourCancelRecipient(r.Id, r.ContactEmail)).ToArrayAsync(ct);

@@ -225,7 +225,7 @@ public sealed class DeploymentDatabaseTests
         route = await Send(new GetRouteQuery(routeId));
         var schedule = TourSchedule.SlotStart(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(10), new TimeOnly(8, 15));
         await Assert.ThrowsAsync<NotFoundException>(() => Send(new CreateTourCommand(actor.Id,
-            new CreateTourRequest(Guid.NewGuid(), new CreateTourInput("Runtime Tour", null, Guid.NewGuid(), "no-such-robot", actor.Id, schedule, null)))));
+            new CreateTourRequest(Guid.NewGuid(), new CreateTourInput("Runtime Tour", null, Guid.NewGuid(), "no-such-robot", actor.Id, schedule, null, 20)))));
         var unused = (await Send(new CreateRouteCommand(actor.Id, input))).Id;
         await Send(new DeleteRouteCommand(unused, actor.Id, (await Send(new GetRouteQuery(unused))).Version));
         foreach (var statement in new[] { "DELETE dbo.Tours WHERE 1=0", "UPDATE dbo.AuditLogs SET ResultCode='FAIL' WHERE 1=0", "DELETE dbo.TourEvents WHERE 1=0", "DELETE dbo.TourRobotReservations WHERE 1=0" })
@@ -306,9 +306,25 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV117SnapshotAndMarker()
+    public async Task Bootstrap_AcceptsVerifiedV118SnapshotAndMarker()
     {
-        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.17.sql", "1.17"));
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.18.sql", "1.18"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_RefusesAV118MarkerWithoutCapacityOrTheExpiredStates()
+    {
+        foreach (var sql in new[]
+        {
+            "ALTER TABLE dbo.Tours DROP CONSTRAINT CK_Tours_Capacity;",
+            "ALTER TABLE dbo.Tours NOCHECK CONSTRAINT CK_Tours_Capacity;",
+            "ALTER TABLE dbo.RosterRows DROP CONSTRAINT CK_RosterRows_ParticipationState; ALTER TABLE dbo.RosterRows WITH CHECK ADD CONSTRAINT CK_RosterRows_ParticipationState CHECK (ParticipationState IN ('PENDING','ACCEPTED','REJECTED','REMOVED'));",
+            "ALTER TABLE dbo.RosterEmailChangeRequests DROP CONSTRAINT CK_RosterEmailChangeRequests_State; ALTER TABLE dbo.RosterEmailChangeRequests WITH CHECK ADD CONSTRAINT CK_RosterEmailChangeRequests_State CHECK (State IN ('PENDING','ACCEPTED','REJECTED'));"
+        })
+        {
+            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.18.sql", "1.18", sql));
+            Assert.Equal(51001, error.Number);
+        }
     }
 
     [SchemaV11Fact]
@@ -345,6 +361,7 @@ public sealed class DeploymentDatabaseTests
     [SchemaV11Fact]
     public async Task Bootstrap_VerifiedV19SnapshotAndMarkerRequiresUpgrade()
     {
+        Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.17.sql", "1.17"));
         Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.16.sql", "1.16"));
         Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.15.sql", "1.15"));
         Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.14.sql", "1.14"));
@@ -362,7 +379,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     // Bootstraps the snapshot with its own hash and version markers, then runs the guard with every
-    // variable bound exactly as init-db.sh binds it for the current v1.17 release.
+    // variable bound exactly as init-db.sh binds it for the current v1.18 release.
     private static async Task<object?> RunCurrentGuardAsync(string snapshot, string version, string? alteration = null)
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync(snapshot);
@@ -385,7 +402,8 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV114)", await SnapshotHashAsync("snapshot-v1.14.sql"))
             .Replace("$(SchemaHashV115)", await SnapshotHashAsync("snapshot-v1.15.sql"))
             .Replace("$(SchemaHashV116)", await SnapshotHashAsync("snapshot-v1.16.sql"))
-            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.17.sql"));
+            .Replace("$(SchemaHashV117)", await SnapshotHashAsync("snapshot-v1.17.sql"))
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.18.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();
     }

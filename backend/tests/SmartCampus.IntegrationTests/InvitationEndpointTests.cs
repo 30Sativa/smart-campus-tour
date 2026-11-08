@@ -131,9 +131,10 @@ public sealed class InvitationEndpointTests
         Assert.Contains("expires=", leave.Cookie!, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Test-only", leave.Body.GetRawText());
         await f.Database.ExecuteAsync("DROP TRIGGER dbo.FailSessionClose;");
-        // The successful join already consumed one of the 60 permits.
+        // The successful join already consumed one of the 60 permits. A different code each time stays under the
+        // per-code guard (ADR-0048), so this still proves the outer limiter.
         for (var index = 0; index < 59; index++)
-            Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "join", "INVALID")).Status);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "join", $"INVALID-{index}")).Status);
         var limited = await AccessAsync(host.Client, f.TourId, "join", "INVALID");
         Assert.Equal(HttpStatusCode.TooManyRequests, limited.Status);
         Assert.Equal("RATE_LIMITED", limited.Body.GetProperty("errors").GetProperty("code").GetString());

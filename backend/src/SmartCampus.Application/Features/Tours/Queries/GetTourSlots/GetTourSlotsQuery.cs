@@ -42,7 +42,7 @@ public sealed class GetTourSlotsQueryHandler(ITourManagementRepository tours, IR
         var now = clock.GetUtcNow();
         return new(query.RouteRevisionId, robot.RobotCode, plan?.MeasuredDurationSeconds, plan?.ExpectedDurationSeconds,
             days.Select(day => new TourSlotDay(day[0].Date, day.Select(shift => Slot(shift, now, plan, holds, TourSchedule.BlockOf(active, shift))).ToArray())).ToArray(),
-            settings.RecommendedMaxSeconds);
+            settings.RecommendedMaxSeconds, settings.MaxCapacity);
     }
 
     private static TourSlotView Slot(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan, IReadOnlyList<TourReservationHold> holds, TourShiftBlockView? adminBlock)

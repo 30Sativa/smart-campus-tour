@@ -1684,6 +1684,26 @@ state and authorization failures block further writes until explicit successful
 reload. Focus/reconnect cannot replace an opened snapshot. Live calls never
 fall back to fixtures; existing Tour/demo consumers remain intact.
 
+### 3.2.x Capacity, Operator change, T-24h expiry and the code guard (ADR-0048, schema v1.18)
+
+Public contract added by this batch. Held seats are the Tour's active PENDING and ACCEPTED rows, counted under the Tour root lock.
+
+| Surface | Contract |
+|---|---|
+| `POST /api/staff/manage/tours` | `configuration.capacity` is required, 1..`Tours:MaxCapacity` (default 20, ceiling 40 by `CK_Tours_Capacity`). |
+| `POST /api/staff/manage/tours/{id}/capacity` | Staff. `{requestId, expectedRowVersion, capacity}`. SCHEDULED/READY before Start. 409 `CAPACITY_BELOW_HELD`, 409 `TOUR_LOCKED`. Audit `TOUR_CAPACITY_CHANGED`. |
+| `POST /api/staff/manage/tours/{id}/operator` | Staff. `{requestId, expectedRowVersion, operatorUserId}`. SCHEDULED/READY before Start; READY stays READY. 409 `TOUR_LOCKED`, 409 `ROUTE_VERSION_REQUIRED` for a legacy Tour. Audit `TOUR_OPERATOR_CHANGED`. |
+| Tour reads (`GET /api/staff/manage/tours`, `/{id}`) | `tour.capacity`, `tour.heldSeats`, `tour.registrationClosesAt`; `permissions.canChangeCapacity`, `canChangeOperator`, `maxCapacity`. `/slots` adds `maxCapacity`. |
+| Representative create, add rows, replace roster | 409 `TOUR_CAPACITY_EXCEEDED`, `errors.fields.remainingSeats`. A write that adds no seat is never refused. |
+| `GET /api/representative/tours` | Only SCHEDULED Tours before the 48-hour close. Tour responses add `capacity` and `remainingSeats`. The detail stays reachable for a Tour the Representative registered for. |
+| `POST .../roster email change request` | 409 `EMAIL_CHANGE_CUTOFF` from T-24h. |
+| Roster row `participationState`, email change `state` | New value `EXPIRED`: set by `RosterExpiryWorker` (every 60 s, one transaction per Tour under the Tour lock) at T-24h on SCHEDULED/READY Tours. It returns the seat and does not count as a pending decision for READY. Email change responses add `expiresAt`. |
+| `POST /api/admin/accounts/{id}/deactivate` | 409 `ACCOUNT_IN_USE`, `errors.blockers[]` (`TOUR_OPERATOR`, `ACTIVE_REGISTRATION`). |
+| `POST /api/student/tours/{tourId}/join` | 429 `INVITATION_CODE_LOCKED` after `Invitations:CodeGuard:MaxFailures` (5) wrong codes per (code, IP) in `WindowMinutes` (10), for `LockMinutes` (15). In memory, one API instance. The 60 requests/minute/IP limiter stays in front. |
+| `GET /api/technical/route-verifications/rerun-queue` | TechnicalStaff. Current revisions whose effective PASS has no `measurementBasis`. `GET /api/technical/dashboard` adds `kpis.routeRerunsCount` and action type `ROUTE_RERUN`. |
+
+Audit actions `ROSTER_PENDING_EXPIRED` and `ROSTER_EXPIRY_NOTICE_{REQUESTED,STARTED,SENT,FAILED}` carry ids and counts only. The notice uses the delivery shape of the cancellation notice: one email per registration, claimed once, an uncertain send never repeated.
+
 ### 3.3 State storage and realtime delivery
 
 When the backend receives robot pose/state, it is transient latest-state data

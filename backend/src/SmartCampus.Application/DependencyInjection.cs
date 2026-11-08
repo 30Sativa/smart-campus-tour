@@ -36,6 +36,7 @@ namespace SmartCampus.Application
             services.AddScoped<SmartCampus.Application.Features.Invitations.InvitationIssuer>();
             services.AddScoped<SmartCampus.Application.Features.Tours.TourStartPreflight>();
             services.AddSingleton<SmartCampus.Application.Features.StudentQuestions.StudentQuestionGate>();
+            services.AddSingleton<SmartCampus.Application.Features.Invitations.InvitationCodeGuard>();
             services.AddSingleton<SmartCampus.Application.Features.Auth.LoginAttemptGate>();
 
             return services;

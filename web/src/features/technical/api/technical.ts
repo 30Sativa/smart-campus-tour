@@ -234,6 +234,7 @@ export const technicalApi = {
   submitPoiProposal: (id: string, proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/submit`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
   listRouteTestQueue: () => apiClient<Envelope<VersionedRoute[]>>('/api/technical/route-verifications/queue').then(response => response.data ?? []),
+  listRouteRerunQueue: () => apiClient<Envelope<VersionedRoute[]>>('/api/technical/route-verifications/rerun-queue').then(response => response.data ?? []),
   listRouteTestParticipants: () => apiClient<Envelope<RouteTestParticipant[]>>('/api/technical/route-verifications/participants').then(response => response.data ?? []),
   recordRouteTest: ({ routeId, revisionId, ...input }: RouteTestRunInput) =>
     apiClient<Envelope<VersionedRoute>>(`/api/technical/routes/${routeId}/revisions/${revisionId}/test-runs`, { method: 'POST', json: input }).then(response => response.data!),

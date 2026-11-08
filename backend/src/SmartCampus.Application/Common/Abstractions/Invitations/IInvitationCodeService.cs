@@ -14,6 +14,9 @@ public sealed record InvitationEmail(Guid TourId, Guid InvitationId, Guid Attemp
 /// <summary>One recipient of a cancellation notice. Carries no code or link: the Tour no longer grants access.</summary>
 public sealed record TourCancelEmail(Guid TourId, Guid AttemptId, Guid RegistrationId, string Recipient, string TourName,
     DateTimeOffset ScheduledStartAt, string Reason);
+/// <summary>One registration's T-24h notice. Counts only: no row name or address beyond the recipient.</summary>
+public sealed record RosterExpiredEmail(Guid TourId, Guid AttemptId, Guid RegistrationId, string Recipient, string TourName,
+    DateTimeOffset ScheduledStartAt, int ExpiredRows, int ExpiredEmailChanges);
 /// <summary>
 /// Sanitized provider outcome: ACCEPTED is service acceptance, FAILED is confirmed rejection,
 /// UNKNOWN is inconclusive delivery. Code is an adapter-owned diagnostic, never a provider body.
@@ -29,4 +32,6 @@ public interface IInvitationEmailSender
     Task<EmailSendResult> SendAsync(InvitationEmail email, CancellationToken ct);
     /// <summary>Same delivery contract as <see cref="SendAsync"/>, for a notice that a Tour was cancelled.</summary>
     Task<EmailSendResult> SendTourCancelledAsync(TourCancelEmail email, CancellationToken ct);
+    /// <summary>Same delivery contract as <see cref="SendAsync"/>, for items that expired at T-24h (BR-05).</summary>
+    Task<EmailSendResult> SendRosterExpiredAsync(RosterExpiredEmail email, CancellationToken ct);
 }

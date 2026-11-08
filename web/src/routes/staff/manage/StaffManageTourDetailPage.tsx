@@ -12,8 +12,9 @@ import { useMapVersions } from '../../../features/technical/technical-hooks'
 import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
 import { campusShortDate } from '../../../features/administration/tours/tour-calendar'
 import { overdueStartLabel } from '../../../features/administration/tours/overdue-start'
-import { isRegistrationClosed, tourError, tourStateLabel } from '../../../features/administration/tours/tour-messages'
+import { isRegistrationClosed, seatsLabel, tourError, tourStateLabel } from '../../../features/administration/tours/tour-messages'
 import { TourReadyPanel } from '../../../features/administration/tours/TourReadyPanel'
+import { TourSeatsAndOperatorPanel } from '../../../features/administration/tours/TourSeatsAndOperatorPanel'
 import { TourStepper } from '../../../features/staff/operations/TourStepper'
 
 const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
@@ -61,6 +62,7 @@ export default function StaffManageTourDetailPage() {
         <Item label="Thời gian dự kiến" value={formatSlot(tour.scheduledStartAt)} />
         <Item label="Trạng thái" value={tourStateLabel(tour, now)} />
         <Item label="Đăng ký / lời mời" value={`${tour.registrationCount} đoàn · ${tour.invitationCount} lời mời`} />
+        {seatsLabel(tour) && <Item label="Chỗ" value={seatsLabel(tour)!} />}
         <Item label="Tạo lúc" value={formatStamp(tour.createdAt)} />
         {reservation && <Item label="Robot" value={reservation.robotCode} />}
         {reservation && <Item label={reservation.releasedAt ? 'Đã trả chỗ robot' : 'Giữ chỗ robot'} value={`${formatStamp(reservation.startsAt)} tới ${formatStamp(reservation.endsAt)}`} />}
@@ -71,6 +73,9 @@ export default function StaffManageTourDetailPage() {
         {data.endReason && <Item label="Lý do kết thúc" value={data.endReason} />}
       </dl>
     </section>
+
+    {/* A READY Tour has no edit page, and its Operator can still change. */}
+    {tour.state === 'READY' && <TourSeatsAndOperatorPanel key={tour.rowVersion} detail={data} />}
 
     {routeRevision && <section className={`${panelClass} mt-3 p-4`} aria-label="Tuyến của Tour">
       <div className="flex flex-wrap items-baseline justify-between gap-2">

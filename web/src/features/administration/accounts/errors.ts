@@ -57,6 +57,14 @@ export function accountFormError(error: unknown): { message: string | null; fiel
   }
 }
 
+/** What still depends on the account when the server answers ACCOUNT_IN_USE; empty for any other error. */
+export function accountInUseBlockers(error: unknown): string[] {
+  if (!(error instanceof ApiError) || error.status !== 409) return []
+  const details = readResponseError(error)?.errors as { code?: unknown; blockers?: { message?: unknown }[] } | undefined
+  if (details?.code !== 'ACCOUNT_IN_USE' || !Array.isArray(details.blockers)) return []
+  return details.blockers.map(blocker => blocker.message).filter((message): message is string => typeof message === 'string')
+}
+
 export function accountRequestError(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) return fallback
   if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.'

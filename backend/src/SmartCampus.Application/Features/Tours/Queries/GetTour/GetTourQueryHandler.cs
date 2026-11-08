@@ -9,7 +9,7 @@ namespace SmartCampus.Application.Features.Tours.Queries.GetTour;
 
 public sealed class GetTourQueryHandler(ITourManagementRepository repository, IRouteManagementRepository routes,
     IRouteRevisionRepository revisions, IRegistrationRepository registrations, IMapVersionRepository maps, TourStartPreflight preflight,
-    TimeProvider clock) : IRequestHandler<GetTourQuery, TourDetails>
+    TourScheduleSettings settings, TimeProvider clock) : IRequestHandler<GetTourQuery, TourDetails>
 {
     public async Task<TourDetails> Handle(GetTourQuery query, CancellationToken ct)
     {
@@ -21,7 +21,7 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         var blockers = await TourReadiness.EvaluateAsync(tour, usage, repository, registrations, revisions, maps, clock, lockTarget: false, ct);
         var permissions = TourPreparation.Permissions(tour, usage) with
         {
-            CanMarkReady = blockers.Count == 0, CanReopen = tour.CanReopenBeforeStart, ReadyBlockers = blockers
+            CanMarkReady = blockers.Count == 0, CanReopen = tour.CanReopenBeforeStart, ReadyBlockers = blockers, MaxCapacity = settings.MaxCapacity
         };
         var execution = await ExecutionAsync(tour, ct);
         var actions = new TourAllowedActions(await StartAsync(tour, query.Viewer, ct), await NextAsync(tour, query.Viewer, ct),

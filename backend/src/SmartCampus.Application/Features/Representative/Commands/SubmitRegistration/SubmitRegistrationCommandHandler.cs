@@ -4,6 +4,7 @@ using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
 using SmartCampus.Application.Features.Representative.Commands.SubmitRegistration.Dtos;
+using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Representative.Commands.SubmitRegistration;
@@ -24,6 +25,7 @@ public sealed class SubmitRegistrationCommandHandler(IRegistrationRepository rep
         if (await repository.HasRegistrationForRepresentativeTourAsync(command.ActorUserId, tour.Id, ct))
             throw new ConflictException("Đã tồn tại hồ sơ của bạn cho Tour này.", "REGISTRATION_EXISTS");
         await RegistrationEmailReservation.EnsureAvailableAsync(repository, tour.Id, null, command.Input.Roster, ct);
+        TourCapacity.EnsureRoom(tour, await repository.CountHeldSeatsAsync(tour.Id, null, ct), 0, command.Input.Roster.Count);
         var registration = new GroupRegistration { Id = Guid.NewGuid(), TourId = tour.Id, RepresentativeUserId = command.ActorUserId,
             State = RegistrationStates.Submitted, SubmittedAt = now, CreatedAt = now };
         _ = RegistrationDraftWriter.Apply(registration, command.Input, [], now);

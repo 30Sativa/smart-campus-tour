@@ -16,7 +16,7 @@ import { InvitationPanel } from '../../../registrations/invitations/InvitationPa
 type Decision = { action: 'accept' | 'reject'; rows: ReviewRosterRow[] }
 type Tab = 'roster' | 'invitations'
 const rowState: Record<ReviewRosterRow['participationState'], string> = {
-  PENDING: 'Chờ xét duyệt', ACCEPTED: 'Đã chấp nhận', REJECTED: 'Đã từ chối',
+  PENDING: 'Chờ xét duyệt', ACCEPTED: 'Đã chấp nhận', REJECTED: 'Đã từ chối', EXPIRED: 'Đã hết hạn',
 }
 const tabClass = (active: boolean) => `rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${active ? 'bg-[#eff6ff] text-[#2563eb]' : 'text-[#64748b] hover:bg-[#f1f5f9]'}`
 

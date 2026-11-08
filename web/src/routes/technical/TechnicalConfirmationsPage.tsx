@@ -6,6 +6,7 @@ import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from 
 import { revisionTone } from '../../features/administration/routes/route-messages'
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
 import { RobotPicker } from '../../features/technical/RobotPicker'
+import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
 import { CheckRow, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { errorText, robotNotReadyReason, routeTestErrors, stamp } from '../../features/technical/technical-format'
 import { usePhysicalRobots, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
@@ -58,6 +59,8 @@ export default function TechnicalConfirmationsPage() {
           </StatStrip>
         </div>
       )}
+
+      <RouteRerunSection onRecord={route => setDialog({ view: 'record', route })} />
 
       <section className={panelClass} aria-label="Danh sách kiểm chứng tuyến">
         <PanelHead title={filterText[filter].title} description="Mỗi lần chạy gắn với đúng một phiên bản tuyến và bản đồ." />

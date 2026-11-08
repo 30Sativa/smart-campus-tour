@@ -7,7 +7,7 @@ import { buttonClass } from '../../components/ui/ui-classes'
 import { useTour, useTourCalendar, useTourShifts } from '../../features/administration/tours/hooks'
 import { TourListPanel } from '../../features/administration/tours/TourListPanel'
 import { campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
-import { REGISTRATION_CLOSED_LABEL, TOUR_STATE_FILTER_LABEL, TOUR_STATE_LABEL, isRegistrationClosed, tourError, tourStateLabel } from '../../features/administration/tours/tour-messages'
+import { REGISTRATION_CLOSED_LABEL, TOUR_STATE_FILTER_LABEL, TOUR_STATE_LABEL, isRegistrationClosed, seatsLabel, tourError, tourStateLabel } from '../../features/administration/tours/tour-messages'
 import { overdueStartLabel } from '../../features/administration/tours/overdue-start'
 import type { TourReservation, TourShift, TourState, TourSummary } from '../../features/administration/tours/types'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
@@ -384,6 +384,7 @@ function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void 
     ...(seconds ? [[Timer, 'Thời lượng dự kiến', `${Math.round(seconds / 60)} phút`] as [typeof Clock, string, ReactNode]] : []),
     [MapIcon, 'Tuyến', tour.routeName],
     [Users, 'Đăng ký', `${tour.registrationCount} đoàn`],
+    ...(seatsLabel(tour) ? [[Users, 'Chỗ', seatsLabel(tour)] as [typeof Clock, string, ReactNode]] : []),
     ...(endReason ? [[FileText, 'Lý do kết thúc', endReason] as [typeof Clock, string, ReactNode]] : []),
   ]
   return (

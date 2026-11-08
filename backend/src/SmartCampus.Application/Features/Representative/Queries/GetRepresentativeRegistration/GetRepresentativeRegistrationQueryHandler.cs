@@ -6,12 +6,12 @@ using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeR
 
 namespace SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistration;
 
-public sealed class GetRepresentativeRegistrationQueryHandler(IRepresentativeRepository repository)
+public sealed class GetRepresentativeRegistrationQueryHandler(IRepresentativeRepository repository, TimeProvider clock)
     : IRequestHandler<GetRepresentativeRegistrationQuery, RegistrationDetails>
 {
     public async Task<RegistrationDetails> Handle(GetRepresentativeRegistrationQuery query, CancellationToken ct)
     {
-        var read = await repository.GetRegistrationAsync(query.Id, query.Owner, ct)
+        var read = await repository.GetRegistrationAsync(query.Id, query.Owner, clock.GetUtcNow(), ct)
             ?? throw new NotFoundException("Không tìm thấy dữ liệu.");
         // The same policy the commands enforce, projected for the client.
         ActionGate Gate(RegistrationOperation operation) => RepresentativeRegistrationPolicy

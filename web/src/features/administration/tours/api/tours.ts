@@ -35,6 +35,10 @@ export const toursApi = {
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/ready`, { method: 'POST', json: body }).then(() => id),
   reopen: (id: string, body: { requestId: string; expectedRowVersion: string; reason: string }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/reopen`, { method: 'POST', json: body }).then(() => id),
+  changeCapacity: (id: string, body: { requestId: string; expectedRowVersion: string; capacity: number }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/capacity`, { method: 'POST', json: body }).then(() => id),
+  changeOperator: (id: string, body: { requestId: string; expectedRowVersion: string; operatorUserId: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/operator`, { method: 'POST', json: body }).then(() => id),
   startChecks: (id: string) => apiClient<ApiResponse<TourStartChecks>>(`/api/staff/manage/tours/${id}/start-checks`).then(r => r.data!),
   start: (id: string, body: { requestId: string; expectedRowVersion: string; confirmation: StartConfirmation }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/start`, { method: 'POST', json: body }).then(() => id),

@@ -6,6 +6,10 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
   { label: 'Tour', actions: {
     TOUR_CREATED: 'Tạo Tour', TOUR_UPDATED: 'Sửa Tour', TOUR_CANCELLED: 'Hủy Tour',
     TOUR_REGISTRATION_CANCELLED: 'Hủy đăng ký do hủy Tour', TOUR_INVITATION_REVOKED: 'Thu hồi lời mời do hủy Tour',
+    TOUR_CAPACITY_CHANGED: 'Đổi sức chứa Tour', TOUR_OPERATOR_CHANGED: 'Đổi người vận hành Tour',
+    ROSTER_PENDING_EXPIRED: 'Hết hạn dòng và yêu cầu chưa duyệt', ROSTER_EXPIRY_NOTICE_REQUESTED: 'Xếp hàng email hết hạn',
+    ROSTER_EXPIRY_NOTICE_STARTED: 'Bắt đầu gửi email hết hạn', ROSTER_EXPIRY_NOTICE_SENT: 'Đã gửi email hết hạn',
+    ROSTER_EXPIRY_NOTICE_FAILED: 'Gửi email hết hạn thất bại',
     TOUR_CANCEL_NOTICE_REQUESTED: 'Xếp hàng email hủy Tour', TOUR_CANCEL_NOTICE_STARTED: 'Bắt đầu gửi email hủy Tour',
     TOUR_CANCEL_NOTICE_SENT: 'Đã gửi email hủy Tour', TOUR_CANCEL_NOTICE_FAILED: 'Gửi email hủy Tour thất bại',
     SCHEDULE_BLOCK_CREATED: 'Khoá ngày/ca', SCHEDULE_BLOCK_REMOVED: 'Gỡ khoá ngày/ca',

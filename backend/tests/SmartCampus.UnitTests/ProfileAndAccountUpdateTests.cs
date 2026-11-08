@@ -259,6 +259,8 @@ public sealed class ProfileAndAccountUpdateTests
 
         public void AddAuditLog(AuditLog auditLog) => Audits.Add(auditLog);
 
+        public Task<IReadOnlyList<SmartCampus.Application.Common.Abstractions.Persistence.AccountUsage>> ListAccountUsageAsync(Guid userId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<SmartCampus.Application.Common.Abstractions.Persistence.AccountUsage>>([]);
         public void AddAccount(User user) => Users[user.Id] = user;
 
         public Task<bool> NormalizedUsernameExistsAsync(string normalizedUsername, CancellationToken cancellationToken = default) =>
