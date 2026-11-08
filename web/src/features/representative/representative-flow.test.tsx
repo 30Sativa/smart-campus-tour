@@ -134,6 +134,46 @@ describe('Representative real HTTP contract', () => {
     expect(screen.getByRole('button', { name: 'Sửa và gửi lại' })).toBeDisabled()
     expect(screen.queryByRole('link', { name: 'Sửa và gửi lại' })).toBeNull()
   })
+  const expiryReason = 'Hết hạn duyệt trước giờ tham quan 24 giờ.'
+  const expiredRegistration = () => {
+    registration.summary = { ...registration.summary, state: 'REJECTED', tourState: 'SCHEDULED', rejectionReason: expiryReason }
+    registration.rejectionReason = expiryReason
+  }
+
+  it('shows a T-24h expiry as expired with no refusal wording and no edit or resubmit, whatever the gates say', async () => {
+    expiredRegistration()
+    registration.allowedActions = { edit: { allowed: true, reason: null }, resubmit: { allowed: true, reason: null }, cancel: { allowed: false, reason: 'Hồ sơ đã kết thúc.' } }
+    renderAt('/dai-dien/dang-ky/registration')
+    expect((await screen.findAllByText('Hồ sơ chưa được duyệt trước giờ tham quan 24 giờ nên đã hết hạn.')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Hết hạn duyệt').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Bị từ chối')).toBeNull()
+    expect(screen.queryByText('Đăng ký bị từ chối')).toBeNull()
+    expect(screen.queryByText(expiryReason)).toBeNull()
+    expect(screen.queryByRole('link', { name: /Sửa/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Sửa/ })).toBeNull()
+  })
+
+  it('does not ask the Representative to fix a registration that expired', async () => {
+    expiredRegistration()
+    renderAt('/dai-dien')
+    expect((await screen.findAllByText('Hết hạn duyệt')).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/cần bạn xử lý/)).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Xem lý do và cập nhật' })).toBeNull()
+  })
+
+  it('dates a cancelled Tour only when the server says when', async () => {
+    registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: 'Robot bảo trì', tourEndedAt: '2026-10-19T02:30:00Z' }
+    renderAt('/dai-dien/dang-ky/registration')
+    expect(await screen.findByText(/^Huỷ lúc 09:30, .*19\/10\/2026 \(UTC\+7\)$/)).toBeInTheDocument()
+  })
+
+  it('prints no cancel time when the server sent none', async () => {
+    registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: 'Robot bảo trì', tourEndedAt: null }
+    renderAt('/dai-dien/dang-ky/registration')
+    expect(await screen.findByText('Buổi tham quan đã bị huỷ')).toBeInTheDocument()
+    expect(screen.queryByText(/Huỷ lúc/)).toBeNull()
+  })
+
   const systemCancel = 'Không bắt đầu trong khung giờ, hệ thống tự huỷ.'
   const friendlyCancel = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Nhà trường sẽ liên hệ nếu sắp xếp lại.'
 

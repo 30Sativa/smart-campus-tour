@@ -74,11 +74,23 @@ export const REGISTRATION_GROUPS: Array<{ slug: string; label: string; group: Re
 ]
 
 /**
- * Same rule as the backend's `RegistrationGroups`: a registration has ended when it was cancelled,
- * its Tour was cancelled, or it was refused after the Tour stopped taking changes.
+ * The text stored when a registration is still undecided at T-24h. Must stay identical to the reason the backend's
+ * expiry writes (ADR-0048). It lives in `rejectionReason`, but nobody refused the registration and it cannot be resubmitted.
  */
-export function isClosedRegistration(r: Pick<RegistrationSummary, 'state' | 'tourState'>) {
-  return r.state === 'CANCELLED' || r.tourState === 'CANCELLED' || (r.state === 'REJECTED' && r.tourState !== 'SCHEDULED')
+const REVIEW_EXPIRED_REASON = 'Hết hạn duyệt trước giờ tham quan 24 giờ.'
+export const REVIEW_EXPIRED_LABEL = 'Hết hạn duyệt'
+export const REVIEW_EXPIRED_TEXT = 'Hồ sơ chưa được duyệt trước giờ tham quan 24 giờ nên đã hết hạn.'
+
+export const isReviewExpired = (r: Pick<RegistrationSummary, 'state' | 'rejectionReason'>) =>
+  r.state === 'REJECTED' && r.rejectionReason?.trim() === REVIEW_EXPIRED_REASON
+
+/**
+ * Same rule as the backend's `RegistrationGroups`: a registration has ended when it was cancelled,
+ * its Tour was cancelled, or it was refused after the Tour stopped taking changes. A registration that
+ * expired at T-24h has also ended, even while its Tour is still SCHEDULED.
+ */
+export function isClosedRegistration(r: Pick<RegistrationSummary, 'state' | 'tourState' | 'rejectionReason'>) {
+  return r.state === 'CANCELLED' || r.tourState === 'CANCELLED' || (r.state === 'REJECTED' && r.tourState !== 'SCHEDULED') || isReviewExpired(r)
 }
 
 export type ClosedNote = { badge: string; tone: 'muted' | 'danger'; by: string; reason: string; at: string | null }
@@ -106,6 +118,7 @@ export function closedNote(r: RegistrationSummary): ClosedNote {
     return { badge: 'Bạn đã hủy', tone: 'muted', by: 'Đại diện', reason: 'Bạn đã hủy đăng ký này.', at: `Hủy lúc ${formatTime(r.updatedAt)}, ${formatShortDate(r.updatedAt)}` }
   if (r.tourState === 'CANCELLED')
     return { badge: 'Buổi bị hủy', tone: 'danger', by: 'Nhà trường', reason: tourCancelReasonText(r.tourCancelReason) || 'Buổi tham quan đã bị hủy.', at: null }
+  if (isReviewExpired(r)) return { badge: REVIEW_EXPIRED_LABEL, tone: 'muted', by: 'Hệ thống', reason: REVIEW_EXPIRED_TEXT, at: null }
   const at = r.reviewedAt ?? r.updatedAt
   return { badge: 'Bị từ chối', tone: 'danger', by: 'Nhà trường', reason: r.rejectionReason?.trim() || 'Nhà trường không ghi lý do.', at: `Từ chối lúc ${formatTime(at)}, ${formatShortDate(at)}` }
 }

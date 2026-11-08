@@ -17,6 +17,7 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
   { label: 'Đăng ký đoàn', actions: {
     REGISTRATION_SUBMITTED: 'Gửi đăng ký', REGISTRATION_RESUBMITTED: 'Gửi lại đăng ký', REGISTRATION_UPDATED: 'Sửa đăng ký',
     REGISTRATION_APPROVED: 'Duyệt đăng ký', REGISTRATION_REJECTED: 'Từ chối đăng ký', REGISTRATION_CANCELLED: 'Hủy đăng ký',
+    REGISTRATION_EXPIRED: 'Hết hạn duyệt đăng ký',
     ROSTER_EMAIL_CHANGE_REQUESTED: 'Yêu cầu đổi email', ROSTER_EMAIL_CORRECTED: 'Sửa email danh sách',
   } },
   { label: 'Lời mời', actions: {

@@ -10,7 +10,8 @@ public sealed class GetRepresentativeToursQueryHandler(IRepresentativeRepository
 {
     public async Task<PagedResult<TourResponse>> Handle(GetRepresentativeToursQuery query, CancellationToken ct)
     {
-        var page = await repository.ListToursAsync(query.Request, clock.GetUtcNow(), ct);
-        return new(page.Items.Select(TourResponseMapper.Map).ToArray(), page.Page, page.PageSize, page.TotalItems);
+        var now = clock.GetUtcNow();
+        var page = await repository.ListToursAsync(query.Request, now, ct);
+        return new(page.Items.Select(tour => TourResponseMapper.Map(tour, now)).ToArray(), page.Page, page.PageSize, page.TotalItems);
     }
 }

@@ -1,5 +1,5 @@
 import type { RegistrationSummary } from './api/types'
-import { formatShortDate, formatTime, groupLabel, isSystemNoStart, tourCancelReasonText } from './rep-format'
+import { REVIEW_EXPIRED_LABEL, REVIEW_EXPIRED_TEXT, formatShortDate, formatTime, groupLabel, isReviewExpired, isSystemNoStart, tourCancelReasonText } from './rep-format'
 
 export type RepNoticeTone = 'ok' | 'bad' | 'warn' | 'info' | 'mute'
 
@@ -45,6 +45,10 @@ export function buildRepNotices(rows: readonly RegistrationSummary[], now: numbe
     if (r.tourState === 'CANCELLED') {
       notices.push({ id: `${r.id}:tour-cancelled`, tone: 'bad', title: 'Buổi tham quan đã bị hủy', subject,
         detail: `${isSystemNoStart(r.tourCancelReason) ? tourCancelReasonText(r.tourCancelReason) : `Nhà trường đã hủy buổi này${r.tourCancelReason?.trim() ? `: ${r.tourCancelReason.trim()}` : ''}.`} Bạn có thể chọn một buổi khác để đăng ký lại.`, at: r.updatedAt, to: '/dai-dien/buoi', toLabel: 'Xem buổi khác' })
+      continue
+    }
+    if (isReviewExpired(r)) {
+      notices.push({ id: `${r.id}:review-expired`, tone: 'mute', title: REVIEW_EXPIRED_LABEL, subject, detail: REVIEW_EXPIRED_TEXT, at: r.updatedAt, to, toLabel: 'Xem hồ sơ' })
       continue
     }
     if (r.state === 'REJECTED') {

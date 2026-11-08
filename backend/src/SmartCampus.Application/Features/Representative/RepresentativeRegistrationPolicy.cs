@@ -9,12 +9,15 @@ namespace SmartCampus.Application.Features.Representative;
 public static class RepresentativeRegistrationPolicy
 {
     public static RegistrationGate Evaluate(string tourState, string registrationState, bool hasInvitations,
-        RegistrationOperation operation)
+        RegistrationOperation operation, bool reviewClosed = false)
     {
         if (!RegistrationGate.IsTourOpen(tourState))
             return RegistrationGate.TourLocked;
         if (operation == RegistrationOperation.Create)
             return RegistrationGate.Open;
+        // Resubmitted rows would be PENDING with no Staff decision left to make (BR-05).
+        if (operation == RegistrationOperation.Resubmit && registrationState == RegistrationStates.Rejected && reviewClosed)
+            return RegistrationGate.Refuse(RegistrationGate.ReviewClosedCode, "Đã quá hạn duyệt trước giờ tham quan 24 giờ, không thể gửi lại đăng ký.");
         var allowed = operation switch
         {
             RegistrationOperation.Update => registrationState is RegistrationStates.Submitted or RegistrationStates.Approved,

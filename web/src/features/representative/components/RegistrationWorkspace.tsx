@@ -49,7 +49,7 @@ export function RegistrationWorkspace({ registrationId, children }: { registrati
         </div>
         {query.isPending ? <p aria-busy="true">Đang tải đăng ký…</p> : query.error ? <ErrorState title="Không tải được đăng ký" message={readRepError(query.error).message} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? <EmptyState title="Không có đăng ký phù hợp" description="Thử đổi nhóm hoặc từ khóa tìm kiếm." /> : <>
           <div className="rep-record-list">{query.data.data.map(item => <Link key={item.id} to={registrationUrl(item.id, params)} className={`rep-record ${item.id === selected ? 'rep-record--selected' : ''}`} aria-current={item.id === selected ? 'page' : undefined}>
-            <strong className="rep-record-title">{item.tourName}</strong><span>{item.groupName}</span><RegistrationStatusBadge state={item.state} />
+            <strong className="rep-record-title">{item.tourName}</strong><span>{item.groupName}</span><RegistrationStatusBadge state={item.state} rejectionReason={item.rejectionReason} />
             <span className="rep-record-meta">{isClosedRegistration(item) ? closedNote(item).reason : formatDateTime(item.tourScheduledStartAt)}</span>
           </Link>)}</div>
           <Pagination page={page} pageCount={query.data.pagination.totalPages} total={query.data.pagination.totalItems} pageSize={query.data.pagination.pageSize} label="Trang đăng ký" onPage={value => { const next = new URLSearchParams(params); next.set('page', String(value)); setParams(next) }} />

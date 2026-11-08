@@ -13,6 +13,7 @@ public sealed record RegistrationGate(bool Allowed, string? Reason = null, strin
     public const string TourLockedCode = "TOUR_LOCKED";
     public const string StateConflictCode = "STATE_CONFLICT";
     public const string InvitationBoundaryCode = "INVITATION_BOUNDARY";
+    public const string ReviewClosedCode = "REGISTRATION_REVIEW_CLOSED";
 
     public static readonly RegistrationGate Open = new(true);
     public static readonly RegistrationGate TourLocked = Refuse(TourLockedCode, "Tour đã khóa đăng ký.");

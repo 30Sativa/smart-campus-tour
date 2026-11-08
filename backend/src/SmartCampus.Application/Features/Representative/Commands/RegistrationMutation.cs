@@ -10,14 +10,15 @@ internal static class RegistrationMutation
 {
     public static async Task<(Tour Tour, GroupRegistration Registration)> LoadAsync(IRegistrationRepository repository,
         Guid id, Guid owner, string expectedVersion, string expectedTourVersion,
-        RegistrationOperation operation, CancellationToken ct)
+        RegistrationOperation operation, TimeProvider clock, CancellationToken ct)
     {
         var (tour, registration) = await repository.LockRegistrationAsync(id, owner, ct)
             ?? throw new NotFoundException("Không tìm thấy đăng ký.");
         RowVersionToken.EnsureCurrent(tour.RowVersion, expectedTourVersion);
         RowVersionToken.EnsureCurrent(registration.RowVersion, expectedVersion);
         RepresentativeRegistrationPolicy.Evaluate(tour.State, registration.State,
-            await repository.HasInvitationsAsync(id, ct), operation).EnsureAllowed();
+            await repository.HasInvitationsAsync(id, ct), operation,
+            RegistrationExpiry.IsReviewClosed(tour.ScheduledStartAt, clock.GetUtcNow())).EnsureAllowed();
         return (tour, registration);
     }
 }

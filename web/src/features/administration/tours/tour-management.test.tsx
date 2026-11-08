@@ -120,6 +120,24 @@ describe('choosing the route of a new Tour', () => {
     expect(screen.getByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })).toBeEnabled()
   })
 
+  it('explains each route when none can be used, asking Technical only for a re-run', async () => {
+    api(tour(), [remeasure, { ...TESTED, revisionId: 'revision-long', name: 'Tuyến dài', scheduleFit: 'TOO_LONG_FOR_SHIFT' }])
+    renderAt('/staff/manage/tours/new')
+    expect(await screen.findByText('Chưa có tuyến nào dùng được để tạo Tour.')).toBeInTheDocument()
+    const reasons = screen.getByRole('list', { name: 'Lý do từng tuyến' })
+    expect(within(reasons).getAllByRole('listitem').map(item => item.textContent)).toEqual([
+      'Đo kiểu cũ: Cần chạy thử lại. Nhờ Kỹ thuật ghi một lần chạy mới.',
+      'Tuyến dài: Quá dài cho 1 ca.',
+    ])
+  })
+
+  it('does not show the explanation while a route can be used', async () => {
+    api(tour(), [TESTED, remeasure])
+    renderAt('/staff/manage/tours/new')
+    await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })
+    expect(screen.queryByText('Chưa có tuyến nào dùng được để tạo Tour.')).not.toBeInTheDocument()
+  })
+
   it('selects the route named by ?route=, and loads its robots', async () => {
     api()
     renderAt('/staff/manage/tours/new?route=revision-2')

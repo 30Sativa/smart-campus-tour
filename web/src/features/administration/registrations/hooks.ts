@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '../../../stores/auth-store'
 import { registrationsApi as api } from './api/registrations'
-import type { ReviewFilters, ReviewInput } from './types'
+import type { EmailChangeDecisionInput, ReviewFilters, ReviewInput } from './types'
 
 const ownerKey = (id: string) => ['admin-registration-review', id] as const
 export function useRegistrationReviews(filters: ReviewFilters, enabled = true) {
@@ -26,6 +26,22 @@ export function useReviewDecision() {
   return useMutation({ mutationFn: ({ registrationId, rowId, decision, input }: { registrationId: string; rowId: string; decision: 'accept' | 'reject'; input: ReviewInput }) => api.reviewRow(registrationId, rowId, decision, input),
     onSuccess: () => Promise.all([
       client.invalidateQueries({ queryKey: [...ownerKey(owner ?? ''), 'list'] }),
+      client.invalidateQueries({ queryKey: ['representative'] }),
+    ]) })
+}
+/** Every PENDING email-change request; the API has no per-registration filter for Staff. */
+export function useStaffEmailChanges() {
+  const owner = useAuthStore(s => s.user?.userId)
+  return useQuery({ queryKey: [...ownerKey(owner ?? ''), 'email-changes'], queryFn: async ({ signal }) => (await api.pendingEmailChanges(signal)).data ?? [],
+    enabled: Boolean(owner), refetchInterval: 15000, retry: false })
+}
+export function useEmailChangeDecision() {
+  const owner = useAuthStore(s => s.user?.userId)
+  const client = useQueryClient()
+  return useMutation({ mutationFn: ({ id, decision, input }: { id: string; decision: 'accept' | 'reject'; input: EmailChangeDecisionInput }) => api.reviewEmailChange(id, decision, input),
+    // Also after a refusal: a 409 means the list on screen no longer matches the server.
+    onSettled: () => Promise.all([
+      client.invalidateQueries({ queryKey: [...ownerKey(owner ?? ''), 'email-changes'] }),
       client.invalidateQueries({ queryKey: ['representative'] }),
     ]) })
 }

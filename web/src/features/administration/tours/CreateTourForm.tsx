@@ -18,9 +18,10 @@ const tourEnd = (slot: TourSlot) => new Date(new Date(slot.startsAt).getTime() +
 const shiftLabel = (slot: TourSlot) =>
   `${slot.shiftName} · ${slot.time}-${campusTime(tourEnd(slot))} · Giữ robot ${campusTime(slot.reservationStartsAt!)}-${campusTime(slot.reservationEndsAt!)}`
 
+const RERUN_REASON = 'Cần chạy thử lại'
 /** Why this route cannot be chosen (docs/lich-tour-theo-ca.md §4); null when it can. UNKNOWN is a PASS measured the old way, which cannot size a shift. */
 const routeBlockReason = (route: VersionedRoute) =>
-  route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? scheduleFitLabel(route)!.text : route.scheduleFit === 'UNKNOWN' ? 'Cần chạy thử lại' : null
+  route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? scheduleFitLabel(route)!.text : route.scheduleFit === 'UNKNOWN' ? RERUN_REASON : null
 
 /**
  * A new Tour names one tested route revision, one physical robot, one Operator and one free shift
@@ -44,6 +45,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   const linkedRoute = linkedRouteId ? routes.data?.find(route => route.revisionId === linkedRouteId) : undefined
   const linkedUsable = linkedRoute != null && routeBlockReason(linkedRoute) === null
   const routeRevisionId = pickedRouteId ?? (linkedUsable ? linkedRoute.revisionId : '')
+  const noRouteUsable = Boolean(routes.data?.length) && routes.data!.every(route => routeBlockReason(route) !== null)
   const robots = useTourRobots(routeRevisionId)
   const operators = useTourOperators()
   const slots = useTourSlots(routeRevisionId, robotCode, date)
@@ -85,6 +87,13 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
           : linkedRouteId && routes.data && !linkedUsable && pickedRouteId === null ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Tuyến vừa mở chưa dùng được để tạo Tour. Chọn tuyến khác.</span>
           : routes.data?.length === 0 ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có tuyến nào chạy thử đạt. Gửi kiểm chứng ở Danh mục tuyến và chờ Kỹ thuật ghi kết quả.</span>
           : <span className="mt-1 block text-xs text-[#64748b]">Chỉ hiện tuyến đã gửi kiểm chứng và có kết quả chạy thử đạt. Tuyến quá dài cho 1 ca hoặc cần chạy thử lại thì chưa chọn được.</span>}</label>
+      {noRouteUsable && <Notice tone="warn">
+        <p className="font-semibold">Chưa có tuyến nào dùng được để tạo Tour.</p>
+        <ul className="mt-1 list-disc pl-5" aria-label="Lý do từng tuyến">{routes.data!.map(route => {
+          const reason = routeBlockReason(route)
+          return <li key={route.revisionId}>{route.name}: {reason}.{reason === RERUN_REASON && ' Nhờ Kỹ thuật ghi một lần chạy mới.'}</li>
+        })}</ul>
+      </Notice>}
       <label className="block text-sm">Robot<select title="" required aria-label="Robot" className={inputClass} value={robotCode} disabled={!routeRevisionId || robots.isPending} onChange={e => setRobotCode(e.target.value)}>
         <option value="">— Chọn robot vật lý —</option>
         {robots.data?.map(robot => <option key={robot.robotCode} value={robot.robotCode} disabled={!robot.usable}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}{robot.blockReason ? ` (${robot.blockReason})` : ''}</option>)}

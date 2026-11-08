@@ -1698,11 +1698,15 @@ Public contract added by this batch. Held seats are the Tour's active PENDING an
 | `GET /api/representative/tours` | Only SCHEDULED Tours before the 48-hour close. Tour responses add `capacity` and `remainingSeats`. The detail stays reachable for a Tour the Representative registered for. |
 | `POST .../roster email change request` | 409 `EMAIL_CHANGE_CUTOFF` from T-24h. |
 | Roster row `participationState`, email change `state` | New value `EXPIRED`: set by `RosterExpiryWorker` (every 60 s, one transaction per Tour under the Tour lock) at T-24h on SCHEDULED/READY Tours. It returns the seat and does not count as a pending decision for READY. Email change responses add `expiresAt`. |
-| `POST /api/admin/accounts/{id}/deactivate` | 409 `ACCOUNT_IN_USE`, `errors.blockers[]` (`TOUR_OPERATOR`, `ACTIVE_REGISTRATION`). |
+| `POST /api/admin/accounts/{id}/deactivate` | 409 `ACCOUNT_IN_USE`, `errors.blockers[]` (`TOUR_OPERATOR`, `ACTIVE_REGISTRATION`). `TOUR_OPERATOR` covers SCHEDULED, READY and RUNNING Tours. |
+| Registration state at T-24h | For each registration with a row expired by the job: any ACCEPTED row keeps APPROVED; otherwise any PENDING row keeps SUBMITTED; otherwise REJECTED with `rejectionReason` exactly `Hết hạn duyệt trước giờ tham quan 24 giờ.`, no reviewer, `reviewedAt` set to the run time. The Representative list's `group=closed` includes it even while the Tour is SCHEDULED. Audit `REGISTRATION_EXPIRED` (`ActorUserId` null, `DataJson` `{"expiredRows":n}`). |
+| `POST /api/representative/registrations/{id}/resubmit` | 409 `REGISTRATION_REVIEW_CLOSED` for a REJECTED registration at or after `ScheduledStartAt - 24h`. `allowedActions.resubmit` returns `allowed:false` with the same message as `reason`. |
+| Representative Tour responses, `register` gate | `allowed:false` with reason `Đã hết hạn đăng ký.` at or after the 48-hour close, then `Tour đã đủ chỗ.` when `remainingSeats` is 0. `TOUR_LOCKED` is checked first. |
+| `GET /api/representative/registrations`, `GET /api/representative/registrations/{id}` | Items and `summary` add nullable `tourEndedAt`, from `Tours.EndedAt`. It is set for any ended Tour, so read it together with `tourState`. |
 | `POST /api/student/tours/{tourId}/join` | 429 `INVITATION_CODE_LOCKED` after `Invitations:CodeGuard:MaxFailures` (5) wrong codes per (code, IP) in `WindowMinutes` (10), for `LockMinutes` (15). In memory, one API instance. The 60 requests/minute/IP limiter stays in front. |
 | `GET /api/technical/route-verifications/rerun-queue` | TechnicalStaff. Current revisions whose effective PASS has no `measurementBasis`. `GET /api/technical/dashboard` adds `kpis.routeRerunsCount` and action type `ROUTE_RERUN`. |
 
-Audit actions `ROSTER_PENDING_EXPIRED` and `ROSTER_EXPIRY_NOTICE_{REQUESTED,STARTED,SENT,FAILED}` carry ids and counts only. The notice uses the delivery shape of the cancellation notice: one email per registration, claimed once, an uncertain send never repeated.
+Audit actions `ROSTER_PENDING_EXPIRED`, `REGISTRATION_EXPIRED` and `ROSTER_EXPIRY_NOTICE_{REQUESTED,STARTED,SENT,FAILED}` carry ids and counts only. The notice uses the delivery shape of the cancellation notice: one email per registration, claimed once, an uncertain send never repeated.
 
 ### 3.3 State storage and realtime delivery
 

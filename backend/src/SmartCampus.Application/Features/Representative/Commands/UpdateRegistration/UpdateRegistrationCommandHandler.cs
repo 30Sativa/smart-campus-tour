@@ -14,7 +14,7 @@ public sealed class UpdateRegistrationCommandHandler(IRegistrationRepository rep
     {
         var input = command.Request.Input;
         var (tour, registration) = await RegistrationMutation.LoadAsync(repository, command.Id, command.ActorUserId,
-            command.Request.ExpectedRowVersion, input.ExpectedTourRowVersion, RegistrationOperation.Update, ct);
+            command.Request.ExpectedRowVersion, input.ExpectedTourRowVersion, RegistrationOperation.Update, clock, ct);
         await RegistrationEmailReservation.EnsureAvailableAsync(repository, tour.Id, registration.Id, input.Roster, ct);
         var now = clock.GetUtcNow();
         if (input.Roster.Any(row => row.RowId is null)) RegistrationCutoff.EnsureNewRowsAllowed(tour, now);

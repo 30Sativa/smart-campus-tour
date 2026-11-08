@@ -69,6 +69,11 @@ export function seatsLabel(tour: { capacity?: number; heldSeats?: number }): str
   return `Còn ${Math.max(0, tour.capacity - tour.heldSeats)}/${tour.capacity} chỗ`
 }
 
+/** Seats for a Tour that can still fill them; an ended Tour has nothing left to book. */
+export function openSeatsLabel(tour: { state: TourState; capacity?: number; heldSeats?: number }): string | null {
+  return tour.state === 'CANCELLED' || tour.state === 'COMPLETED' ? null : seatsLabel(tour)
+}
+
 export function tourError(error: unknown): string {
   if (!(error instanceof ApiError)) return 'Không thể kết nối máy chủ. Hãy thử lại.'
   if (error.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'

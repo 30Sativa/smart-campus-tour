@@ -11,11 +11,13 @@ public sealed class GetRepresentativeRegistrationQueryHandler(IRepresentativeRep
 {
     public async Task<RegistrationDetails> Handle(GetRepresentativeRegistrationQuery query, CancellationToken ct)
     {
-        var read = await repository.GetRegistrationAsync(query.Id, query.Owner, clock.GetUtcNow(), ct)
+        var now = clock.GetUtcNow();
+        var read = await repository.GetRegistrationAsync(query.Id, query.Owner, now, ct)
             ?? throw new NotFoundException("Không tìm thấy dữ liệu.");
         // The same policy the commands enforce, projected for the client.
         ActionGate Gate(RegistrationOperation operation) => RepresentativeRegistrationPolicy
-            .Evaluate(read.Summary.TourState, read.Summary.State, read.HasInvitations, operation).ToActionGate();
+            .Evaluate(read.Summary.TourState, read.Summary.State, read.HasInvitations, operation,
+                RegistrationExpiry.IsReviewClosed(read.Summary.TourScheduledStartAt, now)).ToActionGate();
         return new(read.Summary, read.ContactName, read.ContactEmail, RowVersionToken.Encode(read.RowVersion),
             RowVersionToken.Encode(read.TourRowVersion), read.RejectionReason, read.ReviewedAt, read.Roster,
             new RegistrationActions(Gate(RegistrationOperation.Update), Gate(RegistrationOperation.Resubmit),

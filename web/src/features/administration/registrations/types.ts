@@ -1,7 +1,12 @@
 import type { RegistrationState } from '../../registrations/registration-state'
 import type { RosterRow } from '../../registrations/roster'
+import type { RosterEmailChange } from '../../representative/api/types'
 
 export type { RegistrationState }
+/** The Staff view of an email-change request: the Representative's view plus when it lapses. */
+export type StaffEmailChange = RosterEmailChange & { expiresAt: string }
+export type EmailChangeDecisionInput = { requestId: string; expectedRequestRowVersion: string; expectedTourRowVersion: string
+  expectedRegistrationRowVersion: string; expectedRowVersion: string; reason?: string }
 export type ReviewSummary = {
   id: string; tourId: string; tourName: string; tourScheduledStartAt: string; tourState: string
   schoolName: string; groupName: string; state: RegistrationState; rowCount: number
