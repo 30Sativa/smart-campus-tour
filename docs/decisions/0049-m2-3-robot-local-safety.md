@@ -29,7 +29,7 @@ within 2 s. These need physical evidence.
 
 | Fact | Source | Consequence |
 |---|---|---|
-| The 02/11 baseline says the hardware E-stop does not work. The owner stated on 08/11 that PA10, through connector `J_3V3_AUX` (pin 1 PA10, pin 2 GND), now feeds the E-stop chain. It has not been measured. `/emergency_stop_state` is software-only and no E-stop input reaches the STM32. | `robot-baseline-2026-11-02.md:85`, PCB layout, `mode_manager_node.py`, `PIN_MAP.md`, `PROTOCOL_FB.md` | **A10 is unproven**, so nothing may run on the floor until it passes (Decisions 9 and 10). |
+| The 02/11 baseline says the hardware E-stop does not work. The owner stated on 08/11 that the hardware E-stop now works and that PA10, through connector `J_3V3_AUX` (pin 1 PA10, pin 2 GND), belongs to it. No measurement is recorded yet. `/emergency_stop_state` is software-only and no E-stop input reaches the STM32. | `robot-baseline-2026-11-02.md:85`, owner statement, PCB layout, `mode_manager_node.py`, `PIN_MAP.md`, `PROTOCOL_FB.md` | **A10 must record the measurement**, and nothing may run on the floor until it passes (Decisions 9 and 10). |
 | `contactor/state` is the commanded state of PA10, not the real contact, so it stays 1 while the E-stop is pressed. PA10 turns ON at every STM32 boot. The circuit after `J_3V3_AUX` is not documented. | `HEAD_CONTROL.md:65-66`, `PIN_MAP.md:66-73`, `contactor.c` | Not in `motionReady`. Software never uses `contactor/set` as a stop. A10 measures the real effect on motor power. |
 | `PackageSha256` is over the whole uploaded ZIP. The robot holds only extracted files and the backend gives it no map data. | `MapPackageValidator.cs:72`, `backend/docs/map-poi-versioning.md:102` | The hash cannot be recomputed from yaml + pgm (Decision 4). |
 | `mode_manager`'s latch is in memory, and its release clears stored commands only. Its Nav2 cancel is one-shot, untargeted and skipped if the service is not ready. | `mode_manager_node.py:57,130-139,206-215` | Starts latched in fleet mode. A reset must prove no goal is alive. |
@@ -192,7 +192,7 @@ telemetry-only must be corrected.
 | 8 | Foreign goal (RViz, `route_test.py`) | Decision 5 | Unit; Gazebo CLI goal; GATE A | Fault in telemetry; latch; foreign goal not cancelled by the bridge |
 | 9 | Wrong map, same `map_key` | Decision 4 | Unit; Gazebo altered file; GATE A | GoTo refused, fault reported |
 | 10 | Not localized | Decision 3 | Unit; Gazebo no initial pose; GATE A | `localized` null or false, Start refused |
-| 11 | Physical E-stop | Hardware only, through the existing PA10 chain, **not yet measured**. Software cannot see it until step 3.4. Operating rule in Decision 10 until then | A10 | Motor power cut with server off; no motion on release |
+| 11 | Physical E-stop | Hardware only, through the existing PA10 chain. Reported working by the owner, **no measurement recorded yet**. Software cannot see it until step 3.4. Operating rule in Decision 10 until then | A10 | Motor power cut with server off; no motion on release |
 | 12 | Person-sized obstacle | Nav2 costmap. Unchanged here. **Expected to fail** (Decision 9) | A11, dummy only | Stops ≥ 0.3 m at 0.2 m/s |
 | 13 | Cancel delayed or lost | Gate holds independently of cancel | Unit; Gazebo with Nav2 stalled | `cmd_vel=0` while the goal stays active |
 | 14 | `commands_enabled` with no gate | `DISABLED` makes `motionReady` false | Unit | GoTo refused |
@@ -343,7 +343,7 @@ software catches a mis-paired key and hash. This is a public contract change, re
 
 ## Still open
 
-1. **What the PA10 chain actually cuts.** The owner keeps the circuit as the team member built it. It is proven by the A10
-   measurement, not by this document. If A10 shows the wheel drive supply is not cut, A10 fails and the circuit needs
-   the team member's fix.
+1. **Measured E-stop evidence.** The owner reports that the E-stop works and keeps the circuit as the team member built
+   it. SRS §7 needs physical evidence, so A10 records the wheel drive supply on press and release. If it is not cut, A10
+   fails and the circuit needs the team member's fix.
 2. **Step 3.4 wiring (the team member who built the circuit).** The auxiliary contact and the STM32 input pin.
