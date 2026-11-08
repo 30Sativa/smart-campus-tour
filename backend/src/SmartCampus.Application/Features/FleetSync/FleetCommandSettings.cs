@@ -5,7 +5,7 @@ namespace SmartCampus.Application.Features.FleetSync;
 /// false Start, Next and Retry refuse, so no GoTo row is written, and poll hands out no GoTo. Everything that makes the
 /// robot safer keeps running: poll still checks the stream, applies the timeouts and delivers an open Cancel, results are
 /// always recorded, and the sweeper and restart recovery always run. Turning it on does not move a physical robot by
-/// itself: <c>IsDispatchEnabled</c> has no writer before M2.3.
+/// itself: Technical Staff must also set <c>IsDispatchEnabled</c> on that robot, with GATE A evidence (ADR-0049).
 /// </summary>
 public sealed class FleetCommandSettings
 {

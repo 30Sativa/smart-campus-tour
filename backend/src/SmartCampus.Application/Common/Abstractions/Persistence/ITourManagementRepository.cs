@@ -71,6 +71,8 @@ public interface ITourManagementRepository
     Task MarkRobotNeedsInspectionAsync(Guid robotId, CancellationToken ct);
     /// <summary>Clears the hold only if the robot still has this version; false when it changed.</summary>
     Task<bool> ReleaseInspectionAsync(Guid robotId, byte[] expectedRowVersion, CancellationToken ct);
+    /// <summary>A null version applies the change whatever the row's current version is.</summary>
+    Task<bool> SetDispatchEnabledAsync(Guid robotId, byte[]? expectedRowVersion, bool enabled, CancellationToken ct);
     Task<AuditLog?> FindRobotRequestAsync(Guid actor, Guid requestId, CancellationToken ct);
     void AddAudit(AuditLog audit);
     void AddEvent(TourEvent tourEvent);

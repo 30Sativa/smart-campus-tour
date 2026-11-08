@@ -56,15 +56,11 @@ public sealed class DeploymentDatabaseTests
                 Assert.Equal("11111100", await permissions.ExecuteScalarAsync());
             await using var code = new SqlCommand("SELECT RobotCode FROM dbo.Robots WHERE RobotCode=N'robot_registered_sql';", connection);
             Assert.Equal("robot_registered_sql", await code.ExecuteScalarAsync());
-            foreach (var (statement, expectedError) in new[]
-            {
-                ("UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql'", 230),
-                ("DELETE dbo.Robots WHERE RobotCode=N'robot_registered_sql'", 229)
-            })
-            {
-                await using var denied = new SqlCommand(statement, connection);
-                Assert.Equal(expectedError, (await Assert.ThrowsAsync<SqlException>(() => denied.ExecuteNonQueryAsync())).Number);
-            }
+            await using (var denied = new SqlCommand("DELETE dbo.Robots WHERE RobotCode=N'robot_registered_sql'", connection))
+                Assert.Equal(229, (await Assert.ThrowsAsync<SqlException>(() => denied.ExecuteNonQueryAsync())).Number);
+            // ADR-0049: the Technical Staff dispatch endpoint writes this column, so the runtime role now may; the provisioner still may not.
+            await using (var dispatch = new SqlCommand("UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql'; UPDATE dbo.Robots SET IsDispatchEnabled=0 WHERE RobotCode=N'robot_registered_sql';", connection))
+                await dispatch.ExecuteNonQueryAsync();
             await using (var credentialUpdate = new SqlCommand("UPDATE dbo.Robots SET CredentialHash=0x0102 WHERE RobotCode=N'robot_registered_sql';", connection))
                 Assert.Equal(1, await credentialUpdate.ExecuteNonQueryAsync());
         }

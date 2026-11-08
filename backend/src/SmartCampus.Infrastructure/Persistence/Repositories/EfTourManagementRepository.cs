@@ -201,9 +201,16 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         await db.Robots.Where(r => r.Id == robotId && r.RowVersion == expectedRowVersion)
             .ExecuteUpdateAsync(set => set.SetProperty(r => r.CurrentTourId, (Guid?)null).SetProperty(r => r.NeedsInspection, false), ct) == 1;
 
+    public async Task<bool> SetDispatchEnabledAsync(Guid robotId, byte[]? expectedRowVersion, bool enabled, CancellationToken ct)
+    {
+        var target = db.Robots.Where(r => r.Id == robotId);
+        if (expectedRowVersion is not null) target = target.Where(r => r.RowVersion == expectedRowVersion);
+        return await target.ExecuteUpdateAsync(set => set.SetProperty(r => r.IsDispatchEnabled, enabled), ct) == 1;
+    }
+
     public Task<AuditLog?> FindRobotRequestAsync(Guid actor, Guid requestId, CancellationToken ct) =>
         db.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.ActorUserId == actor && a.CorrelationId == requestId &&
-            a.EntityType == "Robot" && a.Action == TourLifecycleEvents.InspectionReleased, ct);
+            a.EntityType == "Robot" && (a.Action == TourLifecycleEvents.InspectionReleased || a.Action == TourLifecycleEvents.DispatchChanged), ct);
 
     public Task<RobotCommand?> FindLegCommandAsync(Guid legId, CancellationToken ct) =>
         db.RobotCommands.AsNoTracking().SingleOrDefaultAsync(c => c.LegId == legId && c.Kind == RobotCommandKinds.GoTo, ct);

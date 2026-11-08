@@ -30,6 +30,10 @@ failure only while the flag is true; while it is false a failure is logged and t
   nothing about the robot stopping.
 - A GoTo is handed out only while `FleetCommands:Enabled = true`; a new one also needs a RUNNING NORMAL Tour and a
   robot with `IsDispatchEnabled = 1` and `NeedsInspection = 0`.
+- A PENDING GoTo is handed out only if the report that passed the stream check says `localized = true`,
+  `motionReady = true`, `status = IDLE`, and the command's `mapKey` and `frameId`. Start and Next checked up to one
+  accept window earlier. Otherwise poll returns no command and the sweeper applies `AcceptBy` as usual. A Cancel is not
+  subject to this check.
 
 ## Results
 

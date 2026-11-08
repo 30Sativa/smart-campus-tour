@@ -437,8 +437,9 @@ if grep -q 'upgrade-v1.12-to-v1.13' "$scratch/v114.log"; then fail 'v1.13 databa
     HAS_PERMS_BY_NAME(N'dbo.RobotCommands',N'OBJECT',N'UPDATE',N'X',N'COLUMN'),
     HAS_PERMS_BY_NAME(N'dbo.RobotCommands',N'OBJECT',N'DELETE'),
     HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CurrentTourId',N'COLUMN'),
-    HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'NeedsInspection',N'COLUMN'));
-  REVERT;") == 110011 ]] || fail 'Runtime robot command grants are not least privilege.'
+    HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'NeedsInspection',N'COLUMN'),
+    HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'IsDispatchEnabled',N'COLUMN'));
+  REVERT;") == 1100111 ]] || fail 'Runtime robot command grants are not least privilege.'
 upgrade > "$scratch/v114-rerun.log" 2>&1 || { cat "$scratch/v114-rerun.log" >&2; fail 'v1.18 regrant rerun failed.'; }
 grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/v114-rerun.log" || fail 'v1.18 database did not use the regrant path.'
 

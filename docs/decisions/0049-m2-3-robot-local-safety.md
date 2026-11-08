@@ -57,7 +57,9 @@ The value is `true` only when all hold:
    401, 5xx and timeouts do not stamp, although 409 stays "healthy" for backoff.
 2. No own goal is held over from a link loss. If the age passes `T_link` while `_active` is set, the permit stays false
    until Nav2 reports that goal terminal. Otherwise a goal whose controller was silent for the whole outage could resume.
-3. From step 3.2: wheel odometry is fresh, no unowned goal is active, and the map check passed.
+3. From step 3.2: wheel odometry is fresh, no unowned goal is active, and the map check has not found a mismatch.
+   Missing or stale map evidence only refuses new GoTo commands (Decision 4): a slow `map_server` reply must not latch a
+   robot that is already moving.
 
 On link loss with an own active goal, the bridge sends a **targeted** cancel on its own handle and never cancel-all. The
 result is `FAILED` with reason `LOCAL_LINK_LOSS`, sent only after Nav2 reports terminal [ADR-0042]. Inhibition does not

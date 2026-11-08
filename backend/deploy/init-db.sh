@@ -100,6 +100,7 @@ if [[ "$mode" == --check-only ]]; then
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CurrentTourId',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'LastAssignedAt',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'NeedsInspection',N'COLUMN') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'IsDispatchEnabled',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'DELETE') = 1
        THROW 51005, 'Runtime Robot grants are incomplete or too broad; update runtime grants through the controlled v1.18 upgrade/regrant before API deployment.', 1;
@@ -125,7 +126,8 @@ if [[ "$mode" == --check-only ]]; then
            COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'DeactivationReason','ColumnId'),
            COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CurrentTourId','ColumnId'),
            COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'LastAssignedAt','ColumnId'),
-           COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'NeedsInspection','ColumnId')))
+           COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'NeedsInspection','ColumnId'),
+           COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'IsDispatchEnabled','ColumnId')))
        THROW 51005, 'Runtime Robot grants are incomplete or too broad; update runtime grants through the controlled v1.18 upgrade/regrant before API deployment.', 1;
     EXECUTE AS USER=N'smartcampus_api';
     IF HAS_PERMS_BY_NAME(N'dbo.RobotCommands',N'OBJECT',N'SELECT') <> 1

@@ -35,7 +35,8 @@ public sealed record RobotDiagnosticsDetailDto(
     bool DiagnosticsFresh,
     MiniPcResourcesReport? MiniPc,
     Ros2SystemReport? Ros2,
-    SensorHealthReport? Sensors);
+    SensorHealthReport? Sensors,
+    bool IsDispatchEnabled);
 
 public sealed class GetRobotDiagnosticsQueryHandler(
     IPhysicalRobotRepository robotRepository,
@@ -102,6 +103,7 @@ public sealed class GetRobotDiagnosticsQueryHandler(
             diagnosticsFresh,
             diagnosticsSnapshot?.MiniPc,
             diagnosticsSnapshot?.Ros2,
-            diagnosticsSnapshot?.Sensors);
+            diagnosticsSnapshot?.Sensors,
+            robot.IsDispatchEnabled);
     }
 }

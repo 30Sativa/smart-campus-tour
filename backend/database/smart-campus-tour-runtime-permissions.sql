@@ -26,7 +26,7 @@ GRANT UPDATE (CredentialHash, CredentialIssuedAt, CredentialIssuedByUserId, Cred
     CredentialRevokedAt, CredentialRevokedByUserId, FirstAcceptedSyncAt, FirstAcceptedMapKey,
     FirstAcceptedFrameId, AssignedMapVersionId, MapAssignedAt, MapAssignedByUserId, AssignedAreaKey,
     DeactivatedAt, DeactivatedByUserId, DeactivationReason,
-    CurrentTourId, LastAssignedAt, NeedsInspection) ON OBJECT::dbo.Robots TO campus_tour_app;
+    CurrentTourId, LastAssignedAt, NeedsInspection, IsDispatchEnabled) ON OBJECT::dbo.Robots TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.RobotCommands TO campus_tour_app;
 GRANT UPDATE (State, IsOpen, Outcome, DeliveredAt, DeliveredStreamId, AcceptedAt, CompletedAt, ReasonCode,
     ResolvedByUserId, ResolvedAt, ResolutionNote) ON OBJECT::dbo.RobotCommands TO campus_tour_app;
