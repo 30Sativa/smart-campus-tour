@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { closedNote, dayMonth, formatDateTime, formatTime, isClosedRegistration } from './rep-format'
+import { closedNote, dayMonth, formatDateTime, formatTime, isClosedRegistration, isReviewExpired } from './rep-format'
+import { buildRepNotices } from './rep-notices'
 import type { RegistrationSummary } from './api/types'
 
 describe('Representative Tour time', () => {
@@ -33,5 +34,21 @@ describe('Đăng ký của tôi groups', () => {
     expect(closedNote({ ...base, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: ' Robot cần bảo trì ' }).reason).toBe('Robot cần bảo trì')
     expect(closedNote({ ...base, state: 'REJECTED', tourState: 'READY', rejectionReason: ' Thiếu lớp ' }).reason).toBe('Thiếu lớp')
     expect(closedNote({ ...base, state: 'REJECTED', tourState: 'READY' }).reason).toBe('Nhà trường không ghi lý do.')
+  })
+
+  // The exact text the backend's T-24h expiry stores (ADR-0048).
+  const expired: RegistrationSummary = { ...base, state: 'REJECTED', rejectionReason: 'Hết hạn duyệt trước giờ tham quan 24 giờ.' }
+  it('reads a T-24h expiry as expired, not refused, even while the Tour is still SCHEDULED', () => {
+    expect(isClosedRegistration(expired)).toBe(true)
+    expect(closedNote(expired)).toMatchObject({ badge: 'Hết hạn duyệt', reason: 'Hồ sơ chưa được duyệt trước giờ tham quan 24 giờ nên đã hết hạn.', at: null })
+  })
+  it('matches only that exact reason on a refused registration', () => {
+    expect(isReviewExpired({ ...expired, rejectionReason: 'Hết hạn giấy tờ.' })).toBe(false)
+    expect(isReviewExpired({ ...expired, state: 'SUBMITTED' })).toBe(false)
+    expect(closedNote({ ...expired, rejectionReason: 'Thiếu lớp', tourState: 'READY' }).badge).toBe('Bị từ chối')
+  })
+  it('notifies an expiry as an expiry, with nothing to update', () => {
+    const [notice] = buildRepNotices([expired], Date.parse('2026-10-19T03:00:00Z'))
+    expect(notice).toMatchObject({ title: 'Hết hạn duyệt', detail: 'Hồ sơ chưa được duyệt trước giờ tham quan 24 giờ nên đã hết hạn.', toLabel: 'Xem hồ sơ' })
   })
 })

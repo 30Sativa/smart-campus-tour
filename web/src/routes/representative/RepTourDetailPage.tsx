@@ -42,7 +42,7 @@ export default function RepTourDetailPage() {
           : registrations.error ? <ErrorState title="Không kiểm tra được đăng ký" message={readRepError(registrations.error).message} onRetry={() => void registrations.refetch()} />
             : existing ? <div className="rep-stack">
               <h3>{groupLabel(existing) ?? existing.schoolName}</h3>
-              <RegistrationStatusBadge state={existing.state} />
+              <RegistrationStatusBadge state={existing.state} rejectionReason={existing.rejectionReason} />
               <p className="rep-hint">Bạn đã có đăng ký cho buổi tham quan này. Mở hồ sơ để xem thông tin và các thao tác hiện còn cho phép.</p>
               <Link to={`/dai-dien/dang-ky/${existing.id}`} className={repButton('primary')}>Xem đăng ký</Link>
             </div>

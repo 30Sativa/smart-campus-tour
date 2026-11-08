@@ -6,7 +6,7 @@ import { Link } from 'react-router'
 import type { ActionGate, RegistrationState, TourState } from '../api/types'
 import type { StatusTone } from '../../../components/ui/status-tone'
 import { REGISTRATION_STATE_LABEL } from '../../registrations/registration-state'
-import { TOUR_LABEL } from '../rep-format'
+import { REVIEW_EXPIRED_LABEL, TOUR_LABEL, isReviewExpired } from '../rep-format'
 import { repButton } from '../rep-classes'
 
 export function RepPage({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
@@ -43,7 +43,8 @@ export function InfoList({ items, columns = 2 }: { items: Array<{ label: string;
 function SoftBadge({ label, tone, size = 'sm' }: { label: string; tone: StatusTone; size?: 'sm' | 'md' }) {
   return <span className={`rep-badge rep-badge--${tone}${size === 'md' ? ' rep-badge--md' : ''}`}>{label}</span>
 }
-export function RegistrationStatusBadge({ state, size }: { state: RegistrationState; size?: 'sm' | 'md' }) {
+export function RegistrationStatusBadge({ state, rejectionReason, size }: { state: RegistrationState; rejectionReason?: string | null; size?: 'sm' | 'md' }) {
+  if (isReviewExpired({ state, rejectionReason })) return <SoftBadge label={REVIEW_EXPIRED_LABEL} tone="muted" size={size} />
   return <SoftBadge {...REGISTRATION_STATE_LABEL[state]} label={state === 'APPROVED' ? 'Có dòng đã duyệt' : REGISTRATION_STATE_LABEL[state].label} size={size} />
 }
 export function TourStateBadge({ state, size }: { state: TourState; size?: 'sm' | 'md' }) {

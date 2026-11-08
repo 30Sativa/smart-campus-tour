@@ -6,8 +6,8 @@ import StaffManageRegistrationsPage from '../../../routes/staff/manage/StaffMana
 import StaffShell from '../../staff/StaffShell'
 import { useAuthStore } from '../../../stores/auth-store'
 import { useToastStore } from '../../../components/ui/toast-store'
-import { dateBoundary } from './presentation'
-import type { ReviewDetails, ReviewInput } from './types'
+import { dateBoundary, reviewTime } from './presentation'
+import type { EmailChangeDecisionInput, ReviewDetails, ReviewInput, StaffEmailChange } from './types'
 
 const firstVersion = 'AAAAAAAAAAE='
 const secondVersion = 'AAAAAAAAAAI='
@@ -24,6 +24,15 @@ let requests: URL[]
 let unexpectedMutations: string[]
 let failure: 'list' | 'detail' | 'stale' | 'reload' | 'network' | 'duplicate' | 'invalid' | 'forbidden' | 'uncertain-commit' | null
 let clients: QueryClient[]
+let emailChanges: StaffEmailChange[]
+let emailDecisions: { id: string; action: string; input: EmailChangeDecisionInput }[]
+let emailChangeExpired: boolean
+const emailChange = (overrides: Partial<StaffEmailChange> = {}): StaffEmailChange => ({
+  id: 'change-1', registrationId: 'registration', rowId: 'row', rowNumber: 4, currentEmail: 'room@example.com', proposedEmail: 'new@example.com',
+  state: 'PENDING', requestedByUserId: 'rep', createdAt: '2026-10-09T03:00:00Z', reviewedAt: null, reviewedByUserId: null, reviewReason: null,
+  rowVersion: 'request-version', tourRowVersion: 'tour-version', registrationRowVersion: 'registration-version', rosterRowVersion: 'row-version',
+  canReview: true, expiresAt: new Date(Date.now() + 5 * 3600_000).toISOString(), ...overrides,
+})
 function response(data: unknown, status = 200, extra: object = {}) {
   return new Response(JSON.stringify({ success: status === 200, message: 'OK', data, ...extra }), { status })
 }
@@ -39,12 +48,22 @@ function renderAt(path = '/staff/manage/registrations/pending?review=registratio
 beforeEach(() => {
   useToastStore.setState({ toasts: [] })
   clients = []; requests = []; decisions = []; unexpectedMutations = []; registration = structuredClone(initial); failure = null
+  emailChanges = []; emailDecisions = []; emailChangeExpired = false
   useAuthStore.getState().setAuth('staff-token', { userId: 'sql-staff', username: 'staff', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
     expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer staff-token')
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
     if (url.pathname === '/api/registrations/registration/invitations')
       return response({ enabled: false, canIssue: false, items: [] })
+    if (url.pathname.startsWith('/api/staff/manage/roster-email-change-requests')) {
+      if (options?.method !== 'POST') { expect(url.searchParams.get('state')).toBe('PENDING'); return response(structuredClone(emailChanges)) }
+      const [, id, action] = /\/([^/]+)\/(accept|reject)$/.exec(url.pathname)!
+      emailDecisions.push({ id, action, input: JSON.parse(options.body as string) as EmailChangeDecisionInput })
+      emailChanges = emailChanges.filter(item => item.id !== id)
+      return emailChangeExpired
+        ? response(null, 409, { message: 'Yêu cầu không còn chờ xử lý hoặc dòng không còn được chấp nhận.', errors: { code: 'EMAIL_CHANGE_STATE_CONFLICT', fields: null } })
+        : response(null)
+    }
     expect(url.pathname).toMatch(/^\/api\/staff\/manage\/registrations/)
     if (options?.method === 'POST') {
       const match = /^\/api\/staff\/manage\/registrations\/([^/]+)\/rows\/([^/]+)\/(accept|reject)$/.exec(url.pathname)
@@ -79,7 +98,6 @@ describe('Staff registration review boundary', () => {
   it('loads the Staff API and does not expose the legacy Admin-only direct email correction', async () => {
     renderAt('/staff/manage/registrations?review=registration', 'all')
     expect(await screen.findByRole('table', { name: 'Roster đăng ký' })).toBeInTheDocument()
-    expect(screen.getByText(/Yêu cầu đổi email cần quy trình gửi và xét duyệt riêng/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Sửa email dòng/ })).not.toBeInTheDocument()
     expect(requests.some(url => url.pathname.startsWith('/api/staff/manage/registrations'))).toBe(true)
     expect(requests.some(url => url.pathname.startsWith('/api/admin/registrations'))).toBe(false)
@@ -298,6 +316,112 @@ describe('Staff registration review boundary', () => {
     await act(async () => { await client.invalidateQueries({ queryKey: ['admin-registration-review', 'sql-staff', 'list'] }) })
     await waitFor(() => expect(screen.queryByLabelText(/\d+ đoàn chờ duyệt/)).not.toBeInTheDocument())
     expect(screen.getByRole('link', { name: 'Đăng ký đoàn' })).toBeInTheDocument()
+  })
+
+  describe('email-change requests', () => {
+    const accepted = () => { registration.summary.state = 'APPROVED'; registration.roster[0] = { ...registration.roster[0], participationState: 'ACCEPTED', canApprove: false, canReject: false } }
+    const openPanel = async () => {
+      accepted()
+      renderAt('/staff/manage/registrations?review=registration', 'all')
+      return screen.findByRole('region', { name: 'Yêu cầu đổi email chờ duyệt' })
+    }
+
+    it('lists only this registration, with both emails, the sender, the sent time and the expiry', async () => {
+      emailChanges = [emailChange(), emailChange({ id: 'other', registrationId: 'other-registration', proposedEmail: 'other@example.com' })]
+      const panel = await openPanel()
+      expect(within(panel).getByText('room@example.com')).toBeInTheDocument()
+      expect(within(panel).getByText('new@example.com')).toBeInTheDocument()
+      expect(within(panel).getByText('Dòng 4: Phòng A')).toBeInTheDocument()
+      expect(within(panel).getByText(`Gửi bởi Đại diện A lúc ${reviewTime('2026-10-09T03:00:00Z')}`)).toBeInTheDocument()
+      expect(within(panel).getByText(/^Hết hạn lúc /)).toBeInTheDocument()
+      expect(within(panel).queryByText('other@example.com')).not.toBeInTheDocument()
+    })
+
+    it('shows no section when nothing waits', async () => {
+      accepted()
+      renderAt('/staff/manage/registrations?review=registration', 'all')
+      const sheet = await screen.findByRole('dialog', { name: 'Đoàn A' })
+      await within(sheet).findByRole('region', { name: 'Hỗ trợ lời mời' })
+      expect(within(sheet).queryByRole('region', { name: 'Yêu cầu đổi email chờ duyệt' })).not.toBeInTheDocument()
+    })
+
+    it('drops the expiry line once it has passed', async () => {
+      emailChanges = [emailChange({ expiresAt: new Date(Date.now() - 60_000).toISOString() })]
+      const panel = await openPanel()
+      expect(within(panel).queryByText(/Hết hạn lúc/)).not.toBeInTheDocument()
+    })
+
+    it('accepts with all four versions after confirmation and refreshes the roster', async () => {
+      emailChanges = [emailChange()]
+      const panel = await openPanel()
+      const reads = requests.filter(url => url.pathname.endsWith('/registration')).length
+      fireEvent.click(within(panel).getByRole('button', { name: 'Duyệt đổi email dòng 4' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Duyệt yêu cầu đổi email dòng 4?' })
+      expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument()
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Duyệt' }))
+      await waitFor(() => expect(useToastStore.getState().toasts.map(toast => toast.title)).toContain('Đã duyệt yêu cầu đổi email'))
+      expect(emailDecisions).toEqual([{ id: 'change-1', action: 'accept', input: { requestId: expect.any(String), expectedRequestRowVersion: 'request-version',
+        expectedTourRowVersion: 'tour-version', expectedRegistrationRowVersion: 'registration-version', expectedRowVersion: 'row-version' } }])
+      await waitFor(() => expect(screen.queryByRole('region', { name: 'Yêu cầu đổi email chờ duyệt' })).not.toBeInTheDocument())
+      expect(screen.queryByRole('dialog', { name: /Duyệt yêu cầu/ })).not.toBeInTheDocument()
+      await waitFor(() => expect(requests.filter(url => url.pathname.endsWith('/registration')).length).toBeGreaterThan(reads))
+    })
+
+    it('rejects only with a reason', async () => {
+      emailChanges = [emailChange()]
+      const panel = await openPanel()
+      fireEvent.click(within(panel).getByRole('button', { name: 'Từ chối đổi email dòng 4' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Từ chối yêu cầu đổi email dòng 4?' })
+      const submit = within(dialog).getByRole('button', { name: 'Từ chối' })
+      expect(submit).toBeDisabled()
+      fireEvent.change(within(dialog).getByRole('textbox', { name: /Lý do từ chối/ }), { target: { value: '  Email không đúng  ' } })
+      fireEvent.click(submit)
+      await waitFor(() => expect(useToastStore.getState().toasts.map(toast => toast.title)).toContain('Đã từ chối yêu cầu đổi email'))
+      expect(emailDecisions[0]).toMatchObject({ action: 'reject', input: { reason: 'Email không đúng' } })
+    })
+
+    it('keeps a 409 for an expired request inside the dialog, with no success and no way to resend', async () => {
+      emailChanges = [emailChange()]
+      emailChangeExpired = true
+      const panel = await openPanel()
+      fireEvent.click(within(panel).getByRole('button', { name: 'Duyệt đổi email dòng 4' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Duyệt yêu cầu đổi email dòng 4?' })
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Duyệt' }))
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Yêu cầu không còn chờ xử lý')
+      expect(useToastStore.getState().toasts).toHaveLength(0)
+      // The list refreshed and lost the request; the dialog still holds it and cannot send it again.
+      await waitFor(() => expect(screen.queryByRole('region', { name: 'Yêu cầu đổi email chờ duyệt' })).not.toBeInTheDocument())
+      expect(screen.getByRole('dialog', { name: 'Duyệt yêu cầu đổi email dòng 4?' })).toBeInTheDocument()
+      expect(within(dialog).getByRole('button', { name: 'Duyệt' })).toBeDisabled()
+      expect(emailDecisions).toHaveLength(1)
+    })
+
+    it('says so when the requests cannot be loaded', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+        const url = new URL(input, 'https://api.example.test')
+        if (url.pathname.startsWith('/api/staff/manage/roster-email-change-requests')) return response(null, 500)
+        if (url.pathname.endsWith('/registration')) return response(structuredClone(registration))
+        return response([], 200, { pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 1 } })
+      }))
+      renderAt('/staff/manage/registrations?review=registration', 'all')
+      expect(await screen.findByText('Không tải được yêu cầu đổi email.')).toBeInTheDocument()
+    })
+  })
+
+  describe('the T-24h line in the queue', () => {
+    const inHours = (hours: number) => new Date(Date.now() + hours * 3600_000).toISOString()
+    it('shows while the moment is ahead', async () => {
+      registration.summary.tourScheduledStartAt = inHours(48)
+      renderAt()
+      const table = await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })
+      expect(within(table).getByText(/^Hết hạn lúc /)).toBeInTheDocument()
+    })
+    it('is gone once the moment has passed', async () => {
+      registration.summary.tourScheduledStartAt = inHours(12)
+      renderAt()
+      const table = await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })
+      expect(within(table).queryByText(/Hết hạn lúc/)).not.toBeInTheDocument()
+    })
   })
 
   it('uses Vietnam date boundaries with an exclusive upper bound', () => {

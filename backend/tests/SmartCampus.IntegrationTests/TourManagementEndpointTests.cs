@@ -256,6 +256,8 @@ public sealed class TourManagementEndpointTests
         Assert.Equal("Robot cần bảo trì", listed.GetProperty("tourCancelReason").GetString());
         var read = await f.Send(HttpMethod.Get, $"/api/representative/registrations/{registration}", token: f.Representative);
         Assert.Equal("Robot cần bảo trì", read.GetProperty("summary").GetProperty("tourCancelReason").GetString());
+        Assert.Equal(JsonValueKind.String, listed.GetProperty("tourEndedAt").ValueKind);
+        Assert.Equal(listed.GetProperty("tourEndedAt").GetDateTimeOffset(), read.GetProperty("summary").GetProperty("tourEndedAt").GetDateTimeOffset());
         Assert.False(read.GetProperty("allowedActions").GetProperty("edit").GetProperty("allowed").GetBoolean());
         var tour = await f.Send(HttpMethod.Get, $"/api/representative/tours/{id}", token: f.Representative);
         Assert.Equal("CANCELLED", tour.GetProperty("state").GetString());

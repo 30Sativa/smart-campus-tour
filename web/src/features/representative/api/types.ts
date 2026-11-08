@@ -20,6 +20,8 @@ export type RegistrationSummary = {
   rejectionReason?: string | null; reviewedAt?: string | null
   /** Why Staff cancelled the Tour; null unless the Tour is cancelled. */
   tourCancelReason?: string | null
+  /** When a cancelled Tour ended; an older server omits it. */
+  tourEndedAt?: string | null
 }
 /** "Đăng ký của tôi" halves: still in play, or ended (cancelled, Tour cancelled, refused with no way back). */
 export type RegistrationGroup = 'active' | 'closed'

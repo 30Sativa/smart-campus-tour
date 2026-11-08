@@ -37,9 +37,12 @@ public sealed class RegistrationInputValidator : AbstractValidator<RegistrationI
 
 public static class RegistrationCutoff
 {
+    public static bool IsClosed(DateTimeOffset scheduledStartAt, DateTimeOffset now) =>
+        now >= scheduledStartAt - Tours.TourSchedule.RegistrationClose;
+
     public static void EnsureNewRowsAllowed(SmartCampus.Domain.Entities.Tour tour, DateTimeOffset now)
     {
-        if (now >= tour.ScheduledStartAt - Tours.TourSchedule.RegistrationClose)
+        if (IsClosed(tour.ScheduledStartAt, now))
             throw new SmartCampus.Application.Common.Exceptions.ConflictException(
                 "Không thể tạo đăng ký hoặc thêm điểm xem trong 48 giờ trước giờ Tour.", "REGISTRATION_CUTOFF");
     }

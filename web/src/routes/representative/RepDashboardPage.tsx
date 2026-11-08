@@ -5,7 +5,7 @@ import { RepPage, RepSection, ErrorState, EmptyState, PageSkeleton } from '../..
 import { TourCard } from '../../features/representative/components/TourCard'
 import { RegistrationCard } from '../../features/representative/components/RegistrationCard'
 import { RepAttention, RepHero, RepOverviewHeader } from '../../features/representative/components/DashboardParts'
-import { readRepError } from '../../features/representative/rep-format'
+import { isReviewExpired, readRepError } from '../../features/representative/rep-format'
 import { nextUpcomingRegistration, useUpcomingRepRegistrations } from '../../features/representative/upcoming-registrations'
 
 export default function RepDashboardPage() {
@@ -20,7 +20,7 @@ export default function RepDashboardPage() {
 
   const recent = registrations.data.data
   const next = upcoming.isSuccess ? nextUpcomingRegistration(upcoming.data) : null
-  const needsFix = upcoming.data?.find(registration => registration.state === 'REJECTED' && registration.tourState === 'SCHEDULED') ?? null
+  const needsFix = upcoming.data?.find(registration => registration.state === 'REJECTED' && registration.tourState === 'SCHEDULED' && !isReviewExpired(registration)) ?? null
 
   return <RepPage>
     <RepOverviewHeader />

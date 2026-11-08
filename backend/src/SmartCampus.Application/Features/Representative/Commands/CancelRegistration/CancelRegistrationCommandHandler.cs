@@ -11,7 +11,7 @@ public sealed class CancelRegistrationCommandHandler(IRegistrationRepository rep
     public async Task<Unit> Handle(CancelRegistrationCommand command, CancellationToken ct)
     {
         var (tour, registration) = await RegistrationMutation.LoadAsync(repository, command.Id, command.ActorUserId,
-            command.Request.ExpectedRowVersion, command.Request.ExpectedTourRowVersion, RegistrationOperation.Cancel, ct);
+            command.Request.ExpectedRowVersion, command.Request.ExpectedTourRowVersion, RegistrationOperation.Cancel, clock, ct);
         var now = clock.GetUtcNow();
         var activeInvitations = await invitations.LoadAsync(registration.Id, ct);
         foreach (var row in registration.RosterRows.Where(row => row.IsActive))

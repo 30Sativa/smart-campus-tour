@@ -4,6 +4,9 @@ export const reviewTime = (value: string) => `${timeFormat.format(new Date(value
 /** T-24h (BR-05): an undecided row expires here. Display only; the server decides. */
 export const pendingExpiresAt = (tourStart: string) => new Date(new Date(tourStart).getTime() - 24 * 3600_000).toISOString()
 
+/** "Hết hạn lúc …" while that moment is still ahead; null once it has passed, when the line would read as a mistake. */
+export const expiryLabel = (expiresAt: string, now: number) => new Date(expiresAt).getTime() > now ? `Hết hạn lúc ${reviewTime(expiresAt)}` : null
+
 /** Calendar dates refer to Vietnam time; the server's upper boundary is exclusive. */
 export function dateBoundary(day: string, end = false) {
   if (!day) return undefined

@@ -66,8 +66,8 @@ public sealed class EfAccountRepository(ApplicationDbContext dbContext) : IAccou
     public async Task<IReadOnlyList<AccountUsage>> ListAccountUsageAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var operated = await dbContext.Tours.AsNoTracking()
-            .Where(tour => tour.OperatorUserId == userId && (tour.State == "SCHEDULED" || tour.State == "READY"))
-            .Select(tour => new AccountUsage(true, tour.Name, tour.ScheduledStartAt, null)).ToArrayAsync(cancellationToken);
+            .Where(tour => tour.OperatorUserId == userId && (tour.State == "SCHEDULED" || tour.State == "READY" || tour.State == "RUNNING"))
+            .Select(tour => new AccountUsage(true, tour.Name, tour.ScheduledStartAt, null, tour.State == "RUNNING")).ToArrayAsync(cancellationToken);
         var represented = await dbContext.GroupRegistrations.AsNoTracking()
             .Where(registration => registration.RepresentativeUserId == userId &&
                 (registration.State == RegistrationStates.Submitted || registration.State == RegistrationStates.Approved) &&

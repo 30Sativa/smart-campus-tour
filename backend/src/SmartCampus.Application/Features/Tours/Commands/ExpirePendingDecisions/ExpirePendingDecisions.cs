@@ -43,6 +43,7 @@ public sealed class ExpirePendingDecisionsCommandHandler(ITourManagementReposito
         }
         // Only the request closes: the row keeps its email and invitation.
         foreach (var request in emailChanges) request.State = RosterParticipationStates.Expired;
+        foreach (var group in rows.GroupBy(row => row.Registration)) ApplyRegistrationState(group.Key, group.Count(), now);
 
         var items = rows.Select(row => row.RegistrationId).Concat(emailChanges.Select(request => request.RosterRow.RegistrationId)).Distinct()
             .Select(id => new RosterExpiryNoticeItem(id, rows.Count(row => row.RegistrationId == id),
@@ -61,5 +62,25 @@ public sealed class ExpirePendingDecisionsCommandHandler(ITourManagementReposito
                 new { code = "EMAIL_DISABLED", recipientCount = items.Length }));
         }
         return rows.Count + emailChanges.Count;
+    }
+
+    private void ApplyRegistrationState(GroupRegistration registration, int expiredRows, DateTimeOffset now)
+    {
+        var state = RegistrationStates.FromRows(registration.RosterRows);
+        if (state == registration.State) return;
+        registration.State = state;
+        registration.UpdatedAt = now;
+        if (state == RegistrationStates.Rejected)
+        {
+            registration.RejectionReason = RegistrationExpiry.Reason;
+            registration.ReviewedByUserId = null;
+            registration.ReviewedAt = now;
+        }
+        repository.AddAudit(new AuditLog
+        {
+            TourId = registration.TourId, ActorUserId = null, EntityType = RegistrationAudit.RegistrationEntityType,
+            EntityId = registration.Id.ToString("D"), Action = RegistrationExpiry.AuditAction, ResultCode = "SYSTEM", OccurredAt = now,
+            DataJson = JsonSerializer.Serialize(new { expiredRows })
+        });
     }
 }

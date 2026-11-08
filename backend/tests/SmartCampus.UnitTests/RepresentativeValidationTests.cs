@@ -102,4 +102,23 @@ public sealed class RepresentativeValidationTests
         var stale = Assert.Throws<ConflictException>(() => RowVersionToken.EnsureCurrent([0, 0, 0, 0, 0, 0, 0, 2], "AAAAAAAAAAE="));
         Assert.Equal("STALE_VERSION", stale.Code);
     }
+
+    [Fact]
+    public void TheT24Close_RefusesOnlyResubmittingARejectedRegistration()
+    {
+        const string open = RegistrationGate.OpenTourState;
+        static RegistrationGate Closed(string state, RegistrationOperation operation) =>
+            RepresentativeRegistrationPolicy.Evaluate(open, state, false, operation, reviewClosed: true);
+
+        var refused = Closed(RegistrationStates.Rejected, RegistrationOperation.Resubmit);
+        Assert.False(refused.Allowed);
+        Assert.Equal("REGISTRATION_REVIEW_CLOSED", refused.Code);
+        Assert.True(RepresentativeRegistrationPolicy.Evaluate(open, RegistrationStates.Rejected, false, RegistrationOperation.Resubmit).Allowed);
+        Assert.True(Closed(RegistrationStates.Cancelled, RegistrationOperation.Resubmit).Allowed);
+        Assert.False(Closed(RegistrationStates.Rejected, RegistrationOperation.Update).Allowed);
+        Assert.Equal(RegistrationGate.StateConflictCode, Closed(RegistrationStates.Rejected, RegistrationOperation.Update).Code);
+        Assert.True(Closed(RegistrationStates.Approved, RegistrationOperation.Update).Allowed);
+        Assert.Equal(RegistrationGate.TourLockedCode,
+            RepresentativeRegistrationPolicy.Evaluate("READY", RegistrationStates.Rejected, false, RegistrationOperation.Resubmit, reviewClosed: true).Code);
+    }
 }

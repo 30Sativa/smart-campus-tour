@@ -20,15 +20,19 @@ const READY_TOUR = tourRow('tour-ready', 'Tour chiều', 'READY', {
 
 let running: object[] = []
 let today: object[] = [READY_TOUR]
+let emailRequests: object[] = []
 const page = (data: object[], total = data.length) => new Response(JSON.stringify({ success: true, data, pagination: { page: 1, pageSize: 20, totalItems: total, totalPages: 1 } }), { status: 200 })
 
 beforeEach(() => {
   running = []
   today = [READY_TOUR]
+  emailRequests = []
   useAuthStore.getState().setAuth('test-token', { userId: 'staff-1', username: 'lan', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), 'http://localhost')
     if (url.pathname === '/api/staff/manage/registrations') return page([], 4)
+    if (url.pathname === '/api/staff/manage/roster-email-change-requests') return page(emailRequests)
+    if (url.pathname === '/api/staff/manage/registrations/registration-9') return new Response('{}', { status: 500 })
     if (url.pathname !== '/api/staff/manage/tours') return page([])
     if (url.searchParams.get('phase') === 'RUNNING') return page(running)
     if (url.searchParams.get('state') === 'SCHEDULED') {
@@ -71,6 +75,21 @@ describe('Staff home', () => {
     // Why the Tour cannot be marked READY yet, in the server's words.
     expect(await within(queue).findByText('Còn dòng đăng ký đang chờ Staff duyệt. (và 1 điều kiện khác)')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Tạo Tour/ })).toHaveAttribute('href', '/staff/manage/tours/new')
+  })
+
+  it('queues the email-change requests Staff can still decide, and opens the registration of one', async () => {
+    const future = new Date(Date.now() + 5 * 3600_000).toISOString()
+    const request = { id: 'change-1', registrationId: 'registration-9', rowNumber: 3, currentEmail: 'cu@example.test', proposedEmail: 'moi@example.test', createdAt: '2026-11-01T02:00:00Z', expiresAt: future, canReview: true }
+    emailRequests = [request, { ...request, id: 'change-locked', rowNumber: 7, registrationId: 'registration-locked', canReview: false }]
+    show()
+    const section = await within(screen.getByRole('region', { name: 'Hàng chờ chuẩn bị' })).findByRole('group', { name: 'Yêu cầu đổi email chờ duyệt' })
+    expect(await within(section).findByText('Dòng 3: cu@example.test sang moi@example.test')).toBeInTheDocument()
+    expect(within(section).getByText('1')).toBeInTheDocument()
+    expect(within(section).queryByText(/Dòng 7/)).not.toBeInTheDocument()
+    expect(within(section).getByText(/Hết hạn lúc/)).toBeInTheDocument()
+    fireEvent.click(within(section).getByRole('button', { name: 'Xem & duyệt yêu cầu đổi email dòng 3' }))
+    expect(await screen.findByText('Không tải được đăng ký này.')).toBeInTheDocument()
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith('/api/staff/manage/registrations/registration-9'))).toBe(true)
   })
 
   it('narrows the lists to my Tours on request, but never hides an alert', async () => {

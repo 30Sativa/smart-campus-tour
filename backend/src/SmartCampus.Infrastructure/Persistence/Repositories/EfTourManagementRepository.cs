@@ -183,8 +183,9 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     }
 
     public async Task<IReadOnlyList<RosterRow>> LoadPendingRowsAsync(Guid tourId, CancellationToken ct) =>
-        await db.RosterRows.Where(row => row.Registration.TourId == tourId && row.IsActive &&
-            row.ParticipationState == RosterParticipationStates.Pending).ToArrayAsync(ct);
+        await db.RosterRows.Include(row => row.Registration).ThenInclude(registration => registration.RosterRows)
+            .Where(row => row.Registration.TourId == tourId && row.IsActive &&
+                row.ParticipationState == RosterParticipationStates.Pending).ToArrayAsync(ct);
 
     public async Task<IReadOnlyList<RosterEmailChangeRequest>> LoadPendingEmailChangesAsync(Guid tourId, CancellationToken ct) =>
         await db.RosterEmailChangeRequests.Include(request => request.RosterRow).Where(request => request.State == RosterParticipationStates.Pending &&

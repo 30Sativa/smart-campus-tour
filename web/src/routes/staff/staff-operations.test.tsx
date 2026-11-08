@@ -428,8 +428,25 @@ describe('READY and Reopen on Tour preparation', () => {
     const list = await screen.findByRole('list', { name: 'Điều kiện chốt chưa đạt' })
     expect(within(list).getAllByRole('listitem')).toHaveLength(2)
     expect(within(list).getByText('Còn dòng đăng ký đang chờ Staff duyệt.')).toBeInTheDocument()
+    expect(within(list).getAllByRole('link')).toHaveLength(1)
+    expect(within(list).getByRole('link', { name: 'Xem đăng ký của Tour' })).toHaveAttribute('href', '/staff/manage/registrations?tourId=tour-1')
     expect(screen.getByRole('button', { name: /Chốt Tour/ })).toBeDisabled()
     expect(screen.queryByText(/chưa có trên hệ thống thật/)).not.toBeInTheDocument()
+  })
+
+  it.each(['CANCELLED', 'COMPLETED'] as const)('does not print seats for a %s Tour', async state => {
+    const base = detail(state)
+    tour = { ...base, tour: { ...base.tour, capacity: 20, heldSeats: 8 } }
+    renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)
+    await screen.findByRole('region', { name: 'Thông tin Tour' })
+    expect(screen.queryByText('Chỗ')).not.toBeInTheDocument()
+  })
+
+  it('prints seats for a Tour that can still fill them', async () => {
+    const base = detail('SCHEDULED')
+    tour = { ...base, tour: { ...base.tour, capacity: 20, heldSeats: 8 } }
+    renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)
+    expect(await screen.findByText('Còn 12/20 chỗ')).toBeInTheDocument()
   })
 
   it('marks a Tour READY with its row version and shows a refusal with its blockers', async () => {

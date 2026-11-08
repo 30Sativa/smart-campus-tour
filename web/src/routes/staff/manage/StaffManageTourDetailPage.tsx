@@ -12,7 +12,7 @@ import { useMapVersions } from '../../../features/technical/technical-hooks'
 import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
 import { campusShortDate } from '../../../features/administration/tours/tour-calendar'
 import { overdueStartLabel } from '../../../features/administration/tours/overdue-start'
-import { isRegistrationClosed, seatsLabel, tourError, tourStateLabel } from '../../../features/administration/tours/tour-messages'
+import { isRegistrationClosed, openSeatsLabel, tourError, tourStateLabel } from '../../../features/administration/tours/tour-messages'
 import { TourReadyPanel } from '../../../features/administration/tours/TourReadyPanel'
 import { TourSeatsAndOperatorPanel } from '../../../features/administration/tours/TourSeatsAndOperatorPanel'
 import { TourStepper } from '../../../features/staff/operations/TourStepper'
@@ -62,7 +62,7 @@ export default function StaffManageTourDetailPage() {
         <Item label="Thời gian dự kiến" value={formatSlot(tour.scheduledStartAt)} />
         <Item label="Trạng thái" value={tourStateLabel(tour, now)} />
         <Item label="Đăng ký / lời mời" value={`${tour.registrationCount} đoàn · ${tour.invitationCount} lời mời`} />
-        {seatsLabel(tour) && <Item label="Chỗ" value={seatsLabel(tour)!} />}
+        {openSeatsLabel(tour) && <Item label="Chỗ" value={openSeatsLabel(tour)!} />}
         <Item label="Tạo lúc" value={formatStamp(tour.createdAt)} />
         {reservation && <Item label="Robot" value={reservation.robotCode} />}
         {reservation && <Item label={reservation.releasedAt ? 'Đã trả chỗ robot' : 'Giữ chỗ robot'} value={`${formatStamp(reservation.startsAt)} tới ${formatStamp(reservation.endsAt)}`} />}

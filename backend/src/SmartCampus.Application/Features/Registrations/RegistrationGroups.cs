@@ -2,8 +2,8 @@ namespace SmartCampus.Application.Features.Registrations;
 
 /// <summary>
 /// How "Đăng ký của tôi" splits a Representative's registrations. A registration is CLOSED when it was
-/// cancelled, its Tour was cancelled, or it was refused after the Tour stopped taking changes (no resubmit is
-/// possible); everything else is ACTIVE. The repository applies the same rule in SQL.
+/// cancelled, its Tour was cancelled, it was refused after the Tour stopped taking changes (no resubmit is
+/// possible), or it expired at T-24h; everything else is ACTIVE. The repository applies the same rule in SQL.
 /// </summary>
 public static class RegistrationGroups
 {

@@ -2,7 +2,7 @@
 
 Gửi người làm SRS v0.2. File này tóm tắt những gì code đã đổi, những gì còn thiếu so với SRS, và các câu đề xuất sửa SRS.
 
-**Phạm vi.** Nội dung mô tả theo 4 pull request của đợt này. Tại thời điểm viết, các PR chưa merge vào `main`, nên mọi thay đổi chỉ có hiệu lực sau khi merge và nâng database lên v1.18.
+**Phạm vi.** Nội dung mô tả theo các pull request của đợt này và đợt sửa sau review tối 08/11 (mục 1.3). Các thay đổi cần database ở v1.18. Đợt sửa ở mục 1.3 không đổi schema.
 
 | Nhánh | Branch | Nội dung |
 |---|---|---|
@@ -10,6 +10,7 @@ Gửi người làm SRS v0.2. File này tóm tắt những gì code đã đổi,
 | WS-A | `feature/claude/fe-staff-ux-0811` | Giao diện Staff |
 | WS-C | `feature/claude/be-fe-capacity-operator-expiry` | Quy tắc nghiệp vụ, schema v1.18, ADR-0048 |
 | WS-D | `feature/claude/docs-sync-0811` | Tài liệu này và `docs/requirements/srs-v02-backend-gap-register.md` |
+| Sửa sau review | `feature/claude/be-fe-review-gaps-0811` | Các mục A đến E ở mục 1.3 |
 
 Quyết định kỹ thuật nằm ở `docs/decisions/0048-tour-capacity-operator-change-and-t24-expiry.md`. Hợp đồng API nằm ở `docs/architecture.md`, mục 3.2.x.
 
@@ -25,7 +26,7 @@ Repo không chứa bản đầy đủ của SRS. Các mã BR/FR/UC dưới đây
 | Ghế đang giữ | Số dòng `PENDING` và `ACCEPTED` còn hiệu lực của Tour, đếm dưới khoá Tour khi tạo đăng ký, thêm dòng, thay danh sách. Dòng bị từ chối, bị gỡ hoặc hết hạn thì trả ghế. | BR-26, FR-22, AC-14 |
 | Staff đổi sức chứa | Được đổi khi Tour `SCHEDULED` hoặc `READY` chưa Start, có audit. Không thấp hơn số ghế đang giữ. | BR-26 |
 | Đổi người vận hành | Staff đổi được Operator của Tour `SCHEDULED` hoặc `READY` chưa Start. Người mới phải là tài khoản Staff đang hoạt động. Tour `READY` vẫn giữ `READY`. Có audit. | SRS 7.3 quyết định 8 |
-| Chặn vô hiệu hoá tài khoản | Admin nhận 409 kèm danh sách cụ thể khi Staff đang là Operator của Tour `SCHEDULED` hoặc `READY`, hoặc Đại diện trường còn đăng ký `SUBMITTED` hoặc `APPROVED` ở Tour chưa kết thúc. | SRS 7.3 quyết định 8 |
+| Chặn vô hiệu hoá tài khoản | Admin nhận 409 kèm danh sách cụ thể khi Staff đang là Operator của Tour `SCHEDULED`, `READY` hoặc `RUNNING`, hoặc Đại diện trường còn đăng ký `SUBMITTED` hoặc `APPROVED` ở Tour chưa kết thúc. | SRS 7.3 quyết định 8 |
 | Mốc T-24h | Job chạy mỗi phút, mỗi Tour một transaction dưới khoá Tour. Dòng `PENDING` và yêu cầu đổi email `PENDING` chuyển `EXPIRED`. Email và mã mời cũ giữ nguyên. Chạy lại không đổi gì thêm. | BR-05, FR-23 |
 | Chốt Tour sau T-24h | Mục đã hết hạn không còn tính là quyết định đang chờ, nên điều kiện chốt Tour qua được. | BR-05 |
 | Chặn yêu cầu đổi email muộn | Gửi yêu cầu từ T-24h trở đi bị từ chối. | BR-05, FR-23 |
@@ -48,6 +49,16 @@ Các thay đổi này chỉ ở `web/`, không đổi quy tắc nghiệp vụ.
 | Học sinh: link video dự phòng đổi thành "Xem video giới thiệu (không phải trực tiếp)" | Nhãn video dự phòng trong SRS |
 | Admin: bỏ mục menu không dùng được, tên vai trò tiếng Việt, nhật ký ghi "Hệ thống" và "Tự huỷ: không bắt đầu đúng giờ", ca đã qua hiện "Đã qua" | FR-41 |
 | Kỹ thuật: viết lại các chữ kỹ thuật ở màn Xác nhận và Kiểm chứng POI | Màn Kỹ thuật |
+
+### 1.3. Sửa sau review tối 08/11
+
+| Mục | Hành vi hiện tại | Mã SRS |
+|---|---|---|
+| A. Staff duyệt yêu cầu đổi email | Yêu cầu đang chờ hiện trong chi tiết hồ sơ, gồm email hiện tại, email mới, người gửi, giờ gửi và "Hết hạn lúc". Tổng quan Staff có mục "Yêu cầu đổi email chờ duyệt". Dòng `PENDING_DECISIONS` ở chi tiết Tour có link tới chỗ cần duyệt. API không đổi. | BR-05, FR-23 |
+| B. Trạng thái cả hồ sơ sau T-24h | Sau khi các dòng hết hạn: còn dòng `ACCEPTED` thì giữ `APPROVED`; không có `ACCEPTED` nhưng còn `PENDING` thì giữ `SUBMITTED`; không còn cả hai thì chuyển `REJECTED` với lý do hệ thống. Đại diện thấy nhãn "Hết hạn duyệt". Từ T-24h không gửi lại được hồ sơ `REJECTED`. | BR-05, FR-23 |
+| C. Vô hiệu hoá người vận hành | Tính cả Tour `RUNNING`. Câu báo: "Đang vận hành Tour … Chờ Tour kết thúc." | SRS 7.3 quyết định 8 |
+| D. Nút đăng ký của Đại diện | Gate `Register` từ chối khi Tour hết chỗ ("Tour đã đủ chỗ.") hoặc đã qua mốc đóng 48 giờ ("Đã hết hạn đăng ký."). | FR-22, BR-26 |
+| E. Sửa nhỏ phía web | Tour `CANCELLED` hoặc `COMPLETED` không hiện dòng "Chỗ". Tạo Tour giải thích khi không có tuyến nào chọn được. Đại diện thấy "Huỷ lúc …" ở Tour đã huỷ, nhờ trường mới `tourEndedAt` trong tóm tắt và chi tiết hồ sơ (không đổi schema). | Màn Staff, Đại diện |
 
 ## 2. Mã lỗi và endpoint mới
 
@@ -78,6 +89,7 @@ Các thay đổi này chỉ ở `web/`, không đổi quy tắc nghiệp vụ.
 | 409 | `CAPACITY_BELOW_HELD` | Giảm sức chứa xuống dưới số ghế đang giữ | |
 | 409 | `ACCOUNT_IN_USE` | Admin vô hiệu hoá tài khoản còn được dùng | `errors.blockers[]` (`TOUR_OPERATOR`, `ACTIVE_REGISTRATION`) |
 | 409 | `EMAIL_CHANGE_CUTOFF` | Gửi yêu cầu đổi email từ T-24h | |
+| 409 | `REGISTRATION_REVIEW_CLOSED` | Gửi lại hồ sơ `REJECTED` từ T-24h | Message tiếng Việt |
 | 429 | `INVITATION_CODE_LOCKED` | Cặp (mã mời, IP) đang bị khoá | Message tiếng Việt có thời gian còn lại |
 
 ### 2.4. Cấu hình và schema
@@ -123,13 +135,17 @@ Repo không có văn bản gốc của SRS, nên các câu dưới đây viết 
 
 > At T-24h, every PENDING roster row and PENDING email change request of a SCHEDULED or READY Tour becomes EXPIRED. An expired row returns its seat. An expired email change leaves the current email and invitation code valid. Expired items no longer block READY. New email change requests are refused from T-24h.
 
+**BR-05 và FR-23, trạng thái của cả đăng ký sau T-24h.** Đóng điểm "Đăng ký không còn dòng chờ": đã làm theo quy tắc ở mục 1.3 B.
+
+> After the T-24h expiry, a registration with at least one ACCEPTED row stays APPROVED. A registration with no ACCEPTED row but at least one PENDING row stays SUBMITTED. A registration with neither becomes REJECTED with the system reason "Hết hạn duyệt trước giờ tham quan 24 giờ." and no reviewer, and it leaves the Staff queue. From T-24h a REJECTED registration can no longer be resubmitted.
+
 **FR-40, thông báo hết hạn.**
 
 > When items expire at T-24h, the School Representative receives one email per registration stating how many roster rows and email change requests have expired.
 
 **SRS 7.3 quyết định 8, đổi Operator và vô hiệu hoá tài khoản.**
 
-> Staff may reassign the Operator of a SCHEDULED or READY Tour before Start, and a READY Tour stays READY. An Admin cannot deactivate a Staff account that is the Operator of a SCHEDULED or READY Tour, or a School Representative account with an active registration on a Tour that has not ended. The system lists the blocking items.
+> Staff may reassign the Operator of a SCHEDULED or READY Tour before Start, and a READY Tour stays READY. An Admin cannot deactivate a Staff account that is the Operator of a SCHEDULED, READY or RUNNING Tour, or a School Representative account with an active registration on a Tour that has not ended. The system lists the blocking items.
 
 **FR-45, giới hạn của khoá theo cặp (mã mời, IP).** Khoá theo cặp đúng như SRS, nhưng không chặn được người đoán dùng một mã khác ở mỗi lần thử. Với trường hợp đó, lớp chặn còn lại là limiter 60 lần/phút/IP. Bộ đếm nằm trong bộ nhớ, chỉ đúng khi có một instance API, và mất khi khởi động lại.
 
@@ -138,5 +154,3 @@ Repo không có văn bản gốc của SRS, nên các câu dưới đây viết 
 ## 5. Điểm cần người làm SRS xác nhận
 
 - **UC-TOUR-07.** Yêu cầu của đợt này gọi UC-TOUR-07 là "báo trễ", còn `docs/decisions/0047-system-auto-cancel-of-unstarted-tours.md` trích UC-TOUR-07 cho việc tự huỷ Tour không bắt đầu đúng giờ. Phần tự huỷ đã làm theo ADR-0047, phần báo trễ chưa làm. Cần kiểm tra lại mã UC này trong SRS.
-- **Đăng ký không còn dòng chờ.** Đăng ký `SUBMITTED` có mọi dòng đã hết hạn vẫn nằm ở hàng chờ của Staff. SRS chưa nói trạng thái của cả đăng ký trong trường hợp này.
-- **Yêu cầu đổi email của Staff.** Staff chưa có màn duyệt riêng cho yêu cầu đổi email, nên "Hết hạn lúc" mới hiện ở hàng chờ đăng ký.

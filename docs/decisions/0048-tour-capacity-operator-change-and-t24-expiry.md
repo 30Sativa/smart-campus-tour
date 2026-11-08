@@ -84,3 +84,17 @@ SQL tests on disposable databases cover: two registrations racing for the last s
 Operator change and deactivation blocks; expiry exactly at T-24h and not one minute earlier, a second run changing
 nothing, seats returned; the 15-minute lock after 5 wrong codes; the Representative list after the close. Schema tests
 cover the patch rerun, markers, snapshot equality and deployment rejection of a missing or untrusted CHECK.
+
+## Addendum (review of 08/11/2026, evening)
+
+No schema change.
+
+- **Registration state after T-24h.** After rows expire, each affected registration follows the rule of the per-row
+  review: an ACCEPTED row keeps it APPROVED; otherwise a PENDING row keeps it SUBMITTED; otherwise it becomes REJECTED
+  with the constant reason `RegistrationExpiry.Reason`, no reviewer, and `ReviewedAt` set to the run time. The change is
+  audited in the same transaction with ids and counts only. From T-24h, resubmitting a REJECTED registration answers
+  409 `REGISTRATION_REVIEW_CLOSED`, and the Representative gate gives the same answer. No backfill: production has no
+  SCHEDULED Tour.
+- **Operator of a running Tour.** Deactivation also counts RUNNING Tours as `TOUR_OPERATOR` blockers.
+- **Register gate.** The Representative `Register` gate refuses when no seat remains or after the 48-hour close, with the
+  reason shown by the existing gate display.

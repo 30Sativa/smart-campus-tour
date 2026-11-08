@@ -12,6 +12,7 @@ import { reviewError } from '../errors'
 import { reviewTime } from '../presentation'
 import { ReviewStateBadge } from './ReviewStateBadge'
 import { InvitationPanel } from '../../../registrations/invitations/InvitationPanel'
+import { EmailChangeDialog, EmailChangeRequests, type EmailChangeReview } from './EmailChangeRequests'
 
 type Decision = { action: 'accept' | 'reject'; rows: ReviewRosterRow[] }
 type Tab = 'roster' | 'invitations'
@@ -24,6 +25,7 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
   const query = useRegistrationReview(id)
   const mutation = useReviewDecision()
   const [confirm, setConfirm] = useState<Decision | null>(null)
+  const [emailReview, setEmailReview] = useState<EmailChangeReview | null>(null)
   const [needsReload, setNeedsReload] = useState(false)
   const [snapshotRefreshing, setSnapshotRefreshing] = useState(false)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
@@ -81,7 +83,7 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
       reportDone(action, done, rows)
     }
   }
-  const close = () => { if (!mutation.isPending && !progress) onClose() }
+  const close = () => { if (!mutation.isPending && !progress && !emailReview) onClose() }
   const openRows = reg?.roster.filter(row => row.participationState === 'PENDING') ?? []
   const selectable = openRows.filter(row => row.canApprove && row.canReject)
   const chosen = selectable.filter(row => selected.has(row.id))
@@ -119,9 +121,9 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
               {reg.reviewedAt && <Field label="Xét duyệt lúc">{reviewTime(reg.reviewedAt)}</Field>}
             </dl>
             <p className="text-slate-600">Điểm xem chung ghi người phụ trách màn hình; số dòng không phải số học sinh tham dự.</p>
-            <p className="text-slate-600">Yêu cầu đổi email cần quy trình gửi và xét duyệt riêng; chức năng này chưa được triển khai.</p>
           </div>
         </details>
+        <EmailChangeRequests registrationId={id} roster={reg.roster} senderName={reg.summary.representativeName} disabled={!canWrite} onReview={setEmailReview} />
         {showInvitations && <div className="flex gap-1 border-b border-[#eef1f4] pb-2" aria-label="Phần của đăng ký">
           <button type="button" aria-pressed={tab === 'roster'} className={tabClass(tab === 'roster')} onClick={() => setChosenTab('roster')}>Danh sách dòng ({reg.roster.length})</button>
           <button type="button" aria-pressed={tab === 'invitations'} className={tabClass(tab === 'invitations')} onClick={() => setChosenTab('invitations')}>Lời mời và email</button>
@@ -161,5 +163,6 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
       confirmLabel={`${confirm.action === 'reject' ? 'Từ chối' : 'Chấp nhận'} ${bulk ? `${confirm.rows.length} dòng` : 'dòng'}`} busyLabel={bulk && progress ? `Đang lưu ${progress.done}/${progress.total}…` : 'Đang lưu…'} tone={confirm.action === 'reject' ? 'danger' : 'default'}
       withReason={confirm.action === 'reject'} requireReason reasonLabel="Lý do từ chối" reasonPlaceholder="Nêu thông tin cần đại diện sửa." busy={mutation.isPending || progress !== null}
       error={error?.message} onConfirm={reason => void decide(reason)} onCancel={() => { if (!mutation.isPending && !progress) setConfirm(null) }} />}
+    {emailReview && <EmailChangeDialog key={emailReview.requestId} review={emailReview} onClose={() => setEmailReview(null)} onDecided={() => void query.refetch()} />}
   </>
 }

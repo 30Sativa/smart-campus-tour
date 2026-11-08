@@ -6,11 +6,13 @@ import { buttonClass } from '../../components/ui/ui-classes'
 import { formatSlot } from '../administration/admin-format'
 import { needsStaffWork, poiStatus } from '../administration/pois/poi-status'
 import { Waited } from '../administration/registrations/components/Waited'
-import { useRegistrationReviews } from '../administration/registrations/hooks'
+import { useRegistrationReviews, useStaffEmailChanges } from '../administration/registrations/hooks'
+import { expiryLabel, reviewTime } from '../administration/registrations/presentation'
 import { useTours } from '../administration/tours/hooks'
 import type { TourBlocker } from '../administration/tours/types'
 import { useReviewParam } from '../administration/use-review-param'
 import { usePoiProposals } from '../technical/technical-hooks'
+import { useNow } from './use-now'
 
 const PREVIEW = 5
 
@@ -28,6 +30,8 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
   // `readyBlockers`: the server says why each previewed Tour cannot be marked READY yet (same checks as its detail).
   const scheduled = useTours({ state: 'SCHEDULED', page: 1, size: PREVIEW, sort: 'scheduledStartAt', readyBlockers: true })
   const pois = usePoiProposals()
+  const emailChanges = useStaffEmailChanges()
+  const now = useNow(30_000)
   const { open: openReview } = useReviewParam()
   const [toggled, setToggled] = useState<boolean | null>(null)
   const open = toggled ?? !urgent
@@ -36,6 +40,8 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
   const notReady = scheduled.isSuccess ? scheduled.data.pagination.totalItems : null
   const poiWork = pois.isSuccess ? pois.data.filter(needsStaffWork).length : null
   const poiWaiting = pois.isSuccess ? pois.data.filter(p => poiStatus(p) === 'WAIT').length : null
+  // `canReview`: a request left PENDING on a Tour that has moved on is no longer anyone's work. Nearest deadline first.
+  const reviewableEmails = emailChanges.isSuccess ? emailChanges.data.filter(item => item.canReview).sort((a, b) => a.expiresAt.localeCompare(b.expiresAt)) : null
   const figure = (value: number | null) => value ?? '-'
 
   return (
@@ -46,7 +52,7 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
         </button>} />
       {!open ? <p className="px-3.5 py-3 text-[13px] text-[#475569]">
         {urgent && <span className="block font-semibold text-[#9d3428]">Đang có việc cần xử lý ngay ở trên. Hàng chờ tạm thu gọn.</span>}
-        {figure(pending)} đăng ký chờ duyệt · {figure(notReady)} Tour chưa chốt · {figure(poiWork)} POI cần hoàn thiện
+        {figure(pending)} đăng ký chờ duyệt · {figure(notReady)} Tour chưa chốt · {figure(poiWork)} POI cần hoàn thiện · {figure(reviewableEmails?.length ?? null)} yêu cầu đổi email
       </p> : <div className="divide-y divide-[#eef1f4]">
         <QueueSection title="Đăng ký chờ duyệt" total={pending} failed={registrations.isError} loading={registrations.isPending} onRetry={() => void registrations.refetch()}
           note="Gửi trước hiện trước. Mục tiêu xử lý trong 2 ngày làm việc; thời gian chờ tính theo ngày lịch."
@@ -55,6 +61,17 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
             <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold text-[#0f172a]">{reg.groupName}</span><span className="block truncate text-xs text-[#64748b]">{reg.schoolName} · {reg.tourName}</span></span>
             <Waited since={reg.submittedAt} />
             <button type="button" onClick={() => openReview(reg.id)} className={buttonClass('secondary', 'sm')}>Xem & duyệt<span className="sr-only"> {reg.groupName}</span></button>
+          </li>)}
+        </QueueSection>
+
+        <QueueSection title="Yêu cầu đổi email chờ duyệt" total={reviewableEmails?.length ?? null} failed={emailChanges.isError} loading={emailChanges.isPending} onRetry={() => void emailChanges.refetch()}
+          note="Đại diện xin đổi email của dòng đã chấp nhận. Yêu cầu hết hạn 24 giờ trước giờ Tour." more={null}>
+          {reviewableEmails?.map(item => <li key={item.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold text-[#0f172a]">Dòng {item.rowNumber}: {item.currentEmail} sang {item.proposedEmail}</span>
+              <span className="block truncate text-xs text-[#64748b]">Gửi lúc {reviewTime(item.createdAt)}{expiryLabel(item.expiresAt, now) ? ` · ${expiryLabel(item.expiresAt, now)}` : ''}</span>
+            </span>
+            <button type="button" onClick={() => openReview(item.registrationId)} className={buttonClass('secondary', 'sm')}>Xem & duyệt <span className="sr-only">yêu cầu đổi email dòng {item.rowNumber}</span></button>
           </li>)}
         </QueueSection>
 

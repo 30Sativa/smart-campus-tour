@@ -83,10 +83,7 @@ public sealed class ReviewRosterRowCommandHandler(IRegistrationRepository regist
         row.ReviewedByUserId = command.ActorUserId;
         row.ReviewedAt = now;
         row.UpdatedAt = now;
-        registration.State = registration.RosterRows.Any(item => item.IsActive && item.ParticipationState == RosterParticipationStates.Accepted)
-            ? RegistrationStates.Approved
-            : registration.RosterRows.Any(item => item.IsActive && item.ParticipationState == RosterParticipationStates.Pending)
-                ? RegistrationStates.Submitted : RegistrationStates.Rejected;
+        registration.State = RegistrationStates.FromRows(registration.RosterRows);
         registration.ReviewedByUserId = command.ActorUserId;
         registration.ReviewedAt = now;
         registration.RejectionReason = registration.State == RegistrationStates.Rejected ? row.ReviewReason : null;

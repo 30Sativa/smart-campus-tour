@@ -67,6 +67,24 @@ describe('Staff Tour calendar', () => {
     expect(await screen.findByRole('button', { name: /^09:00 Tour sáng thật/ })).toBeInTheDocument()
   })
 
+  it('prints seats in the popup only while the Tour can still fill them', async () => {
+    tourRows = [{ ...session, capacity: 20, heldSeats: 8 }]
+    const open = show('/staff/schedule?date=2099-01-05&tour=tour-1')
+    expect(await within(await screen.findByRole('dialog')).findByText('Còn 12/20 chỗ')).toBeInTheDocument()
+    open.unmount()
+
+    for (const state of ['CANCELLED', 'COMPLETED']) {
+      const ended = { ...session, state, capacity: 20, heldSeats: 8 }
+      tourRows = [ended]
+      tourDetail = { tour: ended, reservation: null, endReason: null }
+      const view = show('/staff/schedule?date=2099-01-05&tour=tour-1')
+      const dialog = await screen.findByRole('dialog')
+      await within(dialog).findByText('Đăng ký')
+      expect(within(dialog).queryByText('Chỗ')).not.toBeInTheDocument()
+      view.unmount()
+    }
+  })
+
   it('reads an ended Tour from its detail: the end reason, robot, released hold and real length', async () => {
     const cancelled = { ...session, state: 'CANCELLED', reservation: null }
     tourRows = [cancelled]

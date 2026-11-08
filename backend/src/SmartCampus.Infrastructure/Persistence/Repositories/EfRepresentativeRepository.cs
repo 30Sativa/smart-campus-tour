@@ -16,15 +16,15 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
     private static readonly Expression<Func<GroupRegistration, RegistrationListItem>> Summary = r =>
         new(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State, r.SchoolName, r.GroupName,
             r.State, r.RosterRows.Count(row => row.IsActive), r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt,
-            r.RejectionReason, r.ReviewedAt, r.Tour.State == "CANCELLED" ? r.Tour.EndReason : null);
+            r.RejectionReason, r.ReviewedAt, r.Tour.State == "CANCELLED" ? r.Tour.EndReason : null, r.Tour.EndedAt);
 
-    // Mirrors RegistrationGroups: ended by cancellation, by a cancelled Tour, or refused after the Tour stopped taking changes.
+    // Mirrors RegistrationGroups: ended by cancellation, by a cancelled Tour, refused after the Tour stopped taking changes, or expired at T-24h.
     private static readonly Expression<Func<GroupRegistration, bool>> IsClosed = r =>
         r.State == RegistrationStates.Cancelled || r.Tour.State == "CANCELLED" ||
-        (r.State == RegistrationStates.Rejected && r.Tour.State != RegistrationGate.OpenTourState);
+        (r.State == RegistrationStates.Rejected && (r.Tour.State != RegistrationGate.OpenTourState || r.RejectionReason == RegistrationExpiry.Reason));
     private static readonly Expression<Func<GroupRegistration, bool>> IsActive = r =>
         !(r.State == RegistrationStates.Cancelled || r.Tour.State == "CANCELLED" ||
-          (r.State == RegistrationStates.Rejected && r.Tour.State != RegistrationGate.OpenTourState));
+          (r.State == RegistrationStates.Rejected && (r.Tour.State != RegistrationGate.OpenTourState || r.RejectionReason == RegistrationExpiry.Reason)));
 
     public async Task<PagedResult<TourReadModel>> ListToursAsync(RepresentativeListRequest request, DateTimeOffset now, CancellationToken ct)
     {
@@ -99,7 +99,7 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
             {
                 Summary = new RegistrationListItem(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State,
                     r.SchoolName, r.GroupName, r.State, r.RosterRows.Count(row => row.IsActive), r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt,
-                    r.RejectionReason, r.ReviewedAt, r.Tour.State == "CANCELLED" ? r.Tour.EndReason : null),
+                    r.RejectionReason, r.ReviewedAt, r.Tour.State == "CANCELLED" ? r.Tour.EndReason : null, r.Tour.EndedAt),
                 r.ContactName, r.ContactEmail, r.RowVersion, TourVersion = r.Tour.RowVersion, r.RejectionReason, r.ReviewedAt,
                 HasInvitations = r.RosterRows.Any(row => row.Invitation != null),
                 Rows = r.RosterRows.Where(row => row.IsActive).OrderBy(row => row.RowNumber)
