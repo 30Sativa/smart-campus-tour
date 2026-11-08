@@ -1,12 +1,12 @@
 import { useEffect, useId, useRef, useState, type PointerEvent } from 'react'
-import { CircleCheck, Crosshair, Hand, Info, LocateFixed, Maximize, Minus, MoveUpRight, Plus, RotateCcw, TriangleAlert } from 'lucide-react'
+import { ArrowRight, ChevronRight, CircleCheck, Crosshair, Hand, Info, LocateFixed, Maximize, Minus, MoveUpRight, Plus, RotateCcw, TriangleAlert } from 'lucide-react'
 import { buttonClass } from '../../../../components/ui/ui-classes'
 import type { OccupancyMap } from './catalog'
 import '../poi-form.css'
 import { loadMapImage, type MapRaster } from './load-map-image'
 import {
   cellAtPose, clearanceMessage, headingFromPoints, imageToRos, poseClearance, quantizePosition, quantizeYaw,
-  rosToImage, sampleCell, screenToImage, type ImagePoint, type RosPoint,
+  rosToImage, sampleCell, screenToImage, yawDegrees, type ImagePoint, type RosPoint,
 } from './occupancy-grid'
 
 export type PickerMode = 'pan' | 'position' | 'heading'
@@ -21,6 +21,15 @@ type Props = {
   onPoseChange: (pose: PickerPose) => void
   /** Free radius the server requires around a pose; the map shows it as a circle. */
   clearanceMeters?: number
+  /**
+   * Staff route screens: what a click places, e.g. "điểm bắt đầu". The default keeps the POI wording.
+   * Setting it also folds coordinates, yaw in radians and the map resolution into "Chi tiết kỹ thuật"
+   * and states the heading in degrees with an arrow; the POI form keeps its own layout.
+   */
+  placing?: string
+  /** Points already on the route, drawn numbered, each with `landmarkRadiusMeters` around it. */
+  landmarks?: Array<{ x: number; y: number; label: string; name: string }>
+  landmarkRadiusMeters?: number
 }
 
 type Viewport = { u: number; v: number; width: number; height: number }
@@ -51,7 +60,8 @@ function zoomView(map: OccupancyMap, current: Viewport, factor: number, focus?: 
   return { u: focus.u - (focus.u - current.u) * width / current.width, v: focus.v - (focus.v - current.v) * height / current.height, width, height }
 }
 
-export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseChange, clearanceMeters }: Props) {
+export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseChange, clearanceMeters, placing, landmarks = [], landmarkRadiusMeters }: Props) {
+  const staff = placing != null
   const helpId = useId()
   const [rasterState, setRasterState] = useState<RasterState>({ status: 'loading' })
   const [retry, setRetry] = useState(0)
@@ -167,7 +177,7 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
   const coach = !editable
     ? null
     : actualMode === 'position'
-      ? { step: '1', text: 'Bấm vào bản đồ để đặt vị trí POI.' }
+      ? { step: '1', text: `Bấm vào bản đồ để đặt ${placing ?? 'vị trí POI'}.` }
       : actualMode === 'heading'
         ? { step: '2', text: 'Rê chuột để xem hướng thân, bấm để chốt. Esc để hủy.' }
         : null
@@ -203,7 +213,7 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
 
       <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-[13px]">
         <p aria-hidden="true" className="flex items-center gap-2 text-[#475569]"><Info size={15} className="shrink-0 text-[#718096]" />{coach?.text ?? (editable ? 'Kéo để di chuyển bản đồ; phím 1 đặt vị trí, phím 2 chọn hướng.' : 'Vị trí đã khóa, chỉ xem và di chuyển bản đồ.')}</p>
-        <p className="text-xs text-[#718096]">Độ phân giải bản đồ: <span className="font-mono">{map.resolution} m/ô</span></p>
+        {!staff && <p className="text-xs text-[#718096]">Độ phân giải bản đồ: <span className="font-mono">{map.resolution} m/ô</span></p>}
       </div>
 
       <div className="relative overflow-hidden rounded-xl border border-[#e2e8f0] bg-[#f8fafc] bg-[linear-gradient(#eef2f6_1px,transparent_1px),linear-gradient(90deg,#eef2f6_1px,transparent_1px)] bg-[length:24px_24px]">
@@ -228,6 +238,14 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
           >
             <title>Chọn vị trí và hướng thân POI trong ROS map frame</title>
             <image href={map.imageUrl} x={0} y={0} width={map.width} height={map.height} style={{ imageRendering: view.height <= 420 ? 'pixelated' : 'auto' }} />
+            {landmarks.map(point => {
+              const at = rosToImage(map, point)
+              return <g key={point.label} pointerEvents="none" aria-label={`${point.label}. ${point.name}`}>
+                {landmarkRadiusMeters != null && <circle cx={at.u} cy={at.v} r={landmarkRadiusMeters / map.resolution} fill="rgba(23,59,95,0.06)" stroke="#173b5f" strokeOpacity={0.6} strokeWidth={1.25} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
+                <circle cx={at.u} cy={at.v} r={markerRadius * 2.2} fill="#173b5f" stroke="white" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                <text x={at.u} y={at.v + markerRadius * 0.85} textAnchor="middle" fontSize={markerRadius * 2.4} fontWeight={700} fill="white">{point.label}</text>
+              </g>
+            })}
             {ghost && <g pointerEvents="none" opacity={0.55}>
               {clearanceRadius != null && <circle data-testid="clearance-preview" cx={ghost.u} cy={ghost.v} r={clearanceRadius} fill="rgba(37,99,235,0.1)" stroke="#2563eb" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
               <circle cx={ghost.u} cy={ghost.v} r={markerRadius * 0.8} fill="#2563eb" />
@@ -252,11 +270,11 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
             <button type="button" aria-label="Đưa POI vào giữa" disabled={!marker} onClick={() => { if (marker) setView((current) => ({ ...current, u: marker.u - current.width / 2, v: marker.v - current.height / 2 })) }} className={zoomButton}><LocateFixed size={16} aria-hidden="true" /></button>
           </div>
 
-          <div aria-hidden="true" className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-1.5 font-mono text-[11.5px] text-[#475569]">
+          {!staff && <div aria-hidden="true" className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-1.5 font-mono text-[11.5px] text-[#475569]">
             <span className="rounded-lg border border-[#e2e8f0] bg-white/92 px-2 py-1">X {shown ? shown.x.toFixed(4) : '—'} m</span>
             <span className="rounded-lg border border-[#e2e8f0] bg-white/92 px-2 py-1">Y {shown ? shown.y.toFixed(4) : '—'} m</span>
             <span className="rounded-lg border border-[#e2e8f0] bg-white/92 px-2 py-1">Yaw {yaw == null ? '—' : yaw.toFixed(6)} rad</span>
-          </div>
+          </div>}
         </>}
       </div>
 
@@ -271,8 +289,22 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
           <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[#111]" aria-hidden="true" />Đen: vật cản</span>
           <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[#9aa5b1]" aria-hidden="true" />Xám: chưa biết</span>
           {clearanceMeters != null && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full border border-dashed border-[#2563eb] bg-[#2563eb]/10" aria-hidden="true" />Vòng tròn: khoảng trống quanh robot</span>}
-          <span>Yaw 0 = +X, chiều dương quay về +Y</span>
+          {landmarks.length > 0 && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full bg-[#173b5f]" aria-hidden="true" />Số: điểm dừng{landmarkRadiusMeters != null ? `, vòng nét đứt: cách tối thiểu ${landmarkRadiusMeters.toLocaleString('vi-VN')} m` : ''}</span>}
+          {!staff && <span>Yaw 0 = +X, chiều dương quay về +Y</span>}
         </div>
+        {staff && <>
+          <p className="flex items-center gap-2 text-sm text-[#334155]"><span className="text-[#64748b]">Hướng robot:</span>{yaw == null ? 'chưa chọn'
+            : <><ArrowRight size={16} aria-hidden="true" className="shrink-0 text-[#2563eb]" style={{ transform: `rotate(${-(yaw - map.origin[2]) * 180 / Math.PI}deg)` }} /><span className="font-semibold">{yawDegrees(yaw)}°</span></>}</p>
+          <details className="group rounded-lg border border-[#e2e8f0]">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 font-medium text-[#475569] [&::-webkit-details-marker]:hidden"><ChevronRight size={14} aria-hidden="true" className="transition-transform group-open:rotate-90" />Chi tiết kỹ thuật</summary>
+            <dl className="grid gap-x-4 gap-y-1 border-t border-[#e2e8f0] px-3 py-2 font-mono sm:grid-cols-3">
+              <div><dt className="font-sans">X</dt><dd>{shown ? `${shown.x.toFixed(4)} m` : '-'}</dd></div>
+              <div><dt className="font-sans">Y</dt><dd>{shown ? `${shown.y.toFixed(4)} m` : '-'}</dd></div>
+              <div><dt className="font-sans">Yaw</dt><dd>{yaw == null ? '-' : `${yaw.toFixed(6)} rad`}</dd></div>
+            </dl>
+            <p className="border-t border-[#e2e8f0] px-3 py-2">Yaw 0 = +X, chiều dương quay về +Y. Độ phân giải bản đồ: <span className="font-mono">{map.resolution} m/ô</span>.</p>
+          </details>
+        </>}
         <p id={helpId} className="sr-only">{help}</p>
       </div>
     </div>

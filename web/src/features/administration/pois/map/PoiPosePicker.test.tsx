@@ -66,6 +66,25 @@ describe('POI pose picker', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Điểm quá sát vật cản (cần trống bán kính 0,30 m).')
   })
 
+  it('on a Staff route screen, draws the stops with their spacing, prompts for what it places and folds the radians away', async () => {
+    render(<PoiPosePicker map={map} pose={{ x: 0, y: 0, yaw: Math.PI / 2 }} mode="position" editable onModeChange={() => {}} onPoseChange={() => {}}
+      placing="điểm kết thúc" landmarks={[{ x: 1, y: 0, label: '1', name: 'Sảnh' }]} landmarkRadiusMeters={1.5} />)
+    const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
+    const stop = svg.querySelector('[aria-label="1. Sảnh"]')!
+    expect(stop.querySelector('circle')).toHaveAttribute('r', String(1.5 / map.resolution))
+    expect(screen.getByText('Bấm vào bản đồ để đặt điểm kết thúc.')).toBeInTheDocument()
+    expect(screen.getByText('90°')).toBeInTheDocument()
+    expect(screen.getByText('Chi tiết kỹ thuật').closest('details')).not.toHaveAttribute('open')
+    expect(screen.queryByText(/Độ phân giải bản đồ: /, { selector: 'p.text-xs' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the POI wording and inline technical values without the Staff route options', async () => {
+    renderPicker()
+    await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
+    expect(screen.getByText('Yaw 0 = +X, chiều dương quay về +Y')).toBeInTheDocument()
+    expect(screen.queryByText('Chi tiết kỹ thuật')).not.toBeInTheDocument()
+  })
+
   it('shows no circle when the screen has no required radius', async () => {
     renderPicker()
     await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })

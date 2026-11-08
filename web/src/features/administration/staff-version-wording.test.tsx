@@ -21,6 +21,20 @@ describe('staffMapLabels', () => {
     expect(label(items[1].map)).toBe('Tầng 6 · tang-6-v2 (mới nhất)')
   })
 
+  it('marks no newest when an area has a single map, and keeps the map key for same-named areas', () => {
+    const items = [mapItem('a', 1), { ...mapItem('b', 1), map: { ...mapItem('b', 1).map, areaKey: 'other', mapKey: 'other-v1' } } as MapVersionItem]
+    const label = staffMapLabels(items)
+    expect(label(items[0].map)).toBe('Tầng 6 · tang-6-v1')
+    expect(label(items[1].map)).toBe('Tầng 6 · other-v1')
+  })
+
+  it('puts the reason a map cannot be chosen in the same brackets as "mới nhất"', () => {
+    const items = [mapItem('a', 1), mapItem('b', 2)]
+    const label = staffMapLabels(items)
+    expect(label(items[1].map, 'chưa có POI đạt')).toBe('Tầng 6 · tang-6-v2 · tải lên 03/11 (mới nhất, chưa có POI đạt)')
+    expect(label(items[0].map, 'chưa có POI đạt')).toBe('Tầng 6 · tang-6-v1 · tải lên 03/11 (chưa có POI đạt)')
+  })
+
   it('adds the upload day only where an area has two usable maps to choose between', () => {
     const items = [mapItem('a', 1), mapItem('b', 2)]
     const label = staffMapLabels(items)
@@ -86,10 +100,17 @@ describe('Route screens without version numbers', () => {
     expect(within(history).getByText('Bản lưu 05/11 14:20 · Đã chạy thử đạt (đang xem)')).toBeInTheDocument()
     expect(within(history).getByText('Bản lưu 01/11 09:05 · Chạy thử không đạt').closest('a')).toHaveAttribute('href', '/staff/manage/routes/route-1?revisionId=rev-1')
     expect(document.body).not.toHaveTextContent(/phiên bản/i)
+    // The map is named by its area, as on the catalog card, never by its raw key.
+    const overview = screen.getByRole('region', { name: 'Tổng quan tuyến' })
+    expect(await within(overview).findByText('Tầng 6')).toBeInTheDocument()
+    expect(overview).not.toHaveTextContent('tang-6-v2')
+    // One notice for the state, with the next step.
+    expect(screen.getByText(/^Dùng được để tạo Tour/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ngừng sử dụng' })).toBeInTheDocument()
   })
 
   it('an older saved copy is named by its date', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ success: true, data: { ...route, revisionId: 'rev-1', revisionNumber: 6, verificationStatus: 'FAIL', effectiveTestRunId: null } }), { status: 200 })))
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify({ success: true, data: String(input).includes('/api/maps/versions') ? [] : { ...route, revisionId: 'rev-1', revisionNumber: 6, verificationStatus: 'FAIL', effectiveTestRunId: null } }), { status: 200 })))
     show('/staff/manage/routes/route-1?revisionId=rev-1')
     expect(await screen.findByText('Đây là bản lưu 01/11 09:05, chỉ xem được.')).toBeInTheDocument()
   })

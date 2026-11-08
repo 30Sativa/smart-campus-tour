@@ -151,8 +151,8 @@ describe('staff preparation UI', () => {
     mapVersions = [mapVersion('map-a', 'tang-6-v1', [], 'Tầng 6'), mapVersion('map-b', 'test123-v1', [], 'Tầng 6')]
     proposals = [proposal('poi-a', 'map-a', 'tang-6-v1', 'Điểm A'), proposal('poi-b', 'map-b', 'test123-v1', 'Điểm B')]
     show(<StaffManagePoisPage />, '/staff/manage/pois')
-    const firstChoice = await screen.findByRole('option', { name: 'Tầng 6 · tang-6-v1 (mới nhất)' })
-    const secondChoice = await screen.findByRole('option', { name: 'Tầng 6 · test123-v1 (mới nhất)' })
+    const firstChoice = await screen.findByRole('option', { name: 'Tầng 6 · tang-6-v1' })
+    const secondChoice = await screen.findByRole('option', { name: 'Tầng 6 · test123-v1' })
     expect(firstChoice).toHaveValue('map-a')
     expect(secondChoice).toHaveValue('map-b')
     const first = await screen.findByRole('img', { name: 'Bản đồ tang-6-v1 với 1 POI' })
@@ -162,7 +162,7 @@ describe('staff preparation UI', () => {
     expect(second.querySelector('image')).toHaveAttribute('width', '40')
     expect(screen.getByRole('button', { name: 'Chọn Điểm B' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Chọn Điểm A' })).not.toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Bản đồ' })).toHaveDisplayValue('Tầng 6 · test123-v1 (mới nhất)')
+    expect(screen.getByRole('combobox', { name: 'Bản đồ' })).toHaveDisplayValue('Tầng 6 · test123-v1')
   })
 
   it('shows the server message for a failed map download and recovers on retry', async () => {

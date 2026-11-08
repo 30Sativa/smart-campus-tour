@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageRouteCatalogPage from '../../../routes/staff/manage/StaffManageRouteCatalogPage'
+import StaffManageRouteDetailsPage from '../../../routes/staff/manage/StaffManageRouteDetailsPage'
 import { ApiError } from '../../../api/client'
 import { useAuthStore } from '../../../stores/auth-store'
 import { routeAvailabilityError } from './route-messages'
@@ -21,6 +22,14 @@ function show() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return render(<QueryClientProvider client={client}><MemoryRouter><StaffManageRouteCatalogPage /></MemoryRouter></QueryClientProvider>)
 }
+function showDetail() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/staff/manage/routes/route-1']}><Routes>
+    <Route path="/staff/manage/routes/:routeId" element={<StaffManageRouteDetailsPage />} />
+  </Routes></MemoryRouter></QueryClientProvider>)
+}
+const DETAIL = route({ mapVersionId: 'map-1', startX: 0, startY: 0, startYaw: 0, endMode: 'LAST_POI', endX: null, endY: null, endYaw: null, testRuns: [], effectiveTestRunId: null,
+  revisionHistory: [{ revisionId: 'rev-1', revisionNumber: 2, isSubmitted: true, verificationStatus: 'PASS', createdAt: '2026-11-01T02:00:00Z' }] })
 
 beforeEach(() => {
   writes = []; refuseWrite = null; reads = []
@@ -35,6 +44,8 @@ beforeEach(() => {
     reads.push(url)
     if (url.pathname === '/api/routes') return page(url.searchParams.get('isActive') === 'true' ? [route({})] : [route({ routeId: 'route-2', name: 'Tuyến cũ', isActive: false })])
     if (url.pathname === '/api/staff/routes/route-1/scheduled-tours') return json({ success: true, data: SCHEDULED })
+    if (url.pathname === '/api/routes/route-1/revisions') return json({ success: true, data: DETAIL })
+    if (url.pathname === '/api/maps/versions') return json({ success: true, data: [] })
     throw new Error(`Unexpected endpoint: ${url.pathname}`)
   }))
 })
@@ -52,10 +63,15 @@ describe('Versioned route availability', () => {
     expect(screen.getByRole('button', { name: 'Mở lại' })).toBeInTheDocument()
   })
 
-  it('confirms with the scheduled Tours linked before stopping a route', async () => {
+  it('offers stopping a route on its detail page, not on the catalog card', async () => {
     show()
     await screen.findByText('Tuyến Thư viện')
-    fireEvent.click(within(screen.getByRole('article')).getByRole('button', { name: 'Ngừng sử dụng' }))
+    expect(within(screen.getByRole('article')).queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('confirms with the scheduled Tours linked before stopping a route', async () => {
+    showDetail()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ngừng sử dụng' }))
     const dialog = await screen.findByRole('dialog')
     const link = await within(dialog).findByRole('link', { name: 'Tour sáng thứ Bảy' })
     expect(link).toHaveAttribute('href', '/staff/manage/tours/tour-9')
@@ -65,15 +81,13 @@ describe('Versioned route availability', () => {
     expect(writes[0].path).toBe('/api/staff/routes/route-1/deactivate')
     expect(writes[0].body).toMatchObject({ expectedRowVersion: 'a'.repeat(64) })
     expect(writes[0].body.requestId).toEqual(expect.any(String))
-    expect(await screen.findByText(/Đã ngừng sử dụng tuyến Tuyến Thư viện\. 1 Tour đã lên lịch vẫn giữ tuyến này/)).toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('keeps the dialog and shows the backend reason when stopping is refused', async () => {
     refuseWrite = json({ success: false, message: 'Tuyến vừa được thay đổi. Tải lại danh sách rồi thử lại.', errors: { code: 'STALE_ROUTE' } }, 409)
-    show()
-    await screen.findByText('Tuyến Thư viện')
-    fireEvent.click(within(screen.getByRole('article')).getByRole('button', { name: 'Ngừng sử dụng' }))
+    showDetail()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ngừng sử dụng' }))
     const dialog = await screen.findByRole('dialog')
     await within(dialog).findByRole('link', { name: 'Tour sáng thứ Bảy' })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ngừng sử dụng' }))

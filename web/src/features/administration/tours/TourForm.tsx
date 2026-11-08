@@ -6,6 +6,8 @@ import { Notice } from '../AdminUi'
 import { fromLocalInput, toLocalInput } from '../admin-format'
 import { useRoute, useRoutes } from '../routes/hooks'
 import { routeIssue } from '../routes/route-messages'
+import { mapAreaName } from '../map-labels'
+import { useMapVersions } from '../../technical/technical-hooks'
 import type { TourInput } from './types'
 
 const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
@@ -35,6 +37,7 @@ export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = f
   const [clientError, setClientError] = useState('')
   const routes = useRoutes({ isActive: true, page: 1, size: 100 })
   const route = useRoute(fixedStops ? undefined : routeId || undefined)
+  const maps = useMapVersions()
   const routeReady = Boolean(fixedStops || route.data)
   const options = routes.data?.data.map(r => ({ id: r.id, name: `${r.name} · ${r.stopCount} điểm dừng` })) ?? []
   if (currentRoute && !options.some(o => o.id === currentRoute.id)) options.unshift({ id: currentRoute.id, name: `${currentRoute.name} (đang dùng)` })
@@ -83,7 +86,7 @@ export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = f
         : route.isError ? <p className="py-6 text-sm text-[#9d3428]">Không tải được cấu hình tuyến.</p>
         : !route.data ? <p className="py-6 text-sm" role="status">Đang tải tuyến…</p>
         : <div className="mt-3 space-y-3">
-          <p className="text-sm text-[#64748b]">{route.data.mapKey} / {route.data.mapFrame} · kết thúc {route.data.endMode === 'LAST_POI' ? 'tại POI cuối' : 'ở pose riêng'}</p>
+          <p className="text-sm text-[#64748b]">{mapAreaName(maps.data, { mapKey: route.data.mapKey }) ?? '-'} · kết thúc {route.data.endMode === 'LAST_POI' ? 'tại POI cuối' : 'ở pose riêng'}</p>
           {route.data.availabilityIssues.length > 0 && <Notice tone="warn">{route.data.availabilityIssues.map(routeIssue).join(' ')}</Notice>}
           <ol className="divide-y divide-[#e2e8f0]">{route.data.stops.map(stop => <li key={stop.id} className="py-2.5 text-sm">
             <span className="font-medium">{stop.stopOrder}. {stop.poiName}</span>
