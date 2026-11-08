@@ -193,6 +193,10 @@ def generate_launch_description():
                               default_value=default_ekf_params,
                               description='EKF parameter file passed to '
                                           'manual_mode.launch.py.'),
+        DeclareLaunchArgument(
+            'require_motion_permit', default_value='false',
+            description='ADR-0049 motion gate, forwarded to manual_mode.launch.py. '
+                        'Must be true whenever fleet_bridge has commands_enabled: true.'),
         DeclareLaunchArgument('enable_camera', default_value='false',
                               description='Feed the Astra point cloud into the '
                                           'local costmap. Enable only after the '
@@ -247,6 +251,7 @@ def generate_launch_description():
                 'wheel_base': wheel_base,
                 'wheel_radius': wheel_radius,
                 'odom_linear_scale': odom_linear_scale,
+                'require_motion_permit': LaunchConfiguration('require_motion_permit'),
             }.items(),
         ),
 

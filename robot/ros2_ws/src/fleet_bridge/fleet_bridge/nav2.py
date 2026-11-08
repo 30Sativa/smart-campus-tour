@@ -72,14 +72,17 @@ class Nav2Navigator:
             handle.cancel_goal_async()
 
     def _on_result(self, future, on_result) -> None:
-        self._handle = None
         try:
             status = future.result().status
         except Exception:
+            # The handle stays: the goal may still be running, so a Cancel must still reach it.
             on_result('UNKNOWN')
             return
-        on_result({GoalStatus.STATUS_SUCCEEDED: 'SUCCEEDED', GoalStatus.STATUS_CANCELED: 'CANCELED',
-                   GoalStatus.STATUS_ABORTED: 'ABORTED'}.get(status, 'UNKNOWN'))
+        result = {GoalStatus.STATUS_SUCCEEDED: 'SUCCEEDED', GoalStatus.STATUS_CANCELED: 'CANCELED',
+                  GoalStatus.STATUS_ABORTED: 'ABORTED'}.get(status, 'UNKNOWN')
+        if result != 'UNKNOWN':
+            self._handle = None
+        on_result(result)
 
     def _cancel(self) -> None:
         # A Cancel can arrive before Nav2 answers the goal; it is applied as soon as the goal has a handle.

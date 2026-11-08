@@ -125,6 +125,9 @@ class _ActiveLeg:
     command: GoToCommand
     stream_id: str
     cancel_requested: bool = False
+    local_stop_reason: str | None = None
+    # Nav2's result could not be read, so the goal may still be running.
+    uncertain: bool = False
 
 
 class CommandExecutor:
@@ -145,7 +148,22 @@ class CommandExecutor:
         with self._lock:
             if self._active is None:
                 return {'status': 'IDLE', 'leg_id': None}
-            return {'status': 'NAVIGATING', 'leg_id': self._active.command.leg_id}
+            return {'status': 'UNKNOWN' if self._active.uncertain else 'NAVIGATING',
+                    'leg_id': self._active.command.leg_id}
+
+    def has_active_leg(self) -> bool:
+        with self._lock:
+            return self._active is not None
+
+    def interrupt_leg(self, reason: str) -> None:
+        """Stop this bridge's own goal after a local fault. The outcome waits for Nav2 to confirm the end."""
+        with self._lock:
+            active = self._active
+            if active is None or active.local_stop_reason is not None:
+                return
+            active.local_stop_reason = reason
+            self._log(f'Leg {active.command.leg_id} interrupted locally: {reason}')
+            self._navigator.cancel()
 
     def handle(self, command: GoToCommand | CancelCommand, stream_id: str) -> None:
         with self._lock:
@@ -207,8 +225,15 @@ class CommandExecutor:
             active = self._active
             if active is None or active.command.leg_id != leg_id:
                 return
+            if status == 'UNKNOWN':
+                # No terminal result is invented: the leg stays open and telemetry reports UNKNOWN.
+                active.uncertain = True
+                self._log(f'Leg {leg_id}: Nav2 result unreadable, execution state is unknown.')
+                return
             self._active = None
             outcome, reason = outcome_from_nav2(status, active.cancel_requested)
+            if outcome == 'FAILED' and active.local_stop_reason is not None:
+                reason = active.local_stop_reason
             self._add(build_result(active.command.command_id, leg_id, active.stream_id, self._now(), 'TERMINAL', outcome, reason))
 
     def _reject(self, command: GoToCommand, stream_id: str, reason: str) -> None:

@@ -1,18 +1,23 @@
 import math
 from typing import Optional
 
+from action_msgs.msg import GoalStatusArray
 from action_msgs.srv import CancelGoal
 from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
-from std_srvs.srv import SetBool
+from std_srvs.srv import SetBool, Trigger
+
+from robot_control.motion_gate import MotionGate
 
 
 MANUAL_MODE = 'manual'
 EXPLORE_MODE = 'explore'
 VALID_MODES = {MANUAL_MODE, EXPLORE_MODE}
+# action_msgs/GoalStatus: ACCEPTED, EXECUTING, CANCELING.
+ACTIVE_GOAL_STATUSES = {1, 2, 3}
 
 
 class ModeManagerNode(Node):
@@ -29,6 +34,10 @@ class ModeManagerNode(Node):
         self.declare_parameter('cancel_nav2_on_manual', True)
         self.declare_parameter(
             'nav2_cancel_service', 'navigate_to_pose/_action/cancel_goal')
+        self.declare_parameter('require_motion_permit', False)
+        self.declare_parameter('motion_permit_timeout', 0.6)
+        self.declare_parameter(
+            'nav2_status_topic', 'navigate_to_pose/_action/status')
 
         initial_mode = self._normalize_mode(
             str(self.get_parameter('initial_mode').value))
@@ -49,6 +58,12 @@ class ModeManagerNode(Node):
             self.get_parameter('cancel_nav2_on_manual').value)
         self.nav2_cancel_service = str(
             self.get_parameter('nav2_cancel_service').value)
+        self._motion_gate = MotionGate(
+            bool(self.get_parameter('require_motion_permit').value),
+            self._positive_float_parameter('motion_permit_timeout', 0.6))
+        self._last_gate_state = ''
+        self._nav2_active_goals: Optional[int] = None
+        self._nav2_status_sub = None
 
         self._manual_cmd: Optional[Twist] = None
         self._nav_cmd: Optional[Twist] = None
@@ -62,6 +77,12 @@ class ModeManagerNode(Node):
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        # VOLATILE on purpose: a late joiner must never receive an old permit or gate state.
+        motion_gate_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
         )
 
         self._cmd_pub = self.create_publisher(Twist, 'cmd_vel', 10)
@@ -80,15 +101,31 @@ class ModeManagerNode(Node):
         self._cancel_client = self.create_client(
             CancelGoal, self.nav2_cancel_service)
 
+        self._gate_state_pub = self.create_publisher(
+            String, 'motion_gate_state', motion_gate_qos)
+        self.create_service(Trigger, 'motion_inhibit_reset',
+                            self._motion_inhibit_reset_callback)
+        if self._motion_gate.required:
+            self.create_subscription(
+                Bool, 'motion_permit', self._motion_permit_callback,
+                motion_gate_qos)
+            self._nav2_status_sub = self.create_subscription(
+                GoalStatusArray,
+                str(self.get_parameter('nav2_status_topic').value),
+                self._nav2_status_callback, state_qos)
+
         self._timer = self.create_timer(
             1.0 / output_rate_hz, self._timer_callback)
+        self._gate_state_timer = self.create_timer(
+            0.5, self._publish_gate_state)
 
         self.get_logger().info(
             'Starting mode manager: '
             f'mode={self.mode}, manual_timeout={self.manual_timeout:.3f}s, '
             f'nav_timeout={self.nav_timeout:.3f}s, '
             f'output_rate_hz={output_rate_hz:.1f}, '
-            f'manual_priority_in_explore={self.manual_priority_in_explore}')
+            f'manual_priority_in_explore={self.manual_priority_in_explore}, '
+            f'require_motion_permit={self._motion_gate.required}')
         self._publish_state()
         self._publish_zero('startup')
 
@@ -144,8 +181,53 @@ class ModeManagerNode(Node):
         response.success = True
         return response
 
+    def _motion_permit_callback(self, msg: Bool):
+        self._motion_gate.on_permit(msg.data, self._now())
+
+    def _nav2_status_callback(self, msg: GoalStatusArray):
+        self._nav2_active_goals = sum(
+            1 for item in msg.status_list
+            if item.status in ACTIVE_GOAL_STATUSES)
+
+    def _motion_inhibit_reset_callback(self, request, response):
+        # A crashed action server leaves its last status latched, so also require a live publisher.
+        status_alive = (self._nav2_status_sub is not None and self.count_publishers(
+            self._nav2_status_sub.topic_name) > 0)
+        was_latched = self._motion_gate.latch_reason is not None
+        response.success, response.message = self._motion_gate.reset(
+            self._now(), self._emergency_stop, status_alive,
+            self._nav2_active_goals)
+        if response.success and was_latched:
+            self._nav_cmd = None
+            self._last_nav_time = None
+        self.get_logger().warn(f'motion_inhibit_reset: {response.message}')
+        self._publish_gate_state()
+        return response
+
+    def _update_motion_gate(self, now: float, nav_recent: bool) -> bool:
+        was_latched = self._motion_gate.latch_reason is not None
+        nav_allowed = self._motion_gate.update(
+            now, nav_recent, self._emergency_stop)
+        if not was_latched and self._motion_gate.latch_reason is not None:
+            self._nav_cmd = None
+            self._last_nav_time = None
+            self.get_logger().error(
+                f'Motion gate latched: {self._motion_gate.latch_reason}. '
+                'Nav2 velocity stays zero until a local reset.')
+        if self._motion_gate.state(now) != self._last_gate_state:
+            self._publish_gate_state()
+        return nav_allowed
+
+    def _publish_gate_state(self):
+        msg = String()
+        msg.data = self._motion_gate.state(self._now())
+        self._gate_state_pub.publish(msg)
+        self._last_gate_state = msg.data
+
     def _timer_callback(self):
         now = self._now()
+        nav_recent = self._is_recent(self._last_nav_time, self.nav_timeout, now)
+        nav_allowed = self._update_motion_gate(now, nav_recent)
 
         if self._emergency_stop:
             self._publish_zero('emergency_stop')
@@ -156,7 +238,6 @@ class ModeManagerNode(Node):
 
         manual_recent = self._is_recent(self._last_manual_time,
                                         self.manual_timeout, now)
-        nav_recent = self._is_recent(self._last_nav_time, self.nav_timeout, now)
 
         if self.mode == MANUAL_MODE:
             if manual_recent:
@@ -166,12 +247,13 @@ class ModeManagerNode(Node):
             if self.manual_priority_in_explore and manual_recent:
                 source = 'manual_override'
                 cmd = self._manual_cmd
-            elif nav_recent:
+            elif nav_recent and nav_allowed:
                 source = 'nav'
                 cmd = self._nav_cmd
 
         if cmd is None:
-            self._publish_zero(f'{self.mode}_timeout')
+            self._publish_zero(
+                f'{self.mode}_timeout' if nav_allowed else 'motion_gate')
             return
 
         self._cmd_pub.publish(cmd)

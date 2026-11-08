@@ -106,6 +106,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'world', default_value=default_world,
             description='Gazebo .world file to load.'),
+        DeclareLaunchArgument(
+            'require_motion_permit', default_value='false',
+            description='ADR-0049 motion gate for the fleet command scenarios.'),
 
         # 1) Gazebo + robot + diff_drive_controller (publishes /scan, odom, tf).
         IncludeLaunchDescription(
@@ -125,6 +128,9 @@ def generate_launch_description():
                 {
                     'initial_mode': 'explore',
                     'use_sim_time': ParameterValue(use_sim_time, value_type=bool),
+                    'require_motion_permit': ParameterValue(
+                        LaunchConfiguration('require_motion_permit'),
+                        value_type=bool),
                 },
             ],
         ),
