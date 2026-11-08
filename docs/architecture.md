@@ -2114,6 +2114,23 @@ rather than manufacturing a terminal result. If ARRIVED occurred before the
 interruption took effect, retain that actual outcome. Physical acceptance must
 observe motor stopping and no automatic restart, not only successful action RPCs.
 
+`docs/decisions/0049-m2-3-robot-local-safety.md` (accepted, **not implemented**)
+specifies that patch. It adds these `robot/`-internal interfaces, all with
+relative names under the robot namespace. The existing `emergency_stop` service
+and `emergency_stop_state` topic do not change.
+
+| Interface | Type | Publisher / server | Consumer | Step |
+|---|---|---|---|---|
+| `motion_permit` | `std_msgs/Bool`, RELIABLE, VOLATILE, every 0.2 s | `fleet_bridge`, only when `commands_enabled` | `mode_manager` | 3.1 |
+| `motion_gate_state` | `std_msgs/String` (`DISABLED`, `OPEN`, `BLOCKED`, `LATCHED:<reason>`), VOLATILE, 2 Hz | `mode_manager` | `fleet_bridge` | 3.1 |
+| `motion_inhibit_reset` | `std_srvs/Trigger` | `mode_manager` | A person on the robot; never `fleet_bridge` or the backend | 3.1 |
+| `hardware_estop_state` | `std_msgs/Bool`, from a new field in the FB frame (`robot/docs/PROTOCOL_FB.md`) | `stm32_bridge` | `mode_manager`, `fleet_bridge` | 3.4, input pin not yet confirmed |
+
+New parameters are `require_motion_permit` on `mode_manager` (default `false`)
+and `map_package_path` and `map_package_sha256` on `fleet_bridge`. The Fleet Sync
+and Fleet Commands contracts do not change: `localized`, `motionReady` and
+`faultCode` already exist and start carrying real values.
+
 ---
 
 ## 7. AI narration and visitor Q&A
