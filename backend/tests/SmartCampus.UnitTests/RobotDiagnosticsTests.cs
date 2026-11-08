@@ -182,7 +182,11 @@ public sealed class RobotDiagnosticsTests
         };
 
         var repo = new TestRobotRepository([robotHeld, robotNormal], []);
-        var mapRepo = new TestMapRepository([]);
+        // Map upload stores "VALID" (CreateMapVersionCommand); only those count as usable map versions.
+        var mapRepo = new TestMapRepository([
+            new MapVersion { Id = Guid.NewGuid(), MapKey = "library-v1", ValidationStatus = "VALID" },
+            new MapVersion { Id = Guid.NewGuid(), MapKey = "library-v2", ValidationStatus = "INVALID" }
+        ]);
         var telemetry = new TestTelemetryStore([]);
         var diag = new TestDiagnosticsStore();
         var sender = new TestSender();
@@ -195,6 +199,7 @@ public sealed class RobotDiagnosticsTests
         Assert.NotNull(result);
         Assert.Equal(2, result.Kpis.TotalRobots);
         Assert.Equal(1, result.Kpis.HeldForInspectionCount);
+        Assert.Equal(1, result.Kpis.ActiveMapVersionsCount);
         Assert.Contains(result.ActionItems, item => item.Type == "HELD_ROBOT" && item.TargetId == robotHeld.Id.ToString());
     }
 

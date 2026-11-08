@@ -1,9 +1,13 @@
-import { Bot, CheckCheck, ClipboardCheck, FileUp, Map } from 'lucide-react'
+import { Activity, Bot, CheckCheck, ClipboardCheck, FileUp, LayoutDashboard, Map } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
 /** Technical Staff work only (SRS v1.9 §3.2.c): no Tour preparation, no robot driving. */
 export const TECHNICAL_NAV_SECTIONS: NavSection[] = [
+  { label: 'Giám sát', items: [
+    { label: 'Tổng quan', path: '/technical/dashboard', icon: LayoutDashboard },
+    { label: 'Robot và Mini PC', path: '/technical/monitoring', icon: Activity },
+  ] },
   { label: 'Bản đồ', items: [{ label: 'Quản lý bản đồ', path: '/technical/maps', icon: Map }] },
   { label: 'Robot', items: [{ label: 'Robot', path: '/technical/robots', icon: Bot }] },
   { label: 'POI', items: [

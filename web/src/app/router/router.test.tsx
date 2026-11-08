@@ -143,8 +143,20 @@ describe('route table', () => {
     it('sends Technical Staff to /technical and keeps Staff out of it', async () => {
       signIn('TechnicalStaff')
       const router = renderAt('/technical')
-      await settled(router, '/technical/maps')
-      expect(await screen.findByRole('heading', { name: 'Quản lý bản đồ', level: 1 })).toBeInTheDocument()
+      await settled(router, '/technical/dashboard')
+      expect(await screen.findByRole('heading', { name: 'Bảng điều khiển kỹ thuật', level: 1 })).toBeInTheDocument()
+    })
+
+    it('opens Robot and Mini PC monitoring for Technical Staff only', async () => {
+      signIn('TechnicalStaff')
+      const technicalRouter = renderAt('/technical/monitoring')
+      await settled(technicalRouter, '/technical/monitoring')
+      expect(await screen.findByRole('heading', { name: 'Giám sát robot và Mini PC', level: 1 })).toBeInTheDocument()
+      cleanup()
+
+      signIn('Admin')
+      const adminRouter = renderAt('/technical/monitoring')
+      await waitFor(() => expect(adminRouter.state.location.pathname.startsWith('/admin')).toBe(true))
     })
 
     it('keeps Staff out of the technical area', async () => {
