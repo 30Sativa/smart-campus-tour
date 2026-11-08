@@ -104,5 +104,6 @@ def evaluate(obs: Observations, limits: ReadinessLimits) -> Readiness:
         refusal = fault or 'NOT_MOTION_READY'
     else:
         refusal = None
-    return Readiness(localized, motion_ready, fault, obs.unowned_goal,
-                     odom_fresh and obs.unowned_goal is None and obs.map_fault is None, refusal)
+    # Missing map evidence refuses new goals above. It must not stop a robot already moving (ADR-0049, Decision 1).
+    permit_allowed = odom_fresh and obs.unowned_goal is None and obs.map_fault != MAP_CONTENT_MISMATCH
+    return Readiness(localized, motion_ready, fault, obs.unowned_goal, permit_allowed, refusal)

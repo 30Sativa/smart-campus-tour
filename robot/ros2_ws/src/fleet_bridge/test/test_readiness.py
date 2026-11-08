@@ -110,8 +110,14 @@ class FaultCodeTests(unittest.TestCase):
 class PermitConditionTests(unittest.TestCase):
     def test_local_conditions_that_block_the_permit(self):
         for changes in ({'odom_age_sec': 0.6}, {'odom_age_sec': None}, {'unowned_goal': FOREIGN_NAV_GOAL},
-                        {'map_fault': MAP_CONTENT_MISMATCH}, {'map_fault': MAP_EVIDENCE_MISSING}):
+                        {'map_fault': MAP_CONTENT_MISMATCH}):
             self.assertFalse(run(**changes).permit_allowed, changes)
+
+    def test_missing_map_evidence_refuses_new_goals_but_keeps_the_permit(self):
+        result = run(map_fault=MAP_EVIDENCE_MISSING)
+        self.assertTrue(result.permit_allowed)
+        self.assertEqual('MAP_MISMATCH', result.goto_refusal)
+        self.assertIsNone(result.motion_ready)
 
     def test_a_latched_gate_does_not_block_the_permit(self):
         self.assertTrue(run(gate_state='LATCHED:BOOT').permit_allowed)
