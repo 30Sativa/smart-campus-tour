@@ -32,4 +32,7 @@ Expected: the stub prints `ACCEPTED`, then `TERMINAL` with outcome `ARRIVED`, an
 `--cancel-after-sec 3` to the stub and pick a far goal: expect `TERMINAL` with outcome `CANCELLED`, or `ARRIVED` if
 the robot got there first.
 
+With `require_motion_permit:=true` the gate starts latched, so add `--goto-delay-sec 25` to the stub and reset the
+gate before the GoTo arrives. The scenarios are in `robot/docs/m2-3-gazebo-test-notes.md`.
+
 `fleet_bridge` needs system time, so keep `use_sim_time` false; the telemetry and action calls do not need sim time.

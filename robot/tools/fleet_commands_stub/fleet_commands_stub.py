@@ -138,6 +138,9 @@ def main() -> int:
     parser.add_argument('--goto', nargs=3, type=float, required=True, metavar=('X', 'Y', 'YAW'))
     parser.add_argument('--cancel-after-sec', type=float, help='Cancel the leg this long after it is accepted.')
     parser.add_argument('--timeout-sec', type=float, default=180.0)
+    parser.add_argument('--goto-delay-sec', type=float, default=0.0,
+                        help='Wait this long after the first report before offering the GoTo, '
+                             'so the motion gate can be reset first (ADR-0049).')
     args = parser.parse_args()
     with open(args.credential_file, encoding='utf-8') as file:
         state = StubState(args.robot_code, file.read().strip(), args.map_key)
@@ -145,6 +148,7 @@ def main() -> int:
     print(f'stub listening on http://127.0.0.1:{server.server_port}{SYNC_PATH}', flush=True)
     while state.stream_id is None:
         time.sleep(0.2)
+    time.sleep(args.goto_delay_sec)
     goto = state.add_goto(*args.goto, accept_sec=args.timeout_sec)
     print(json.dumps({'sent': goto}), flush=True)
     deadline = time.monotonic() + args.timeout_sec

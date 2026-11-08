@@ -591,10 +591,16 @@ class FleetSyncWorkerStateTests(unittest.TestCase):
                                  sorted(re.findall(r"create_publisher\(\w+, '([^']+)'", source)))
                 self.assertEqual(2, source.count('create_publisher'))
                 self.assertEqual(['head/set'], re.findall(r"ActionClient\(node, \w+, '([^']+)'\)", source))
+            elif module.name == 'motion_permit_ros.py':
+                # ADR-0049: its only publisher is the permit, which grants nothing by itself and carries no velocity.
+                self.assertEqual(['motion_permit'], re.findall(r"create_publisher\(\w+, '([^']+)'", source))
+                self.assertEqual(1, source.count('create_publisher'))
             else:
                 self.assertNotIn('create_publisher', source, module.name)
             self.assertNotIn('cmd_vel', source, module.name)
             self.assertNotIn('cancel_all', source, module.name)
+            # ADR-0049: the bridge can never clear the latch that protects against it.
+            self.assertNotIn('motion_inhibit_reset', source, module.name)
             if module.name not in ('nav2.py', 'head_ros.py'):
                 self.assertNotIn('ActionClient', source, module.name)
         self.assertIn('spin_until_worker_fatal', node_source)

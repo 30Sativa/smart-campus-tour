@@ -28,6 +28,9 @@ subscribes only to `/cmd_vel`.
 | `/robot_mode_state` | `std_msgs/msg/String` | Current mode state |
 | `/emergency_stop` | `std_srvs/srv/SetBool` | `true` engages, `false` releases |
 | `/emergency_stop_state` | `std_msgs/msg/Bool` | Emergency stop state |
+| `/motion_permit` | `std_msgs/msg/Bool` | From `fleet_bridge`; read only with `require_motion_permit` |
+| `/motion_gate_state` | `std_msgs/msg/String` | Motion gate state |
+| `/motion_inhibit_reset` | `std_srvs/srv/Trigger` | A person clears the motion gate latch |
 | `/scan` | `sensor_msgs/msg/LaserScan` | RPLiDAR scan |
 | `/wheel/odom` | `nav_msgs/msg/Odometry` | Wheel-only odometry from STM32 STEP counts |
 | `/imu/data` | `sensor_msgs/msg/Imu` | BNO085 Game Rotation Vector yaw (no magnetometer) |
@@ -268,6 +271,31 @@ ros2 service call /emergency_stop std_srvs/srv/SetBool "{data: false}"
 While emergency stop is engaged, `mode_manager_node` forces `/cmd_vel` to zero
 and blocks manual/Nav2 commands. The STM32 bridge converts zero Twist to the
 firmware `STOP,<seq>` command.
+
+## Motion Gate (fleet command mode)
+
+`require_motion_permit` (default `false`, launch argument on `manual_mode`, `navigation` and
+`sim_navigation`) must be `true` whenever `fleet_bridge` has `commands_enabled: true`. See
+`docs/decisions/0049-m2-3-robot-local-safety.md`. `motion_gate_state` reports the gate:
+
+| State | Meaning |
+|---|---|
+| `DISABLED` | Gate off; behaviour is unchanged |
+| `OPEN` | Fresh permit, not latched; Nav2 velocity passes |
+| `BLOCKED` | No fresh permit while Nav2 is silent; clears by itself when the permit returns |
+| `LATCHED:BOOT` | Every start with the gate on |
+| `LATCHED:PERMIT_LOST` | No fresh permit (0.6 s) while Nav2 was commanding |
+| `LATCHED:ESTOP` | Software E-stop was engaged |
+
+A latch holds Nav2 velocity at zero and never clears on reconnect. A person on the robot clears it:
+
+```bash
+ros2 service call /motion_inhibit_reset std_srvs/srv/Trigger
+```
+
+The reset is refused while the E-stop is on, without a fresh permit, while a Nav2 goal is
+active, or when Nav2's action status has no publisher. It resumes nothing: motion needs a new
+leg. Manual teleop keeps its behaviour under `BLOCKED` and `LATCHED`; the E-stop still blocks it.
 
 ## Test Order
 

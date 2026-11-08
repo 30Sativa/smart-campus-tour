@@ -104,6 +104,10 @@ def generate_launch_description():
                               description='manual or explore.'),
         DeclareLaunchArgument('use_sim_time', default_value='false',
                               description='Use simulation clock.'),
+        DeclareLaunchArgument(
+            'require_motion_permit', default_value='false',
+            description='ADR-0049 motion gate. Must be true whenever '
+                        'fleet_bridge has commands_enabled: true.'),
         # Measured 2026-10-15: in the straight corridor the walls appear
         # rotated 12.5-13.3 deg in the scan while wheel odometry and the
         # LiDAR wall distances show the robot driving parallel to them (4
@@ -193,6 +197,9 @@ def generate_launch_description():
                     'initial_mode': initial_mode,
                     'manual_timeout': 0.5,
                     'nav_timeout': 0.5,
+                    'require_motion_permit': ParameterValue(
+                        LaunchConfiguration('require_motion_permit'),
+                        value_type=bool),
                 },
             ],
         ),

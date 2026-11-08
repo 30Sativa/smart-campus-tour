@@ -96,11 +96,19 @@ this yet; enforcement is M2.3.
 `report_period_sec` must be below the backend's 2 s telemetry limit or polls are refused
 with `STREAM_NOT_CURRENT`; the node warns at startup.
 
+**Motion permit (ADR-0049).** With `commands_enabled`, the bridge publishes `motion_permit`
+(`std_msgs/Bool`, RELIABLE, VOLATILE) every `motion_permit_period_sec` (0.2 s). It is `true`
+only while the last HTTP 200 poll with a valid body is younger than
+`motion_permit_link_timeout_sec` (1.5 s). If the link is lost during a leg, the bridge cancels
+its own goal, holds the permit false until Nav2 ends that leg, and reports `FAILED`
+`LOCAL_LINK_LOSS`, or `ARRIVED` if arrival came first. `mode_manager` must run with
+`require_motion_permit: true`, and a person clears its latch with `motion_inhibit_reset`.
+If Nav2's result cannot be read, no terminal result is sent and telemetry reports `UNKNOWN`.
+
 Limits left to M2.3:
 
 - A restart starts a new stream and remembers nothing, so it never re-runs a command. It
   also does not cancel goals: a goal left by a crashed bridge keeps running (no blind
-  cancel-all, ADR-0008). Handling that orphan goal is M2.3.
-- No local stop on heartbeat loss.
+  cancel-all, ADR-0008). `mode_manager` holds it at zero; detecting it in the bridge is step 3.2.
 - `localized` and `motionReady` are still reported as null, so a real backend Start fails
   those checks until M2.3 gives them robot-side sources.

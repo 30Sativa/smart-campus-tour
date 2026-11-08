@@ -6,6 +6,7 @@ import http.client
 import json
 import random
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -17,12 +18,14 @@ from .http_client import HttpResponse, TransportFailure
 class CommandWorkerConfig:
     poll_period_sec: float = 0.5
     retry_max_sec: float = 30.0
+    # While the last successful poll is this recent, failures do not back off (ADR-0049 T_link).
+    no_backoff_window_sec: float = 0.0
 
 
 class FleetCommandWorker:
     def __init__(self, config: CommandWorkerConfig, executor: CommandExecutor, transport: object,
                  stream_provider: Callable[[], str], on_log=None, stop_event: threading.Event | None = None,
-                 wait=None, random_source=None):
+                 wait=None, random_source=None, monotonic=None):
         self.config = config
         self.executor = executor
         self.transport = transport
@@ -31,9 +34,16 @@ class FleetCommandWorker:
         self.stop_event = stop_event or threading.Event()
         self.wait = wait or self.stop_event.wait
         self.random_source = random_source or random.random
+        self.monotonic = monotonic or time.monotonic
         self._thread: threading.Thread | None = None
         self._failures = 0
         self._last_log: str | None = None
+        self._last_poll_success: float | None = None
+
+    @property
+    def last_poll_success(self) -> float | None:
+        """Monotonic time of the last 200 poll with a contract-valid body. Refusals never count."""
+        return self._last_poll_success
 
     def start(self) -> None:
         if self._thread is not None:
@@ -102,12 +112,15 @@ class FleetCommandWorker:
         except ValueError as error:
             self._note(f'Poll response ignored: {error}.')
             return False
+        self._last_poll_success = self.monotonic()
         if command is not None:
             self.executor.handle(command, stream_id)
         return True
 
     def _delay(self) -> float:
-        if self._failures == 0:
+        last = self._last_poll_success
+        in_window = last is not None and self.monotonic() - last < self.config.no_backoff_window_sec
+        if self._failures == 0 or in_window:
             return self.config.poll_period_sec
         base = min(self.config.retry_max_sec, self.config.poll_period_sec * (2 ** self._failures))
         return max(self.config.poll_period_sec, base * (0.75 + 0.5 * self.random_source()))

@@ -46,6 +46,9 @@ class FleetBridgeNode(Node):
         self.declare_parameter('commands_enabled', False)
         self.declare_parameter('command_base_url', '')
         self.declare_parameter('command_poll_period_sec', 0.5)
+        # ADR-0049 T_link and permit period; used only when commands_enabled is true.
+        self.declare_parameter('motion_permit_link_timeout_sec', 1.5)
+        self.declare_parameter('motion_permit_period_sec', 0.2)
         # ADR-0045 Operator head buttons; off by default, independent of commands_enabled.
         self.declare_parameter('head_enabled', False)
         self.declare_parameter('head_base_url', '')
@@ -133,12 +136,26 @@ class FleetBridgeNode(Node):
             base = str(self.get_parameter('command_base_url').value).strip() or commands_url_from_sync_url(backend_url)
             return FleetCommandsHttpClient(base, robot_code, credential, request_timeout_sec)
 
+        link_timeout_sec = float(self.get_parameter('motion_permit_link_timeout_sec').value)
+        permit_period_sec = float(self.get_parameter('motion_permit_period_sec').value)
+        if commands_enabled and min(link_timeout_sec, permit_period_sec) <= 0:
+            raise RuntimeError('Motion permit timing parameters must be positive.')
         path = create_command_path(
             commands_enabled, create_navigator, create_transport,
-            CommandWorkerConfig(float(self.get_parameter('command_poll_period_sec').value), retry_max_sec),
+            CommandWorkerConfig(float(self.get_parameter('command_poll_period_sec').value), retry_max_sec,
+                                link_timeout_sec),
             map_key, frame_id, lambda: report_state.stream_id, self.get_logger().warning)
         if path is not None:
             self._commands, self._command_worker = path
+            # Imported only here: the telemetry-only bridge publishes nothing.
+            from .motion_permit import MotionPermit
+            from .motion_permit_ros import MotionPermitPublisher
+            commands, command_worker = path
+            self._motion_permit_publisher = MotionPermitPublisher(
+                self,
+                MotionPermit(link_timeout_sec, lambda: command_worker.last_poll_success, commands.has_active_leg,
+                             lambda: commands.interrupt_leg('LOCAL_LINK_LOSS')),
+                permit_period_sec)
 
         self._head_worker = None
         if bool(self.get_parameter('head_enabled').value):

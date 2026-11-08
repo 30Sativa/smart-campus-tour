@@ -7,3 +7,7 @@
     manual_priority_in_explore: true
     cancel_nav2_on_manual: true
     nav2_cancel_service: navigate_to_pose/_action/cancel_goal
+    # ADR-0049. Must be true whenever fleet_bridge has commands_enabled: true.
+    require_motion_permit: false
+    motion_permit_timeout: 0.6
+    nav2_status_topic: navigate_to_pose/_action/status
