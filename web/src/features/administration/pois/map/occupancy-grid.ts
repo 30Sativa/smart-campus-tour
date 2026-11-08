@@ -113,3 +113,9 @@ export function poseClearance(grid: GridGeometry, pixels: Uint8ClampedArray | nu
 export function clearanceMessage(radius: number) {
   return `Điểm quá sát vật cản (cần trống bán kính ${radius.toFixed(2).replace('.', ',')} m).`
 }
+
+/** A yaw in radians as whole degrees in (-180, 180], the way Staff reads a heading. */
+export const yawDegrees = (yaw: number) => {
+  const degrees = Math.round(yaw * 180 / Math.PI) % 360
+  return degrees > 180 ? degrees - 360 : degrees <= -180 ? degrees + 360 : degrees
+}

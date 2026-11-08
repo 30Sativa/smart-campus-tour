@@ -92,9 +92,13 @@ export function SetupSteps({ title, steps }: { title: string; steps: SetupStep[]
  * It is the button's description (pass the same `id` to its aria-describedby), not a live region, so a screen
  * reader hears it on reaching the button instead of on every keystroke.
  */
-export function SaveBlockedHint({ id, missing, lead = 'Chưa lưu được' }: { id: string; missing: string[]; lead?: string }) {
+export function SaveBlockedHint({ id, missing, lead = 'Chưa lưu được', tone = 'danger' }: {
+  id: string; missing: string[]; lead?: string
+  /** `neutral` for what a form simply still needs (grey); the default red is for a real refusal. */
+  tone?: 'danger' | 'neutral'
+}) {
   if (!missing.length) return null
-  return <p id={id} className="mr-auto text-xs text-[#b23e18]">{lead}: {missing.join(', ')}.</p>
+  return <p id={id} className={`mr-auto text-xs ${tone === 'neutral' ? 'text-[#64748b]' : 'text-[#b23e18]'}`}>{lead}: {missing.join(', ')}.</p>
 }
 
 export function CheckRow({ checked, onChange, children }: { checked: boolean; onChange: (value: boolean) => void; children: ReactNode }) {

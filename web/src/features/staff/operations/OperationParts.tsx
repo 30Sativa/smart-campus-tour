@@ -5,6 +5,8 @@ import { TOUR_STATE_LABEL } from '../../administration/tours/tour-messages'
 import { formatTime } from '../formatters'
 import { useNow } from '../use-now'
 import { telemetryAge, useFleetConnection, useFleetRobot } from './fleet-telemetry'
+import { mapAreaName } from '../../administration/map-labels'
+import { useMapVersions } from '../../technical/technical-hooks'
 import {
   COMMAND_KIND_LABEL, LEG_LABEL, OPERATIONAL_LABEL, STEP_LABEL, commandStateInfo, robotReasonText,
 } from './operation-labels'
@@ -96,6 +98,7 @@ const yesNo = (value: boolean | null, yes: string, no: string) => (value === nul
 export function RobotTelemetryPanel({ robotCode }: { robotCode: string | null | undefined }) {
   const connection = useFleetConnection(store => store.state)
   const { robot, receivedAt } = useFleetRobot(robotCode)
+  const maps = useMapVersions()
   const now = useNow(1000)
   if (!robotCode) return <p className="text-[13px] text-[#64748b]">Tour chưa giữ robot nào.</p>
   const link = connection === 'connected' ? null
@@ -113,7 +116,7 @@ export function RobotTelemetryPanel({ robotCode }: { robotCode: string | null | 
         <Row label="Trạng thái thực thi">{EXECUTION_STATUS[robot.executionStatus] ?? `Khác (${robot.executionStatus})`}</Row>
         <Row label="Định vị">{yesNo(robot.localized, 'Đã định vị', 'Chưa định vị')}</Row>
         <Row label="Sẵn sàng di chuyển">{yesNo(robot.motionReady, 'Sẵn sàng', 'Chưa sẵn sàng')}</Row>
-        <Row label="Bản đồ"><span className="font-mono text-xs">{robot.mapKey} / {robot.frameId}</span></Row>
+        <Row label="Bản đồ">{mapAreaName(maps.data, { mapKey: robot.mapKey }) ?? (maps.isSuccess ? 'Bản đồ chưa có trong danh sách' : '-')}</Row>
         <Row label="Vị trí">{robot.pose ? <span className={robot.poseFresh ? '' : 'text-[#b45309]'}>x {robot.pose.x.toFixed(2)}, y {robot.pose.y.toFixed(2)} m{robot.poseFresh ? '' : ', đã cũ'}</span> : 'Robot chưa báo'}</Row>
         <Row label="Pin">{robot.batteryPercent == null ? 'Robot chưa báo' : `${robot.batteryPercent.toFixed(0)}%`}</Row>
         {robot.faultCode && <Row label="Lỗi robot báo"><span className="font-mono text-xs text-[#9d3428]">{robot.faultCode}</span></Row>}

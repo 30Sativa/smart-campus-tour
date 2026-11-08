@@ -15,12 +15,26 @@ import { campusShortStamp } from '../../../features/administration/tours/tour-ca
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
 import { clearanceMessage, poseClearance } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
+import { UnsavedChangesGuard } from '../../../features/administration/UnsavedChangesGuard'
+import { AFTER_SAVE } from '../../../features/administration/after-save'
 
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
 
 type Draft = { mapVersionId: string; name: string; purpose: string; description: string; narrationText: string; fallbackVideoUrl: string; x: number | null; y: number | null; yaw: number | null; cameraPreset: string }
 const empty: Draft = { mapVersionId: '', name: '', purpose: '', description: '', narrationText: '', fallbackVideoUrl: '', x: null, y: null, yaw: null, cameraPreset: 'FRONT' }
+
+/** The draft exactly as it is sent, so "nothing changed" means the server would get the same revision. */
+function payload(draft: Draft) {
+  return { mapVersionId: draft.mapVersionId, name: draft.name.trim(), purpose: draft.purpose.trim(), description: draft.description.trim() || null,
+    narrationText: draft.narrationText.trim(), fallbackVideoUrl: draft.fallbackVideoUrl.trim() || null, x: draft.x, y: draft.y, yaw: draft.yaw, cameraPreset: draft.cameraPreset }
+}
+const samePayload = (a: Draft, b: Draft) => JSON.stringify(payload(a)) === JSON.stringify(payload(b))
+/**
+ * The fields of the server's navigation fingerprint (PoiNavigationFingerprint.Compute), at its precision. A PASS
+ * belongs to this fingerprint, so a revision that keeps it keeps the PASS and any other change needs a new check.
+ */
+const navigationKey = (draft: Draft) => [draft.mapVersionId, draft.x?.toFixed(4), draft.y?.toFixed(4), draft.yaw?.toFixed(6), draft.cameraPreset.trim().toUpperCase()].join('|')
 
 function asDraft(item: PoiProposal): Draft {
   const { revision } = item
@@ -39,7 +53,15 @@ export default function StaffManagePoiFormPage() {
   const [error, setError] = useState<string | null>(null)
   const [poseMode, setPoseMode] = useState<PickerMode>('position')
   const current = saved ?? proposalQuery.data ?? null
-  const draft = draftOverride ?? (proposalQuery.data ? asDraft(proposalQuery.data) : empty)
+  // A save clears the override, so the form then shows the revision the server just returned.
+  const draft = draftOverride ?? (current ? asDraft(current) : empty)
+  const baseline = current ? asDraft(current) : empty
+  const changed = !samePayload(draft, baseline)
+  const navigationChanged = Boolean(current) && navigationKey(draft) !== navigationKey(baseline)
+  const passed = current?.revision.navigationStatus === 'PASS'
+  const failed = current?.revision.navigationStatus === 'FAIL'
+  // The server refuses a new revision of a submitted one that is still waiting for its check (CreatePoiRevisionCommand).
+  const waiting = Boolean(current?.revision.isSubmitted) && !passed && !failed
   const mapMissingFromList = Boolean(poiId && current && !maps.data?.some(item => item.map.id === current.revision.mapVersionId))
   const mapDetailsQuery = useQuery({
     queryKey: ['technical', 'map', current?.revision.mapVersionId],
@@ -58,6 +80,8 @@ export default function StaffManagePoiFormPage() {
   const history = useQuery({ queryKey: ['technical', 'poi-history', poiId], queryFn: () => technicalApi.getPoiHistory(poiId!), enabled: Boolean(poiId) })
   const update = (values: Partial<Draft>) => { setDraftOverride(value => ({ ...draft, ...value, ...values })); setError(null) }
   const mutate = async (action: 'save' | 'submit') => {
+    // Enter in a field submits the form even while Save is disabled.
+    if ((action === 'save' && current && !changed) || (waiting && changed)) return
     if (!mapEligible || historicalReadOnly || !draft.mapVersionId || !draft.name.trim() || !draft.purpose.trim() || !draft.narrationText.trim() || draft.x == null || draft.y == null || draft.yaw == null) {
       setError('Cần chọn bản đồ, nhập tên, mục đích, nội dung thuyết minh và đặt vị trí cùng hướng trên bản đồ.')
       return
@@ -69,15 +93,18 @@ export default function StaffManagePoiFormPage() {
       setError(clearanceMessage(clearanceMeters))
       return
     }
-    const body = { ...draft, x: draft.x!, y: draft.y!, yaw: draft.yaw!, name: draft.name.trim(), purpose: draft.purpose.trim(), description: draft.description.trim() || null, narrationText: draft.narrationText.trim(), fallbackVideoUrl: draft.fallbackVideoUrl.trim() || null }
+    const body = { ...payload(draft), x: draft.x, y: draft.y, yaw: draft.yaw }
     setBusy(true); setError(null)
     try {
       let result = current
       const created = !result
-      if (result) result = await technicalApi.revisePoiProposal(result.id, result, body)
-      else result = await technicalApi.createPoiProposal(body)
-      setSaved(result)
-      await queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposals'] })
+      // Nothing changed: no new revision, so the history does not gain a copy of the current one.
+      if (!result || changed) {
+        result = result ? await technicalApi.revisePoiProposal(result.id, result, body) : await technicalApi.createPoiProposal(body)
+        setSaved(result)
+        setDraftOverride(null)
+        await queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposals'] })
+      }
       if (action === 'submit') {
         result = await technicalApi.submitPoiProposal(result.id, result)
         setSaved(result)
@@ -88,7 +115,7 @@ export default function StaffManagePoiFormPage() {
       else notify(submitted
         ? { title: `Đã gửi kiểm chứng POI “${body.name}”`, detail: 'Chờ kỹ thuật xác nhận. Gửi kiểm chứng chưa tạo kết quả PASS.' }
         : { title: `Đã lưu POI “${body.name}”`, detail: 'Bản nháp; chưa gửi kiểm chứng.' })
-      if (!poiId) navigate(`/staff/manage/pois/${result.id}`, { replace: true })
+      if (!poiId) navigate(`/staff/manage/pois/${result.id}`, { replace: true, ...AFTER_SAVE })
     } catch (cause) {
       setError(errorText(cause))
       if (isMapEligibilityConflict(cause)) {
@@ -128,11 +155,31 @@ export default function StaffManagePoiFormPage() {
     [draft.yaw != null, 'Hướng đã chọn', 'Hướng chưa chọn'],
     [contentReady, 'Nội dung đủ', 'Nội dung chưa đủ'],
   ]
+  // What Save and Send would do from here, in the server's terms; see navigationKey above.
+  const outcome: { tone: 'ok' | 'info' | 'warn'; text: string } | null = !current
+    ? { tone: 'ok', text: 'Đủ thông tin. Lưu nháp, hoặc gửi để kỹ thuật kiểm tra trên robot.' }
+    : !changed
+      ? passed ? { tone: 'ok', text: 'Đã đạt, dùng được trong tuyến.' }
+        : waiting ? { tone: 'info', text: 'Đang chờ kỹ thuật kiểm tra.' }
+        : failed ? { tone: 'warn', text: current.revision.isSubmitted ? 'Kỹ thuật ghi không đạt. Sửa vị trí, hướng hoặc góc camera rồi gửi kiểm chứng lại.' : 'Kỹ thuật ghi không đạt cho vị trí này. Gửi kiểm chứng để kiểm tra lại.' }
+        : { tone: 'info', text: 'Bản nháp, chưa gửi kiểm chứng.' }
+      : waiting ? { tone: 'warn', text: 'Đang chờ kỹ thuật kiểm tra nên chưa lưu được thay đổi. Chờ có kết quả rồi sửa tiếp.' }
+      : navigationChanged
+        ? passed ? { tone: 'warn', text: 'Lưu sẽ tạo bản mới và phải gửi kiểm chứng lại. Tuyến và Tour đang dùng bản cũ không bị ảnh hưởng.' }
+          : failed ? { tone: 'info', text: 'Lưu sẽ tạo bản mới và phải gửi kiểm chứng lại.' }
+          : { tone: 'info', text: 'Lưu sẽ tạo bản nháp mới, chưa gửi kiểm chứng.' }
+        : passed ? { tone: 'ok', text: 'Lưu sẽ tạo bản mới và giữ kết quả đạt.' }
+          : failed ? { tone: 'warn', text: 'Lưu sẽ tạo bản mới. Vị trí, hướng và góc camera không đổi nên vẫn giữ kết quả không đạt.' }
+          : { tone: 'info', text: 'Lưu sẽ tạo bản nháp mới, chưa gửi kiểm chứng.' }
+  const saveBlocked = Boolean(current) && (!changed || waiting)
+  // Sending again adds nothing when the revision it would send is already submitted or already holds a PASS.
+  const submitBlocked = Boolean(current) && (waiting || (!changed && (current!.revision.isSubmitted || passed)) || (changed && !navigationChanged && passed))
   const missing = [!draft.mapVersionId && 'bản đồ', !placed && 'vị trí', draft.yaw == null && 'hướng robot', !draft.name.trim() && 'tên POI', !draft.purpose.trim() && 'mục đích', !draft.narrationText.trim() && 'thuyết minh'].filter(Boolean) as string[]
   const field = `${inputClass} mt-1.5`
   const label = 'flex items-center gap-1 text-sm font-medium text-[#2d3748]'
   const required = <span aria-hidden="true" className="text-[#c53030]">*</span>
   return <AdminPage>
+    <UnsavedChangesGuard when={changed && !locked} />
     {back}
     <header className="mb-5">
       <h1 className="text-2xl leading-tight font-bold text-[#2d3748]">{poiId ? (current?.revision.name ?? 'Điểm tham quan') : 'Tạo điểm tham quan'}</h1>
@@ -145,8 +192,7 @@ export default function StaffManagePoiFormPage() {
 
     <section className={`${card} mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-3.5`} aria-label="Bản đồ và tiến độ">
       <span className="text-sm text-[#718096]">Bản đồ</span>
-      <select title="" id="poi-map" aria-label="Bản đồ" className={`min-h-10 min-w-56 rounded-xl border border-[#e2e8f0] bg-white px-3 text-sm font-semibold text-[#2d3748] ${focus}`} required value={draft.mapVersionId} onChange={event => { update({ mapVersionId: event.target.value, x: null, y: null, yaw: null }); setPoseMode('position') }}><option value="">— Chọn bản đồ —</option>{maps.data?.map(item => { const { map } = item; return <option key={map.id} value={map.id} disabled={!item.canUseForPoiPreparation}>{mapLabel(map)}{item.canUseForPoiPreparation ? '' : ` · ${mapCheckLabel(item.technicalCheckStatus)}`}</option> })}{selectedItem && !maps.data?.some(item => item.map.id === selectedItem.map.id) && <option value={selectedItem.map.id} disabled={!selectedItem.canUseForPoiPreparation}>{mapLabel(selectedItem.map)} · {mapCheckLabel(selectedItem.technicalCheckStatus)}</option>}</select>
-      {selectedItem && <span className="rounded-lg bg-[#f1f5f9] px-2.5 py-1 font-mono text-xs text-[#475569]">{selectedItem.map.mapKey}</span>}
+      <select title="" id="poi-map" aria-label="Bản đồ" className={`min-h-10 min-w-56 rounded-xl border border-[#e2e8f0] bg-white px-3 text-sm font-semibold text-[#2d3748] ${focus}`} required value={draft.mapVersionId} onChange={event => { update({ mapVersionId: event.target.value, x: null, y: null, yaw: null }); setPoseMode('position') }}><option value="">— Chọn bản đồ —</option>{maps.data?.map(item => { const { map } = item; return <option key={map.id} value={map.id} disabled={!item.canUseForPoiPreparation}>{mapLabel(map, item.canUseForPoiPreparation ? null : mapCheckLabel(item.technicalCheckStatus))}</option> })}{selectedItem && !maps.data?.some(item => item.map.id === selectedItem.map.id) && <option value={selectedItem.map.id} disabled={!selectedItem.canUseForPoiPreparation}>{mapLabel(selectedItem.map, mapCheckLabel(selectedItem.technicalCheckStatus))}</option>}</select>
       {selectedItem && selectedItem.currentlyDeployedOn.length > 0 && <span className="rounded-lg bg-[#edf3fc] px-2.5 py-1 text-xs font-medium text-[#3f62a0]">Robot kiểm tra đạt: {selectedItem.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}
       <ol aria-label="Tiến độ" className="flex flex-wrap items-center gap-x-3 gap-y-2 xl:ml-auto xl:border-l xl:border-[#e2e8f0] xl:pl-4">
         {steps.map(([ok, done, todo], index) => (
@@ -211,18 +257,18 @@ export default function StaffManagePoiFormPage() {
     {current && <section className={`${card} mt-4 p-5`} aria-label="Lịch sử thay đổi"><h2 className="text-lg font-bold text-[#2d3748]">Lịch sử thay đổi</h2>{historyRows.length ? <ol className="mt-2 space-y-1.5">{historyRows.map(item => <li key={item.id} className="text-sm text-[#2d3748]">Bản lưu {campusShortStamp(item.createdAt)} · {poiStatus(item).label}</li>)}</ol> : <p className="mt-2 text-sm text-[#718096]">{history.isPending ? 'Đang tải lịch sử…' : 'Chưa có lịch sử.'}</p>}{history.data?.verificationRecords.length ? <div className="mt-3 border-t border-[#e2e8f0] pt-3"><h3 className="text-sm font-semibold text-[#2d3748]">Kết quả kiểm chứng</h3><ul className="mt-2 space-y-2">{history.data.verificationRecords.map(record => <li key={record.id} className="text-sm text-[#2d3748]">{record.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'} · {record.robotCode} · {new Date(record.checkedAt).toLocaleString('vi-VN')}{record.reason && <p className="text-[#a4473d]">Lý do: {record.reason}</p>}<p className="text-xs text-[#718096]">{record.evidenceNote}</p></li>)}</ul></div> : null}</section>}
 
     {/* The page's actions stay in reach at the bottom of the screen. */}
-    <div className="sticky bottom-3 z-20 mt-4 rounded-[15px] border border-[#e2e8f0] bg-white/90 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.25)] backdrop-blur-xl">
+    <div className="sticky bottom-20 z-20 lg:bottom-3 mt-4 rounded-[15px] border border-[#e2e8f0] bg-white/90 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.25)] backdrop-blur-xl">
       <div className="flex flex-wrap items-center gap-3 px-5 py-3">
         <div className="min-w-0 flex-1">
           {error ? <p role="alert" className="flex items-start gap-2 text-sm text-[#a4473d]"><CircleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0" />{error}</p>
             : locked && current ? <p className="text-sm text-[#718096]">Điểm này đang ở chế độ chỉ xem.</p>
             : missing.length ? <p className="flex items-start gap-2.5 text-sm"><CircleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-[#c08a1e]" /><span><b className="block font-semibold text-[#2d3748]">Chưa đủ thông tin</b><span className="text-[#718096]">Còn thiếu: {missing.join(', ')}.</span></span></p>
-            : <p className="flex items-center gap-2 text-sm font-semibold text-[#2d3748]"><Check size={16} aria-hidden="true" className="text-[#3f62a0]" />Đủ thông tin để gửi kiểm chứng.</p>}
+            : outcome && <p id="poi-outcome" className="flex items-start gap-2 text-sm font-semibold text-[#2d3748]">{outcome.tone === 'ok' ? <Check size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-[#3f62a0]" /> : outcome.tone === 'warn' ? <CircleAlert size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-[#c08a1e]" /> : <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-[#718096]" />}{outcome.text}</p>}
         </div>
         <p className="hidden text-xs text-[#a0aec0] xl:block">Lưu tạo bản mới; gửi kiểm chứng chưa phải kết quả đạt.</p>
         <Link to="/staff/manage/pois" className={buttonClass('secondary')}>Hủy bỏ</Link>
-        <button type="submit" form="poi-form" disabled={busy || locked} className={buttonClass('secondary')}>{busy ? 'Đang lưu…' : 'Lưu nháp'}</button>
-        <button type="button" disabled={busy || locked} onClick={() => void mutate('submit')} className={buttonClass('primary')}>{busy ? 'Đang xử lý…' : 'Gửi kiểm chứng'}</button>
+        <button type="submit" form="poi-form" disabled={busy || locked || saveBlocked} aria-describedby={saveBlocked ? 'poi-outcome' : undefined} className={buttonClass('secondary')}>{busy ? 'Đang lưu…' : 'Lưu nháp'}</button>
+        <button type="button" disabled={busy || locked || submitBlocked} aria-describedby={submitBlocked ? 'poi-outcome' : undefined} onClick={() => void mutate('submit')} className={buttonClass('primary')}>{busy ? 'Đang xử lý…' : 'Gửi kiểm chứng'}</button>
       </div>
     </div>
   </AdminPage>

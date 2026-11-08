@@ -10,6 +10,7 @@ import type { MapVersionItem, PoiProposal } from '../../../features/technical/ap
 import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
+import { fitView } from '../../../features/administration/pois/map/fit-view'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 import { poiStatus, type PoiStatus } from '../../../features/administration/pois/poi-status'
 
@@ -202,18 +203,7 @@ function PoiMap({ proposals, framed, mapVersionId, mapLabel, number, selectedId,
   if (!map) return <section className={`${card} overflow-hidden`} aria-label="Bản đồ POI"><SkeletonRows rows={6} label="Đang tải bản đồ" /></section>
   const points = proposals.map((p) => ({ p, at: rosToImage(map, { x: p.revision.x, y: p.revision.y }) }))
   // The frame fits every POI on this version, not just the filtered ones, so changing tab or search never re-zooms the map.
-  const framePoints = framed.map((p) => rosToImage(map, { x: p.revision.x, y: p.revision.y }))
-  const us = framePoints.map((pt) => pt.u), vs = framePoints.map((pt) => pt.v)
-  // Crop to the POIs with a margin proportional to their spread, so unexplored grey does not fill the frame.
-  const spread = us.length ? Math.max(Math.max(...us) - Math.min(...us), Math.max(...vs) - Math.min(...vs)) : 0
-  const pad = Math.max(40, spread * 0.2)
-  const x0 = Math.max(0, (us.length ? Math.min(...us) - pad : 0)), y0 = Math.max(0, (vs.length ? Math.min(...vs) - pad : 0))
-  const w = Math.max(Math.min(map.width, (us.length ? Math.max(...us) + pad : map.width)) - x0, Math.min(200, map.width))
-  const h = Math.max(Math.min(map.height, (vs.length ? Math.max(...vs) + pad : map.height)) - y0, Math.min(200, map.height))
-  // Zoom keeps the centre of the fitted view.
-  const zw = w / zoom, zh = h / zoom, zx = x0 + (w - zw) / 2, zy = y0 + (h - zh) / 2
-  // Uploaded rasters differ in size, so markers scale with the view rather than with image pixels.
-  const unit = Math.max(zw, zh) / 560
+  const { x: zx, y: zy, width: zw, height: zh, unit } = fitView(map, framed.map((p) => rosToImage(map, { x: p.revision.x, y: p.revision.y })), zoom)
   const tool = `grid size-9 place-items-center rounded-xl border border-[#e2e8f0] bg-white text-[#475569] transition-colors hover:bg-[#f8fafc] disabled:opacity-40 ${focus}`
   return (
     <section ref={frame} className={`${card} overflow-hidden p-4`} aria-label="Bản đồ POI">

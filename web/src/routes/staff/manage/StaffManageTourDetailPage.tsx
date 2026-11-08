@@ -7,6 +7,8 @@ import { notify } from '../../../components/ui/toast-store'
 import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { formatSlot, formatStamp } from '../../../features/administration/admin-format'
 import { passedAt } from '../../../features/administration/routes/route-messages'
+import { mapAreaName } from '../../../features/administration/map-labels'
+import { useMapVersions } from '../../../features/technical/technical-hooks'
 import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
 import { campusShortDate } from '../../../features/administration/tours/tour-calendar'
 import { overdueStartLabel } from '../../../features/administration/tours/overdue-start'
@@ -24,6 +26,7 @@ export default function StaffManageTourDetailPage() {
   const { tourId = '' } = useParams()
   const detail = useTour(tourId)
   const cancel = useCancelTour()
+  const maps = useMapVersions()
   const [confirming, setConfirming] = useState(false)
   const [requestId, setRequestId] = useState(newRequestId)
   const [now] = useState(() => Date.now())
@@ -86,7 +89,7 @@ export default function StaffManageTourDetailPage() {
         <h2 className="text-[15px] font-semibold">Tuyến: {route.name}</h2>
         <Link to={`/staff/manage/routes/${route.id}`} className="text-sm text-[#2d719e]">Mở tuyến</Link>
       </div>
-      <p className="mt-1 text-sm text-[#64748b]">{route.mapKey} / {route.mapFrame} · {route.stops.length} điểm dừng</p>
+      <p className="mt-1 text-sm text-[#64748b]">{mapAreaName(maps.data, { mapKey: route.mapKey }) ?? '-'} · {route.stops.length} điểm dừng</p>
       <ol className="mt-3 divide-y divide-[#e2e8f0]">{route.stops.map(stop => <li key={stop.id} className="py-2.5 text-sm">
         <span className="font-medium">{stop.stopOrder}. {stop.poiName}</span>
         <span className="block text-xs text-[#64748b]">Dừng {stop.dwellSeconds}s · nhìn {stop.headSteps.map(h => `${HEAD_LABEL[h.preset]} ${h.holdSeconds}s`).join(', ')}</span>

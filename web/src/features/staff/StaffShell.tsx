@@ -127,8 +127,10 @@ export default function StaffShell() {
         </header>
 
         {/* Every panel on a Staff page becomes a Purity card: 15px corners, no border, a soft lift. */}
-        <main className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0 ${softConsoleMain}`}>
+        <main className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto ${softConsoleMain}`}>
           <RouteView />
+          {/* Room under every page for the floating menu button below lg; a block, so it counts in any scroll container. */}
+          <div aria-hidden="true" className="h-20 lg:hidden" />
         </main>
 
       </div>

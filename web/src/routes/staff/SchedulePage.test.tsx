@@ -197,6 +197,19 @@ describe('Staff Tour calendar', () => {
     expect(within(week).getByRole('region', { name: 'Ngoài ca ngày 06/01/2099' })).toBeInTheDocument()
   })
 
+  it('folds the filters behind one button on a narrow screen and counts the active ones', async () => {
+    const matchMedia = window.matchMedia
+    vi.spyOn(window, 'matchMedia').mockImplementation(query => ({ ...matchMedia(query), matches: query === '(max-width: 767px)' }))
+    show('/staff/schedule?date=2099-01-05&state=READY&q=abc')
+    const toggle = await screen.findByRole('button', { name: /Lọc/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(within(toggle).getByLabelText('2 bộ lọc đang bật')).toHaveTextContent('2')
+    expect(screen.queryByLabelText('Lọc theo robot')).not.toBeInTheDocument()
+    fireEvent.click(toggle)
+    expect(screen.getByLabelText('Lọc theo robot')).toBeInTheDocument()
+    expect(screen.getByLabelText('Tìm Tour')).toHaveValue('abc')
+  })
+
   it('reports a failed shifts load instead of a table with no rows', async () => {
     shiftStatus = 503
     show()

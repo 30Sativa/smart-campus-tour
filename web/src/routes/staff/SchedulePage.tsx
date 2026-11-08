@@ -1,5 +1,5 @@
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, Info, Lock, Map as MapIcon, Plus, Search, Timer, Bot, Users } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, Info, Lock, Map as MapIcon, Plus, Search, SlidersHorizontal, Timer, Bot, Users } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { LoadingPanel } from '../../components/ui/ConsolePrimitives'
 import { Drawer } from '../../components/ui/Drawer'
@@ -98,6 +98,9 @@ export default function SchedulePage() {
   const tours = useTourCalendar(week[0], week[6], view !== 'list')
   const shifts = useTourShifts(week[0], week[6], view !== 'list')
   const narrow = useNarrowScreen()
+  // On a narrow screen the three filters fold behind one button, so the week starts higher up.
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const activeFilters = [robotFilter, stateFilter, query.trim()].filter(Boolean).length
   const shiftsOf = (key: string) => [...(shifts.data?.days.find(item => item.date === key)?.shifts ?? [])].sort((a, b) => a.time.localeCompare(b.time))
   // Read once per mount: whether a shift is past the 72-hour mark does not need to tick.
   const [now] = useState(() => Date.now())
@@ -140,7 +143,7 @@ export default function SchedulePage() {
   const viewToggle = <div role="group" aria-label="Chế độ xem lịch" className="ml-auto flex rounded-xl border border-[#e2e8f0] bg-white p-1">
     {([['week', 'Tuần'], ['day', 'Ngày'], ['list', 'Danh sách']] as const).map(([value, label]) => (
       <button key={value} type="button" aria-pressed={view === value} onClick={() => set({ view: value === 'week' ? null : value, tour: null })}
-        className={`min-h-8 rounded-lg px-4 text-sm font-semibold transition-colors ${focus} ${view === value ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:text-[#2d3748]'}`}>{label}</button>
+        className={`min-h-8 rounded-lg px-2.5 text-sm font-semibold sm:px-4 transition-colors ${focus} ${view === value ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:text-[#2d3748]'}`}>{label}</button>
     ))}
   </div>
 
@@ -167,18 +170,22 @@ export default function SchedulePage() {
       <section className={`${card} p-4 sm:p-5`} aria-label="Lịch">
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setDay(addDays(day, -step))} className={`${buttonClass('secondary', 'sm')} size-10 px-0`} aria-label={view === 'week' ? 'Tuần trước' : 'Ngày trước'}><ChevronLeft size={16} /></button>
-          <h2 className="min-w-36 px-1 text-center text-base font-bold text-[#2d3748] tabular-nums first-letter:uppercase">{heading}</h2>
+          <h2 className="min-w-0 flex-1 px-1 text-center text-sm whitespace-nowrap sm:min-w-36 sm:flex-none font-bold sm:text-base text-[#2d3748] tabular-nums first-letter:uppercase">{heading}</h2>
           <button type="button" onClick={() => setDay(addDays(day, step))} className={`${buttonClass('secondary', 'sm')} size-10 px-0`} aria-label={view === 'week' ? 'Tuần sau' : 'Ngày sau'}><ChevronRight size={16} /></button>
           <button type="button" onClick={() => setDay(today)} disabled={day === today} className={`${buttonClass('secondary', 'sm')} min-h-10`}>Hôm nay</button>
-          {viewToggle}
+          {narrow ? <div className="flex w-full items-center gap-2"><button type="button" aria-expanded={filtersOpen} aria-controls="schedule-filters" onClick={() => setFiltersOpen(open => !open)}
+          className={`${buttonClass('secondary', 'sm')} min-h-10`}>
+          <SlidersHorizontal size={15} aria-hidden="true" />Lọc
+          {activeFilters > 0 && <span aria-label={`${activeFilters} bộ lọc đang bật`} className="grid min-w-5 place-items-center rounded-full bg-[#2563eb] px-1.5 text-[11px] font-bold text-white tabular-nums">{activeFilters}</span>}
+        </button>{viewToggle}</div> : viewToggle}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <select aria-label="Lọc theo robot" value={robotFilter} onChange={event => set({ robot: event.target.value || null })} className={`${control} min-w-44`}>
+        {(!narrow || filtersOpen) && <div id="schedule-filters" className="mt-3 flex flex-wrap items-center gap-2">
+          <select aria-label="Lọc theo robot" value={robotFilter} onChange={event => set({ robot: event.target.value || null })} className={`${control} w-full min-w-44 sm:w-auto`}>
             <option value="">Robot: Tất cả</option>
             {robots.map(code => <option key={code} value={code}>Robot: {code}</option>)}
           </select>
-          <select aria-label="Lọc theo trạng thái" value={stateFilter} onChange={event => set({ state: event.target.value || null })} className={`${control} min-w-44`}>
+          <select aria-label="Lọc theo trạng thái" value={stateFilter} onChange={event => set({ state: event.target.value || null })} className={`${control} w-full min-w-44 sm:w-auto`}>
             <option value="">Trạng thái: Tất cả</option>
             {STATES.map(state => <option key={state} value={state}>Trạng thái: {TOUR_STATE_LABEL[state]}</option>)}
           </select>
@@ -186,7 +193,7 @@ export default function SchedulePage() {
             <Search size={16} aria-hidden="true" className="shrink-0 text-[#a0aec0]" />
             <input type="search" aria-label="Tìm Tour" value={query} onChange={event => set({ q: event.target.value || null })} placeholder="Tìm Tour…" className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#a0aec0]" />
           </label>
-        </div>
+        </div>}
 
         {failed && <div className="mt-4"><ErrorPanel error={new Error(tourError(failed))} onRetry={() => { if (tours.isError) void tours.refetch(); if (shifts.isError) void shifts.refetch() }} /></div>}
 

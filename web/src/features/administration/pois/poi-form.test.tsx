@@ -139,7 +139,7 @@ describe('Staff versioned POI workflow', () => {
 
     renderAt('/staff/manage/pois')
     expect(await screen.findByText('Chưa thể tạo điểm tham quan')).toBeInTheDocument()
-    expect(screen.getByText('Library · library-v1 (mới nhất)')).toBeInTheDocument()
+    expect(screen.getByText('Library · library-v1')).toBeInTheDocument()
     expect(screen.getByText('Chờ kỹ thuật kiểm tra')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toHaveAccessibleDescription('Chưa có bản đồ nào đạt kiểm tra kỹ thuật')
@@ -246,5 +246,57 @@ describe('Staff versioned POI workflow', () => {
     expect(screen.getByLabelText('Mục đích')).toHaveValue('Entrance')
     expect(screen.getByLabelText('Nội dung thuyết minh')).toHaveValue('Nội dung giới thiệu.')
     expect(screen.getByLabelText('X (m)')).toHaveValue(10.25)
+  })
+
+  describe('saving only what changed', () => {
+    const serve = (revision: object) => vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })
+      if (url.pathname === '/api/maps/versions') return response([eligibleMap])
+      if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(new Blob(['zip']))
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1') return response({ ...proposal, revision: { ...proposal.revision, ...revision } })
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1/submit') return response({ ...proposal, revision: { ...proposal.revision, ...revision, isSubmitted: true } })
+      return response(null)
+    }))
+    const writes = () => requests.filter(r => r.init?.method === 'PUT' || r.init?.method === 'POST').map(r => r.url.pathname)
+
+    it('locks both actions on an unchanged passed POI and says why', async () => {
+      serve({ isSubmitted: true, navigationStatus: 'PASS' })
+      renderAt('/staff/manage/pois/proposal-1')
+      expect(await screen.findByText('Đã đạt, dùng được trong tuyến.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toHaveAccessibleDescription('Đã đạt, dùng được trong tuyến.')
+    })
+
+    it('says a content edit keeps the PASS and a camera change needs a new check', async () => {
+      serve({ isSubmitted: true, navigationStatus: 'PASS' })
+      renderAt('/staff/manage/pois/proposal-1')
+      fireEvent.change(await screen.findByLabelText('Nội dung thuyết minh'), { target: { value: 'Nội dung mới.' } })
+      expect(screen.getByText('Lưu sẽ tạo bản mới và giữ kết quả đạt.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeDisabled()
+      fireEvent.change(screen.getByLabelText('Góc camera'), { target: { value: 'LEFT' } })
+      expect(screen.getByText('Lưu sẽ tạo bản mới và phải gửi kiểm chứng lại. Tuyến và Tour đang dùng bản cũ không bị ảnh hưởng.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeEnabled()
+    })
+
+    it('sends an unchanged draft for checking without saving a copy of it first', async () => {
+      serve({})
+      renderAt('/staff/manage/pois/proposal-1')
+      expect(await screen.findByText('Bản nháp, chưa gửi kiểm chứng.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeDisabled()
+      fireEvent.click(screen.getByRole('button', { name: 'Gửi kiểm chứng' }))
+      await waitFor(() => expect(writes()).toEqual(['/api/staff/poi-proposals/proposal-1/submit']))
+    })
+
+    it('does not offer saving while a submitted revision waits for its check', async () => {
+      serve({ isSubmitted: true })
+      renderAt('/staff/manage/pois/proposal-1')
+      expect(await screen.findByText('Đang chờ kỹ thuật kiểm tra.')).toBeInTheDocument()
+      fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Tên khác' } })
+      expect(screen.getByText(/chưa lưu được thay đổi/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeDisabled()
+    })
   })
 })
