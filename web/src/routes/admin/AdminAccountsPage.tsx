@@ -50,7 +50,7 @@ export default function AdminAccountsPage() {
             placeholder="Tìm theo tên đăng nhập hoặc họ tên…"
             className="w-full sm:max-w-sm"
           />
-          {pageData && <p className="ml-auto text-xs text-[#64748b] tabular-nums">{pageData.pagination.totalItems} tài khoản · thứ tự do máy chủ cung cấp</p>}
+          {pageData && <p className="ml-auto text-xs text-[#64748b] tabular-nums">{pageData.pagination.totalItems} tài khoản</p>}
         </div>
 
         {accounts.isPending ? (

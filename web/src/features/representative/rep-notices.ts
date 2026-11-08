@@ -1,5 +1,5 @@
 import type { RegistrationSummary } from './api/types'
-import { formatShortDate, formatTime, groupLabel } from './rep-format'
+import { formatShortDate, formatTime, groupLabel, isSystemNoStart, tourCancelReasonText } from './rep-format'
 
 export type RepNoticeTone = 'ok' | 'bad' | 'warn' | 'info' | 'mute'
 
@@ -44,7 +44,7 @@ export function buildRepNotices(rows: readonly RegistrationSummary[], now: numbe
 
     if (r.tourState === 'CANCELLED') {
       notices.push({ id: `${r.id}:tour-cancelled`, tone: 'bad', title: 'Buổi tham quan đã bị hủy', subject,
-        detail: `Nhà trường đã hủy buổi này${r.tourCancelReason?.trim() ? `: ${r.tourCancelReason.trim()}` : ''}. Bạn có thể chọn một buổi khác để đăng ký lại.`, at: r.updatedAt, to: '/dai-dien/buoi', toLabel: 'Xem buổi khác' })
+        detail: `${isSystemNoStart(r.tourCancelReason) ? tourCancelReasonText(r.tourCancelReason) : `Nhà trường đã hủy buổi này${r.tourCancelReason?.trim() ? `: ${r.tourCancelReason.trim()}` : ''}.`} Bạn có thể chọn một buổi khác để đăng ký lại.`, at: r.updatedAt, to: '/dai-dien/buoi', toLabel: 'Xem buổi khác' })
       continue
     }
     if (r.state === 'REJECTED') {

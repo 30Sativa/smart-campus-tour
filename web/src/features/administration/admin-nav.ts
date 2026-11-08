@@ -1,4 +1,4 @@
-import { CalendarOff, KeyRound, Radio, ScrollText, Server, ShieldAlert, UsersRound } from 'lucide-react'
+import { CalendarOff, KeyRound, ScrollText, Server, ShieldAlert, UsersRound } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
@@ -8,8 +8,7 @@ import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-na
  * lives under `/staff/manage/*`.
  *
  * Laid out like the Staff and Technical sidebars: always-open sections under
- * small headings. "Khu vực vận hành" is the way across to `/staff`, which an
- * Admin account also holds.
+ * small headings. There is no entry to `/staff`: an Admin account cannot open it.
  */
 export const ADMIN_NAV_SECTIONS: NavSection[] = [
   { label: 'Tài khoản', items: [{ label: 'Tài khoản', path: '/admin/accounts', icon: UsersRound }] },
@@ -23,7 +22,6 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: 'Nhật ký hệ thống', path: '/admin/audit-logs', icon: ScrollText },
     ],
   },
-  { label: 'Khu vực khác', items: [{ label: 'Khu vực vận hành', path: '/staff', icon: Radio }] },
 ]
 
 export const ADMIN_NAV: NavItem[] = ADMIN_NAV_SECTIONS.flatMap((section) => section.items)

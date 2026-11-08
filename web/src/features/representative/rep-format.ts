@@ -81,14 +81,31 @@ export function isClosedRegistration(r: Pick<RegistrationSummary, 'state' | 'tou
   return r.state === 'CANCELLED' || r.tourState === 'CANCELLED' || (r.state === 'REJECTED' && r.tourState !== 'SCHEDULED')
 }
 
-export type ClosedNote = { badge: string; tone: 'muted' | 'danger'; by: string; reason: string; at: string }
+export type ClosedNote = { badge: string; tone: 'muted' | 'danger'; by: string; reason: string; at: string | null }
 
-/** Why an ended registration ended, who ended it and when. Only a refusal has a stored reason. */
+/**
+ * The text stored when the system cancels a Tour that never started. Must stay identical to
+ * `TourAutoCancel.Reason` in backend/src/SmartCampus.Application/Features/Tours/TourAutoCancel.cs.
+ */
+const SYSTEM_NO_START_REASON = 'Không bắt đầu trong khung giờ, hệ thống tự huỷ.'
+const SYSTEM_NO_START_TEXT = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Nhà trường sẽ liên hệ nếu sắp xếp lại.'
+
+export const isSystemNoStart = (reason?: string | null) => reason?.trim() === SYSTEM_NO_START_REASON
+
+/** A stored Tour cancel reason as a Representative should read it; null when none was stored. */
+export function tourCancelReasonText(reason?: string | null) {
+  return isSystemNoStart(reason) ? SYSTEM_NO_START_TEXT : reason?.trim() || null
+}
+
+/**
+ * Why an ended registration ended, who ended it and when. A cancelled Tour has no `at`: the Representative API
+ * does not return when it ended, and the registration's own update time would read as the cancellation time.
+ */
 export function closedNote(r: RegistrationSummary): ClosedNote {
   if (r.state === 'CANCELLED')
     return { badge: 'Bạn đã hủy', tone: 'muted', by: 'Đại diện', reason: 'Bạn đã hủy đăng ký này.', at: `Hủy lúc ${formatTime(r.updatedAt)}, ${formatShortDate(r.updatedAt)}` }
   if (r.tourState === 'CANCELLED')
-    return { badge: 'Buổi bị hủy', tone: 'danger', by: 'Nhà trường', reason: r.tourCancelReason?.trim() || 'Buổi tham quan đã bị hủy.', at: `Cập nhật ${formatTime(r.updatedAt)}, ${formatShortDate(r.updatedAt)}` }
+    return { badge: 'Buổi bị hủy', tone: 'danger', by: 'Nhà trường', reason: tourCancelReasonText(r.tourCancelReason) || 'Buổi tham quan đã bị hủy.', at: null }
   const at = r.reviewedAt ?? r.updatedAt
   return { badge: 'Bị từ chối', tone: 'danger', by: 'Nhà trường', reason: r.rejectionReason?.trim() || 'Nhà trường không ghi lý do.', at: `Từ chối lúc ${formatTime(at)}, ${formatShortDate(at)}` }
 }

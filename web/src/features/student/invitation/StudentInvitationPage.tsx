@@ -36,7 +36,7 @@ const date = (stamp: string) => new Date(stamp).toLocaleString('vi-VN', { timeZo
 function FallbackVideoLink({ url }: { url: string | null }) {
   if (!url) return null
   return <p className="st-invitation-fallback">
-    <a href={url} target="_blank" rel="noreferrer">Xem video dự phòng (chế độ suy giảm)</a>
+    <a href={url} target="_blank" rel="noreferrer">Xem video giới thiệu (không phải trực tiếp)</a>
   </p>
 }
 

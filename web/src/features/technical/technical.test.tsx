@@ -886,7 +886,7 @@ describe('Technical Staff API integration', () => {
   it('states that a route record is human evidence and shows no result without a queue item', async () => {
     renderPage(<TechnicalConfirmationsPage />)
     expect(screen.getByText(/không chứng minh robot đã chạy thật/)).toBeInTheDocument()
-    expect(screen.getByText(/không tự làm tuyến READY/)).toBeInTheDocument()
+    expect(screen.getByText(/không tự cho phép tạo Tour/)).toBeInTheDocument()
     expect(await screen.findByText('Không có tuyến nào đang chờ chạy thử.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Ghi kết quả/ })).not.toBeInTheDocument()
   })

@@ -54,7 +54,7 @@ function AuditRow({ entry }: { entry: AuditLogEntry }) {
     <td className={`${tdClass} whitespace-nowrap text-xs text-[#64748b]`}>{stamp(entry.occurredAt)}</td>
     <td className={`${tdClass} font-medium text-[#0f172a]`}>{auditActionLabel(entry.action)}</td>
     <td className={tdClass}>{auditEntityLabel(entry.entityType)}{(entry.tourName || entry.robotCode) && <p className="text-[11.5px] text-[#64748b]">{entry.tourName ?? entry.robotCode}</p>}</td>
-    <td className={tdClass}>{entry.actorName ?? 'Hệ thống hoặc khách'}</td>
+    <td className={tdClass}>{entry.actorName ?? 'Hệ thống'}</td>
     <td className={tdClass}>{result ? <ToneBadge tone={result.tone}>{result.label}</ToneBadge> : '-'}</td>
   </tr>
 }

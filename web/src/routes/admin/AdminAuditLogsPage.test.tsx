@@ -41,8 +41,16 @@ describe('system audit log', () => {
     rows = [{ ...entry, action: 'SOMETHING_NEW', actorName: null, resultCode: null }]
     show()
     expect(await screen.findByText('Thao tác khác')).toBeInTheDocument()
-    expect(screen.getByText('Hệ thống hoặc khách')).toBeInTheDocument()
+    expect(screen.getByText('Hệ thống')).toBeInTheDocument()
     expect(screen.queryByText('SOMETHING_NEW')).not.toBeInTheDocument()
+  })
+
+  it('words a system auto-cancel without showing its result code', async () => {
+    rows = [{ ...entry, actorUserId: null, actorName: null, resultCode: 'SYSTEM_NO_START' }]
+    show()
+    expect(await screen.findByText('Tự huỷ: không bắt đầu đúng giờ')).toBeInTheDocument()
+    expect(screen.getByText('Hệ thống')).toBeInTheDocument()
+    expect(screen.queryByText('SYSTEM_NO_START')).not.toBeInTheDocument()
   })
 
   it('sends the action code and actor, then clears the filters', async () => {
