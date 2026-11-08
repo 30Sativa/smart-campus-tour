@@ -37,10 +37,11 @@ public sealed class RegistrationInputValidator : AbstractValidator<RegistrationI
 
 public static class RegistrationCutoff
 {
-    public static void EnsureNewRowsAllowed(SmartCampus.Domain.Entities.Tour tour, DateTimeOffset now)
+    /// <param name="close">The configured registration close, <c>Tours:RegistrationCloseHours</c> (ADR-0047).</param>
+    public static void EnsureNewRowsAllowed(SmartCampus.Domain.Entities.Tour tour, DateTimeOffset now, TimeSpan close)
     {
-        if (now >= tour.ScheduledStartAt - Tours.TourSchedule.RegistrationClose)
+        if (now >= tour.ScheduledStartAt - close)
             throw new SmartCampus.Application.Common.Exceptions.ConflictException(
-                "Không thể tạo đăng ký hoặc thêm điểm xem trong 48 giờ trước giờ Tour.", "REGISTRATION_CUTOFF");
+                $"Không thể tạo đăng ký hoặc thêm điểm xem trong {close.TotalHours:0} giờ trước giờ Tour.", "REGISTRATION_CUTOFF");
     }
 }

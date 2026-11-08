@@ -3,10 +3,12 @@ using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Features.Invitations;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
+using SmartCampus.Application.Features.Tours;
 
 namespace SmartCampus.Application.Features.Representative.Commands.ResubmitRegistration;
 
-public sealed class ResubmitRegistrationCommandHandler(IRegistrationRepository repository, IInvitationRepository invitations, TimeProvider clock)
+public sealed class ResubmitRegistrationCommandHandler(IRegistrationRepository repository, IInvitationRepository invitations,
+    TourScheduleSettings schedule, TimeProvider clock)
     : IRequestHandler<ResubmitRegistrationCommand, Unit>
 {
     public async Task<Unit> Handle(ResubmitRegistrationCommand command, CancellationToken ct)
@@ -16,7 +18,7 @@ public sealed class ResubmitRegistrationCommandHandler(IRegistrationRepository r
             command.Request.ExpectedRowVersion, input.ExpectedTourRowVersion, RegistrationOperation.Resubmit, ct);
         await RegistrationEmailReservation.EnsureAvailableAsync(repository, tour.Id, registration.Id, input.Roster, ct);
         var now = clock.GetUtcNow();
-        if (input.Roster.Any(row => row.RowId is null)) RegistrationCutoff.EnsureNewRowsAllowed(tour, now);
+        if (input.Roster.Any(row => row.RowId is null)) RegistrationCutoff.EnsureNewRowsAllowed(tour, now, schedule.RegistrationClose);
         var removed = RegistrationDraftWriter.Apply(registration, input, await invitations.LoadAsync(registration.Id, ct), now,
             resetRowsForResubmit: true);
         foreach (var invitation in removed)

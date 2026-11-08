@@ -74,9 +74,10 @@ export type TourAllowedActions = {
 }
 export type TourStartCheck = { id: string; passed: boolean; source: string; detail: string }
 /** `canStart` belongs to the caller: false for any Staff who is not the Tour's Operator. */
-export type TourStartChecks = { checks: TourStartCheck[]; canStart: boolean; blockedBy: string[] }
-/** The four on-site confirmations of a Start request (SRS §7). */
-export type StartConfirmation = { robotPlaced: boolean; areaClear: boolean; attendantPresent: boolean; previewChecked: boolean }
+/** `opensAt` is the first instant the server accepts Start, which may be before the published time (ADR-0047). */
+export type TourStartChecks = { checks: TourStartCheck[]; canStart: boolean; blockedBy: string[]; opensAt?: string | null }
+/** The on-site confirmations of a Start request (SRS §7); `earlyStartAgreed` is asked only before the published time (ADR-0047). */
+export type StartConfirmation = { robotPlaced: boolean; areaClear: boolean; attendantPresent: boolean; previewChecked: boolean; earlyStartAgreed?: boolean }
 export type TourPhase = 'UPCOMING' | 'RUNNING' | 'FINISHED'
 export type TourListQuery = { search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number }
 export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_GAP' | 'ROUTE_TEST_REMEASURE_REQUIRED'
@@ -88,4 +89,6 @@ export type TourSlots = {
   routeRevisionId: string; robotCode: string; measuredDurationSeconds: number | null; expectedDurationSeconds: number | null
   days: { date: string; slots: TourSlot[] }[]
   customStartEarliest: string; customStartLatest: string
+  /** The configured lead time and registration close (ADR-0047); an older server omits them. */
+  leadTimeHours?: number; registrationCloseHours?: number
 }

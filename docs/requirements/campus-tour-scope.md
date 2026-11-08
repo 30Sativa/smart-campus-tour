@@ -133,9 +133,13 @@ effective PASS run of the exact route revision (ADR-0034, interim), counted as t
 whole run including dwell, plus any dwell the revision adds. A Tour starts on a
 configured slot or a time typed inside the allowed hours (ADR-0036), at least
 72 hours ahead; registration still closes 48 hours
-before the start (ADR-0035). Time, route
+before the start (ADR-0035). Both are configured values with these production
+defaults; a test or demo environment may shorten them (ADR-0047). Time, route
 and robot changes on a created Tour mean cancelling and recreating it.
-Start is requested while READY at/after published time, validates all guards,
+Start is requested while READY at/after published time, or up to the configured
+early limit before it (at most the 15-minute reservation buffer) when the Operator
+confirms the group is present and agreed (ADR-0047, owner decision 09/11/2026;
+departs from the SRS wording, listed for advisor review). It validates all guards,
 claims the robot atomically, commits the permitted transition, then sends the
 first leg. Deduplicate repeated Start/commands and record actor/time/reason.
 

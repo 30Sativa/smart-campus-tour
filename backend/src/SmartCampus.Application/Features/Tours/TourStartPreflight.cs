@@ -7,11 +7,21 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Tours;
 
-/// <summary>The four on-site confirmations of the Start request body; a missing value is not a confirmation.</summary>
-public sealed record TourStartConfirmation(bool? RobotPlaced, bool? AreaClear, bool? AttendantPresent, bool? PreviewChecked);
+/// <summary>
+/// The on-site confirmations of the Start request body; a missing value is not a confirmation.
+/// <see cref="EarlyStartAgreed"/> is required only before ScheduledStartAt (ADR-0047).
+/// </summary>
+public sealed record TourStartConfirmation(bool? RobotPlaced, bool? AreaClear, bool? AttendantPresent, bool? PreviewChecked,
+    bool? EarlyStartAgreed = null);
 
-/// <summary><see cref="CanStart"/> is true only when every returned check passed.</summary>
-public sealed record TourStartChecks(IReadOnlyList<ConflictCheck> Checks, bool CanStart, IReadOnlyList<string> BlockedBy);
+/// <summary>
+/// <see cref="CanStart"/> is true only when every returned check passed. <see cref="OpensAt"/> is the first instant Start
+/// is accepted (ScheduledStartAt − StartEarlyLimit, ADR-0047); null on movement checks during a Tour.
+/// </summary>
+public sealed record TourStartChecks(IReadOnlyList<ConflictCheck> Checks, bool CanStart, IReadOnlyList<string> BlockedBy)
+{
+    public DateTimeOffset? OpensAt { get; init; }
+}
 
 /// <summary>
 /// The Start conditions table of architecture §3.2 (ADR-0042), one check per row, read from real data: DB, the
@@ -28,6 +38,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
     public const string TransportDisabledCode = "COMMAND_TRANSPORT_DISABLED";
     public const string MovementFailedCode = "MOVE_PRECONDITION_FAILED";
     public const string TransportCheck = "commandTransportEnabled";
+    public const string EarlyStartCheck = "earlyStartAgreed";
 
     /// <summary>
     /// <paramref name="viewer"/> adds <c>callerIsOperator</c> (the read only; Start answers 403 instead).
@@ -124,13 +135,21 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
             Confirm(list, "areaClear", confirmation?.AreaClear);
             Confirm(list, "attendantPresent", confirmation?.AttendantPresent);
             Confirm(list, "previewChecked", confirmation?.PreviewChecked);
+            // ADR-0047: inside the early window the group must have agreed to begin early. Before the window opens
+            // only withinStartWindow is the root cause.
+            if (now >= tour.ScheduledStartAt)
+                list.Add(EarlyStartCheck, "OPERATOR_CONFIRMATION", true, "Không áp dụng: đã tới giờ bắt đầu.");
+            else if (now >= tour.ScheduledStartAt - settings.StartEarlyLimit)
+                Confirm(list, EarlyStartCheck, confirmation?.EarlyStartAgreed);
+            else
+                list.Skip("withinStartWindow", "OPERATOR_CONFIRMATION", [EarlyStartCheck]);
         }
 
         AddTransport(list);
         // D3: battery is shown, never blocks.
         list.Info("batteryInfo", "TELEMETRY", snapshot?.Report.BatteryPercent is { } battery
             ? $"Pin {battery:0.#}% (chỉ hiển thị, không chặn Start)." : "Robot chưa báo pin (chỉ hiển thị, không chặn Start).");
-        return list.Result();
+        return list.Result() with { OpensAt = tour.ScheduledStartAt - settings.StartEarlyLimit };
     }
 
     /// <summary>
@@ -180,13 +199,22 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         list.Add(TransportCheck, "CONFIG", settings.Enabled,
             settings.Enabled ? "Command transport đang bật." : "FleetCommands:Enabled = false nên backend không tạo lệnh cho robot.");
 
+    /// <summary>
+    /// [start − StartEarlyLimit, start + StartLateLimit]. The early bound never exceeds the reservation buffer, so an
+    /// early run stays inside the Tour's own reservation and needs no new overlap check (ADR-0047).
+    /// </summary>
     private bool Window(DateTimeOffset start, DateTimeOffset now, out string detail)
     {
+        var earliest = start - settings.StartEarlyLimit;
         var latest = start + settings.StartLateLimit;
-        detail = now < start ? "Chưa tới giờ bắt đầu của Tour."
+        detail = now < earliest
+                ? settings.StartEarlyLimit > TimeSpan.Zero
+                    ? $"Chưa tới giờ được Start; Start mở từ {settings.StartEarlyLimit.TotalMinutes:0} phút trước giờ bắt đầu."
+                    : "Chưa tới giờ bắt đầu của Tour."
             : now > latest ? $"Đã quá {settings.StartLateLimit.TotalMinutes:0} phút sau giờ bắt đầu của Tour."
+            : now < start ? "Đang trong khung Start sớm; cần xác nhận đoàn đồng ý bắt đầu sớm."
             : "Đang trong khung giờ được Start.";
-        return now >= start && now <= latest;
+        return now >= earliest && now <= latest;
     }
 
     private void EvaluateTelemetry(Checklist list, FleetTelemetrySnapshot? snapshot, MapVersion? map, DateTimeOffset now)

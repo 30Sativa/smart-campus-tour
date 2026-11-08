@@ -67,6 +67,7 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
     const typed = url.searchParams.get('time')
     if (path === '/api/staff/manage/tours/slots') return Promise.resolve(json({ success: true, data: { routeRevisionId: 'revision-2', robotCode: 'amr-01',
       measuredDurationSeconds: 1200, expectedDurationSeconds: 1320, customStartEarliest: '08:00', customStartLatest: '17:00',
+      leadTimeHours: 2, registrationCloseHours: 1,
       days: [{ date: '2099-01-03', slots: typed ? [...slotDay, typed === '07:30' ? tooEarly : customFree] : slotDay }] } }))
     if (method !== 'GET') {
       writes.push({ method, path, body: JSON.parse(String(init?.body)) as Record<string, unknown> })
@@ -225,6 +226,8 @@ describe('live Tour management', () => {
     const locked = await screen.findByRole('button', { name: /10:00/ })
     expect(locked).toBeDisabled()
     expect(locked).toHaveTextContent('Trùng khung giữ robot của Tour Tour chiều')
+    // The configured policy, not a hardcoded 72/48 (ADR-0047).
+    expect(screen.getByText('Cần tạo trước giờ bắt đầu ít nhất 2 giờ; đăng ký đóng 1 giờ trước giờ bắt đầu.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
     expect(writes).toHaveLength(0)
   })

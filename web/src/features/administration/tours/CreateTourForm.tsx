@@ -72,6 +72,8 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
         <span className="mt-1 block text-xs text-[#64748b]">{routeRevisionId && robotCode ? 'Giờ Việt Nam. Tới giờ robot không tự chạy; Staff bắt đầu thủ công.' : 'Chọn tuyến và robot trước để xem khung giờ.'}</span></label>
       <div role="group" aria-label="Khung giờ">
         <p className="text-sm">Khung giờ</p>
+        {slots.data?.leadTimeHours !== undefined && slots.data.registrationCloseHours !== undefined &&
+          <p className="mt-0.5 text-xs text-[#64748b]">Cần tạo trước giờ bắt đầu ít nhất {slots.data.leadTimeHours} giờ; đăng ký đóng {slots.data.registrationCloseHours} giờ trước giờ bắt đầu.</p>}
         {!date ? <p className="mt-1 text-xs text-[#64748b]">Chọn ngày để xem khung giờ.</p>
           : slots.isPending ? <p aria-busy="true" className="mt-1 text-xs text-[#64748b]">Đang tải khung giờ…</p>
           : slots.isError ? <p role="alert" className="mt-1 text-xs text-[#b23e31]">{tourError(slots.error)}</p>

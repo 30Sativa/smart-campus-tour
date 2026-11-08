@@ -77,6 +77,7 @@ public sealed class InfrastructureDependencyInjectionTests
         Assert.False(settings.Enabled);
         Assert.Equal(TimeSpan.FromSeconds(2), settings.MaxTelemetryAge);
         Assert.Equal(TimeSpan.FromMinutes(15), settings.StartLateLimit);
+        Assert.Equal(TimeSpan.FromMinutes(10), settings.StartEarlyLimit); // ADR-0047
         Assert.Equal(TimeSpan.FromSeconds(30), settings.AcceptWindow);
         // No per-user console tracking yet: presence is unknown, never connected.
         Assert.Null(provider.GetRequiredService<IOperatorConsolePresence>().IsConnected(Guid.NewGuid()));
@@ -85,5 +86,26 @@ public sealed class InfrastructureDependencyInjectionTests
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<SmartCampus.Application.Features.Infrastructure.IInfrastructureMetricsCollector>());
         Assert.NotNull(provider.GetRequiredService<SmartCampus.Application.Features.RobotDiagnostics.IRobotDiagnosticsStore>());
+    }
+
+    [Theory]
+    [InlineData(null, null, 72, 48)]   // Unset: the production policy (ADR-0035, SRS).
+    [InlineData("2", "1", 2, 1)]       // A test or demo environment (ADR-0047).
+    public void AddInfrastructure_ReadsTourLeadTimeAndRegistrationClose(string? lead, string? close, int leadHours, int closeHours)
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:DefaultConnection"] = "Server=localhost,1433;Database=SmartCampusTests;Trusted_Connection=True;",
+            ["Tours:StartSlots:0"] = "09:00",
+            ["Tours:CustomStartEarliest"] = "08:00",
+            ["Tours:CustomStartLatest"] = "17:00",
+            ["Tours:LeadTimeHours"] = lead,
+            ["Tours:RegistrationCloseHours"] = close
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+        using var provider = new ServiceCollection().AddInfrastructure(configuration).BuildServiceProvider();
+
+        var settings = provider.GetRequiredService<SmartCampus.Application.Features.Tours.TourScheduleSettings>();
+        Assert.Equal((TimeSpan.FromHours(leadHours), TimeSpan.FromHours(closeHours)), (settings.LeadTime, settings.RegistrationClose));
     }
 }

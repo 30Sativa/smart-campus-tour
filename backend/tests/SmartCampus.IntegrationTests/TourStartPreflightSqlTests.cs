@@ -35,7 +35,8 @@ public sealed class TourStartPreflightSqlTests
         var refused = await w.StartRefused();
         Assert.Equal("COMMAND_TRANSPORT_DISABLED", refused.Code);
         Assert.Equal([Transport], refused.BlockedBy);
-        Assert.Equal(4, refused.Checks!.Count(c => c is { Source: "OPERATOR_CONFIRMATION", Passed: true }));
+        // The four on-site confirmations plus earlyStartAgreed, which passes as not applicable after the start (ADR-0047).
+        Assert.Equal(5, refused.Checks!.Count(c => c is { Source: "OPERATOR_CONFIRMATION", Passed: true }));
         Assert.Equal(before, await w.State());
     }
 
@@ -134,9 +135,10 @@ public sealed class TourStartPreflightSqlTests
     public async Task StartWindow_IncludesBothBounds_AndNothingOutside()
     {
         await using var w = await World.Create();
+        // ADR-0047: the window opens StartEarlyLimitMinutes (default 10) before the published time.
         foreach (var (offset, passes) in new[]
                  {
-                     (TimeSpan.FromMilliseconds(-1), false), (TimeSpan.Zero, true),
+                     (TimeSpan.FromMinutes(-10) - TimeSpan.FromMilliseconds(1), false), (TimeSpan.Zero, true),
                      (TimeSpan.FromMinutes(15), true), (TimeSpan.FromMinutes(15) + TimeSpan.FromMilliseconds(1), false)
                  })
         {
@@ -144,6 +146,35 @@ public sealed class TourStartPreflightSqlTests
             await w.Report();
             await w.AssertBlocked(passes ? [] : ["withinStartWindow"]);
         }
+    }
+
+    [SchemaV11Fact]
+    public async Task EarlyStart_OpensAtTheEarlyLimit_AndNeedsTheGroupsAgreement()
+    {
+        await using var w = await World.Create();
+        var agreed = new TourStartConfirmation(true, true, true, true, EarlyStartAgreed: true);
+        foreach (var offset in new[] { TimeSpan.FromMinutes(-10), TimeSpan.FromMilliseconds(-1) })
+        {
+            w.Clock.Now = w.H.Start + offset;
+            await w.Report();
+            var read = await w.Checks();
+            Assert.Equal([Transport], read.BlockedBy);
+            Assert.Equal(w.H.Start.AddMinutes(-10), read.OpensAt);
+            Assert.True(Assert.Single(read.Checks, c => c.Id == "withinStartWindow").Passed);
+
+            var missing = await w.StartRefused();
+            Assert.Equal("START_PRECONDITION_FAILED", missing.Code);
+            Assert.Equal([TourStartPreflight.EarlyStartCheck, Transport], missing.BlockedBy);
+            Assert.Equal([TourStartPreflight.EarlyStartCheck, Transport], (await w.StartRefused(agreed with { EarlyStartAgreed = false })).BlockedBy);
+            Assert.Equal([Transport], (await w.StartRefused(agreed)).BlockedBy);
+        }
+
+        // From the published time on the agreement is not asked for.
+        w.Clock.Now = w.H.Start;
+        await w.Report();
+        var onTime = await w.StartRefused();
+        Assert.Equal([Transport], onTime.BlockedBy);
+        Assert.True(Assert.Single(onTime.Checks!, c => c.Id == TourStartPreflight.EarlyStartCheck).Passed);
     }
 
     [SchemaV11Fact]

@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useToastStore } from '../../components/ui/toast-store'
 import type { TourActionAvailability, TourDetails, TourStartChecks } from '../../features/administration/tours/types'
+import { formatSlot } from '../../features/administration/admin-format'
 import { useAuthStore } from '../../stores/auth-store'
 import { useTourOriginStore } from '../../features/staff/operations/tour-origin'
 import LiveOperationsPage from './LiveOperationsPage'
@@ -163,6 +164,39 @@ describe('pre-start check on the real Tour API', () => {
     expect(typeof writes[0].body.requestId).toBe('string')
     expect(useToastStore.getState().toasts).toHaveLength(0)
     expect(screen.queryByText('Đã chuyển trang')).not.toBeInTheDocument()
+  })
+
+  it('asks for the group\'s agreement before the published time and sends it with Start (ADR-0047)', async () => {
+    tour = detail('READY'); tour.tour.scheduledStartAt = new Date(Date.now() + 5 * 60_000).toISOString()
+    checks = { ...OPEN_CHECKS, opensAt: new Date(Date.now() - 5 * 60_000).toISOString() }
+    renderAt('/staff/tours/tour-1/start', '/staff/tours/:tourId/start', <StartCheckPage />)
+    const start = await screen.findByRole('button', { name: /Bắt đầu Tour/ })
+    expect(await screen.findByText(/Đang trước giờ công bố\. Đánh dấu đủ 5 xác nhận/)).toBeInTheDocument()
+    for (const box of screen.getAllByRole('checkbox').slice(0, 4)) fireEvent.click(box)
+    // The four on-site confirmations alone do not open an early Start.
+    expect(start).toBeDisabled()
+    expect(within(screen.getByRole('group', { name: 'Bước 2: Xác nhận tại chỗ' })).getByText('4/5')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: /Đoàn đã có mặt và đồng ý bắt đầu sớm/ }))
+    await waitFor(() => expect(start).toBeEnabled())
+    fireEvent.click(start)
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Bắt đầu' }))
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0].body).toMatchObject({ confirmation: { robotPlaced: true, areaClear: true, attendantPresent: true, previewChecked: true, earlyStartAgreed: true } })
+  })
+
+  it('says when an early window opens, before the published time', async () => {
+    const published = Date.now() + 2 * 3_600_000
+    tour = detail('READY'); tour.tour.scheduledStartAt = new Date(published).toISOString()
+    checks = { canStart: false, blockedBy: ['withinStartWindow'], opensAt: new Date(published - 10 * 60_000).toISOString(),
+      checks: [check('withinStartWindow', false, 'Chưa tới giờ được Start; Start mở từ 10 phút trước giờ bắt đầu.')] }
+    renderAt('/staff/tours/tour-1/start', '/staff/tours/:tourId/start', <StartCheckPage />)
+    expect(await screen.findByText('Chưa tới giờ bắt đầu')).toBeInTheDocument()
+    // The server's opening time, not the published one.
+    // Both the verdict and the window row say it.
+    for (const line of screen.getAllByText(/^Mở lúc /)) {
+      expect(line).toHaveTextContent(`Mở lúc ${formatSlot(checks.opensAt!)}`)
+      expect(line).not.toHaveTextContent(`Mở lúc ${formatSlot(tour.tour.scheduledStartAt)}`)
+    }
   })
 
   it('keeps the checks on screen when a poll fails but locks Start until they are current again', async () => {

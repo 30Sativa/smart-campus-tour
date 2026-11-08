@@ -59,7 +59,8 @@ public static class DependencyInjection
             configuration.GetValue<int?>("FleetCommands:StartLateLimitMinutes") ?? 15,
             configuration.GetValue<int?>("FleetCommands:AcceptWindowSeconds") ?? 30,
             configuration.GetValue<int?>("FleetCommands:LegResultTimeoutSeconds") ?? 600,
-            configuration.GetValue<int?>("FleetCommands:SweepIntervalSeconds") ?? 5));
+            configuration.GetValue<int?>("FleetCommands:SweepIntervalSeconds") ?? 5,
+            configuration.GetValue<int?>("FleetCommands:StartEarlyLimitMinutes") ?? 10));
         // ADR-0045: Operator head control. In memory per API instance, like the telemetry store.
         services.AddSingleton(new FleetHeadSettings(configuration.GetValue<bool?>("FleetHead:Enabled") ?? false,
             configuration.GetValue<int?>("FleetHead:MaxCommandAgeMs") ?? 1000,
@@ -90,7 +91,9 @@ public static class DependencyInjection
         services.AddScoped<ITourManagementRepository, EfTourManagementRepository>();
         services.AddSingleton(_ => new MapPoiSettings(configuration.GetValue<decimal?>("Maps:PoiClearanceMeters")));
         services.AddSingleton(_ => new TourScheduleSettings(configuration.GetSection("Tours:StartSlots").Get<string[]>(),
-            configuration["Tours:CustomStartEarliest"], configuration["Tours:CustomStartLatest"]));
+            configuration["Tours:CustomStartEarliest"], configuration["Tours:CustomStartLatest"],
+            configuration.GetValue<int?>("Tours:LeadTimeHours") ?? 72,
+            configuration.GetValue<int?>("Tours:RegistrationCloseHours") ?? 48));
 
         services.AddScoped<IAuditLogReader, EfAuditLogReader>();
         services.AddScoped<ITourManagementTransaction, EfTourManagementTransaction>();

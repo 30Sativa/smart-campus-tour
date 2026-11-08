@@ -20,27 +20,33 @@ import { BlockerList, CheckGroups } from '../../features/staff/operations/StartC
 import { TourStepper } from '../../features/staff/operations/TourStepper'
 import { untilText } from '../../features/staff/formatters'
 
+type Confirmation = { key: keyof StartConfirmation; label: string; hint: string }
 /** The four on-site confirmations the Start request carries (SRS §7); the server records them. */
-const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: string }> = [
+const CONFIRMATIONS: Confirmation[] = [
   { key: 'robotPlaced', label: 'Robot ở đúng điểm xuất phát', hint: 'Vị trí robot báo khớp thực tế.' },
   { key: 'areaClear', label: 'Đường đi đầu tiên thông thoáng', hint: 'Không có người hay vật cản.' },
   { key: 'attendantPresent', label: 'Người phụ trách an toàn cạnh robot', hint: 'Sẵn sàng bấm nút dừng khẩn cấp trên robot.' },
   { key: 'previewChecked', label: 'Đã xem hình camera', hint: 'Hình rõ, đúng hướng.' },
 ]
-const NONE: StartConfirmation = { robotPlaced: false, areaClear: false, attendantPresent: false, previewChecked: false }
+/** Asked only before the published time: the server refuses an early Start without it (ADR-0047). */
+const EARLY_CONFIRMATION: Confirmation = { key: 'earlyStartAgreed', label: 'Đoàn đã có mặt và đồng ý bắt đầu sớm',
+  hint: 'Người xem vào đúng giờ công bố vẫn vào được nhưng sẽ lỡ phần đầu.' }
+const NONE: StartConfirmation = { robotPlaced: false, areaClear: false, attendantPresent: false, previewChecked: false, earlyStartAgreed: false }
 
 type Verdict = { tone: 'ok' | 'info' | 'warn'; title: string; note: string }
-function verdictOf(result: TourStartChecks, confirmed: boolean, opensAt: string, now: number): Verdict {
+function verdictOf(result: TourStartChecks, confirmed: boolean, required: number, early: boolean, opensAt: string, now: number): Verdict {
   const causes = result.checks.filter(check => checkVerdict(check, result.blockedBy) === 'failed')
   const system = causes.filter(check => blockerOwner(check.id) === 'system').length
-  const early = result.blockedBy.includes('withinStartWindow') && new Date(opensAt).getTime() > now
-  const work = causes.length - system - (early ? 1 : 0)
+  const tooEarly = result.blockedBy.includes('withinStartWindow') && new Date(opensAt).getTime() > now
+  const work = causes.length - system - (tooEarly ? 1 : 0)
   const rest = [work && `${work} việc cần xử lý`, system && `${system} giới hạn hệ thống chưa mở`].filter(Boolean).join(' và ')
   // Too early is the usual reason a Tour opened days ahead cannot start; say when, not just "not yet".
-  if (!result.canStart && early)
+  if (!result.canStart && tooEarly)
     return { tone: 'warn', title: 'Chưa tới giờ bắt đầu', note: `Mở lúc ${formatSlot(opensAt)} (${untilText(opensAt, now)}). ${rest ? `Ngoài giờ, còn ${rest}.` : 'Các điều kiện khác đều đạt.'} Danh sách tự cập nhật vài giây một lần.` }
   if (!result.canStart) return { tone: 'warn', title: 'Chưa thể bắt đầu', note: `Còn ${rest}, xem bên dưới. Danh sách tự cập nhật vài giây một lần.` }
-  if (!confirmed) return { tone: 'info', title: 'Máy chủ cho phép bắt đầu', note: 'Đánh dấu đủ 4 xác nhận tại chỗ rồi bấm Bắt đầu.' }
+  if (!confirmed) return { tone: 'info', title: 'Máy chủ cho phép bắt đầu', note: early
+    ? `Đang trước giờ công bố. Đánh dấu đủ ${required} xác nhận tại chỗ, gồm việc đoàn đồng ý bắt đầu sớm, rồi bấm Bắt đầu.`
+    : `Đánh dấu đủ ${required} xác nhận tại chỗ rồi bấm Bắt đầu.` }
   return { tone: 'ok', title: 'Sẵn sàng bắt đầu', note: 'Máy chủ sẽ kiểm tra lại mọi điều kiện khi bắt đầu.' }
 }
 /** One numbered step of the Start panel, so the server's part and the operator's part never read as one checklist. */
@@ -109,21 +115,25 @@ export default function StartCheckPage() {
   const blockedBy = result?.blockedBy ?? []
   const counted = result?.checks.filter(check => checkVerdict(check, blockedBy) !== 'info') ?? []
   const passed = counted.filter(check => check.passed).length
-  const confirmed = CONFIRMATIONS.every(({ key }) => confirmation[key])
+  // Before the published time the server also asks for the group's agreement to begin early (ADR-0047).
+  const early = now < new Date(summary.scheduledStartAt).getTime()
+  const required = early ? [...CONFIRMATIONS, EARLY_CONFIRMATION] : CONFIRMATIONS
+  const opensAt = result?.opensAt ?? summary.scheduledStartAt
+  const confirmed = required.every(({ key }) => confirmation[key])
   // Start is decided on what the screen shows, so it waits while the checks or the Tour are out of date.
   const stale = Boolean(result) && (isTourStale(checks, now) || isTourStale(tour, now))
   const canStart = Boolean(result?.canStart) && confirmed && !stale
   const notOperator = blockedBy.includes('callerIsOperator')
-  const verdict = result ? verdictOf(result, confirmed, summary.scheduledStartAt, now) : null
+  const verdict = result ? verdictOf(result, confirmed, required.length, early, opensAt, now) : null
   const refusal = start.isError ? operationRefusal(start.error, { operator: true }) : null
   const blocking = result?.checks.filter(check => checkVerdict(check, blockedBy) === 'failed').length ?? 0
-  const ticked = CONFIRMATIONS.filter(({ key }) => confirmation[key]).length
+  const ticked = required.filter(({ key }) => confirmation[key]).length
   const reason = !result ? null
     : stale ? 'Điều kiện chưa cập nhật được từ máy chủ. Chờ cập nhật lại rồi bắt đầu.'
     : notOperator ? `Chỉ ${operator?.fullName ?? 'người vận hành được giao'} mới bắt đầu được Tour này.`
     : !result.canStart && !confirmed ? 'Còn thiếu cả bước 1 và bước 2.'
     : !result.canStart ? 'Bước 2 đã xong. Nút còn khóa vì bước 1: máy chủ chưa cho phép.'
-    : !confirmed ? 'Bước 1 đã đạt. Đánh dấu đủ 4 xác nhận ở bước 2.'
+    : !confirmed ? `Bước 1 đã đạt. Đánh dấu đủ ${required.length} xác nhận ở bước 2.`
     : null
 
   return (
@@ -149,7 +159,7 @@ export default function StartCheckPage() {
                 })()}
                 {!result.canStart && <div className="border-t border-[#f1f5f9] px-4 pt-3 pb-4">
                   <h2 className="mb-2 text-xs font-semibold text-[#64748b]">Cần xử lý</h2>
-                  <BlockerList checks={result.checks} blockedBy={blockedBy} opensAt={summary.scheduledStartAt} now={now} />
+                  <BlockerList checks={result.checks} blockedBy={blockedBy} opensAt={opensAt} now={now} />
                 </div>}
               </section>
               <section className={panelClass} aria-label="Toàn bộ điều kiện">
@@ -166,11 +176,11 @@ export default function StartCheckPage() {
               <StartStep number={1} done={Boolean(result?.canStart)} title="Máy chủ cho phép"
                 status={!result ? '…' : result.canStart ? 'Đạt' : `Còn ${blocking} mục chặn`}
                 note="Máy chủ tự kiểm tra vài giây một lần, bạn không tick ở đây. Các mục còn chặn nằm ở phần Cần xử lý." />
-              {!notOperator && <StartStep number={2} done={confirmed} title="Xác nhận tại chỗ" status={`${ticked}/4`}
+              {!notOperator && <StartStep number={2} done={confirmed} title="Xác nhận tại chỗ" status={`${ticked}/${required.length}`}
                 note="Bạn tự đánh dấu khi đang đứng cạnh robot. Đây chỉ là phần của bạn, không thay được bước 1." />}
               {!notOperator && <fieldset className="mb-3 ml-8 space-y-1.5">
                 <legend className="sr-only">Xác nhận tại chỗ</legend>
-                {CONFIRMATIONS.map(({ key, label, hint }) => (
+                {required.map(({ key, label, hint }) => (
                   <label key={key} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors duration-150 motion-reduce:transition-none ${confirmation[key] ? 'border-[#bfdbfe] bg-[#eff6ff]' : 'border-[#e2e8f0] hover:border-[#bfdbfe]'}`}>
                     <input type="checkbox" checked={confirmation[key]} onChange={event => setConfirmation(value => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#2563eb]" />
                     <span className="min-w-0"><span className="block text-[13px] font-semibold text-[#0f172a]">{label}</span><span className="block text-[11.5px] text-[#64748b]">{hint}</span></span>

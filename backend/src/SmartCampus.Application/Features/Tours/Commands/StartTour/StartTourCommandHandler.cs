@@ -18,6 +18,8 @@ public sealed class StartTourCommandHandler(ITourManagementRepository repository
     IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, TimeProvider clock,
     ILogger<StartTourCommandHandler> logger) : IRequestHandler<StartTourCommand, TourMutationResult>
 {
+    public const string EarlyStartReason = "EARLY_START";
+
     public async Task<TourMutationResult> Handle(StartTourCommand command, CancellationToken ct)
     {
         var fingerprint = TourRequestReceipt.Fingerprint(TourLifecycleEvents.Started, command.Id, command.Request.Confirmation);
@@ -45,11 +47,16 @@ public sealed class StartTourCommandHandler(ITourManagementRepository repository
         var now = clock.GetUtcNow();
         if (!await repository.TryClaimRobotAsync(reservation.RobotId, tour.Id, now, ct))
             throw new ConflictException("Robot vừa đổi trạng thái nên không nhận được Tour. Tải lại và thử lại.", "ROBOT_CLAIM_FAILED");
+        // ADR-0047: an early Start is recorded with how early it was; the preflight required the group's agreement.
+        var early = tour.ScheduledStartAt - now;
         tour.Start(reservation.RobotId, now);
         repository.AddEvent(new TourEvent
         {
             TourId = tour.Id, EventType = TourLifecycleEvents.Started, OccurredAt = now, RobotId = reservation.RobotId,
-            RouteId = tour.ActiveRouteId, ActorUserId = command.Actor
+            RouteId = tour.ActiveRouteId, ActorUserId = command.Actor,
+            ReasonCode = early > TimeSpan.Zero ? EarlyStartReason : null,
+            ReasonNote = early > TimeSpan.Zero
+                ? $"Start sớm {(int)Math.Ceiling(early.TotalSeconds)} giây trước giờ bắt đầu; người vận hành xác nhận đoàn đồng ý." : null
         });
         TourLegDispatch.Begin(repository, settings, tour, reservation.RobotId, map, TourLegTarget.To(first), command.Actor, now);
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,

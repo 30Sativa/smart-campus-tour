@@ -179,7 +179,7 @@ Lock order must match ADR-0039 (deployment and reservation locks taken by Tour c
 
 ### 7. Start window (D2)
 
-**[Design, decided 03/11/2026]** Start is accepted only in `[ScheduledStartAt, ScheduledStartAt + StartLateLimitMinutes]`, configurable, default 15. **This is a design proposal, not an SRS requirement.** The SRS and scope say only "at/after published time" (scope §4); the schema comment on `Tours.ScheduledStartAt` gives the lower bound only. No other SRS source for an upper bound was found.
+**[Design, decided 03/11/2026]** Start is accepted only in `[ScheduledStartAt, ScheduledStartAt + StartLateLimitMinutes]`, configurable, default 15. *(Amended by ADR-0047: the window opens `StartEarlyLimitMinutes` before the start, default 10, at most the 15-minute reservation buffer, with an `earlyStartAgreed` confirmation.)* **This is a design proposal, not an SRS requirement.** The SRS and scope say only "at/after published time" (scope §4); the schema comment on `Tours.ScheduledStartAt` gives the lower bound only. No other SRS source for an upper bound was found.
 
 Why 15: the reservation ends at `ScheduledStartAt + expected duration + 15 min` (ADR-0034/0035). A Start at the latest allowed moment ends exactly at that `EndsAt`, so the next Tour on the robot still has its own 15-minute before-buffer. Remaining risk: a Tour that runs longer than its measured duration eats into the next Tour's buffer.
 

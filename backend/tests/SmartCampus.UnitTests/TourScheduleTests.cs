@@ -108,16 +108,52 @@ public sealed class TourScheduleTests
     [Fact]
     public void LeadTime_AcceptsExactly72Hours_AndRefuses71Hours59Minutes()
     {
-        Assert.Null(TourSchedule.Evaluate(Start, Start.AddHours(-72), Plan, []));
-        var block = TourSchedule.Evaluate(Start, Start.AddHours(-72).AddMinutes(1), Plan, []);
+        Assert.Null(TourSchedule.Evaluate(Start, Start.AddHours(-72), Settings.LeadTime, Plan, []));
+        var block = TourSchedule.Evaluate(Start, Start.AddHours(-72).AddMinutes(1), Settings.LeadTime, Plan, []);
         Assert.Equal(TourSchedule.LeadTimeTooShort, block!.Code);
         Assert.Equal("Quá gần hiện tại, cần tạo trước ít nhất 72 giờ", block.Message);
     }
 
     [Fact]
+    public void Settings_DefaultTo72HourLeadAnd48HourRegistrationClose()
+    {
+        Assert.Equal(TimeSpan.FromHours(72), Settings.LeadTime);
+        Assert.Equal(TimeSpan.FromHours(48), Settings.RegistrationClose);
+    }
+
+    [Fact]
+    public void ConfiguredLeadTime_AllowsASameDayTour_AndNamesTheConfiguredHours()
+    {
+        var demo = new TourScheduleSettings(["09:00"], "08:00", "17:00", leadTimeHours: 2, registrationCloseHours: 1);
+        Assert.Null(TourSchedule.Evaluate(Start, Start.AddHours(-2), demo.LeadTime, Plan, []));
+        var block = TourSchedule.Evaluate(Start, Start.AddHours(-2).AddMinutes(1), demo.LeadTime, Plan, []);
+        Assert.Equal("Quá gần hiện tại, cần tạo trước ít nhất 2 giờ", block!.Message);
+    }
+
+    [Theory]
+    [InlineData(48, 48)]  // A Tour created at the minimum lead time would be born with registration closed.
+    [InlineData(1, 2)]
+    [InlineData(2, -1)]
+    public void Settings_RefuseALeadTimeNotAfterTheRegistrationClose(int lead, int close) =>
+        Assert.Throws<InvalidOperationException>(() =>
+            new TourScheduleSettings(["09:00"], "08:00", "17:00", leadTimeHours: lead, registrationCloseHours: close));
+
+    [Fact]
+    public void RegistrationCutoff_FollowsTheConfiguredClose()
+    {
+        var tour = new SmartCampus.Domain.Entities.Tour { ScheduledStartAt = Start };
+        var close = TimeSpan.FromHours(1);
+        SmartCampus.Application.Features.Registrations.RegistrationCutoff.EnsureNewRowsAllowed(tour, Start.AddHours(-1).AddTicks(-1), close);
+        var refused = Assert.Throws<ConflictException>(() =>
+            SmartCampus.Application.Features.Registrations.RegistrationCutoff.EnsureNewRowsAllowed(tour, Start.AddHours(-1), close));
+        Assert.Equal("REGISTRATION_CUTOFF", refused.Code);
+        Assert.Contains("1 giờ", refused.Message);
+    }
+
+    [Fact]
     public void RunWithoutAgreedBasisBlocksEveryUsableSlot()
     {
-        var block = TourSchedule.Evaluate(Start, LongAgo, null, []);
+        var block = TourSchedule.Evaluate(Start, LongAgo, Settings.LeadTime, null, []);
         Assert.Equal(TourSchedule.RemeasureRequired, block!.Code);
         Assert.Equal("Cần chạy thử lại tuyến để đo theo định nghĩa mới", block.Message);
     }
@@ -126,7 +162,7 @@ public sealed class TourScheduleTests
     public void HoldCoveringTheOpeningOfTheWindow_NamesThatTour()
     {
         var hold = new TourReservationHold("Tour sáng", Start.AddMinutes(-60), Start.AddMinutes(-10));
-        var block = TourSchedule.Evaluate(Start, LongAgo, Plan, [hold]);
+        var block = TourSchedule.Evaluate(Start, LongAgo, Settings.LeadTime, Plan, [hold]);
         Assert.Equal(TourSchedule.ReservationOverlap, block!.Code);
         Assert.Equal("Trùng khung giữ robot của Tour Tour sáng", block.Message);
     }
@@ -135,7 +171,7 @@ public sealed class TourScheduleTests
     public void HoldBeginningInsideTheWindow_MeansTheRouteDoesNotFitTheGap()
     {
         var hold = new TourReservationHold("Tour sau", Start.AddMinutes(30), Start.AddMinutes(90));
-        var block = TourSchedule.Evaluate(Start, LongAgo, Plan, [hold]);
+        var block = TourSchedule.Evaluate(Start, LongAgo, Settings.LeadTime, Plan, [hold]);
         Assert.Equal(TourSchedule.RouteTooLongForGap, block!.Code);
         Assert.Equal("Tuyến dài hơn khoảng trống còn lại", block.Message);
     }
@@ -144,7 +180,7 @@ public sealed class TourScheduleTests
     public void WindowsThatOnlyTouch_DoNotClash()
     {
         var (startsAt, endsAt) = TourSchedule.Window(Start, Plan.ExpectedDurationSeconds);
-        Assert.Null(TourSchedule.Evaluate(Start, LongAgo, Plan, [
+        Assert.Null(TourSchedule.Evaluate(Start, LongAgo, Settings.LeadTime, Plan, [
             new("Trước", startsAt.AddHours(-1), startsAt), new("Sau", endsAt, endsAt.AddHours(1))]));
     }
 

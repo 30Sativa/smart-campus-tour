@@ -9,8 +9,13 @@ public sealed class TourScheduleSettings
     public IReadOnlyList<TimeOnly> StartSlots { get; }
     public TimeOnly CustomStartEarliest { get; }
     public TimeOnly CustomStartLatest { get; }
+    /// <summary>Minimum time between saving a Tour and its start (ADR-0035; configured by ADR-0047).</summary>
+    public TimeSpan LeadTime { get; }
+    /// <summary>New registrations and rows close this long before the start (SRS 48 h by default; ADR-0047).</summary>
+    public TimeSpan RegistrationClose { get; }
 
-    public TourScheduleSettings(IEnumerable<string>? startSlots, string? customStartEarliest, string? customStartLatest)
+    public TourScheduleSettings(IEnumerable<string>? startSlots, string? customStartEarliest, string? customStartLatest,
+        int leadTimeHours = 72, int registrationCloseHours = 48)
     {
         var slots = new SortedSet<TimeOnly>();
         foreach (var value in startSlots ?? []) slots.Add(Parse("StartSlots", value));
@@ -19,6 +24,12 @@ public sealed class TourScheduleSettings
         CustomStartEarliest = Parse("CustomStartEarliest", customStartEarliest);
         CustomStartLatest = Parse("CustomStartLatest", customStartLatest);
         if (CustomStartEarliest >= CustomStartLatest) throw new InvalidOperationException("Tours:CustomStartEarliest must be before Tours:CustomStartLatest.");
+        if (registrationCloseHours < 0) throw new InvalidOperationException("Tours:RegistrationCloseHours must not be negative.");
+        // A Tour created at the minimum lead time must still accept registrations.
+        if (leadTimeHours <= registrationCloseHours)
+            throw new InvalidOperationException("Tours:LeadTimeHours must be greater than Tours:RegistrationCloseHours.");
+        LeadTime = TimeSpan.FromHours(leadTimeHours);
+        RegistrationClose = TimeSpan.FromHours(registrationCloseHours);
     }
 
     private static TimeOnly Parse(string key, string? value) =>
@@ -41,8 +52,6 @@ public static class TourSchedule
     public const string RouteTooLongForGap = "ROUTE_TOO_LONG_FOR_GAP";
     public const string RemeasureRequired = "ROUTE_TEST_REMEASURE_REQUIRED";
 
-    public static readonly TimeSpan LeadTime = TimeSpan.FromHours(72);
-    public static readonly TimeSpan RegistrationClose = TimeSpan.FromHours(48);
     public static readonly TimeSpan ReservationBuffer = TimeSpan.FromMinutes(15);
     // Asia/Ho_Chi_Minh has no daylight saving; a fixed offset needs no time zone data in the runtime image.
     private static readonly TimeSpan CampusOffset = TimeSpan.FromHours(7);
@@ -77,10 +86,11 @@ public static class TourSchedule
         (start - ReservationBuffer, start + TimeSpan.FromSeconds(expectedSeconds) + ReservationBuffer);
 
     /// <summary>Null when the start can be used. A hold covering the opening of the window is a clash; one that begins inside it leaves too small a gap.</summary>
-    public static TourSlotBlock? Evaluate(DateTimeOffset start, DateTimeOffset now, TourReservationPlan? plan,
+    public static TourSlotBlock? Evaluate(DateTimeOffset start, DateTimeOffset now, TimeSpan leadTime, TourReservationPlan? plan,
         IReadOnlyCollection<TourReservationHold> holds)
     {
-        if (start - now < LeadTime) return new(LeadTimeTooShort, "Quá gần hiện tại, cần tạo trước ít nhất 72 giờ");
+        if (start - now < leadTime)
+            return new(LeadTimeTooShort, $"Quá gần hiện tại, cần tạo trước ít nhất {leadTime.TotalHours:0} giờ");
         if (plan is null) return new(RemeasureRequired, "Cần chạy thử lại tuyến để đo theo định nghĩa mới");
         var (startsAt, endsAt) = Window(start, plan.ExpectedDurationSeconds);
         var clash = holds.Where(hold => hold.StartsAt <= startsAt && hold.EndsAt > startsAt).OrderBy(hold => hold.StartsAt).FirstOrDefault();

@@ -44,15 +44,16 @@ public sealed class GetTourSlotsQueryHandler(ITourManagementRepository tours, IR
         var now = clock.GetUtcNow();
         return new(query.RouteRevisionId, robot.RobotCode, plan?.MeasuredDurationSeconds, plan?.ExpectedDurationSeconds,
             dates.Select(date => new TourSlotDay(date, times.Select(slot => Slot(date, slot, now, plan, holds)).ToArray())).ToArray(),
-            settings.CustomStartEarliest.ToString("HH\\:mm"), settings.CustomStartLatest.ToString("HH\\:mm"));
+            settings.CustomStartEarliest.ToString("HH\\:mm"), settings.CustomStartLatest.ToString("HH\\:mm"),
+            (int)settings.LeadTime.TotalHours, (int)settings.RegistrationClose.TotalHours);
     }
 
     private TourSlotView Slot(DateOnly date, TimeOnly slot, DateTimeOffset now, TourReservationPlan? plan, IReadOnlyList<TourReservationHold> holds)
     {
         var start = TourSchedule.SlotStart(date, slot);
-        var block = TourSchedule.StartRule(settings, start) ?? TourSchedule.Evaluate(start, now, plan, holds);
+        var block = TourSchedule.StartRule(settings, start) ?? TourSchedule.Evaluate(start, now, settings.LeadTime, plan, holds);
         var window = plan is null ? ((DateTimeOffset, DateTimeOffset)?)null : TourSchedule.Window(start, plan.ExpectedDurationSeconds);
         return new(slot.ToString("HH\\:mm"), start, block is null, block?.Code, block?.Message,
-            window?.Item1, window?.Item2, start - TourSchedule.RegistrationClose);
+            window?.Item1, window?.Item2, start - settings.RegistrationClose);
     }
 }

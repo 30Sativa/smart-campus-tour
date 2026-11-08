@@ -4,11 +4,12 @@ using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
 using SmartCampus.Application.Features.Representative.Commands.SubmitRegistration.Dtos;
+using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Representative.Commands.SubmitRegistration;
 
-public sealed class SubmitRegistrationCommandHandler(IRegistrationRepository repository, TimeProvider clock)
+public sealed class SubmitRegistrationCommandHandler(IRegistrationRepository repository, TourScheduleSettings schedule, TimeProvider clock)
     : IRequestHandler<SubmitRegistrationCommand, RegistrationCreated>
 {
     public async Task<RegistrationCreated> Handle(SubmitRegistrationCommand command, CancellationToken ct)
@@ -20,7 +21,7 @@ public sealed class SubmitRegistrationCommandHandler(IRegistrationRepository rep
         RowVersionToken.EnsureCurrent(tour.RowVersion, command.Input.ExpectedTourRowVersion);
         RepresentativeRegistrationPolicy.Evaluate(tour.State, string.Empty, false, RegistrationOperation.Create).EnsureAllowed();
         var now = clock.GetUtcNow();
-        RegistrationCutoff.EnsureNewRowsAllowed(tour, now);
+        RegistrationCutoff.EnsureNewRowsAllowed(tour, now, schedule.RegistrationClose);
         if (await repository.HasRegistrationForRepresentativeTourAsync(command.ActorUserId, tour.Id, ct))
             throw new ConflictException("Đã tồn tại hồ sơ của bạn cho Tour này.", "REGISTRATION_EXISTS");
         await RegistrationEmailReservation.EnsureAvailableAsync(repository, tour.Id, null, command.Input.Roster, ct);

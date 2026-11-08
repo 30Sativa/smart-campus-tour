@@ -46,6 +46,7 @@ const CHECKS: Record<string, { label: string; group: CheckGroup }> = {
   areaClear: { label: 'Khu vực xuất phát thông thoáng', group: 'onsite' },
   attendantPresent: { label: 'Người phụ trách an toàn có mặt cạnh robot', group: 'onsite' },
   previewChecked: { label: 'Đã xem hình camera', group: 'onsite' },
+  earlyStartAgreed: { label: 'Đoàn đồng ý bắt đầu sớm', group: 'onsite' },
 }
 
 export function checkInfo(id: string): { label: string; group: CheckGroup } {

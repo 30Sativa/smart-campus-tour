@@ -3,10 +3,12 @@ using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Features.Invitations;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
+using SmartCampus.Application.Features.Tours;
 
 namespace SmartCampus.Application.Features.Representative.Commands.UpdateRegistration;
 
-public sealed class UpdateRegistrationCommandHandler(IRegistrationRepository repository, IInvitationRepository invitations, TimeProvider clock)
+public sealed class UpdateRegistrationCommandHandler(IRegistrationRepository repository, IInvitationRepository invitations,
+    TourScheduleSettings schedule, TimeProvider clock)
     : IRequestHandler<UpdateRegistrationCommand, Unit>
 {
     public async Task<Unit> Handle(UpdateRegistrationCommand command, CancellationToken ct)
@@ -16,7 +18,7 @@ public sealed class UpdateRegistrationCommandHandler(IRegistrationRepository rep
             command.Request.ExpectedRowVersion, input.ExpectedTourRowVersion, RegistrationOperation.Update, ct);
         await RegistrationEmailReservation.EnsureAvailableAsync(repository, tour.Id, registration.Id, input.Roster, ct);
         var now = clock.GetUtcNow();
-        if (input.Roster.Any(row => row.RowId is null)) RegistrationCutoff.EnsureNewRowsAllowed(tour, now);
+        if (input.Roster.Any(row => row.RowId is null)) RegistrationCutoff.EnsureNewRowsAllowed(tour, now, schedule.RegistrationClose);
         var removed = RegistrationDraftWriter.Apply(registration, input, await invitations.LoadAsync(registration.Id, ct), now);
         foreach (var invitation in removed)
             invitations.AddAudit(InvitationAudit.Create(tour.Id, command.ActorUserId, "INVITATION_REVOKED_BY_ROSTER_REMOVAL",

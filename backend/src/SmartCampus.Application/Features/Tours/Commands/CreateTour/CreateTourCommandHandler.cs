@@ -32,7 +32,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         var (startsAt, endsAt) = TourSchedule.Window(input.ScheduledStartAt, plan?.ExpectedDurationSeconds ?? run.MeasuredDurationSeconds);
         // Decided after the robot lock, on a fresh clock, so a slot taken while waiting is seen.
         var now = clock.GetUtcNow();
-        TourSchedule.EnsureUsable(TourSchedule.Evaluate(input.ScheduledStartAt, now, plan,
+        TourSchedule.EnsureUsable(TourSchedule.Evaluate(input.ScheduledStartAt, now, settings.LeadTime, plan,
             await repository.GetActiveReservationsAsync(robot.Id, startsAt, endsAt, ct)));
         var tour = new Tour
         {
