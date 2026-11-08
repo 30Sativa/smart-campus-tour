@@ -100,6 +100,7 @@ public static class TourLifecycleEvents
     public const string CommandReconciled = "COMMAND_RECONCILED";
     public const string BackendRestarted = "TOUR_BACKEND_RESTARTED";
     public const string InspectionReleased = "ROBOT_INSPECTION_RELEASED";
+    public const string DispatchChanged = "ROBOT_DISPATCH_CHANGED";
     public const string CapacityChanged = "TOUR_CAPACITY_CHANGED";
     public const string OperatorChanged = "TOUR_OPERATOR_CHANGED";
 }

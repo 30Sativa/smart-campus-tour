@@ -62,7 +62,8 @@ public sealed record TechnicalRobotSummaryDto(
     double? CpuPercent,
     double? CpuTemperatureCelsius,
     string? LidarStatus,
-    string? ImuStatus);
+    string? ImuStatus,
+    bool IsDispatchEnabled);
 
 public sealed class GetTechnicalDashboardQueryHandler(
     IPhysicalRobotRepository robotRepository,
@@ -201,7 +202,8 @@ public sealed class GetTechnicalDashboardQueryHandler(
                 diagnostics?.MiniPc?.CpuPercent,
                 diagnostics?.MiniPc?.CpuTemperatureCelsius,
                 diagnostics?.Sensors?.Lidar?.Status,
-                diagnostics?.Sensors?.Imu?.Status));
+                diagnostics?.Sensors?.Imu?.Status,
+                robot.IsDispatchEnabled));
         }
 
         if (poiQueue.Count > 0)

@@ -7,6 +7,7 @@ using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Tours.Commands.ReleaseRobotInspection;
+using SmartCampus.Application.Features.Tours.Commands.SetRobotDispatch;
 using SmartCampus.Application.Features.RobotCredentials;
 using SmartCampus.Application.Common.Exceptions;
 
@@ -106,6 +107,13 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         Guid id, [FromBody] ReleaseRobotInspectionRequest request, CancellationToken ct) =>
         Ok(new BaseResponse<ReleaseRobotInspectionResult> { Success = true, Message = "Robot released.",
             Data = await sender.Send(new ReleaseRobotInspectionCommand(id, User.GetRequiredUserId(), request), ct) });
+
+    [HttpPost("technical/physical-robots/{id:guid}/dispatch")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<SetRobotDispatchResult>>> SetRobotDispatch(
+        Guid id, [FromBody] SetRobotDispatchRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<SetRobotDispatchResult> { Success = true, Message = "Robot dispatch changed.",
+            Data = await sender.Send(new SetRobotDispatchCommand(id, User.GetRequiredUserId(), request), ct) });
 
     [HttpPost("technical/physical-robots/{id:guid}/activate")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]

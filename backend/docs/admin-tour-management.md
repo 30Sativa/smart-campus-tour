@@ -229,7 +229,8 @@ Configuration section `FleetCommands`: `Enabled` (default false),
 `MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15), `AcceptWindowSeconds` (30,
 initial value, not measured), `LegResultTimeoutSeconds`, `SweepIntervalSeconds`. `operatorConsoleConnected` has
 no source yet (`IOperatorConsolePresence` returns unknown) and always fails;
-`robotDispatchEnabled` always fails because nothing sets `IsDispatchEnabled`.
+`robotDispatchEnabled` passes once Technical Staff set `IsDispatchEnabled` through
+`POST /api/technical/physical-robots/{id}/dispatch` with GATE A evidence (ADR-0049).
 
 ## List and verification
 

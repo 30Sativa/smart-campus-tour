@@ -473,6 +473,15 @@ public sealed class TourManagementEndpointTests
         var robot = $"/api/technical/physical-robots/{Guid.NewGuid()}/release-inspection";
         Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, robot, release));
         Assert.Equal(HttpStatusCode.NotFound, await f.SendStatus(HttpMethod.Post, robot, release, f.Technical));
+
+        var dispatch = $"/api/technical/physical-robots/{Guid.NewGuid()}/dispatch";
+        var turnOn = new { requestId = Guid.NewGuid(), expectedRowVersion = version, enabled = true, reason = "GATE A đạt", evidenceRef = "robot/docs/gate-a.md" };
+        foreach (var token in new[] { f.SystemAdmin, f.Representative })
+            Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, dispatch, turnOn, token));
+        Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, dispatch, turnOn));
+        Assert.Equal(HttpStatusCode.NotFound, await f.SendStatus(HttpMethod.Post, dispatch, turnOn, f.Technical));
+        var noEvidence = new { requestId = Guid.NewGuid(), expectedRowVersion = version, enabled = true, reason = "GATE A đạt" };
+        Assert.Equal(HttpStatusCode.BadRequest, await f.SendStatus(HttpMethod.Post, dispatch, noEvidence, f.Technical));
     }
 
     [SchemaV11Fact]

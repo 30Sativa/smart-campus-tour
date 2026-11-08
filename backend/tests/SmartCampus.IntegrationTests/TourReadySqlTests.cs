@@ -197,7 +197,7 @@ public sealed class TourReadySqlTests
         catch (Exception error) { return error; }
     }
 
-    private static byte[] MapPackage(string marker)
+    internal static byte[] MapPackage(string marker)
     {
         var pgm = $"P2\n# {marker}\n4 4\n255\n254 254 254 254\n254 254 254 254\n254 254 254 254\n254 254 254 254\n";
         const string yaml = "image: map.pgm\nmode: trinary\nresolution: 1\norigin: [0, 0, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n";
