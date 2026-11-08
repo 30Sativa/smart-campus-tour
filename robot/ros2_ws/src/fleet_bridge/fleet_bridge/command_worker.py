@@ -132,11 +132,12 @@ class FleetCommandWorker:
 
 
 def create_command_path(enabled: bool, create_navigator, create_transport, config: CommandWorkerConfig, map_key: str,
-                        frame_id: str, stream_provider, on_log=None) -> tuple[CommandExecutor, FleetCommandWorker] | None:
+                        frame_id: str, stream_provider, on_log=None,
+                        goto_guard=None) -> tuple[CommandExecutor, FleetCommandWorker] | None:
     """Telemetry-only unless enabled: with False nothing here is built, so nothing polls or sends a goal."""
     if not enabled:
         return None
-    executor = CommandExecutor(map_key, frame_id, create_navigator(), on_log=on_log)
+    executor = CommandExecutor(map_key, frame_id, create_navigator(), on_log=on_log, goto_guard=goto_guard)
     return executor, FleetCommandWorker(config, executor, create_transport(), stream_provider, on_log)
 
 

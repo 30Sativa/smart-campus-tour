@@ -19,6 +19,16 @@
     # ADR-0049. Used only with commands_enabled; mode_manager must then run with require_motion_permit: true.
     motion_permit_link_timeout_sec: 1.5
     motion_permit_period_sec: 0.2
+    # ADR-0049 readiness, read only with commands_enabled. Copy map_key and the hash from the same MapVersion row.
+    # report_period_sec must be below 2.0 with commands_enabled; the fleet command profile uses 0.5.
+    readiness_odometry_topic: wheel/odom
+    map_package_path: ""
+    map_package_sha256: ""
+    map_server_name: map_server
+    localized_max_tf_age_sec: 1.0
+    localized_max_xy_variance: 0.09
+    localized_max_yaw_variance: 0.05
+    motion_ready_max_odom_age_sec: 0.5
     # ADR-0045 Operator head buttons (docs/contracts/fleet-head/v1). Off by default; needs stm32_bridge head/*
     # in the same namespace and FleetHead:Enabled on the backend.
     head_enabled: false

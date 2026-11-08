@@ -132,7 +132,9 @@ class _ActiveLeg:
 
 class CommandExecutor:
     def __init__(self, map_key: str, frame_id: str, navigator: Navigator, wall_clock=None, on_log=None,
-                 max_results: int = MAX_RESULTS):
+                 max_results: int = MAX_RESULTS, goto_guard: Callable[[], str | None] | None = None):
+        # Returns the reason a GoTo must be refused right now, or None (ADR-0049, Decision 3).
+        self._goto_guard = goto_guard or (lambda: None)
         self._map_key = map_key
         self._frame_id = frame_id
         self._navigator = navigator
@@ -150,6 +152,10 @@ class CommandExecutor:
                 return {'status': 'IDLE', 'leg_id': None}
             return {'status': 'UNKNOWN' if self._active.uncertain else 'NAVIGATING',
                     'leg_id': self._active.command.leg_id}
+
+    @property
+    def navigator(self) -> Navigator:
+        return self._navigator
 
     def has_active_leg(self) -> bool:
         with self._lock:
@@ -193,6 +199,8 @@ class CommandExecutor:
         elif self._active is not None or len(self._results) >= self._max_results:
             # A full buffer means the backend has not heard earlier results: taking more work would risk losing them.
             self._reject(command, stream_id, 'BUSY')
+        elif (refusal := self._goto_guard()) is not None:
+            self._reject(command, stream_id, refusal)
         else:
             self._active = _ActiveLeg(command, stream_id)
             leg = command.leg_id

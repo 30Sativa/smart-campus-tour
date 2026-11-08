@@ -98,6 +98,9 @@ def build_report(
     pose: dict[str, float | str] | None,
     status: str,
     leg_id: str | None = None,
+    localized: bool | None = None,
+    motion_ready: bool | None = None,
+    fault_code: str | None = None,
 ) -> dict[str, object]:
     if not ROBOT_CODE_PATTERN.fullmatch(robot_code):
         raise ValueError('robot code is not valid for Fleet Sync v1')
@@ -124,9 +127,9 @@ def build_report(
         'pose': pose,
         'status': status,
         'legId': leg_id,
-        'localized': None,
-        'motionReady': None,
-        'faultCode': None,
+        'localized': localized,
+        'motionReady': motion_ready,
+        'faultCode': fault_code,
         'batteryPercent': None,
     }
 

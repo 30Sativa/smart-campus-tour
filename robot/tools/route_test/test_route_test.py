@@ -575,6 +575,8 @@ import route_test as rt
 import test_route_test as t
 
 MODE = os.environ['FAKE_NAV2']
+BRIDGE = os.environ.get('FAKE_BRIDGE', 'telemetry')
+ACTIVE_GOAL = os.environ.get('FAKE_ACTIVE_GOAL') == '1'
 rt.CANCEL_ACK_TIMEOUT_S = rt.CANCEL_RESULT_TIMEOUT_S = float(os.environ['FAKE_CANCEL_WAIT'])
 signal.signal(signal.SIGINT, signal.default_int_handler)
 NS = types.SimpleNamespace
@@ -621,11 +623,30 @@ def goal():
     return NS(pose=NS(header=NS(), pose=NS(position=NS(), orientation=NS())))
 
 
-node = NS(get_clock=lambda: NS(now=lambda: NS(to_msg=lambda: None)), destroy_node=lambda: None)
+class ParamClient:
+    def wait_for_service(self, timeout_sec=None):
+        return BRIDGE != 'absent'
+
+    def call_async(self, _request):
+        return t.done_future(NS(values=[NS(type=1, bool_value=BRIDGE == 'commands')]))
+
+
+def create_subscription(_type, _topic, callback, _qos):
+    callback(NS(status_list=[NS(status=2)] if ACTIVE_GOAL else []))
+
+
+node = NS(get_clock=lambda: NS(now=lambda: NS(to_msg=lambda: None)), destroy_node=lambda: None,
+          create_client=lambda _type, _name: ParamClient(), destroy_client=lambda _c: None,
+          create_subscription=create_subscription, destroy_subscription=lambda _s: None)
 module('rclpy', init=init, create_node=lambda _n: node, ok=lambda: True, shutdown=lambda: None)
 module('rclpy.action', ActionClient=ActionClient)
 module('rclpy.duration', Duration=lambda seconds: seconds)
 module('rclpy.executors', SingleThreadedExecutor=Executor)
+module('rclpy.qos', QoSProfile=lambda **_k: None, ReliabilityPolicy=NS(RELIABLE=1), DurabilityPolicy=NS(TRANSIENT_LOCAL=1))
+module('action_msgs')
+module('action_msgs.msg', GoalStatusArray=object)
+module('rcl_interfaces')
+module('rcl_interfaces.srv', GetParameters=NS(Request=lambda: NS()))
 module('rclpy.signals', SignalHandlerOptions=NS(NO='NO'))
 module('rclpy.time', Time=lambda: None)
 module('nav2_msgs', action=None)
@@ -637,8 +658,9 @@ sys.exit(rt.main(sys.argv[1:]))
 needs_posix = pytest.mark.skipif(os.name == 'nt', reason='can tin hieu POSIX')
 
 
-def start_stubbed(tmp_path, mode, route, *args, cancel_wait=0.3):
-    env = dict(os.environ, FAKE_NAV2=mode, FAKE_CANCEL_WAIT=str(cancel_wait), PYTHONUTF8='1')
+def start_stubbed(tmp_path, mode, route, *args, cancel_wait=0.3, bridge='telemetry', active_goal=False):
+    env = dict(os.environ, FAKE_NAV2=mode, FAKE_CANCEL_WAIT=str(cancel_wait), PYTHONUTF8='1',
+               FAKE_BRIDGE=bridge, FAKE_ACTIVE_GOAL='1' if active_goal else '0')
     return subprocess.Popen(
         [sys.executable, '-B', '-c', STUB_DRIVER, HERE, route, '--log-dir', str(tmp_path / 'logs'),
          *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
@@ -660,6 +682,52 @@ def finish(proc, tmp_path):
     events = [json.loads(line) for line in
               (run_dir / 'events.jsonl').read_text(encoding='utf-8').splitlines()]
     return proc.returncode, out, summary, events, run_dir
+
+
+def test_command_bridge_service_follows_the_action_namespace():
+    assert rt.command_bridge_service('/robot_01/navigate_to_pose') == '/robot_01/fleet_bridge/get_parameters'
+    assert rt.command_bridge_service('/navigate_to_pose') == '/fleet_bridge/get_parameters'
+
+
+def test_bridge_refusal_rules():
+    assert rt.bridge_start_refusal(False, 0, False) is None
+    assert rt.bridge_start_refusal(None, 0, True) is None
+    assert 'commands_enabled' in rt.bridge_start_refusal(True, 0, False)
+    assert 'commands_enabled' in rt.bridge_start_refusal(True, 0, True)
+    assert '--no-command-bridge' in rt.bridge_start_refusal(None, 0, False)
+    assert 'goal' in rt.bridge_start_refusal(False, 2, False)
+    assert 'goal' in rt.bridge_start_refusal(None, 1, True)
+
+
+@needs_posix
+def test_e2e_refuses_while_the_bridge_takes_commands(tmp_path):
+    proc = start_stubbed(tmp_path, 'succeed', route_file(tmp_path), '--no-confirm', '--no-command-bridge',
+                         bridge='commands')
+    code, out, summary, _, _ = finish(proc, tmp_path)
+    assert code == 1 and 'GOAL_SENT' not in out and 'commands_enabled' in out
+    assert summary['stop_reason'] == 'command_bridge_guard'
+
+
+@needs_posix
+def test_e2e_refuses_when_the_bridge_cannot_be_asked(tmp_path):
+    proc = start_stubbed(tmp_path, 'succeed', route_file(tmp_path), '--no-confirm', bridge='absent')
+    code, out, summary, _, _ = finish(proc, tmp_path)
+    assert code == 1 and 'GOAL_SENT' not in out and summary['stop_reason'] == 'command_bridge_guard'
+
+
+@needs_posix
+def test_e2e_operator_can_declare_there_is_no_bridge(tmp_path):
+    proc = start_stubbed(tmp_path, 'succeed', route_file(tmp_path, n_pois=1, default_dwell_s=0.01),
+                         '--no-confirm', '--no-command-bridge', bridge='absent')
+    code, out, _, _, _ = finish(proc, tmp_path)
+    assert code == 0 and 'GOAL_SENT' in out
+
+
+@needs_posix
+def test_e2e_refuses_while_a_goal_is_active(tmp_path):
+    proc = start_stubbed(tmp_path, 'succeed', route_file(tmp_path), '--no-confirm', active_goal=True)
+    code, out, summary, _, _ = finish(proc, tmp_path)
+    assert code == 1 and 'GOAL_SENT' not in out and summary['stop_reason'] == 'command_bridge_guard'
 
 
 @needs_posix

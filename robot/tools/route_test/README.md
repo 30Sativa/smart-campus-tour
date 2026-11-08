@@ -39,8 +39,10 @@ phải luôn giữ E-stop.
 
 - Navigation stack đã chạy, map đang load phải đúng là `map_yaml` trong file tuyến.
 - Đặt 2D Pose Estimate trên RViz, robot đứng ở START.
-- Fleet Bridge có thể chạy song song vì chỉ gửi telemetry. **Không gửi Nav2 Goal
-  từ RViz** trong lúc script đang chạy.
+- Fleet Bridge chỉ được chạy song song khi `commands_enabled` là false. Script hỏi bridge
+  trước khi chạy và từ chối nếu bridge đang nhận lệnh hoặc Nav2 còn goal. Không có bridge
+  thì thêm `--no-command-bridge` (ADR-0049). **Không gửi Nav2 Goal từ RViz** trong lúc
+  script đang chạy.
 - Muốn bag, ghi trước khi chạy theo `robot/docs/logging.md`.
 
 ## File tuyến
@@ -93,6 +95,7 @@ python3 route_test.py route.example.yaml                            # cả tuy�
 | `--with-end` | tắt | vẫn chạy chặng kết thúc khi dùng `--max-points` |
 | `--dry-run` | tắt | chỉ validate và in kế hoạch, không cần ROS, không ghi log |
 | `--no-confirm` | tắt | bỏ bước bấm Enter |
+| `--no-command-bridge` | tắt | người vận hành xác nhận không có bridge nhận lệnh khi script không hỏi được bridge; không bỏ qua được bridge đang nhận lệnh |
 | `--log-dir` | `$AMR_RUN_DIR` hoặc `~/amr_logs/runs` | nơi tạo thư mục log của lần chạy |
 
 ## Log
