@@ -28,8 +28,8 @@ const SWING = { pan: 0.6, tilt: 0.21 }
 
 /** How a node's parts are pinned for a link: one point, one per side (left/right), or one per corner. */
 function anchorMode(id: FlowNodeId): 'centre' | 'sides' | 'corners' {
-  if (id === 'sonar') return 'corners'
-  if (id === 'driver' || id === 'motor' || id === 'wheel' || id === 'drv') return 'sides'
+  if (id === 'sonar' || id === 'sr04t') return 'corners'
+  if (id === 'driver' || id === 'motor' || id === 'drv') return 'sides'
   return 'centre'
 }
 
@@ -86,7 +86,8 @@ function useFlowModel() {
 
     const anchors = (id: FlowNodeId): Vector3[] => {
       if (id === 'cloud') return [CLOUD]
-      const items = meshes.get(flowNode(id).part!) ?? []
+      const node = flowNode(id)
+      const items = (meshes.get(node.part!) ?? []).filter(item => !node.pieces || node.pieces.includes(item.mesh.name))
       const mode = anchorMode(id)
       const buckets = new Map<string, Vector3[]>()
       for (const { centre } of items) {
@@ -100,8 +101,8 @@ function useFlowModel() {
       const items = meshes.get(group) ?? []
       return items.length ? items.reduce((sum, item) => sum + item.centre.y, 0) / items.length : null
     }
-    const wheelCentres = (meshes.get('wheel') ?? []).map(item => item.centre.clone())
-    return { root, materials, spinners, head, tilt, panCentre, tiltCentre, anchors, heightOf, wheelCentres }
+    const wheels = spinners.filter(spinner => spinner.group === 'wheel').map(spinner => spinner.pivot)
+    return { root, materials, spinners, wheels, head, tilt, panCentre, tiltCentre, anchors, heightOf }
   }, [scene])
 }
 
@@ -141,16 +142,22 @@ function styleModel(model: FlowModel, step: FlowStep | null) {
     const colour = glow.get(group)
     material.opacity = colour ? 1 : group === 'frame' ? 0.3 : SEE_THROUGH.includes(group) ? 0.06 : 0.14
     material.depthWrite = Boolean(colour) || group === 'frame'
-    material.emissive.set(colour ?? '#000000')
-    material.emissiveIntensity = colour ? 0.55 : 0
+    // Working drive wheels stay solid dark tyres, so the coloured aura round them reads.
+    const tyre = group === 'wheel' && colour
+    material.emissive.set(tyre ? '#000000' : colour ?? '#000000')
+    material.emissiveIntensity = colour && !tyre ? 0.55 : 0
   }
 }
 
-/** Spins the wheels or the LiDAR, or swings the head on both of its axes, when the step is about them; the head eases back otherwise. */
-function moveParts(model: FlowModel, motion: FlowStep['motion'], delta: number, time: number) {
+/**
+ * Spins the LiDAR or swings the head on both of its axes when the step is about
+ * them (the head eases back otherwise); the drive wheels turn at `drive`
+ * (0 still … 1 full speed), which rises once the current reaches the motors.
+ */
+function moveParts(model: FlowModel, motion: FlowStep['motion'], delta: number, time: number, drive: number) {
   for (const spinner of model.spinners) {
-    const turning = (motion === 'wheels' && spinner.group === 'wheel') || (motion === 'lidar' && spinner.group === 'lidar')
-    if (turning) spinner.pivot.rotation[spinner.axis] += delta * (spinner.group === 'lidar' ? 5 : WHEEL_SPIN)
+    if (spinner.group === 'wheel') spinner.pivot.rotation.x += delta * WHEEL_SPIN * drive
+    else if (motion === 'lidar') spinner.pivot.rotation[spinner.axis] += delta * 5
   }
   const swinging = motion === 'head'
   const pan = swinging ? Math.sin(time * 0.9) * SWING.pan : 0
@@ -170,60 +177,130 @@ function followAxes(model: FlowModel, tiltAxis: Group | null, panRing: Group | n
 /** Axis markers are drawn in the see-through pass after the parts (which are all transparent materials), so they stay on top. */
 const AXIS_COLOUR = '#0f5b66'
 
-/** Turning speed of the drive wheels (rad/s); positive rolls the robot forwards (+z, where the headset looks). */
-const WHEEL_SPIN = 3.2
-const AURA_COLOUR = '#e5554a'
+/** Turning speed of the drive wheels at full speed (rad/s); positive rolls the robot forwards (+z, where the headset looks). */
+const WHEEL_SPIN = 3.4
+/** How the drive wheels' aura is laid out: speed arcs round the tyre, streaks on the floor behind, chevrons ahead. */
+const AURA = { arcs: [{ radius: 0.118, width: 0.005, opacity: 0.9 }, { radius: 0.142, width: 0.0035, opacity: 0.5 }], streaks: 5, chevrons: 3 } as const
 
-/** Turns the aura rings with the wheels and runs the ground chevrons forwards. */
-function runAura(rings: (Group | null)[], chevrons: (Mesh | null)[], time: number) {
-  for (const ring of rings) if (ring) ring.rotation.x = time * WHEEL_SPIN
-  chevrons.forEach((chevron, index) => {
+type AuraParts = { arcs: (Group | null)[]; halos: (Mesh | null)[]; streaks: (Mesh | null)[]; chevrons: (Mesh | null)[] }
+
+function fade(mesh: Mesh | null, opacity: number) {
+  if (mesh) (mesh.material as MeshBasicMaterial).opacity = opacity
+}
+
+/**
+ * Moves the aura with the wheels: the arcs turn with the tyre, the halo
+ * breathes, streaks slide back along the floor and chevrons slide forward,
+ * everything as strong as the wheels are fast.
+ */
+function runAura(model: FlowModel, parts: AuraParts, time: number, drive: number) {
+  parts.arcs.forEach((arc, index) => { if (arc) arc.rotation.x = (model.wheels[Math.floor(index / AURA.arcs.length)]?.rotation.x ?? 0) * (index % 2 ? 0.8 : 1) })
+  parts.arcs.forEach(arc => arc?.children.forEach(child => fade(child as Mesh, (child.userData.opacity as number) * drive)))
+  parts.halos.forEach(halo => {
+    fade(halo, (0.1 + 0.06 * Math.sin(time * 5)) * drive)
+    halo?.scale.setScalar(1 + 0.06 * Math.sin(time * 5))
+  })
+  parts.streaks.forEach((streak, index) => {
+    if (!streak) return
+    const phase = (time * 1.1 * drive + (index % AURA.streaks) / AURA.streaks + (index % 3) * 0.13) % 1
+    streak.position.z = -0.06 - phase * 0.34
+    fade(streak, Math.sin(phase * Math.PI) * 0.7 * drive)
+  })
+  parts.chevrons.forEach((chevron, index) => {
     if (!chevron) return
-    const phase = (time * 0.55 + index / chevrons.length) % 1
-    chevron.position.z = -0.14 + phase * 0.42
-    const material = chevron.material as MeshBasicMaterial
-    material.opacity = Math.sin(phase * Math.PI) * 0.8
+    const phase = (time * 0.7 + (index % AURA.chevrons) / AURA.chevrons) % 1
+    chevron.position.z = 0.08 + phase * 0.3
+    fade(chevron, Math.sin(phase * Math.PI) * 0.85 * drive)
   })
 }
 
 /**
- * A moving aura round each drive wheel: glowing arcs turning with the wheel,
- * and chevrons sliding forwards on the floor beside it, so the robot is seen
- * to drive.
+ * A moving aura round each drive wheel, shown once the current reaches the
+ * motors: glowing speed arcs turning with the tyre over a soft halo, light
+ * streaks running back along the floor and chevrons running ahead, so the
+ * robot is seen to drive forward.
  */
-function WheelAura({ model }: { model: FlowModel }) {
-  const rings = useRef<(Group | null)[]>([])
-  const chevrons = useRef<(Mesh | null)[]>([])
-  useFrame(state => runAura(rings.current, chevrons.current, state.clock.elapsedTime))
-  const wheels = model.wheelCentres
+function WheelAura({ model, color, drive }: { model: FlowModel; color: string; drive: { current: number } }) {
+  const parts = useRef<AuraParts>({ arcs: [], halos: [], streaks: [], chevrons: [] })
+  useFrame(state => runAura(model, parts.current, state.clock.elapsedTime, drive.current))
   return (
     <>
-      {wheels.map((centre, side) => (
-        <group key={side} position={centre}>
-          <group ref={node => { rings.current[side] = node }}>
-            <group rotation={[0, Math.PI / 2, 0]}>
-              {[0, 1, 2].map(arc => (
-                <mesh key={arc} rotation={[0, 0, (arc * Math.PI * 2) / 3]} renderOrder={21}>
-                  <torusGeometry args={[0.122, 0.006, 8, 48, Math.PI * 0.45]} />
-                  <meshBasicMaterial color={AURA_COLOUR} transparent opacity={0.75} depthTest={false} toneMapped={false} />
-                </mesh>
-              ))}
-            </group>
+      {model.wheels.map((wheel, side) => {
+        const out = wheel.position.x < 0 ? -1 : 1
+        return (
+          <group key={side} position={wheel.position}>
+            {AURA.arcs.map((arc, layer) => (
+              <group key={layer} ref={node => { parts.current.arcs[side * AURA.arcs.length + layer] = node }}>
+                {[0, 1, 2].map(index => (
+                  <mesh key={index} rotation={[0, Math.PI / 2, ((index + layer * 0.5) * Math.PI * 2) / 3]} userData={{ opacity: arc.opacity }} renderOrder={21}>
+                    <torusGeometry args={[arc.radius, arc.width, 8, 48, Math.PI * (layer ? 0.3 : 0.42)]} />
+                    <meshBasicMaterial color={layer ? '#ffffff' : color} transparent opacity={0} depthTest={false} toneMapped={false} />
+                  </mesh>
+                ))}
+              </group>
+            ))}
+            <mesh ref={node => { parts.current.halos[side] = node }} position={[out * 0.03, 0, 0]} rotation={[0, Math.PI / 2, 0]} renderOrder={20}>
+              <ringGeometry args={[0.09, 0.15, 48]} />
+              <meshBasicMaterial color={color} transparent opacity={0} depthTest={false} toneMapped={false} side={2} />
+            </mesh>
+            {Array.from({ length: AURA.streaks }, (_, index) => (
+              <mesh
+                key={`s${index}`}
+                ref={node => { parts.current.streaks[side * AURA.streaks + index] = node }}
+                position={[out * (0.005 + (index - 2) * 0.012), 0.002 - wheel.position.y, 0]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                renderOrder={20}
+              >
+                <planeGeometry args={[0.005, 0.09 + (index % 2) * 0.05]} />
+                <meshBasicMaterial color={color} transparent opacity={0} depthTest={false} toneMapped={false} side={2} />
+              </mesh>
+            ))}
+            {Array.from({ length: AURA.chevrons }, (_, index) => (
+              <mesh
+                key={`c${index}`}
+                ref={node => { parts.current.chevrons[side * AURA.chevrons + index] = node }}
+                position={[0, 0.003 - wheel.position.y, 0]}
+                rotation={[Math.PI / 2, 0, 0]}
+                renderOrder={20}
+              >
+                <ringGeometry args={[0.026, 0.04, 3, 1, Math.PI / 6, (Math.PI * 2) / 3]} />
+                <meshBasicMaterial color={color} transparent opacity={0} depthTest={false} toneMapped={false} side={2} />
+              </mesh>
+            ))}
           </group>
-          <mesh rotation={[0, Math.PI / 2, 0]} renderOrder={20}>
-            <torusGeometry args={[0.14, 0.018, 10, 64]} />
-            <meshBasicMaterial color={AURA_COLOUR} transparent opacity={0.12} depthTest={false} toneMapped={false} />
-          </mesh>
-          {[0, 1, 2].map(index => (
-            <mesh
-              key={index}
-              ref={node => { chevrons.current[side * 3 + index] = node }}
-              position={[centre.x < 0 ? -0.07 : 0.07, 0.003 - centre.y, 0]}
-              rotation={[Math.PI / 2, 0, 0]}
-              renderOrder={20}
-            >
-              <ringGeometry args={[0.028, 0.042, 3, 1, Math.PI / 2 - Math.PI / 3, (Math.PI * 2) / 3]} />
-              <meshBasicMaterial color={AURA_COLOUR} transparent opacity={0.6} depthTest={false} toneMapped={false} side={2} />
+        )
+      })}
+    </>
+  )
+}
+
+/** Ultrasound: arcs leaving each sensor head outwards, and fainter echoes coming back. */
+const WAVES = { count: 3, arc: Math.PI * 0.45, reach: 0.34, period: 1.4 } as const
+
+function runWaves(waves: (Mesh | null)[], time: number) {
+  waves.forEach((wave, index) => {
+    if (!wave) return
+    const echo = index % (WAVES.count * 2) >= WAVES.count
+    const phase = (time / WAVES.period + (index % WAVES.count) / WAVES.count) % 1
+    const distance = echo ? 1 - phase : phase
+    wave.scale.set(0.15 + distance, 0.15 + distance, 1)
+    fade(wave, (echo ? 0.35 : 0.85) * Math.sin(phase * Math.PI))
+  })
+}
+
+/** Sound waves from the four ultrasonic heads, while the step is about them. */
+function SonarWaves({ model, color }: { model: FlowModel; color: string }) {
+  const waves = useRef<(Mesh | null)[]>([])
+  useFrame(state => runWaves(waves.current, state.clock.elapsedTime))
+  const heads = useMemo(() => model.anchors('sonar'), [model])
+  return (
+    <>
+      {heads.map((head, sensor) => (
+        <group key={sensor} position={head} rotation={[0, Math.atan2(-head.z, head.x), 0]}>
+          {Array.from({ length: WAVES.count * 2 }, (_, index) => (
+            <mesh key={index} ref={node => { waves.current[sensor * WAVES.count * 2 + index] = node }} rotation={[-Math.PI / 2, 0, -WAVES.arc / 2]} renderOrder={21}>
+              <torusGeometry args={[WAVES.reach, index >= WAVES.count ? 0.006 : 0.009, 8, 32, WAVES.arc]} />
+              <meshBasicMaterial color={index >= WAVES.count ? '#ffffff' : color} transparent opacity={0} depthTest={false} toneMapped={false} />
             </mesh>
           ))}
         </group>
@@ -279,6 +356,8 @@ function PanTiltAxes({ model }: { model: FlowModel }) {
 
 /** How the current is drawn: pulses every PERIOD metres along a path, running at SPEED metres a second. */
 const CURRENT = { period: 0.32, speed: 0.42 }
+/** Segments each signal path is drawn with. */
+const SEGMENTS = 64
 /**
  * One pulse is a stack of dashes that all end at the same front: long and faint
  * at the back, short and solid at the front, with a white-hot core on the very
@@ -294,16 +373,31 @@ const PULSE = [
 
 type Dashed = { material: { dashOffset: number } }
 
-/** Runs the pulses forward: a smaller dash offset moves the dashes towards the end of the line. */
-function runCurrent(layers: (Dashed | null)[], travelled: number) {
+type Clipped = { geometry: { instanceCount: number } }
+
+/**
+ * Runs the current forward. `front` is how far it has got along the path (m):
+ * the wire is drawn only up to there, the leading spark sits right at it, and
+ * once the front has reached the end the sparks keep coming at a steady pace.
+ * (A smaller dash offset moves the dashes towards the end of the line.)
+ */
+function runCurrent(wire: Clipped | null, layers: (Dashed | null)[], front: number, length: number, segments: number) {
+  const reached = Math.max(0, Math.min(1, front / length))
+  const drawn = Math.ceil(reached * segments)
+  if (wire) wire.geometry.instanceCount = drawn
   layers.forEach((layer, index) => {
-    if (layer) layer.material.dashOffset = -travelled - (PULSE[0].length - PULSE[index].length)
+    if (!layer) return
+    const clipped = layer as unknown as Clipped
+    layer.material.dashOffset = PULSE[index].length - front
+    clipped.geometry.instanceCount = drawn
   })
 }
 
-/** The receiving end breathes a little, like a contact taking current. */
-function breathe(halo: Mesh | null, time: number) {
-  if (halo) halo.scale.setScalar(1 + 0.35 * (0.5 + 0.5 * Math.sin(time * 6)))
+/** The receiving end breathes a little, like a contact taking current; hidden until the current gets there (`time` null). */
+function breathe(halo: Mesh | null, time: number | null) {
+  if (!halo) return
+  halo.visible = time !== null
+  if (time !== null) halo.scale.setScalar(1 + 0.35 * (0.5 + 0.5 * Math.sin(time * 6)))
 }
 
 /**
@@ -314,23 +408,26 @@ function breathe(halo: Mesh | null, time: number) {
 function SignalPath({ curve, color, lead }: {
   curve: QuadraticBezierCurve3
   color: string
-  /** Length of the chain before this path (m), so a spark leaving one link carries on into the next. */
+  /** Length of the chain before this path (m): the current sets off along it only when it has run that far. */
   lead: number
 }) {
-  const points = useMemo(() => curve.getPoints(64), [curve])
-  const wire = useMemo(() => new Color(color).lerp(new Color('#ffffff'), 0.5), [color])
+  const points = useMemo(() => curve.getPoints(SEGMENTS), [curve])
+  const length = useMemo(() => curve.getLength(), [curve])
+  const wireColour = useMemo(() => new Color(color).lerp(new Color('#ffffff'), 0.5), [color])
+  const wire = useRef<Clipped | null>(null)
   const layers = useRef<(Dashed | null)[]>([])
   const halo = useRef<Mesh>(null)
   const travelled = useRef(0)
   useFrame((state, delta) => {
     travelled.current += delta * CURRENT.speed
-    runCurrent(layers.current, travelled.current - lead)
-    breathe(halo.current, state.clock.elapsedTime)
+    const front = travelled.current - lead
+    runCurrent(wire.current, layers.current, front, length, SEGMENTS)
+    breathe(halo.current, front >= length ? state.clock.elapsedTime : null)
   })
   return (
     <group>
       {/* Solid (not see-through) so the joints between segments do not show as dots. */}
-      <Line points={points} color={wire} lineWidth={1.9} depthTest={false} toneMapped={false} renderOrder={10} />
+      <Line ref={node => { wire.current = node as unknown as Clipped | null }} points={points} color={wireColour} lineWidth={1.9} depthTest={false} toneMapped={false} renderOrder={10} />
       {PULSE.map((pulse, index) => (
         <Line
           key={index}
@@ -407,8 +504,27 @@ function chainCurves(model: FlowModel, step: FlowStep | null) {
     const start = lead
     lead += curves[0]?.getLength() ?? 0
     end = link.to
-    return curves.map((curve, part) => ({ key: `${index}-${part}`, curve, color: signalColor(link.kind), lead: start }))
+    return curves.map((curve, part) => ({
+      key: `${step!.title}-${index}-${part}`,
+      curve,
+      color: signalColor(link.kind),
+      lead: start,
+      /** Seconds after the step starts when the current reaches the end of this path. */
+      arrives: (start + curve.getLength()) / CURRENT.speed,
+      link,
+    }))
   })
+}
+
+/** When (seconds into the step) a command first reaches the drive motors, or null if it never does. */
+function motorsStartAt(curves: ReturnType<typeof chainCurves>) {
+  const times = curves.filter(item => item.link.to === 'motor' && item.link.kind === 'command').map(item => item.arrives)
+  return times.length ? Math.min(...times) : null
+}
+
+/** Eases the drive wheels' speed (0…1) up once the current has reached the motors, and down otherwise. */
+function easeDrive(drive: { current: number }, on: boolean, delta: number) {
+  drive.current += ((on ? 1 : 0) - drive.current) * Math.min(1, delta * 2.2)
 }
 
 function Robot({ step, zoom }: { step: FlowStep | null; zoom: number }) {
@@ -416,18 +532,25 @@ function Robot({ step, zoom }: { step: FlowStep | null; zoom: number }) {
   const focus = useMemo(() => stepFocus(model, step), [model, step])
   const styled = useRef<FlowStep | null | undefined>(undefined)
   const curves = useMemo(() => chainCurves(model, step), [model, step])
+  const motorsAt = useMemo(() => motorsStartAt(curves), [curves])
+  const started = useRef(0)
+  const drive = useRef(0)
   useFrame((state, delta) => {
+    const time = state.clock.elapsedTime
     if (styled.current !== step) {
       styled.current = step
+      started.current = time
       styleModel(model, step)
     }
-    moveParts(model, step?.motion, delta, state.clock.elapsedTime)
+    easeDrive(drive, step?.motion === 'wheels' && motorsAt !== null && time - started.current >= motorsAt, delta)
+    moveParts(model, step?.motion, delta, time, drive.current)
   })
   return (
     <>
       <primitive object={model.root} />
       {curves.map(item => <SignalPath key={item.key} curve={item.curve} color={item.color} lead={item.lead} />)}
-      {step?.motion === 'wheels' && <WheelAura model={model} />}
+      <WheelAura model={model} color={signalColor(step?.links[0].kind ?? 'command')} drive={drive} />
+      {step?.motion === 'sonar' && <SonarWaves model={model} color={signalColor('feedback')} />}
       {step?.motion === 'head' && <PanTiltAxes model={model} />}
       <ZoomRig zoom={zoom} focus={focus} />
     </>

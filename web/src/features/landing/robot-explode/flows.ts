@@ -25,9 +25,9 @@ export function signalColor(kind: SignalKind): string {
 }
 
 export type FlowNodeId =
-  | 'lidar' | 'camera' | 'quest' | 'sonar' | 'imu' | 'battery'
+  | 'lidar' | 'camera' | 'quest' | 'sonar' | 'sr04t' | 'imu' | 'battery'
   | 'pc' | 'mcu'
-  | 'driver' | 'motor' | 'wheel' | 'drv' | 'pantilt' | 'contactor' | 'cloud'
+  | 'driver' | 'motor' | 'drv' | 'pantilt' | 'contactor' | 'cloud'
 
 export type FlowNode = {
   id: FlowNodeId
@@ -38,20 +38,22 @@ export type FlowNode = {
   column: 'in' | 'brain' | 'out'
   /** Where the node sits in the 3D model; null when it is off the robot. */
   part: PartGroupId | null
+  /** Only these pieces of the part (by node name), when the part holds more than this node. */
+  pieces?: readonly string[]
 }
 
 export const FLOW_NODES: readonly FlowNode[] = [
   { id: 'lidar', label: 'LiDAR', detail: 'RPLiDAR · USB', column: 'in', part: 'lidar' },
   { id: 'camera', label: 'Camera phía trước', detail: 'Ảnh độ sâu · USB', column: 'in', part: 'camera' },
   { id: 'quest', label: 'Kính Meta Quest 3', detail: 'H.264 · USB/ADB', column: 'in', part: 'quest' },
-  { id: 'sonar', label: 'Siêu âm ×4', detail: 'JSN-SR04T', column: 'in', part: 'sonar' },
+  { id: 'sonar', label: 'Đầu dò siêu âm ×4', detail: 'JSN-SR04T · chống nước', column: 'in', part: 'sonar', pieces: ['sonar__05', 'sonar__06', 'sonar__07', 'sonar__08'] },
+  { id: 'sr04t', label: 'Mạch SR04T ×4', detail: 'Đo thời gian sóng dội', column: 'in', part: 'sonar', pieces: ['sonar__01', 'sonar__02', 'sonar__03', 'sonar__04'] },
   { id: 'imu', label: 'IMU', detail: 'BNO085 · trên mạch', column: 'in', part: 'pcb' },
   { id: 'battery', label: 'Pin', detail: 'Nguồn chính', column: 'in', part: 'battery' },
   { id: 'pc', label: 'Mini PC', detail: 'Beelink · ROS 2 · Nav2', column: 'brain', part: 'pc' },
   { id: 'mcu', label: 'STM32G431', detail: 'Mạch điều khiển', column: 'brain', part: 'pcb' },
   { id: 'driver', label: 'Driver HBS86H ×2', detail: 'STEP / DIR', column: 'out', part: 'driver' },
   { id: 'motor', label: 'Động cơ 57HS22 ×2', detail: '2,2 N·m', column: 'out', part: 'motor' },
-  { id: 'wheel', label: 'Bánh xe chủ động', detail: 'Trái · phải', column: 'out', part: 'wheel' },
   { id: 'drv', label: 'Driver pan/tilt ×2', detail: 'STEP · nEN', column: 'out', part: 'drv' },
   { id: 'pantilt', label: 'Đầu pan–tilt', detail: 'Pan 0,6° · tilt 1,8°/bước', column: 'out', part: 'pantilt' },
   { id: 'contactor', label: 'Contactor', detail: 'MOSFET · PA10', column: 'out', part: 'pcb' },
@@ -65,7 +67,7 @@ export function flowNode(id: FlowNodeId): FlowNode {
 export type FlowLink = { from: FlowNodeId; to: FlowNodeId; kind: SignalKind; label: string }
 
 /** What moves in the 3D model while the step is shown. */
-export type FlowMotion = 'wheels' | 'lidar' | 'head'
+export type FlowMotion = 'wheels' | 'lidar' | 'head' | 'sonar'
 
 export type FlowStep = {
   title: string
@@ -95,34 +97,18 @@ export const FLOWS: readonly Flow[] = [
         body: '[[Mini PC|command]] chạy ROS 2 và Nav2: từ bản đồ và vị trí hiện tại, nó tính tốc độ bánh trái, bánh phải rồi gửi xuống [[mạch điều khiển STM32|command]] qua cáp USB.',
         signal: 'USB CDC: CMD,<seq>,<trái mm/s>,<phải mm/s>. Lệnh phải tới đều; im quá 300 ms là watchdog trên STM32 cắt động cơ.',
         links: [CMD_USB],
-        motion: 'wheels',
       },
       {
         title: 'Mạch điều khiển phát xung',
         body: 'STM32 đổi tốc độ thành chuỗi [[xung STEP và chiều DIR|command]] cho hai [[driver HBS86H|command]], mỗi driver lo một bánh.',
         signal: 'Mỗi xung STEP là một bước của động cơ; tần số xung quyết định tốc độ, mức DIR quyết định chiều quay.',
         links: [{ from: 'mcu', to: 'driver', kind: 'command', label: 'STEP / DIR' }],
-        motion: 'wheels',
       },
       {
-        title: 'Driver cấp dòng cho động cơ',
-        body: 'Mỗi [[HBS86H|command]] cấp dòng vào hai cuộn dây của một [[động cơ bước 57HS22|command]], đẩy trục quay từng bước theo xung nhận được.',
-        signal: 'Động cơ 57 mm, mô-men giữ 2,2 N·m; điện cho driver đi qua contactor (xem Nguồn điện).',
+        title: 'Động cơ quay bánh xe',
+        body: 'Mỗi [[HBS86H|command]] cấp dòng vào hai cuộn dây của một [[động cơ bước 57HS22|command]]. Dòng tới là trục động cơ quay từng bước, kéo [[bánh xe chủ động|command]] ở giữa quay theo; hai bánh quay khác tốc độ thì robot rẽ, bốn bánh phụ ở góc chỉ lăn theo.',
+        signal: 'Động cơ 57 mm, mô-men giữ 2,2 N·m; robot đi tối đa khoảng 0,20 m/s theo cấu hình Nav2. Điện cho driver đi qua contactor (xem Nguồn điện).',
         links: [{ from: 'driver', to: 'motor', kind: 'command', label: 'Dòng pha A/B' }],
-        motion: 'wheels',
-      },
-      {
-        title: 'Bánh xe quay',
-        body: 'Trục động cơ quay hai [[bánh xe chủ động|command]] ở giữa. Hai bánh quay khác tốc độ thì robot rẽ; bốn bánh xe phụ ở góc chỉ lăn theo.',
-        signal: 'Robot đi tối đa khoảng 0,20 m/s theo cấu hình Nav2 hiện tại.',
-        links: [{ from: 'motor', to: 'wheel', kind: 'command', label: 'Trục động cơ' }],
-        motion: 'wheels',
-      },
-      {
-        title: 'Báo về máy tính',
-        body: 'STM32 đếm số bước đã phát và gửi [[khung FB|feedback]] 50 lần mỗi giây về [[Mini PC|feedback]]; ROS 2 tính quãng đường (odometry) để biết robot đã đi bao xa.',
-        signal: 'FB,<seq>,<bước trái>,<bước phải>,<dt_ms>,<trạng thái>,… — trạng thái OK, STOP, TIMEOUT hoặc ERR.',
-        links: [FB_USB],
         parts: ['wheel'],
         motion: 'wheels',
       },
@@ -141,10 +127,24 @@ export const FLOWS: readonly Flow[] = [
         motion: 'lidar',
       },
       {
-        title: 'Siêu âm đo vật cản gần',
-        body: 'Bốn [[cảm biến siêu âm JSN-SR04T|feedback]] ở bốn góc phát sóng; mạch SR04T đo thời gian sóng dội lại và báo qua chân Echo về [[STM32|feedback]]. STM32 đổi thời gian đó thành khoảng cách rồi gửi lên [[Mini PC|feedback]] để xử lí.',
-        signal: 'Trig / Echo tới STM32; mỗi cảm biến cho một cặp <mm>,<hợp lệ> trong khung FB (SONAR1–4) gửi lên Mini PC.',
-        links: [{ from: 'sonar', to: 'mcu', kind: 'feedback', label: 'Trig / Echo' }, FB_USB],
+        title: 'Siêu âm đo vật cản qua SR04T',
+        body: 'Bốn [[đầu dò siêu âm|feedback]] ở bốn góc phát một chùm sóng ra ngoài rồi nghe sóng dội lại từ vật cản; [[mạch SR04T|feedback]] đi kèm mỗi đầu dò đo thời gian từ lúc phát tới lúc nghe thấy.',
+        signal: 'Sóng 40 kHz; vật càng xa thì sóng dội về càng lâu. JSN-SR04T đo được khoảng 0,25–4,5 m.',
+        links: [{ from: 'sonar', to: 'sr04t', kind: 'feedback', label: 'Sóng dội' }],
+        motion: 'sonar',
+      },
+      {
+        title: 'SR04T chuyển vào STM32',
+        body: '[[STM32|feedback]] phát xung Trig cho từng [[mạch SR04T|feedback]]; mạch trả về xung Echo dài đúng bằng thời gian sóng đi và về, STM32 đổi độ dài đó thành khoảng cách.',
+        signal: 'Trig / Echo; khoảng cách (mm) ≈ thời gian Echo (µs) × 0,343 ÷ 2.',
+        links: [{ from: 'sr04t', to: 'mcu', kind: 'feedback', label: 'Trig / Echo' }],
+      },
+      {
+        title: 'STM32 gửi lên Mini PC',
+        body: 'STM32 đóng bốn khoảng cách vào [[khung FB|feedback]] và gửi qua USB lên [[Mini PC|feedback]]; máy tính dùng chúng để tránh vật cản ở gần mà LiDAR khó thấy.',
+        signal: 'Mỗi cảm biến cho một cặp <mm>,<hợp lệ> trong khung FB (SONAR1–4), 50 lần mỗi giây.',
+        links: [FB_USB],
+        parts: ['sonar'],
       },
       {
         title: 'IMU đo hướng quay',
@@ -245,7 +245,6 @@ export const FLOWS: readonly Flow[] = [
         body: 'Qua contactor, điện tới hai [[driver HBS86H|power]] rồi tới động cơ. Lệnh dừng hay watchdog chỉ dừng động cơ, không tự ngắt contactor.',
         signal: 'Muốn cắt hẳn điện động cơ thì máy tính gửi CONTACTOR,<seq>,OFF.',
         links: [{ from: 'contactor', to: 'driver', kind: 'power', label: 'Nguồn động cơ' }, { from: 'driver', to: 'motor', kind: 'power', label: 'Dòng pha' }],
-        motion: 'wheels',
       },
     ],
   },

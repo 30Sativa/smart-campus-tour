@@ -21,30 +21,37 @@ describe('robot signal flows', () => {
     }
   })
 
-  it('follows a drive command from the mini PC down to the wheels and back', () => {
+  it('follows a drive command from the mini PC down to the motors, which turn the wheels', () => {
     const drive = FLOWS.find(flow => flow.id === 'drive')!
     const chain = drive.steps.flatMap(step => step.links.map(link => `${link.from}>${link.to}`))
-    expect(chain).toEqual(['pc>mcu', 'mcu>driver', 'driver>motor', 'motor>wheel', 'mcu>pc'])
-    expect(drive.steps.at(-1)!.links[0].kind).toBe('feedback')
-    expect(drive.steps.some(step => step.motion === 'wheels')).toBe(true)
+    expect(chain).toEqual(['pc>mcu', 'mcu>driver', 'driver>motor'])
+    expect(drive.steps.map(step => step.motion ?? null)).toEqual([null, null, 'wheels'])
   })
 
-  it('turns the wheels whenever a step talks about them or drives them, and swings the head through the whole head flow', () => {
+  it('turns the wheels only where a command reaches the motors, and swings the head through the whole head flow', () => {
     for (const flow of FLOWS) for (const step of flow.steps) {
-      if (/bánh/i.test(step.body) || flow.id === 'drive') expect(step.motion, step.title).toBe('wheels')
+      const drives = step.links.some(link => link.to === 'motor' && link.kind === 'command')
+      expect(step.motion === 'wheels', `${flow.id}: ${step.title}`).toBe(drives)
     }
     expect(FLOWS.find(flow => flow.id === 'head')!.steps.every(step => step.motion === 'head')).toBe(true)
   })
 
-  it('brings every sensor reading through the STM32 up to the mini PC', () => {
+  it('brings the ultrasonic reading from the sensor heads through the SR04T boards and the STM32 to the mini PC, one hop a step', () => {
     const sense = FLOWS.find(flow => flow.id === 'sense')!
-    for (const step of sense.steps) {
-      const toMcu = step.links.some(link => link.to === 'mcu')
-      if (toMcu) expect(step.links.some(link => link.from === 'mcu' && link.to === 'pc'), step.title).toBe(true)
-      expect(step.links.at(-1)!.to === 'pc' || step.links.some(link => link.to === 'pc'), step.title).toBe(true)
-    }
-    const sonar = sense.steps.find(step => step.links.some(link => link.from === 'sonar'))!
-    expect(sonar.links.map(link => `${link.from}>${link.to}`)).toEqual(['sonar>mcu', 'mcu>pc'])
+    const start = sense.steps.findIndex(step => step.links[0].from === 'sonar')
+    const hops = sense.steps.slice(start, start + 3).map(step => step.links.map(link => `${link.from}>${link.to}`))
+    expect(hops).toEqual([['sonar>sr04t'], ['sr04t>mcu'], ['mcu>pc']])
+    expect(sense.steps[start].motion).toBe('sonar')
+    // Readings that reach the STM32 always go on up to the mini PC, in the same step or the next.
+    sense.steps.forEach((step, index) => {
+      if (!step.links.some(link => link.to === 'mcu')) return
+      const next = [...step.links, ...(sense.steps[index + 1]?.links ?? [])]
+      expect(next.some(link => link.from === 'mcu' && link.to === 'pc'), step.title).toBe(true)
+    })
+    // The sensor heads and the SR04T boards are different pieces of the same model part.
+    expect(flowNode('sonar').pieces).toHaveLength(4)
+    expect(flowNode('sr04t').pieces).toHaveLength(4)
+    expect(flowNode('sonar').pieces!.some(piece => flowNode('sr04t').pieces!.includes(piece))).toBe(false)
   })
 
   it('underlines marked words in their signal colour and leaves the rest plain', () => {

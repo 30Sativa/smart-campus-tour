@@ -20,7 +20,7 @@ function canUseWebGL() {
 
 const BOX = { w: 230, h: 44 }
 const COLUMN_X = { in: 0, brain: 365, out: 730 } as const
-const VIEW = { w: 960, h: 380 }
+const VIEW = { w: 960, h: 430 }
 
 function boxOf(node: FlowNode) {
   if (node.column === 'brain') return { x: COLUMN_X.brain, y: node.id === 'pc' ? 30 : 205, w: BOX.w, h: 140 }
