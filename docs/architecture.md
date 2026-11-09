@@ -1297,6 +1297,20 @@ closed tab stops the head. On the robot, `fleet_bridge` (`head_enabled`) maps
 `ANGLE` to action `head/set`, and reports `head/state` on its next poll. Same
 single-API-instance limit as Fleet Sync (ADR-0019).
 
+**Quest camera on demand (ADR-0052, proposed 09/11/2026; robot side opt-in).**
+The robot's Quest stream runs only while a Tour assigned to it is `RUNNING` or a Staff
+lease has not expired:
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/staff/manage/robots/{robotCode}/camera-lease` | Staff role, no body. Extends the lease to now + `FleetCamera:LeaseSeconds` (120); 200 `{robotCode, wanted, reason, robotListening, lastPollAt, leaseUntil}`; 404 unknown or deactivated robot; 400 invalid code. The pre-start check page renews it every 30 s while visible. |
+| POST | `/api/fleet/camera/v1/poll` | Robot scheme, no body, `FleetSync` rate-limit policy. 200 `{wanted, reason: TOUR_RUNNING\|STAFF_WATCHING\|IDLE, pollSeconds}`. |
+
+Leases and last polls live only in API memory (single instance, ADR-0019); nothing is
+written to SQL. `robot/quest-stream` (`QUEST_CONTROL_URL=auto`) polls with the Fleet Sync
+identity, pauses capture when not wanted (`/status` state `paused`, `/device` stream
+`paused`) and keeps capturing after 60 s without an answer unless `QUEST_CONTROL_FAILSAFE=off`.
+
 Rotating head/pan presets remain a V1 requirement outside the navigation wire
 MVP. FRONT gating is the current orchestration decision described above, not a
 separately established Capstone requirement. A separate patch must define presets,

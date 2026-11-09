@@ -326,6 +326,33 @@ NUC7PJYH (Pentium Silver J5005) yếu hơn và phải giải mã 3664x1920 từ 
 bằng `scripts/measure.sh`; nếu `speed` < 1.0 hoặc CPU > 80 % thì làm theo mục
 "Hình giật".
 
+## Chỉ bật camera khi cần (ADR-0052)
+
+Mặc định `quest-stream` phát liên tục khi kính được cắm. Đặt `QUEST_CONTROL_URL=auto` trong
+`quest-stream.env` để NUC hỏi backend mỗi 5 giây và **chỉ quay khi có người cần hình**:
+
+| Backend trả lời | Khi nào |
+|---|---|
+| `TOUR_RUNNING` | Có Tour đang `RUNNING` trên robot này (học sinh và người vận hành đang xem) |
+| `STAFF_WATCHING` | Trang "Kiểm tra trước khi bắt đầu" của Staff đang mở cho robot này (gia hạn mỗi 30 s, hết hạn sau 2 phút) |
+| `IDLE` | Không ai cần: NUC dừng scrcpy/FFmpeg, kính không quay, MediaMTX báo "không có luồng" |
+
+Khi đang tắt, `/status` có `"state": "paused"`, `"reason": "CAMERA_OFF: IDLE"`; bật lại mất khoảng 20–30 s
+(trang Staff mở sớm trước giờ Start là đủ). Backend không trả lời quá `QUEST_CONTROL_GRACE` (60 s):
+`QUEST_CONTROL_FAILSAFE=on` (mặc định) giữ camera chạy để Tour không mất hình.
+
+NUC dùng chính danh tính robot của Fleet Sync (`~/.config/campustour/fleet-sync.env` do
+`robot/scripts/setup_fleet_sync.py` tạo). Chưa có file đó: chạy script này một lần với credential lấy từ trang
+Kỹ thuật, hoặc đặt `QUEST_ROBOT_CODE` + `QUEST_ROBOT_CREDENTIAL_FILE`.
+
+```bash
+sed -i '/^QUEST_CONTROL_URL=/d' quest-stream.env && echo 'QUEST_CONTROL_URL=auto' >> quest-stream.env
+sudo systemctl restart quest-stream
+curl -s localhost:8080/status | python3 -m json.tool | grep -A5 '"camera"'   # enabled, wanted, reason
+```
+
+Phía người xem (web): nút tạm dừng trên khung hình, và tự ngắt khi tab bị ẩn; mở lại tab là nối lại.
+
 ## Phát ra Internet (trang deploy https://www.fptcampustour.cloud)
 
 Trình duyệt ngoài Internet không tới được NUC trong LAN, và trang HTTPS không gọi
