@@ -4,6 +4,7 @@ import { ContactShadows, Grid, Html, Line, OrbitControls, useGLTF } from '@react
 import { Box3, Color, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, QuadraticBezierCurve3, Vector3 } from 'three'
 import { PART_GROUPS, groupOfNode, type PartGroupId } from './parts'
 import { flowNode, signalColor, stepParts, type FlowLink, type FlowNodeId, type FlowStep } from './flows'
+import WheelAura from './WheelAura'
 import ZoomControls from './ZoomControls'
 import { dollyTo, useZoom } from './zoom'
 
@@ -179,99 +180,8 @@ const AXIS_COLOUR = '#0f5b66'
 
 /** Turning speed of the drive wheels at full speed (rad/s); positive rolls the robot forwards (+z, where the headset looks). */
 const WHEEL_SPIN = 3.4
-/** How the drive wheels' aura is laid out: speed arcs round the tyre, streaks on the floor behind, chevrons ahead. */
-const AURA = { arcs: [{ radius: 0.118, width: 0.005, opacity: 0.9 }, { radius: 0.142, width: 0.0035, opacity: 0.5 }], streaks: 5, chevrons: 3 } as const
-
-type AuraParts = { arcs: (Group | null)[]; halos: (Mesh | null)[]; streaks: (Mesh | null)[]; chevrons: (Mesh | null)[] }
-
 function fade(mesh: Mesh | null, opacity: number) {
   if (mesh) (mesh.material as MeshBasicMaterial).opacity = opacity
-}
-
-/**
- * Moves the aura with the wheels: the arcs turn with the tyre, the halo
- * breathes, streaks slide back along the floor and chevrons slide forward,
- * everything as strong as the wheels are fast.
- */
-function runAura(model: FlowModel, parts: AuraParts, time: number, drive: number) {
-  parts.arcs.forEach((arc, index) => { if (arc) arc.rotation.x = (model.wheels[Math.floor(index / AURA.arcs.length)]?.rotation.x ?? 0) * (index % 2 ? 0.8 : 1) })
-  parts.arcs.forEach(arc => arc?.children.forEach(child => fade(child as Mesh, (child.userData.opacity as number) * drive)))
-  parts.halos.forEach(halo => {
-    fade(halo, (0.1 + 0.06 * Math.sin(time * 5)) * drive)
-    halo?.scale.setScalar(1 + 0.06 * Math.sin(time * 5))
-  })
-  parts.streaks.forEach((streak, index) => {
-    if (!streak) return
-    const phase = (time * 1.1 * drive + (index % AURA.streaks) / AURA.streaks + (index % 3) * 0.13) % 1
-    streak.position.z = -0.06 - phase * 0.34
-    fade(streak, Math.sin(phase * Math.PI) * 0.7 * drive)
-  })
-  parts.chevrons.forEach((chevron, index) => {
-    if (!chevron) return
-    const phase = (time * 0.7 + (index % AURA.chevrons) / AURA.chevrons) % 1
-    chevron.position.z = 0.08 + phase * 0.3
-    fade(chevron, Math.sin(phase * Math.PI) * 0.85 * drive)
-  })
-}
-
-/**
- * A moving aura round each drive wheel, shown once the current reaches the
- * motors: glowing speed arcs turning with the tyre over a soft halo, light
- * streaks running back along the floor and chevrons running ahead, so the
- * robot is seen to drive forward.
- */
-function WheelAura({ model, color, drive }: { model: FlowModel; color: string; drive: { current: number } }) {
-  const parts = useRef<AuraParts>({ arcs: [], halos: [], streaks: [], chevrons: [] })
-  useFrame(state => runAura(model, parts.current, state.clock.elapsedTime, drive.current))
-  return (
-    <>
-      {model.wheels.map((wheel, side) => {
-        const out = wheel.position.x < 0 ? -1 : 1
-        return (
-          <group key={side} position={wheel.position}>
-            {AURA.arcs.map((arc, layer) => (
-              <group key={layer} ref={node => { parts.current.arcs[side * AURA.arcs.length + layer] = node }}>
-                {[0, 1, 2].map(index => (
-                  <mesh key={index} rotation={[0, Math.PI / 2, ((index + layer * 0.5) * Math.PI * 2) / 3]} userData={{ opacity: arc.opacity }} renderOrder={21}>
-                    <torusGeometry args={[arc.radius, arc.width, 8, 48, Math.PI * (layer ? 0.3 : 0.42)]} />
-                    <meshBasicMaterial color={layer ? '#ffffff' : color} transparent opacity={0} depthTest={false} toneMapped={false} />
-                  </mesh>
-                ))}
-              </group>
-            ))}
-            <mesh ref={node => { parts.current.halos[side] = node }} position={[out * 0.03, 0, 0]} rotation={[0, Math.PI / 2, 0]} renderOrder={20}>
-              <ringGeometry args={[0.09, 0.15, 48]} />
-              <meshBasicMaterial color={color} transparent opacity={0} depthTest={false} toneMapped={false} side={2} />
-            </mesh>
-            {Array.from({ length: AURA.streaks }, (_, index) => (
-              <mesh
-                key={`s${index}`}
-                ref={node => { parts.current.streaks[side * AURA.streaks + index] = node }}
-                position={[out * (0.005 + (index - 2) * 0.012), 0.002 - wheel.position.y, 0]}
-                rotation={[-Math.PI / 2, 0, 0]}
-                renderOrder={20}
-              >
-                <planeGeometry args={[0.005, 0.09 + (index % 2) * 0.05]} />
-                <meshBasicMaterial color={color} transparent opacity={0} depthTest={false} toneMapped={false} side={2} />
-              </mesh>
-            ))}
-            {Array.from({ length: AURA.chevrons }, (_, index) => (
-              <mesh
-                key={`c${index}`}
-                ref={node => { parts.current.chevrons[side * AURA.chevrons + index] = node }}
-                position={[0, 0.003 - wheel.position.y, 0]}
-                rotation={[Math.PI / 2, 0, 0]}
-                renderOrder={20}
-              >
-                <ringGeometry args={[0.026, 0.04, 3, 1, Math.PI / 6, (Math.PI * 2) / 3]} />
-                <meshBasicMaterial color={color} transparent opacity={0} depthTest={false} toneMapped={false} side={2} />
-              </mesh>
-            ))}
-          </group>
-        )
-      })}
-    </>
-  )
 }
 
 /** Ultrasound: arcs leaving each sensor head outwards, and fainter echoes coming back. */
@@ -535,6 +445,7 @@ function Robot({ step, zoom }: { step: FlowStep | null; zoom: number }) {
   const motorsAt = useMemo(() => motorsStartAt(curves), [curves])
   const started = useRef(0)
   const drive = useRef(0)
+  const wheelCentres = useMemo(() => model.wheels.map(wheel => wheel.position), [model])
   useFrame((state, delta) => {
     const time = state.clock.elapsedTime
     if (styled.current !== step) {
@@ -549,7 +460,7 @@ function Robot({ step, zoom }: { step: FlowStep | null; zoom: number }) {
     <>
       <primitive object={model.root} />
       {curves.map(item => <SignalPath key={item.key} curve={item.curve} color={item.color} lead={item.lead} />)}
-      <WheelAura model={model} color={signalColor(step?.links[0].kind ?? 'command')} drive={drive} />
+      <WheelAura centres={wheelCentres} color={signalColor(step?.links[0].kind ?? 'command')} drive={() => drive.current} angle={() => model.wheels[0]?.rotation.x ?? 0} />
       {step?.motion === 'sonar' && <SonarWaves model={model} color={signalColor('feedback')} />}
       {step?.motion === 'head' && <PanTiltAxes model={model} />}
       <ZoomRig zoom={zoom} focus={focus} />

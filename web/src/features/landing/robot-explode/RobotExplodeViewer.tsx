@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { ContactShadows, Grid, OrbitControls, useGLTF } from '@react-three/drei'
-import { Box3, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, LineDashedMaterial, LineSegments, Mesh, MeshBasicMaterial, MeshStandardMaterial, RingGeometry, Vector3, type Camera } from 'three'
+import { Box3, Color, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, RingGeometry, Vector3, type Camera } from 'three'
 import { Expand, Pause, Play, Shrink, X } from 'lucide-react'
 import { PART_GROUPS, explodeOffset, groupOfNode, orderMoves, pairMoves, partGroup, planAssembly, stepApart, stepAt, type PartGroupId, type Step, type Vec3 } from './parts'
+import WheelAura from './WheelAura'
 import ZoomControls from './ZoomControls'
 import { useZoom } from './zoom'
 
@@ -12,7 +13,8 @@ export const ROBOT_EXPLODE_URL = `${import.meta.env.BASE_URL}models/robot/campus
 /** Seconds one ordinary move takes to go on (or come off); the whole robot takes the sum of its moves' turns. */
 const SECONDS_PER_TURN = 0.5
 /** Auto cycle: assembled, apart, assembled; seconds. */
-const CYCLE = { holdTogether: 2.5, holdApart: 2.5 }
+/** Assembled long enough to see it drive and look around. */
+const CYCLE = { holdTogether: 9, holdApart: 2.5 }
 const GLOW = new Color('#8fcf4a')
 /** Where the camera looks when no part is picked: the middle of the robot, put together or apart. */
 const HOME = { together: { y: 0.62, distance: 3.1 }, apart: { y: 1.3, distance: 5.6 } }
@@ -20,7 +22,10 @@ const HOME_TARGET = new Vector3(0, HOME.apart.y, 0)
 /** Camera distance from one picked part. */
 const PICKED_DISTANCE = 2.1
 
-type Piece = { mesh: Mesh; group: PartGroupId; base: Vector3; offset: Vector3; step: Step | undefined }
+type Piece = { mesh: Mesh; group: PartGroupId; base: Vector3; home: Vector3; offset: Vector3; step: Step | undefined }
+/** What turns with the head, about the column's axis; the base plate of the pan-tilt stays put. */
+const HEAD_PIECES = new Set<PartGroupId>(['pantilt', 'head', 'quest'])
+const HEAD_BASE = 'pantilt__03'
 /** One unit's way out of the robot: from its home along its offset, as far as its step has taken it. */
 type Leader = { home: Vector3; offset: Vector3; step: Step | undefined }
 
@@ -81,13 +86,16 @@ function usePieces() {
       for (const unit of move.members) {
         // Each piece of a pair leaves towards its own side.
         const offset = new Vector3(...explodeOffset(partGroup(unit.group).explode, unit.centre))
-        for (const mesh of unit.meshes) pieces.push({ mesh, group: unit.group, base: mesh.position.clone(), offset, step })
+        for (const mesh of unit.meshes) pieces.push({ mesh, group: unit.group, base: mesh.position.clone(), home: new Box3().setFromObject(mesh).getCenter(new Vector3()), offset, step })
         leaders.push({ home: new Vector3(...unit.centre), offset, step })
       }
     }
     const counts = new Map<PartGroupId, number>()
     pieces.forEach(piece => counts.set(piece.group, (counts.get(piece.group) ?? 0) + 1))
-    return { root, pieces, leaders, materials, glow, counts, steps: plan.steps, seconds: plan.turns * SECONDS_PER_TURN }
+    const column = pieces.find(piece => piece.group === 'column')?.home ?? new Vector3()
+    const panAxis = new Vector3(column.x, 0, column.z)
+    const wheelCentres = pieces.filter(piece => piece.group === 'wheel').map(piece => piece.home)
+    return { root, pieces, leaders, materials, glow, counts, panAxis, wheelCentres, steps: plan.steps, seconds: plan.turns * SECONDS_PER_TURN }
   }, [scene])
 }
 
@@ -134,22 +142,14 @@ function styleParts(model: Model, highlight: readonly PartGroupId[], hovered: Pa
   }
 }
 
-/* ---------- Effects: guide lines, snap flashes, a scan ring and a fly-in. ---------- */
+/* ---------- Effects: snap flashes, a scan ring, an idle drive and a fly-in. ---------- */
 
 const FLASHES = 8
 const FLASH_SECONDS = 0.65
 const SCAN = { radius: 0.52, height: 1.42, rise: 2.4, rest: 3.2 } as const
 
-/** The effect objects, made once per model and moved every frame. */
-function makeEffects(model: Model) {
-  // Thin guide lines from where each unit belongs to where it is, like an exploded-view drawing.
-  const guidePositions = new Float32Array(model.leaders.length * 6)
-  const guideGeometry = new BufferGeometry()
-  guideGeometry.setAttribute('position', new BufferAttribute(guidePositions, 3))
-  const guides = new LineSegments(guideGeometry, new LineDashedMaterial({ color: '#4f7d8a', dashSize: 0.025, gapSize: 0.018, transparent: true, opacity: 0, depthWrite: false }))
-  guides.frustumCulled = false
-  guides.renderOrder = 5
-
+/** The effect objects, made once and moved every frame. */
+function makeEffects() {
   // Rings that flash where a part snaps into place.
   const flashes = Array.from({ length: FLASHES }, () => {
     const ring = new Mesh(new RingGeometry(0.05, 0.062, 40), new MeshBasicMaterial({ color: GLOW, transparent: true, opacity: 0, depthTest: false, depthWrite: false, side: DoubleSide }))
@@ -163,27 +163,51 @@ function makeEffects(model: Model) {
   scan.rotation.x = -Math.PI / 2
   scan.renderOrder = 6
   const group = new Group()
-  group.add(guides, scan, ...flashes.map(flash => flash.ring))
-  return { group, guides, guidePositions, flashes, scan, scanClock: 0, lastMoving: null as Step | null }
+  group.add(scan, ...flashes.map(flash => flash.ring))
+  return { group, flashes, scan, scanClock: 0, lastMoving: null as Step | null, idle: 0, idleClock: 0, wheelAngle: 0 }
 }
 
 type Effects = ReturnType<typeof makeEffects>
 
-/** Draws the guide lines out to every unit that has left home; they fade in as the robot opens. */
-function drawGuides(model: Model, effects: Effects, progress: number) {
-  const positions = effects.guidePositions
-  model.leaders.forEach((leader, index) => {
-    const apart = stepApart(progress, leader.step)
-    const o = index * 6
-    positions[o] = leader.home.x; positions[o + 1] = leader.home.y; positions[o + 2] = leader.home.z
-    positions[o + 3] = leader.home.x + leader.offset.x * apart
-    positions[o + 4] = leader.home.y + leader.offset.y * apart
-    positions[o + 5] = leader.home.z + leader.offset.z * apart
-  })
-  effects.guides.geometry.attributes.position.needsUpdate = true
-  effects.guides.computeLineDistances()
-  const material = effects.guides.material as LineDashedMaterial
-  material.opacity = Math.min(1, progress * 3) * 0.55
+/** How the head looks around while the robot stands idle: [seconds into the cycle, pan in rad], eased between. */
+const LOOK_AROUND: readonly [number, number][] = [[0, 0], [2.2, 0], [3.2, 0.6], [4.4, 0.6], [5.6, -0.45], [6.6, -0.45], [7.6, 0], [9, 0]]
+const IDLE_WHEEL_SPIN = 3.4
+
+function lookAround(time: number) {
+  const t = time % LOOK_AROUND[LOOK_AROUND.length - 1][0]
+  const next = LOOK_AROUND.findIndex(([at]) => at > t)
+  const [a, from] = LOOK_AROUND[next - 1]
+  const [b, to] = LOOK_AROUND[next]
+  const k = (t - a) / (b - a)
+  return from + (to - from) * k * k * (3 - 2 * k)
+}
+
+const turn = new Quaternion()
+const pivot = new Vector3()
+const X_AXIS = new Vector3(1, 0, 0)
+const Y_AXIS = new Vector3(0, 1, 0)
+
+/**
+ * While the robot stands assembled with nothing to do, it "drives": the drive
+ * wheels turn on their axles and now and then the head looks left and right.
+ * `idle` eases in and out, so the head turns back before the robot comes apart.
+ */
+function runIdle(model: Model, effects: Effects, idle: boolean, delta: number) {
+  effects.idle += ((idle ? 1 : 0) - effects.idle) * Math.min(1, delta * 2.5)
+  effects.idleClock = idle ? effects.idleClock + delta : 0
+  effects.wheelAngle += delta * IDLE_WHEEL_SPIN * effects.idle
+  const pan = lookAround(effects.idleClock) * effects.idle
+  for (const piece of model.pieces) {
+    const wheel = piece.group === 'wheel'
+    if (!wheel && !HEAD_PIECES.has(piece.group)) continue
+    if (piece.mesh.name === HEAD_BASE) continue
+    // Turn about an axis through `pivot`: the wheel's own axle, or the column for the head.
+    if (wheel) turn.setFromAxisAngle(X_AXIS, effects.wheelAngle)
+    else turn.setFromAxisAngle(Y_AXIS, pan)
+    pivot.copy(wheel ? piece.home : model.panAxis)
+    piece.mesh.quaternion.copy(turn)
+    piece.mesh.position.add(pivot).sub(pivot.applyQuaternion(turn))
+  }
 }
 
 /** Notes the move under way; when one has just finished going on (while assembling), its units flash. */
@@ -254,7 +278,7 @@ function Robot({ model, mode, visible, highlight, hovered, zoom, onHover, onPick
   const resumed = useRef(true)
   const controls = useThree(state => state.controls) as unknown as { target: Vector3; update: () => void } | null
   const camera = useThree(state => state.camera)
-  const effects = useMemo(() => makeEffects(model), [model])
+  const effects = useMemo(() => makeEffects(), [])
 
   useEffect(() => { clock.current = 0 }, [mode])
   // No frames are drawn while the section is away, so the first one back would span the whole pause.
@@ -279,7 +303,7 @@ function Robot({ model, mode, visible, highlight, hovered, zoom, onHover, onPick
     placePieces(model, progress.current, highlight.length === 0 ? moving : null)
     // A move that has just finished going on flashes where it landed.
     trackMoves(model, effects, moving, progress.current < before)
-    drawGuides(model, effects, progress.current)
+    runIdle(model, effects, progress.current === 0 && target === 0 && highlight.length === 0, delta)
     runFlashes(effects, camera, delta)
     runScan(effects, progress.current, delta, highlight.length === 0)
 
@@ -306,6 +330,7 @@ function Robot({ model, mode, visible, highlight, hovered, zoom, onHover, onPick
   return (
     <>
     <primitive object={effects.group} />
+    <WheelAura centres={model.wheelCentres} color="#6fae3c" drive={() => effects.idle} angle={() => effects.wheelAngle} />
     <primitive
       object={model.root}
       onPointerMove={(event: ThreeEvent<PointerEvent>) => { event.stopPropagation(); onHover(groupAt(event)) }}
