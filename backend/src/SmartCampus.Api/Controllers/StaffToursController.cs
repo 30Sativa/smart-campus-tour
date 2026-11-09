@@ -70,9 +70,9 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
 
     [HttpGet("slots")]
     public async Task<IActionResult> Slots([FromQuery] Guid routeRevisionId, [FromQuery] string robotCode,
-        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct) =>
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct, [FromQuery] bool shortNotice = false) =>
         Ok(new BaseResponse<TourSlotsView> { Success = true, Message = "Tour slots retrieved.",
-            Data = await sender.Send(new GetTourSlotsQuery(routeRevisionId, robotCode, from, to), ct) });
+            Data = await sender.Send(new GetTourSlotsQuery(routeRevisionId, robotCode, from, to, shortNotice), ct) });
 
     [HttpGet("shifts")]
     public async Task<IActionResult> Shifts([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct) =>

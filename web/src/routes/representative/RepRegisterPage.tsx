@@ -87,7 +87,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
   async function send() {
     if (!attempt) {
       if (diff?.issues.length) { setError({ message: 'Kiểm tra thay đổi danh sách trước khi lưu.', details: diff.issues }); return }
-      if (rows.some(row => !row.rowId) && !newRosterRowsAllowed(base.tour.scheduledStartAt)) { setError({ message: 'Đã qua hạn tạo đăng ký hoặc thêm điểm xem mới. Các cập nhật và loại dòng hiện tại vẫn theo quyền của hồ sơ.' }); return }
+      if (rows.some(row => !row.rowId) && !newRosterRowsAllowed(base.tour)) { setError({ message: 'Đã qua hạn tạo đăng ký hoặc thêm điểm xem mới. Các cập nhật và loại dòng hiện tại vẫn theo quyền của hồ sơ.' }); return }
     }
     setError(null)
     const next = attempt ?? { requestId: crypto.randomUUID(), input: {
@@ -139,7 +139,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
             {fieldErrors[field.key] && <span id={`registration-${field.key}-error`} className="rep-error-message">{fieldErrors[field.key]}</span>}
           </label>)}</div><p className="rep-hint">Email liên hệ của đoàn không thay thế email riêng của từng dòng lời mời.</p></Panel>}
           {step === 1 && <Panel title="Danh sách lời mời" action={base.registration && <button type="button" className={repButton('secondary', 'sm')} onClick={() => downloadBytes('CampusTour-danh-sach-hien-tai.xlsx', rosterWorkbookBytes(existingRows))}>Tải danh sách hiện tại</button>}>
-            <div className="rep-stack"><ExcelUploader accepted={accepted} onAccept={next => { setAccepted(next); setConfirmed(false) }} existingRows={existingRows} canAddRows={newRosterRowsAllowed(base.tour.scheduledStartAt)} inUse={base.registration ? { count: existingRows.length } : null} />
+            <div className="rep-stack"><ExcelUploader accepted={accepted} onAccept={next => { setAccepted(next); setConfirmed(false) }} existingRows={existingRows} canAddRows={newRosterRowsAllowed(base.tour)} inUse={base.registration ? { count: existingRows.length } : null} />
               {overSeats && <Callout tone="warn" title="Vượt số chỗ còn lại" role="status">{seatsMessage}</Callout>}
               {base.registration && !accepted && <RosterPreview rows={rows} variant="representative" />}
               {base.registration && <Link className={repButton('ghost', 'sm')} to={`/dai-dien/dang-ky/${base.registration.summary.id}?tab=email-change`}>Yêu cầu đổi email dòng đã chấp nhận</Link>}
@@ -159,7 +159,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
         </div>
       </form>
     </div><aside className="rep-summary-aside" aria-label="Buổi tham quan đang đăng ký"><h2>{base.tour.name}</h2>
-      <InfoList columns={1} items={[{ label: 'Thời gian dự kiến', value: formatDateTime(base.tour.scheduledStartAt) }, { label: 'Hạn tạo đăng ký và thêm dòng', value: formatDateTime(registrationClosesAt(base.tour.scheduledStartAt).toISOString()) }, { label: 'Tuyến tham quan', value: base.tour.routeName }, { label: 'Điểm dừng trong tuyến', value: base.tour.stops.length }]} />
+      <InfoList columns={1} items={[{ label: 'Thời gian dự kiến', value: formatDateTime(base.tour.scheduledStartAt) }, { label: 'Hạn tạo đăng ký và thêm dòng', value: formatDateTime(registrationClosesAt(base.tour).toISOString()) }, { label: 'Tuyến tham quan', value: base.tour.routeName }, { label: 'Điểm dừng trong tuyến', value: base.tour.stops.length }]} />
       <p className="rep-hint">Tối đa 10 điểm xem cho mỗi hồ sơ. Cập nhật và loại dòng hiện tại theo quyền do nhà trường cung cấp.</p>
     </aside></div>
   </RepPage>

@@ -66,7 +66,7 @@ export function TourListPanel() {
         <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left" aria-label="Danh sách Tour">
           <thead className="border-b border-[#e2e8f0]"><tr>{['Tour', 'Thời gian', 'Tuyến', 'Đoàn đăng ký', 'Đã gửi thư mời', 'Trạng thái'].map(label => <th key={label} scope="col" className={thClass}>{label}</th>)}</tr></thead>
           <tbody className="divide-y divide-[#eef1f4]">{tours.data.data.map(tour => <tr key={tour.id} className={rowClass}>
-            <td className={tdClass}><Link to={`/staff/tours/${tour.id}`} className="font-semibold text-[#0f172a] hover:text-[#2d719e] hover:underline focus-visible:outline-2 focus-visible:outline-[#2d719e]">{tour.name}</Link></td>
+            <td className={tdClass}><Link to={`/staff/tours/${tour.id}`} className="font-semibold text-[#0f172a] hover:text-[#2d719e] hover:underline focus-visible:outline-2 focus-visible:outline-[#2d719e]">{tour.name}</Link>{tour.isShortNotice && <span className="ml-1.5 inline-flex rounded-full border border-[#f1dcb0] bg-[#fffaf0] px-2 py-px text-[11px] font-bold whitespace-nowrap text-[#7d5310]">Ngắn hạn</span>}</td>
             <td className={`${tdClass} whitespace-nowrap`}>{formatSlot(tour.scheduledStartAt)}</td>
             <td className={tdClass}>{tour.routeName}</td>
             <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>

@@ -59,6 +59,7 @@ const lockedSlot = { ...freeSlot, time: '13:15', startsAt: '2099-01-03T06:15:00Z
 let slotDay = [freeSlot, lockedSlot]
 let expectedSeconds = 1320
 let refuseCreate: string | null = null
+let shortNoticeMinutes: number | null = null
 
 function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { ...TESTED, revisionId: 'revision-untested', name: 'Chưa đạt', verificationStatus: 'NOT_TESTED' }]) {
   const writes: { method: string; path: string; body: Record<string, unknown> }[] = []
@@ -67,7 +68,7 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
     const path = url.pathname
     const method = init?.method ?? 'GET'
     if (path === '/api/staff/manage/tours/slots') return Promise.resolve(json({ success: true, data: { routeRevisionId: 'revision-2', robotCode: 'amr-01',
-      measuredDurationSeconds: 1200, expectedDurationSeconds: expectedSeconds, recommendedMaxSeconds: 3600,
+      measuredDurationSeconds: 1200, expectedDurationSeconds: expectedSeconds, recommendedMaxSeconds: 3600, shortNoticeMinLeadMinutes: shortNoticeMinutes,
       days: [{ date: '2099-01-03', slots: slotDay }] } }))
     if (method !== 'GET') {
       writes.push({ method, path, body: JSON.parse(String(init?.body)) as Record<string, unknown> })
@@ -95,7 +96,7 @@ function renderAt(path: string) {
     <Route path="/staff/manage/tours/:tourId/edit" element={<StaffManageTourEditPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
-beforeEach(() => { slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null })
+beforeEach(() => { slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null; shortNoticeMinutes = null })
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
@@ -248,6 +249,34 @@ describe('live Tour management', () => {
       configuration: { name: 'Tour sáng thứ Bảy', description: null, routeRevisionId: 'revision-2', robotCode: 'amr-01', operatorUserId: 'staff-1', scheduledStartAt: '2099-01-03T01:15:00Z', fallbackVideoUrl: null },
     } })
     expect(writes[0].body.requestId).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/))
+  })
+
+  it('does not offer a short-notice Tour while the server has it switched off', async () => {
+    api()
+    renderAt('/staff/manage/tours/new')
+    await chooseTarget()
+    pickDate()
+    await screen.findByRole('button', { name: /Ca sáng/ })
+    expect(screen.queryByRole('checkbox', { name: /Tour ngắn hạn/ })).not.toBeInTheDocument()
+  })
+
+  it('asks the server for short-notice shifts and needs a reason before creating', async () => {
+    shortNoticeMinutes = 60
+    const writes = api()
+    renderAt('/staff/manage/tours/new')
+    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour trong ngày' } })
+    await chooseTarget()
+    pickDate()
+    fireEvent.click(await screen.findByRole('button', { name: /Ca sáng/ }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Tour ngắn hạn/ }))
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('shortNotice=true'))).toBe(true))
+    expect(await screen.findByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
+    expect(within(await screen.findByRole('region', { name: 'Xem lại trước khi tạo' })).getByText('Khi Staff chốt Tour')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/Lý do tạo gấp/), { target: { value: 'Trình diễn cho đoàn khách.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0].body).toMatchObject({ configuration: { name: 'Tour trong ngày', shortNoticeReason: 'Trình diễn cho đoàn khách.' } })
   })
 
   it('picks the day and shift from the calendar link and warns when the route is over the recommended length', async () => {

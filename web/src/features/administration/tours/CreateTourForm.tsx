@@ -39,6 +39,8 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   const [shiftCode, setShiftCode] = useState(() => params.get('shift') ?? '')
   const [video, setVideo] = useState('')
   const [capacity, setCapacity] = useState('20')
+  const [shortNotice, setShortNotice] = useState(false)
+  const [shortNoticeReason, setShortNoticeReason] = useState('')
   const [clientError, setClientError] = useState('')
   const routes = useTestedRoutes()
   const linkedRouteId = params.get('route')
@@ -48,7 +50,8 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   const noRouteUsable = Boolean(routes.data?.length) && routes.data!.every(route => routeBlockReason(route) !== null)
   const robots = useTourRobots(routeRevisionId)
   const operators = useTourOperators()
-  const slots = useTourSlots(routeRevisionId, robotCode, date)
+  const slots = useTourSlots(routeRevisionId, robotCode, date, shortNotice)
+  const shortNoticeMinutes = slots.data?.shortNoticeMinLeadMinutes
   const maps = useMapVersions()
   const selected = routes.data?.find(route => route.revisionId === routeRevisionId)
   const selectedArea = maps.data?.find(item => item.map.id === selected?.mapVersionId)?.map.areaName
@@ -57,7 +60,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   // Derived, so a shift that stops being free after a refresh drops out of the review by itself.
   const picked = day?.slots.find(item => item.shiftCode === shiftCode)
   const usable = picked?.available ? picked : undefined
-  const ready = Boolean(selected && robotCode && operatorUserId && usable)
+  const ready = Boolean(selected && robotCode && operatorUserId && usable && (!shortNotice || shortNoticeReason.trim()))
   const expected = slots.data?.expectedDurationSeconds
   const overRecommended = expected != null && slots.data != null && expected > slots.data.recommendedMaxSeconds
 
@@ -66,7 +69,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
     if (busy || !ready || !usable) return
     if (!name.trim()) return setClientError('Nhập tên Tour.')
     setClientError('')
-    onSubmit({ name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, scheduledStartAt: usable.startsAt, fallbackVideoUrl: video.trim() || null, capacity: Number(capacity) })
+    onSubmit({ name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, scheduledStartAt: usable.startsAt, fallbackVideoUrl: video.trim() || null, capacity: Number(capacity), shortNoticeReason: shortNotice ? shortNoticeReason.trim() : null })
   }
 
   return <form onSubmit={submit} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -108,6 +111,14 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
         {operators.isError && <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh sách Staff.</span>}</label>
       <label className="block text-sm">Ngày tổ chức<input required type="date" className={inputClass} min={campusDay(new Date())} value={date} onChange={e => setDate(e.target.value)} />
         <span className="mt-1 block text-xs text-[#64748b]">Giờ Việt Nam. Tới giờ robot không tự chạy; Staff bắt đầu thủ công.</span></label>
+      {(shortNotice || shortNoticeMinutes != null) && <div className="rounded-xl border border-[#e2e8f0] p-3 text-sm">
+        <label className="flex cursor-pointer items-start gap-2.5">
+          <input type="checkbox" checked={shortNotice} onChange={e => setShortNotice(e.target.checked)} className="mt-0.5 size-4 accent-[#2563eb]" />
+          <span className="min-w-0"><span className="block font-semibold text-[#0f172a]">Tour ngắn hạn</span>
+            <span className="block text-xs text-[#64748b]">Tạo gần giờ hơn mức 72 giờ{shortNoticeMinutes != null && `, tối thiểu ${shortNoticeMinutes} phút trước giờ bắt đầu`}. Không áp dụng hạn đăng ký 48 giờ và hạn duyệt 24 giờ; danh sách đóng khi Staff chốt Tour. Mọi điều kiện an toàn robot khi bắt đầu vẫn giữ nguyên.</span></span>
+        </label>
+        {shortNotice && <label className="mt-2 block">Lý do tạo gấp<textarea required maxLength={500} rows={2} className={inputClass} value={shortNoticeReason} onChange={e => setShortNoticeReason(e.target.value)} placeholder="Ví dụ: Buổi trình diễn với đoàn khách của nhà trường." /></label>}
+      </div>}
       <div role="group" aria-label="Ca">
         <p className="text-sm">Ca</p>
         {!routeRevisionId || !robotCode ? <p className="mt-1 text-xs text-[#64748b]">Chọn tuyến và robot để xem ca nào còn trống.</p>
@@ -138,7 +149,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
             {expected !== slots.data.measuredDurationSeconds && <span className="block text-xs text-[#64748b]">Chạy thử đo {formatDuration(slots.data.measuredDurationSeconds!)}, cộng thêm thời gian dừng đã tăng.</span>}
             <span className="block text-xs text-[#64748b]">Ca này chứa tối đa {formatDuration(usable.maxDurationSeconds)}.</span></Review>
           <Review label="Giữ robot">{campusTime(usable.reservationStartsAt!)} - {campusTime(usable.reservationEndsAt!)}</Review>
-          <Review label="Đóng đăng ký">{campusStamp(usable.registrationClosesAt)}</Review>
+          <Review label="Đóng đăng ký">{shortNotice ? 'Khi Staff chốt Tour' : campusStamp(usable.registrationClosesAt)}</Review>
           <Review label="Sức chứa">{capacity} chỗ</Review>
         </dl>
         {overRecommended && <div className="mt-3"><Notice tone="warn">Tuyến dài {formatDuration(expected!)}, hơn mức khuyến nghị {formatDuration(slots.data.recommendedMaxSeconds)}. Vẫn tạo được, nhưng nên cân nhắc tuyến ngắn hơn.</Notice></div>}
