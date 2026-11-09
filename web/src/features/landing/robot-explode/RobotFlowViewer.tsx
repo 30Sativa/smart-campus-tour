@@ -1,15 +1,20 @@
 import { useMemo, useRef } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { ContactShadows, Grid, Line, OrbitControls, useGLTF } from '@react-three/drei'
-import { AdditiveBlending, Box3, Color, Group, Mesh, MeshStandardMaterial, QuadraticBezierCurve3, Vector3 } from 'three'
+import { Box3, Color, Group, Mesh, MeshStandardMaterial, QuadraticBezierCurve3, Vector3 } from 'three'
 import { PART_GROUPS, groupOfNode, type PartGroupId } from './parts'
 import { flowNode, signalColor, stepParts, type FlowLink, type FlowNodeId, type FlowStep } from './flows'
+import ZoomControls from './ZoomControls'
+import { dollyTo, useZoom } from './zoom'
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/robot/campus-amr-explode.glb`
 /** The students' tour page has no place on the robot; its link leaves upwards, above the headset. */
 const CLOUD = new Vector3(0, 1.72, 0.25)
 /** Groups seen through: the casing and lid fade so the signal paths inside show. */
 const SEE_THROUGH: readonly PartGroupId[] = ['shell', 'lowershell', 'lid', 'screw', 'column', 'lidar']
+const CAMERA = { position: [1.95, 1.3, 2.35] as const, target: [0, 0.62, 0] as const }
+/** The camera's usual distance from what it looks at. */
+const HOME_DISTANCE = new Vector3(...CAMERA.position).distanceTo(new Vector3(...CAMERA.target))
 
 type Spinner = { pivot: Group; axis: 'x' | 'y'; group: PartGroupId }
 
@@ -124,52 +129,99 @@ function moveParts(model: FlowModel, motion: FlowStep['motion'], delta: number, 
   model.head.rotation.y += (pan - model.head.rotation.y) * Math.min(1, delta * 4)
 }
 
-/** Current pulses on each path, and how many glowing beads make up one pulse's tail. */
-const PULSES = 3
-const TAIL = 7
+/** How the current is drawn: pulses every PERIOD metres along a path, running at SPEED metres a second. */
+const CURRENT = { period: 0.32, speed: 0.42 }
+/**
+ * One pulse is a stack of dashes that all end at the same front: long and faint
+ * at the back, short and solid at the front, with a white-hot core on the very
+ * front, so together they read as a spark with a tail fading out behind it.
+ */
+const PULSE = [
+  { length: 0.16, width: 3, opacity: 0.14, white: false },
+  { length: 0.09, width: 3, opacity: 0.26, white: false },
+  { length: 0.045, width: 3.2, opacity: 0.6, white: false },
+  { length: 0.018, width: 3.8, opacity: 1, white: false },
+  { length: 0.011, width: 1.5, opacity: 1, white: true },
+] as const
+
+type Dashed = { material: { dashOffset: number } }
+
+/** Runs the pulses forward: a smaller dash offset moves the dashes towards the end of the line. */
+function runCurrent(layers: (Dashed | null)[], travelled: number) {
+  layers.forEach((layer, index) => {
+    if (layer) layer.material.dashOffset = -travelled - (PULSE[0].length - PULSE[index].length)
+  })
+}
+
+/** The receiving end breathes a little, like a contact taking current. */
+function breathe(halo: Mesh | null, time: number) {
+  if (halo) halo.scale.setScalar(1 + 0.35 * (0.5 + 0.5 * Math.sin(time * 6)))
+}
 
 /**
- * One signal path drawn like a live wire: a soft halo, a bright core that
- * flickers a little, and pulses of current with fading tails running from the
+ * One signal path drawn like a thin live wire: a fine line in the signal's
+ * colour, and sparks of current with fading tails running along it from the
  * sender to the receiver.
  */
 function SignalPath({ curve, color, reduced }: { curve: QuadraticBezierCurve3; color: string; reduced: boolean }) {
   const points = useMemo(() => curve.getPoints(64), [curve])
-  const spark = useMemo(() => new Color(color).lerp(new Color('#ffffff'), 0.55), [color])
-  const core = useRef<{ material: { opacity: number } } | null>(null)
-  const beads = useRef<(Mesh | null)[]>([])
-  const speed = 0.55 / Math.max(0.35, curve.getLength())
-  useFrame(state => {
-    const t = state.clock.elapsedTime
-    if (core.current) core.current.material.opacity = reduced ? 0.9 : 0.72 + 0.28 * Math.abs(Math.sin(t * 23) * Math.sin(t * 7.3))
-    beads.current.forEach((bead, index) => {
-      if (!bead) return
-      const pulse = Math.floor(index / TAIL)
-      const tail = index % TAIL
-      const head = reduced ? (pulse + 0.5) / PULSES : (t * speed + pulse / PULSES) % 1
-      const u = head - tail * 0.022
-      bead.visible = u >= 0
-      if (!bead.visible) return
-      bead.position.copy(curve.getPoint(u))
-      bead.scale.setScalar(1 - tail / TAIL)
-    })
+  const wire = useMemo(() => new Color(color).lerp(new Color('#ffffff'), 0.5), [color])
+  const layers = useRef<(Dashed | null)[]>([])
+  const halo = useRef<Mesh>(null)
+  const travelled = useRef(0)
+  useFrame((state, delta) => {
+    if (!reduced) travelled.current += delta * CURRENT.speed
+    runCurrent(layers.current, travelled.current)
+    if (!reduced) breathe(halo.current, state.clock.elapsedTime)
   })
   return (
     <group>
-      <Line points={points} color={color} lineWidth={10} transparent opacity={0.14} depthTest={false} toneMapped={false} renderOrder={10} />
-      <Line ref={core as never} points={points} color={color} lineWidth={2.6} transparent opacity={0.9} depthTest={false} toneMapped={false} renderOrder={11} />
-      {Array.from({ length: PULSES * TAIL }, (_, index) => (
-        <mesh key={index} ref={node => { beads.current[index] = node }} renderOrder={12}>
-          <sphereGeometry args={[index % TAIL === 0 ? 0.02 : 0.015, 10, 10]} />
-          <meshBasicMaterial color={index % TAIL === 0 ? '#ffffff' : spark} transparent opacity={index % TAIL === 0 ? 1 : 0.75} depthTest={false} blending={AdditiveBlending} toneMapped={false} />
-        </mesh>
+      {/* Solid (not see-through) so the joints between segments do not show as dots. */}
+      <Line points={points} color={wire} lineWidth={1.2} depthTest={false} toneMapped={false} renderOrder={10} />
+      {PULSE.map((pulse, index) => (
+        <Line
+          key={index}
+          ref={node => { layers.current[index] = node as unknown as Dashed | null }}
+          points={points}
+          color={pulse.white ? '#ffffff' : color}
+          lineWidth={pulse.width}
+          dashed
+          dashSize={pulse.length}
+          gapSize={CURRENT.period - pulse.length}
+          transparent
+          opacity={pulse.opacity}
+          depthTest={false}
+          toneMapped={false}
+          renderOrder={11 + index}
+        />
       ))}
-      <mesh position={curve.v2} renderOrder={12}>
-        <sphereGeometry args={[0.026, 16, 16]} />
-        <meshBasicMaterial color={spark} transparent opacity={0.9} depthTest={false} blending={AdditiveBlending} toneMapped={false} />
+      <mesh position={curve.v0} renderOrder={17}>
+        <sphereGeometry args={[0.006, 12, 12]} />
+        <meshBasicMaterial color={color} depthTest={false} toneMapped={false} />
+      </mesh>
+      <mesh ref={halo} position={curve.v2} renderOrder={17}>
+        <sphereGeometry args={[0.014, 16, 16]} />
+        <meshBasicMaterial color={color} transparent opacity={0.25} depthTest={false} toneMapped={false} />
+      </mesh>
+      <mesh position={curve.v2} renderOrder={18}>
+        <sphereGeometry args={[0.007, 12, 12]} />
+        <meshBasicMaterial color={color} depthTest={false} toneMapped={false} />
       </mesh>
     </group>
   )
+}
+
+/** Keeps the camera at its usual distance times the zoom factor, easing there. */
+function ZoomRig({ zoom }: { zoom: number }) {
+  const controls = useThree(state => state.controls) as unknown as { target: Vector3; update: () => void } | null
+  const camera = useThree(state => state.camera)
+  const scratch = useMemo(() => new Vector3(), [])
+  useFrame((_, delta) => {
+    if (!controls) return
+    dollyTo(camera.position, controls.target, HOME_DISTANCE * zoom, 1 - Math.exp(-6 * delta), scratch)
+    controls.update()
+  })
+  return null
 }
 
 function Robot({ step, reduced }: { step: FlowStep | null; reduced: boolean }) {
@@ -202,16 +254,22 @@ function Robot({ step, reduced }: { step: FlowStep | null; reduced: boolean }) {
  */
 export default function RobotFlowViewer({ step, visible = true, reduced = false }: { step: FlowStep | null; visible?: boolean; reduced?: boolean }) {
   const colour = useMemo(() => new Color('#ffffff'), [])
+  const stage = useRef<HTMLDivElement>(null)
+  const zoom = useZoom(stage)
   return (
-    <Canvas className="lp3-flow__canvas" frameloop={visible ? 'always' : 'never'} shadows dpr={[1, 1.75]} camera={{ position: [1.95, 1.3, 2.35], fov: 34, near: 0.05, far: 30 }}>
-      <hemisphereLight args={[colour, '#8a9aa4', 1.3]} />
-      <directionalLight position={[2.5, 4, 3]} intensity={2} castShadow shadow-mapSize={[1024, 1024]} />
-      <directionalLight position={[-3, 2, -2]} intensity={0.7} />
-      <Robot step={step} reduced={reduced} />
-      <Grid position={[0, -0.001, 0]} args={[10, 10]} cellSize={0.1} cellThickness={0.6} cellColor="#9fb0b8" sectionSize={0.5} sectionThickness={1} sectionColor="#7d939d" fadeDistance={6} fadeStrength={2.2} infiniteGrid />
-      <ContactShadows position={[0, 0, 0]} opacity={0.3} scale={2.4} blur={2.4} far={1.2} />
-      <OrbitControls makeDefault target={[0, 0.62, 0]} enablePan={false} enableZoom={false} minPolarAngle={Math.PI * 0.2} maxPolarAngle={Math.PI * 0.49} />
-    </Canvas>
+    <div className="lp3-flow__zoomable" ref={stage}>
+      <Canvas className="lp3-flow__canvas" frameloop={visible ? 'always' : 'never'} shadows dpr={[1, 1.75]} camera={{ position: [...CAMERA.position], fov: 34, near: 0.05, far: 30 }}>
+        <hemisphereLight args={[colour, '#8a9aa4', 1.3]} />
+        <directionalLight position={[2.5, 4, 3]} intensity={2} castShadow shadow-mapSize={[1024, 1024]} />
+        <directionalLight position={[-3, 2, -2]} intensity={0.7} />
+        <Robot step={step} reduced={reduced} />
+        <Grid position={[0, -0.001, 0]} args={[10, 10]} cellSize={0.1} cellThickness={0.6} cellColor="#9fb0b8" sectionSize={0.5} sectionThickness={1} sectionColor="#7d939d" fadeDistance={6} fadeStrength={2.2} infiniteGrid />
+        <ContactShadows position={[0, 0, 0]} opacity={0.3} scale={2.4} blur={2.4} far={1.2} />
+        <OrbitControls makeDefault target={[...CAMERA.target]} enablePan={false} enableZoom={false} minPolarAngle={Math.PI * 0.2} maxPolarAngle={Math.PI * 0.49} />
+        <ZoomRig zoom={zoom.level} />
+      </Canvas>
+      <ZoomControls level={zoom.level} onIn={zoom.zoomIn} onOut={zoom.zoomOut} onReset={zoom.reset} />
+    </div>
   )
 }
 

@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { ContactShadows, Grid, OrbitControls, useGLTF } from '@react-three/drei'
 import { Box3, Color, Mesh, MeshStandardMaterial, Vector3 } from 'three'
 import { Expand, Pause, Play, Shrink, X } from 'lucide-react'
 import { PART_GROUPS, explodeOffset, groupOfNode, orderMoves, pairMoves, partGroup, planAssembly, stepApart, stepAt, type PartGroupId, type Step, type Vec3 } from './parts'
+import ZoomControls from './ZoomControls'
+import { useZoom } from './zoom'
 
 export const ROBOT_EXPLODE_URL = `${import.meta.env.BASE_URL}models/robot/campus-amr-explode.glb`
 
@@ -19,8 +21,6 @@ const HOME_TARGET = new Vector3(0, HOME.apart.y, 0)
 const PICKED_DISTANCE = 2.1
 
 type Piece = { mesh: Mesh; group: PartGroupId; base: Vector3; offset: Vector3; step: Step | undefined }
-/** What the status bar under the robot shows; written straight into the DOM every frame it changes. */
-type Status = { text: string; color: string; step: string; placed: number }
 
 function usePieces() {
   const { scene } = useGLTF(ROBOT_EXPLODE_URL, false, true)
@@ -71,12 +71,10 @@ function usePieces() {
     const plan = planAssembly(count)
     const taken = new Map<PartGroupId, number>()
     const pieces: Piece[] = []
-    const together = new Map<Step, number>()
     for (const move of moves) {
       const index = taken.get(move.group) ?? 0
       taken.set(move.group, index + 1)
       const step = plan.steps.get(move.group)?.[index]
-      if (step) together.set(step, move.members.length)
       for (const unit of move.members) {
         // Each piece of a pair leaves towards its own side.
         const offset = new Vector3(...explodeOffset(partGroup(unit.group).explode, unit.centre))
@@ -85,8 +83,7 @@ function usePieces() {
     }
     const counts = new Map<PartGroupId, number>()
     pieces.forEach(piece => counts.set(piece.group, (counts.get(piece.group) ?? 0) + 1))
-    const allSteps = [...plan.steps.values()].flat().sort((a, b) => a.start - b.start)
-    return { root, pieces, materials, glow, counts, steps: plan.steps, allSteps, together, seconds: plan.turns * SECONDS_PER_TURN }
+    return { root, pieces, materials, glow, counts, steps: plan.steps, seconds: plan.turns * SECONDS_PER_TURN }
   }, [scene])
 }
 
@@ -136,21 +133,21 @@ function styleParts(model: Model, highlight: readonly PartGroupId[], hovered: Pa
 /** Put together, taken apart, looping between the two, or held where it is (while a part is being looked at). */
 type Mode = 'together' | 'apart' | 'auto' | 'hold'
 
-function Robot({ model, mode, visible, highlight, hovered, onHover, onPick, onStatus }: {
+function Robot({ model, mode, visible, highlight, hovered, zoom, onHover, onPick }: {
   model: Model
   mode: Mode
   /** False while the section is scrolled away and no frames are drawn. */
   visible: boolean
   highlight: readonly PartGroupId[]
   hovered: PartGroupId | null
+  /** Factor on the camera distance, from the zoom buttons or a pinch. */
+  zoom: number
   onHover: (group: PartGroupId | null) => void
   onPick: (group: PartGroupId) => void
-  onStatus: (status: Status) => void
 }) {
   const progress = useRef(0)
   const clock = useRef(0)
   const styled = useRef('')
-  const shown = useRef('')
   const aim = useRef(new Vector3())
   const resumed = useRef(true)
   const controls = useThree(state => state.controls) as unknown as { target: Vector3; update: () => void } | null
@@ -178,21 +175,6 @@ function Robot({ model, mode, visible, highlight, hovered, onHover, onPick, onSt
     // Only the move under way glows, so the order can be followed one move at a time.
     placePieces(model, progress.current, highlight.length === 0 ? moving : null)
 
-    const placed = Math.round((1 - progress.current) * 100)
-    const status: Status = moving
-      ? {
-          text: `${progress.current < before ? 'Đang ghép' : 'Đang tháo'} · ${partGroup(moving.group).label}${moving.of > 1 ? ` ${moving.number}/${moving.of}` : ''}${(model.together.get(moving) ?? 1) > 1 && moving.group !== 'screw' ? ' · cặp hai bên' : ''}`,
-          color: partGroup(moving.group).color,
-          step: `Bước ${model.allSteps.indexOf(moving) + 1}/${model.allSteps.length}`,
-          placed,
-        }
-      : { text: placed === 100 ? 'Robot đã ghép hoàn chỉnh' : placed === 0 ? 'Đã tháo rời toàn bộ' : 'Tạm dừng', color: '', step: `${model.allSteps.length} bước`, placed }
-    const key = `${status.text}|${status.step}|${status.placed}`
-    if (key !== shown.current) {
-      shown.current = key
-      onStatus(status)
-    }
-
     const look = `${highlight.join()}|${hovered ?? ''}`
     if (look !== styled.current) {
       styled.current = look
@@ -206,7 +188,7 @@ function Robot({ model, mode, visible, highlight, hovered, onHover, onPick, onSt
       const goal = single ?? aim.current.set(0, HOME.together.y + (HOME.apart.y - HOME.together.y) * open, 0)
       // A narrow (phone) frame cuts the sides first, so the camera stands further back there.
       const fit = 'aspect' in camera ? Math.max(1, 0.9 / camera.aspect) : 1
-      followCamera(camera.position, controls.target, goal, (single ? PICKED_DISTANCE : home) * fit, 1 - Math.exp(-3 * delta))
+      followCamera(camera.position, controls.target, goal, (single ? PICKED_DISTANCE : home) * fit * zoom, 1 - Math.exp(-3 * delta))
       controls.update()
     }
   })
@@ -257,7 +239,7 @@ const MODES: { id: Exclude<Mode, 'hold'>; label: string }[] = [
 /**
  * The CampusTour robot from its SolidWorks assembly: it comes apart one move
  * at a time (a piece, a mirrored pair, or all the screws) and goes back
- * together the same way. Clicking a part (or a part name) holds the robot
+ * together the same way. Clicking a part holds the robot
  * where it is and shows what that part is; every other part fades so the ones
  * inside the body can be seen.
  */
@@ -272,20 +254,8 @@ export default function RobotExplodeViewer({ focus = [], visible = true }: {
   const [picked, setPicked] = useState<PartGroupId | null>(null)
   const [hovered, setHovered] = useState<PartGroupId | null>(null)
   const [model, setModel] = useState<Model | null>(null)
-  const statusText = useRef<HTMLSpanElement>(null)
-  const statusDot = useRef<HTMLElement>(null)
-  const statusStep = useRef<HTMLSpanElement>(null)
-  const statusBar = useRef<HTMLSpanElement>(null)
-
-  const onStatus = useCallback((status: Status) => {
-    if (statusText.current) statusText.current.textContent = status.text
-    if (statusStep.current) statusStep.current.textContent = `${status.step} · ${status.placed}% đã lắp`
-    if (statusDot.current) {
-      statusDot.current.style.background = status.color || 'transparent'
-      statusDot.current.dataset.idle = status.color ? 'false' : 'true'
-    }
-    if (statusBar.current) statusBar.current.style.transform = `scaleX(${status.placed / 100})`
-  }, [])
+  const stage = useRef<HTMLDivElement>(null)
+  const zoom = useZoom(stage)
 
   const highlight = useMemo(() => (picked ? [picked] : focus), [picked, focus])
   const info = picked ? partGroup(picked) : null
@@ -300,7 +270,7 @@ export default function RobotExplodeViewer({ focus = [], visible = true }: {
 
   return (
     <div className="lp3-explode" data-hovering={hovered ? 'true' : 'false'}>
-      <div className="lp3-explode__stage">
+      <div className="lp3-explode__stage" ref={stage}>
         <Canvas
           className="lp3-explode__canvas"
           frameloop={visible ? 'always' : 'never'}
@@ -314,11 +284,11 @@ export default function RobotExplodeViewer({ focus = [], visible = true }: {
             visible={visible}
             highlight={highlight}
             hovered={hovered}
+            zoom={zoom.level}
             onHover={setHovered}
             onPick={pick}
             spin={!picked && focus.length === 0 && !reduced}
             onModel={setModel}
-            onStatus={onStatus}
           />
         </Canvas>
 
@@ -326,7 +296,8 @@ export default function RobotExplodeViewer({ focus = [], visible = true }: {
           <span>Mô hình SolidWorks · A_Full_Xe</span>
           <strong>{pieceCount ? `${pieceCount} chi tiết · ${PART_GROUPS.length} nhóm linh kiện` : 'Đang tải mô hình…'}</strong>
         </div>
-        <p className="lp3-explode__hint">Kéo để xoay · Bấm linh kiện để xem</p>
+        <p className="lp3-explode__hint">Kéo để xoay · Ctrl + cuộn để phóng to · Bấm linh kiện để xem</p>
+        <ZoomControls level={zoom.level} onIn={zoom.zoomIn} onOut={zoom.zoomOut} onReset={zoom.reset} />
 
         {info && (
           <div className="lp3-explode__card" role="status">
@@ -339,27 +310,12 @@ export default function RobotExplodeViewer({ focus = [], visible = true }: {
         )}
       </div>
 
-      <div className="lp3-explode__status" aria-hidden="true">
-        <div className="lp3-explode__status-row">
-          <span className="lp3-explode__status-label"><i ref={statusDot} data-idle="true" /><span ref={statusText} /></span>
-          <span className="lp3-explode__status-step" ref={statusStep} />
-        </div>
-        <span className="lp3-explode__track"><span ref={statusBar} /></span>
-      </div>
-
       <div className="lp3-explode__bar">
         <div className="lp3-explode__modes" role="group" aria-label="Chế độ xem robot">
           {MODES.map(item => (
             <button key={item.id} type="button" aria-pressed={mode === item.id} onClick={() => choose(item.id)}>
               {item.id === 'apart' ? <Expand size={15} aria-hidden="true" /> : item.id === 'together' ? <Shrink size={15} aria-hidden="true" /> : mode === 'auto' ? <Pause size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
               {item.label}
-            </button>
-          ))}
-        </div>
-        <div className="lp3-explode__parts" role="group" aria-label="Linh kiện">
-          {PART_GROUPS.filter(group => group.id !== 'frame').map(group => (
-            <button key={group.id} type="button" aria-pressed={picked === group.id} onClick={() => pick(group.id)} onMouseEnter={() => setHovered(group.id)} onMouseLeave={() => setHovered(null)}>
-              <i style={{ background: group.color }} aria-hidden="true" />{group.label}
             </button>
           ))}
         </div>
