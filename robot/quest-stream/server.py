@@ -114,6 +114,7 @@ class Config:
     scrcpy_max_fps: int = 0  # 0 = the output fps
     scrcpy_max_size: int = 1600  # longest side sent by the Quest, 0 = full eye
     scrcpy_crop: str = ""  # W:H:X:Y on the Quest display, empty = the chosen eye's half
+    scrcpy_angle: float = 0.0  # rotate the eye image clockwise on the Quest (degrees), after the crop
 
     # Output: where FFmpeg publishes (MediaMTX RTSP) and how often a keyframe
     # is sent (a new WebRTC viewer starts on the next keyframe).
@@ -161,6 +162,7 @@ class Config:
             scrcpy_max_fps=_env_int("QUEST_SCRCPY_MAX_FPS", 0),
             scrcpy_max_size=_env_int("QUEST_SCRCPY_MAX_SIZE", 1600),
             scrcpy_crop=_env("QUEST_SCRCPY_CROP", ""),
+            scrcpy_angle=_env_float("QUEST_SCRCPY_ANGLE", 0.0),
             publish_url=_env("QUEST_PUBLISH_URL", "rtsp://127.0.0.1:8554/quest"),
             keyframe_interval=_env_float("QUEST_KEYFRAME_INTERVAL", 1.0),
             log_dir=Path(_env("QUEST_LOG_DIR", str(MODULE_DIR / "logs"))),
@@ -187,6 +189,8 @@ class Config:
             raise SystemExit("CONFIG_ERROR QUEST_SCRCPY_CROP must look like 2064:2208:0:0")
         if not 0 <= self.scrcpy_max_fps <= 120 or self.scrcpy_max_size < 0:
             raise SystemExit("CONFIG_ERROR QUEST_SCRCPY_MAX_FPS must be 0-120 and QUEST_SCRCPY_MAX_SIZE >= 0")
+        if not -360 <= self.scrcpy_angle <= 360:
+            raise SystemExit("CONFIG_ERROR QUEST_SCRCPY_ANGLE must be between -360 and 360 degrees")
         parts = urlsplit(self.publish_url)
         if parts.scheme not in ("rtsp", "rtsps") or not parts.hostname or len(parts.path) < 2:
             raise SystemExit("CONFIG_ERROR QUEST_PUBLISH_URL must look like rtsp://127.0.0.1:8554/quest")
@@ -382,6 +386,10 @@ def build_scrcpy_server_command(cfg: Config, serial: str, scid: str, crop: str, 
         f"max_fps={cfg.scrcpy_max_fps or cfg.fps}", f"max_size={cfg.scrcpy_max_size}",
         f"crop={crop}",
     ]
+    if cfg.scrcpy_angle:
+        # Rotates after the crop, on the Quest (scrcpy >= 3.0); only sent when set, so
+        # older servers that do not know the option still start.
+        args.append(f"angle={cfg.scrcpy_angle:g}")
     return [cfg.adb, "-s", serial, "shell", " ".join(args)]
 
 
@@ -437,7 +445,7 @@ def run_scrcpy_capture(cfg: Config, serial: str) -> int:
         return fail(3, f"adb setup failed: {exc}")
 
     print(f"SCRCPY_START version={version} crop={crop} max_fps={cfg.scrcpy_max_fps or cfg.fps} "
-          f"max_size={cfg.scrcpy_max_size}", file=sys.stderr, flush=True)
+          f"max_size={cfg.scrcpy_max_size} angle={cfg.scrcpy_angle:g}", file=sys.stderr, flush=True)
     server = subprocess.Popen(build_scrcpy_server_command(cfg, serial, scid, crop, version),
                               stdin=subprocess.DEVNULL, stdout=sys.stderr, stderr=sys.stderr)
     try:

@@ -186,6 +186,15 @@ class ScrcpyCaptureTests(unittest.TestCase):
                     "video_codec=h264", "max_fps=20", "max_size=1600", "crop=2064:2208:0:0"):
             self.assertIn(arg, shell.split())
 
+    def test_angle_is_sent_only_when_set(self):
+        plain = server.build_scrcpy_server_command(cfg(capture="scrcpy"), "S", "0abc1234", "2064:2208:0:0", "5.0.1")
+        self.assertNotIn("angle=", plain[4])
+        tilted = server.build_scrcpy_server_command(
+            cfg(capture="scrcpy", scrcpy_angle=-12.5), "S", "0abc1234", "2064:2208:0:0", "5.0.1")
+        self.assertIn("angle=-12.5", tilted[4].split())
+        with self.assertRaises(SystemExit):
+            cfg(capture="scrcpy", scrcpy_angle=400)
+
     def test_version_comes_from_the_installed_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             jar = Path(tmp) / "scrcpy-server"
