@@ -32,9 +32,18 @@ public sealed class TourScheduleSettings
     public int MaxCapacity { get; }
     /// <summary>The longest Tour any shift can hold; a route needing more fits no shift.</summary>
     public int LongestShiftMaxSeconds => Shifts.Max(TourSchedule.MaxDurationSeconds);
+    /// <summary>The least notice a short-notice Tour needs (ADR-0050); null while the option is switched off.</summary>
+    public TimeSpan? ShortNoticeMinLead { get; }
 
-    public TourScheduleSettings(IEnumerable<TourShiftOption>? shifts, int? recommendedMaxMinutes, int? maxCapacity = null)
+    public TourScheduleSettings(IEnumerable<TourShiftOption>? shifts, int? recommendedMaxMinutes, int? maxCapacity = null,
+        int? shortNoticeMinLeadMinutes = null)
     {
+        if (shortNoticeMinLeadMinutes is { } minutes)
+        {
+            if (minutes <= 0 || TimeSpan.FromMinutes(minutes) >= TourSchedule.LeadTime)
+                throw new InvalidOperationException("Tours:ShortNoticeMinLeadMinutes must be greater than 0 and shorter than the standard lead time.");
+            ShortNoticeMinLead = TimeSpan.FromMinutes(minutes);
+        }
         MaxCapacity = maxCapacity ?? DefaultMaxCapacity;
         if (MaxCapacity is < 1 or > CapacityCeiling) throw new InvalidOperationException("Tours:MaxCapacity must be between 1 and 40.");
         var parsed = (shifts ?? []).Select(Parse).OrderBy(shift => shift.Start).ToArray();
@@ -93,6 +102,17 @@ public static class TourSchedule
     // Asia/Ho_Chi_Minh has no daylight saving; a fixed offset needs no time zone data in the runtime image.
     private static readonly TimeSpan CampusOffset = TimeSpan.FromHours(7);
 
+    /// <summary>When new rows stop. A short-notice Tour has no 48-hour close: Staff closes its list with READY (ADR-0050).</summary>
+    public static DateTimeOffset RegistrationClosesAt(DateTimeOffset start, bool isShortNotice) =>
+        isShortNotice ? start : start - RegistrationClose;
+
+    /// <summary>When Staff review closes (BR-05). A short-notice Tour has no 24-hour close; undecided rows block READY instead (ADR-0050).</summary>
+    public static DateTimeOffset ReviewClosesAt(DateTimeOffset start, bool isShortNotice) =>
+        isShortNotice ? start : start - PendingDecisionClose;
+
+    public static TimeSpan RequireShortNoticeLead(TourScheduleSettings settings) =>
+        settings.ShortNoticeMinLead ?? throw new ConflictException("Chưa bật tùy chọn Tour ngắn hạn.", "SHORT_NOTICE_DISABLED");
+
     public static DateTimeOffset SlotStart(DateOnly date, TimeOnly slot) =>
         new DateTimeOffset(date.ToDateTime(slot), CampusOffset).ToUniversalTime();
 
@@ -143,13 +163,17 @@ public static class TourSchedule
 
     /// <summary>
     /// Null when the shift can be used. Order: lead time, remeasure, length, Admin block, then any hold still in
-    /// force inside the shift, including an older Tour held at an odd time.
+    /// force inside the shift, including an older Tour held at an odd time. <paramref name="shortNoticeLead"/> replaces only
+    /// the lead time; every other rule is the same for a short-notice Tour (ADR-0050).
     /// </summary>
     public static TourSlotBlock? Evaluate(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan,
-        IReadOnlyCollection<TourReservationHold> holds, TourShiftBlockView? adminBlock = null)
+        IReadOnlyCollection<TourReservationHold> holds, TourShiftBlockView? adminBlock = null, TimeSpan? shortNoticeLead = null)
     {
         var start = TourStart(shift.Date, shift.Shift);
-        if (start - now < LeadTime) return new(LeadTimeTooShort, "Quá gần hiện tại, cần tạo trước ít nhất 72 giờ");
+        if (start - now < (shortNoticeLead ?? LeadTime))
+            return new(LeadTimeTooShort, shortNoticeLead is { } lead
+                ? $"Quá gần hiện tại, Tour ngắn hạn cần tạo trước ít nhất {lead.TotalMinutes:0} phút"
+                : "Quá gần hiện tại, cần tạo trước ít nhất 72 giờ");
         if (plan is null) return new(RemeasureRequired, "Cần chạy thử lại tuyến để đo theo định nghĩa mới");
         var max = MaxDurationSeconds(shift.Shift);
         if (plan.ExpectedDurationSeconds > max)

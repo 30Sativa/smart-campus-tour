@@ -42,9 +42,31 @@ public sealed class TourHappyPathSqlTests
 
         var events = await db.TourEvents.AsNoTracking().Where(e => e.TourId == tour.Id).OrderBy(e => e.Id).ToArrayAsync();
         Assert.Equal(["TOUR_READY", "TOUR_STARTED", "LEG_DISPATCH_REQUESTED"], events.Select(e => e.EventType));
+        Assert.Null(events[1].ReasonCode); // On time: not an early Start (ADR-0050).
         var dispatch = events[^1];
         Assert.Equal((command.Id, command.LegId, first.StopOrder, map.MapKey, first.X), (dispatch.CommandId!.Value, dispatch.LegId!.Value, dispatch.TargetStopOrder!.Value, dispatch.TargetMapKey, dispatch.TargetX!.Value));
         Assert.Single(await db.AuditLogs.AsNoTracking().Where(a => a.Action == "TOUR_STARTED" && a.ActorUserId == w.H.OperatorId).ToArrayAsync());
+    }
+
+    [SchemaV11Fact]
+    public async Task EarlyStart_WithNobodyMissing_RunsInsideTheOwnRobotHold_AndRecordsHowEarly()
+    {
+        await using var w = await World.Create(enabled: true);
+        w.Clock.Now = w.H.Start.AddMinutes(-10);
+        await w.Report();
+        await w.H.Send(new StartTourCommand(w.H.TourId, w.H.OperatorId,
+            new(Guid.NewGuid(), await w.H.Version(), new(true, true, true, true))));
+
+        await using var db = w.H.Context();
+        var tour = await db.Tours.AsNoTracking().SingleAsync(t => t.Id == w.H.TourId);
+        Assert.Equal(("RUNNING", w.Clock.Now), (tour.State, tour.StartedAt));
+        Assert.Equal(w.H.Start, tour.ScheduledStartAt);
+        // The reservation is not moved: the shift hold opens a buffer before the start and covers the early run.
+        var reservation = await db.TourRobotReservations.AsNoTracking().SingleAsync(r => r.TourId == tour.Id);
+        Assert.True(reservation.StartsAt <= tour.StartedAt);
+        var started = await db.TourEvents.AsNoTracking().SingleAsync(e => e.TourId == tour.Id && e.EventType == "TOUR_STARTED");
+        Assert.Equal(StartTourCommandHandler.EarlyStartReason, started.ReasonCode);
+        Assert.Contains("600 giây", started.ReasonNote);
     }
 
     [SchemaV11Fact]

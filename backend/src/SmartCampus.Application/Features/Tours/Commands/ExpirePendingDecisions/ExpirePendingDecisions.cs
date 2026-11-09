@@ -30,6 +30,8 @@ public sealed class ExpirePendingDecisionsCommandHandler(ITourManagementReposito
     {
         // The Tour root lock every registration writer takes first, so a Staff decision and this job never interleave.
         if (await registrations.LockTourAsync(command.TourId, ct) is not { } tour || tour.State is not ("SCHEDULED" or "READY")) return 0;
+        // A short-notice Tour has no T-24h; what Staff leaves undecided blocks READY (ADR-0050).
+        if (tour.IsShortNotice) return 0;
         var now = clock.GetUtcNow();
         if (now < tour.ScheduledStartAt - TourSchedule.PendingDecisionClose) return 0;
 

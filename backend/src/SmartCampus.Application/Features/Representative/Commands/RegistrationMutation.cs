@@ -18,7 +18,7 @@ internal static class RegistrationMutation
         RowVersionToken.EnsureCurrent(registration.RowVersion, expectedVersion);
         RepresentativeRegistrationPolicy.Evaluate(tour.State, registration.State,
             await repository.HasInvitationsAsync(id, ct), operation,
-            RegistrationExpiry.IsReviewClosed(tour.ScheduledStartAt, clock.GetUtcNow())).EnsureAllowed();
+            RegistrationExpiry.IsReviewClosed(tour.ScheduledStartAt, clock.GetUtcNow(), tour.IsShortNotice)).EnsureAllowed();
         return (tour, registration);
     }
 }

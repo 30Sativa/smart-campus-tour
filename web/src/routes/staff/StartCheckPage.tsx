@@ -114,7 +114,9 @@ export default function StartCheckPage() {
   const stale = Boolean(result) && (isTourStale(checks, now) || isTourStale(tour, now))
   const canStart = Boolean(result?.canStart) && confirmed && !stale
   const notOperator = blockedBy.includes('callerIsOperator')
-  const verdict = result ? verdictOf(result, confirmed, summary.scheduledStartAt, now) : null
+  // The server opens Start a few minutes before the published time (ADR-0050); an older server omits it.
+  const opensAt = result?.opensAt ?? summary.scheduledStartAt
+  const verdict = result ? verdictOf(result, confirmed, opensAt, now) : null
   const refusal = start.isError ? operationRefusal(start.error, { operator: true }) : null
   const blocking = result?.checks.filter(check => checkVerdict(check, blockedBy) === 'failed').length ?? 0
   const ticked = CONFIRMATIONS.filter(({ key }) => confirmation[key]).length
@@ -149,7 +151,7 @@ export default function StartCheckPage() {
                 })()}
                 {!result.canStart && <div className="border-t border-[#f1f5f9] px-4 pt-3 pb-4">
                   <h2 className="mb-2 text-xs font-semibold text-[#64748b]">Cần xử lý</h2>
-                  <BlockerList checks={result.checks} blockedBy={blockedBy} opensAt={summary.scheduledStartAt} now={now} />
+                  <BlockerList checks={result.checks} blockedBy={blockedBy} opensAt={opensAt} now={now} />
                 </div>}
               </section>
               <section className={panelClass} aria-label="Toàn bộ điều kiện">

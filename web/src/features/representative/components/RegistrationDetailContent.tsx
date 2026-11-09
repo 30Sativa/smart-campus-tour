@@ -49,7 +49,7 @@ export function RegistrationDetailContent({ registrationId }: { registrationId: 
     <RepPageHeader title={summary.groupName} description={`${summary.tourName}, ${summary.schoolName}`} badges={<><RegistrationStatusBadge state={summary.state} rejectionReason={summary.rejectionReason} /><TourStateBadge state={summary.tourState} /></>} back={{ to: `/dai-dien/dang-ky?${back}`, label: 'Danh sách đăng ký' }} />
     <InfoList items={[
       { label: 'Giờ bắt đầu', value: formatDateTime(summary.tourScheduledStartAt) },
-      ...(tourCancelled ? [] : [{ label: 'Hạn đăng ký và thêm dòng', value: formatDateTime(registrationClosesAt(summary.tourScheduledStartAt).toISOString()) }]),
+      ...(tourCancelled ? [] : [{ label: 'Hạn đăng ký và thêm dòng', value: formatDateTime(registrationClosesAt({ scheduledStartAt: summary.tourScheduledStartAt, registrationClosesAt: summary.tourRegistrationClosesAt }).toISOString()) }]),
     ]} />
     {justSent && <Callout tone="ok" title="Đã gửi đăng ký" role="status">Kết quả xét duyệt sẽ cập nhật ở từng dòng trong danh sách.</Callout>}
     {message && <Callout title={message} role="status" />}

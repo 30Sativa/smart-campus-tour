@@ -6,7 +6,7 @@ namespace SmartCampus.Application.Features.Tours;
 public sealed record TourInput(string Name, string? Description, Guid RouteId,
     DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl);
 public sealed record CreateTourInput(string Name, string? Description, Guid RouteRevisionId, string RobotCode,
-    Guid OperatorUserId, DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl, int Capacity);
+    Guid OperatorUserId, DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl, int Capacity, string? ShortNoticeReason = null);
 /// <summary>
 /// <see cref="OperatorUserId"/> keeps the Tours that account operates; <see cref="NeedsReconcile"/> keeps the Tours with an
 /// UNKNOWN GoTo, in any state. <see cref="IncludeReadyBlockers"/> evaluates READY for each SCHEDULED row of the page, the
@@ -28,7 +28,7 @@ public sealed record TourSummary(Guid Id, string Name, string? Description, Guid
     int RegistrationCount, int InvitationCount, Guid? RouteRevisionId, TourReservationView? Reservation = null,
     TourExecutionSummary? Execution = null, RouteTestParticipantView? Operator = null,
     IReadOnlyList<ConflictBlocker>? ReadyBlockers = null, int Capacity = 0, int HeldSeats = 0,
-    DateTimeOffset? RegistrationClosesAt = null);
+    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false);
 /// <summary>
 /// Read-only situation of a Tour for list rows. <see cref="CommandState"/> is the current leg's GoTo, the command
 /// <c>GetTour</c> shows. <see cref="NeedsReconcile"/> is true while any GoTo of the Tour is UNKNOWN, in any Tour state.
@@ -51,7 +51,8 @@ public sealed record TourSlotView(string Time, DateTimeOffset StartsAt, bool Ava
     string ShiftCode, string ShiftName, int MaxDurationSeconds);
 public sealed record TourSlotDay(DateOnly Date, IReadOnlyList<TourSlotView> Slots);
 public sealed record TourSlotsView(Guid RouteRevisionId, string RobotCode, int? MeasuredDurationSeconds,
-    int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days, int RecommendedMaxSeconds, int MaxCapacity = 0);
+    int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days, int RecommendedMaxSeconds, int MaxCapacity = 0,
+    int? ShortNoticeMinLeadMinutes = null);
 /// <summary>A configured shift on one day, for drawing the calendar before a route or robot is chosen.</summary>
 public sealed record TourShiftView(string Code, string Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
     DateTimeOffset TourStartsAt, string Time, int MaxDurationSeconds, TourShiftBlockView? Block);
@@ -77,9 +78,11 @@ public sealed record TourActionAvailability(bool Allowed, string? Reason, IReadO
 public sealed record TourAllowedActions(TourActionAvailability Start, TourActionAvailability Next, TourActionAvailability EndEarly,
     TourActionAvailability RetryLeg, TourActionAvailability Reconcile);
 public sealed record TourMutationResult(Guid Id);
-/// <summary>TourEvent types and receipt actions. READY and Reopen are not operational use of the Tour; the rest are.</summary>
+public sealed record TourViewerPresence(int Accepted, int Joined);
+/// <summary>TourEvent types and receipt actions. Short-notice creation, READY and Reopen are not operational use of the Tour; the rest are.</summary>
 public static class TourLifecycleEvents
 {
+    public const string CreatedShortNotice = "TOUR_CREATED_SHORT_NOTICE";
     public const string Ready = "TOUR_READY";
     public const string Reopened = "TOUR_REOPENED";
     public const string Started = "TOUR_STARTED";

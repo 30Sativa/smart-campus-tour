@@ -10,8 +10,13 @@ namespace SmartCampus.Application.Features.FleetSync;
 public sealed class FleetCommandSettings
 {
     public FleetCommandSettings(bool enabled = false, int maxTelemetryAgeSeconds = 2, int startLateLimitMinutes = 15,
-        int acceptWindowSeconds = 30, int legResultTimeoutSeconds = 600, int sweepIntervalSeconds = 5)
+        int acceptWindowSeconds = 30, int legResultTimeoutSeconds = 600, int sweepIntervalSeconds = 5,
+        int startEarlyLimitMinutes = 10)
     {
+        // ADR-0050: an early Start must stay inside the robot hold, which opens one buffer before the Tour start.
+        if (startEarlyLimitMinutes < 0 || TimeSpan.FromMinutes(startEarlyLimitMinutes) > Tours.TourSchedule.ReservationBuffer)
+            throw new InvalidOperationException(
+                $"FleetCommands:StartEarlyLimitMinutes must be between 0 and {Tours.TourSchedule.ReservationBuffer.TotalMinutes:0}.");
         if (maxTelemetryAgeSeconds <= 0)
             throw new InvalidOperationException("FleetCommands:MaxTelemetryAgeSeconds must be positive.");
         if (startLateLimitMinutes < 0)
@@ -25,6 +30,7 @@ public sealed class FleetCommandSettings
         Enabled = enabled;
         MaxTelemetryAge = TimeSpan.FromSeconds(maxTelemetryAgeSeconds);
         StartLateLimit = TimeSpan.FromMinutes(startLateLimitMinutes);
+        StartEarlyLimit = TimeSpan.FromMinutes(startEarlyLimitMinutes);
         AcceptWindow = TimeSpan.FromSeconds(acceptWindowSeconds);
         LegResultTimeout = TimeSpan.FromSeconds(legResultTimeoutSeconds);
         SweepInterval = TimeSpan.FromSeconds(sweepIntervalSeconds);
@@ -33,8 +39,10 @@ public sealed class FleetCommandSettings
     public bool Enabled { get; }
     /// <summary>Latest telemetry must have been received by the server no longer ago than this (SRS §7).</summary>
     public TimeSpan MaxTelemetryAge { get; }
-    /// <summary>Start is accepted in [ScheduledStartAt, ScheduledStartAt + this] (ADR-0042 §7, D2).</summary>
+    /// <summary>Start is accepted until ScheduledStartAt + this (ADR-0042 §7, D2).</summary>
     public TimeSpan StartLateLimit { get; }
+    /// <summary>Start is accepted from ScheduledStartAt − this, at most the reservation buffer (ADR-0050).</summary>
+    public TimeSpan StartEarlyLimit { get; }
     /// <summary>A GoTo's AcceptBy is its issue time plus this. Initial value, not measured yet.</summary>
     public TimeSpan AcceptWindow { get; }
     /// <summary>An accepted GoTo with no terminal result after this is UNKNOWN. Initial value, not measured yet.</summary>

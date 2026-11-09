@@ -7,6 +7,8 @@ public sealed class CreateTourInputValidator : AbstractValidator<CreateTourInput
     public CreateTourInputValidator(TourScheduleSettings settings)
     {
         RuleFor(t => t.Capacity).InclusiveBetween(1, settings.MaxCapacity).WithMessage($"Sức chứa phải từ 1 đến {settings.MaxCapacity} chỗ.");
+        RuleFor(t => t.ShortNoticeReason).MaximumLength(500).Must(reason => reason is null || !string.IsNullOrWhiteSpace(reason))
+            .WithMessage("Tour ngắn hạn cần có lý do.");
         RuleFor(t => t.Name).NotEmpty().Must(v => !string.IsNullOrWhiteSpace(v)).MaximumLength(150);
         RuleFor(t => t.Description).MaximumLength(1000);
         RuleFor(t => t.RouteRevisionId).NotEmpty();
