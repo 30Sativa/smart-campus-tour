@@ -6,12 +6,12 @@ import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { Notice } from '../AdminUi'
 import { passedAt, scheduleFitLabel } from '../routes/route-messages'
 import { useMapVersions } from '../../technical/technical-hooks'
-import { useQuickTourPlan, useTestedRoutes, useTourOperators, useTourRobots, useTourShifts, useTourSlots } from './hooks'
+import { useTestedRoutes, useTourOperators, useTourRobots, useTourShifts, useTourSlots } from './hooks'
 import { campusDay, campusShortDate, campusStamp, campusTime, formatDuration } from './tour-calendar'
 import { tourError } from './tour-messages'
 import type { VersionedRoute } from '../routes/versioned-api'
 import { tourKindOf, type TourKind } from './quick-tour'
-import type { CreateTourInput, QuickTourInput, TourSlot } from './types'
+import type { CreateTourInput, TourSlot } from './types'
 
 const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/
 /** When a shift's Tour must have ended: its start plus the most the shift holds. */
@@ -28,7 +28,6 @@ const routeBlockReason = (route: VersionedRoute) =>
 type CreateTourFormProps = {
   busy: boolean; error: string | null
   onSubmit: (input: CreateTourInput) => void
-  onSubmitQuick: (input: QuickTourInput) => void
 }
 
 /**
@@ -36,7 +35,7 @@ type CreateTourFormProps = {
  * shift (ADR-0034, docs/lich-tour-theo-ca.md §3): `?date=YYYY-MM-DD&shift=S1` picks the day and shift in advance. A quick
  * Tour (ADR-0053) names none: it holds the robot from now and may start once ready. `?route=<revisionId>` picks the route.
  */
-export function CreateTourForm({ busy, error, onSubmit, onSubmitQuick }: CreateTourFormProps) {
+export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const [params, setParams] = useSearchParams()
   // The kind is asked before the form, because it decides the deadlines and whether there is a shift at all.
   const kind = tourKindOf(params.get('kind'))
@@ -63,7 +62,9 @@ export function CreateTourForm({ busy, error, onSubmit, onSubmitQuick }: CreateT
   const robots = useTourRobots(routeRevisionId)
   const operators = useTourOperators()
   const slots = useTourSlots(routeRevisionId, robotCode, date, !quick)
-  const plan = useQuickTourPlan(routeRevisionId, robotCode, quick)
+  const today = campusDay(new Date())
+  // Only for the wait shown to Staff; the server sets the quick Tour's latest Start when it creates it.
+  const waitMinutes = useTourShifts(today, today, quick).data?.quickTourWaitMinutes
   const maps = useMapVersions()
   const selected = routes.data?.find(route => route.revisionId === routeRevisionId)
   const selectedArea = maps.data?.find(item => item.map.id === selected?.mapVersionId)?.map.areaName
@@ -72,9 +73,8 @@ export function CreateTourForm({ busy, error, onSubmit, onSubmitQuick }: CreateT
   // Derived, so a shift that stops being free after a refresh drops out of the review by itself.
   const picked = day?.slots.find(item => item.shiftCode === shiftCode)
   const usable = picked?.available ? picked : undefined
-  const quickPlan = plan.data?.available ? plan.data : undefined
-  const ready = Boolean(selected && robotCode && operatorUserId && (quick ? quickPlan && quickReason.trim() : usable))
-  const expected = quick ? plan.data?.expectedDurationSeconds : slots.data?.expectedDurationSeconds
+  const ready = Boolean(selected && robotCode && operatorUserId && (quick ? quickReason.trim() : usable))
+  const expected = slots.data?.expectedDurationSeconds
   const overRecommended = expected != null && slots.data != null && expected > slots.data.recommendedMaxSeconds
 
   const submit = (event: FormEvent) => {
@@ -83,7 +83,7 @@ export function CreateTourForm({ busy, error, onSubmit, onSubmitQuick }: CreateT
     if (!name.trim()) return setClientError('Nhập tên Tour.')
     setClientError('')
     const common = { name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, fallbackVideoUrl: video.trim() || null, capacity: Number(capacity) }
-    if (quick) onSubmitQuick({ ...common, reason: quickReason.trim() })
+    if (quick) onSubmit({ ...common, scheduledStartAt: null, shortNoticeReason: quickReason.trim() })
     else if (usable) onSubmit({ ...common, scheduledStartAt: usable.startsAt })
   }
 
@@ -132,7 +132,7 @@ export function CreateTourForm({ busy, error, onSubmit, onSubmitQuick }: CreateT
         {operators.data?.map(person => <option key={person.userId} value={person.userId}>{person.fullName} · {person.username}</option>)}
       </select>
         {operators.isError && <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh sách Staff.</span>}</label>
-      {quick ? <QuickTourTiming routeChosen={Boolean(routeRevisionId && robotCode)} plan={plan} /> : <>
+      {quick ? null : <>
       <label className="block text-sm">Ngày tổ chức<input required type="date" className={inputClass} min={campusDay(new Date())} value={date} onChange={e => setDate(e.target.value)} />
         <span className="mt-1 block text-xs text-[#64748b]">Giờ Việt Nam. Tới giờ robot không tự chạy; Staff bắt đầu thủ công.</span></label>
       <div role="group" aria-label="Ca">
@@ -146,7 +146,7 @@ export function CreateTourForm({ busy, error, onSubmit, onSubmitQuick }: CreateT
             {picked && !picked.available && <p role="alert" className="text-xs text-[#b23e31]">{picked.shiftName} không dùng được: {picked.reason}. Chọn ca khác.</p>}
           </div>}
       </div></>}
-      <label className="block text-sm">Sức chứa<input required type="number" min={1} max={(quick ? plan.data?.maxCapacity : slots.data?.maxCapacity) ?? 20} step={1} className={inputClass} value={capacity} onChange={e => setCapacity(e.target.value)} />
+      <label className="block text-sm">Sức chứa<input required type="number" min={1} max={slots.data?.maxCapacity ?? 20} step={1} className={inputClass} value={capacity} onChange={e => setCapacity(e.target.value)} />
         <span className="mt-1 block text-xs text-[#64748b]">Số dòng đăng ký tối đa của cả Tour. Mỗi điểm xem chung tính là 1 chỗ.</span></label>
       <label className="block text-sm">Video dự phòng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
       <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:justify-end">
@@ -156,17 +156,15 @@ export function CreateTourForm({ busy, error, onSubmit, onSubmitQuick }: CreateT
     </fieldset>
 
     <div className="space-y-3">
-      {quick && quickPlan && <section className={`${panelClass} p-4`} aria-label="Xem lại trước khi tạo">
-        <h2 className="text-[15px] font-semibold">Xem lại trước khi tạo</h2>
+      {quick && <section className={`${panelClass} p-4`} aria-label="Tour nhanh chạy thế nào">
+        <h2 className="text-[15px] font-semibold">Tour nhanh chạy thế nào</h2>
         <dl className="mt-3 space-y-2 text-sm">
+          <Review label="Giữ robot">Từ lúc bấm Tạo Tour<span className="block text-xs text-[#64748b]">Robot đang bận cho Tour khác thì không tạo được.</span></Review>
           <Review label="Mở Start">Ngay khi Tour sẵn sàng<span className="block text-xs text-[#64748b]">Đã chốt danh sách và mọi điểm xem đã vào phòng chờ.</span></Review>
-          <Review label="Hạn Start">{campusStamp(quickPlan.deadlineAt)}<span className="block text-xs text-[#64748b]">Sau {quickPlan.waitMinutes} phút. Chưa Start thì hệ thống tự huỷ.</span></Review>
-          {quickPlan.expectedDurationSeconds != null && <Review label="Thời lượng dự kiến">{formatDuration(quickPlan.expectedDurationSeconds)}</Review>}
-          <Review label="Giữ robot">{campusTime(quickPlan.reservationStartsAt!)} - {campusTime(quickPlan.reservationEndsAt!)}</Review>
-          <Review label="Đóng đăng ký">Khi Staff chốt Tour<span className="block text-xs text-[#64748b]">Muộn nhất {campusTime(quickPlan.deadlineAt)}.</span></Review>
+          <Review label="Hạn Start">{waitMinutes != null ? `${waitMinutes} phút sau khi tạo` : 'Theo cấu hình server'}<span className="block text-xs text-[#64748b]">Chưa Start thì hệ thống tự huỷ và trả robot.</span></Review>
+          <Review label="Đóng đăng ký">Khi Staff chốt Tour</Review>
           <Review label="Sức chứa">{capacity} chỗ</Review>
         </dl>
-        <p className="mt-3 text-xs text-[#64748b]">Giờ tính từ lúc bấm Tạo Tour, nên có thể lệch vài phút so với lúc xem.</p>
       </section>}
       {!quick && usable && slots.data && <section className={`${panelClass} p-4`} aria-label="Xem lại trước khi tạo">
         <h2 className="text-[15px] font-semibold">Xem lại trước khi tạo</h2>
@@ -210,18 +208,6 @@ function KindPill({ short }: { short: boolean }) {
   const Icon = short ? Zap : CalendarDays
   return <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${short ? 'border-[#f1dcb0] bg-[#fffaf0] text-[#7d5310]' : 'border-[#dbe6f4] bg-[#eff6ff] text-[#1d4ed8]'}`}>
     <Icon size={13} aria-hidden="true" />{short ? 'Tour nhanh' : 'Tour theo ca'}</span>
-}
-
-/** Where a quick Tour's timing goes instead of the date and shift: whether it can be created now, and why not. */
-function QuickTourTiming({ routeChosen, plan }: { routeChosen: boolean; plan: ReturnType<typeof useQuickTourPlan> }) {
-  return <div role="group" aria-label="Thời gian Tour nhanh">
-    <p className="text-sm">Thời gian</p>
-    {!routeChosen ? <p className="mt-1 text-xs text-[#64748b]">Chọn tuyến và robot để xem robot có rảnh ngay bây giờ không.</p>
-      : plan.isPending ? <p aria-busy="true" className="mt-1 text-xs text-[#64748b]">Đang kiểm tra robot…</p>
-      : plan.isError ? <p role="alert" className="mt-1 text-xs text-[#b23e31]">{tourError(plan.error)}</p>
-      : plan.data.available ? <p className="mt-1 text-xs text-[#1f7a55]">Robot rảnh. Tour giữ robot từ lúc tạo, hạn Start {campusTime(plan.data.deadlineAt)}.</p>
-      : <p role="alert" className="mt-1 text-xs text-[#b23e31]">Chưa tạo được Tour nhanh: {plan.data.reason}.</p>}
-  </div>
 }
 
 /** The first step of "Tạo Tour": which kind, before any field is shown. */

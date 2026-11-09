@@ -67,9 +67,6 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
     const url = new URL(String(input), 'http://localhost')
     const path = url.pathname
     const method = init?.method ?? 'GET'
-    if (path === '/api/staff/manage/tours/quick/plan') return Promise.resolve(json({ success: true, data: { routeRevisionId: 'revision-2', robotCode: 'amr-01',
-      expectedDurationSeconds: 1200, available: true, reasonCode: null, reason: null, deadlineAt: '2099-01-03T06:00:00Z',
-      reservationStartsAt: '2099-01-03T05:00:00Z', reservationEndsAt: '2099-01-03T06:35:00Z', waitMinutes: shortNoticeMinutes, maxCapacity: 20 } }))
     if (path === '/api/staff/manage/tours/shifts') return Promise.resolve(json({ success: true, data: { days: [], recommendedMaxSeconds: 3600, quickTourWaitMinutes: shortNoticeMinutes } }))
     if (path === '/api/staff/manage/tours/slots') return Promise.resolve(json({ success: true, data: { routeRevisionId: 'revision-2', robotCode: 'amr-01',
       measuredDurationSeconds: 1200, expectedDurationSeconds: expectedSeconds, recommendedMaxSeconds: 3600,
@@ -277,29 +274,28 @@ describe('live Tour management', () => {
   it('opens the quick form from an old ?kind=short link', async () => {
     api()
     renderAt('/staff/manage/tours/new?kind=short')
-    await chooseTarget()
-    expect(await screen.findByText(/Robot rảnh/)).toBeInTheDocument()
+    expect(await screen.findByLabelText(/Lý do tạo gấp/)).toBeInTheDocument()
   })
 
-  it('creates a quick Tour with no date or shift once the robot is free and a reason is given', async () => {
+  it('creates a quick Tour through the same create call, with a reason and no date or shift', async () => {
     shortNoticeMinutes = 60
     const writes = api()
     renderAt('/staff/manage/tours/new?kind=quick')
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour trình diễn' } })
     await chooseTarget()
-    expect(await screen.findByText(/Robot rảnh/)).toBeInTheDocument()
-    const review = within(await screen.findByRole('region', { name: 'Xem lại trước khi tạo' }))
-    expect(review.getByText('Ngay khi Tour sẵn sàng')).toBeInTheDocument()
-    expect(review.getByText('Sau 60 phút. Chưa Start thì hệ thống tự huỷ.')).toBeInTheDocument()
+    const how = within(await screen.findByRole('region', { name: 'Tour nhanh chạy thế nào' }))
+    expect(how.getByText('Ngay khi Tour sẵn sàng')).toBeInTheDocument()
+    expect(await how.findByText('60 phút sau khi tạo')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Ngày tổ chức/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
     expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/tours/slots'))).toBe(false)
 
     fireEvent.change(screen.getByLabelText(/Lý do tạo gấp/), { target: { value: 'Trình diễn cho đoàn khách.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
     await waitFor(() => expect(writes).toHaveLength(1))
-    expect(writes[0]).toMatchObject({ method: 'POST', path: '/api/staff/manage/tours/quick', body: {
-      configuration: { name: 'Tour trình diễn', routeRevisionId: 'revision-2', robotCode: 'amr-01', operatorUserId: 'staff-1', capacity: 20, reason: 'Trình diễn cho đoàn khách.' } } })
-    expect(writes[0].body.configuration).not.toHaveProperty('scheduledStartAt')
+    expect(writes[0]).toMatchObject({ method: 'POST', path: '/api/staff/manage/tours', body: {
+      configuration: { name: 'Tour trình diễn', routeRevisionId: 'revision-2', robotCode: 'amr-01', operatorUserId: 'staff-1', capacity: 20,
+        scheduledStartAt: null, shortNoticeReason: 'Trình diễn cho đoàn khách.' } } })
   })
 
   it('picks the day and shift from the calendar link and warns when the route is over the recommended length', async () => {

@@ -6,7 +6,6 @@ import { Drawer } from '../../components/ui/Drawer'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { useTour, useTourCalendar, useTourShifts } from '../../features/administration/tours/hooks'
 import { TourListPanel } from '../../features/administration/tours/TourListPanel'
-import { QuickTourPanel } from '../../features/administration/tours/QuickTourPanel'
 import { campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
 import { REGISTRATION_CLOSED_LABEL, TOUR_STATE_FILTER_LABEL, TOUR_STATE_LABEL, isRegistrationClosed, openSeatsLabel, tourError, tourStateLabel } from '../../features/administration/tours/tour-messages'
 import { overdueStartLabel } from '../../features/administration/tours/overdue-start'
@@ -107,10 +106,8 @@ export default function SchedulePage() {
   const query = params.get('q') ?? ''
   const monday = weekStart(day)
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
-  // A quick Tour has no shift, so it has its own tab (ADR-0053).
-  const quickTab = params.get('kind') === 'quick'
-  const tours = useTourCalendar(week[0], week[6], view !== 'list' && !quickTab)
-  const shifts = useTourShifts(week[0], week[6], view !== 'list' && !quickTab)
+  const tours = useTourCalendar(week[0], week[6], view !== 'list')
+  const shifts = useTourShifts(week[0], week[6], view !== 'list')
   const narrow = useNarrowScreen()
   // On a narrow screen the three filters fold behind one button, so the week starts higher up.
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -147,43 +144,19 @@ export default function SchedulePage() {
   const robotCount = new Set(filtered.map(tour => tour.reservation?.robotCode).filter(Boolean)).size
   const failed = tours.isError ? tours.error : shifts.isError ? shifts.error : null
 
-  const header = <>
-    <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
-      <div className="min-w-0">
-        <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch tour</h1>
-        <p className="mt-1 text-sm text-[#718096]">{quickTab ? 'Tour nhanh: không theo ca, Start khi chốt danh sách và đủ người.'
-          : view === 'list' ? 'Mọi Tour theo thời gian: sắp diễn ra, đang chạy, đã kết thúc.' : 'Tour đã lên lịch và thời gian giữ robot.'}</p>
-      </div>
-      <Link to={quickTab ? '/staff/manage/tours/new?kind=quick' : '/staff/manage/tours/new?kind=normal'} className={buttonClass('primary')}>
-        <Plus size={16} aria-hidden="true" />{quickTab ? 'Tạo Tour nhanh' : 'Tạo Tour'}</Link>
-    </header>
-    <div role="tablist" aria-label="Loại Tour" className="mb-4 inline-flex gap-0.5 rounded-xl border border-[#e2e8f0] bg-white p-1">
-      {([['normal', 'Theo ca', CalendarDays], ['quick', 'Tour nhanh', Zap]] as const).map(([value, label, Icon]) => {
-        const active = (value === 'quick') === quickTab
-        return <button key={value} type="button" role="tab" aria-selected={active} onClick={() => set({ kind: value === 'quick' ? 'quick' : null, tour: null }, false)}
-          className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors ${focus} ${active ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:text-[#2d3748]'}`}>
-          <Icon size={15} aria-hidden="true" />{label}</button>
-      })}
+  const header = <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+    <div className="min-w-0">
+      <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch tour</h1>
+      <p className="mt-1 text-sm text-[#718096]">{view === 'list' ? 'Mọi Tour theo thời gian: sắp diễn ra, đang chạy, đã kết thúc.' : 'Tour đã lên lịch và thời gian giữ robot.'}</p>
     </div>
-  </>
+    <Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>
+  </header>
   const viewToggle = <div role="group" aria-label="Chế độ xem lịch" className="ml-auto flex rounded-xl border border-[#e2e8f0] bg-white p-1">
     {([['week', 'Tuần'], ['day', 'Ngày'], ['list', 'Danh sách']] as const).map(([value, label]) => (
       <button key={value} type="button" aria-pressed={view === value} onClick={() => set({ view: value === 'week' ? null : value, tour: null })}
         className={`min-h-8 rounded-lg px-2.5 text-sm font-semibold sm:px-4 transition-colors ${focus} ${view === value ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:text-[#2d3748]'}`}>{label}</button>
     ))}
   </div>
-
-  // A quick Tour has no shift, so its tab is a list by how soon each must start, not the week.
-  if (quickTab) return (
-    <StaffPage>
-      {header}
-      <section className={`${card} p-4 sm:p-5`} aria-label="Tour nhanh">
-        <QuickTourPanel />
-        <p className="mt-3 flex items-start gap-2 text-[13px] text-[#718096]"><Info size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
-          Tour nhanh giữ robot từ lúc tạo, nên các ca trùng khung giữ đó trong tab Theo ca không nhận Tour mới. Chưa Start trước hạn thì hệ thống tự huỷ.</p>
-      </section>
-    </StaffPage>
-  )
 
   // All three views share this frame, so switching between them moves neither the toggle nor the top of the table.
   // The list is every Tour across time, not this week: it has no week to step through and keeps its own filters and paging.

@@ -1,7 +1,6 @@
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Tours;
-using SmartCampus.Application.Features.Tours.Commands.CreateQuickTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateScheduleBlock;
 using SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
@@ -176,14 +175,15 @@ public sealed class TourScheduleTests
     }
 
     [Theory]
-    [InlineData("Trình diễn", 20, true)]
-    [InlineData("  ", 20, false)]
-    [InlineData("", 20, false)]
-    [InlineData("Trình diễn", 0, false)]
-    [InlineData("Trình diễn", 21, false)]
-    public void QuickTourInput_NeedsAReason_AndACapacityInRange(string reason, int capacity, bool valid) =>
-        Assert.Equal(valid, new QuickTourInputValidator(Settings).Validate(
-            new QuickTourInput("Tour nhanh", null, Guid.NewGuid(), "amr", Guid.NewGuid(), null, capacity, reason)).IsValid);
+    [InlineData("Trình diễn", false, 20, true)]
+    [InlineData("  ", false, 20, false)]
+    [InlineData("Trình diễn", true, 20, false)]   // A quick Tour has no start of its own (ADR-0053).
+    [InlineData(null, false, 20, false)]          // A Tour on a shift needs one.
+    [InlineData(null, true, 20, true)]
+    [InlineData("Trình diễn", false, 21, false)]
+    public void CreateTourInput_IsEitherOnAShift_OrQuickWithAReason(string? reason, bool withStart, int capacity, bool valid) =>
+        Assert.Equal(valid, new CreateTourInputValidator(Settings).Validate(
+            new CreateTourInput("Tour", null, Guid.NewGuid(), "amr", Guid.NewGuid(), withStart ? Start : (DateTimeOffset?)null, null, capacity, reason)).IsValid);
 
     private static TourScheduleBlock Block(DateOnly date, string? shift) => new() { Id = Guid.NewGuid(), BlockDate = date, ShiftCode = shift, Reason = "Bảo trì" };
 
