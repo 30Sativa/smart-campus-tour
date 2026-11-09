@@ -113,6 +113,22 @@ describe('Technical dashboard and Mini PC monitoring', () => {
     expect(table.getByText('(cũ)')).toBeInTheDocument()
   })
 
+  it('lists warnings above routine work and states every fleet connection count', async () => {
+    dashboard = {
+      ...dashboardFixture([robotSummary()]),
+      actionItems: [
+        { type: 'POI_QUEUE', severity: 'INFO', title: '2 POI đang chờ', description: 'POI mới.', targetId: null, linkUrl: '/technical/poi-import' },
+        { type: 'ROUTE_RERUN', severity: 'WARNING', title: '1 tuyến cần chạy lại', description: 'Cần ghi lần chạy mới.', targetId: null, linkUrl: '/technical/confirmations' },
+      ],
+    }
+    renderAt(<TechnicalDashboardPage />, '/technical/dashboard')
+    const rows = within(await screen.findByRole('region', { name: 'Việc cần xử lý' })).getAllByRole('listitem')
+    expect(rows[0]).toHaveTextContent('1 tuyến cần chạy lại')
+    expect(within(rows[0]).getByText('Cảnh báo')).toBeInTheDocument()
+    expect(rows[1]).toHaveTextContent('2 POI đang chờ')
+    expect(within(screen.getByRole('region', { name: 'Tình trạng robot' })).getByRole('img', { name: 'Trực tuyến: 1, Ngoại tuyến: 0, Chưa nhận dữ liệu: 0, Chưa xác nhận kết nối: 0' })).toBeInTheDocument()
+  })
+
   it('shows one robot\'s live diagnostics with unknown and not-applicable readings labelled', async () => {
     renderAt(<TechnicalMonitoringPage />, '/technical/monitoring?robot=amr-01')
     const resources = within(await screen.findByRole('region', { name: 'Tài nguyên Mini PC' }))
