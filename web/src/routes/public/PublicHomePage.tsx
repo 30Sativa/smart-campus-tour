@@ -1,12 +1,12 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import Lenis from '@studio-freight/lenis'
+import { Link } from 'react-router'
 import { ArrowRight, BatteryCharging, Bot, MapPin, MessageCircle, Radar, Radio, Route, Video } from 'lucide-react'
 import { SiteNav } from '../../features/landing/sections/SiteNav'
 import { Hero } from '../../features/landing/sections/Hero'
 import { CtaBand } from '../../features/landing/sections/CtaBand'
 import { SiteFooter } from '../../features/landing/sections/SiteFooter'
 import { AiPreview, CyclingStatus, JourneyRouteOverlay, TechShowcase } from '../../features/landing/sections/JourneyParts'
-import { RobotFlowSection } from '../../features/landing/sections/RobotFlowSection'
 import type { TechItem } from '../../features/landing/sections/JourneyParts'
 import { EASE, ScrollTrigger, gsap, prefersReducedMotion, revealOnScroll } from '../../features/landing/landing-motion'
 import '../../features/landing/landing.css'
@@ -316,9 +316,9 @@ export default function PublicHomePage() {
           <div className="lp3-container">
             <div className="lp3-section-head"><span className="lp3-kicker" data-reveal>04 / Công nghệ</span><h2 data-reveal>Công nghệ đứng sau<br />mỗi điểm dừng.</h2><p data-reveal>Robot tự hành, nguồn hình và dữ liệu vận hành cùng kết nối trong một tour.</p></div>
             <TechShowcase items={technology} />
+            <Link to="/ben-trong-robot" className="lp3-outline-link lp3-tech-more">Xem dữ liệu chạy bên trong robot <ArrowRight size={18} aria-hidden="true" /></Link>
           </div>
         </section>
-        <RobotFlowSection />
         <CtaBand />
       </main>
       <SiteFooter />

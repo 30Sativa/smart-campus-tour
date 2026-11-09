@@ -571,9 +571,16 @@ html[data-theme-wave]::view-transition-new(root) {
 .lp3-flow__diagram svg { display: block; width: 100%; min-width: 560px; height: auto; font-family: inherit; }
 .lp3-flow__col { fill: var(--lp-ink-3); font-size: 11px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
 .lp3-flow__wire { fill: none; stroke: var(--lp-line-strong); stroke-width: 1.4; opacity: .55; }
-.lp3-flow__wire--on { stroke-width: 2.4; opacity: 1; stroke-dasharray: 7 6; animation: lp3-flow-dash 1s linear infinite; }
+.lp3-flow__wire--on { stroke-width: 2.2; opacity: .95; }
+/* Current running down a live wire: a blurred glow under it, and two sparks
+   (a coloured streak with a white-hot core) chasing each other to the receiver. */
+.lp3-flow__glow { fill: none; stroke-width: 9; stroke-linecap: round; opacity: .2; filter: blur(3px); animation: lp3-flow-hum 1.6s ease-in-out infinite; }
+.lp3-flow__spark { fill: none; stroke-width: 4.2; stroke-linecap: round; stroke-dasharray: 9 91; stroke-dashoffset: 100; animation: lp3-flow-spark 1.3s linear infinite; filter: drop-shadow(0 0 3px currentColor); }
+.lp3-flow__spark--core { stroke: #fff; stroke-width: 1.6; stroke-dasharray: 5 95; filter: none; }
+.lp3-flow__spark--late { animation-delay: -.65s; }
+@keyframes lp3-flow-spark { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes lp3-flow-hum { 0%, 100% { opacity: .14; } 50% { opacity: .32; } }
 .lp3-flow__wire-label { font-size: 12px; font-weight: 700; paint-order: stroke; stroke: var(--lp-surface); stroke-width: 4px; }
-@keyframes lp3-flow-dash { to { stroke-dashoffset: -13; } }
 .lp3-flow__node rect { fill: var(--lp-bg-sunk); stroke: var(--lp-line); stroke-width: 1.2; transition: fill .3s, stroke .3s; }
 .lp3-flow__node[data-on="true"] rect { fill: var(--lp-surface); stroke-width: 2.2; }
 .lp3-flow__node-label { fill: var(--lp-ink-3); font-size: 14px; font-weight: 700; }
@@ -582,7 +589,7 @@ html[data-theme-wave]::view-transition-new(root) {
 .lp3-flow__legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 8px; color: var(--lp-ink-2); font-size: .78rem; }
 .lp3-flow__legend span { display: inline-flex; align-items: center; gap: 7px; }
 .lp3-flow__legend i { width: 18px; height: 3px; border-radius: 3px; }
-@media (prefers-reduced-motion: reduce) { .lp3-flow__wire--on { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .lp3-flow__glow, .lp3-flow__spark { animation: none; } .lp3-flow__spark { stroke-dashoffset: 50; } }
 
 @media (max-width: 899px) {
   .lp3-flow__grid { grid-template-columns: 1fr; }
@@ -591,3 +598,10 @@ html[data-theme-wave]::view-transition-new(root) {
   .lp3-flow__diagram { display: none; }
   .lp3-flow__step { min-height: 52vh; }
 }
+
+/* Its own page (/ben-trong-robot): the section opens the page under the navigation. */
+.lp3-flow[data-page="true"] { padding-top: clamp(120px, 12vw, 168px); }
+.lp3-section-head h1 { margin-top: 20px; font-size: clamp(2.65rem, 5vw, 5.4rem); line-height: 1.08; letter-spacing: -.055em; font-weight: 800; max-width: 20ch; color: var(--lp-ink); }
+/* The link from section 04 on the light page, which the dark twin section's outline link style would leave unreadable. */
+.lp3-tech-more { border-color: var(--lp-line-strong); color: var(--lp-ink) !important; }
+.lp3-tech-more:hover { border-color: var(--lp-ink); }

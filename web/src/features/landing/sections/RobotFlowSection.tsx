@@ -94,7 +94,13 @@ export function SignalDiagram({ step }: { step: FlowStep | null }) {
             const path = linkPath(link)
             return (
               <g key={`${link.from}>${link.to}`} data-kind={link.kind}>
+                {/* A live wire: a soft glow, the wire itself, and two sparks of current running down it. */}
+                <path className="lp3-flow__glow" d={path.d} stroke={signalColor(link.kind)} />
                 <path className="lp3-flow__wire lp3-flow__wire--on" d={path.d} stroke={signalColor(link.kind)} markerEnd={`url(#flow-arrow-${link.kind})`} />
+                <path className="lp3-flow__spark" d={path.d} pathLength={100} stroke={signalColor(link.kind)} color={signalColor(link.kind)} />
+                <path className="lp3-flow__spark lp3-flow__spark--core" d={path.d} pathLength={100} />
+                <path className="lp3-flow__spark lp3-flow__spark--late" d={path.d} pathLength={100} stroke={signalColor(link.kind)} color={signalColor(link.kind)} />
+                <path className="lp3-flow__spark lp3-flow__spark--core lp3-flow__spark--late" d={path.d} pathLength={100} />
                 <text className="lp3-flow__wire-label" x={path.label.x} y={path.label.y} textAnchor={path.label.anchor as 'start' | 'middle' | 'end'} fill={signalColor(link.kind)}>{link.label}</text>
               </g>
             )
@@ -137,7 +143,10 @@ function StepBody({ step }: { step: FlowStep }) {
  * the step under way: the parts that work light up and each signal runs along
  * its path; below it, the same step on the signal diagram.
  */
-export function RobotFlowSection() {
+export function RobotFlowSection({ asPage = false }: {
+  /** On its own page the heading is the page's h1. */
+  asPage?: boolean
+}) {
   const [flowIndex, setFlowIndex] = useState(0)
   const [stepIndex, setStepIndex] = useState(0)
   const [details, setDetails] = useState<number | null>(null)
@@ -182,12 +191,12 @@ export function RobotFlowSection() {
   }
 
   return (
-    <section className="lp3-flow lp3-section" id="ben-trong-robot">
+    <section className="lp3-flow lp3-section" id="ben-trong-robot" data-page={asPage ? 'true' : undefined}>
       <div className="lp3-container">
         <div className="lp3-section-head">
-          <span className="lp3-kicker" data-reveal>05 / Bên trong robot</span>
-          <h2 data-reveal>Dữ liệu chạy từ máy tính<br />tới từng bánh xe.</h2>
-          <p data-reveal>Chọn một chức năng rồi cuộn xuống: mỗi bước sáng lên đúng linh kiện đang làm việc và đường tín hiệu đi qua nó.</p>
+          <span className="lp3-kicker">{asPage ? 'Quy trình chi tiết' : 'Bên trong robot'}</span>
+          {asPage ? <h1>Dữ liệu chạy từ máy tính<br />tới từng bánh xe.</h1> : <h2>Dữ liệu chạy từ máy tính<br />tới từng bánh xe.</h2>}
+          <p>Chọn một chức năng rồi cuộn xuống: mỗi bước sáng lên đúng linh kiện đang làm việc, và tín hiệu chạy dọc đường dây như dòng điện.</p>
         </div>
 
         <div className="lp3-flow__tabs" role="tablist" aria-label="Chức năng của robot">

@@ -24,6 +24,7 @@ const columns: FooterColumn[] = [
     title: 'Kỹ thuật',
     links: [
       { href: '#cong-nghe', label: 'Công nghệ robot' },
+      { href: '/ben-trong-robot', label: 'Bên trong robot' },
       { href: '#gioi-thieu', label: 'Digital Twin' },
     ],
   },
@@ -37,7 +38,8 @@ const columns: FooterColumn[] = [
   },
 ]
 
-export function SiteFooter() {
+/** `base` is `/` on pages other than home, so the section links lead back to it. */
+export function SiteFooter({ base = '' }: { base?: string }) {
   return (
     <footer className="lp-foot" id="lien-he">
       <div className="lp-ctn">
@@ -66,7 +68,7 @@ export function SiteFooter() {
                 {column.links.map((link) => (
                   <a
                     key={link.href}
-                    href={link.href}
+                    href={link.href.startsWith('#') ? `${base}${link.href}` : link.href}
                     target={link.external ? '_blank' : undefined}
                     rel={link.external ? 'noreferrer' : undefined}
                   >

@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { ContactShadows, Grid, Line, OrbitControls, useGLTF } from '@react-three/drei'
-import { Box3, Color, Group, Mesh, MeshStandardMaterial, QuadraticBezierCurve3, Vector3 } from 'three'
+import { AdditiveBlending, Box3, Color, Group, Mesh, MeshStandardMaterial, QuadraticBezierCurve3, Vector3 } from 'three'
 import { PART_GROUPS, groupOfNode, type PartGroupId } from './parts'
 import { flowNode, signalColor, stepParts, type FlowLink, type FlowNodeId, type FlowStep } from './flows'
 
@@ -124,32 +124,49 @@ function moveParts(model: FlowModel, motion: FlowStep['motion'], delta: number, 
   model.head.rotation.y += (pan - model.head.rotation.y) * Math.min(1, delta * 4)
 }
 
+/** Current pulses on each path, and how many glowing beads make up one pulse's tail. */
+const PULSES = 3
+const TAIL = 7
+
+/**
+ * One signal path drawn like a live wire: a soft halo, a bright core that
+ * flickers a little, and pulses of current with fading tails running from the
+ * sender to the receiver.
+ */
 function SignalPath({ curve, color, reduced }: { curve: QuadraticBezierCurve3; color: string; reduced: boolean }) {
-  const points = useMemo(() => curve.getPoints(48), [curve])
-  const packets = useRef<(Mesh | null)[]>([])
-  const line = useRef<{ material: { dashOffset: number } } | null>(null)
-  useFrame((state, delta) => {
-    if (reduced) return
-    if (line.current) line.current.material.dashOffset -= delta * 0.35
-    packets.current.forEach((packet, index) => {
-      if (!packet) return
-      const t = (state.clock.elapsedTime * 0.45 + index / 3) % 1
-      packet.position.copy(curve.getPoint(t))
+  const points = useMemo(() => curve.getPoints(64), [curve])
+  const spark = useMemo(() => new Color(color).lerp(new Color('#ffffff'), 0.55), [color])
+  const core = useRef<{ material: { opacity: number } } | null>(null)
+  const beads = useRef<(Mesh | null)[]>([])
+  const speed = 0.55 / Math.max(0.35, curve.getLength())
+  useFrame(state => {
+    const t = state.clock.elapsedTime
+    if (core.current) core.current.material.opacity = reduced ? 0.9 : 0.72 + 0.28 * Math.abs(Math.sin(t * 23) * Math.sin(t * 7.3))
+    beads.current.forEach((bead, index) => {
+      if (!bead) return
+      const pulse = Math.floor(index / TAIL)
+      const tail = index % TAIL
+      const head = reduced ? (pulse + 0.5) / PULSES : (t * speed + pulse / PULSES) % 1
+      const u = head - tail * 0.022
+      bead.visible = u >= 0
+      if (!bead.visible) return
+      bead.position.copy(curve.getPoint(u))
+      bead.scale.setScalar(1 - tail / TAIL)
     })
   })
   return (
-    <group renderOrder={10}>
-      <Line points={points} color={color} lineWidth={2.2} transparent opacity={0.35} depthTest={false} />
-      <Line ref={line as never} points={points} color={color} lineWidth={3.2} dashed dashSize={0.035} gapSize={0.03} depthTest={false} />
-      {[0, 1, 2].map(index => (
-        <mesh key={index} ref={node => { packets.current[index] = node }} position={curve.getPoint(index / 3)} renderOrder={11}>
-          <sphereGeometry args={[0.016, 12, 12]} />
-          <meshBasicMaterial color={color} depthTest={false} transparent />
+    <group>
+      <Line points={points} color={color} lineWidth={10} transparent opacity={0.14} depthTest={false} toneMapped={false} renderOrder={10} />
+      <Line ref={core as never} points={points} color={color} lineWidth={2.6} transparent opacity={0.9} depthTest={false} toneMapped={false} renderOrder={11} />
+      {Array.from({ length: PULSES * TAIL }, (_, index) => (
+        <mesh key={index} ref={node => { beads.current[index] = node }} renderOrder={12}>
+          <sphereGeometry args={[index % TAIL === 0 ? 0.02 : 0.015, 10, 10]} />
+          <meshBasicMaterial color={index % TAIL === 0 ? '#ffffff' : spark} transparent opacity={index % TAIL === 0 ? 1 : 0.75} depthTest={false} blending={AdditiveBlending} toneMapped={false} />
         </mesh>
       ))}
-      <mesh position={curve.v2} renderOrder={11}>
-        <sphereGeometry args={[0.022, 16, 16]} />
-        <meshBasicMaterial color={color} depthTest={false} transparent opacity={0.85} />
+      <mesh position={curve.v2} renderOrder={12}>
+        <sphereGeometry args={[0.026, 16, 16]} />
+        <meshBasicMaterial color={spark} transparent opacity={0.9} depthTest={false} blending={AdditiveBlending} toneMapped={false} />
       </mesh>
     </group>
   )
