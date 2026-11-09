@@ -13,7 +13,7 @@ if [ "${1:-}" = "--remove" ]; then
   echo "quest-relay-push removed."
   exit 0
 fi
-grep -q '^RELAY_SRT_URL=srt://' relay-push.env 2>/dev/null || {
+grep -Eq "^RELAY_SRT_URL=[\"']?srt://" relay-push.env 2>/dev/null || {
   echo "relay-push.env missing: on EC2 run 'sudo bash install-relay.sh <domain> --show',"
   echo "then put its RELAY_SRT_URL=... line in $DIR/relay-push.env"
   exit 1

@@ -6,7 +6,10 @@
 #   RELAY_SOURCE    default rtsp://127.0.0.1:8554/quest
 set -eu
 cd "$(dirname "$0")/.."
-if [ -f relay-push.env ]; then set -a; . ./relay-push.env; set +a; fi
+# Read the value literally: the URL contains '&' and '?', so the file is not sourced.
+if [ -z "${RELAY_SRT_URL:-}" ] && [ -f relay-push.env ]; then
+  RELAY_SRT_URL=$(sed -n 's/^RELAY_SRT_URL=//p' relay-push.env | tail -n 1 | tr -d "\"'\r")
+fi
 : "${RELAY_SRT_URL:?set RELAY_SRT_URL in relay-push.env (printed by relay/install-relay.sh on EC2)}"
 SOURCE=${RELAY_SOURCE:-rtsp://127.0.0.1:8554/quest}
 echo "RELAY_PUSH ${SOURCE} -> ${RELAY_SRT_URL%%\?*}"
