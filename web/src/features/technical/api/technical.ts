@@ -128,6 +128,9 @@ export type PoiProposal = {
   rowVersion: string
   revision: PoiRevision
   sourcePoiId?: string | null
+  /** No revision ever passed, so Staff may discard it (ADR-0051). */
+  canDiscard?: boolean
+  discardedAt?: string | null
 }
 
 export type PoiVerificationQueueItem = { proposalId: string; currentRevision: number; rowVersion: string; revision: PoiRevision; sourcePoiId?: string | null }
@@ -231,6 +234,8 @@ export const technicalApi = {
     apiClient<Envelope<PoiProposal>>('/api/staff/poi-proposals', { method: 'POST', json: { requestId: crypto.randomUUID(), draft } }).then(response => response.data!),
   revisePoiProposal: (id: string, current: PoiProposal, draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string; narrationText: string; fallbackVideoUrl: string | null }) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/draft`, { method: 'PUT', json: { requestId: crypto.randomUUID(), expectedCurrentRevision: current.currentRevision, expectedRowVersion: current.rowVersion, draft } }).then(response => response.data!),
+  discardPoiProposal: (proposal: PoiProposal) =>
+    apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/discard`, { method: 'POST', json: { expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
   submitPoiProposal: (id: string, proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/submit`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
   listRouteTestQueue: () => apiClient<Envelope<VersionedRoute[]>>('/api/technical/route-verifications/queue').then(response => response.data ?? []),

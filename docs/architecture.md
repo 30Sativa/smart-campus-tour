@@ -666,6 +666,12 @@ in [`backend/docs/map-poi-versioning.md`](../backend/docs/map-poi-versioning.md)
 The new endpoints do not grant Admin access. Existing legacy POI rows are not
 migrated or deleted; only their old HTTP catalog interface has been retired.
 
+Under ADR-0051 (schema v1.19), Staff `POST /api/staff/poi-proposals/{id}/discard`
+soft-discards a proposal that never had a PASS on any revision; it leaves the
+Staff list and verification queue but no row is deleted. Proposal views add
+`canDiscard` and `discardedAt`; later writes to it return 409
+`POI_PROPOSAL_DISCARDED`.
+
 Under ADR-0028, a valid uploaded package alone is not selectable for new POI
 work. Map list/detail return backend-calculated `technicalCheckStatus`,
 `canUseForPoiPreparation`, a block reason code/text, and the evidence record

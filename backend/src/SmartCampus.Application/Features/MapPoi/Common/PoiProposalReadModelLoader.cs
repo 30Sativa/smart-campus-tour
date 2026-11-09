@@ -34,7 +34,9 @@ internal static class PoiProposalReadModelLoader
             revision.CreatedAt, submitted is not null, submitted?.SubmittedAt,
             verification?.ResultCode ?? "NOT_CHECKED", revision.NarrationText, revision.FallbackVideoUrl,
             verification?.ProposalRevisionId, verification?.VerificationMethod);
+        var results = await verificationRepository.ListVerificationRecordsAsync([proposal.Id], cancellationToken);
         return new PoiProposalView(proposal.Id, proposal.CurrentRevision,
-            Convert.ToBase64String(proposal.RowVersion), proposal.CreatedAt, proposal.UpdatedAt, view, proposal.SourcePoiId);
+            Convert.ToBase64String(proposal.RowVersion), proposal.CreatedAt, proposal.UpdatedAt, view, proposal.SourcePoiId,
+            proposal.DiscardedAt is null && PoiProposalRules.CanDiscard(results), proposal.DiscardedAt);
     }
 }
