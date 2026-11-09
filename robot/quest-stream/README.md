@@ -34,6 +34,8 @@ Hai dịch vụ chạy trên NUC:
 | `scripts/check-quest.sh` | kiểm tra adb, ffmpeg, MediaMTX, cổng WebRTC, kính |
 | `scripts/start-stream.sh` / `stop-stream.sh` | chạy/dừng `server.py` bằng tay (không qua systemd) |
 | `scripts/measure.sh` | đo độ phân giải, fps, bitrate, số người xem, CPU, RAM |
+| `relay/install-relay.sh` | cài relay MediaMTX công khai trên EC2 (mục "Phát ra Internet") |
+| `scripts/install-relay-push.sh`, `scripts/relay-push.sh` | NUC đẩy luồng lên relay (dịch vụ `quest-relay-push`) |
 | `quest-stream.env.example` | tham số của `server.py` (copy thành `quest-stream.env`) |
 | `mediamtx.env.example` | tham số MediaMTX (copy thành `mediamtx.env`) |
 | `systemd/*.service` | mẫu dịch vụ (được `install-services.sh` điền đường dẫn) |
@@ -323,6 +325,77 @@ xem cạnh kính, chụp ảnh cả hai; hiệu hai số là độ trễ.
 NUC7PJYH (Pentium Silver J5005) yếu hơn và phải giải mã 3664x1920 từ kính: đo lại
 bằng `scripts/measure.sh`; nếu `speed` < 1.0 hoặc CPU > 80 % thì làm theo mục
 "Hình giật".
+
+## Phát ra Internet (trang deploy https://www.fptcampustour.cloud)
+
+Trình duyệt ngoài Internet không tới được NUC trong LAN, và trang HTTPS không gọi
+được `http://10.x`. NUC đẩy luồng 720p **một lần** lên MediaMTX trên EC2 (đang
+chạy backend), EC2 phát WebRTC cho mọi học sinh:
+
+```
+NUC: MediaMTX local ──quest-relay-push (ffmpeg -c copy, SRT có mã hoá)──▶ EC2: mediamtx-relay
+                                                                          │ WebRTC (WHEP, HTTPS :8889)
+LAN vẫn xem trực tiếp từ NUC như cũ                                       ▼
+                                                     https://stream.fptcampustour.cloud:8889/quest/whep
+```
+
+Không mã hoá lại ở đâu cả nên NUC và EC2 gần như không tốn CPU. Chi phí là băng
+thông ra của EC2: mỗi người xem nhận đúng `QUEST_VIDEO_BITRATE`. Ở 2 Mbit/s,
+40 học sinh x 1 giờ khoảng 36 GB; AWS miễn phí 100 GB ra Internet mỗi tháng.
+
+**1. DNS + AWS (một lần)**
+
+- Bản ghi `A`: `stream.fptcampustour.cloud` → Elastic IP của EC2.
+- Security Group của EC2, inbound: `8889/tcp`, `8189/udp`, `8189/tcp`, `8890/udp`
+  (nguồn `0.0.0.0/0`).
+- Chứng chỉ cho `stream.fptcampustour.cloud`, cùng cách đang làm cho `api.`
+  (Certbot DNS-01, xem `backend/docs/ec2-deployment.md`), ví dụ
+  `sudo certbot certonly --dns-<plugin> -d stream.fptcampustour.cloud`.
+  Cách khác nếu mở được cổng 80: `sudo certbot certonly --standalone -d stream.fptcampustour.cloud`.
+
+**2. EC2: cài relay**
+
+```bash
+# trên máy có repo: scp robot/quest-stream/relay/install-relay.sh <user>@<EC2>:~
+sudo bash install-relay.sh stream.fptcampustour.cloud
+```
+
+Script tải MediaMTX, tạo mật khẩu (một lần, `/etc/mediamtx-relay/secrets.env`),
+chép chứng chỉ, cài dịch vụ `mediamtx-relay` và hook gia hạn Certbot, rồi in ra
+hai dòng: `VITE_QUEST_WHEP_URL=...` và `RELAY_SRT_URL=...`. In lại:
+`sudo bash install-relay.sh stream.fptcampustour.cloud --show`.
+Log: `journalctl -u mediamtx-relay -f`.
+
+**3. NUC: đẩy lên relay**
+
+```bash
+cd ~/smart-campus-tour/robot/quest-stream
+nano relay-push.env                      # dán dòng RELAY_SRT_URL=... từ bước 2
+bash scripts/install-relay-push.sh       # cài + chạy dịch vụ quest-relay-push
+journalctl -u quest-relay-push -f        # không có lỗi là đang đẩy
+```
+
+Giảm băng thông (khuyên dùng khi phát ra Internet), trong `quest-stream.env`:
+`QUEST_VIDEO_BITRATE=2M`, `QUEST_VIDEO_MAXRATE=2500k`, rồi `sudo systemctl restart quest-stream`.
+
+Kiểm tra trên EC2: `curl -s localhost:9997/v3/paths/get/quest` phải có `"ready": true`.
+Mở `https://stream.fptcampustour.cloud:8889/quest` trong Chrome: thấy hình là xong phía máy chủ.
+
+**4. Vercel**
+
+Project web → Settings → Environment Variables (Production):
+`VITE_QUEST_WHEP_URL=https://stream.fptcampustour.cloud:8889/quest/whep`, rồi
+Redeploy (biến `VITE_*` chỉ được đọc lúc build).
+
+| Triệu chứng | Nguyên nhân thường gặp |
+|---|---|
+| `quest-relay-push` log `Input/output error` liên tục | sai `RELAY_SRT_URL`, hoặc `8890/udp` chưa mở trong Security Group |
+| log `404 Not Found` | stream trên NUC chưa `live` (`curl localhost:8080/status`) |
+| Trang `:8889/quest` mở được nhưng xoay mãi | `8189/udp` và `8189/tcp` chưa mở, hoặc sai IP công khai (chạy lại script với `PUBLIC_IP=<Elastic IP>`) |
+| Trình duyệt báo lỗi chứng chỉ | chứng chỉ không đúng tên `stream.fptcampustour.cloud` |
+
+Chưa đưa qua relay: đàm thoại staff (`quest-mic`, `staff-mic`) và
+`VITE_QUEST_STATUS_URL` (`/device`) vẫn chỉ chạy trong LAN.
 
 ## Ngoài LAN
 

@@ -1,0 +1,18 @@
+# Local Quest stream -> public relay on EC2 (SRT). Installed by
+# scripts/install-relay-push.sh, which replaces __DIR__ and __USER__.
+[Unit]
+Description=Quest stream -> public relay (Smart Campus Tour)
+After=network-online.target mediamtx.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__DIR__
+ExecStart=__DIR__/scripts/relay-push.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
