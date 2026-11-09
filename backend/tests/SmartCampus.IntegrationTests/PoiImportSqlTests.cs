@@ -213,6 +213,70 @@ public sealed class PoiImportSqlTests
     }
 
     [SchemaV11Fact]
+    public async Task NeverPassedPoi_IsDiscarded_LeavesListsAndQueue_KeepsHistory_AndRefusesLaterWrites()
+    {
+        await using var h = await Harness.Create();
+        var proposalId = (await h.Import([File("a.yaml", "POI_A", verified: false)])).CreatedProposalIds[0];
+        var kept = (await h.Import([File("b.yaml", "POI_B", verified: false)])).CreatedProposalIds[0];
+        var before = await h.Send(new GetPoiProposalQuery(proposalId));
+        Assert.True(before.CanDiscard);
+
+        var discarded = await h.Send(new DiscardPoiProposalCommand(h.StaffId, proposalId, new(before.CurrentRevision, before.RowVersion)));
+
+        Assert.NotNull(discarded.DiscardedAt);
+        Assert.False(discarded.CanDiscard);
+        Assert.Equal([kept], (await h.Send(new ListPoiProposalsQuery(h.MapId))).Select(item => item.Id));
+        Assert.Equal([kept], (await h.Send(new ListPoiVerificationQueueQuery(h.MapId))).Select(item => item.ProposalId));
+        Assert.Single((await h.Send(new GetPoiHistoryQuery(proposalId))).Revisions);
+        await h.AssertCounts(proposals: 2, revisions: 2, verifications: 0);
+        PoiProposal row;
+        await using (var db = h.Context())
+        {
+            row = await db.PoiProposals.AsNoTracking().SingleAsync(item => item.Id == proposalId);
+            Assert.Equal(h.StaffId, row.DiscardedByUserId);
+            Assert.Equal(1, await db.AuditLogs.CountAsync(audit => audit.Action == "POI_PROPOSAL_DISCARDED" && audit.EntityId == proposalId.ToString()));
+            Assert.Equal(1, await db.PoiImportReceipts.CountAsync(receipt => receipt.ProposalId == proposalId));
+        }
+
+        // A retry of the same discard answers with the same result and writes nothing more.
+        var retried = await h.Send(new DiscardPoiProposalCommand(h.StaffId, proposalId, new(before.CurrentRevision, before.RowVersion)));
+        Assert.Equal(row.DiscardedAt, retried.DiscardedAt);
+        Assert.Equal(Convert.ToBase64String(row.RowVersion), retried.RowVersion);
+        await using (var db = h.Context())
+            Assert.Equal(1, await db.AuditLogs.CountAsync(audit => audit.Action == "POI_PROPOSAL_DISCARDED"));
+
+        var verify = await Assert.ThrowsAsync<ConflictException>(() => h.Send(new RecordPoiVerificationCommand(h.TechnicalId, proposalId, 1,
+            new(Guid.NewGuid(), 1, discarded.RowVersion, Robot, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ."))));
+        Assert.Equal("POI_PROPOSAL_DISCARDED", verify.Code);
+        var revise = await Assert.ThrowsAsync<ConflictException>(() => h.AddStaffContent(proposalId, "Thư viện", "Đây là thư viện."));
+        Assert.Equal("POI_PROPOSAL_DISCARDED", revise.Code);
+        Assert.Equal("POI_PROPOSAL_DISCARDED", Assert.Single((await h.Preview(File("a2.yaml", "poi_a", x: 2.5m))).Files).ErrorCode);
+    }
+
+    [SchemaV11Fact]
+    public async Task PoiWithAnyPass_CannotBeDiscarded()
+    {
+        await using var h = await Harness.Create();
+        var proposalId = (await h.Import([File("a.yaml", "POI_A")])).CreatedProposalIds[0];
+        // A later move needs a fresh check, but the earlier PASS may still back a Route revision.
+        var moved = await h.Send(new GetPoiProposalQuery(proposalId));
+        var revision = moved.Revision;
+        moved = await h.Send(new CreatePoiRevisionCommand(h.StaffId, proposalId, new(Guid.NewGuid(), moved.CurrentRevision, moved.RowVersion,
+            new(h.MapId, revision.Name, revision.Purpose, null, 2.5m, revision.Y, revision.Yaw, revision.CameraPreset, "Nội dung thuyết minh."))));
+        Assert.Equal("NOT_CHECKED", moved.Revision.NavigationStatus);
+        Assert.False(moved.CanDiscard);
+        Assert.False(Assert.Single(await h.Send(new ListPoiProposalsQuery(h.MapId))).CanDiscard);
+
+        var error = await Assert.ThrowsAsync<ConflictException>(() => h.Send(
+            new DiscardPoiProposalCommand(h.StaffId, proposalId, new(moved.CurrentRevision, moved.RowVersion))));
+
+        Assert.Equal("POI_PROPOSAL_HAS_PASS", error.Code);
+        await using var db = h.Context();
+        Assert.Null((await db.PoiProposals.AsNoTracking().SingleAsync()).DiscardedAt);
+        Assert.Equal(0, await db.AuditLogs.CountAsync(audit => audit.Action == "POI_PROPOSAL_DISCARDED"));
+    }
+
+    [SchemaV11Fact]
     public async Task UnverifiedFile_DoesNotNeedTheRobotOnThisMap()
     {
         await using var h = await Harness.Create();

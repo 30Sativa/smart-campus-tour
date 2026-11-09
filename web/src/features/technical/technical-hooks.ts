@@ -95,6 +95,12 @@ export const useUploadMap = () => useTechnicalMutation(technicalApi.uploadMap, k
   detail: 'Upload chỉ lưu phiên bản trên hệ thống; chưa nạp map lên robot.',
 }))
 
+/** Staff remove a never-passed POI from the list; its history stays on the server (ADR-0051). */
+export const useDiscardPoiProposal = () => useTechnicalMutation(technicalApi.discardPoiProposal, keys.poiProposals, input => ({
+  title: `Đã xoá ${input.revision.name} khỏi danh sách`,
+  detail: 'Lịch sử chỉnh sửa và kiểm chứng của điểm này vẫn được lưu.',
+}))
+
 /** Preview changes nothing on the server, so it neither invalidates data nor notifies. */
 export function usePreviewPoiImport() {
   return useMutation({ mutationFn: technicalApi.previewPoiImport })

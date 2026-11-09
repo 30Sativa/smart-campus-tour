@@ -19,6 +19,8 @@ public sealed record CreatePoiRevisionRequest(
 public sealed record SubmitPoiProposalRequest(
     Guid RequestId, int ExpectedRevisionNumber, string ExpectedRowVersion);
 
+public sealed record DiscardPoiProposalRequest(int ExpectedRevisionNumber, string ExpectedRowVersion);
+
 public sealed record VerifyPoiProposalRequest(
     Guid RequestId, int ExpectedRevisionNumber, string ExpectedRowVersion, string RobotCode,
     string ResultCode, bool Reached, bool Stopped, bool LocalizationPassed,

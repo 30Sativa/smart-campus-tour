@@ -45,7 +45,9 @@ public partial class User
 
     public virtual ICollection<PoiProposalSubmission> PoiProposalSubmissions { get; set; } = new List<PoiProposalSubmission>();
 
-    public virtual ICollection<PoiProposal> PoiProposals { get; set; } = new List<PoiProposal>();
+    public virtual ICollection<PoiProposal> PoiProposalCreatedByUsers { get; set; } = new List<PoiProposal>();
+
+    public virtual ICollection<PoiProposal> PoiProposalDiscardedByUsers { get; set; } = new List<PoiProposal>();
 
     public virtual ICollection<PoiVerificationRecord> PoiVerificationRecords { get; set; } = new List<PoiVerificationRecord>();
 

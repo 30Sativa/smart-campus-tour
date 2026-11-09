@@ -67,8 +67,25 @@ internal static class PoiProposalRules
         CreatedByUserId = actorUserId,
         CreatedAt = now
     };
+    public const string DiscardedCode = "POI_PROPOSAL_DISCARDED";
+    public const string HasPassCode = "POI_PROPOSAL_HAS_PASS";
+
+    /// <summary>
+    /// Only a proposal with no PASS on any revision may be discarded: a Route revision can only reference a POI revision
+    /// with an effective PASS, so such a proposal is in no Route, Tour or history that a discard could orphan.
+    /// </summary>
+    public static bool CanDiscard(IEnumerable<PoiVerificationRecord> results) =>
+        !results.Any(result => result.ResultCode == "PASS");
+
+    public static void EnsureNotDiscarded(PoiProposal proposal)
+    {
+        if (proposal.DiscardedAt is not null)
+            throw new ConflictException("POI này đã bị xoá khỏi danh sách nên không thể chỉnh sửa, gửi hay kiểm chứng.", DiscardedCode);
+    }
+
     public static void EnsureCurrent(PoiProposal proposal, int expectedRevision, string expectedRowVersion)
     {
+        EnsureNotDiscarded(proposal);
         if (proposal.CurrentRevision != expectedRevision ||
             !proposal.RowVersion.AsSpan().SequenceEqual(PoiProposalRowVersion.Decode(expectedRowVersion)))
             throw new ConflictException("The proposal changed since it was loaded. Reload it before retrying.", "STALE_VERSION");

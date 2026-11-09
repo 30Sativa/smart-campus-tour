@@ -42,7 +42,7 @@ tool() {
 sql() { tool --entrypoint /opt/mssql-tools18/bin/sqlcmd "$db_init_image" -S sqlserver -U sa -C -b -l 30 -r 1 "$@"; }
 query() { sql -d SmartCampusTourV11 -h -1 -W -Q "SET NOCOUNT ON; $1" | tr -d '\r'; }
 # Exactly the invocation used by deploy/upgrade-db-schema-ec2.sh; extra docker args inject test faults.
-upgrade() { tool "$@" --entrypoint /bin/bash "$db_init_image" /deployment/upgrade-db.sh --upgrade-to-v1.19; }
+upgrade() { tool "$@" --entrypoint /bin/bash "$db_init_image" /deployment/upgrade-db.sh --upgrade-to-v1.20; }
 check_only() { tool --entrypoint /bin/bash "$db_init_image" /deployment/init-db.sh --check-only; }
 
 for attempt in $(seq 1 60); do
@@ -181,8 +181,8 @@ provisioner_robot_permissions() {
 before=$(baseline_data)
 [[ $(markers) == "|$v11_hash" ]] || fail 'Baseline markers were not created as expected.'
 
-# 1. Fault after the v1.19 marker: the final runtime grant step fails, as a dropped connection or grant error would.
-printf "THROW 51090, 'Injected runtime grant failure after the v1.19 marker.', 1;\nGO\n" > "$scratch/failing-runtime-permissions.sql"
+# 1. Fault after the v1.20 marker: the final runtime grant step fails, as a dropped connection or grant error would.
+printf "THROW 51090, 'Injected runtime grant failure after the v1.20 marker.', 1;\nGO\n" > "$scratch/failing-runtime-permissions.sql"
 chmod 0644 "$scratch/failing-runtime-permissions.sql"
 if upgrade -v "$scratch/failing-runtime-permissions.sql:/database/smart-campus-tour-runtime-permissions.sql:ro" > "$scratch/first.log" 2>&1; then
   cat "$scratch/first.log" >&2
@@ -190,8 +190,8 @@ if upgrade -v "$scratch/failing-runtime-permissions.sql:/database/smart-campus-t
 fi
 grep -q 'Injected runtime grant failure' "$scratch/first.log" || { cat "$scratch/first.log" >&2; fail 'Upgrade failed for an unexpected reason.'; }
 upgraded_markers=$(markers)
-[[ "$upgraded_markers" == "1.19|b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43" ]] ||
-  fail "Expected v1.19 marker with the retained upgrade snapshot hash, got $upgraded_markers."
+[[ "$upgraded_markers" == "1.20|b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43" ]] ||
+  fail "Expected v1.20 marker with the retained upgrade snapshot hash, got $upgraded_markers."
 [[ $(baseline_data) == "$before" ]] || fail 'Upgrade changed baseline business data.'
 [[ $(runtime_can_read_email_changes) == 000 ]] || fail 'Fault injection did not leave runtime grants incomplete.'
 after_failure=$(all_data)
@@ -234,9 +234,9 @@ grep -q 'Runtime Robot grants are incomplete' "$scratch/missing-robot-insert.log
   fail 'Failed read-only check changed business data or schema markers.'
 [[ $(runtime_robot_permissions) == 10111111100 ]] || fail 'Failed read-only check changed runtime Robot grants.'
 
-# 5. The existing v1.19 upgrade/regrant path restores only the reviewed grants and preserves data.
+# 5. The existing v1.20 upgrade/regrant path restores only the reviewed grants and preserves data.
 upgrade > "$scratch/robot-regrant.log" 2>&1 || { cat "$scratch/robot-regrant.log" >&2; fail 'Controlled v1.5 runtime-grant recheck failed.'; }
-grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/robot-regrant.log" || fail 'v1.19 database did not use the existing regrant path.'
+grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/robot-regrant.log" || fail 'v1.20 database did not use the existing regrant path.'
 if grep -q 'Applying additive database patch: patches/' "$scratch/robot-regrant.log"; then fail 'v1.4 regrant unexpectedly applied a schema patch.'; fi
 grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/robot-regrant.log" || fail 'Runtime grants were not checked after regrant.'
 [[ $(runtime_robot_permissions) == 11111111100 ]] || fail 'Runtime Robot rights after regrant are not least privilege.'
@@ -291,9 +291,9 @@ SQL
 query "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$(printf '0%.0s' {1..64})';" >/dev/null
 if upgrade > "$scratch/unknown.log" 2>&1; then fail 'Marker 1.7 with an unknown snapshot hash was accepted.'; fi
 grep -q 'snapshot marker is unknown or absent; refusing to complete grants' "$scratch/unknown.log" || { cat "$scratch/unknown.log" >&2; fail 'Unknown snapshot was not refused clearly.'; }
-query "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'${upgraded_markers#1.19|}';" >/dev/null
+query "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'${upgraded_markers#1.20|}';" >/dev/null
 query "DROP TABLE dbo.RosterEmailChangeRequests;" >/dev/null
-if upgrade > "$scratch/incomplete.log" 2>&1; then fail 'Marker 1.19 with missing required structure was accepted.'; fi
+if upgrade > "$scratch/incomplete.log" 2>&1; then fail 'Marker 1.20 with missing required structure was accepted.'; fi
 grep -q 'required structure is incomplete; refusing to complete grants' "$scratch/incomplete.log" || { cat "$scratch/incomplete.log" >&2; fail 'Incomplete structure was not refused clearly.'; }
 if grep -q 'Applying additive database patch' "$scratch/incomplete.log"; then fail 'Grants ran against an incomplete structure.'; fi
 [[ $(markers) == "$upgraded_markers" ]] || fail 'Refused upgrade changed markers.'
@@ -320,7 +320,7 @@ legacy_data_before=$(all_data)
 if check_only > "$scratch/v14-select-only.log" 2>&1; then
   fail 'Read-only check accepted a v1.4 database with SELECT-only Robot permissions.'
 fi
-grep -q 'Database schema is older than v1.19' "$scratch/v14-select-only.log" || {
+grep -q 'Database schema is older than v1.20' "$scratch/v14-select-only.log" || {
   cat "$scratch/v14-select-only.log" >&2
   fail 'v1.4 database did not fail the deployment gate with an actionable upgrade requirement.'
 }
@@ -334,10 +334,10 @@ grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/v14-
 [[ $(runtime_robot_permissions) == 11111111100 ]] || fail 'v1.4 regrant did not apply the reviewed runtime Robot grants.'
 [[ $(query "SELECT CONCAT(RobotCode,':',CONVERT(varchar(64),CredentialHash,2),':',IsDispatchEnabled,':',NeedsInspection) FROM dbo.Robots WHERE RobotCode=N'legacy-v14-robot';") == "$legacy_robot" ]] ||
   fail 'v1.4 upgrade changed the registered robot business data.'
-check_only > "$scratch/v14-check.log" 2>&1 || { cat "$scratch/v14-check.log" >&2; fail 'v1.19 read-only check rejected the upgraded legacy database.'; }
+check_only > "$scratch/v14-check.log" 2>&1 || { cat "$scratch/v14-check.log" >&2; fail 'v1.20 read-only check rejected the upgraded legacy database.'; }
 
 # 8. A v1.5 database can contain both legacy empty hashes and real credentials.
-# Exercise the actual controlled v1.5 -> v1.19 upgrade path with both rows present.
+# Exercise the actual controlled v1.5 -> v1.20 upgrade path with both rows present.
 v15_hash=$(tool --entrypoint /bin/bash "$db_init_image" -c "sed 's/\r$//' /database/smart-campus-tour-schema-v1.5.sql | sha256sum | cut -d ' ' -f 1")
 sql -d master -Q 'DROP DATABASE SmartCampusTourV11; CREATE DATABASE SmartCampusTourV11;'
 sql -d SmartCampusTourV11 <<SQL
@@ -354,12 +354,12 @@ GO
 SQL
 [[ $(query "SELECT CONCAT(RobotCode,':',CONVERT(varchar(64),CredentialHash,2)) FROM dbo.Robots ORDER BY RobotCode;") == $'v15-provisioned-real-hash:0123456789ABCDEF\nv15-unissued-empty-hash:' ]] ||
   fail 'v1.5 fixture did not contain the expected empty and real credential hashes.'
-upgrade > "$scratch/v15-upgrade.log" 2>&1 || { cat "$scratch/v15-upgrade.log" >&2; fail 'Controlled v1.5-to-v1.19 upgrade failed with empty and real credential hashes.'; }
+upgrade > "$scratch/v15-upgrade.log" 2>&1 || { cat "$scratch/v15-upgrade.log" >&2; fail 'Controlled v1.5-to-v1.20 upgrade failed with empty and real credential hashes.'; }
 grep -q 'applying the additive v1.5-to-v1.6 credential lifecycle patch' "$scratch/v15-upgrade.log" ||
   fail 'v1.5 database did not use the credential lifecycle patch.'
 check_only > "$scratch/v15-check.log" 2>&1 || { cat "$scratch/v15-check.log" >&2; fail 'Read-only check rejected the upgraded v1.5 database.'; }
 [[ $(query "SELECT CONCAT(RobotCode,':',COALESCE(CONVERT(varchar(64),CredentialHash,2),'NULL'),':',CASE WHEN CredentialHash IS NULL THEN 'NOT_ISSUED' ELSE 'ACTIVE' END) FROM dbo.Robots ORDER BY RobotCode;") == $'v15-provisioned-real-hash:0123456789ABCDEF:ACTIVE\nv15-unissued-empty-hash:NULL:NOT_ISSUED' ]] ||
-  fail 'v1.19 upgrade did not null the empty hash while preserving the real hash and active status.'
+  fail 'v1.20 upgrade did not null the empty hash while preserving the real hash and active status.'
 [[ $(query "SELECT COUNT(*) FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name IN (N'CK_Robots_CredentialIssueMetadata',N'CK_Robots_CredentialRevocationMetadata') AND is_disabled=0 AND is_not_trusted=0;") == 2 ]] ||
   fail 'Credential lifecycle check constraints are missing, disabled, or untrusted after upgrade.'
 [[ $(query "DECLARE @violations TABLE (TableName sysname, ConstraintName sysname, WhereClause nvarchar(4000)); INSERT @violations EXEC('DBCC CHECKCONSTRAINTS (N''dbo.Robots'') WITH ALL_CONSTRAINTS'); SELECT COUNT(*) FROM @violations;") == 0 ]] ||
@@ -394,20 +394,20 @@ grep -q 'pilot (v1, v2)' "$scratch/duplicate.log" || { cat "$scratch/duplicate.l
 
 # 9. Without duplicates the same database upgrades, and the same package is then refused within an area and allowed in another.
 query "UPDATE dbo.MapVersions SET PackageSha256=CONVERT(binary(32), REPLICATE('CD', 32), 2) WHERE VersionNumber=2;" >/dev/null
-upgrade > "$scratch/unique.log" 2>&1 || { cat "$scratch/unique.log" >&2; fail 'v1.12 to v1.19 upgrade failed without duplicates.'; }
+upgrade > "$scratch/unique.log" 2>&1 || { cat "$scratch/unique.log" >&2; fail 'v1.12 to v1.20 upgrade failed without duplicates.'; }
 grep -q 'Applying additive database patch: patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql' "$scratch/unique.log" || fail 'Upgrade did not apply the v1.13 patch.'
 grep -q 'Applying additive database patch: patches/upgrade-v1.13-to-v1.14-robot-commands.sql' "$scratch/unique.log" || fail 'Upgrade did not apply the v1.14 patch.'
 grep -q 'Applying additive database patch: patches/upgrade-v1.14-to-v1.15-command-outcome.sql' "$scratch/unique.log" || fail 'Upgrade did not apply the v1.15 correction.'
 grep -q 'Applying additive database patch: patches/upgrade-v1.15-to-v1.16-schedule-blocks.sql' "$scratch/unique.log" || fail 'Upgrade did not apply the v1.16 patch.'
-[[ $(markers) == "1.19|$v112_hash" ]] || fail 'v1.19 upgrade did not advance only the schema version marker.'
+[[ $(markers) == "1.20|$v112_hash" ]] || fail 'v1.20 upgrade did not advance only the schema version marker.'
 [[ $(query "SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.MapVersions') AND name=N'UX_MapVersions_Area_PackageSha256' AND is_unique=1;") == 1 ]] ||
   fail 'The unique map package index is missing.'
 if query "UPDATE dbo.MapVersions SET PackageSha256=CONVERT(binary(32), REPLICATE('AB', 32), 2) WHERE VersionNumber=2;" > "$scratch/unique-violation.log" 2>&1; then
   fail 'The unique map package index allowed a duplicate.'
 fi
-check_only > "$scratch/unique-check.log" 2>&1 || { cat "$scratch/unique-check.log" >&2; fail 'Read-only check rejected the v1.19 database.'; }
+check_only > "$scratch/unique-check.log" 2>&1 || { cat "$scratch/unique-check.log" >&2; fail 'Read-only check rejected the v1.20 database.'; }
 
-# 10. A v1.13 database receives the v1.14 robot command patch, the v1.15 correction, the v1.16 and v1.19 patches, reruns as a regrant, and the runtime
+# 10. A v1.13 database receives the v1.14 robot command patch, the v1.15 correction, the v1.16 and v1.20 patches, reruns as a regrant, and the runtime
 # may record command progress but never rewrite a command's target or delete it.
 v113_hash=$(tool --entrypoint /bin/bash "$db_init_image" -c "sed 's/\r$//' /database/smart-campus-tour-schema-v1.13.sql | sha256sum | cut -d ' ' -f 1")
 sql -d master -Q 'DROP DATABASE SmartCampusTourV11; CREATE DATABASE SmartCampusTourV11;'
@@ -422,14 +422,14 @@ EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.13'
 GO
 SQL
 before_v114=$(data_except_tours); before_v114_tours=$(tours_data)
-upgrade > "$scratch/v114.log" 2>&1 || { cat "$scratch/v114.log" >&2; fail 'v1.13 to v1.19 upgrade failed.'; }
+upgrade > "$scratch/v114.log" 2>&1 || { cat "$scratch/v114.log" >&2; fail 'v1.13 to v1.20 upgrade failed.'; }
 grep -q 'Applying additive database patch: patches/upgrade-v1.13-to-v1.14-robot-commands.sql' "$scratch/v114.log" || fail 'v1.13 database did not receive the v1.14 patch.'
 grep -q 'Applying additive database patch: patches/upgrade-v1.14-to-v1.15-command-outcome.sql' "$scratch/v114.log" || fail 'v1.13 database did not receive the v1.15 correction.'
 grep -q 'Applying additive database patch: patches/upgrade-v1.15-to-v1.16-schedule-blocks.sql' "$scratch/v114.log" || fail 'v1.13 database did not receive the v1.16 patch.'
 if grep -q 'upgrade-v1.12-to-v1.13' "$scratch/v114.log"; then fail 'v1.13 database re-applied the v1.13 patch.'; fi
-[[ $(markers) == "1.19|$v113_hash" ]] || fail 'v1.19 upgrade did not advance only the schema version marker.'
+[[ $(markers) == "1.20|$v113_hash" ]] || fail 'v1.20 upgrade did not advance only the schema version marker.'
 # The new empty RobotCommands and TourScheduleBlocks tables are the only additions.
-[[ $(data_except_tours | grep -v '^RobotCommands\|^TourScheduleBlocks') == "$before_v114" && $(tours_data) == "$before_v114_tours" ]] && tours_have_default_capacity || fail 'v1.19 upgrade changed business data.'
+[[ $(data_except_tours | grep -v '^RobotCommands\|^TourScheduleBlocks') == "$before_v114" && $(tours_data) == "$before_v114_tours" ]] && tours_have_default_capacity || fail 'v1.20 upgrade changed business data.'
 [[ $(query "SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.RobotCommands') AND is_unique=1 AND has_filter=1;") == 3 ]] ||
   fail 'The RobotCommands filtered unique indexes are missing.'
 [[ $(query "EXECUTE AS USER=N'smartcampus_api';
@@ -441,10 +441,10 @@ if grep -q 'upgrade-v1.12-to-v1.13' "$scratch/v114.log"; then fail 'v1.13 databa
     HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'NeedsInspection',N'COLUMN'),
     HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'IsDispatchEnabled',N'COLUMN'));
   REVERT;") == 1100111 ]] || fail 'Runtime robot command grants are not least privilege.'
-upgrade > "$scratch/v114-rerun.log" 2>&1 || { cat "$scratch/v114-rerun.log" >&2; fail 'v1.19 regrant rerun failed.'; }
-grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/v114-rerun.log" || fail 'v1.19 database did not use the regrant path.'
+upgrade > "$scratch/v114-rerun.log" 2>&1 || { cat "$scratch/v114-rerun.log" >&2; fail 'v1.20 regrant rerun failed.'; }
+grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/v114-rerun.log" || fail 'v1.20 database did not use the regrant path.'
 
-# 11. A deployed v1.14 database receives the outcome correction and the v1.16 and v1.19 patches; all rows and its bootstrap hash survive.
+# 11. A deployed v1.14 database receives the outcome correction and the v1.16 and v1.20 patches; all rows and its bootstrap hash survive.
 v114_hash=$(tool --entrypoint /bin/bash "$db_init_image" -c "sed 's/\r$//' /database/smart-campus-tour-schema-v1.14.sql | sha256sum | cut -d ' ' -f 1")
 sql -d master -Q 'DROP DATABASE SmartCampusTourV11; CREATE DATABASE SmartCampusTourV11;'
 sql -d SmartCampusTourV11 <<SQL
@@ -458,17 +458,17 @@ GO
 SQL
 before_v115=$(data_except_tours); before_v115_tours=$(tours_data)
 if check_only > "$scratch/v115-before.log" 2>&1; then fail 'Read-only gate accepted v1.14 without the outcome correction.'; fi
-upgrade > "$scratch/v115.log" 2>&1 || { cat "$scratch/v115.log" >&2; fail 'v1.14 to v1.19 upgrade failed.'; }
+upgrade > "$scratch/v115.log" 2>&1 || { cat "$scratch/v115.log" >&2; fail 'v1.14 to v1.20 upgrade failed.'; }
 grep -q 'Applying additive database patch: patches/upgrade-v1.14-to-v1.15-command-outcome.sql' "$scratch/v115.log" || fail 'v1.14 database missed the v1.15 correction.'
 grep -q 'Applying additive database patch: patches/upgrade-v1.15-to-v1.16-schedule-blocks.sql' "$scratch/v115.log" || fail 'v1.14 database missed the v1.16 patch.'
-[[ $(grep -c 'Applying additive database patch: patches/' "$scratch/v115.log") == 5 ]] || fail 'v1.14 database received an unrelated schema patch.'
-[[ $(markers) == "1.19|$v114_hash" && $(data_except_tours | grep -v '^TourScheduleBlocks') == "$before_v115" && $(tours_data) == "$before_v115_tours" ]] && tours_have_default_capacity || fail 'Outcome correction changed business data or the bootstrap hash.'
+[[ $(grep -c 'Applying additive database patch: patches/' "$scratch/v115.log") == 6 ]] || fail 'v1.14 database received an unrelated schema patch.'
+[[ $(markers) == "1.20|$v114_hash" && $(data_except_tours | grep -v '^TourScheduleBlocks') == "$before_v115" && $(tours_data) == "$before_v115_tours" ]] && tours_have_default_capacity || fail 'Outcome correction changed business data or the bootstrap hash.'
 outcome_check_id=$(query "SELECT OBJECT_ID(N'dbo.CK_RobotCommands_Outcome');")
-upgrade > "$scratch/v115-rerun.log" 2>&1 || { cat "$scratch/v115-rerun.log" >&2; fail 'v1.19 regrant failed.'; }
-[[ $(query "SELECT OBJECT_ID(N'dbo.CK_RobotCommands_Outcome');") == "$outcome_check_id" ]] || fail 'v1.19 regrant replaced the outcome CHECK.'
-check_only > "$scratch/v115-check.log" 2>&1 || { cat "$scratch/v115-check.log" >&2; fail 'Read-only gate rejected the corrected v1.19 database.'; }
+upgrade > "$scratch/v115-rerun.log" 2>&1 || { cat "$scratch/v115-rerun.log" >&2; fail 'v1.20 regrant failed.'; }
+[[ $(query "SELECT OBJECT_ID(N'dbo.CK_RobotCommands_Outcome');") == "$outcome_check_id" ]] || fail 'v1.20 regrant replaced the outcome CHECK.'
+check_only > "$scratch/v115-check.log" 2>&1 || { cat "$scratch/v115-check.log" >&2; fail 'Read-only gate rejected the corrected v1.20 database.'; }
 
-# 12. A deployed v1.15 database receives the schedule blocks table and the v1.19 release CHECK; all rows and its bootstrap hash survive, a rerun
+# 12. A deployed v1.15 database receives the schedule blocks table and the v1.20 release CHECK; all rows and its bootstrap hash survive, a rerun
 # is a regrant, and the runtime may add and remove a block but never rewrite or delete one (docs/lich-tour-theo-ca.md Â§5).
 v115_hash=$(tool --entrypoint /bin/bash "$db_init_image" -c "sed 's/\r$//' /database/smart-campus-tour-schema-v1.15.sql | sha256sum | cut -d ' ' -f 1")
 sql -d master -Q 'DROP DATABASE SmartCampusTourV11; CREATE DATABASE SmartCampusTourV11;'
@@ -483,10 +483,10 @@ GO
 SQL
 before_v116=$(data_except_tours); before_v116_tours=$(tours_data)
 if check_only > "$scratch/v116-before.log" 2>&1; then fail 'Read-only gate accepted v1.15 without the schedule blocks table.'; fi
-upgrade > "$scratch/v116.log" 2>&1 || { cat "$scratch/v116.log" >&2; fail 'v1.15 to v1.19 upgrade failed.'; }
+upgrade > "$scratch/v116.log" 2>&1 || { cat "$scratch/v116.log" >&2; fail 'v1.15 to v1.20 upgrade failed.'; }
 grep -q 'Applying additive database patch: patches/upgrade-v1.15-to-v1.16-schedule-blocks.sql' "$scratch/v116.log" || fail 'v1.15 database missed the v1.16 patch.'
-[[ $(grep -c 'Applying additive database patch: patches/' "$scratch/v116.log") == 4 ]] || fail 'v1.15 database received an unrelated schema patch.'
-[[ $(markers) == "1.19|$v115_hash" && $(data_except_tours | grep -v '^TourScheduleBlocks') == "$before_v116" && $(tours_data) == "$before_v116_tours" ]] && tours_have_default_capacity || fail 'Schedule blocks patch changed business data or the bootstrap hash.'
+[[ $(grep -c 'Applying additive database patch: patches/' "$scratch/v116.log") == 5 ]] || fail 'v1.15 database received an unrelated schema patch.'
+[[ $(markers) == "1.20|$v115_hash" && $(data_except_tours | grep -v '^TourScheduleBlocks') == "$before_v116" && $(tours_data) == "$before_v116_tours" ]] && tours_have_default_capacity || fail 'Schedule blocks patch changed business data or the bootstrap hash.'
 [[ $(query "EXECUTE AS USER=N'smartcampus_api';
   SELECT CONCAT(HAS_PERMS_BY_NAME(N'dbo.TourScheduleBlocks',N'OBJECT',N'INSERT'),
     HAS_PERMS_BY_NAME(N'dbo.TourScheduleBlocks',N'OBJECT',N'UPDATE',N'RemovedAt',N'COLUMN'),
@@ -494,10 +494,10 @@ grep -q 'Applying additive database patch: patches/upgrade-v1.15-to-v1.16-schedu
     HAS_PERMS_BY_NAME(N'dbo.TourScheduleBlocks',N'OBJECT',N'DELETE'));
   REVERT;") == 1100 ]] || fail 'Runtime schedule block grants are not least privilege.'
 blocks_table_id=$(query "SELECT OBJECT_ID(N'dbo.TourScheduleBlocks');")
-upgrade > "$scratch/v116-rerun.log" 2>&1 || { cat "$scratch/v116-rerun.log" >&2; fail 'v1.19 regrant failed.'; }
-grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/v116-rerun.log" || fail 'v1.19 database did not use the regrant path.'
-[[ $(query "SELECT OBJECT_ID(N'dbo.TourScheduleBlocks');") == "$blocks_table_id" ]] || fail 'v1.19 regrant recreated the schedule blocks table.'
-check_only > "$scratch/v116-check.log" 2>&1 || { cat "$scratch/v116-check.log" >&2; fail 'Read-only gate rejected the v1.19 database.'; }
+upgrade > "$scratch/v116-rerun.log" 2>&1 || { cat "$scratch/v116-rerun.log" >&2; fail 'v1.20 regrant failed.'; }
+grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/v116-rerun.log" || fail 'v1.20 database did not use the regrant path.'
+[[ $(query "SELECT OBJECT_ID(N'dbo.TourScheduleBlocks');") == "$blocks_table_id" ]] || fail 'v1.20 regrant recreated the schedule blocks table.'
+check_only > "$scratch/v116-check.log" 2>&1 || { cat "$scratch/v116-check.log" >&2; fail 'Read-only gate rejected the v1.20 database.'; }
 
 # 13. A deployed v1.16 database receives only the reservation release CHECK replacement (ADR-0047); all rows and its
 # bootstrap hash survive and a rerun is a regrant that keeps the new CHECK.
@@ -513,20 +513,20 @@ EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.16'
 GO
 SQL
 before_v117=$(data_except_tours); before_v117_tours=$(tours_data)
-if check_only > "$scratch/v117-before.log" 2>&1; then fail 'Read-only gate accepted v1.16 without the v1.19 release CHECK.'; fi
-upgrade > "$scratch/v117.log" 2>&1 || { cat "$scratch/v117.log" >&2; fail 'v1.16 to v1.19 upgrade failed.'; }
+if check_only > "$scratch/v117-before.log" 2>&1; then fail 'Read-only gate accepted v1.16 without the v1.20 release CHECK.'; fi
+upgrade > "$scratch/v117.log" 2>&1 || { cat "$scratch/v117.log" >&2; fail 'v1.16 to v1.20 upgrade failed.'; }
 grep -q 'Applying additive database patch: patches/upgrade-v1.16-to-v1.17-system-reservation-release.sql' "$scratch/v117.log" || fail 'v1.16 database missed the v1.17 patch.'
 grep -q 'Applying additive database patch: patches/upgrade-v1.17-to-v1.18-capacity-and-expiry.sql' "$scratch/v117.log" || fail 'v1.16 database missed the v1.18 patch.'
-[[ $(grep -c 'Applying additive database patch: patches/' "$scratch/v117.log") == 3 ]] || fail 'v1.16 database received an unrelated schema patch.'
-[[ $(markers) == "1.19|$v116_hash" && $(data_except_tours) == "$before_v117" && $(tours_data) == "$before_v117_tours" ]] && tours_have_default_capacity || fail 'Release CHECK patch changed business data or the bootstrap hash.'
+[[ $(grep -c 'Applying additive database patch: patches/' "$scratch/v117.log") == 4 ]] || fail 'v1.16 database received an unrelated schema patch.'
+[[ $(markers) == "1.20|$v116_hash" && $(data_except_tours) == "$before_v117" && $(tours_data) == "$before_v117_tours" ]] && tours_have_default_capacity || fail 'Release CHECK patch changed business data or the bootstrap hash.'
 [[ $(query "SELECT CONCAT(CASE WHEN OBJECT_ID(N'dbo.CK_TourRobotReservations_Release_Complete') IS NULL THEN 0 ELSE 1 END,
   CASE WHEN OBJECT_ID(N'dbo.CK_TourRobotReservations_Release_Actor') IS NULL THEN 0 ELSE 1 END);") == 01 ]] ||
-  fail 'v1.19 patch did not replace the reservation release CHECK.'
+  fail 'v1.20 patch did not replace the reservation release CHECK.'
 release_check_id=$(query "SELECT OBJECT_ID(N'dbo.CK_TourRobotReservations_Release_Actor');")
-upgrade > "$scratch/v117-rerun.log" 2>&1 || { cat "$scratch/v117-rerun.log" >&2; fail 'v1.19 regrant failed.'; }
-grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/v117-rerun.log" || fail 'v1.19 database did not use the regrant path.'
-[[ $(query "SELECT OBJECT_ID(N'dbo.CK_TourRobotReservations_Release_Actor');") == "$release_check_id" ]] || fail 'v1.19 regrant replaced the release CHECK.'
-check_only > "$scratch/v117-check.log" 2>&1 || { cat "$scratch/v117-check.log" >&2; fail 'Read-only gate rejected the v1.19 database.'; }
+upgrade > "$scratch/v117-rerun.log" 2>&1 || { cat "$scratch/v117-rerun.log" >&2; fail 'v1.20 regrant failed.'; }
+grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/v117-rerun.log" || fail 'v1.20 database did not use the regrant path.'
+[[ $(query "SELECT OBJECT_ID(N'dbo.CK_TourRobotReservations_Release_Actor');") == "$release_check_id" ]] || fail 'v1.20 regrant replaced the release CHECK.'
+check_only > "$scratch/v117-check.log" 2>&1 || { cat "$scratch/v117-check.log" >&2; fail 'Read-only gate rejected the v1.20 database.'; }
 
 # 14. A deployed v1.18 database receives only the short-notice column (ADR-0050); every Tour stays standard and a rerun is a regrant.
 v118_hash=$(tool --entrypoint /bin/bash "$db_init_image" -c "sed 's/\r$//' /database/smart-campus-tour-schema-v1.18.sql | sha256sum | cut -d ' ' -f 1")
@@ -542,13 +542,41 @@ GO
 SQL
 before_v119=$(data_except_tours); before_v119_tours=$(tours_data)
 if check_only > "$scratch/v119-before.log" 2>&1; then fail 'Read-only gate accepted v1.18 without the short-notice column.'; fi
-upgrade > "$scratch/v119.log" 2>&1 || { cat "$scratch/v119.log" >&2; fail 'v1.18 to v1.19 upgrade failed.'; }
+upgrade > "$scratch/v119.log" 2>&1 || { cat "$scratch/v119.log" >&2; fail 'v1.18 to v1.20 upgrade failed.'; }
 grep -q 'Applying additive database patch: patches/upgrade-v1.18-to-v1.19-short-notice-tour.sql' "$scratch/v119.log" || fail 'v1.18 database missed the v1.19 patch.'
-[[ $(grep -c 'Applying additive database patch: patches/' "$scratch/v119.log") == 1 ]] || fail 'v1.18 database received an unrelated schema patch.'
-[[ $(markers) == "1.19|$v118_hash" && $(data_except_tours) == "$before_v119" && $(tours_data) == "$before_v119_tours" ]] || fail 'Short-notice patch changed business data or the bootstrap hash.'
+grep -q 'Applying additive database patch: patches/upgrade-v1.19-to-v1.20-poi-discard.sql' "$scratch/v119.log" || fail 'v1.18 database missed the v1.20 patch.'
+[[ $(grep -c 'Applying additive database patch: patches/' "$scratch/v119.log") == 2 ]] || fail 'v1.18 database received an unrelated schema patch.'
+[[ $(markers) == "1.20|$v118_hash" && $(data_except_tours) == "$before_v119" && $(tours_data) == "$before_v119_tours" ]] || fail 'Short-notice patch changed business data or the bootstrap hash.'
 [[ $(query "SELECT COUNT(*) FROM dbo.Tours WHERE IsShortNotice <> 0;") == 0 ]] || fail 'Short-notice patch marked an existing Tour.'
-upgrade > "$scratch/v119-rerun.log" 2>&1 || { cat "$scratch/v119-rerun.log" >&2; fail 'v1.19 regrant failed.'; }
-grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/v119-rerun.log" || fail 'v1.19 database did not use the regrant path.'
-check_only > "$scratch/v119-check.log" 2>&1 || { cat "$scratch/v119-check.log" >&2; fail 'Read-only gate rejected the v1.19 database.'; }
+upgrade > "$scratch/v119-rerun.log" 2>&1 || { cat "$scratch/v119-rerun.log" >&2; fail 'v1.20 regrant failed.'; }
+grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/v119-rerun.log" || fail 'v1.20 database did not use the regrant path.'
+check_only > "$scratch/v119-check.log" 2>&1 || { cat "$scratch/v119-check.log" >&2; fail 'Read-only gate rejected the v1.20 database.'; }
 
-echo 'PASS: real DB tool upgrade preserves data, recovers from a failed grant after the v1.19 marker, reruns idempotently, rejects missing Robot INSERT, CredentialHash UPDATE or map-assignment UPDATE in read-only check-only, restores reviewed Robot grants through the existing v1.8 regrant, keeps credential provisioning column-limited, and refuses unknown snapshots or incomplete structure.'
+# 15. A deployed v1.19 database receives only the POI discard columns (ADR-0051); all rows and its bootstrap hash
+# survive, existing proposals stay undiscarded, and a rerun is a regrant that keeps the new CHECK.
+v119_hash=$(tool --entrypoint /bin/bash "$db_init_image" -c "sed 's/\r$//' /database/smart-campus-tour-schema-v1.19.sql | sha256sum | cut -d ' ' -f 1")
+sql -d master -Q 'DROP DATABASE SmartCampusTourV11; CREATE DATABASE SmartCampusTourV11;'
+sql -d SmartCampusTourV11 <<SQL
+:r /database/smart-campus-tour-schema-v1.19.sql
+:r /database/smart-campus-tour-permissions.sql
+CREATE USER smartcampus_api FOR LOGIN smartcampus_api;
+ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;
+EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$v119_hash';
+EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.19';
+GO
+SQL
+before_v120=$(all_data | grep -v '^PoiProposals[[:space:]]')
+if check_only > "$scratch/v120-before.log" 2>&1; then fail 'Read-only gate accepted v1.19 without the v1.20 POI discard columns.'; fi
+upgrade > "$scratch/v120.log" 2>&1 || { cat "$scratch/v120.log" >&2; fail 'v1.19 to v1.20 upgrade failed.'; }
+grep -q 'Applying additive database patch: patches/upgrade-v1.19-to-v1.20-poi-discard.sql' "$scratch/v120.log" || fail 'v1.19 database missed the v1.20 patch.'
+[[ $(grep -c 'Applying additive database patch: patches/' "$scratch/v120.log") == 1 ]] || fail 'v1.19 database received an unrelated schema patch.'
+[[ $(markers) == "1.20|$v119_hash" && $(all_data | grep -v '^PoiProposals[[:space:]]') == "$before_v120" ]] || fail 'POI discard patch changed business data or the bootstrap hash.'
+[[ $(query "SELECT COUNT(*) FROM dbo.PoiProposals WHERE DiscardedAt IS NOT NULL OR DiscardedByUserId IS NOT NULL;") == 0 ]] ||
+  fail 'v1.20 patch discarded an existing POI proposal.'
+discard_check_id=$(query "SELECT OBJECT_ID(N'dbo.CK_PoiProposals_Discard_Complete');")
+upgrade > "$scratch/v120-rerun.log" 2>&1 || { cat "$scratch/v120-rerun.log" >&2; fail 'v1.20 regrant failed.'; }
+grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/v120-rerun.log" || fail 'v1.20 database did not use the regrant path.'
+[[ $(query "SELECT OBJECT_ID(N'dbo.CK_PoiProposals_Discard_Complete');") == "$discard_check_id" ]] || fail 'v1.20 regrant replaced the discard CHECK.'
+check_only > "$scratch/v120-check.log" 2>&1 || { cat "$scratch/v120-check.log" >&2; fail 'Read-only gate rejected the v1.20 database.'; }
+
+echo 'PASS: real DB tool upgrade preserves data, recovers from a failed grant after the v1.20 marker, reruns idempotently, rejects missing Robot INSERT, CredentialHash UPDATE or map-assignment UPDATE in read-only check-only, restores reviewed Robot grants through the existing v1.8 regrant, keeps credential provisioning column-limited, and refuses unknown snapshots or incomplete structure.'

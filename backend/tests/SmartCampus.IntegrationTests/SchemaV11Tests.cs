@@ -719,6 +719,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.17-to-v1.18-capacity-and-expiry.sql");
         await db.ApplyFileAsync("upgrade-v1.18-to-v1.19-short-notice-tour.sql");
         await db.ApplyFileAsync("upgrade-v1.18-to-v1.19-short-notice-tour.sql");
+        await db.ApplyFileAsync("upgrade-v1.19-to-v1.20-poi-discard.sql");
+        await db.ApplyFileAsync("upgrade-v1.19-to-v1.20-poi-discard.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -729,7 +731,8 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.19", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.20", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name='DiscardedAt' AND is_nullable=1;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RobotCommands';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='TourScheduleBlocks';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Tours') AND name='CurrentRevisionStopId' AND is_nullable=1;"));
@@ -1096,6 +1099,38 @@ public sealed class SchemaV11Tests
         await using var snapshot = await TestDatabase.CreateAsync();
         const string column = "SELECT CONCAT(TYPE_NAME(c.user_type_id), ':', c.is_nullable, ':', OBJECT_DEFINITION(c.default_object_id)) FROM sys.columns c WHERE c.object_id=OBJECT_ID(N'dbo.Tours') AND c.name='IsShortNotice';";
         Assert.Equal(await snapshot.ScalarAsync<string>(column), await db.ScalarAsync<string>(column));
+    }
+
+    [SchemaV17Fact]
+    public async Task PoiDiscardUpgrade_MatchesTheSnapshot_KeepsExistingProposalsVisible_AndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.19.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.19';");
+        const string bootstrapHash = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{bootstrapHash}';");
+
+        await db.ApplyFileAsync("upgrade-v1.19-to-v1.20-poi-discard.sql");
+        await db.ApplyFileAsync("upgrade-v1.19-to-v1.20-poi-discard.sql");
+
+        Assert.Equal("1.20", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        await using var snapshot = await TestDatabase.CreateAsync();
+        const string columns = "SELECT STRING_AGG(CONCAT(name,':',TYPE_NAME(system_type_id),':',scale,':',is_nullable), N',') WITHIN GROUP (ORDER BY name) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name IN ('DiscardedAt','DiscardedByUserId');";
+        const string check = "SELECT CONCAT(definition,':',is_not_trusted) FROM sys.check_constraints WHERE name=N'CK_PoiProposals_Discard_Complete';";
+        const string foreignKey = "SELECT CONCAT(OBJECT_NAME(referenced_object_id),':',is_not_trusted) FROM sys.foreign_keys WHERE name=N'FK_PoiProposals_DiscardedByUserId';";
+        foreach (var shape in new[] { columns, check, foreignKey })
+            Assert.Equal(await snapshot.ScalarAsync<string>(shape), await db.ScalarAsync<string>(shape));
+        Assert.Equal("Users:0", await db.ScalarAsync<string>(foreignKey));
+    }
+
+    [SchemaV17Fact]
+    public async Task PoiDiscardUpgrade_RefusesAnyOtherVersion()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.18.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.18';");
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.19-to-v1.20-poi-discard.sql"));
+        Assert.Equal(51200, error.Number);
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name='DiscardedAt';"));
     }
 
     [SchemaV17Fact]
@@ -1681,7 +1716,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.19.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.20.sql")
         {
             var db = new TestDatabase();
             try

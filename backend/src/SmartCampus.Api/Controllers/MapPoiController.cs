@@ -244,6 +244,12 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         Ok(new BaseResponse<PoiProposalView> { Success = true, Message = "POI revision submitted for technical verification.",
             Data = await sender.Send(new SubmitPoiProposalCommand(User.GetRequiredUserId(), id, request), ct) });
 
+    [HttpPost("staff/poi-proposals/{id:guid}/discard")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiProposalView>>> DiscardProposal(Guid id, [FromBody] DiscardPoiProposalRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiProposalView> { Success = true, Message = "POI proposal discarded; its history is kept.",
+            Data = await sender.Send(new DiscardPoiProposalCommand(User.GetRequiredUserId(), id, request), ct) });
+
     [HttpGet("technical/poi-verifications")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<PoiVerificationQueueItem>>>> VerificationQueue([FromQuery] Guid? mapVersionId, CancellationToken ct) =>

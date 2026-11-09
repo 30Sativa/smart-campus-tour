@@ -62,10 +62,10 @@ jobs:
         if: steps.detect.outputs.backend_changed == 'true' && steps.detect.outputs.database_tool_changed != 'true'
         shell: bash
         run: |
-          if docker manifest inspect ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.19 > /dev/null; then
+          if docker manifest inspect ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.20 > /dev/null; then
             echo 'missing=false' >> "$GITHUB_OUTPUT"
           else
-            echo '::notice::backend-db-init:schema-v1.19 is not published; treating the DB tool as changed.'
+            echo '::notice::backend-db-init:schema-v1.20 is not published; treating the DB tool as changed.'
             echo 'missing=true' >> "$GITHUB_OUTPUT"
           fi
 
@@ -192,7 +192,7 @@ jobs:
           build-args: |
             SQLSERVER_IMAGE=${{ steps.bases.outputs.sql }}
             VCS_REF=${{ github.sha }}
-            VERSION=1.19
+            VERSION=1.20
             BUILD_DATE=${{ github.event.pull_request.updated_at }}
           cache-from: type=gha,scope=backend-db-init
           cache-to: type=gha,mode=max,scope=backend-db-init
@@ -205,11 +205,11 @@ jobs:
         run: bash backend/scripts/test-db-upgrade
       - name: Reuse the last verified DB tool when its inputs are unchanged
         if: needs.changes.outputs.database_tool_changed != 'true'
-        run: docker pull ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.19
+        run: docker pull ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.20
       - name: Smoke-test PR API with exact candidate and database tool images
         env:
           BACKEND_IMAGE: campustour-backend:pr-${{ github.event.pull_request.number }}
-          DB_INIT_IMAGE: ${{ needs.changes.outputs.database_tool_changed == 'true' && format('campustour-db-init:pr-{0}', github.event.pull_request.number) || 'ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.19' }}
+          DB_INIT_IMAGE: ${{ needs.changes.outputs.database_tool_changed == 'true' && format('campustour-db-init:pr-{0}', github.event.pull_request.number) || 'ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.20' }}
           SQLSERVER_IMAGE: ${{ steps.bases.outputs.sql }}
           DEPLOYMENT_TEST_BUILD_IMAGES: "false"
         run: bash backend/scripts/test-deployment
@@ -284,7 +284,7 @@ jobs:
           build-args: |
             SQLSERVER_IMAGE=${{ steps.bases.outputs.sql }}
             VCS_REF=${{ github.sha }}
-            VERSION=1.19
+            VERSION=1.20
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=backend-db-init
           cache-to: type=gha,mode=max,scope=backend-db-init
@@ -304,7 +304,7 @@ jobs:
             db_image="ghcr.io/30sativa/smart-campus-tour/backend-db-init@$NEW_DB_DIGEST"
             db_source="$SOURCE_SHA"
           else
-            db_tag=ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.19
+            db_tag=ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.20
             docker pull "$db_tag"
             db_image=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$db_tag" | grep -E '^ghcr\.io/30sativa/smart-campus-tour/backend-db-init@sha256:[0-9a-f]{64}$' | head -n1)
             db_source=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$db_tag")
@@ -312,7 +312,7 @@ jobs:
           docker pull "$db_image"
           tool_revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$db_image")
           schema_version=$(docker image inspect --format '{{index .Config.Labels "org.smartcampus.database.schema-version"}}' "$db_image")
-          [[ "$tool_revision" == "$db_source" && "$schema_version" == 1.19 ]]
+          [[ "$tool_revision" == "$db_source" && "$schema_version" == 1.20 ]]
           echo "db_image=$db_image" >> "$GITHUB_OUTPUT"
           echo "db_source=$db_source" >> "$GITHUB_OUTPUT"
       - name: Pull and validate exact API and DB tool artifacts
@@ -325,7 +325,7 @@ jobs:
           docker pull "$API_IMAGE"
           [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$API_IMAGE") == "$SOURCE_SHA" ]]
           [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$DB_INIT_IMAGE") == "${{ steps.dbartifact.outputs.db_source }}" ]]
-          [[ $(docker image inspect --format '{{index .Config.Labels "org.smartcampus.database.schema-version"}}' "$DB_INIT_IMAGE") == 1.19 ]]
+          [[ $(docker image inspect --format '{{index .Config.Labels "org.smartcampus.database.schema-version"}}' "$DB_INIT_IMAGE") == 1.20 ]]
       - name: Test the published DB tool upgrade path on a disposable database
         if: needs.changes.outputs.database_tool_changed == 'true'
         env:
@@ -354,7 +354,7 @@ jobs:
             echo "api_image=$API_IMAGE"
             echo "db_init_image=$DB_INIT_IMAGE"
             echo "db_init_source_sha=$DB_SOURCE_SHA"
-            echo "database_schema_version=1.19"
+            echo "database_schema_version=1.20"
             echo "sdk_image=$SDK_IMAGE"
             echo "runtime_image=$RUNTIME_IMAGE"
             echo "sqlserver_image=$SQLSERVER_IMAGE"
@@ -383,7 +383,7 @@ jobs:
         if: needs.changes.outputs.database_tool_changed == 'true'
         env:
           DB_IMAGE: ${{ needs.image-main.outputs.db_init_image }}
-        run: docker buildx imagetools create --tag ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.19 "$DB_IMAGE"
+        run: docker buildx imagetools create --tag ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.20 "$DB_IMAGE"
       - name: Write immutable release manifest
         env:
           SOURCE_SHA: ${{ github.sha }}

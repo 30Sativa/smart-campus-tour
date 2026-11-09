@@ -143,7 +143,7 @@ assert_login
 
 # A candidate schema rejection must not make Compose stop the current API.
 api_id_before=$("${dc[@]}" ps -q api)
-schema_hash=$(sed 's/\r$//' backend/database/smart-campus-tour-schema-v1.19.sql | sha256sum | cut -d' ' -f1)
+schema_hash=$(sed 's/\r$//' backend/database/smart-campus-tour-schema-v1.20.sql | sha256sum | cut -d' ' -f1)
 stored_schema_hash=$(sql_as_sa -h -1 -W -Q "SET NOCOUNT ON; SELECT CONVERT(nvarchar(64), value) FROM SmartCampusTourV11.sys.extended_properties WHERE name=N'CampusTourBootstrapHash';" | tr -d '\r\n ')
 [[ "$stored_schema_hash" == "$schema_hash" ]] || {
   echo 'Unexpected initial schema hash in the disposable SQL database.' >&2
@@ -284,7 +284,8 @@ IF OBJECT_ID(N'dbo.RosterEmailChangeRequests', N'U') IS NULL
     OR COL_LENGTH(N'dbo.Tours',N'CurrentRevisionStopId') IS NULL
     OR OBJECT_ID(N'dbo.TourScheduleBlocks',N'U') IS NULL
     OR OBJECT_ID(N'dbo.CK_TourRobotReservations_Release_Actor',N'C') IS NULL
-    THROW 51001, 'Expected v1.19 registration, map/POI narration, route, robot confirmation, credential lifecycle, map assignment and Tour reservation, robot command, schedule block and system reservation release schema.', 1;
+    OR COL_LENGTH(N'dbo.PoiProposals',N'DiscardedAt') IS NULL
+    THROW 51001, 'Expected v1.20 registration, map/POI narration, route, robot confirmation, credential lifecycle, map assignment and Tour reservation, robot command, schedule block and system reservation release and POI discard schema.', 1;
 IF (SELECT COUNT(*) FROM dbo.Users WHERE NormalizedUsername=N'DEPLOYMENT.ADMIN') <> 1
     THROW 51002, 'Seed must be idempotent.', 1;
 IF HAS_PERMS_BY_NAME('dbo.AuditLogs', 'OBJECT', 'INSERT') <> 1

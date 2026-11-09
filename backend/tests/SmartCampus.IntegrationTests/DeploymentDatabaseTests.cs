@@ -302,9 +302,31 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV119SnapshotAndMarker()
+    public async Task Bootstrap_AcceptsVerifiedV120SnapshotAndMarker()
     {
-        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.19.sql", "1.19"));
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.20.sql", "1.20"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_AskForTheUpgradeOnAVerifiedV119Database()
+    {
+        Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.19.sql", "1.19"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_RefusesAV120MarkerWithoutTheTrustedPoiDiscardStructure()
+    {
+        foreach (var sql in new[]
+        {
+            "ALTER TABLE dbo.PoiProposals DROP CONSTRAINT CK_PoiProposals_Discard_Complete;",
+            "ALTER TABLE dbo.PoiProposals NOCHECK CONSTRAINT CK_PoiProposals_Discard_Complete;",
+            "ALTER TABLE dbo.PoiProposals NOCHECK CONSTRAINT FK_PoiProposals_DiscardedByUserId;",
+            "ALTER TABLE dbo.PoiProposals DROP CONSTRAINT FK_PoiProposals_DiscardedByUserId;"
+        })
+        {
+            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.20.sql", "1.20", sql));
+            Assert.Equal(51001, error.Number);
+        }
     }
 
     [SchemaV11Fact]
@@ -388,7 +410,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     // Bootstraps the snapshot with its own hash and version markers, then runs the guard with every
-    // variable bound exactly as init-db.sh binds it for the current v1.19 release.
+    // variable bound exactly as init-db.sh binds it for the current v1.20 release.
     private static async Task<object?> RunCurrentGuardAsync(string snapshot, string version, string? alteration = null)
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync(snapshot);
@@ -413,7 +435,8 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV116)", await SnapshotHashAsync("snapshot-v1.16.sql"))
             .Replace("$(SchemaHashV117)", await SnapshotHashAsync("snapshot-v1.17.sql"))
             .Replace("$(SchemaHashV118)", await SnapshotHashAsync("snapshot-v1.18.sql"))
-            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.19.sql"));
+            .Replace("$(SchemaHashV119)", await SnapshotHashAsync("snapshot-v1.19.sql"))
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.20.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();
     }
@@ -464,6 +487,28 @@ public sealed class DeploymentDatabaseTests
     {
         await using var database = await DatabaseWithReviewedGrantsAsync();
         await database.ExecuteAsync("REVOKE UPDATE (CurrentTourId) ON OBJECT::dbo.Robots FROM campus_tour_app;");
+
+        var error = await Assert.ThrowsAsync<SqlException>(() => RunCheckOnlyGrantsAsync(database));
+
+        Assert.Equal(51005, error.Number);
+    }
+
+    [SchemaV17Fact]
+    public async Task CheckOnly_RefusesRuntimeThatCannotDiscardAPoiProposal()
+    {
+        await using var database = await DatabaseWithReviewedGrantsAsync();
+        await database.ExecuteAsync("REVOKE UPDATE (DiscardedAt) ON OBJECT::dbo.PoiProposals FROM campus_tour_app;");
+
+        var error = await Assert.ThrowsAsync<SqlException>(() => RunCheckOnlyGrantsAsync(database));
+
+        Assert.Equal(51005, error.Number);
+    }
+
+    [SchemaV17Fact]
+    public async Task CheckOnly_RefusesRuntimeThatCanDeletePoiProposals()
+    {
+        await using var database = await DatabaseWithReviewedGrantsAsync();
+        await database.ExecuteAsync("GRANT DELETE ON OBJECT::dbo.PoiProposals TO campus_tour_app;");
 
         var error = await Assert.ThrowsAsync<SqlException>(() => RunCheckOnlyGrantsAsync(database));
 
