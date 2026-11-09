@@ -6,6 +6,7 @@ import { Hero } from '../../features/landing/sections/Hero'
 import { CtaBand } from '../../features/landing/sections/CtaBand'
 import { SiteFooter } from '../../features/landing/sections/SiteFooter'
 import { AiPreview, CyclingStatus, JourneyRouteOverlay, TechShowcase } from '../../features/landing/sections/JourneyParts'
+import { RobotFlowSection } from '../../features/landing/sections/RobotFlowSection'
 import type { TechItem } from '../../features/landing/sections/JourneyParts'
 import { EASE, ScrollTrigger, gsap, prefersReducedMotion, revealOnScroll } from '../../features/landing/landing-motion'
 import '../../features/landing/landing.css'
@@ -317,6 +318,7 @@ export default function PublicHomePage() {
             <TechShowcase items={technology} />
           </div>
         </section>
+        <RobotFlowSection />
         <CtaBand />
       </main>
       <SiteFooter />
