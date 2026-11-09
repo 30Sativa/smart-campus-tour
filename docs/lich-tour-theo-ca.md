@@ -44,12 +44,16 @@ Trên form tạo/sửa tuyến:
 | Ca | Giữ robot | Tour bắt đầu | Tour kết thúc muộn nhất |
 |---|---|---|---|
 | S1 · Ca sáng | 08:00–10:00 | 08:15 | 09:45 |
+| S4 · Ca trưa | 11:00–12:00 | 11:15 | 11:45 |
 | S2 · Ca chiều 1 | 13:00–15:00 | 13:15 | 14:45 |
 | S3 · Ca chiều 2 | 16:00–18:00 | 16:15 | 17:45 |
+| S5 · Ca tối | 19:00–21:00 | 19:15 | 20:45 |
 
 - Ca là khung **giữ robot**, đã gồm 15 phút chuẩn bị và 15 phút kết thúc (đúng `ReservationBuffer` hiện có).
   Giờ bắt đầu Tour = đầu ca + 15 phút.
-- Giữa hai ca nghỉ ít nhất 1 tiếng để sạc pin và reset robot. Riêng buổi trưa nghỉ dài hơn.
+- Giữa hai ca nghỉ ít nhất 1 tiếng để sạc pin và reset robot.
+- S4 và S5 thêm ngày 09/11/2026 để có thêm chỗ trong ngày, nhất là cho Tour ngắn hạn (ADR-0050). Mã ca mới
+  nằm sau S3 để Tour đã tạo giữ nguyên mã. S4 chỉ dài 1 tiếng nên chỉ nhận tuyến chạy tối đa 30 phút.
 - Mỗi robot nhận tối đa 1 Tour mỗi ca. Tour mới giữ robot trọn ca (`StartsAt` = đầu ca, `EndsAt` = cuối ca),
   không còn tính khung giữ theo thời lượng.
 - Staff không gõ giờ nữa: chọn ngày rồi chọn ca. Server chỉ nhận `ScheduledStartAt` trùng đúng giờ bắt đầu Tour
@@ -121,8 +125,10 @@ Số điểm dừng thiếu và thời gian dừng ngoài 15–300 giây là l�
 "Tours": {
   "Shifts": [
     { "Code": "S1", "Name": "Ca sáng",    "Start": "08:00", "End": "10:00" },
+    { "Code": "S4", "Name": "Ca trưa",    "Start": "11:00", "End": "12:00" },
     { "Code": "S2", "Name": "Ca chiều 1", "Start": "13:00", "End": "15:00" },
-    { "Code": "S3", "Name": "Ca chiều 2", "Start": "16:00", "End": "18:00" }
+    { "Code": "S3", "Name": "Ca chiều 2", "Start": "16:00", "End": "18:00" },
+    { "Code": "S5", "Name": "Ca tối",     "Start": "19:00", "End": "21:00" }
   ],
   "RecommendedMaxMinutes": 60
 },
