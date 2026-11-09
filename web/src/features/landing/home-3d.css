@@ -43,27 +43,29 @@ html.dark .lp3 {
 .lp3-section-head p { margin-top: 20px; max-width: 54ch; font-size: clamp(1rem, 1.35vw, 1.28rem); line-height: 1.6; color: var(--lp-ink-2); }
 
 /* The first viewport lets the hero image continue behind the navigation. */
-.lp3 .lp-nav { background: transparent; border-bottom-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.lp3:not(.lp3-page) .lp-nav { background: transparent; border-bottom-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .lp3 .lp-nav[data-stuck="true"] { background: var(--lp-nav-bg); border-bottom-color: var(--lp-line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-.lp3 .lp-nav[data-stuck="false"] { --lp-ink: #ffffff; --lp-ink-2: rgba(255,255,255,.84); --lp-line-strong: rgba(255,255,255,.42); }
-.lp3 .lp-nav[data-stuck="false"] .lp-brand,
-.lp3 .lp-nav[data-stuck="false"] .lp-navlink,
-.lp3 .lp-nav[data-stuck="false"] .lp-themebtn { color: #fff; }
-.lp3 .lp-nav[data-stuck="false"] .lp-brand,
-.lp3 .lp-nav[data-stuck="false"] .lp-navlink,
-.lp3 .lp-nav[data-stuck="false"] .lp-themebtn {
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] { --lp-ink: #ffffff; --lp-ink-2: rgba(255,255,255,.84); --lp-line-strong: rgba(255,255,255,.42); }
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-brand,
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-navlink,
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-themebtn { color: #fff; }
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-brand,
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-navlink,
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-themebtn {
   text-shadow: 0 2px 4px rgba(0,0,0,.82), 0 0 10px rgba(0,0,0,.42);
   -webkit-text-stroke: .25px rgba(0,0,0,.28);
 }
-.lp3 .lp-nav[data-stuck="false"] .lp-brand__mark { filter: brightness(0) invert(1); }
-.lp3 .lp-nav[data-stuck="false"] .lp-btn--ghost {
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-brand__mark { filter: brightness(0) invert(1); }
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-btn--ghost {
   color: #fff;
   border-color: rgba(255,255,255,.78);
   background: rgba(9,40,43,.28);
   box-shadow: 0 2px 12px rgba(0,0,0,.2), inset 0 0 0 1px rgba(255,255,255,.1);
   text-shadow: 0 1px 3px rgba(0,0,0,.8);
 }
-html.dark .lp3 .lp-nav[data-stuck="false"] { --lp-ink: #f2f7f2; --lp-ink-2: #bad0ca; --lp-line-strong: rgba(230,247,235,.3); }
+html.dark .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] { --lp-ink: #f2f7f2; --lp-ink-2: #bad0ca; --lp-line-strong: rgba(230,247,235,.3); }
+/* Pages without a hero photo keep the solid nav from the top, with the page's own ink. */
+.lp3-page .lp-nav[data-stuck="false"] { --lp-ink: inherit; --lp-ink-2: inherit; --lp-line-strong: inherit; background: var(--lp-nav-bg); border-bottom-color: var(--lp-line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
 .lp3 .lp-nav__inner { height: 76px; max-width: 1600px; }
 .lp3 .lp-brand__name { font-weight: 800; letter-spacing: -.045em; }
 html.dark .lp3 .lp-nav .lp-brand__mark { filter: brightness(0) invert(1); }
