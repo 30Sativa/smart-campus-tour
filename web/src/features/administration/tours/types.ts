@@ -8,22 +8,10 @@ export type TourInput = {
 }
 export type CreateTourInput = {
   name: string; description: string | null; routeRevisionId: string; robotCode: string
-  operatorUserId: string; scheduledStartAt: string; fallbackVideoUrl: string | null; capacity: number
-}
-/** A quick Tour (ADR-0053): no date or shift, so no start time; `reason` is required. */
-export type QuickTourInput = {
-  name: string; description: string | null; routeRevisionId: string; robotCode: string
-  operatorUserId: string; fallbackVideoUrl: string | null; capacity: number; reason: string
-}
-/**
- * Whether a quick Tour can be created now with this route and robot. `deadlineAt` is its latest Start and published
- * time; the hold runs from now. The values move with the clock, and create decides again.
- */
-export type QuickTourPlan = {
-  routeRevisionId: string; robotCode: string; expectedDurationSeconds: number | null
-  available: boolean; reasonCode: TourSlotReason | null; reason: string | null
-  deadlineAt: string; reservationStartsAt: string | null; reservationEndsAt: string | null
-  waitMinutes: number; maxCapacity: number
+  /** The chosen shift's start; null for a quick Tour, whose latest Start the server sets (ADR-0053). */
+  operatorUserId: string; scheduledStartAt: string | null; fallbackVideoUrl: string | null; capacity: number
+  /** Set only for a quick Tour, and then required. */
+  shortNoticeReason?: string | null
 }
 export type TourOperator = { userId: string; fullName: string; username: string }
 export type TourRobotOption = { robotCode: string; displayName: string | null; usable: boolean; blockReason: string | null }
@@ -115,8 +103,6 @@ export type TourPhase = 'UPCOMING' | 'RUNNING' | 'FINISHED'
 export type TourListQuery = {
   search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number
   operator?: 'me'; needsReconcile?: boolean; readyBlockers?: boolean
-  /** true: quick Tours only; false: Tours on a shift only (ADR-0053). */
-  shortNotice?: boolean
 }
 export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_SHIFT' | 'SHIFT_BLOCKED' | 'ROUTE_TEST_REMEASURE_REQUIRED'
 /** One shift of one day (docs/lich-tour-theo-ca.md §3): `time` is the Tour start, the reservation is the whole shift. */

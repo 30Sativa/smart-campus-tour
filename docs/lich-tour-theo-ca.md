@@ -401,8 +401,9 @@ Nguồn: SRS v0.2 BR-24, UC-TOUR-07, BR-27, FR-40, AC-19; quyết định kỹ t
 Tour nhanh dùng cho buổi trình diễn hoặc đoàn khách đột xuất. Nó **không theo ca**; mọi quy tắc của Tour theo ca ở các
 mục trên giữ nguyên.
 
-- **Tạo:** chọn tuyến đã chạy thử đạt, robot, người vận hành, sức chứa và **lý do** (bắt buộc). Không chọn ngày, không chọn
-  ca. API riêng: `GET /api/staff/manage/tours/quick/plan` (robot có rảnh ngay không) và `POST /api/staff/manage/tours/quick`.
+- **Tạo:** cùng form và cùng API tạo Tour (`POST /api/staff/manage/tours`), chỉ bớt ràng buộc: chọn loại "Tour nhanh", chọn
+  tuyến đã chạy thử đạt, robot, người vận hành, sức chứa và ghi **lý do** (bắt buộc, gửi `shortNoticeReason`). Không chọn ngày,
+  không chọn ca (`scheduledStartAt` để trống), không cần báo trước 72 giờ. Robot đang bận thì tạo báo lỗi kèm lý do.
 - **Hạn Start:** lúc tạo + `Tours:ShortNoticeMinLeadMinutes`, làm tròn lên phút. Mặc định 30 phút (đúng giá trị đã có trong
   `appsettings.json`); không còn công tắc bật/tắt. Hạn Start cũng là giờ ghi cho người xem.
 - **Giữ robot:** từ lúc tạo đến hạn Start + thời lượng tuyến + 15 phút. Vẫn kiểm tra trùng khung giữ robot của mọi Tour khác
@@ -413,9 +414,8 @@ mục trên giữ nguyên.
 - **Đăng ký:** như Tour ngắn hạn của ADR-0050: không có mốc 48 giờ và 24 giờ; đăng ký đóng khi Staff chốt READY, muộn nhất
   là hạn Start; job T−24h bỏ qua Tour này.
 - **Quá hạn:** chưa Start tới hạn Start + 15 phút thì hệ thống tự huỷ như mục 11 và trả robot.
-- **Web:** Lịch Tour có hai tab "Theo ca" và "Tour nhanh". Tab Tour nhanh liệt kê từng Tour với khung giữ robot và thời gian
-  còn lại để Start. Trong lịch theo ca, Tour nhanh hiện ở giờ hạn Start với nhãn "Nhanh", và ca bị nó giữ robot không nhận
-  Tour mới. Danh sách Tour lọc được theo loại.
+- **Web:** không có tab hay trang riêng. Trong Lịch Tour, Tour nhanh hiện ở giờ hạn Start với nhãn "Nhanh" (thường ở dòng
+  "Ngoài ca"), và ca bị nó giữ robot không nhận Tour mới. Danh sách và trang chi tiết ghi "Tour nhanh".
 - **Bỏ:** cách "Tour ngắn hạn gắn vào ca" của ADR-0050 (`shortNotice` trên `/slots`, `shortNoticeReason` khi tạo Tour theo ca).
 - **Để sau:** email mời vẫn ghi một giờ cố định (với Tour nhanh là hạn Start); Staff tự thêm người xem cho Tour nhanh cần quyết
   định riêng.

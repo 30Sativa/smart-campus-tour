@@ -5,18 +5,12 @@ namespace SmartCampus.Application.Features.Tours;
 
 public sealed record TourInput(string Name, string? Description, Guid RouteId,
     DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl);
-public sealed record CreateTourInput(string Name, string? Description, Guid RouteRevisionId, string RobotCode,
-    Guid OperatorUserId, DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl, int Capacity);
-/// <summary>A quick Tour (ADR-0053): no date or shift; it holds its robot from creation and may start once ready.</summary>
-public sealed record QuickTourInput(string Name, string? Description, Guid RouteRevisionId, string RobotCode,
-    Guid OperatorUserId, string? FallbackVideoUrl, int Capacity, string Reason);
 /// <summary>
-/// Whether a quick Tour can be created now with this revision and robot, and the deadline and hold it would get. The
-/// values move with the clock; create recomputes them.
+/// A Tour on a shift names its <see cref="ScheduledStartAt"/>. A quick Tour (ADR-0053) names a
+/// <see cref="ShortNoticeReason"/> and no start: the server sets its latest Start.
 /// </summary>
-public sealed record QuickTourPlanView(Guid RouteRevisionId, string RobotCode, int? ExpectedDurationSeconds, bool Available,
-    string? ReasonCode, string? Reason, DateTimeOffset DeadlineAt, DateTimeOffset? ReservationStartsAt, DateTimeOffset? ReservationEndsAt,
-    int WaitMinutes, int MaxCapacity);
+public sealed record CreateTourInput(string Name, string? Description, Guid RouteRevisionId, string RobotCode,
+    Guid OperatorUserId, DateTimeOffset? ScheduledStartAt, string? FallbackVideoUrl, int Capacity, string? ShortNoticeReason = null);
 /// <summary>
 /// <see cref="OperatorUserId"/> keeps the Tours that account operates; <see cref="NeedsReconcile"/> keeps the Tours with an
 /// UNKNOWN GoTo, in any state. <see cref="IncludeReadyBlockers"/> evaluates READY for each SCHEDULED row of the page, the
@@ -24,7 +18,7 @@ public sealed record QuickTourPlanView(Guid RouteRevisionId, string RobotCode, i
 /// </summary>
 public sealed record TourListRequest(string? Search, string Sort, int Page, int Size,
     string? State, DateTimeOffset? From, DateTimeOffset? To, string? Phase = null, DateTimeOffset Now = default,
-    Guid? OperatorUserId = null, bool NeedsReconcile = false, bool IncludeReadyBlockers = false, bool? ShortNotice = null);
+    Guid? OperatorUserId = null, bool NeedsReconcile = false, bool IncludeReadyBlockers = false);
 /// <summary>The Staff list's groupings of Tour state; a single <see cref="TourListRequest.State"/> cannot express them.</summary>
 public static class TourPhases
 {

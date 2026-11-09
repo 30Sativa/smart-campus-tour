@@ -8,9 +8,7 @@ using SmartCampus.Application.Features.Representative.Queries.Lists;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.CreateScheduleBlock;
 using SmartCampus.Application.Features.Tours.Commands.ExpirePendingDecisions;
-using SmartCampus.Application.Features.Tours.Queries.GetQuickTourPlan;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
-using SmartCampus.Application.Features.Tours.Queries.GetTours;
 using SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 using SmartCampus.Application.Features.Tours.Queries.GetTourStartChecks;
 
@@ -46,10 +44,6 @@ public sealed class TourShortNoticeSqlTests
         var day = TourSchedule.CampusDate(w.Noon);
         Assert.Equal(60, (await w.H.Send(new GetTourShiftsQuery(day, day))).QuickTourWaitMinutes);
 
-        var plan = await w.H.Send(new GetQuickTourPlanQuery(w.H.Route.RevisionId, TourReadySqlTests.Robot));
-        Assert.True(plan.Available);
-        Assert.Equal(deadline, plan.DeadlineAt);
-
         var requestId = Guid.NewGuid();
         var id = await w.H.CreateQuickTour(Reason, requestId);
         Assert.Equal(id, await w.H.CreateQuickTour(Reason, requestId));
@@ -64,13 +58,11 @@ public sealed class TourShortNoticeSqlTests
         var hold = await db.TourRobotReservations.AsNoTracking().SingleAsync(r => r.TourId == id);
         Assert.Equal(w.Noon, hold.StartsAt);
         Assert.Equal(deadline + TimeSpan.FromSeconds(hold.ExpectedDurationSeconds!.Value) + TourSchedule.ReservationBuffer, hold.EndsAt);
-        Assert.Equal((plan.ReservationStartsAt, plan.ReservationEndsAt), ((DateTimeOffset?)hold.StartsAt, (DateTimeOffset?)hold.EndsAt));
         var recorded = await db.TourEvents.AsNoTracking().SingleAsync(e => e.TourId == id);
         Assert.Equal((TourLifecycleEvents.CreatedShortNotice, Reason), (recorded.EventType, recorded.ReasonNote));
 
         // The robot is now held, so a second quick Tour waits for this one.
         Assert.Equal("ROBOT_RESERVATION_CONFLICT", (await Assert.ThrowsAsync<ConflictException>(() => w.H.CreateQuickTour(Reason))).Code);
-        Assert.Equal(TourSchedule.ReservationOverlap, (await w.H.Send(new GetQuickTourPlanQuery(w.H.Route.RevisionId, TourReadySqlTests.Robot))).ReasonCode);
     }
 
     [SchemaV11Fact]
@@ -136,20 +128,6 @@ public sealed class TourShortNoticeSqlTests
         w.Clock.Now = deadline;
         var late = await w.Representative("late");
         Assert.Equal("REGISTRATION_CUTOFF", (await Assert.ThrowsAsync<ConflictException>(() => w.Submit(id, late, "late@example.test"))).Code);
-    }
-
-    [SchemaV11Fact]
-    public async Task TheList_SeparatesQuickTours_FromToursOnAShift()
-    {
-        await using var w = await World.Create(minutes: 60);
-        w.Clock.Now = w.Noon;
-        var quick = await w.H.CreateQuickTour(Reason);
-
-        async Task<Guid[]> Listed(bool? shortNotice) =>
-            (await w.H.Send(new GetToursQuery(new(null, "scheduledStartAt", 1, 20, null, null, null, ShortNotice: shortNotice)))).Items.Select(t => t.Id).ToArray();
-        Assert.Equal(new[] { quick }, await Listed(true));
-        Assert.Equal(new[] { w.H.TourId }, await Listed(false));
-        Assert.Equal(2, (await Listed(null)).Length);
     }
 
     [SchemaV11Fact]

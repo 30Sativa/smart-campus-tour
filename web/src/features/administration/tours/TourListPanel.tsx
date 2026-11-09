@@ -38,15 +38,11 @@ export function TourListPanel() {
   // A state or "all" pick steps outside the tabs: it is how dashboard links land, and how to reach a Tour past its start that never ran.
   const state: TourState | '' = requestedState && requestedState in TOUR_STATE_LABEL ? requestedState as TourState : ''
   const everything = requestedState === 'ALL'
-  // ADR-0053: the list holds both kinds; `?tourKind=` keeps one.
-  const tourKind = params.get('tourKind')
-  const shortNotice = tourKind === 'quick' ? true : tourKind === 'normal' ? false : undefined
   const tab = state || everything ? null : TABS.find(item => item.phase === params.get('tab')) ?? TABS[0]
   const [page, setPage] = useState(1)
   const [now] = useState(() => Date.now())
   const term = useDebouncedValue(search, 300)
-  const tours = useTours({ search: term, state: state || undefined, phase: tab?.phase, sort: tab?.sort, page, size: PAGE_SIZE, shortNotice })
-  const pickKind = (value: string) => { setParams(current => { const next = new URLSearchParams(current); if (value) next.set('tourKind', value); else next.delete('tourKind'); return next }, { replace: true }); setPage(1) }
+  const tours = useTours({ search: term, state: state || undefined, phase: tab?.phase, sort: tab?.sort, page, size: PAGE_SIZE })
   const update = (key: 'tab' | 'state', value: string) => { setParams(current => { const next = new URLSearchParams(current); next.delete('tab'); next.delete('state'); if (value) next.set(key, value); return next }, { replace: true }); setPage(1) }
   const pickTab = (phase: TourPhase) => update('tab', phase)
   return <>
@@ -60,11 +56,6 @@ export function TourListPanel() {
           <option value="">Theo nhóm đang chọn</option>
           <option value="ALL">Tất cả</option>
           {(Object.keys(TOUR_STATE_LABEL) as TourState[]).map(s => <option key={s} value={s}>{TOUR_STATE_FILTER_LABEL[s]}</option>)}
-        </select></label>
-        <label className="flex items-center gap-2 whitespace-nowrap text-sm">Loại<select aria-label="Loại Tour" className={inputClass} value={shortNotice === undefined ? '' : tourKind!} onChange={e => pickKind(e.target.value)}>
-          <option value="">Tất cả</option>
-          <option value="normal">Theo ca</option>
-          <option value="quick">Tour nhanh</option>
         </select></label>
         <SearchField value={search} onChange={v => { setSearch(v); setPage(1) }} label="Tìm Tour" placeholder="Tên Tour" className="min-w-48 flex-1" />
       </div>
