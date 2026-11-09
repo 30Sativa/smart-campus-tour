@@ -1,12 +1,11 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { Activity, LoaderCircle, RefreshCw } from 'lucide-react'
-import { KpiRow, KpiTile } from '../../components/ui/Charts'
-import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
-import type { StatusTone } from '../../components/ui/status-tone'
+import { ChevronRight, LoaderCircle, RefreshCw } from 'lucide-react'
+import { PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
+import { dotClass, type StatusTone } from '../../components/ui/status-tone'
 import { buttonClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import type { TechnicalActionItem, TechnicalRobotSummary } from '../../features/technical/api/diagnostics-api'
+import type { TechnicalActionItem, TechnicalKpiSummary, TechnicalRobotSummary } from '../../features/technical/api/diagnostics-api'
 import { connectionStatusView, reading, sensorStatusView, sourceState, sourceStateView } from '../../features/technical/diagnostics-status'
 import { errorText, stamp } from '../../features/technical/technical-format'
 import { useTechnicalDashboard } from '../../features/technical/technical-hooks'
@@ -14,21 +13,77 @@ import { useTechnicalDashboard } from '../../features/technical/technical-hooks'
 const REFRESH_MS = 15_000
 
 const severityTone: Record<string, StatusTone> = { DANGER: 'danger', WARNING: 'warn', INFO: 'info' }
-const severityLabel: Record<string, string> = { DANGER: 'Nghiêm trọng', WARNING: 'Cảnh báo', INFO: 'Thông tin' }
+const severityLabel: Record<string, string> = { DANGER: 'Nghiêm trọng', WARNING: 'Cảnh báo' }
+const severityRank: Record<string, number> = { DANGER: 0, WARNING: 1 }
+const rankOf = (item: TechnicalActionItem) => severityRank[item.severity] ?? 2
+
+const FLEET_PARTS = [
+  { status: 'CONNECTED', count: 'connectedRobots' },
+  { status: 'DISCONNECTED', count: 'disconnectedRobots' },
+  { status: 'AWAITING_DATA', count: 'awaitingDataRobots' },
+  { status: 'UNCONFIRMED', count: 'unconfirmedRobots' },
+] as const
+
+const quietLinkClass = 'inline-flex min-h-8 shrink-0 items-center gap-0.5 rounded-lg px-2 text-[13px] font-semibold text-[#1d4ed8] transition-colors hover:bg-[#eff6ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]'
 
 /** Only links into this area are followed; anything else the server sends is shown as text. */
 const internalLink = (url: string | null) => (url && url.startsWith('/technical/') ? url : null)
 
+function SectionTitle({ title, note, children }: { title: string; note?: string; children?: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-4 pt-4">
+      <h2 className="text-[15px] font-semibold text-[#0f172a]">{title}</h2>
+      {children}
+      {note && <p className="w-full text-xs text-[#64748b] sm:ml-auto sm:w-auto">{note}</p>}
+    </div>
+  )
+}
+
+/** One bar answers "is the fleet up"; every state keeps its printed count, so colour is never the only carrier. */
+function FleetHealth({ kpis }: { kpis: TechnicalKpiSummary }) {
+  const parts = FLEET_PARTS.map(part => ({ ...connectionStatusView(part.status), status: part.status, count: kpis[part.count] }))
+  return (
+    <section className={`${panelClass} flex flex-col`} aria-label="Tình trạng robot">
+      <SectionTitle title="Tình trạng robot" />
+      <div className="flex flex-1 flex-col px-4 pt-3 pb-4">
+        <Link to="/technical/monitoring" className="flex items-baseline gap-2 self-start rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]">
+          <b className="text-[32px] leading-none font-bold tracking-[-0.02em] text-[#0f172a] tabular-nums">{kpis.connectedRobots}/{kpis.totalRobots}</b>
+          <span className="text-[13px] text-[#64748b]">robot trực tuyến</span>
+        </Link>
+        <div role="img" aria-label={parts.map(part => `${part.label}: ${part.count}`).join(', ')} className="mt-4 flex h-2 gap-0.5 overflow-hidden rounded-full bg-[#eef1f4]">
+          {parts.filter(part => part.count > 0).map(part => <span key={part.status} title={`${part.label}: ${part.count}`} className={dotClass[part.tone]} style={{ flexGrow: part.count }} />)}
+        </div>
+        <ul className="mt-3 grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+          {parts.map(part => (
+            <li key={part.status} className="flex items-center gap-2 text-[12.5px] text-[#475569]">
+              <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${dotClass[part.tone]}`} />
+              <span className="min-w-0 flex-1 truncate">{part.label}</span>
+              <b className={`font-semibold tabular-nums ${part.count > 0 ? 'text-[#0f172a]' : 'text-[#94a3b8]'}`}>{part.count}</b>
+            </li>
+          ))}
+        </ul>
+        <dl className="mt-auto flex flex-wrap gap-x-6 gap-y-1 pt-4 text-[12.5px] text-[#64748b]">
+          <div className="flex gap-1.5"><dt>Chờ kiểm tra tại chỗ</dt><dd className="font-semibold text-[#0f172a] tabular-nums">{kpis.heldForInspectionCount}</dd></div>
+          <div className="flex gap-1.5"><dt>Bản đồ hợp lệ</dt><dd className="font-semibold text-[#0f172a] tabular-nums">{kpis.activeMapVersionsCount}</dd></div>
+        </dl>
+      </div>
+    </section>
+  )
+}
+
 function ActionItemRow({ item }: { item: TechnicalActionItem }) {
   const to = internalLink(item.linkUrl)
+  const label = severityLabel[item.severity]
   return (
-    <li className="flex flex-wrap items-start gap-3 px-4 py-3">
-      <ToneBadge tone={severityTone[item.severity] ?? 'muted'}>{severityLabel[item.severity] ?? 'Thông tin'}</ToneBadge>
+    <li className="flex items-center gap-3 px-4 py-2.5">
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold text-[#0f172a]">{item.title}</p>
-        <p className="mt-0.5 text-xs text-[#475569]">{item.description}</p>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-[13px] font-semibold text-[#0f172a]">{item.title}</span>
+          {label && <ToneBadge tone={severityTone[item.severity]}>{label}</ToneBadge>}
+        </p>
+        <p className="mt-0.5 text-xs text-[#64748b]">{item.description}</p>
       </div>
-      {to && <Link to={to} className={buttonClass('secondary', 'sm')}>Mở</Link>}
+      {to && <Link to={to} className={quietLinkClass}>Mở<ChevronRight size={14} aria-hidden="true" /></Link>}
     </li>
   )
 }
@@ -59,17 +114,21 @@ export default function TechnicalDashboardPage() {
   const dashboard = useTechnicalDashboard(autoRefresh ? REFRESH_MS : false)
   const data = dashboard.data
   const kpis = data?.kpis
+  const actionItems = data ? [...data.actionItems].sort((a, b) => rankOf(a) - rankOf(b)) : []
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="Tổng quan" title="Bảng điều khiển kỹ thuật"
-        description="Trạng thái kết nối robot, báo cáo Mini PC và các việc kỹ thuật đang chờ. Kết nối và chẩn đoán là hai nguồn riêng, mỗi nguồn có trạng thái cập nhật của nó."
+      <PageHeader eyebrow="Tổng quan" title="Bảng điều khiển kỹ thuật" description="Robot đang thế nào và việc kỹ thuật nào đang chờ."
         action={<>
-          <button type="button" aria-pressed={autoRefresh} className={buttonClass(autoRefresh ? 'primary' : 'secondary', 'sm')} onClick={() => setAutoRefresh(value => !value)}>
-            <Activity size={14} aria-hidden="true" />{autoRefresh ? 'Tự làm mới (15s)' : 'Tự làm mới: Tắt'}
+          {data && <span className="text-xs text-[#64748b]">Cập nhật lúc {stamp(data.collectedAt)}</span>}
+          <button type="button" aria-pressed={autoRefresh} onClick={() => setAutoRefresh(value => !value)}
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-[#475569] transition-colors hover:bg-[#eef1f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]">
+            <span aria-hidden="true" className={`size-1.5 rounded-full ${autoRefresh ? dotClass.ok : dotClass.muted}`} />
+            {autoRefresh ? 'Tự làm mới 15s' : 'Tự làm mới: Tắt'}
           </button>
-          <button type="button" className={buttonClass('secondary', 'sm')} disabled={dashboard.isFetching} onClick={() => void dashboard.refetch()}>
-            <RefreshCw size={14} className={dashboard.isFetching ? 'animate-spin' : ''} aria-hidden="true" />{dashboard.isFetching ? 'Đang tải…' : 'Làm mới ngay'}
+          <button type="button" aria-label="Làm mới ngay" title="Làm mới ngay" disabled={dashboard.isFetching} onClick={() => void dashboard.refetch()}
+            className="grid size-8 place-items-center rounded-lg border border-[#e2e8f0] bg-white text-[#475569] transition-colors hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] disabled:opacity-60">
+            <RefreshCw size={14} className={dashboard.isFetching ? 'animate-spin motion-reduce:animate-none' : ''} aria-hidden="true" />
           </button>
         </>} />
 
@@ -84,35 +143,31 @@ export default function TechnicalDashboardPage() {
         <div className="space-y-4">
           {dashboard.isError && <div role="alert"><Note tone="warn">Không cập nhật được số liệu mới. Các số bên dưới là lần tải thành công gần nhất lúc <strong>{stamp(data.collectedAt)}</strong>, không phải trạng thái hiện tại.</Note></div>}
 
-          <KpiRow label="Tổng quan kỹ thuật">
-            <KpiTile label="Robot trực tuyến" value={`${kpis.connectedRobots}/${kpis.totalRobots}`}
-              note={`${kpis.disconnectedRobots} ngoại tuyến · ${kpis.awaitingDataRobots} chưa nhận dữ liệu · ${kpis.unconfirmedRobots} chưa xác nhận`}
-              tone={kpis.disconnectedRobots > 0 ? 'warn' : 'plain'} to="/technical/monitoring" />
-            <KpiTile label="Robot chờ kiểm tra tại chỗ" value={kpis.heldForInspectionCount} tone={kpis.heldForInspectionCount > 0 ? 'warn' : 'plain'} to="/technical/robots" />
-            <KpiTile label="POI chờ kiểm chứng" value={kpis.pendingPoiVerificationsCount} to="/technical/poi-import" />
-            <KpiTile label="Tuyến cần chạy lại" value={kpis.routeRerunsCount ?? 0} tone={kpis.routeRerunsCount ? 'warn' : 'plain'} to="/technical/confirmations" />
-            <KpiTile label="Tuyến chờ chạy thử" value={kpis.pendingRouteTestsCount} note={`${kpis.activeMapVersionsCount} phiên bản bản đồ hợp lệ`} to="/technical/confirmations" />
-          </KpiRow>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            <FleetHealth kpis={kpis} />
 
-          <section className={panelClass} aria-label="Việc cần xử lý">
-            <PanelHead title="Việc cần xử lý" description={`Cập nhật lúc ${stamp(data.collectedAt)}`} />
-            {data.actionItems.length === 0
-              ? <p className="px-4 py-6 text-[13px] text-[#64748b]">Không có việc kỹ thuật nào đang chờ.</p>
-              : <ul className="divide-y divide-[#eef1f4]">{data.actionItems.map((item, index) => <ActionItemRow key={`${item.type}-${item.targetId ?? index}`} item={item} />)}</ul>}
-          </section>
+            <section className={`${panelClass} flex flex-col`} aria-label="Việc cần xử lý">
+              <SectionTitle title="Việc cần xử lý">
+                {actionItems.length > 0 && <span className="rounded-full bg-[#f1f5f9] px-2 text-xs font-semibold text-[#475569] tabular-nums">{actionItems.length}</span>}
+              </SectionTitle>
+              {actionItems.length === 0
+                ? <p className="flex flex-1 items-center justify-center px-4 py-8 text-[13px] text-[#64748b]">Không có việc kỹ thuật nào đang chờ.</p>
+                : <ul className="mt-1.5 divide-y divide-[#eef1f4] pb-1.5">{actionItems.map((item, index) => <ActionItemRow key={`${item.type}-${item.targetId ?? index}`} item={item} />)}</ul>}
+            </section>
+          </div>
 
           <section className={panelClass} aria-label="Robot và Mini PC">
-            <PanelHead title="Robot và Mini PC" description="Kết nối đến từ Fleet Sync; số liệu Mini PC chỉ hiện khi báo cáo chẩn đoán còn mới (dưới 60 giây)." />
+            <SectionTitle title="Robot và Mini PC" note="Số liệu Mini PC chỉ hiện khi báo cáo còn mới (dưới 60 giây)." />
             {data.robots.length === 0 ? <p className="px-4 py-6 text-[13px] text-[#64748b]">Chưa có robot đang sử dụng. <Link to="/technical/robots" className="font-semibold text-[#1d4ed8] underline">Đăng ký robot</Link></p> : (
-              <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left">
-                <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Pin</th><th className={thClass}>Mini PC</th><th className={thClass}>Bản đồ</th><th className={`${thClass} text-center`}>Thao tác</th></tr></thead>
+              <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[820px] text-left">
+                <thead className="border-y border-[#eef1f4]"><tr><th className={thClass}>Robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Pin</th><th className={thClass}>Mini PC</th><th className={thClass}>Bản đồ</th><th aria-label="Thao tác" className={thClass} /></tr></thead>
                 <tbody className="divide-y divide-[#eef1f4]">
                   {data.robots.map(robot => {
                     const connection = connectionStatusView(robot.connectionStatus)
                     return (
                       <tr key={robot.id} className={rowClass}>
                         <td className={tdClass}><p className="font-semibold text-[#0f172a]">{robot.displayName ?? robot.robotCode}</p><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p></td>
-                        <td className={tdClass}><ToneBadge tone={connection.tone}>{connection.label}</ToneBadge><p className="mt-0.5 text-[11.5px] text-[#64748b]">Lần nhận cuối: {stamp(robot.lastSeenAt)}</p></td>
+                        <td className={tdClass}><ToneBadge tone={connection.tone}>{connection.label}</ToneBadge>{robot.lastSeenAt && <p className="mt-0.5 text-[11.5px] text-[#64748b]">Lần nhận cuối: {stamp(robot.lastSeenAt)}</p>}</td>
                         <td className={tdClass}><BatteryCell robot={robot} /></td>
                         <td className={tdClass}><MiniPcCell robot={robot} /></td>
                         <td className={tdClass}>
@@ -120,7 +175,7 @@ export default function TechnicalDashboardPage() {
                           {robot.contextMismatch && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ kiểm tra gần nhất</p>}
                           {robot.needsInspection && <p className="mt-0.5"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}
                         </td>
-                        <td className={`${tdClass} text-center`}><Link to={`/technical/monitoring?robot=${encodeURIComponent(robot.robotCode)}`} aria-label={`Giám sát ${robot.robotCode}`} className={buttonClass('secondary', 'sm')}>Giám sát</Link></td>
+                        <td className={`${tdClass} text-right`}><Link to={`/technical/monitoring?robot=${encodeURIComponent(robot.robotCode)}`} aria-label={`Giám sát ${robot.robotCode}`} className={quietLinkClass}>Giám sát<ChevronRight size={14} aria-hidden="true" /></Link></td>
                       </tr>
                     )
                   })}
