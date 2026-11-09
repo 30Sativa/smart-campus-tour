@@ -19,7 +19,7 @@ function FieldError({ id, text }: { id: string; text?: string }) {
 
 function Card({ title, note, children }: { title: string; note: string; children: React.ReactNode }) {
   return (
-    <section className={`${panelClass} p-5`} aria-label={title}>
+    <section className={`${panelClass} flex flex-col p-5`} aria-label={title}>
       <h2 className="text-[15px] font-bold text-[#0f172a]">{title}</h2>
       <p className="mt-0.5 mb-4 text-[12.5px] text-[#64748b]">{note}</p>
       {children}
@@ -65,8 +65,8 @@ function ProfileCard() {
 
   return (
     <Card title="Thông tin cá nhân" note="Họ tên là thông tin duy nhất bạn tự sửa. Tên đăng nhập, vai trò và trạng thái do Admin quản lý.">
-      <form onSubmit={submit} noValidate className="space-y-4">
-        {failure && !failure.fields.fullName && <p role="alert" className="rounded-xl bg-[#fff4f2] px-3 py-2 text-xs text-[#9d3428]">{failure.message}</p>}
+      <form onSubmit={submit} noValidate className="flex flex-1 flex-col space-y-4">
+        {failure && !failure.fields.fullName &&<p role="alert" className="rounded-xl bg-[#fff4f2] px-3 py-2 text-xs text-[#9d3428]">{failure.message}</p>}
         <div>
           <label htmlFor="profile-full-name" className={labelClass}>Họ tên</label>
           <input
@@ -87,7 +87,7 @@ function ProfileCard() {
           <div><dt className="text-[#64748b]">Trạng thái</dt><dd className="font-semibold text-[#0f172a]">{data.isActive ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}</dd></div>
           <div><dt className="text-[#64748b]">Ngày tạo</dt><dd className="text-[#334155]">{formatDate(data.createdAt)}</dd></div>
         </dl>
-        <div className="flex gap-2">
+        <div className="mt-auto flex gap-2">
           <button type="submit" disabled={!dirty || update.isPending} className={buttonClass('primary', 'md')}>
             {update.isPending ? 'Đang lưu…' : 'Lưu thay đổi'}
           </button>
@@ -134,8 +134,8 @@ function PasswordCard() {
 
   return (
     <Card title="Đổi mật khẩu" note={`Cần mật khẩu hiện tại. Mật khẩu mới dài ${MIN_PASSWORD_LENGTH} đến 128 ký tự. Sau khi đổi, mọi thiết bị phải đăng nhập lại.`}>
-      <form onSubmit={submit} noValidate className="space-y-4">
-        {failure && !Object.keys(failure.fields).length && <p role="alert" className="rounded-xl bg-[#fff4f2] px-3 py-2 text-xs text-[#9d3428]">{failure.message}</p>}
+      <form onSubmit={submit} noValidate className="flex flex-1 flex-col space-y-4">
+        {failure && !Object.keys(failure.fields).length &&<p role="alert" className="rounded-xl bg-[#fff4f2] px-3 py-2 text-xs text-[#9d3428]">{failure.message}</p>}
         {([
           ['currentPassword', 'Mật khẩu hiện tại', 'current-password'],
           ['newPassword', 'Mật khẩu mới', 'new-password'],
@@ -156,18 +156,20 @@ function PasswordCard() {
             <FieldError id={`pw-${field}-error`} text={shown[field]} />
           </div>
         ))}
-        <button type="submit" disabled={change.isPending} className={buttonClass('primary', 'md')}>
-          {change.isPending ? 'Đang đổi…' : 'Đổi mật khẩu'}
-        </button>
+        <div className="mt-auto">
+          <button type="submit" disabled={change.isPending} className={buttonClass('primary', 'md')}>
+            {change.isPending ? 'Đang đổi…' : 'Đổi mật khẩu'}
+          </button>
+        </div>
       </form>
     </Card>
   )
 }
 
 /** The one self-service block every signed-in role embeds in its own profile page. */
-export function AccountSettings() {
+export function AccountSettings({ className = '' }: { className?: string }) {
   return (
-    <div className="grid gap-3">
+    <div className={`grid gap-3 ${className}`}>
       <ProfileCard />
       <PasswordCard />
     </div>
