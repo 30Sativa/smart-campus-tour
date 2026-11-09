@@ -32,6 +32,6 @@ public sealed class GetTourShiftsQueryHandler(TourScheduleSettings settings, ISc
                 return new TourShiftView(item.Shift.Code, item.Shift.Name, startsAt, endsAt, TourSchedule.TourStart(item.Date, item.Shift),
                     item.Shift.Start.Add(TourSchedule.ReservationBuffer).ToString("HH\\:mm"), TourSchedule.MaxDurationSeconds(item.Shift),
                     TourSchedule.BlockOf(active, item));
-            }).ToArray())).ToArray(), settings.RecommendedMaxSeconds, (int?)settings.ShortNoticeMinLead?.TotalMinutes);
+            }).ToArray())).ToArray(), settings.RecommendedMaxSeconds, (int)settings.ShortNoticeMinLead.TotalMinutes);
     }
 }

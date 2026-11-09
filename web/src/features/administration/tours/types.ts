@@ -135,5 +135,5 @@ export type TourSlots = {
 export type TourShift = { code: string; name: string; startsAt: string; endsAt: string; tourStartsAt: string; time: string; maxDurationSeconds: number; block: TourShiftBlock | null }
 /** An Admin closure of this shift; `scope` says whether it covers the whole day (docs/lich-tour-theo-ca.md §5). */
 export type TourShiftBlock = { id: string; scope: 'DAY' | 'SHIFT'; reason: string }
-/** `quickTourWaitMinutes` is null or absent while quick Tours are off (ADR-0053). */
-export type TourShifts = { days: { date: string; shifts: TourShift[] }[]; recommendedMaxSeconds: number; quickTourWaitMinutes?: number | null }
+/** `quickTourWaitMinutes`: how long a quick Tour waits to be started (ADR-0053). */
+export type TourShifts = { days: { date: string; shifts: TourShift[] }[]; recommendedMaxSeconds: number; quickTourWaitMinutes: number }

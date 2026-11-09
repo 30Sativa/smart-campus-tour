@@ -224,27 +224,24 @@ function QuickTourTiming({ routeChosen, plan }: { routeChosen: boolean; plan: Re
   </div>
 }
 
-/** The first step of "Tạo Tour": which kind, before any field is shown. A quick Tour is offered only while the server has it on. */
+/** The first step of "Tạo Tour": which kind, before any field is shown. */
 function TourKindChooser({ onPick }: { onPick: (kind: TourKind) => void }) {
   const today = campusDay(new Date())
   const shifts = useTourShifts(today, today)
   const waitMinutes = shifts.data?.quickTourWaitMinutes
-  const quickOff = shifts.isSuccess && waitMinutes == null
   return <section className={`${panelClass} max-w-3xl p-5`} aria-labelledby="tour-kind-title">
     <p className="text-xs font-semibold text-[#2563eb]">Bước 1/2</p>
     <h2 id="tour-kind-title" className="mt-0.5 text-[17px] font-semibold text-[#0f172a]">Chọn loại Tour</h2>
     <p className="mt-1 text-[13px] text-[#64748b]">Loại Tour quyết định thời hạn tạo, đăng ký và duyệt. Có thể đổi lại ở bước sau.</p>
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
       {kinds(waitMinutes).map(({ value, icon: Icon, title, summary, facts }) => <button key={value} type="button" onClick={() => onPick(value)} aria-label={title}
-        disabled={value === 'quick' && quickOff} title={value === 'quick' && quickOff ? 'Server chưa bật Tour nhanh' : undefined}
-        className="group flex flex-col rounded-2xl border border-[#e2e8f0] bg-white p-4 text-left transition-[border-color,box-shadow] duration-200 hover:border-[#93b4ef] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-[#e2e8f0] disabled:hover:shadow-none motion-reduce:transition-none">
+        className="group flex flex-col rounded-2xl border border-[#e2e8f0] bg-white p-4 text-left transition-[border-color,box-shadow] duration-200 hover:border-[#93b4ef] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] motion-reduce:transition-none">
         <span className={`grid size-10 place-items-center rounded-xl ${value === 'quick' ? 'bg-[#fffaf0] text-[#b7791f]' : 'bg-[#eff6ff] text-[#2563eb]'}`}><Icon size={20} aria-hidden="true" /></span>
         <span className="mt-3 block text-[15px] font-semibold text-[#0f172a]">{title}</span>
         <span className="mt-0.5 block text-[13px] text-[#64748b]">{summary}</span>
         <ul className="mt-3 space-y-1.5 border-t border-[#f1f5f9] pt-3 text-[13px] text-[#334155]">
           {facts.map(fact => <li key={fact} className="flex items-start gap-2"><Check size={14} className="mt-0.5 shrink-0 text-[#64748b]" aria-hidden="true" />{fact}</li>)}
         </ul>
-        {value === 'quick' && quickOff && <span className="mt-3 block text-[13px] font-medium text-[#7d5310]">Server chưa bật Tour nhanh.</span>}
         <span className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-[#2563eb]">Chọn {title}<ArrowRight size={14} className="transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true" /></span>
       </button>)}
     </div>

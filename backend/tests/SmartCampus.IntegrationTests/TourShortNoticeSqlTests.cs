@@ -26,15 +26,14 @@ public sealed class TourShortNoticeSqlTests
     private const string Reason = "Trình diễn với đoàn khách của nhà trường.";
 
     [SchemaV11Fact]
-    public async Task QuickTours_AreOff_UntilConfigured()
+    public async Task QuickTours_WaitTheDefault30Minutes_WhenNotConfigured()
     {
         await using var w = await World.Create(minutes: null);
         w.Clock.Now = w.Noon;
-        Assert.Equal("SHORT_NOTICE_DISABLED", (await Assert.ThrowsAsync<ConflictException>(() => w.H.CreateQuickTour(Reason))).Code);
-        Assert.Equal("SHORT_NOTICE_DISABLED", (await Assert.ThrowsAsync<ConflictException>(() =>
-            w.H.Send(new GetQuickTourPlanQuery(w.H.Route.RevisionId, TourReadySqlTests.Robot)))).Code);
         var day = TourSchedule.CampusDate(w.Noon);
-        Assert.Null((await w.H.Send(new GetTourShiftsQuery(day, day))).QuickTourWaitMinutes);
+        Assert.Equal(30, (await w.H.Send(new GetTourShiftsQuery(day, day))).QuickTourWaitMinutes);
+        var id = await w.H.CreateQuickTour(Reason);
+        Assert.Equal(w.Noon.AddMinutes(30), (await w.H.Send(new GetTourQuery(id))).Tour.ScheduledStartAt);
     }
 
     [SchemaV11Fact]
