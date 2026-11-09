@@ -20,13 +20,15 @@ const steps = [
 /**
  * Parts of the robot, in the order of the numbered rings already drawn on
  * `technology-robot-quest.png`; `spot` is the centre of that ring, in percent,
- * so each button sits exactly on top of the picture's own number.
+ * so each button sits exactly on top of the picture's own number (the picture
+ * is the fallback without WebGL). `parts` are the groups of the 3D model
+ * (`features/landing/robot-explode/parts.ts`) each item lights up.
  */
 const technology: TechItem[] = [
-  { icon: Radar, title: 'LiDAR & tự hành', body: 'Cảm biến LiDAR quét quanh robot để định vị, tránh vật cản và bám theo tuyến đã chuẩn bị qua từng điểm tham quan.', spot: { x: 33, y: 63.5 } },
-  { icon: BatteryCharging, title: 'Pin & nguồn điện', body: 'Pin trên robot cấp điện cho động cơ và máy tính; mức pin hiện cho đội vận hành theo dõi.', spot: { x: 62.8, y: 58 } },
-  { icon: Radio, title: 'Vị trí đồng bộ', body: 'Cùng một vị trí phục vụ bản đồ 2D của học sinh và Twin 3D của đội vận hành.', spot: { x: 42.8, y: 70.5 } },
-  { icon: Video, title: 'Nguồn hình trực tiếp', body: 'Kính Meta Quest 3 trên trụ giữ truyền góc nhìn của chuyến đi tới học sinh.', spot: { x: 60.6, y: 9.6 } },
+  { icon: Radar, title: 'LiDAR & tự hành', body: 'Cảm biến LiDAR quét quanh robot để định vị, tránh vật cản và bám theo tuyến đã chuẩn bị qua từng điểm tham quan.', spot: { x: 33, y: 63.5 }, parts: ['lidar', 'sonar', 'pc'] },
+  { icon: BatteryCharging, title: 'Pin & nguồn điện', body: 'Pin trên robot cấp điện cho động cơ và máy tính; mức pin hiện cho đội vận hành theo dõi.', spot: { x: 62.8, y: 58 }, parts: ['battery'] },
+  { icon: Radio, title: 'Vị trí đồng bộ', body: 'Cùng một vị trí phục vụ bản đồ 2D của học sinh và Twin 3D của đội vận hành.', spot: { x: 42.8, y: 70.5 }, parts: ['pc', 'pcb'] },
+  { icon: Video, title: 'Nguồn hình trực tiếp', body: 'Kính Meta Quest 3 trên trụ giữ truyền góc nhìn của chuyến đi tới học sinh.', spot: { x: 60.6, y: 9.6 }, parts: ['quest', 'head', 'pantilt'] },
 ]
 
 /** Labelled buildings on `twin-smartbus.png`, in percent of the picture. */
