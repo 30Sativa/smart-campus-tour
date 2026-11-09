@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { ArrowRight, CalendarDays, Check, Zap, type LucideIcon } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
@@ -28,7 +29,11 @@ const routeBlockReason = (route: VersionedRoute) =>
  * (ADR-0034, docs/lich-tour-theo-ca.md §3). `?date=YYYY-MM-DD&shift=S1` picks the day and shift in advance, `?route=<revisionId>` the route.
  */
 export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error: string | null; onSubmit: (input: CreateTourInput) => void }) {
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
+  // ADR-0050: the kind is asked before the form, because it decides the lead time, the deadlines and which shifts open.
+  const kind = params.get('kind')
+  const shortNotice = kind === 'short'
+  const chooseKind = (next: 'normal' | 'short' | null) => setParams(prev => { const copy = new URLSearchParams(prev); if (next) copy.set('kind', next); else copy.delete('kind'); return copy })
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   // Null until Staff picks: until then the route comes from `?route=`, once the list says it can be chosen.
@@ -39,7 +44,6 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   const [shiftCode, setShiftCode] = useState(() => params.get('shift') ?? '')
   const [video, setVideo] = useState('')
   const [capacity, setCapacity] = useState('20')
-  const [shortNotice, setShortNotice] = useState(false)
   const [shortNoticeReason, setShortNoticeReason] = useState('')
   const [clientError, setClientError] = useState('')
   const routes = useTestedRoutes()
@@ -72,10 +76,18 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
     onSubmit({ name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, scheduledStartAt: usable.startsAt, fallbackVideoUrl: video.trim() || null, capacity: Number(capacity), shortNoticeReason: shortNotice ? shortNoticeReason.trim() : null })
   }
 
+  if (kind !== 'normal' && kind !== 'short') return <TourKindChooser onPick={chooseKind} />
+
   return <form onSubmit={submit} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
     <fieldset disabled={busy} className={`${panelClass} space-y-4 p-4`}>
       <legend className="sr-only">Thông tin Tour</legend>
       {(clientError || error) && <Notice tone="danger">{clientError || error}</Notice>}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#f1f5f9] pb-3 text-[13px]">
+        <KindPill short={shortNotice} />
+        <span className="text-[#64748b]">{shortNotice ? `Trước giờ bắt đầu ít nhất ${shortNoticeMinutes ?? '…'} phút` : 'Trước giờ bắt đầu ít nhất 72 giờ'}</span>
+        <button type="button" className="ml-auto rounded-lg px-2 py-1 font-semibold text-[#2563eb] hover:bg-[#eff6ff] hover:text-[#1d4ed8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]" onClick={() => chooseKind(null)}>Đổi loại</button>
+      </div>
+      {shortNotice && <label className="block text-sm">Lý do tạo gấp<textarea required maxLength={500} rows={2} className={inputClass} value={shortNoticeReason} onChange={e => setShortNoticeReason(e.target.value)} placeholder="Ví dụ: Buổi trình diễn với đoàn khách của nhà trường." /></label>}
       <label className="block text-sm">Tên Tour<input required maxLength={150} className={inputClass} value={name} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Tham quan từ xa · Sáng thứ Bảy" /></label>
       <label className="block text-sm">Mô tả<textarea maxLength={1000} rows={3} className={inputClass} value={description} onChange={e => setDescription(e.target.value)} placeholder="Nội dung ngắn đại diện trường sẽ thấy khi đăng ký." /></label>
       <label className="block text-sm">Tuyến đã kiểm chứng<select title="" required aria-label="Tuyến đã kiểm chứng" className={inputClass} value={routeRevisionId} disabled={routes.isPending} onChange={e => { setPickedRouteId(e.target.value); setRobotCode('') }}>
@@ -111,14 +123,6 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
         {operators.isError && <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh sách Staff.</span>}</label>
       <label className="block text-sm">Ngày tổ chức<input required type="date" className={inputClass} min={campusDay(new Date())} value={date} onChange={e => setDate(e.target.value)} />
         <span className="mt-1 block text-xs text-[#64748b]">Giờ Việt Nam. Tới giờ robot không tự chạy; Staff bắt đầu thủ công.</span></label>
-      {(shortNotice || shortNoticeMinutes != null) && <div className="rounded-xl border border-[#e2e8f0] p-3 text-sm">
-        <label className="flex cursor-pointer items-start gap-2.5">
-          <input type="checkbox" checked={shortNotice} onChange={e => setShortNotice(e.target.checked)} className="mt-0.5 size-4 accent-[#2563eb]" />
-          <span className="min-w-0"><span className="block font-semibold text-[#0f172a]">Tour ngắn hạn</span>
-            <span className="block text-xs text-[#64748b]">Tạo gần giờ hơn mức 72 giờ{shortNoticeMinutes != null && `, tối thiểu ${shortNoticeMinutes} phút trước giờ bắt đầu`}. Không áp dụng hạn đăng ký 48 giờ và hạn duyệt 24 giờ; danh sách đóng khi Staff chốt Tour. Mọi điều kiện an toàn robot khi bắt đầu vẫn giữ nguyên.</span></span>
-        </label>
-        {shortNotice && <label className="mt-2 block">Lý do tạo gấp<textarea required maxLength={500} rows={2} className={inputClass} value={shortNoticeReason} onChange={e => setShortNoticeReason(e.target.value)} placeholder="Ví dụ: Buổi trình diễn với đoàn khách của nhà trường." /></label>}
-      </div>}
       <div role="group" aria-label="Ca">
         <p className="text-sm">Ca</p>
         {!routeRevisionId || !robotCode ? <p className="mt-1 text-xs text-[#64748b]">Chọn tuyến và robot để xem ca nào còn trống.</p>
@@ -167,6 +171,41 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
       </section>
     </div>
   </form>
+}
+
+type KindOption = { value: 'normal' | 'short'; icon: LucideIcon; title: string; summary: string; facts: string[] }
+const KINDS: KindOption[] = [
+  { value: 'normal', icon: CalendarDays, title: 'Tour thường', summary: 'Lên lịch trước, trường có thời gian đăng ký và Staff duyệt.',
+    facts: ['Tạo trước giờ bắt đầu ít nhất 72 giờ', 'Đăng ký đóng trước 48 giờ', 'Staff duyệt đơn trước 24 giờ'] },
+  { value: 'short', icon: Zap, title: 'Tour ngắn hạn', summary: 'Tạo gấp cho buổi trình diễn hoặc đoàn khách đột xuất.',
+    facts: ['Tạo được trong ngày', 'Đăng ký đóng khi Staff chốt Tour', 'Cần ghi lý do tạo gấp'] },
+]
+
+function KindPill({ short }: { short: boolean }) {
+  const Icon = short ? Zap : CalendarDays
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${short ? 'border-[#f1dcb0] bg-[#fffaf0] text-[#7d5310]' : 'border-[#dbe6f4] bg-[#eff6ff] text-[#1d4ed8]'}`}>
+    <Icon size={13} aria-hidden="true" />{short ? 'Tour ngắn hạn' : 'Tour thường'}</span>
+}
+
+/** The first step of "Tạo Tour": which kind, before any field is shown. */
+function TourKindChooser({ onPick }: { onPick: (kind: 'normal' | 'short') => void }) {
+  return <section className={`${panelClass} max-w-3xl p-5`} aria-labelledby="tour-kind-title">
+    <p className="text-xs font-semibold text-[#2563eb]">Bước 1/2</p>
+    <h2 id="tour-kind-title" className="mt-0.5 text-[17px] font-semibold text-[#0f172a]">Chọn loại Tour</h2>
+    <p className="mt-1 text-[13px] text-[#64748b]">Loại Tour quyết định thời hạn tạo, đăng ký và duyệt. Có thể đổi lại ở bước sau.</p>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      {KINDS.map(({ value, icon: Icon, title, summary, facts }) => <button key={value} type="button" onClick={() => onPick(value)} aria-label={title}
+        className="group flex flex-col rounded-2xl border border-[#e2e8f0] bg-white p-4 text-left transition-[border-color,box-shadow] duration-200 hover:border-[#93b4ef] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] motion-reduce:transition-none">
+        <span className={`grid size-10 place-items-center rounded-xl ${value === 'short' ? 'bg-[#fffaf0] text-[#b7791f]' : 'bg-[#eff6ff] text-[#2563eb]'}`}><Icon size={20} aria-hidden="true" /></span>
+        <span className="mt-3 block text-[15px] font-semibold text-[#0f172a]">{title}</span>
+        <span className="mt-0.5 block text-[13px] text-[#64748b]">{summary}</span>
+        <ul className="mt-3 space-y-1.5 border-t border-[#f1f5f9] pt-3 text-[13px] text-[#334155]">
+          {facts.map(fact => <li key={fact} className="flex items-start gap-2"><Check size={14} className="mt-0.5 shrink-0 text-[#64748b]" aria-hidden="true" />{fact}</li>)}
+        </ul>
+        <span className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-[#2563eb]">Chọn {title}<ArrowRight size={14} className="transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true" /></span>
+      </button>)}
+    </div>
+  </section>
 }
 
 const slotClass = (chosen: boolean, available: boolean) =>
