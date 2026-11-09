@@ -247,7 +247,13 @@ tail -f logs/adb.log logs/quest-stream.log             # thấy SCRCPY_START r�
 | `SCRCPY_ERROR ... is missing` | chạy `install-scrcpy-server.sh` |
 | `SCRCPY_ERROR scrcpy-server did not start` | xem dòng ngay trên trong `logs/adb.log`; thử bản khác: `install-scrcpy-server.sh v3.3.1` |
 | Hình lệch mắt / còn hai mắt | đặt `QUEST_SCRCPY_CROP=W:H:X:Y` (xem `adb shell wm size`, lấy nửa trái `W/2:H:0:0`) |
+| Hình bị nghiêng | `QUEST_SCRCPY_ANGLE=<độ>` (xoay theo chiều kim đồng hồ, số âm là ngược lại; xoay ngay trên kính, không tốn CPU NUC). Thử từng 5° |
 | Muốn quay lại cách cũ | `QUEST_CAPTURE=screenrecord`, restart |
+
+**Với scrcpy, để trống `QUEST_HWDEC`.** Đo trên NUC7PJYH (10 s hình từ kính, một
+mắt 1496x1600): giải mã bằng CPU 162 fps, giải mã VAAPI chỉ 7.7 fps (chậm hơn
+thời gian thực, hình dồn lại, trễ tăng dần tới cả phút). Cả chuỗi CPU (giải mã,
+cắt, scale, libx264 ultrafast) đạt 43 fps, đủ cho `QUEST_FPS=30`.
 
 ## Xử lý khi hỏng
 
