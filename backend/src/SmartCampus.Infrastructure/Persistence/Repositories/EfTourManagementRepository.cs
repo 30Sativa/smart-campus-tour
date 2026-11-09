@@ -29,7 +29,7 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         t.OperatorUser == null ? null : new RouteTestParticipantView(t.OperatorUser.Id, t.OperatorUser.FullName, t.OperatorUser.Username),
         null, t.Capacity,
         t.GroupRegistrations.SelectMany(r => r.RosterRows).Count(row => row.IsActive && (row.ParticipationState == RosterParticipationStates.Pending || row.ParticipationState == RosterParticipationStates.Accepted)),
-        t.ScheduledStartAt.AddHours(-TourSchedule.RegistrationCloseHours));
+        t.IsShortNotice ? t.ScheduledStartAt : t.ScheduledStartAt.AddHours(-TourSchedule.RegistrationCloseHours), t.IsShortNotice);
 
     public Task LockRequestAsync(Guid actor, Guid requestId, CancellationToken ct)
     {
@@ -93,8 +93,8 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public async Task<TourUsage> GetUsageAsync(Guid id, CancellationToken ct) => new(
         await db.GroupRegistrations.AnyAsync(r => r.TourId == id, ct),
         await db.TourAllowedBranches.AnyAsync(b => b.TourId == id, ct),
-        // READY and Reopen are Staff decisions before Start; they must not lock the Tour as if it had run.
-        await db.TourEvents.AnyAsync(e => e.TourId == id && e.EventType != "TOUR_ROUTE_CHANGED" &&
+        // Short-notice creation, READY and Reopen are Staff decisions before Start; they must not lock the Tour as if it had run.
+        await db.TourEvents.AnyAsync(e => e.TourId == id && e.EventType != "TOUR_ROUTE_CHANGED" && e.EventType != TourLifecycleEvents.CreatedShortNotice &&
             e.EventType != TourLifecycleEvents.Ready && e.EventType != TourLifecycleEvents.Reopened, ct) ||
             await db.BranchRequests.AnyAsync(b => b.TourId == id, ct),
         await db.Robots.AnyAsync(r => r.CurrentTourId == id, ct));
@@ -127,6 +127,14 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
 
     public Task<bool> HasOpenCommandAsync(Guid robotId, CancellationToken ct) =>
         db.RobotCommands.AsNoTracking().AnyAsync(c => c.RobotId == robotId && c.IsOpen, ct);
+
+    public async Task<TourViewerPresence> GetViewerPresenceAsync(Guid tourId, DateTimeOffset now, CancellationToken ct)
+    {
+        var rows = db.RosterRows.AsNoTracking().Where(row => row.Registration.TourId == tourId && row.IsActive &&
+            row.ParticipationState == RosterParticipationStates.Accepted);
+        return new(await rows.CountAsync(ct), await rows.CountAsync(row => row.Invitation != null && row.Invitation.RevokedAt == null &&
+            row.Invitation.BrowserSessions.Any(session => session.EndedAt == null && session.ExpiresAt > now), ct));
+    }
 
     public async Task<bool> TryClaimRobotAsync(Guid robotId, Guid tourId, DateTimeOffset now, CancellationToken ct) =>
         await db.Robots.Where(r => r.Id == robotId && r.CurrentTourId == null && !r.NeedsInspection && r.IsDispatchEnabled && r.DeactivatedAt == null)
@@ -175,7 +183,7 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public async Task<IReadOnlyList<Guid>> ListToursWithExpirableDecisionsAsync(DateTimeOffset expiresAtOrBefore, CancellationToken ct)
     {
         var scheduledBy = expiresAtOrBefore + TourSchedule.PendingDecisionClose;
-        return await db.Tours.AsNoTracking().Where(t => (t.State == "SCHEDULED" || t.State == "READY") && t.ScheduledStartAt <= scheduledBy &&
+        return await db.Tours.AsNoTracking().Where(t => !t.IsShortNotice && (t.State == "SCHEDULED" || t.State == "READY") && t.ScheduledStartAt <= scheduledBy &&
                 t.GroupRegistrations.SelectMany(r => r.RosterRows).Any(row => row.IsActive &&
                     (row.ParticipationState == RosterParticipationStates.Pending ||
                      row.EmailChangeRequests.Any(request => request.State == RosterParticipationStates.Pending))))

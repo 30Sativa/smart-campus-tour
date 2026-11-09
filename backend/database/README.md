@@ -1,8 +1,8 @@
 # CampusTour database snapshots
 
-## v1.19 Staff discard of a never-passed POI (ADR-0051)
+## v1.20 Staff discard of a never-passed POI (ADR-0051)
 
-`smart-campus-tour-schema-v1.19.sql` adds nullable `PoiProposals.DiscardedAt` and `DiscardedByUserId`, `FK_PoiProposals_DiscardedByUserId` and `CK_PoiProposals_Discard_Complete` (both set or both null). `patches/upgrade-v1.18-to-v1.19-poi-discard.sql` applies them to a v1.18 database, changes no row and is rerunnable. Runtime gets column UPDATE on the two new columns through `smart-campus-tour-runtime-permissions.sql`, never DELETE; the check-only gate refuses a runtime without that grant or with table-wide UPDATE/DELETE on `PoiProposals`. The v1.18 snapshot and its patch stay immutable. EF entities gained the two properties and the `DiscardedByUser` navigation by hand in scaffold form; re-scaffold against a v1.19 database to confirm.
+`smart-campus-tour-schema-v1.20.sql` adds nullable `PoiProposals.DiscardedAt` and `DiscardedByUserId`, `FK_PoiProposals_DiscardedByUserId` and `CK_PoiProposals_Discard_Complete` (both set or both null). `patches/upgrade-v1.19-to-v1.20-poi-discard.sql` applies them to a v1.19 database, changes no row and is rerunnable. Runtime gets column UPDATE on the two new columns through `smart-campus-tour-runtime-permissions.sql`, never DELETE; the check-only gate refuses a runtime without that grant or with table-wide UPDATE/DELETE on `PoiProposals`. The v1.19 snapshot and its patch stay immutable. EF entities gained the two properties and the `DiscardedByUser` navigation by hand in scaffold form; re-scaffold against a v1.20 database to confirm.
 
 ## v1.15 Terminal command outcomes (ADR-0044)
 

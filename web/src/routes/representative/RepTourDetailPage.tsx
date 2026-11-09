@@ -29,7 +29,7 @@ export default function RepTourDetailPage() {
         <Panel title="Lịch tham quan">
           <InfoList items={[
             { label: 'Thời gian dự kiến', value: formatDateTime(tour.scheduledStartAt) },
-            { label: 'Hạn đăng ký', value: formatDateTime(registrationClosesAt(tour.scheduledStartAt).toISOString()) },
+            { label: 'Hạn đăng ký', value: formatDateTime(registrationClosesAt(tour).toISOString()) },
             { label: 'Tuyến tham quan', value: tour.routeName },
             ...(tour.capacity != null && tour.remainingSeats != null ? [{ label: 'Chỗ', value: `Còn ${tour.remainingSeats}/${tour.capacity} chỗ` }] : []),
           ]} />

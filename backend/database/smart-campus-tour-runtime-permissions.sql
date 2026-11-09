@@ -19,7 +19,7 @@ GRANT UPDATE (ReleasedAt, ReleasedByUserId) ON OBJECT::dbo.TourRobotReservations
 -- v1.16: Admin schedule blocks are removed by stamping RemovedAt/RemovedByUserId, never deleted.
 GRANT SELECT, INSERT ON OBJECT::dbo.TourScheduleBlocks TO campus_tour_app;
 GRANT UPDATE (RemovedAt, RemovedByUserId) ON OBJECT::dbo.TourScheduleBlocks TO campus_tour_app;
--- v1.19 (ADR-0051): Staff discard a never-passed POI proposal by stamping DiscardedAt/DiscardedByUserId; never deleted.
+-- v1.20 (ADR-0051): Staff discard a never-passed POI proposal by stamping DiscardedAt/DiscardedByUserId; never deleted.
 GRANT UPDATE (DiscardedAt, DiscardedByUserId) ON OBJECT::dbo.PoiProposals TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.PoiImportReceipts TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.RouteVariants TO campus_tour_app;

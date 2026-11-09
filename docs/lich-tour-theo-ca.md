@@ -370,7 +370,7 @@ mục đó), `backend/scripts/test-db-upgrade` và `backend/scripts/test-deploym
 
 Nguồn: SRS v0.2 BR-24, UC-TOUR-07, BR-27, FR-40, AC-19; quyết định kỹ thuật ở ADR-0047.
 
-- **Khi nào:** Start chỉ được nhận trong [T, T+15'] (`TourStartPreflight`, `FleetCommands:StartLateLimitMinutes`). Tour còn
+- **Khi nào:** Start chỉ được nhận trong [T−10', T+15'] (`TourStartPreflight`, `FleetCommands:StartLateLimitMinutes`; mốc sớm theo ADR-0050). Tour còn
   `SCHEDULED`/`READY`, chưa có dấu vết vận hành (cùng điều kiện Staff Cancel dùng), đến hết khung giữ robot thì hệ thống tự huỷ.
   Hết khung giữ là `EndsAt` của reservation đang hiệu lực; Tour không có reservation thì là T+15'. Mốc này không bao giờ sớm
   hơn T+15', nên hệ thống không lấy mất Tour mà Staff còn Start được.

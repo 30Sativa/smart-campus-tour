@@ -152,6 +152,48 @@ public sealed class TourScheduleTests
     }
 
     [Fact]
+    public void ShortNotice_ReplacesOnlyTheLeadTime()
+    {
+        var lead = TimeSpan.FromMinutes(60);
+        Assert.Null(TourSchedule.Evaluate(MorningOnDay, Start.AddMinutes(-60), Plan, [], shortNoticeLead: lead));
+        var late = TourSchedule.Evaluate(MorningOnDay, Start.AddMinutes(-59), Plan, [], shortNoticeLead: lead);
+        Assert.Equal(TourSchedule.LeadTimeTooShort, late!.Code);
+        Assert.Equal("Quá gần hiện tại, Tour ngắn hạn cần tạo trước ít nhất 60 phút", late.Message);
+
+        // Everything else still decides: a held shift, an Admin block, a route that has not been measured or does not fit.
+        var hold = new TourReservationHold("Tour cũ", Start, Start.AddMinutes(30));
+        var closed = new TourShiftBlockView(Guid.NewGuid(), ScheduleBlockScope.Shift, "Bảo trì");
+        var now = Start.AddHours(-2);
+        Assert.Equal(TourSchedule.ReservationOverlap, TourSchedule.Evaluate(MorningOnDay, now, Plan, [hold], shortNoticeLead: lead)!.Code);
+        Assert.Equal(TourSchedule.ShiftBlocked, TourSchedule.Evaluate(MorningOnDay, now, Plan, [], closed, lead)!.Code);
+        Assert.Equal(TourSchedule.RemeasureRequired, TourSchedule.Evaluate(MorningOnDay, now, null, [], shortNoticeLead: lead)!.Code);
+        Assert.Equal(TourSchedule.RouteTooLongForShift, TourSchedule.Evaluate(MorningOnDay, now, new(6000, 6000), [], shortNoticeLead: lead)!.Code);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(72 * 60)]
+    public void Settings_RefuseAShortNoticeLeadThatIsNotShorterThanTheStandardOne(int minutes) =>
+        Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings(TourShiftsFixture.Options, 60, shortNoticeMinLeadMinutes: minutes));
+
+    [Fact]
+    public void Settings_LeaveShortNoticeOffUntilConfigured()
+    {
+        Assert.Null(new TourScheduleSettings(TourShiftsFixture.Options, 60).ShortNoticeMinLead);
+        Assert.Equal(TimeSpan.FromMinutes(45), new TourScheduleSettings(TourShiftsFixture.Options, 60, shortNoticeMinLeadMinutes: 45).ShortNoticeMinLead);
+    }
+
+    [Fact]
+    public void Deadlines_FollowTheTourKind()
+    {
+        Assert.Equal(Start.AddHours(-48), TourSchedule.RegistrationClosesAt(Start, isShortNotice: false));
+        Assert.Equal(Start.AddHours(-24), TourSchedule.ReviewClosesAt(Start, isShortNotice: false));
+        Assert.Equal(Start, TourSchedule.RegistrationClosesAt(Start, isShortNotice: true));
+        Assert.Equal(Start, TourSchedule.ReviewClosesAt(Start, isShortNotice: true));
+    }
+
+    [Fact]
     public void RunWithoutAgreedBasisBlocksEveryUsableShift()
     {
         var block = TourSchedule.Evaluate(MorningOnDay, LongAgo, null, []);

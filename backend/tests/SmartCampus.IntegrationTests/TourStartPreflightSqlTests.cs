@@ -3,9 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.FleetSync;
+using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.StartTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourStartChecks;
+using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.IntegrationTests;
 
@@ -134,9 +136,10 @@ public sealed class TourStartPreflightSqlTests
     public async Task StartWindow_IncludesBothBounds_AndNothingOutside()
     {
         await using var w = await World.Create();
+        // ADR-0050: the window opens StartEarlyLimitMinutes (default 10) before the published time.
         foreach (var (offset, passes) in new[]
                  {
-                     (TimeSpan.FromMilliseconds(-1), false), (TimeSpan.Zero, true),
+                     (TimeSpan.FromMinutes(-10) - TimeSpan.FromMilliseconds(1), false), (TimeSpan.Zero, true),
                      (TimeSpan.FromMinutes(15), true), (TimeSpan.FromMinutes(15) + TimeSpan.FromMilliseconds(1), false)
                  })
         {
@@ -144,6 +147,60 @@ public sealed class TourStartPreflightSqlTests
             await w.Report();
             await w.AssertBlocked(passes ? [] : ["withinStartWindow"]);
         }
+    }
+
+    [SchemaV11Fact]
+    public async Task EarlyStart_OpensAtTheEarlyLimit_AndNeedsEveryAcceptedViewerInTheWaitingRoom()
+    {
+        await using var w = await World.Create();
+        var joined = await w.AddAcceptedViewer("joined");
+        var absent = await w.AddAcceptedViewer("absent");
+        await w.Join(joined);
+        // A session that has ended is not presence.
+        await w.Join(absent, ended: true);
+        foreach (var offset in new[] { TimeSpan.FromMinutes(-10), TimeSpan.FromMilliseconds(-1) })
+        {
+            w.Clock.Now = w.H.Start + offset;
+            await w.Report();
+            var read = await w.Checks();
+            Assert.Equal(w.H.Start.AddMinutes(-10), read.OpensAt);
+            Assert.True(Assert.Single(read.Checks, c => c.Id == "withinStartWindow").Passed);
+            Assert.Equal([TourStartPreflight.AllViewersJoinedCheck, Transport], read.BlockedBy);
+            Assert.Contains("1/2", Assert.Single(read.Checks, c => c.Id == TourStartPreflight.AllViewersJoinedCheck).Detail);
+            var refused = await w.StartRefused();
+            Assert.Equal("START_PRECONDITION_FAILED", refused.Code);
+        }
+
+        await w.Join(absent);
+        await w.Report();
+        Assert.Equal([Transport], (await w.Checks()).BlockedBy);
+
+        // Before the window only the window is a root cause.
+        w.Clock.Now = w.H.Start.AddMinutes(-11);
+        await w.Report();
+        Assert.Equal(["withinStartWindow", Transport], (await w.StartRefused()).BlockedBy);
+    }
+
+    [SchemaV11Fact]
+    public async Task FromThePublishedTime_AnAbsentViewerNoLongerHoldsTheTour()
+    {
+        await using var w = await World.Create();
+        await w.AddAcceptedViewer("absent");
+        w.Clock.Now = w.H.Start;
+        await w.Report();
+        var onTime = await w.StartRefused();
+        Assert.Equal([Transport], onTime.BlockedBy);
+        Assert.True(Assert.Single(onTime.Checks!, c => c.Id == TourStartPreflight.AllViewersJoinedCheck).Passed);
+    }
+
+    [SchemaV11Fact]
+    public async Task EarlyStart_StillRefusesAnUnsafeRobot()
+    {
+        await using var w = await World.Create();
+        await w.H.Database.ExecuteAsync("UPDATE dbo.Robots SET IsDispatchEnabled = 0;");
+        w.Clock.Now = w.H.Start.AddMinutes(-5);
+        await w.Report();
+        Assert.Equal(["robotDispatchEnabled", Transport], (await w.Checks()).BlockedBy);
     }
 
     [SchemaV11Fact]
@@ -300,6 +357,33 @@ public sealed class TourStartPreflightSqlTests
         }
 
         public Task<TourStartChecks> Checks() => harness.Send(new GetTourStartChecksQuery(harness.TourId, harness.OperatorId));
+
+        /// <summary>An accepted viewing row with an invitation of its own; returns the invitation.</summary>
+        public async Task<Guid> AddAcceptedViewer(string name)
+        {
+            var representative = await harness.Database.InsertUserAsync(true, username: $"rep.{name}", roles: ["SCHOOL_REPRESENTATIVE"]);
+            var at = harness.Start.AddDays(-1);
+            var registration = new GroupRegistration { Id = Guid.NewGuid(), TourId = harness.TourId, RepresentativeUserId = representative.Id,
+                SchoolName = "THPT Thử", GroupName = name, ContactName = "Liên hệ", ContactEmail = "contact@example.test",
+                State = RegistrationStates.Submitted, SubmittedAt = at, CreatedAt = at };
+            var row = new RosterRow { Id = Guid.NewGuid(), RegistrationId = registration.Id, RowNumber = 1, RowType = "INDIVIDUAL", DisplayName = name,
+                Email = $"{name}@example.test", ParticipationState = "ACCEPTED", IsActive = true, CreatedAt = at };
+            var invitation = new Invitation { Id = Guid.NewGuid(), RosterRowId = row.Id, AccessCodeHash = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32),
+                AccessCodeProtected = [1], AccessVersion = 1, CodeIssuedAt = at, ExpiresAt = harness.Start.AddDays(1), CreatedAt = at };
+            await using var db = harness.Context();
+            db.AddRange(registration, row, invitation);
+            await db.SaveChangesAsync();
+            return invitation.Id;
+        }
+
+        public async Task Join(Guid invitation, bool ended = false)
+        {
+            await using var db = harness.Context();
+            db.Add(new BrowserSession { Id = Guid.NewGuid(), InvitationId = invitation, SessionTokenHash = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32),
+                CreatedAt = harness.Start.AddMinutes(-30), ExpiresAt = harness.Start.AddHours(1), EndedAt = ended ? harness.Start.AddMinutes(-20) : null,
+                EndReason = ended ? "LEFT" : null });
+            await db.SaveChangesAsync();
+        }
 
         public async Task<ConflictException> StartRefused(TourStartConfirmation? confirmation = null, bool omitConfirmation = false) =>
             await Assert.ThrowsAsync<ConflictException>(async () => await harness.Send(new StartTourCommand(harness.TourId, harness.OperatorId,

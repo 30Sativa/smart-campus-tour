@@ -1152,13 +1152,6 @@ GO
 ALTER TABLE dbo.Tours WITH CHECK ADD CONSTRAINT CK_Tours_Capacity CHECK (Capacity BETWEEN 1 AND 40);
 GO
 
--- v1.19: Staff ẩn mềm một đề xuất POI chưa từng đạt kiểm chứng (ADR-0051). Không xoá dòng nào; revision,
--- lượt gửi, kết quả kiểm chứng và receipt nhập tệp vẫn giữ nguyên làm lịch sử.
-ALTER TABLE dbo.PoiProposals ADD DiscardedAt DATETIMEOFFSET(3) NULL, DiscardedByUserId UNIQUEIDENTIFIER NULL;
-GO
-ALTER TABLE dbo.PoiProposals WITH CHECK ADD CONSTRAINT FK_PoiProposals_DiscardedByUserId
-    FOREIGN KEY (DiscardedByUserId) REFERENCES dbo.Users(Id);
-GO
-ALTER TABLE dbo.PoiProposals WITH CHECK ADD CONSTRAINT CK_PoiProposals_Discard_Complete CHECK
-    ((DiscardedAt IS NULL AND DiscardedByUserId IS NULL) OR (DiscardedAt IS NOT NULL AND DiscardedByUserId IS NOT NULL));
+-- v1.19: Tour ngắn hạn (ADR-0050). 1 = bỏ mốc 72h/48h/24h, Staff chốt danh sách bằng READY; điều kiện Start giữ nguyên.
+ALTER TABLE dbo.Tours ADD IsShortNotice BIT NOT NULL CONSTRAINT DF_Tours_IsShortNotice DEFAULT (0);
 GO

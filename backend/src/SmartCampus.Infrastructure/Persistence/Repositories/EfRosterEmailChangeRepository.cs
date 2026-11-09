@@ -55,6 +55,7 @@ public sealed class EfRosterEmailChangeRepository(ApplicationDbContext context) 
                 request.CurrentEmail, request.ProposedEmail, request.State, request.RequestedByUserId, request.CreatedAt,
                 request.ReviewedAt, request.ReviewedByUserId, request.ReviewReason, request.RowVersion,
                 TourStart = request.RosterRow.Registration.Tour.ScheduledStartAt,
+                TourIsShortNotice = request.RosterRow.Registration.Tour.IsShortNotice,
                 TourState = request.RosterRow.Registration.Tour.State, TourRowVersion = request.RosterRow.Registration.Tour.RowVersion,
                 RegistrationRowVersion = request.RosterRow.Registration.RowVersion, RosterRowVersion = request.RosterRow.RowVersion
             }).ToArrayAsync(ct);
@@ -64,7 +65,7 @@ public sealed class EfRosterEmailChangeRepository(ApplicationDbContext context) 
             RowVersionToken.Encode(request.RowVersion), RowVersionToken.Encode(request.TourRowVersion),
             RowVersionToken.Encode(request.RegistrationRowVersion), RowVersionToken.Encode(request.RosterRowVersion),
             request.TourState == "SCHEDULED" && request.State == "PENDING",
-            request.TourStart - SmartCampus.Application.Features.Tours.TourSchedule.PendingDecisionClose)).ToArray();
+            SmartCampus.Application.Features.Tours.TourSchedule.ReviewClosesAt(request.TourStart, request.TourIsShortNotice))).ToArray();
     }
 
     public void Add(RosterEmailChangeRequest request) => context.RosterEmailChangeRequests.Add(request);

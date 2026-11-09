@@ -17,6 +17,8 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         if (replay.HasValue) return new(replay.Value);
         TourPreparation.RequireFuture(input.ScheduledStartAt, clock.GetUtcNow());
         var shift = TourSchedule.RequireShift(settings, input.ScheduledStartAt);
+        // A short-notice Tour differs only in its lead time and registration deadlines; the rest of this path is shared (ADR-0050).
+        TimeSpan? shortNoticeLead = input.ShortNoticeReason is null ? null : TourSchedule.RequireShortNoticeLead(settings);
         var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, input.RouteRevisionId, lockTarget: true, ct);
         await TourTarget.RequireOperatorAsync(revisions, input.OperatorUserId, ct);
         var found = await revisions.FindPhysicalRobotAsync(input.RobotCode, ct)
@@ -36,15 +38,22 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         // Decided after the locks, on a fresh clock, so a shift taken or closed while waiting is seen.
         var now = clock.GetUtcNow();
         TourSchedule.EnsureUsable(TourSchedule.Evaluate(shift, now, plan,
-            await repository.GetActiveReservationsAsync(robot.Id, startsAt, endsAt, ct), adminBlock));
+            await repository.GetActiveReservationsAsync(robot.Id, startsAt, endsAt, ct), adminBlock, shortNoticeLead));
         var tour = new Tour
         {
             Id = Guid.NewGuid(), Name = input.Name, Description = input.Description, RouteId = revision.RouteId,
             ActiveRouteId = revision.RouteId, RouteRevisionId = revision.Id, OperatorUserId = input.OperatorUserId,
             ScheduledStartAt = input.ScheduledStartAt, State = "SCHEDULED",
-            FallbackVideoUrl = input.FallbackVideoUrl, CreatedByUserId = command.Actor, CreatedAt = now, Capacity = input.Capacity
+            FallbackVideoUrl = input.FallbackVideoUrl, CreatedByUserId = command.Actor, CreatedAt = now, Capacity = input.Capacity,
+            IsShortNotice = shortNoticeLead is not null
         };
         repository.Add(tour);
+        if (tour.IsShortNotice)
+            repository.AddEvent(new TourEvent
+            {
+                TourId = tour.Id, EventType = TourLifecycleEvents.CreatedShortNotice, OccurredAt = now, ActorUserId = command.Actor,
+                ReasonNote = input.ShortNoticeReason
+            });
         repository.Add(new TourRobotReservation
         {
             Id = Guid.NewGuid(), TourId = tour.Id, RobotId = robot.Id, RouteTestRunId = run.Id,
@@ -53,7 +62,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
             ReservedByUserId = command.Actor, ReservedAt = now
         });
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId, "TOUR_CREATED", fingerprint, now,
-            "name", "description", "routeRevisionId", "operatorUserId", "robotReservation", "scheduledStartAt", "fallbackVideoUrl", "state", "capacity");
+            "name", "description", "routeRevisionId", "operatorUserId", "robotReservation", "scheduledStartAt", "fallbackVideoUrl", "state", "capacity", "isShortNotice");
         return new(tour.Id);
     }
 }

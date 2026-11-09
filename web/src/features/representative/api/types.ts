@@ -12,6 +12,8 @@ export type RepresentativeTour = {
   cancelReason?: string | null
   /** Seats of the Tour (BR-26). An older server omits them. */
   capacity?: number; remainingSeats?: number
+  /** The server's own deadline for this Tour. An older server omits it. */
+  registrationClosesAt?: string | null
 }
 export type RegistrationSummary = {
   id: string; tourId: string; tourName: string; tourScheduledStartAt: string; tourState: TourState
@@ -22,6 +24,8 @@ export type RegistrationSummary = {
   tourCancelReason?: string | null
   /** When a cancelled Tour ended; an older server omits it. */
   tourEndedAt?: string | null
+  /** The server's own deadline for this Tour. An older server omits it. */
+  tourRegistrationClosesAt?: string | null
 }
 /** "Đăng ký của tôi" halves: still in play, or ended (cancelled, Tour cancelled, refused with no way back). */
 export type RegistrationGroup = 'active' | 'closed'

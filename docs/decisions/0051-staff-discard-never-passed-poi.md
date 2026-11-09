@@ -42,9 +42,9 @@ one `POI_PROPOSAL_DISCARDED` audit row.
 `PoiProposalView` gains `canDiscard` (no PASS on any revision and not discarded) and `discardedAt`, so the screen offers
 the action only where the server will accept it.
 
-### Schema v1.19
+### Schema v1.20
 
-One additive patch, `upgrade-v1.18-to-v1.19-poi-discard.sql`, plus the v1.19 snapshot:
+One additive patch, `upgrade-v1.19-to-v1.20-poi-discard.sql`, plus the v1.20 snapshot:
 
 - `PoiProposals.DiscardedAt DATETIMEOFFSET(3) NULL` and `PoiProposals.DiscardedByUserId UNIQUEIDENTIFIER NULL`,
   `FK_PoiProposals_DiscardedByUserId` to `Users`, and `CK_PoiProposals_Discard_Complete` (both set or both null).
@@ -52,11 +52,10 @@ One additive patch, `upgrade-v1.18-to-v1.19-poi-discard.sql`, plus the v1.19 sna
   `smart-campus-tour-runtime-permissions.sql`. The check-only gate refuses a runtime without it, or with table-wide
   UPDATE or DELETE on `PoiProposals`, or DELETE on `PoiProposalRevisions`.
 
-No existing row changes. The bootstrap check reports v1.18 as `UPGRADE_REQUIRED` and v1.19 as `READY`.
+No existing row changes. The bootstrap check reports v1.19 as `UPGRADE_REQUIRED` and v1.20 as `READY`.
 
 ## Consequences
 
 - Staff can clean up mistakes without Technical Staff or a database operator, and history stays complete.
-- The schema version is v1.19. A parallel branch also prepares a v1.19 (ADR-0050, early start); whichever merges second
-  renumbers its patch, snapshot and version plumbing to v1.20.
+- The schema version is v1.20, on top of v1.19 (ADR-0050, short-notice Tours).
 - Not covered: discarding or retiring a POI that ever passed, restore, and bulk discard.

@@ -16,7 +16,8 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
     private static readonly Expression<Func<GroupRegistration, RegistrationListItem>> Summary = r =>
         new(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State, r.SchoolName, r.GroupName,
             r.State, r.RosterRows.Count(row => row.IsActive), r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt,
-            r.RejectionReason, r.ReviewedAt, r.Tour.State == "CANCELLED" ? r.Tour.EndReason : null, r.Tour.EndedAt);
+            r.RejectionReason, r.ReviewedAt, r.Tour.State == "CANCELLED" ? r.Tour.EndReason : null, r.Tour.EndedAt, r.Tour.IsShortNotice,
+            r.Tour.IsShortNotice ? r.Tour.ScheduledStartAt : r.Tour.ScheduledStartAt.AddHours(-Application.Features.Tours.TourSchedule.RegistrationCloseHours));
 
     // Mirrors RegistrationGroups: ended by cancellation, by a cancelled Tour, refused after the Tour stopped taking changes, or expired at T-24h.
     private static readonly Expression<Func<GroupRegistration, bool>> IsClosed = r =>
@@ -30,7 +31,8 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
     {
         // Only Tours still open for registration; one the Representative already joined stays reachable through its detail.
         var closesAfter = now + Application.Features.Tours.TourSchedule.RegistrationClose;
-        var query = context.Tours.AsNoTracking().Where(t => t.State == RegistrationGate.OpenTourState && t.ScheduledStartAt > closesAfter);
+        var query = context.Tours.AsNoTracking().Where(t => t.State == RegistrationGate.OpenTourState &&
+            t.ScheduledStartAt > (t.IsShortNotice ? now : closesAfter));
         if (!string.IsNullOrWhiteSpace(request.Search))
             query = query.Where(t => t.Name.Contains(request.Search.Trim()) || t.Route.Name.Contains(request.Search.Trim()));
         var total = await query.LongCountAsync(ct);
@@ -65,7 +67,7 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
         tour.RouteRevision is { } revision
             ? revision.RouteRevisionStops.OrderBy(s => s.StopOrder).Select(s => new TourStopResponse(s.StopOrder, s.Name, null)).ToArray()
             : tour.Route.RouteStops.OrderBy(s => s.StopOrder).Select(s => new TourStopResponse(s.StopOrder, s.Poi.Name, s.Poi.Description)).ToArray(),
-        tour.State == "CANCELLED" ? tour.EndReason : null, tour.Capacity, heldSeats);
+        tour.State == "CANCELLED" ? tour.EndReason : null, tour.Capacity, heldSeats, tour.IsShortNotice);
     public async Task<PagedResult<RegistrationListItem>> ListRegistrationsAsync(Guid owner, RepresentativeListRequest request, CancellationToken ct)
     {
         var query = context.GroupRegistrations.AsNoTracking().Where(r => r.RepresentativeUserId == owner);
@@ -99,7 +101,8 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
             {
                 Summary = new RegistrationListItem(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State,
                     r.SchoolName, r.GroupName, r.State, r.RosterRows.Count(row => row.IsActive), r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt,
-                    r.RejectionReason, r.ReviewedAt, r.Tour.State == "CANCELLED" ? r.Tour.EndReason : null, r.Tour.EndedAt),
+                    r.RejectionReason, r.ReviewedAt, r.Tour.State == "CANCELLED" ? r.Tour.EndReason : null, r.Tour.EndedAt, r.Tour.IsShortNotice,
+                    r.Tour.IsShortNotice ? r.Tour.ScheduledStartAt : r.Tour.ScheduledStartAt.AddHours(-Application.Features.Tours.TourSchedule.RegistrationCloseHours)),
                 r.ContactName, r.ContactEmail, r.RowVersion, TourVersion = r.Tour.RowVersion, r.RejectionReason, r.ReviewedAt,
                 HasInvitations = r.RosterRows.Any(row => row.Invitation != null),
                 Rows = r.RosterRows.Where(row => row.IsActive).OrderBy(row => row.RowNumber)
@@ -114,7 +117,7 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
                   row.ReviewedByUserId, row.ReviewReason,
                   row.InvitationVersion == null ? null : RowVersionToken.Encode(row.InvitationVersion),
                   result.Summary.TourState == "SCHEDULED" && row.ParticipationState == RosterParticipationStates.Accepted &&
-                      now < result.Summary.TourScheduledStartAt - Application.Features.Tours.TourSchedule.PendingDecisionClose,
+                      now < Application.Features.Tours.TourSchedule.ReviewClosesAt(result.Summary.TourScheduledStartAt, result.Summary.TourIsShortNotice),
                   result.Summary.TourState == "SCHEDULED", false, false)).ToArray(),
             result.HasInvitations);
     }
