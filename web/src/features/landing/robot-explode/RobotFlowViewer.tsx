@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { ContactShadows, Grid, Html, Line, OrbitControls, useGLTF } from '@react-three/drei'
-import { Box3, Color, Group, Mesh, MeshStandardMaterial, QuadraticBezierCurve3, Vector3 } from 'three'
+import { Box3, Color, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, QuadraticBezierCurve3, Vector3 } from 'three'
 import { PART_GROUPS, groupOfNode, type PartGroupId } from './parts'
 import { flowNode, signalColor, stepParts, type FlowLink, type FlowNodeId, type FlowStep } from './flows'
 import ZoomControls from './ZoomControls'
@@ -64,7 +64,7 @@ function useFlowModel() {
       return pivot
     }
     const spinners: Spinner[] = []
-    for (const [group, axis] of [['wheel', 'x'], ['caster', 'x'], ['lidar', 'y']] as const) {
+    for (const [group, axis] of [['wheel', 'x'], ['lidar', 'y']] as const) {
       for (const { mesh, centre } of meshes.get(group) ?? []) spinners.push({ pivot: pivotAt(centre, [mesh]), axis, group })
     }
     // The pan-tilt head: its base stays on the column; everything above it pans about the
@@ -100,7 +100,8 @@ function useFlowModel() {
       const items = meshes.get(group) ?? []
       return items.length ? items.reduce((sum, item) => sum + item.centre.y, 0) / items.length : null
     }
-    return { root, materials, spinners, head, tilt, panCentre, tiltCentre, anchors, heightOf }
+    const wheelCentres = (meshes.get('wheel') ?? []).map(item => item.centre.clone())
+    return { root, materials, spinners, head, tilt, panCentre, tiltCentre, anchors, heightOf, wheelCentres }
   }, [scene])
 }
 
@@ -148,8 +149,8 @@ function styleModel(model: FlowModel, step: FlowStep | null) {
 /** Spins the wheels or the LiDAR, or swings the head on both of its axes, when the step is about them; the head eases back otherwise. */
 function moveParts(model: FlowModel, motion: FlowStep['motion'], delta: number, time: number) {
   for (const spinner of model.spinners) {
-    const turning = (motion === 'wheels' && spinner.group !== 'lidar') || (motion === 'lidar' && spinner.group === 'lidar')
-    if (turning) spinner.pivot.rotation[spinner.axis] += delta * (spinner.group === 'lidar' ? 5 : 3.2)
+    const turning = (motion === 'wheels' && spinner.group === 'wheel') || (motion === 'lidar' && spinner.group === 'lidar')
+    if (turning) spinner.pivot.rotation[spinner.axis] += delta * (spinner.group === 'lidar' ? 5 : WHEEL_SPIN)
   }
   const swinging = motion === 'head'
   const pan = swinging ? Math.sin(time * 0.9) * SWING.pan : 0
@@ -168,6 +169,68 @@ function followAxes(model: FlowModel, tiltAxis: Group | null, panRing: Group | n
 
 /** Axis markers are drawn in the see-through pass after the parts (which are all transparent materials), so they stay on top. */
 const AXIS_COLOUR = '#0f5b66'
+
+/** Turning speed of the drive wheels (rad/s); positive rolls the robot forwards (+z, where the headset looks). */
+const WHEEL_SPIN = 3.2
+const AURA_COLOUR = '#e5554a'
+
+/** Turns the aura rings with the wheels and runs the ground chevrons forwards. */
+function runAura(rings: (Group | null)[], chevrons: (Mesh | null)[], time: number) {
+  for (const ring of rings) if (ring) ring.rotation.x = time * WHEEL_SPIN
+  chevrons.forEach((chevron, index) => {
+    if (!chevron) return
+    const phase = (time * 0.55 + index / chevrons.length) % 1
+    chevron.position.z = -0.14 + phase * 0.42
+    const material = chevron.material as MeshBasicMaterial
+    material.opacity = Math.sin(phase * Math.PI) * 0.8
+  })
+}
+
+/**
+ * A moving aura round each drive wheel: glowing arcs turning with the wheel,
+ * and chevrons sliding forwards on the floor beside it, so the robot is seen
+ * to drive.
+ */
+function WheelAura({ model }: { model: FlowModel }) {
+  const rings = useRef<(Group | null)[]>([])
+  const chevrons = useRef<(Mesh | null)[]>([])
+  useFrame(state => runAura(rings.current, chevrons.current, state.clock.elapsedTime))
+  const wheels = model.wheelCentres
+  return (
+    <>
+      {wheels.map((centre, side) => (
+        <group key={side} position={centre}>
+          <group ref={node => { rings.current[side] = node }}>
+            <group rotation={[0, Math.PI / 2, 0]}>
+              {[0, 1, 2].map(arc => (
+                <mesh key={arc} rotation={[0, 0, (arc * Math.PI * 2) / 3]} renderOrder={21}>
+                  <torusGeometry args={[0.122, 0.006, 8, 48, Math.PI * 0.45]} />
+                  <meshBasicMaterial color={AURA_COLOUR} transparent opacity={0.75} depthTest={false} toneMapped={false} />
+                </mesh>
+              ))}
+            </group>
+          </group>
+          <mesh rotation={[0, Math.PI / 2, 0]} renderOrder={20}>
+            <torusGeometry args={[0.14, 0.018, 10, 64]} />
+            <meshBasicMaterial color={AURA_COLOUR} transparent opacity={0.12} depthTest={false} toneMapped={false} />
+          </mesh>
+          {[0, 1, 2].map(index => (
+            <mesh
+              key={index}
+              ref={node => { chevrons.current[side * 3 + index] = node }}
+              position={[centre.x < 0 ? -0.07 : 0.07, 0.003 - centre.y, 0]}
+              rotation={[Math.PI / 2, 0, 0]}
+              renderOrder={20}
+            >
+              <ringGeometry args={[0.028, 0.042, 3, 1, Math.PI / 2 - Math.PI / 3, (Math.PI * 2) / 3]} />
+              <meshBasicMaterial color={AURA_COLOUR} transparent opacity={0.6} depthTest={false} toneMapped={false} side={2} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </>
+  )
+}
 
 /** A ring of arrow heads round an axis, showing which way the motor turns it. */
 function TurnRing({ radius, axis }: { radius: number; axis: 'x' | 'y' }) {
@@ -222,11 +285,11 @@ const CURRENT = { period: 0.32, speed: 0.42 }
  * front, so together they read as a spark with a tail fading out behind it.
  */
 const PULSE = [
-  { length: 0.16, width: 3, opacity: 0.14, white: false },
-  { length: 0.09, width: 3, opacity: 0.26, white: false },
-  { length: 0.045, width: 3.2, opacity: 0.6, white: false },
-  { length: 0.018, width: 3.8, opacity: 1, white: false },
-  { length: 0.011, width: 1.5, opacity: 1, white: true },
+  { length: 0.17, width: 4.2, opacity: 0.14, white: false },
+  { length: 0.1, width: 4.2, opacity: 0.26, white: false },
+  { length: 0.05, width: 4.6, opacity: 0.6, white: false },
+  { length: 0.02, width: 5.4, opacity: 1, white: false },
+  { length: 0.013, width: 2.2, opacity: 1, white: true },
 ] as const
 
 type Dashed = { material: { dashOffset: number } }
@@ -248,7 +311,12 @@ function breathe(halo: Mesh | null, time: number) {
  * colour, and sparks of current with fading tails running along it from the
  * sender to the receiver.
  */
-function SignalPath({ curve, color }: { curve: QuadraticBezierCurve3; color: string }) {
+function SignalPath({ curve, color, lead }: {
+  curve: QuadraticBezierCurve3
+  color: string
+  /** Length of the chain before this path (m), so a spark leaving one link carries on into the next. */
+  lead: number
+}) {
   const points = useMemo(() => curve.getPoints(64), [curve])
   const wire = useMemo(() => new Color(color).lerp(new Color('#ffffff'), 0.5), [color])
   const layers = useRef<(Dashed | null)[]>([])
@@ -256,13 +324,13 @@ function SignalPath({ curve, color }: { curve: QuadraticBezierCurve3; color: str
   const travelled = useRef(0)
   useFrame((state, delta) => {
     travelled.current += delta * CURRENT.speed
-    runCurrent(layers.current, travelled.current)
+    runCurrent(layers.current, travelled.current - lead)
     breathe(halo.current, state.clock.elapsedTime)
   })
   return (
     <group>
       {/* Solid (not see-through) so the joints between segments do not show as dots. */}
-      <Line points={points} color={wire} lineWidth={1.2} depthTest={false} toneMapped={false} renderOrder={10} />
+      <Line points={points} color={wire} lineWidth={1.9} depthTest={false} toneMapped={false} renderOrder={10} />
       {PULSE.map((pulse, index) => (
         <Line
           key={index}
@@ -281,15 +349,15 @@ function SignalPath({ curve, color }: { curve: QuadraticBezierCurve3; color: str
         />
       ))}
       <mesh position={curve.v0} renderOrder={17}>
-        <sphereGeometry args={[0.006, 12, 12]} />
+        <sphereGeometry args={[0.008, 12, 12]} />
         <meshBasicMaterial color={color} depthTest={false} toneMapped={false} />
       </mesh>
       <mesh ref={halo} position={curve.v2} renderOrder={17}>
-        <sphereGeometry args={[0.014, 16, 16]} />
+        <sphereGeometry args={[0.018, 16, 16]} />
         <meshBasicMaterial color={color} transparent opacity={0.25} depthTest={false} toneMapped={false} />
       </mesh>
       <mesh position={curve.v2} renderOrder={18}>
-        <sphereGeometry args={[0.007, 12, 12]} />
+        <sphereGeometry args={[0.009, 12, 12]} />
         <meshBasicMaterial color={color} depthTest={false} toneMapped={false} />
       </mesh>
     </group>
@@ -325,14 +393,29 @@ function ZoomRig({ zoom, focus }: { zoom: number; focus: Vector3 }) {
   return null
 }
 
+/**
+ * The curves of a step's links. A link that starts where the one before it
+ * ended (sonar → STM32 → mini PC) carries on its current, so sparks run the
+ * whole chain in one go.
+ */
+function chainCurves(model: FlowModel, step: FlowStep | null) {
+  let lead = 0
+  let end: FlowNodeId | null = null
+  return (step?.links ?? []).flatMap((link, index) => {
+    const curves = linkCurves(model, link)
+    if (link.from !== end) lead = 0
+    const start = lead
+    lead += curves[0]?.getLength() ?? 0
+    end = link.to
+    return curves.map((curve, part) => ({ key: `${index}-${part}`, curve, color: signalColor(link.kind), lead: start }))
+  })
+}
+
 function Robot({ step, zoom }: { step: FlowStep | null; zoom: number }) {
   const model = useFlowModel()
   const focus = useMemo(() => stepFocus(model, step), [model, step])
   const styled = useRef<FlowStep | null | undefined>(undefined)
-  const curves = useMemo(
-    () => (step?.links ?? []).flatMap((link, index) => linkCurves(model, link).map((curve, part) => ({ key: `${index}-${part}`, curve, color: signalColor(link.kind) }))),
-    [model, step],
-  )
+  const curves = useMemo(() => chainCurves(model, step), [model, step])
   useFrame((state, delta) => {
     if (styled.current !== step) {
       styled.current = step
@@ -343,7 +426,8 @@ function Robot({ step, zoom }: { step: FlowStep | null; zoom: number }) {
   return (
     <>
       <primitive object={model.root} />
-      {curves.map(item => <SignalPath key={item.key} curve={item.curve} color={item.color} />)}
+      {curves.map(item => <SignalPath key={item.key} curve={item.curve} color={item.color} lead={item.lead} />)}
+      {step?.motion === 'wheels' && <WheelAura model={model} />}
       {step?.motion === 'head' && <PanTiltAxes model={model} />}
       <ZoomRig zoom={zoom} focus={focus} />
     </>

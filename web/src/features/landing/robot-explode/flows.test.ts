@@ -36,6 +36,17 @@ describe('robot signal flows', () => {
     expect(FLOWS.find(flow => flow.id === 'head')!.steps.every(step => step.motion === 'head')).toBe(true)
   })
 
+  it('brings every sensor reading through the STM32 up to the mini PC', () => {
+    const sense = FLOWS.find(flow => flow.id === 'sense')!
+    for (const step of sense.steps) {
+      const toMcu = step.links.some(link => link.to === 'mcu')
+      if (toMcu) expect(step.links.some(link => link.from === 'mcu' && link.to === 'pc'), step.title).toBe(true)
+      expect(step.links.at(-1)!.to === 'pc' || step.links.some(link => link.to === 'pc'), step.title).toBe(true)
+    }
+    const sonar = sense.steps.find(step => step.links.some(link => link.from === 'sonar'))!
+    expect(sonar.links.map(link => `${link.from}>${link.to}`)).toEqual(['sonar>mcu', 'mcu>pc'])
+  })
+
   it('underlines marked words in their signal colour and leaves the rest plain', () => {
     expect(parseBody('[[Mini PC|command]] gửi lệnh tới [[STM32|feedback]].')).toEqual([
       { text: 'Mini PC', kind: 'command' },

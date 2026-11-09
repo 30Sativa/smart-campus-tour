@@ -113,10 +113,9 @@ export const FLOWS: readonly Flow[] = [
       },
       {
         title: 'Bánh xe quay',
-        body: 'Trục động cơ quay [[bánh xe chủ động|command]]. Hai bánh quay khác tốc độ thì robot rẽ; bốn [[bánh xe phụ|command]] tự xoay theo hướng đi.',
+        body: 'Trục động cơ quay hai [[bánh xe chủ động|command]] ở giữa. Hai bánh quay khác tốc độ thì robot rẽ; bốn bánh xe phụ ở góc chỉ lăn theo.',
         signal: 'Robot đi tối đa khoảng 0,20 m/s theo cấu hình Nav2 hiện tại.',
         links: [{ from: 'motor', to: 'wheel', kind: 'command', label: 'Trục động cơ' }],
-        parts: ['caster'],
         motion: 'wheels',
       },
       {
@@ -143,15 +142,15 @@ export const FLOWS: readonly Flow[] = [
       },
       {
         title: 'Siêu âm đo vật cản gần',
-        body: 'Bốn [[cảm biến siêu âm JSN-SR04T|feedback]] ở bốn góc phát sóng và đo thời gian sóng dội lại; [[STM32|feedback]] đổi thời gian đó thành khoảng cách.',
-        signal: 'Mỗi cảm biến cho một cặp <mm>,<hợp lệ> trong khung FB (SONAR1–4).',
-        links: [{ from: 'sonar', to: 'mcu', kind: 'feedback', label: 'Trig / Echo' }],
+        body: 'Bốn [[cảm biến siêu âm JSN-SR04T|feedback]] ở bốn góc phát sóng; mạch SR04T đo thời gian sóng dội lại và báo qua chân Echo về [[STM32|feedback]]. STM32 đổi thời gian đó thành khoảng cách rồi gửi lên [[Mini PC|feedback]] để xử lí.',
+        signal: 'Trig / Echo tới STM32; mỗi cảm biến cho một cặp <mm>,<hợp lệ> trong khung FB (SONAR1–4) gửi lên Mini PC.',
+        links: [{ from: 'sonar', to: 'mcu', kind: 'feedback', label: 'Trig / Echo' }, FB_USB],
       },
       {
         title: 'IMU đo hướng quay',
-        body: 'Cảm biến [[IMU BNO085|feedback]] trên mạch điều khiển đo hướng của robot; STM32 đọc góc quay (yaw) và độ tin cậy của nó.',
-        signal: 'yaw_cdeg (×0,01°) và yaw_acc 0–3; yaw_acc = 0 nghĩa là từ kế chưa hiệu chuẩn.',
-        links: [{ from: 'imu', to: 'mcu', kind: 'feedback', label: 'Yaw' }],
+        body: 'Cảm biến [[IMU BNO085|feedback]] trên mạch điều khiển đo hướng của robot; [[STM32|feedback]] đọc góc quay (yaw) và độ tin cậy của nó rồi gửi lên [[Mini PC|feedback]] để xử lí.',
+        signal: 'yaw_cdeg (×0,01°) và yaw_acc 0–3 trong khung FB; yaw_acc = 0 nghĩa là từ kế chưa hiệu chuẩn.',
+        links: [{ from: 'imu', to: 'mcu', kind: 'feedback', label: 'Yaw' }, FB_USB],
       },
       {
         title: 'Máy tính ghép lại để định vị',
