@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Maximize,
   Minimize,
+  Pause,
+  Play,
   RotateCcw,
   Volume2,
   VolumeX,
@@ -9,6 +11,7 @@ import {
 import { useStudentStore } from '../student-store'
 import { QUEST_WHEP_URL } from '../../quest-stream/quest-stream-config'
 import { useWhepStream } from '../../quest-stream/use-whep-stream'
+import { usePageVisible } from '../../quest-stream/use-page-visible'
 
 interface StudentVideoPlayerProps {
   streamUrl?: string
@@ -47,6 +50,10 @@ export function StudentVideoPlayer({
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showAutoplayOverlay, setShowAutoplayOverlay] = useState(false)
+  // The viewer may pause the live picture; a hidden tab stops pulling it too. Both close the
+  // WebRTC connection, so nobody downloads a picture nobody sees (ADR-0052).
+  const [livePaused, setLivePaused] = useState(false)
+  const visible = usePageVisible()
 
   const audioMuted = useStudentStore((s) => s.audioMuted)
   const setAudioMuted = useStudentStore((s) => s.setAudioMuted)
@@ -57,11 +64,12 @@ export function StudentVideoPlayer({
   // reconnecting it.
   const questUrl = QUEST_WHEP_URL
   const sampleVideo = !questUrl && streamUrl?.startsWith('/videos/')
-  const { status: questStatus, retry: retryQuest } = useWhepStream(videoRef, questUrl, active)
+  const { status: questStatus, retry: retryQuest } = useWhepStream(videoRef, questUrl, active && !livePaused && visible)
   // SRS v1.9: when the live stream is lost, viewers get the Tour's fallback
   // video, labelled as a degraded mode, while the live stream keeps reconnecting.
   const degraded = Boolean(questUrl && streamUrl && (questStatus === 'offline' || questStatus === 'error'))
-  const questWaiting = questUrl && questStatus !== 'live' && !degraded ? questStatus : null
+  const paused = Boolean(questUrl && livePaused)
+  const questWaiting = questUrl && !paused && questStatus !== 'live' && !degraded ? questStatus : null
   const noSource = !questUrl && !streamUrl
 
   // SRS v0.2: during fallback the live audio is muted; the fallback video carries the sound.
@@ -151,7 +159,9 @@ export function StudentVideoPlayer({
 
       <div className="st-video__top">
         <div className="st-video__badges">
-          {degraded ? (
+          {paused ? (
+            <span className="st-badge st-badge--dark">Tạm dừng</span>
+          ) : degraded ? (
             <span className="st-badge st-badge--sample">{FALLBACK_BADGE}</span>
           ) : questWaiting ? (
             <span className="st-badge st-badge--dark">{questWaiting === 'connecting' ? 'Đang kết nối' : 'Mất tín hiệu'}</span>
@@ -179,6 +189,16 @@ export function StudentVideoPlayer({
               <span className="st-btn__ic" aria-hidden="true"><RotateCcw size={16} /></span>
             </button>
           )}
+        </div>
+      )}
+
+      {paused && (
+        <div className="st-video__overlay" role="status">
+          <p>Đã tạm dừng hình trực tiếp. Thuyết minh vẫn phát bình thường.</p>
+          <button type="button" onClick={() => setLivePaused(false)} className="st-btn st-btn--light">
+            <span>Tiếp tục xem</span>
+            <span className="st-btn__ic" aria-hidden="true"><Play size={16} /></span>
+          </button>
         </div>
       )}
 
@@ -210,6 +230,17 @@ export function StudentVideoPlayer({
           >
             {audioMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
           </button>
+          {questUrl && (
+            <button
+              type="button"
+              onClick={() => setLivePaused(!livePaused)}
+              className="st-icon-btn"
+              title={livePaused ? 'Tiếp tục xem hình' : 'Tạm dừng hình'}
+              aria-label={livePaused ? 'Tiếp tục xem hình' : 'Tạm dừng hình'}
+            >
+              {livePaused ? <Play size={18} /> : <Pause size={18} />}
+            </button>
+          )}
           {onReplayNarration && (
             <button type="button" onClick={onReplayNarration} className="st-ghost-btn" title="Nghe lại thuyết minh điểm hiện tại">
               <RotateCcw size={14} />

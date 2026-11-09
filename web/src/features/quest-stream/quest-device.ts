@@ -8,7 +8,8 @@
  */
 
 export type QuestConnection = 'connected' | 'unauthorized' | 'offline' | 'not_found' | 'adb_error' | 'unknown'
-export type QuestStream = 'live' | 'connecting' | 'lost'
+/** `paused`: nobody needs the camera, so quest-stream switched it off on purpose (ADR-0052). */
+export type QuestStream = 'live' | 'connecting' | 'paused' | 'lost'
 export type QuestTone = 'ok' | 'info' | 'warn' | 'danger' | 'muted'
 
 export type QuestBattery = {
@@ -61,7 +62,7 @@ export function resolveDeviceUrl(value: string | null | undefined): string | nul
 }
 
 const CONNECTIONS: QuestConnection[] = ['connected', 'unauthorized', 'offline', 'not_found', 'adb_error', 'unknown']
-const STREAMS: QuestStream[] = ['live', 'connecting', 'lost']
+const STREAMS: QuestStream[] = ['live', 'connecting', 'paused', 'lost']
 
 /** Reads `/device`; rejects on network errors, HTTP errors and malformed bodies. */
 export async function fetchQuestDevice(url: string, signal?: AbortSignal): Promise<QuestDevice> {
@@ -99,6 +100,7 @@ export const CONNECTION_VIEW: Record<QuestConnection, { label: string; tone: Que
 export const STREAM_VIEW: Record<QuestStream, { label: string; tone: QuestTone }> = {
   live: { label: 'Đang phát', tone: 'ok' },
   connecting: { label: 'Đang kết nối', tone: 'info' },
+  paused: { label: 'Đang tắt (không ai xem)', tone: 'muted' },
   lost: { label: 'Mất tín hiệu', tone: 'danger' },
 }
 

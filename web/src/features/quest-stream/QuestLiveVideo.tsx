@@ -1,6 +1,7 @@
-import { useRef } from 'react'
-import { LoaderCircle, RotateCcw, VideoOff } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { LoaderCircle, Pause, Play, RotateCcw, VideoOff } from 'lucide-react'
 import { QUEST_WHEP_URL } from './quest-stream-config'
+import { usePageVisible } from './use-page-visible'
 import { useWhepStream, type LiveStreamStatus } from './use-whep-stream'
 
 const COPY: Record<Exclude<LiveStreamStatus, 'live'>, { title: string; hint: string }> = {
@@ -23,17 +24,25 @@ type QuestLiveVideoProps = {
   src?: string | null
   /** Shown next to the status badge, e.g. the robot's name. */
   label?: string | null
+  /** Replaces the "no signal" hint, e.g. while the robot is still switching its camera on. */
+  offlineHint?: string
   className?: string
 }
+
+const PAUSED_BADGE = { label: 'Tạm dừng', className: 'bg-white/85 text-[#475569]', dot: 'bg-[#94a3b8]' }
 
 /**
  * The Quest 3 camera view as a 16:9 live video. It never shows an old frame
  * as if it were live: without a stream it says why and keeps reconnecting.
+ * The viewer can pause it, and a hidden tab stops pulling it; either way the
+ * WebRTC connection is closed, so no bandwidth is spent on a picture nobody sees.
  */
-export function QuestLiveVideo({ src = QUEST_WHEP_URL, label, className = '' }: QuestLiveVideoProps) {
+export function QuestLiveVideo({ src = QUEST_WHEP_URL, label, offlineHint, className = '' }: QuestLiveVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const { status, retry } = useWhepStream(videoRef, src)
-  const badge = BADGE[status]
+  const [paused, setPaused] = useState(false)
+  const visible = usePageVisible()
+  const { status, retry } = useWhepStream(videoRef, src, !paused && visible)
+  const badge = paused ? PAUSED_BADGE : BADGE[status]
 
   return (
     <figure className={`relative aspect-video w-full overflow-hidden rounded-2xl bg-[#1c1c1c] ${className}`}>
@@ -46,7 +55,23 @@ export function QuestLiveVideo({ src = QUEST_WHEP_URL, label, className = '' }: 
         aria-label={`Hình trực tiếp từ kính Quest${label ? ` - ${label}` : ''}`}
       />
 
-      {status !== 'live' && (
+      {paused ? (
+        <div className="absolute inset-0 grid place-items-center p-4 text-center text-[#c6c7cc]" role="status">
+          <div>
+            <Pause size={28} className="mx-auto text-[#74777d]" aria-hidden="true" />
+            <p className="mt-3 text-sm font-semibold">Đã tạm dừng hình</p>
+            <p className="mt-1 text-xs text-[#8e9096]">Không tải hình trong lúc tạm dừng.</p>
+            <button
+              type="button"
+              onClick={() => setPaused(false)}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-white/20 motion-reduce:transition-none"
+            >
+              <Play size={14} aria-hidden="true" />
+              Tiếp tục xem
+            </button>
+          </div>
+        </div>
+      ) : status !== 'live' && (
         <div className="absolute inset-0 grid place-items-center p-4 text-center text-[#c6c7cc]" role="status">
           <div>
             {status === 'connecting' ? (
@@ -55,7 +80,7 @@ export function QuestLiveVideo({ src = QUEST_WHEP_URL, label, className = '' }: 
               <VideoOff size={28} className="mx-auto text-[#74777d]" aria-hidden="true" />
             )}
             <p className="mt-3 text-sm font-semibold">{COPY[status].title}</p>
-            <p className="mt-1 text-xs text-[#8e9096]">{COPY[status].hint}</p>
+            <p className="mt-1 text-xs text-[#8e9096]">{status === 'offline' && offlineHint ? offlineHint : COPY[status].hint}</p>
             {(status === 'offline' || status === 'error') && (
               <button
                 type="button"
@@ -77,6 +102,18 @@ export function QuestLiveVideo({ src = QUEST_WHEP_URL, label, className = '' }: 
         </span>
         {label && <span className="rounded-full bg-[#1c1c1c]/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">{label}</span>}
       </figcaption>
+
+      {src && !paused && (
+        <button
+          type="button"
+          onClick={() => setPaused(true)}
+          className="absolute right-3 bottom-3 inline-flex size-8 items-center justify-center rounded-full bg-[#1c1c1c]/60 text-white backdrop-blur transition-colors hover:bg-[#1c1c1c]/80 motion-reduce:transition-none"
+          title="Tạm dừng hình"
+          aria-label="Tạm dừng hình"
+        >
+          <Pause size={14} aria-hidden="true" />
+        </button>
+      )}
     </figure>
   )
 }

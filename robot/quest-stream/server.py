@@ -41,7 +41,9 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
+from urllib.request import Request, urlopen
 
 MODULE_DIR = Path(__file__).resolve().parent
 
@@ -116,6 +118,14 @@ class Config:
     scrcpy_crop: str = ""  # W:H:X:Y on the Quest display, empty = the chosen eye's half
     scrcpy_angle: float = 0.0  # rotate the eye image clockwise on the Quest (degrees), after the crop
 
+    # Camera on demand (ADR-0052): capture only while the backend says someone needs the camera
+    # (a Tour runs on this robot, or a Staff page holds a lease). Empty control_url = always capture.
+    control_url: str = ""  # https://<api>/api/fleet/camera/v1/poll ("auto" in the env = from FLEET_SYNC_URL)
+    robot_code: str = ""  # the Fleet robot identity (FLEET_ROBOT_CODE)
+    robot_credential_file: str = ""  # the Fleet robot credential (FLEET_ROBOT_CREDENTIAL_FILE)
+    control_failsafe: bool = True  # capture when the backend has never answered / not for control_grace
+    control_grace: float = 60.0  # keep the last answer this long while the backend cannot be reached
+
     # Output: where FFmpeg publishes (MediaMTX RTSP) and how often a keyframe
     # is sent (a new WebRTC viewer starts on the next keyframe).
     publish_url: str = "rtsp://127.0.0.1:8554/quest"
@@ -169,6 +179,14 @@ class Config:
             stall_timeout=_env_float("QUEST_STALL_TIMEOUT", 10.0),
             device_poll=_env_float("QUEST_DEVICE_POLL", 5.0),
         )
+        cfg.control_url, cfg.robot_code, cfg.robot_credential_file = resolve_control_settings(
+            _env("QUEST_CONTROL_URL", ""),
+            _env("QUEST_ROBOT_CODE", ""),
+            _env("QUEST_ROBOT_CREDENTIAL_FILE", ""),
+            read_env_file(Path(_env("QUEST_FLEET_ENV", str(Path.home() / ".config" / "campustour" / "fleet-sync.env")))),
+        )
+        cfg.control_failsafe = _env("QUEST_CONTROL_FAILSAFE", "on").lower() in ("1", "on", "true", "yes")
+        cfg.control_grace = _env_float("QUEST_CONTROL_GRACE", 60.0)
         cfg.validate()
         return cfg
 
@@ -183,6 +201,15 @@ class Config:
             raise SystemExit("CONFIG_ERROR QUEST_ENCODER must be libx264 or h264_vaapi")
         if self.hwdec not in ("", "vaapi"):
             raise SystemExit("CONFIG_ERROR QUEST_HWDEC must be empty or 'vaapi'")
+        if self.control_url:
+            if urlsplit(self.control_url).scheme not in ("https", "http"):
+                raise SystemExit("CONFIG_ERROR QUEST_CONTROL_URL must be https://<api>/api/fleet/camera/v1/poll or 'auto'")
+            if not self.robot_code or not self.robot_credential_file:
+                raise SystemExit("CONFIG_ERROR QUEST_CONTROL_URL needs the robot code and credential file "
+                                 "(fleet-sync.env from robot/scripts/setup_fleet_sync.py, or QUEST_ROBOT_CODE + "
+                                 "QUEST_ROBOT_CREDENTIAL_FILE)")
+        if self.control_grace < 0:
+            raise SystemExit("CONFIG_ERROR QUEST_CONTROL_GRACE must be >= 0")
         if self.capture not in ("screenrecord", "scrcpy"):
             raise SystemExit("CONFIG_ERROR QUEST_CAPTURE must be 'screenrecord' or 'scrcpy'")
         if self.scrcpy_crop and not re.fullmatch(r"\d+:\d+:\d+:\d+", self.scrcpy_crop):
@@ -539,7 +566,7 @@ def pick_quest(
 
 @dataclass
 class Status:
-    state: str = "starting"  # starting | connecting | live | offline | error | stopped
+    state: str = "starting"  # starting | connecting | live | paused | offline | error | stopped
     reason: str = ""
     serial: str = ""
     model: str = ""
@@ -591,6 +618,151 @@ class Status:
                 "publish": cfg.publish_url_safe,
                 "whepPath": f"/{cfg.path_name}/whep",
             }
+
+
+# --------------------------------------------------------------------------
+# Camera on demand (ADR-0052)
+# --------------------------------------------------------------------------
+
+FLEET_SYNC_PATH = "/api/fleet/v1/sync"
+CAMERA_POLL_PATH = "/api/fleet/camera/v1/poll"
+
+
+def read_env_file(path: Path) -> Dict[str, str]:
+    """KEY=VALUE lines (as written by robot/scripts/setup_fleet_sync.py); missing file = {}."""
+    values: Dict[str, str] = {}
+    try:
+        text = path.read_text("utf-8")
+    except OSError:
+        return values
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        values[key.strip()] = value.strip().strip("'\"")
+    return values
+
+
+def resolve_control_settings(url: str, robot_code: str, credential_file: str,
+                             fleet_env: Dict[str, str]) -> Tuple[str, str, str]:
+    """(control URL, robot code, credential file); 'auto' derives the URL from FLEET_SYNC_URL."""
+    robot_code = robot_code or fleet_env.get("FLEET_ROBOT_CODE", "")
+    credential_file = credential_file or fleet_env.get("FLEET_ROBOT_CREDENTIAL_FILE", "")
+    if url.lower() == "auto":
+        sync_url = fleet_env.get("FLEET_SYNC_URL", "")
+        if not sync_url.endswith(FLEET_SYNC_PATH):
+            raise SystemExit("CONFIG_ERROR QUEST_CONTROL_URL=auto needs FLEET_SYNC_URL=https://<api>/api/fleet/v1/sync "
+                             "in fleet-sync.env (robot/scripts/setup_fleet_sync.py), or set the full URL")
+        url = sync_url[: -len(FLEET_SYNC_PATH)] + CAMERA_POLL_PATH
+    return url, robot_code, credential_file
+
+
+class CameraDemand(threading.Thread):
+    """Asks the backend every few seconds whether anyone needs this robot's camera.
+
+    Without a control URL the camera is always wanted (the behaviour before ADR-0052). When the backend
+    cannot answer, the last answer holds for ``control_grace`` seconds, then ``control_failsafe`` decides:
+    by default the camera keeps running, so a backend outage never blacks out a running Tour.
+    """
+
+    def __init__(self, cfg: Config, opener=urlopen, clock=time.time):
+        super().__init__(name="camera-demand", daemon=True)
+        self.cfg = cfg
+        self.enabled = bool(cfg.control_url)
+        self.changed = threading.Event()
+        self.stop_event = threading.Event()
+        self._opener = opener
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._wanted: Optional[bool] = None
+        self._reason = ""
+        self._last_ok = 0.0
+        self._error = ""
+        self._poll = 5.0
+
+    def wanted(self) -> bool:
+        if not self.enabled:
+            return True
+        with self._lock:
+            if self._wanted is not None and self._clock() - self._last_ok <= self.cfg.control_grace:
+                return self._wanted
+            return self.cfg.control_failsafe
+
+    def reason(self) -> str:
+        if not self.enabled:
+            return "ALWAYS_ON"
+        with self._lock:
+            if self._wanted is not None and self._clock() - self._last_ok <= self.cfg.control_grace:
+                return self._reason
+            return f"BACKEND_UNREACHABLE ({self._error or 'no answer yet'})"
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            last_ok = self._last_ok
+            error = self._error
+        return {"enabled": self.enabled, "wanted": self.wanted(), "reason": self.reason(),
+                "lastAnswerAt": round(last_ok, 3) if last_ok else None, "error": error or None}
+
+    def poll_once(self) -> None:
+        before = self.wanted()
+        try:
+            credential = Path(self.cfg.robot_credential_file).read_text("utf-8").strip()
+            request = Request(self.cfg.control_url, data=b"", method="POST", headers={
+                "Authorization": f"Bearer {credential}",
+                "X-Robot-Code": self.cfg.robot_code,
+                "Content-Type": "application/json",
+            })
+            with self._opener(request, timeout=8) as response:
+                body = json.loads(response.read().decode("utf-8"))
+            data = body.get("data") or {}
+            if not isinstance(data.get("wanted"), bool):
+                raise ValueError("answer without data.wanted")
+            with self._lock:
+                self._wanted = data["wanted"]
+                self._reason = str(data.get("reason") or "")
+                self._last_ok = self._clock()
+                self._error = ""
+                poll = data.get("pollSeconds")
+                if isinstance(poll, (int, float)) and 1 <= poll <= 60:
+                    self._poll = float(poll)
+        except HTTPError as exc:
+            why = (f"HTTP {exc.code}: the robot credential was refused (check {self.cfg.robot_credential_file})"
+                   if exc.code in (401, 403) else f"HTTP {exc.code}")
+            self._fail(why)
+        except (URLError, OSError, ValueError) as exc:
+            self._fail(str(getattr(exc, "reason", exc)))
+        if self.wanted() != before:
+            log.info("CAMERA_DEMAND %s (%s)", "on" if self.wanted() else "off", self.reason())
+            self.changed.set()
+
+    def _fail(self, why: str) -> None:
+        with self._lock:
+            if why != self._error:
+                log.warning("CAMERA_DEMAND_ERROR %s", why)
+            self._error = why
+
+    def run(self) -> None:
+        while not self.stop_event.is_set():
+            self.poll_once()
+            self.stop_event.wait(self._poll)
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        self.changed.set()
+
+
+class AlwaysWanted:
+    """Stand-in when no CameraDemand is given: capture whenever the Quest is attached."""
+
+    enabled = False
+    changed = threading.Event()
+
+    def wanted(self) -> bool:
+        return True
+
+    def reason(self) -> str:
+        return "ALWAYS_ON"
 
 
 # --------------------------------------------------------------------------
@@ -702,6 +874,8 @@ def stream_summary(state: str) -> str:
         return "live"
     if state in ("starting", "connecting"):
         return "connecting"
+    if state == "paused":
+        return "paused"  # ADR-0052: nobody needs the camera, so it is off on purpose
     return "lost"
 
 
@@ -776,10 +950,11 @@ class Supervisor(threading.Thread):
     SHORT_SESSION = 3.0  # an adb session shorter than this is a failure, not a rollover
     MAX_SHORT_FAILURES = 5
 
-    def __init__(self, cfg: Config, status: Status):
+    def __init__(self, cfg: Config, status: Status, demand=None):
         super().__init__(name="supervisor", daemon=True)
         self.cfg = cfg
         self.status = status
+        self.demand = demand if demand is not None else AlwaysWanted()
         self.stop_event = threading.Event()
         self._ffmpeg: Optional[subprocess.Popen] = None
         self._adb: Optional[subprocess.Popen] = None
@@ -796,6 +971,25 @@ class Supervisor(threading.Thread):
         """Interruptible sleep. Returns True if we should stop."""
         return self.stop_event.wait(seconds)
 
+    def _wait_for_demand(self, seconds: float) -> bool:
+        """Sleep until the camera demand changes, at most ``seconds``. Returns True if we should stop."""
+        deadline = time.time() + seconds
+        while time.time() < deadline:
+            if self.demand.changed.wait(0.5):
+                self.demand.changed.clear()
+                break
+            if self.stop_event.is_set():
+                return True
+        return self.stop_event.is_set()
+
+    def _pause(self) -> None:
+        """ADR-0052: nobody needs the camera. Nothing runs on the Quest; MediaMTX reports no stream."""
+        reason = self.demand.reason()
+        if self.status.state != "paused":
+            log.info("CAMERA_OFF %s", reason)
+        self._keep_awake(self.status.serial, False)
+        self.status.set("paused", f"CAMERA_OFF: {reason}")
+
     def run(self) -> None:
         poll = self.cfg.poll_min
         ffmpeg_backoff = 2.0
@@ -803,6 +997,13 @@ class Supervisor(threading.Thread):
         last_missing_reason = None
         last_mediamtx_reason = None
         while not self.stop_event.is_set():
+            if not self.demand.wanted():
+                self._pause()
+                if self._wait_for_demand(5.0):
+                    break
+                continue
+            if self.status.state == "paused":
+                log.info("CAMERA_ON %s", self.demand.reason())
             try:
                 devices = list_devices(self.cfg)
             except AdbUnavailable as exc:
@@ -850,6 +1051,8 @@ class Supervisor(threading.Thread):
 
             if self.stop_event.is_set():
                 break
+            if outcome == "paused":
+                continue  # the loop top pauses until someone needs the camera again
             if outcome == "ffmpeg":
                 if lived > 60:
                     ffmpeg_backoff = 2.0
@@ -981,7 +1184,7 @@ class Supervisor(threading.Thread):
     def _run_session(self, serial: str) -> str:
         """Run until something breaks.
 
-        Returns 'disconnected', 'stalled', 'ffmpeg', 'adb' or 'stop'.
+        Returns 'disconnected', 'stalled', 'ffmpeg', 'adb', 'paused' or 'stop'.
         """
         run_id = time.strftime("%Y%m%d%H%M%S")
         self.cfg.log_dir.mkdir(parents=True, exist_ok=True)
@@ -1005,6 +1208,9 @@ class Supervisor(threading.Thread):
                 # Watch this adb session.
                 while not self.stop_event.is_set():
                     time.sleep(0.5)
+                    if not self.demand.wanted():
+                        self._pause()
+                        return "paused"
                     if self._ffmpeg.poll() is not None:
                         log.error("FFMPEG_ERROR exit=%s %s", self._ffmpeg.returncode, self._ffmpeg_tail())
                         self.status.set("error", "FFMPEG_ERROR: encoder stopped, restarting")
@@ -1076,7 +1282,7 @@ class Supervisor(threading.Thread):
 # --------------------------------------------------------------------------
 
 
-def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = None):
+def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = None, demand=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "QuestStream/2.0"
 
@@ -1114,7 +1320,10 @@ def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = N
             if path in ("/health", "/healthz"):
                 return self._json(200, {"ok": True})
             if path == "/status":
-                return self._json(200, status.snapshot(cfg))
+                body = status.snapshot(cfg)
+                if demand is not None:
+                    body["camera"] = demand.snapshot()
+                return self._json(200, body)
             if path == "/device":
                 # The headset (adb + battery) and the video, kept apart: a
                 # connected headset can still have no live picture.
@@ -1171,12 +1380,13 @@ def main() -> int:
         return 2
 
     status = Status()
-    supervisor = Supervisor(cfg, status)
+    demand = CameraDemand(cfg)
+    supervisor = Supervisor(cfg, status, demand)
     device = DeviceStatus()
     monitor = DeviceMonitor(cfg, device)
 
     try:
-        httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status, device))
+        httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status, device, demand))
     except OSError as exc:
         log.error("HTTP_ERROR cannot listen on %s:%s: %s", cfg.host, cfg.port, exc)
         return 3
@@ -1186,6 +1396,7 @@ def main() -> int:
         log.info("Signal %s received, stopping", signum)
         supervisor.stop()
         monitor.stop()
+        demand.stop()
         threading.Thread(target=httpd.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, shutdown)
@@ -1197,6 +1408,11 @@ def main() -> int:
         cfg.host, cfg.port, cfg.publish_url_safe, cfg.capture, cfg.eye, cfg.crop_keep,
         cfg.width, cfg.height, cfg.fps, cfg.encoder, cfg.bitrate,
     )
+    if demand.enabled:
+        log.info("CAMERA_DEMAND asking %s as %s (failsafe %s after %.0fs without an answer)",
+                 cfg.control_url, cfg.robot_code, "on" if cfg.control_failsafe else "off", cfg.control_grace)
+        demand.poll_once()  # decide before the first capture, so an idle robot never starts the Quest
+        demand.start()
     supervisor.start()
     monitor.start()
     try:
@@ -1204,6 +1420,7 @@ def main() -> int:
     finally:
         supervisor.stop()
         monitor.stop()
+        demand.stop()
         supervisor.join(timeout=10)
         httpd.server_close()
     return 0

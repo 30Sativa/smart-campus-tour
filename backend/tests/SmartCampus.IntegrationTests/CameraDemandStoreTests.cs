@@ -1,0 +1,39 @@
+using SmartCampus.Infrastructure.Integrations.FleetCamera;
+
+namespace SmartCampus.IntegrationTests;
+
+/// <summary>ADR-0052 in-memory camera demand: monotonic per robot, robot codes case-insensitive.</summary>
+public sealed class CameraDemandStoreTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 11, 9, 10, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public void Lease_OnlyGrows_AndIgnoresCase()
+    {
+        var store = new InMemoryCameraDemandStore();
+        Assert.Null(store.GetLease("amr_01"));
+        Assert.Equal(Now.AddMinutes(2), store.ExtendLease("amr_01", Now.AddMinutes(2)));
+        Assert.Equal(Now.AddMinutes(2), store.ExtendLease("AMR_01", Now.AddMinutes(1)));
+        Assert.Equal(Now.AddMinutes(3), store.ExtendLease("amr_01", Now.AddMinutes(3)));
+        Assert.Equal(Now.AddMinutes(3), store.GetLease("Amr_01"));
+        Assert.Null(store.GetLease("amr_02"));
+    }
+
+    [Fact]
+    public void Poll_KeepsTheLatest()
+    {
+        var store = new InMemoryCameraDemandStore();
+        Assert.Null(store.GetLastPoll("amr_01"));
+        store.RecordPoll("amr_01", Now);
+        store.RecordPoll("amr_01", Now.AddSeconds(-5));
+        Assert.Equal(Now, store.GetLastPoll("AMR_01"));
+    }
+
+    [Fact]
+    public async Task ConcurrentLeases_KeepTheLatestEnd()
+    {
+        var store = new InMemoryCameraDemandStore();
+        await Task.WhenAll(Enumerable.Range(1, 200).Select(i => Task.Run(() => store.ExtendLease("amr_01", Now.AddSeconds(i)))));
+        Assert.Equal(Now.AddSeconds(200), store.GetLease("amr_01"));
+    }
+}
