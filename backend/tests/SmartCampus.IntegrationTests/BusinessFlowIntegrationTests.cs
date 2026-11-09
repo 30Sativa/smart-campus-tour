@@ -815,7 +815,7 @@ public sealed class BusinessFlowIntegrationTests
         var slotData = (await Body(slots)).GetProperty("data");
         Assert.Equal(3600, slotData.GetProperty("recommendedMaxSeconds").GetInt32());
         Assert.False(slotData.TryGetProperty("customStartEarliest", out _));
-        Assert.Equal(["S1", "S2", "S3"], slotData.GetProperty("days")[0].GetProperty("slots").EnumerateArray().Select(slot => slot.GetProperty("shiftCode").GetString()));
+        Assert.Equal(["S1", "S4", "S2", "S3", "S5"], slotData.GetProperty("days")[0].GetProperty("slots").EnumerateArray().Select(slot => slot.GetProperty("shiftCode").GetString()));
         var firstSlot = slotData.GetProperty("days")[0].GetProperty("slots")[0];
         Assert.Equal("08:15", firstSlot.GetProperty("time").GetString());
         Assert.Equal("Ca sáng", firstSlot.GetProperty("shiftName").GetString());
@@ -827,7 +827,7 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal(HttpStatusCode.OK, shifts.StatusCode);
         var shiftDays = (await Body(shifts)).GetProperty("data").GetProperty("days");
         Assert.Equal(7, shiftDays.GetArrayLength());
-        Assert.Equal("13:15", shiftDays[0].GetProperty("shifts")[1].GetProperty("time").GetString());
+        Assert.Equal("13:15", shiftDays[0].GetProperty("shifts").EnumerateArray().Single(shift => shift.GetProperty("code").GetString() == "S2").GetProperty("time").GetString());
         using var shiftsAsTechnical = await Get(host.Client, $"/api/staff/manage/tours/shifts?from={slotDate:yyyy-MM-dd}&to={slotDate:yyyy-MM-dd}", technicalToken);
         Assert.Equal(HttpStatusCode.Forbidden, shiftsAsTechnical.StatusCode);
         using var slotsTooWide = await Get(host.Client, $"/api/staff/manage/tours/slots?routeRevisionId={routeRevisionId}&robotCode=flow_physical&from={slotDate:yyyy-MM-dd}&to={slotDate.AddDays(31):yyyy-MM-dd}", staffToken);
