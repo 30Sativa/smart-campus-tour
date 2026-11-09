@@ -17,10 +17,10 @@ BLOCKED = 'BLOCKED'
 
 
 class MotionGate:
-    def __init__(self, required: bool, permit_timeout: float):
+    def __init__(self, required: bool, permit_timeout: float, start_latched: bool = True):
         self.required = required
         self.permit_timeout = permit_timeout
-        self.latch_reason: Optional[str] = BOOT if required else None
+        self.latch_reason: Optional[str] = BOOT if required and start_latched else None
         self._permit = False
         self._permit_time: Optional[float] = None
 

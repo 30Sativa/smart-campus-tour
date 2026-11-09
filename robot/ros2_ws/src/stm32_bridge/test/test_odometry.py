@@ -15,6 +15,7 @@ Run with::
 import math
 import os
 import sys
+import threading
 import types
 from types import SimpleNamespace
 
@@ -102,6 +103,7 @@ if _PKG_ROOT not in sys.path:
     sys.path.insert(0, _PKG_ROOT)
 
 from stm32_bridge.imu_health import ImuHealth  # noqa: E402
+from stm32_bridge.link_supervisor import LinkSupervisor  # noqa: E402
 from stm32_bridge.stm32_bridge_node import (  # noqa: E402
     DEFAULT_IMU_ORIENTATION_REPORT,
     DEFAULT_IMU_YAW_VARIANCE,
@@ -590,6 +592,13 @@ class _FeedbackHarness:
         self.published_odometry = []
         self._imu_health = ImuHealth()
         self.odom_linear_scale = 1.0
+        self.feedback_timeout = 1.0
+        self._serial_lock = threading.RLock()
+        self._link = LinkSupervisor(1.0, 0.5)
+        self._force_count_baseline = False
+        self._imu_heading_offset = 0.0
+        self._last_imu_heading = None
+        self._theta_at_last_imu = 0.0
 
     def get_logger(self):
         return SimpleNamespace(
@@ -601,11 +610,13 @@ class _FeedbackHarness:
     _compute_count_delta = Stm32BridgeNode._compute_count_delta
     _resolve_feedback_dt = Stm32BridgeNode._resolve_feedback_dt
     _diff_signed_32 = staticmethod(Stm32BridgeNode._diff_signed_32)
-    _warn_if_count_jump = Stm32BridgeNode._warn_if_count_jump
+    _count_jump_detected = Stm32BridgeNode._count_jump_detected
+    _rebase_imu_heading = Stm32BridgeNode._rebase_imu_heading
     _update_odometry = Stm32BridgeNode._update_odometry
     _publish_joint_state = Stm32BridgeNode._publish_joint_state
     _normalize_angle = staticmethod(Stm32BridgeNode._normalize_angle)
     _log_imu_events = Stm32BridgeNode._log_imu_events
+    _log_link_events = Stm32BridgeNode._log_link_events
 
 
 def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():

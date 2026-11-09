@@ -1,4 +1,5 @@
 import math
+import os
 import threading
 import time
 from typing import Callable, Optional, Sequence, Tuple
@@ -13,17 +14,17 @@ from tf2_ros import TransformBroadcaster
 
 from stm32_bridge.head_link import next_seq
 from stm32_bridge.imu_health import ImuHealth, parse_fb_counters, WARN as IMU_WARN
+from stm32_bridge.link_supervisor import (
+    ERROR as LINK_ERROR, FEEDBACK_LOST, FilterSwitch, LinkSupervisor,
+)
 
 try:
     import serial
-    from serial import SerialException, SerialTimeoutException
+    from serial import SerialException
 except ImportError:  # pragma: no cover - depends on host ROS environment
     serial = None
 
     class SerialException(Exception):
-        pass
-
-    class SerialTimeoutException(SerialException):
         pass
 
 
@@ -50,6 +51,20 @@ DEFAULT_TWIST_COVARIANCE_DIAGONAL = [
     99999.0,
     0.1,
 ]
+
+# Added to the elapsed time when bounding a plausible STEP delta: covers frame
+# timing jitter. The rate itself is the firmware's hard clamp, so no margin.
+COUNT_JUMP_SLACK_S = 0.1
+# Longest stretch the wheels can keep stepping unseen: the feedback timeout
+# gates CMD, then the firmware's 500 ms ISR watchdog stops the pulses.
+FIRMWARE_ISR_WATCHDOG_S = 0.5
+# Above this host-side gap (and twice the frame's own dt_ms) the frame covers
+# more motion than its dt_ms says, so twist is averaged over the gap instead.
+TWIST_GAP_MIN_S = 0.25
+# A yaw step the wheels cannot explain means the BNO085 restarted from a new
+# zero. In 200k recorded frames the largest step outside such a restart was
+# 1 degree, and none exceeded 5.
+IMU_HEADING_STEP_RAD = math.radians(10.0)
 
 # Report huong ma firmware dang stream (BNO08X_USE_GAME_ROTATION_VECTOR).
 # game_rotation_vector (0x08, mac dinh): gyro + accel, khong tu ke -> yaw_acc
@@ -151,7 +166,16 @@ class Stm32BridgeNode(Node):
         # docs/phase3-nav2.md section 7.
         self.declare_parameter('sonar_max_range', 2.0)
         self.declare_parameter('sonar_field_of_view', 0.52)
-        self.declare_parameter('feedback_timeout', 1.0)
+        # Longest FB gap that is ridden through. Recorded maximum 117 ms at 97 %
+        # host CPU, see README "Link Supervision" before changing it.
+        self.declare_parameter('feedback_timeout', 0.4)
+        # After a fault: how long feedback must stay steady before CMD may go out.
+        self.declare_parameter('feedback_recovery_time', 0.5)
+        # A TX line the kernel will not take for this long closes the port.
+        self.declare_parameter('serial_write_stall_timeout', 1.0)
+        # robot_localization service that pauses the EKF while FB is missing.
+        # Empty disables it, and the EKF then predicts through the gap.
+        self.declare_parameter('ekf_toggle_service', 'toggle')
         self.declare_parameter('feedback_counts_are_cumulative', True)
         self.declare_parameter('feedback_rate_warn_hz', 2.0)
         self.declare_parameter('reset_odom_on_start', True)
@@ -225,6 +249,10 @@ class Stm32BridgeNode(Node):
             self.get_parameter('sonar_field_of_view').value)
         self.feedback_timeout = float(
             self.get_parameter('feedback_timeout').value)
+        self.feedback_recovery_time = float(
+            self.get_parameter('feedback_recovery_time').value)
+        self.serial_write_stall_timeout = float(
+            self.get_parameter('serial_write_stall_timeout').value)
         self.feedback_counts_are_cumulative = bool(
             self.get_parameter('feedback_counts_are_cumulative').value)
         self.feedback_rate_warn_hz = float(
@@ -263,8 +291,20 @@ class Stm32BridgeNode(Node):
 
         if not math.isfinite(self.feedback_timeout) or self.feedback_timeout <= 0.0:
             self.get_logger().warn(
-                'feedback_timeout must be > 0. Falling back to 1.0 s.')
-            self.feedback_timeout = 1.0
+                'feedback_timeout must be > 0. Falling back to 0.4 s.')
+            self.feedback_timeout = 0.4
+
+        if (not math.isfinite(self.feedback_recovery_time) or
+                self.feedback_recovery_time <= 0.0):
+            self.get_logger().warn(
+                'feedback_recovery_time must be > 0. Falling back to 0.5 s.')
+            self.feedback_recovery_time = 0.5
+
+        if (not math.isfinite(self.serial_write_stall_timeout) or
+                self.serial_write_stall_timeout <= 0.0):
+            self.get_logger().warn(
+                'serial_write_stall_timeout must be > 0. Falling back to 1.0 s.')
+            self.serial_write_stall_timeout = 1.0
 
         if (not math.isfinite(self.feedback_rate_warn_hz) or
                 self.feedback_rate_warn_hz <= 0.0):
@@ -299,6 +339,12 @@ class Stm32BridgeNode(Node):
         self._feedback_warn_period = 1.0 / self.feedback_rate_warn_hz
 
         self._serial = None
+        self._serial_closer: Optional[threading.Thread] = None
+        self._serial_opener: Optional[threading.Thread] = None
+        # Tail of a TX line the kernel only partly took. It must be finished
+        # before anything else goes out, see _write_serial_locked.
+        self._tx_pending = b''
+        self._write_stall_since: Optional[float] = None
         # Timer (CMD/STOP, doc FB) va callback dau quay (executor nhieu luong)
         # cung ghi serial va dung chung bo dem seq.
         self._serial_lock = threading.RLock()
@@ -332,8 +378,17 @@ class Stm32BridgeNode(Node):
         self._last_feedback_status = ''
         self._node_start_mono = time.monotonic()
         self._last_feedback_timeout_warn_time = 0.0
+        self._last_motion_held_warn_time = 0.0
+        self._link = LinkSupervisor(
+            self.feedback_timeout, self.feedback_recovery_time,
+            start=self._node_start_mono)
+        # After a reconnect or a count discontinuity the next count is only a
+        # baseline, even with reset_odom_on_start=false.
+        self._force_count_baseline = False
+        self._imu_heading_offset = 0.0
+        self._last_imu_heading: Optional[float] = None
+        self._theta_at_last_imu = 0.0
         self._last_invalid_dt_warn_time = 0.0
-        self._last_count_jump_warn_time = 0.0
         self._imu_health = ImuHealth(
             stale_timeout=float(self.get_parameter('imu_stale_timeout').value),
             start=self._node_start_mono)
@@ -388,6 +443,12 @@ class Stm32BridgeNode(Node):
         self._timer = self.create_timer(
             1.0 / self.send_rate_hz, self._timer_callback)
         self._diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        # Imported here like the head interface, so the ROS-free tests can load
+        # this module. mode_manager uses this level to stop Nav2 resuming.
+        from std_msgs.msg import Bool
+        self._bool_msg = Bool
+        self._link_ok_pub = self.create_publisher(Bool, 'stm32_link_ok', 1)
+        self._filter_switch = self._create_filter_switch()
         self._imu_health_timer = self.create_timer(1.0, self._imu_health_callback)
 
         if bool(self.get_parameter('enable_head').value):
@@ -468,7 +529,7 @@ class Stm32BridgeNode(Node):
         # fills up. A full read buffer can stall write() and trigger a spurious
         # write timeout.
         self._read_feedback()
-        self._check_feedback_timeout(now)
+        self._supervise_link(now)
         if self._head is not None:
             self._call_head('on_timer', now)
 
@@ -482,6 +543,9 @@ class Stm32BridgeNode(Node):
                 self._timed_out = True
             self._send_stop()
         elif self._command_is_stop:
+            self._send_stop()
+        elif not self._link.motion_permitted:
+            self._warn_motion_held(now)
             self._send_stop()
         else:
             self._send_command(self._left_mm_s, self._right_mm_s)
@@ -547,25 +611,42 @@ class Stm32BridgeNode(Node):
             return
 
         try:
-            self._serial = serial.Serial(
+            # Never call Serial.write on this port, see _write_serial_locked.
+            port = serial.Serial(
                 port=self.port,
                 baudrate=self.baudrate,
                 timeout=0.0,
-                write_timeout=None,
             )
-            self._rx_buffer = ''
-            self.get_logger().info(
-                f'Opened serial port {self.port} at {self.baudrate} baud.')
+            os.set_blocking(port.fileno(), False)
         except (OSError, SerialException) as exc:
-            self._serial = None
             self._next_reconnect_time = time.monotonic() + self._reconnect_period
             self.get_logger().error(
                 f'Failed to open serial port {self.port}: {exc}. '
                 f'Retrying every {self._reconnect_period:.1f} s.')
+            return
+
+        with self._serial_lock:
+            self._serial = port
+            self._rx_buffer = ''
+            self._tx_pending = b''
+            self._write_stall_since = None
+            if self._last_left_count is not None:
+                # USB can only come back this way if the device re-enumerated
+                # or the host dropped it: the MCU may have rebooted.
+                self._restart_count_baseline()
+            events = self._link.on_port_opened(time.monotonic())
+        self._log_link_events(events)
+        self.get_logger().info(
+            f'Opened serial port {self.port} at {self.baudrate} baud.')
 
     def _ensure_serial(self, now: float):
-        if self._serial is not None and self._serial.is_open:
+        port = self._serial     # a head callback thread may clear it
+        if port is not None and port.is_open:
             return
+
+        for worker in (self._serial_closer, self._serial_opener):
+            if worker is not None and worker.is_alive():
+                return
 
         if now < self._next_reconnect_time:
             return
@@ -573,55 +654,92 @@ class Stm32BridgeNode(Node):
         self._next_reconnect_time = now + self._reconnect_period
         self.get_logger().info(
             f'Trying to reconnect serial port {self.port}...')
-        self._open_serial()
+        # Opening sends USB control requests that wait on a half-dead device.
+        self._serial_opener = threading.Thread(
+            target=self._open_serial, name='stm32_serial_open', daemon=True)
+        self._serial_opener.start()
 
     def _write_serial(self, command: str) -> bool:
         with self._serial_lock:
             return self._write_serial_locked(command)
 
     def _write_serial_locked(self, command: str) -> bool:
+        """Queue one line without ever blocking; False = the line did not start.
+
+        Goes straight to the O_NONBLOCK fd because pyserial 3.5 has no safe
+        mode here: write_timeout=None sleeps forever in select(), 0 spins
+        forever on EAGAIN, and > 0 can raise after the whole line was written.
+        A line the kernel takes only part of is finished before the next one:
+        cut short it could still parse ("CMD,7,-250,-250" -> "CMD,7,-250,-25").
+        """
         if self._serial is None or not self._serial.is_open:
             return False
 
+        started = False
         try:
-            self._serial.write(command.encode('ascii'))
-            return True
-        except SerialTimeoutException:
-            # The USB CDC pipe is momentarily congested, not disconnected.
-            # Drop this frame instead of tearing down the port; the next timer
-            # tick will send a fresh command.
-            self.get_logger().warn(
-                f'Serial write timed out on {self.port}; dropping one frame.')
-            try:
-                self._serial.reset_output_buffer()
-            except (OSError, SerialException):
-                pass
-            return False
+            fd = self._serial.fileno()
+            if self._tx_pending:
+                self._tx_pending = self._tx_pending[
+                    self._write_nonblocking(fd, self._tx_pending):]
+            if not self._tx_pending:
+                data = command.encode('ascii')
+                written = self._write_nonblocking(fd, data)
+                self._tx_pending = data[written:]
+                started = written > 0
         except (OSError, SerialException) as exc:
             self.get_logger().error(
                 f'Serial write failed on {self.port}: {exc}. '
                 'Closing port and waiting for reconnect.')
-            self._enter_safe_stop_state('serial_write_failed')
-            self._close_serial()
+            self._handle_serial_failure('serial_write_failed')
             return False
 
-    def _read_feedback(self):
-        if self._serial is None or not self._serial.is_open:
-            return
+        if started and not self._tx_pending:
+            self._write_stall_since = None
+            return True
 
+        now = time.monotonic()
+        if self._write_stall_since is None:
+            self._write_stall_since = now
+        elif now - self._write_stall_since > self.serial_write_stall_timeout:
+            self.get_logger().error(
+                f'Serial output on {self.port} stalled for more than '
+                f'{self.serial_write_stall_timeout:.1f} s. '
+                'Closing port and waiting for reconnect.')
+            self._handle_serial_failure('serial_write_stalled')
+            return False
+        return started
+
+    @staticmethod
+    def _write_nonblocking(fd: int, data: bytes) -> int:
         try:
-            waiting = self._serial.in_waiting
-            if waiting <= 0:
+            return os.write(fd, data)
+        except BlockingIOError:
+            return 0
+
+    def _handle_serial_failure(self, reason: str):
+        self._enter_safe_stop_state(reason)
+        self._close_serial(reason)
+
+    def _read_feedback(self):
+        # The lock also keeps a head-thread write failure from closing the
+        # port between these calls; timeout=0 makes them non-blocking.
+        with self._serial_lock:
+            if self._serial is None or not self._serial.is_open:
                 return
 
-            chunk = self._serial.read(waiting).decode(
-                'ascii', errors='replace')
-        except (OSError, SerialException) as exc:
-            self.get_logger().error(
-                f'Serial read failed on {self.port}: {exc}. '
-                'Closing port and waiting for reconnect.')
-            self._close_serial()
-            return
+            try:
+                waiting = self._serial.in_waiting
+                if waiting <= 0:
+                    return
+
+                chunk = self._serial.read(waiting).decode(
+                    'ascii', errors='replace')
+            except (OSError, SerialException) as exc:
+                self.get_logger().error(
+                    f'Serial read failed on {self.port}: {exc}. '
+                    'Closing port and waiting for reconnect.')
+                self._handle_serial_failure('serial_read_failed')
+                return
 
         self._rx_buffer += chunk
         while '\n' in self._rx_buffer:
@@ -657,13 +775,31 @@ class Stm32BridgeNode(Node):
          sonar1, sonar2, sonar3, sonar4) = parsed
 
         now_mono = time.monotonic()
+        host_gap = (now_mono - self._last_feedback_mono
+                    if self._last_feedback_mono is not None else 0.0)
+        with self._serial_lock:
+            events = self._link.on_feedback(now_mono)
+        self._log_link_events(events)
         rearm, reset_seen = parse_fb_counters(line)
         self._log_imu_events(self._imu_health.on_feedback(
             now_mono, yaw_rad is not None, rearm, reset_seen))
         now_ros = self.get_clock().now()
         now_ros_sec = now_ros.nanoseconds / 1e9
 
-        self._publish_imu(now_ros, yaw_rad, yaw_acc)
+        delta_left_count, delta_right_count = self._compute_count_delta(
+            left_count,
+            right_count,
+        )
+        dt = self._resolve_feedback_dt(dt_ms, now_ros_sec, now_mono)
+        # Only a delta between two frames can be judged: the first frame with
+        # reset_odom_on_start=false is an absolute count.
+        if (delta_left_count is not None and
+                self._last_left_count is not None and
+                self._count_jump_detected(
+                    delta_left_count, delta_right_count, dt, host_gap, now_mono)):
+            delta_left_count = delta_right_count = None
+
+        self._publish_imu(now_ros, self._rebase_imu_heading(yaw_rad), yaw_acc)
 
         if sonar1 is not None:
             self._publish_sonar_range(
@@ -686,12 +822,6 @@ class Stm32BridgeNode(Node):
             f'seq={seq}, left_count={left_count}, right_count={right_count}, '
             f'dt_ms={dt_ms:.3f}, status={status}')
 
-        delta_left_count, delta_right_count = self._compute_count_delta(
-            left_count,
-            right_count,
-        )
-        dt = self._resolve_feedback_dt(dt_ms, now_ros_sec, now_mono)
-
         self._last_left_count = left_count
         self._last_right_count = right_count
         self._last_feedback_ros_sec = now_ros_sec
@@ -713,12 +843,13 @@ class Stm32BridgeNode(Node):
         if self.odom_invert_right:
             delta_right_count = -delta_right_count
 
-        self._warn_if_count_jump(delta_left_count, delta_right_count, dt,
-                                 now_mono)
+        twist_dt = dt
+        if dt > 0.0 and host_gap > max(TWIST_GAP_MIN_S, 2.0 * dt):
+            twist_dt = host_gap
         linear_velocity, angular_velocity = self._update_odometry(
             delta_left_count,
             delta_right_count,
-            dt,
+            twist_dt,
         )
         self._publish_joint_state(now_ros, delta_left_count, delta_right_count)
 
@@ -729,6 +860,33 @@ class Stm32BridgeNode(Node):
             return
 
         self._publish_odometry(now_ros, linear_velocity, angular_velocity)
+
+    def _rebase_imu_heading(self, yaw_rad: Optional[float]) -> Optional[float]:
+        """Keep imu/data continuous when the BNO085 restarts.
+
+        The chip restarts from an arbitrary zero after an MCU reboot, or alone,
+        and the EKF (imu0_relative) would take that as a real turn. A jump the
+        wheels cannot explain is removed, using the wheel rotation since the
+        last sample so a chip reset while turning does not hide the turn. This
+        looks only at the data, so it does not depend on detecting the reset.
+        """
+        if yaw_rad is None:
+            return None
+        if self._imu_heading_offset != 0.0:
+            yaw_rad = self._normalize_angle(yaw_rad + self._imu_heading_offset)
+        if self._last_imu_heading is not None:
+            expected = self._last_imu_heading + (self._theta - self._theta_at_last_imu)
+            step = self._normalize_angle(yaw_rad - expected)
+            if abs(step) > IMU_HEADING_STEP_RAD:
+                self._imu_heading_offset = self._normalize_angle(
+                    self._imu_heading_offset - step)
+                yaw_rad = self._normalize_angle(expected)
+                self.get_logger().warn(
+                    f'IMU yaw step of {math.degrees(step):.1f} deg not explained '
+                    'by the wheels (BNO085 restart): re-referenced.')
+        self._last_imu_heading = yaw_rad
+        self._theta_at_last_imu = self._theta
+        return yaw_rad
 
     def _publish_joint_state(
             self, stamp, delta_left_count: int = 0,
@@ -854,7 +1012,7 @@ class Stm32BridgeNode(Node):
             return left_count, right_count
 
         if self._last_left_count is None or self._last_right_count is None:
-            if self.reset_odom_on_start:
+            if self.reset_odom_on_start or self._force_count_baseline:
                 return None, None
             return left_count, right_count
 
@@ -999,6 +1157,8 @@ class Stm32BridgeNode(Node):
             else:
                 self.get_logger().info(text)
 
+    _log_link_events = _log_imu_events  # same (level, text) event tuples
+
     def _imu_health_callback(self):
         now = time.monotonic()
         alive = self._imu_feedback_alive(now)
@@ -1012,76 +1172,146 @@ class Stm32BridgeNode(Node):
         status.values = [KeyValue(key=k, value=v) for k, v in values.items()]
         array = DiagnosticArray()
         array.header.stamp = self.get_clock().now().to_msg()
-        array.status = [status]
+        array.status = [status, self._link_diagnostic_status(now)]
         self._diag_pub.publish(array)
 
-    def _check_feedback_timeout(self, now: float):
-        if not self.publish_odom and not self.publish_tf:
+    def _link_diagnostic_status(self, now: float) -> DiagnosticStatus:
+        with self._serial_lock:
+            level, message, values = self._link.status(now)
+        status = DiagnosticStatus()
+        status.level = bytes([level])
+        status.name = f'{self.get_fully_qualified_name()}: link'
+        status.message = message
+        status.hardware_id = self.port
+        status.values = [KeyValue(key=k, value=v) for k, v in values.items()]
+        return status
+
+    def _create_filter_switch(self) -> Optional[FilterSwitch]:
+        service = str(self.get_parameter('ekf_toggle_service').value)
+        if not service:
+            return None
+        try:
+            from robot_localization.srv import ToggleFilterProcessing
+        except ImportError as exc:
+            self.get_logger().error(
+                f'EKF pause disabled: {exc!r}. The EKF will predict through '
+                'feedback gaps.')
+            return None
+        client = self.create_client(ToggleFilterProcessing, service)
+        return FilterSwitch(
+            client.service_is_ready,
+            lambda on: client.call_async(ToggleFilterProcessing.Request(on=on)))
+
+    def _command_idle(self, now: float) -> bool:
+        return (self._last_cmd_time is None or self._command_is_stop or
+                (now - self._last_cmd_time) > self.cmd_timeout)
+
+    def _supervise_link(self, now: float):
+        with self._serial_lock:
+            was_lost = self._link.state == FEEDBACK_LOST
+            events = self._link.tick(now, self._command_idle(now))
+            lost = self._link.state == FEEDBACK_LOST
+            level = self._link.status(now)[0]
+            quiet_for = self._link.seconds_without_feedback(now)
+        self._log_link_events(events)
+
+        if lost and not was_lost:
+            self._enter_safe_stop_state('feedback_timeout')
+        if self._link_ok_pub is not None:
+            self._link_ok_pub.publish(self._bool_msg(
+                data=self._link.motion_permitted))
+        if self._filter_switch is not None:
+            self._filter_switch.update(self._link.feedback_flowing, now)
+
+        # Only logging is rate limited here; the gate above is level-triggered.
+        if level < LINK_ERROR or quiet_for <= self.feedback_timeout:
             return
-
-        last_feedback = self._last_feedback_mono
-        if last_feedback is None:
-            elapsed = now - self._node_start_mono
-            if elapsed <= self.feedback_timeout:
-                return
-        else:
-            elapsed = now - last_feedback
-            if elapsed <= self.feedback_timeout:
-                return
-
         if now - self._last_feedback_timeout_warn_time < self._feedback_warn_period:
             return
-
-        if last_feedback is None:
+        self._last_feedback_timeout_warn_time = now
+        if self._last_feedback_mono is None:
             self.get_logger().warn(
-                f'No STM32 feedback received after {elapsed:.3f} s. '
+                f'No STM32 feedback received after {quiet_for:.3f} s. '
                 'Expected FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>.')
         else:
             self.get_logger().warn(
-                f'No STM32 feedback for {elapsed:.3f} s. '
+                f'No STM32 feedback for {quiet_for:.3f} s. '
                 f'Last status={self._last_feedback_status}, '
                 f'last_seq={self._last_feedback_seq}.')
-        self._last_feedback_timeout_warn_time = now
-        self._enter_safe_stop_state('feedback_timeout')
-        self._send_stop()
 
-    def _warn_if_count_jump(
+    def _warn_motion_held(self, now: float):
+        if now - self._last_motion_held_warn_time < self._feedback_warn_period:
+            return
+        self._last_motion_held_warn_time = now
+        with self._serial_lock:
+            message = self._link.status(now)[1]
+        self.get_logger().warn(f'Ignoring /cmd_vel: {message}.')
+
+    def _restart_count_baseline(self):
+        """Call with the serial lock held: the next counts are a new reference,
+        not a continuation of the old ones."""
+        self._last_left_count = None
+        self._last_right_count = None
+        self._force_count_baseline = True
+
+    def _count_jump_detected(
             self,
             delta_left_count: int,
             delta_right_count: int,
             dt: float,
-            now: float):
-        effective_dt = dt if dt > 0.0 else (1.0 / self.send_rate_hz)
-        max_expected_delta = self.max_steps_per_sec * effective_dt * 4.0
-        max_delta = max(abs(delta_left_count), abs(delta_right_count))
+            host_gap: float,
+            now: float) -> bool:
+        """True if the delta is more STEP than the firmware could have issued.
 
-        if max_delta <= max_expected_delta:
-            return
-
-        if now - self._last_count_jump_warn_time < self._feedback_warn_period:
-            return
+        The elapsed time uses the host gap as well as dt_ms because frames can
+        be lost, and is capped because a rebooted MCU reports a dt_ms of
+        several seconds, which would excuse the very jump being looked for.
+        """
+        elapsed = min(max(dt, host_gap),
+                      self.feedback_timeout + FIRMWARE_ISR_WATCHDOG_S)
+        limit = self.max_steps_per_sec * (elapsed + COUNT_JUMP_SLACK_S)
+        if max(abs(delta_left_count), abs(delta_right_count)) <= limit:
+            return False
 
         self.get_logger().warn(
-            'Suspicious feedback count jump: '
+            'Rejecting impossible feedback count jump: '
             f'delta_left={delta_left_count}, delta_right={delta_right_count}, '
-            f'dt={dt:.4f}s, threshold={max_expected_delta:.1f} steps.')
-        self._last_count_jump_warn_time = now
-
-    def _close_serial(self):
+            f'dt={dt:.4f}s, host_gap={host_gap:.4f}s, limit={limit:.1f} steps. '
+            'Wheel odometry keeps its pose and takes a new count baseline.')
         with self._serial_lock:
-            self._close_serial_locked()
+            self._restart_count_baseline()
+            events = self._link.on_discontinuity(now, 'count_jump')
+        self._log_link_events(events)
+        self._enter_safe_stop_state('count_jump')
+        return True
 
-    def _close_serial_locked(self):
+    def _close_serial(self, reason: str):
+        with self._serial_lock:
+            self._close_serial_locked(reason)
+
+    def _close_serial_locked(self, reason: str):
         if self._serial is None:
             return
 
+        port, self._serial = self._serial, None
+        self._tx_pending = b''
+        self._write_stall_since = None
+        events = self._link.on_port_closed(time.monotonic(), reason)
+        if reason != 'shutdown':
+            self._log_link_events(events)
+        # close() drains unsent output and can sleep for the tty closing_wait
+        # (30 s) on a wedged device, so it must not run on the timer thread.
+        # _ensure_serial does not reopen until this thread has finished.
+        self._serial_closer = threading.Thread(
+            target=self._close_port, args=(port,),
+            name='stm32_serial_close', daemon=True)
+        self._serial_closer.start()
+
+    def _close_port(self, port):
         try:
-            if self._serial.is_open:
-                self._serial.close()
+            port.close()
         except (OSError, SerialException) as exc:
             self.get_logger().warn(f'Error while closing serial port: {exc}')
-        finally:
-            self._serial = None
 
     def _enter_safe_stop_state(self, reason: str):
         was_active = (
@@ -1226,7 +1456,9 @@ class Stm32BridgeNode(Node):
                 self._head.shutdown()
             self._send_stop()
         finally:
-            self._close_serial()
+            self._close_serial('shutdown')
+            if self._serial_closer is not None:
+                self._serial_closer.join(timeout=1.0)
             super().destroy_node()
 
 
@@ -1249,7 +1481,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

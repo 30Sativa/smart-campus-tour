@@ -99,7 +99,7 @@ class _Publisher:
 class _Harness:
     """A real ModeManagerNode control path with ROS replaced by fakes."""
 
-    def __init__(self, required=True, mode=EXPLORE_MODE):
+    def __init__(self, required=True, mode=EXPLORE_MODE, link_required=False):
         node = ModeManagerNode.__new__(ModeManagerNode)
         self.node = node
         self.now = 100.0
@@ -116,6 +116,10 @@ class _Harness:
         node.nav_timeout = 0.5
         node.manual_priority_in_explore = True
         node._motion_gate = MotionGate(required, 0.6)
+        node._link_gate = MotionGate(link_required, 0.6, start_latched=False)
+        node._last_link_cancel_time = 0.0
+        self.cancels = 0
+        node._request_nav2_cancel = self._cancel
         node._last_gate_state = ''
         node._manual_cmd = None
         node._nav_cmd = None
@@ -127,6 +131,12 @@ class _Harness:
         node._gate_state_pub = _Publisher()
         self.nav_cmd = _twist(0.2)
         self.manual_cmd = _twist(0.1)
+
+    def _cancel(self):
+        self.cancels += 1
+
+    def link(self, value=True):
+        self.node._stm32_link_callback(SimpleNamespace(data=value))
 
     def permit(self, value=True):
         self.node._motion_permit_callback(SimpleNamespace(data=value))
@@ -360,3 +370,191 @@ def _run_all():
 
 if __name__ == '__main__':
     sys.exit(1 if _run_all() else 0)
+
+
+# ---- STM32 link latch -------------------------------------------------------
+def _link_harness():
+    h = _Harness(required=False, link_required=True)
+    h.link()
+    return h
+
+
+def _driving(h):
+    h.nav()
+    h.link()
+    return h.tick()
+
+
+def test_link_gate_off_changes_nothing():
+    h = _Harness(required=False)
+    h.nav()
+    assert h.is_motion(h.tick())
+    assert h.cancels == 0
+
+
+def test_nav_passes_while_the_link_is_ok():
+    h = _link_harness()
+    assert h.is_motion(_driving(h))
+    assert h.cancels == 0
+
+
+def test_link_false_while_driving_zeroes_and_cancels():
+    h = _link_harness()
+    _driving(h)
+    h.nav()
+    h.link(False)
+    assert not h.is_motion(h.tick())
+    assert h.node._link_gate.latch_reason is not None
+    assert h.cancels == 1
+
+
+def test_stale_link_topic_latches_like_a_bridge_crash():
+    h = _link_harness()
+    _driving(h)
+    for _ in range(14):                     # 0.7 s of nav with no link topic
+        h.nav()
+        last = h.tick()
+    assert not h.is_motion(last)
+    assert h.node._link_gate.latch_reason is not None
+
+
+def test_returning_link_does_not_release_while_the_goal_is_active():
+    """The core rule: a zero from Nav2 or a healthy link is not a new goal."""
+    h = _link_harness()
+    _driving(h)
+    h.nav()
+    h.link(False)
+    h.tick()
+    h.node._nav2_active_goals = 1
+    for _ in range(40):
+        h.nav()
+        h.link()
+        assert not h.is_motion(h.tick())
+    assert h.node._link_gate.latch_reason is not None
+
+
+def test_silent_nav_with_an_active_goal_stays_latched():
+    h = _link_harness()
+    _driving(h)
+    h.link(False)
+    h.nav()
+    h.tick()
+    h.node._nav2_active_goals = 1
+    for _ in range(30):
+        h.link()
+        h.tick()
+    assert h.node._link_gate.latch_reason is not None
+
+
+def test_cancel_is_retried_while_the_goal_stays_active():
+    h = _link_harness()
+    _driving(h)
+    h.nav()
+    h.link(False)
+    h.tick()
+    h.node._nav2_active_goals = 1
+    for _ in range(41):                     # 2 s
+        h.link(False)
+        h.tick()
+    assert 2 <= h.cancels <= 4
+
+
+def test_latch_clears_only_after_goal_end_link_ok_and_nav_silence():
+    h = _link_harness()
+    _driving(h)
+    h.nav()
+    h.link(False)
+    h.tick()
+    h.node._nav2_active_goals = 0
+    h.tick()
+    assert h.node._link_gate.latch_reason is not None       # link still down
+    for _ in range(12):
+        h.link()
+        h.tick()
+    assert h.node._link_gate.latch_reason is None
+
+
+def test_recent_nav_blocks_the_release_even_with_no_goal_reported():
+    """A status topic that never arrived must not look like an idle Nav2."""
+    h = _link_harness()
+    _driving(h)
+    h.nav()
+    h.link(False)
+    h.tick()
+    assert h.node._nav2_active_goals is None
+    h.nav()
+    h.link()
+    h.tick()
+    assert h.node._link_gate.latch_reason is not None
+
+
+def test_new_goal_after_release_drives():
+    h = _link_harness()
+    _driving(h)
+    h.nav()
+    h.link(False)
+    h.tick()
+    h.node._nav2_active_goals = 0
+    for _ in range(12):
+        h.link()
+        h.tick()
+    assert h.is_motion(_driving(h))
+
+
+def test_no_stale_nav_command_survives_the_latch():
+    h = _link_harness()
+    _driving(h)
+    h.nav()
+    h.link(False)
+    h.tick()
+    assert h.node._nav_cmd is None
+
+
+def test_link_loss_while_parked_does_not_latch_or_cancel():
+    h = _link_harness()
+    for _ in range(20):
+        h.link(False)
+        h.tick()
+    assert h.node._link_gate.latch_reason is None
+    assert h.cancels == 0
+
+
+def test_goal_before_the_link_is_up_latches():
+    h = _Harness(required=False, link_required=True)
+    h.nav()
+    assert not h.is_motion(h.tick())
+    assert h.node._link_gate.latch_reason is not None
+
+
+def test_teleop_is_live_while_link_latched():
+    h = _link_harness()
+    _driving(h)
+    h.nav()
+    h.link(False)
+    h.tick()
+    h.manual()
+    assert h.is_motion(h.tick(), h.manual_cmd)
+
+
+def test_fleet_latch_is_not_cleared_by_the_link_gate():
+    h = _Harness(required=True, link_required=True)
+    h.open()
+    h.link()
+    h.nav()
+    h.permit()
+    assert h.is_motion(h.tick())
+    for _ in range(14):                             # permit expires: fleet latch
+        h.nav()
+        h.link()
+        last = h.tick()
+    assert not h.is_motion(last)
+    assert h.node._motion_gate.latch_reason is not None
+    h.link()
+    h.permit()
+    h.node._nav2_active_goals = 0
+    for _ in range(12):
+        h.link()
+        h.permit()
+        h.tick()
+    assert h.node._motion_gate.latch_reason is not None
+

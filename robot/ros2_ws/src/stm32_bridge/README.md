@@ -269,7 +269,7 @@ ros2 run tf2_tools view_frames
 | `steps_per_rev` | `200.0` | Motor full steps per revolution |
 | `microstep` | `8.0` | HBS57H microstep multiplier |
 | `gear_ratio` | `10.0` | Motor-to-wheel gear ratio |
-| `max_steps_per_sec` | `12000.0` | Expected max step rate for jump warnings |
+| `max_steps_per_sec` | `12000.0` | Firmware STEP rate clamp; a count delta beyond it is treated as an MCU reboot, do not set it below the real clamp |
 | `max_wheel_speed_mm_s` | `250.0` | Peak wheel speed limit for pair scaling, mm/s |
 | `send_rate_hz` | `20.0` | Periodic serial send/read rate |
 | `cmd_timeout` | `0.5` | Send STOP after this many seconds without `/cmd_vel` |
@@ -288,12 +288,44 @@ ros2 run tf2_tools view_frames
 | `imu_orientation_report` | `game_rotation_vector` | Must match firmware `BNO08X_USE_GAME_ROTATION_VECTOR`. `game_rotation_vector`: fixed yaw variance 0.01 (no magnetometer, `yaw_acc` ignored). `rotation_vector`: variance from `yaw_acc` |
 | `imu_stale_timeout` | `1.0` | Seconds without FB `yaw_valid=1` before the bridge warns that the IMU is missing (checked at 1 Hz, so the warning arrives 1-2 s after the last sample) (EKF then uses wheel odometry only) and reports WARN on `/diagnostics` (`<node>: imu`). Recovery is logged with the outage length. Publishing is unchanged |
 | `odom_linear_scale` | `1.0` | Localization V2: multiplies only the **translation** integrated from STEP counts (pose and `twist.linear.x`). Rotation, commands sent to the STM32, `joint_states` and `wheel_radius` are unchanged. Values outside [0.8, 1.2] fall back to 1.0. Set it from a measured straight run (`robot/tools/odom_calibration`); see `robot/docs/localization-v2.md` |
-| `feedback_timeout` | `1.0` | Warn after missing feedback for this many seconds |
+| `feedback_timeout` | `0.4` | Hold the wheels (STOP only) after missing feedback for this many seconds |
+| `ekf_toggle_service` | `toggle` | robot_localization service paused while feedback is missing; empty disables it |
+| `feedback_recovery_time` | `0.5` | After a fault, feedback must stay steady this long before CMD is sent again |
+| `serial_write_stall_timeout` | `1.0` | Close and reopen the port if the kernel refuses output for this many seconds |
 | `feedback_counts_are_cumulative` | `true` | Treat feedback counts as cumulative |
 | `feedback_rate_warn_hz` | `2.0` | Max warning rate for feedback issues |
 | `reset_odom_on_start` | `true` | Use first cumulative sample as zero baseline |
 | `odom_covariance_diagonal` | `[0.01, 0.01, 99999.0, 99999.0, 99999.0, 0.1]` | Pose covariance diagonal |
 | `twist_covariance_diagonal` | `[0.01, 0.0025, 99999.0, 99999.0, 99999.0, 0.1]` | Twist covariance diagonal; `linear.y` encodes the diff-drive `vy=0` constraint |
+
+## Link Supervision
+
+CMD goes out only while the link is `ONLINE` and re-armed; every other state sends
+`STOP`. The state is on `/diagnostics` as `<node>: link`, and the permission is
+published as `stm32_link_ok`. Logic: `stm32_bridge/link_supervisor.py`.
+
+| Event | Wheels | Released when |
+|---|---|---|
+| Feedback gap up to `feedback_timeout` | Unaffected | Not applicable |
+| Longer gap, port lost, serial failure or stall, count jump, bridge start | Held | Feedback steady for `feedback_recovery_time`, then `/cmd_vel` seen stopped or silent for `cmd_timeout` |
+
+There is deliberately no automatic resume after a longer gap: gaps between normal
+jitter and a real outage have never been recorded, and the FB frame cannot prove the
+MCU did not reboot. `feedback_timeout` (0.4 s) is about 3x the worst gap in 201k
+recorded frames (117 ms at 97 % host CPU, without head motion). Re-measure it with the
+head moving before relying on it; raise it if real gaps come close.
+
+A stop command does not end a Nav2 goal: its abort, retry and recovery publish zero
+while the goal lives. So `mode_manager` (`require_stm32_link`) latches the Nav2 branch
+when `stm32_link_ok` goes false or stale while Nav2 is driving, cancels the goal, and
+clears only when the link is back, Nav2 is silent and no goal is active. More motion
+needs a new goal. A fault while parked does not latch. Teleop stays governed by the
+bridge alone: a person releasing the key is real intent.
+
+While feedback is missing the bridge pauses the EKF (`ekf_toggle_service`), which
+otherwise predicts from its last velocity. Odom TF keeps flowing with a frozen pose.
+A port loss or count jump keeps the wheel pose and takes a new count baseline. A yaw
+step above 10 degrees that the wheels cannot explain is removed from `imu/data`.
 
 ## If `/wheel/odom` Does Not Change
 

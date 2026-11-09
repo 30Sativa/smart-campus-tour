@@ -92,7 +92,7 @@ có dốc giảm tốc (giữ nguyên hành vi cũ).
 | `kill -9` bridge, rút cáp USB, host treo | Timeout vòng lặp chính 300 ms | **0.25–0.40 s** |
 | Nav2/teleop ngừng gửi `/cmd_vel`, bridge còn sống | Bridge `cmd_timeout` 0.5 s gửi `STOP` | khoảng 0.50–0.55 s |
 | Vòng lặp chính firmware kẹt | Watchdog trong ngắt 500 ms | **0.45–0.55 s** |
-| Bridge mất FB > 1 s | Safe stop của bridge gửi `STOP` | khoảng 1 s |
+| Bridge mất FB > `feedback_timeout` (0.4 s) | Bridge chỉ gửi `STOP` cho tới khi link phục hồi và lệnh về dừng | khoảng 0.4–0.45 s |
 
 Watchdog trong ngắt chỉ là lưới an toàn cuối: khi vòng lặp chính còn chạy, nó
 không bao giờ kích hoạt trước timeout 300 ms. Nếu vòng lặp chính chậm hơn

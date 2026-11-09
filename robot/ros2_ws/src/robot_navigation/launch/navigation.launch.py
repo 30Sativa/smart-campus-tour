@@ -197,6 +197,10 @@ def generate_launch_description():
             'require_motion_permit', default_value='false',
             description='ADR-0049 motion gate, forwarded to manual_mode.launch.py. '
                         'Must be true whenever fleet_bridge has commands_enabled: true.'),
+        DeclareLaunchArgument(
+            'require_stm32_link', default_value='true',
+            description='Forwarded to manual_mode.launch.py: latch the Nav2 branch on '
+                        'STM32 link loss until that goal has ended.'),
         DeclareLaunchArgument('enable_camera', default_value='false',
                               description='Feed the Astra point cloud into the '
                                           'local costmap. Enable only after the '
@@ -252,6 +256,7 @@ def generate_launch_description():
                 'wheel_radius': wheel_radius,
                 'odom_linear_scale': odom_linear_scale,
                 'require_motion_permit': LaunchConfiguration('require_motion_permit'),
+                'require_stm32_link': LaunchConfiguration('require_stm32_link'),
             }.items(),
         ),
 
