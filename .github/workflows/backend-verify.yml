@@ -14,7 +14,7 @@ concurrency:
 jobs:
   changes:
     name: Detect backend changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: read
@@ -73,7 +73,7 @@ jobs:
     name: Verify backend
     needs: changes
     if: needs.changes.outputs.backend_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -138,7 +138,7 @@ jobs:
     name: Build and smoke-test backend PR images
     if: github.event_name == 'pull_request' && needs.changes.outputs.release_needed == 'true'
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -218,7 +218,7 @@ jobs:
     name: Publish and smoke-test backend candidate images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.release_needed == 'true'
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -364,7 +364,7 @@ jobs:
     name: Finalize verified backend release manifest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.release_needed == 'true'
     needs: [changes, verify, image-main]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
