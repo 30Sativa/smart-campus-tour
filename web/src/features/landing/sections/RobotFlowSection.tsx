@@ -248,7 +248,7 @@ export function RobotFlowSection({ asPage = false }: {
               {mode === '3d' ? (
                 <ViewerBoundary fallback={null}>
                   <Suspense fallback={<p className="lp3-flow__loading">Đang tải mô hình 3D…</p>}>
-                    <RobotFlowViewer step={step} visible={visible} reduced={reduced} />
+                    <RobotFlowViewer step={step} visible={visible} />
                   </Suspense>
                 </ViewerBoundary>
               ) : mode === 'none' ? <p className="lp3-flow__loading">Trình duyệt này không hiển thị được mô hình 3D; sơ đồ bên dưới vẫn cho thấy tín hiệu đi đâu.</p> : null}

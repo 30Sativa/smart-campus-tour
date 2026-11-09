@@ -29,6 +29,13 @@ describe('robot signal flows', () => {
     expect(drive.steps.some(step => step.motion === 'wheels')).toBe(true)
   })
 
+  it('turns the wheels whenever a step talks about them or drives them, and swings the head through the whole head flow', () => {
+    for (const flow of FLOWS) for (const step of flow.steps) {
+      if (/bánh/i.test(step.body) || flow.id === 'drive') expect(step.motion, step.title).toBe('wheels')
+    }
+    expect(FLOWS.find(flow => flow.id === 'head')!.steps.every(step => step.motion === 'head')).toBe(true)
+  })
+
   it('underlines marked words in their signal colour and leaves the rest plain', () => {
     expect(parseBody('[[Mini PC|command]] gửi lệnh tới [[STM32|feedback]].')).toEqual([
       { text: 'Mini PC', kind: 'command' },

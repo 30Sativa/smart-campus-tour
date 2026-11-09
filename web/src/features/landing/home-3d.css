@@ -588,7 +588,13 @@ html[data-theme-wave]::view-transition-new(root) {
 .lp3-flow__legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 8px; color: var(--lp-ink-2); font-size: .78rem; }
 .lp3-flow__legend span { display: inline-flex; align-items: center; gap: 7px; }
 .lp3-flow__legend i { width: 18px; height: 3px; border-radius: 3px; }
-@media (prefers-reduced-motion: reduce) { .lp3-flow__glow, .lp3-flow__spark { animation: none; } .lp3-flow__spark { stroke-dashoffset: 50; } .lp3-flow__spark--core { stroke-dashoffset: 37; } }
+/* The running current is what the diagram explains, so it keeps running when the system
+   asks for reduced motion (the landing sheet otherwise cuts every animation to one frame). */
+@media (prefers-reduced-motion: reduce) {
+  .lp .lp3-flow__glow { animation-duration: 1.6s !important; animation-iteration-count: infinite !important; }
+  .lp .lp3-flow__spark { animation-duration: 1.4s !important; animation-iteration-count: infinite !important; }
+}
+.lp3-flow__axis-label { padding: 2px 8px; border-radius: 999px; background: #0f5b66; color: #fff; font-size: .68rem; font-weight: 750; letter-spacing: .02em; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 10px rgba(8,30,32,.18); }
 
 @media (max-width: 899px) {
   .lp3-flow__grid { grid-template-columns: 1fr; }

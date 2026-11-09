@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { ContactShadows, Grid, Line, OrbitControls, useGLTF } from '@react-three/drei'
+import { ContactShadows, Grid, Html, Line, OrbitControls, useGLTF } from '@react-three/drei'
 import { Box3, Color, Group, Mesh, MeshStandardMaterial, QuadraticBezierCurve3, Vector3 } from 'three'
 import { PART_GROUPS, groupOfNode, type PartGroupId } from './parts'
 import { flowNode, signalColor, stepParts, type FlowLink, type FlowNodeId, type FlowStep } from './flows'
@@ -17,6 +17,14 @@ const CAMERA = { position: [1.95, 1.3, 2.35] as const, target: [0, 0.62, 0] as c
 const HOME_DISTANCE = new Vector3(...CAMERA.position).distanceTo(new Vector3(...CAMERA.target))
 
 type Spinner = { pivot: Group; axis: 'x' | 'y'; group: PartGroupId }
+
+/** The pan-tilt pieces, by node name: the base fixed on the column, and the cradle that tilts with the head. */
+const PAN_BASE = 'pantilt__03'
+const TILT_PIECES = ['pantilt__05']
+/** Height of the tilt shaft, through the middle of the bracket arms (m). */
+const TILT_AXIS_Y = 0.978
+/** How far the head swings while a step is about it (rad): pan ±34°, tilt ±12°. */
+const SWING = { pan: 0.6, tilt: 0.21 }
 
 /** How a node's parts are pinned for a link: one point, one per side (left/right), or one per corner. */
 function anchorMode(id: FlowNodeId): 'centre' | 'sides' | 'corners' {
@@ -59,9 +67,22 @@ function useFlowModel() {
     for (const [group, axis] of [['wheel', 'x'], ['caster', 'x'], ['lidar', 'y']] as const) {
       for (const { mesh, centre } of meshes.get(group) ?? []) spinners.push({ pivot: pivotAt(centre, [mesh]), axis, group })
     }
+    // The pan-tilt head: its base stays on the column; everything above it pans about the
+    // column's vertical axis, and the cradle with the head and headset tilts (nods) about
+    // a sideways axis through the bracket arms.
     const column = meshes.get('column')?.[0]?.centre ?? new Vector3()
-    const headMeshes = (['pantilt', 'head', 'quest'] as const).flatMap(group => (meshes.get(group) ?? []).map(item => item.mesh))
-    const head = pivotAt(new Vector3(column.x, 0, column.z), headMeshes)
+    const pantilt = meshes.get('pantilt') ?? []
+    const tilting = [
+      ...pantilt.filter(item => TILT_PIECES.includes(item.mesh.name)),
+      ...(['head', 'quest'] as const).flatMap(group => meshes.get(group) ?? []),
+    ].map(item => item.mesh)
+    const panning = pantilt.filter(item => item.mesh.name !== PAN_BASE && !TILT_PIECES.includes(item.mesh.name)).map(item => item.mesh)
+    const panCentre = new Vector3(column.x, 0, column.z)
+    const tiltCentre = new Vector3(column.x, TILT_AXIS_Y, column.z)
+    const head = pivotAt(panCentre, panning)
+    const tilt = pivotAt(tiltCentre, tilting)
+    head.add(tilt)
+    tilt.position.sub(panCentre)
 
     const anchors = (id: FlowNodeId): Vector3[] => {
       if (id === 'cloud') return [CLOUD]
@@ -74,7 +95,12 @@ function useFlowModel() {
       }
       return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, points]) => points.reduce((sum, p) => sum.add(p), new Vector3()).divideScalar(points.length))
     }
-    return { root, materials, spinners, head, anchors }
+    /** Height of the middle of a group's parts, as built. */
+    const heightOf = (group: PartGroupId) => {
+      const items = meshes.get(group) ?? []
+      return items.length ? items.reduce((sum, item) => sum + item.centre.y, 0) / items.length : null
+    }
+    return { root, materials, spinners, head, tilt, panCentre, tiltCentre, anchors, heightOf }
   }, [scene])
 }
 
@@ -119,14 +145,73 @@ function styleModel(model: FlowModel, step: FlowStep | null) {
   }
 }
 
-/** Spins the wheels or the LiDAR, or pans the head, when the step is about them; the head eases back otherwise. */
+/** Spins the wheels or the LiDAR, or swings the head on both of its axes, when the step is about them; the head eases back otherwise. */
 function moveParts(model: FlowModel, motion: FlowStep['motion'], delta: number, time: number) {
   for (const spinner of model.spinners) {
     const turning = (motion === 'wheels' && spinner.group !== 'lidar') || (motion === 'lidar' && spinner.group === 'lidar')
     if (turning) spinner.pivot.rotation[spinner.axis] += delta * (spinner.group === 'lidar' ? 5 : 3.2)
   }
-  const pan = motion === 'head' ? Math.sin(time * 0.9) * 0.5 : 0
-  model.head.rotation.y += (pan - model.head.rotation.y) * Math.min(1, delta * 4)
+  const swinging = motion === 'head'
+  const pan = swinging ? Math.sin(time * 0.9) * SWING.pan : 0
+  const tilt = swinging ? Math.sin(time * 1.5 + 0.8) * SWING.tilt : 0
+  const ease = Math.min(1, delta * 4)
+  model.head.rotation.y += (pan - model.head.rotation.y) * ease
+  model.tilt.rotation.x += (tilt - model.tilt.rotation.x) * ease
+}
+
+/** Keeps the tilt-axis marker on the tilt shaft as the head pans, and turns each axis's arrow ring with its motor. */
+function followAxes(model: FlowModel, tiltAxis: Group | null, panRing: Group | null, tiltRing: Group | null) {
+  if (tiltAxis) tiltAxis.rotation.y = model.head.rotation.y
+  if (panRing) panRing.rotation.y = model.head.rotation.y
+  if (tiltRing) tiltRing.rotation.x = model.tilt.rotation.x
+}
+
+/** Axis markers are drawn in the see-through pass after the parts (which are all transparent materials), so they stay on top. */
+const AXIS_COLOUR = '#0f5b66'
+
+/** A ring of arrow heads round an axis, showing which way the motor turns it. */
+function TurnRing({ radius, axis }: { radius: number; axis: 'x' | 'y' }) {
+  const turn = axis === 'y' ? [Math.PI / 2, 0, 0] as const : [0, Math.PI / 2, 0] as const
+  return (
+    <group rotation={turn}>
+      <mesh renderOrder={20}>
+        <torusGeometry args={[radius, 0.0035, 8, 64, Math.PI * 1.6]} />
+        <meshBasicMaterial color={AXIS_COLOUR} transparent opacity={0.85} depthTest={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[radius, 0, 0]} rotation={[0, 0, 0]} renderOrder={20}>
+        <coneGeometry args={[0.012, 0.03, 12]} />
+        <meshBasicMaterial color={AXIS_COLOUR} transparent depthTest={false} toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
+/**
+ * The two motor shafts of the pan-tilt head, drawn as axes through the head:
+ * the pan axis stands up the column, the tilt axis runs sideways through the
+ * bracket arms and turns with the pan. Each carries a ring turning with its
+ * motor and a label.
+ */
+function PanTiltAxes({ model }: { model: FlowModel }) {
+  const tiltAxis = useRef<Group>(null)
+  const panRing = useRef<Group>(null)
+  const tiltRing = useRef<Group>(null)
+  useFrame(() => followAxes(model, tiltAxis.current, panRing.current, tiltRing.current))
+  const { panCentre, tiltCentre } = model
+  return (
+    <>
+      <group position={[panCentre.x, 0, panCentre.z]}>
+        <Line points={[[0, 0.83, 0], [0, 1.42, 0]]} color={AXIS_COLOUR} lineWidth={2.2} dashed dashSize={0.024} gapSize={0.012} transparent opacity={0.95} depthTest={false} toneMapped={false} renderOrder={19} />
+        <group ref={panRing} position={[0, 0.925, 0]}><TurnRing radius={0.105} axis="y" /></group>
+        <Html position={[0, 1.44, 0]} center zIndexRange={[5, 0]} className="lp3-flow__axis-label">Trục pan</Html>
+      </group>
+      <group ref={tiltAxis} position={[tiltCentre.x, tiltCentre.y, tiltCentre.z]}>
+        <Line points={[[-0.17, 0, 0], [0.17, 0, 0]]} color={AXIS_COLOUR} lineWidth={2.2} dashed dashSize={0.024} gapSize={0.012} transparent opacity={0.95} depthTest={false} toneMapped={false} renderOrder={19} />
+        <group ref={tiltRing} position={[0.12, 0, 0]}><TurnRing radius={0.05} axis="x" /></group>
+        <Html position={[0.25, 0, 0]} center zIndexRange={[5, 0]} className="lp3-flow__axis-label">Trục tilt</Html>
+      </group>
+    </>
+  )
 }
 
 /** How the current is drawn: pulses every PERIOD metres along a path, running at SPEED metres a second. */
@@ -163,16 +248,16 @@ function breathe(halo: Mesh | null, time: number) {
  * colour, and sparks of current with fading tails running along it from the
  * sender to the receiver.
  */
-function SignalPath({ curve, color, reduced }: { curve: QuadraticBezierCurve3; color: string; reduced: boolean }) {
+function SignalPath({ curve, color }: { curve: QuadraticBezierCurve3; color: string }) {
   const points = useMemo(() => curve.getPoints(64), [curve])
   const wire = useMemo(() => new Color(color).lerp(new Color('#ffffff'), 0.5), [color])
   const layers = useRef<(Dashed | null)[]>([])
   const halo = useRef<Mesh>(null)
   const travelled = useRef(0)
   useFrame((state, delta) => {
-    if (!reduced) travelled.current += delta * CURRENT.speed
+    travelled.current += delta * CURRENT.speed
     runCurrent(layers.current, travelled.current)
-    if (!reduced) breathe(halo.current, state.clock.elapsedTime)
+    breathe(halo.current, state.clock.elapsedTime)
   })
   return (
     <group>
@@ -211,21 +296,38 @@ function SignalPath({ curve, color, reduced }: { curve: QuadraticBezierCurve3; c
   )
 }
 
-/** Keeps the camera at its usual distance times the zoom factor, easing there. */
-function ZoomRig({ zoom }: { zoom: number }) {
+/** Shifts the camera and what it looks at together, easing `target` towards `goal` by `blend`. */
+function slideTo(position: Vector3, target: Vector3, goal: Vector3, blend: number, scratch: Vector3) {
+  scratch.subVectors(goal, target).multiplyScalar(blend)
+  target.add(scratch)
+  position.add(scratch)
+}
+
+/** Where the camera looks for a step: up the column, halfway towards the middle of the parts that work in it. */
+function stepFocus(model: FlowModel, step: FlowStep | null) {
+  const heights = (step ? stepParts(step) : []).map(model.heightOf).filter((height): height is number => height !== null)
+  const middle = heights.length ? heights.reduce((sum, height) => sum + height, 0) / heights.length : CAMERA.target[1]
+  return new Vector3(CAMERA.target[0], CAMERA.target[1] + (middle - CAMERA.target[1]) * 0.55, CAMERA.target[2])
+}
+
+/** Keeps the camera on the step's parts, at its usual distance times the zoom factor, easing there. */
+function ZoomRig({ zoom, focus }: { zoom: number; focus: Vector3 }) {
   const controls = useThree(state => state.controls) as unknown as { target: Vector3; update: () => void } | null
   const camera = useThree(state => state.camera)
   const scratch = useMemo(() => new Vector3(), [])
   useFrame((_, delta) => {
     if (!controls) return
-    dollyTo(camera.position, controls.target, HOME_DISTANCE * zoom, 1 - Math.exp(-6 * delta), scratch)
+    const blend = 1 - Math.exp(-4 * delta)
+    slideTo(camera.position, controls.target, focus, blend, scratch)
+    dollyTo(camera.position, controls.target, HOME_DISTANCE * zoom, blend, scratch)
     controls.update()
   })
   return null
 }
 
-function Robot({ step, reduced }: { step: FlowStep | null; reduced: boolean }) {
+function Robot({ step, zoom }: { step: FlowStep | null; zoom: number }) {
   const model = useFlowModel()
+  const focus = useMemo(() => stepFocus(model, step), [model, step])
   const styled = useRef<FlowStep | null | undefined>(undefined)
   const curves = useMemo(
     () => (step?.links ?? []).flatMap((link, index) => linkCurves(model, link).map((curve, part) => ({ key: `${index}-${part}`, curve, color: signalColor(link.kind) }))),
@@ -236,12 +338,14 @@ function Robot({ step, reduced }: { step: FlowStep | null; reduced: boolean }) {
       styled.current = step
       styleModel(model, step)
     }
-    moveParts(model, reduced ? undefined : step?.motion, delta, state.clock.elapsedTime)
+    moveParts(model, step?.motion, delta, state.clock.elapsedTime)
   })
   return (
     <>
       <primitive object={model.root} />
-      {curves.map(item => <SignalPath key={item.key} curve={item.curve} color={item.color} reduced={reduced} />)}
+      {curves.map(item => <SignalPath key={item.key} curve={item.curve} color={item.color} />)}
+      {step?.motion === 'head' && <PanTiltAxes model={model} />}
+      <ZoomRig zoom={zoom} focus={focus} />
     </>
   )
 }
@@ -249,10 +353,12 @@ function Robot({ step, reduced }: { step: FlowStep | null; reduced: boolean }) {
 /**
  * The robot seen through its casing, with one step of a signal flow drawn
  * on it: the parts that work in the step light up, each link runs as a
- * coloured path with packets travelling along it, and the wheels, the LiDAR
- * or the head move when the step is about them.
+ * coloured path with current running along it, and the wheels, the LiDAR
+ * or the pan-tilt head (with its two motor axes drawn) move when the step is
+ * about them. Signals and moving parts are what this view explains, so they
+ * keep moving even when the system asks for reduced motion.
  */
-export default function RobotFlowViewer({ step, visible = true, reduced = false }: { step: FlowStep | null; visible?: boolean; reduced?: boolean }) {
+export default function RobotFlowViewer({ step, visible = true }: { step: FlowStep | null; visible?: boolean }) {
   const colour = useMemo(() => new Color('#ffffff'), [])
   const stage = useRef<HTMLDivElement>(null)
   const zoom = useZoom(stage)
@@ -262,11 +368,10 @@ export default function RobotFlowViewer({ step, visible = true, reduced = false 
         <hemisphereLight args={[colour, '#8a9aa4', 1.3]} />
         <directionalLight position={[2.5, 4, 3]} intensity={2} castShadow shadow-mapSize={[1024, 1024]} />
         <directionalLight position={[-3, 2, -2]} intensity={0.7} />
-        <Robot step={step} reduced={reduced} />
+        <Robot step={step} zoom={zoom.level} />
         <Grid position={[0, -0.001, 0]} args={[10, 10]} cellSize={0.1} cellThickness={0.6} cellColor="#9fb0b8" sectionSize={0.5} sectionThickness={1} sectionColor="#7d939d" fadeDistance={6} fadeStrength={2.2} infiniteGrid />
         <ContactShadows position={[0, 0, 0]} opacity={0.3} scale={2.4} blur={2.4} far={1.2} />
         <OrbitControls makeDefault target={[...CAMERA.target]} enablePan={false} enableZoom={false} minPolarAngle={Math.PI * 0.2} maxPolarAngle={Math.PI * 0.49} />
-        <ZoomRig zoom={zoom.level} />
       </Canvas>
       <ZoomControls level={zoom.level} onIn={zoom.zoomIn} onOut={zoom.zoomOut} onReset={zoom.reset} />
     </div>
