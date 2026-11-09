@@ -71,6 +71,8 @@ public partial class Tour
 
     public int Capacity { get; set; }
 
+    public bool IsShortNotice { get; set; }
+
     public virtual Route ActiveRoute { get; set; } = null!;
 
     public virtual Robot? AssignedRobot { get; set; }

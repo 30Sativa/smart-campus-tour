@@ -204,7 +204,8 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
 
     public async Task<IReadOnlyList<PoiProposal>> ListProposalsAsync(Guid? mapVersionId, CancellationToken cancellationToken)
     {
-        var query = dbContext.PoiProposals.AsNoTracking().AsQueryable();
+        // Discarded proposals (ADR-0051) stay readable by id and history, but leave every working list.
+        var query = dbContext.PoiProposals.AsNoTracking().Where(proposal => proposal.DiscardedAt == null);
         if (mapVersionId.HasValue)
             query = query.Where(proposal => dbContext.PoiProposalRevisions.Any(revision =>
                 revision.ProposalId == proposal.Id && revision.RevisionNumber == proposal.CurrentRevision &&
@@ -229,6 +230,7 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
             .Include(revision => revision.MapVersion).ThenInclude(map => map.AreaKeyNavigation)
             .Include(revision => revision.PoiProposalSubmission)
             .Where(revision => revision.RevisionNumber == revision.Proposal.CurrentRevision &&
+                               revision.Proposal.DiscardedAt == null &&
                                dbContext.PoiProposalSubmissions.Any(submission => submission.ProposalRevisionId == revision.Id) &&
                                !dbContext.PoiVerificationRecords.Any(verification => verification.ProposalRevisionId == revision.Id) &&
                                !dbContext.PoiVerificationRecords

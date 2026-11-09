@@ -1,5 +1,9 @@
 # CampusTour database snapshots
 
+## v1.20 Staff discard of a never-passed POI (ADR-0051)
+
+`smart-campus-tour-schema-v1.20.sql` adds nullable `PoiProposals.DiscardedAt` and `DiscardedByUserId`, `FK_PoiProposals_DiscardedByUserId` and `CK_PoiProposals_Discard_Complete` (both set or both null). `patches/upgrade-v1.19-to-v1.20-poi-discard.sql` applies them to a v1.19 database, changes no row and is rerunnable. Runtime gets column UPDATE on the two new columns through `smart-campus-tour-runtime-permissions.sql`, never DELETE; the check-only gate refuses a runtime without that grant or with table-wide UPDATE/DELETE on `PoiProposals`. The v1.19 snapshot and its patch stay immutable. EF entities gained the two properties and the `DiscardedByUser` navigation by hand in scaffold form; re-scaffold against a v1.20 database to confirm.
+
 ## v1.15 Terminal command outcomes (ADR-0044)
 
 `smart-campus-tour-schema-v1.15.sql` requires a non-NULL, matching `Outcome` for ARRIVED, FAILED and CANCELLED commands. The v1.14 snapshot and its patch stay immutable. `patches/upgrade-v1.14-to-v1.15-command-outcome.sql` transactionally replaces only the outcome CHECK and advances the version marker. It preserves command rows and the original bootstrap hash, and stops with invalid command IDs if existing history has missing or mismatched outcomes. It never fills these values automatically. Use the backed-up Database Schema Upgrade workflow before deploying this release; read-only checks require v1.15 and the trusted NULL guard. Runtime grants and EF entities are unchanged.

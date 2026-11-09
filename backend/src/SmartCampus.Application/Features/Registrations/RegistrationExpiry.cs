@@ -6,6 +6,6 @@ public static class RegistrationExpiry
     public const string Reason = "Hết hạn duyệt trước giờ tham quan 24 giờ.";
     public const string AuditAction = "REGISTRATION_EXPIRED";
 
-    public static bool IsReviewClosed(DateTimeOffset scheduledStartAt, DateTimeOffset now) =>
-        now >= scheduledStartAt - Tours.TourSchedule.PendingDecisionClose;
+    public static bool IsReviewClosed(DateTimeOffset scheduledStartAt, DateTimeOffset now, bool isShortNotice) =>
+        now >= Tours.TourSchedule.ReviewClosesAt(scheduledStartAt, isShortNotice);
 }

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { FileText, Maximize2, MapPinOff, Pencil, Plus, Send } from 'lucide-react'
+import { FileText, Maximize2, MapPinOff, Pencil, Plus, Send, Trash2 } from 'lucide-react'
 import { SearchField } from '../../../components/ui/ConsolePrimitives'
+import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
-import { useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
+import { useDiscardPoiProposal, useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
+import { errorText } from '../../../features/technical/technical-format'
 import type { MapVersionItem, PoiProposal } from '../../../features/technical/api/technical'
 import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { staffMapLabels } from '../../../features/administration/map-labels'
@@ -174,9 +176,27 @@ function PoiDetail({ proposal }: { proposal: PoiProposal }) {
         {facts.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-[#718096]">{label}</dt><dd className="truncate font-semibold text-[#2d3748]">{value}</dd></div>)}
       </dl>
       <p className={`rounded-xl px-3.5 py-2.5 text-[13px] ${tone}`}>{next.text}</p>
-      <Link to={`/staff/manage/pois/${proposal.id}`} className={buttonClass('primary', 'sm')}><next.icon size={14} aria-hidden="true" />{next.action}</Link>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link to={`/staff/manage/pois/${proposal.id}`} className={buttonClass('primary', 'sm')}><next.icon size={14} aria-hidden="true" />{next.action}</Link>
+        {/* The server decides: a POI that ever passed may back a route and is never offered here. */}
+        {proposal.canDiscard && <DiscardPoi proposal={proposal} />}
+      </div>
     </section>
   )
+}
+
+/** Removes a never-passed POI from the list after a confirmation; a refusal stays in the dialog. */
+function DiscardPoi({ proposal }: { proposal: PoiProposal }) {
+  const [open, setOpen] = useState(false)
+  const discard = useDiscardPoiProposal()
+  const close = () => { setOpen(false); discard.reset() }
+  return <>
+    <button type="button" onClick={() => setOpen(true)} className={`${buttonClass('secondary', 'sm')} text-[#a4473d]`}><Trash2 size={14} aria-hidden="true" />Xoá điểm</button>
+    <ConfirmationDialog open={open} tone="danger" withReason={false} title={`Xoá ${proposal.revision.name}?`} confirmLabel="Xoá điểm" busyLabel="Đang xoá…"
+      busy={discard.isPending} error={discard.error ? errorText(discard.error) : null} onCancel={close}
+      onConfirm={() => discard.mutate(proposal, { onSuccess: () => setOpen(false) })}
+      description="Điểm sẽ không còn trong danh sách và hàng chờ kiểm chứng, không thể sửa hay gửi lại. Lịch sử chỉnh sửa và kiểm chứng vẫn được lưu. Điểm này chưa từng đạt nên không tuyến nào đang dùng." />
+  </>
 }
 
 /** No map has passed its technical check yet, so there is nowhere to place a POI. */

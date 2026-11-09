@@ -30,8 +30,10 @@ public sealed record PoiRevisionView(
     string? NarrationText, string? FallbackVideoUrl,
     Guid? VerificationSourceRevisionId, string? VerificationMethod = null);
 
+/// <summary>CanDiscard: no revision of this proposal ever passed verification (ADR-0051).</summary>
 public sealed record PoiProposalView(Guid Id, int CurrentRevision, string RowVersion, DateTimeOffset CreatedAt,
-    DateTimeOffset? UpdatedAt, PoiRevisionView Revision, string? SourcePoiId = null);
+    DateTimeOffset? UpdatedAt, PoiRevisionView Revision, string? SourcePoiId = null,
+    bool CanDiscard = false, DateTimeOffset? DiscardedAt = null);
 
 public sealed record PoiVerificationView(
     Guid Id, Guid ProposalId, Guid ProposalRevisionId, int RevisionNumber, Guid MapVersionId,

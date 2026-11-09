@@ -22,6 +22,8 @@ public sealed class ListPoiProposalsQueryHandler(IPoiProposalRepository proposal
                 .OrderByDescending(record => record.ProposalRevision.RevisionNumber)
                 .ThenByDescending(record => record.CheckedAt).ThenByDescending(record => record.Id).First());
         var revisionByProposal = revisions.ToDictionary(revision => revision.ProposalId);
+        var passedProposals = verifications.Where(record => !PoiProposalRules.CanDiscard([record]))
+            .Select(record => record.ProposalRevision.ProposalId).ToHashSet();
         var result = new List<PoiProposalView>(proposals.Count);
         foreach (var proposal in proposals)
         {
@@ -31,7 +33,8 @@ public sealed class ListPoiProposalsQueryHandler(IPoiProposalRepository proposal
             var submission = revision.PoiProposalSubmission;
             var view = PoiProposalReadModelLoader.ToRevisionView(revision, submission, verification);
             result.Add(new(proposal.Id, proposal.CurrentRevision, Convert.ToBase64String(proposal.RowVersion),
-                proposal.CreatedAt, proposal.UpdatedAt, view, proposal.SourcePoiId));
+                proposal.CreatedAt, proposal.UpdatedAt, view, proposal.SourcePoiId,
+                proposal.DiscardedAt is null && !passedProposals.Contains(proposal.Id), proposal.DiscardedAt));
         }
         return result;
     }

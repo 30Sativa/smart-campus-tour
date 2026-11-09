@@ -17,7 +17,7 @@ public sealed class GetRepresentativeRegistrationQueryHandler(IRepresentativeRep
         // The same policy the commands enforce, projected for the client.
         ActionGate Gate(RegistrationOperation operation) => RepresentativeRegistrationPolicy
             .Evaluate(read.Summary.TourState, read.Summary.State, read.HasInvitations, operation,
-                RegistrationExpiry.IsReviewClosed(read.Summary.TourScheduledStartAt, now)).ToActionGate();
+                RegistrationExpiry.IsReviewClosed(read.Summary.TourScheduledStartAt, now, read.Summary.TourIsShortNotice)).ToActionGate();
         return new(read.Summary, read.ContactName, read.ContactEmail, RowVersionToken.Encode(read.RowVersion),
             RowVersionToken.Encode(read.TourRowVersion), read.RejectionReason, read.ReviewedAt, read.Roster,
             new RegistrationActions(Gate(RegistrationOperation.Update), Gate(RegistrationOperation.Resubmit),

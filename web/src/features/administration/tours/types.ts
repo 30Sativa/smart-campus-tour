@@ -9,6 +9,8 @@ export type TourInput = {
 export type CreateTourInput = {
   name: string; description: string | null; routeRevisionId: string; robotCode: string
   operatorUserId: string; scheduledStartAt: string; fallbackVideoUrl: string | null; capacity: number
+  /** Set only for a short-notice Tour (ADR-0050). */
+  shortNoticeReason?: string | null
 }
 export type TourOperator = { userId: string; fullName: string; username: string }
 export type TourRobotOption = { robotCode: string; displayName: string | null; usable: boolean; blockReason: string | null }
@@ -18,6 +20,8 @@ export type TourSummary = {
   scheduledStartAt: string; state: TourState; createdByUserId: string; createdAt: string; updatedAt: string | null
   /** When registration closes, from a server that sends it. Absent otherwise: see `registrationClosesAtOf`. */
   registrationClosesAt?: string | null
+  /** Staff closes the list of this Tour with READY; there is no 72/48/24-hour schedule (ADR-0050). */
+  isShortNotice?: boolean
   rowVersion: string; registrationCount: number; invitationCount: number; routeRevisionId: string | null
   /** Seats of the Tour and the rows holding one (BR-26). An older server omits them. */
   capacity?: number; heldSeats?: number
@@ -83,7 +87,8 @@ export type TourAllowedActions = {
 }
 export type TourStartCheck = { id: string; passed: boolean; source: string; detail: string }
 /** `canStart` belongs to the caller: false for any Staff who is not the Tour's Operator. */
-export type TourStartChecks = { checks: TourStartCheck[]; canStart: boolean; blockedBy: string[] }
+/** `opensAt` is the first instant the server accepts Start, which may be before the published time (ADR-0050). */
+export type TourStartChecks = { checks: TourStartCheck[]; canStart: boolean; blockedBy: string[]; opensAt?: string | null }
 /** The four on-site confirmations of a Start request (SRS §7). */
 export type StartConfirmation = { robotPlaced: boolean; areaClear: boolean; attendantPresent: boolean; previewChecked: boolean }
 export type TourPhase = 'UPCOMING' | 'RUNNING' | 'FINISHED'
@@ -107,6 +112,8 @@ export type TourSlots = {
   days: { date: string; slots: TourSlot[] }[]
   recommendedMaxSeconds: number
   maxCapacity?: number
+  /** The least notice of a short-notice Tour; null or absent while the option is off (ADR-0050). */
+  shortNoticeMinLeadMinutes?: number | null
 }
 /** A configured shift on one day, for the calendar before a route or robot is chosen. */
 export type TourShift = { code: string; name: string; startsAt: string; endsAt: string; tourStartsAt: string; time: string; maxDurationSeconds: number; block: TourShiftBlock | null }

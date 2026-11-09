@@ -77,6 +77,7 @@ public sealed class InfrastructureDependencyInjectionTests
         Assert.False(settings.Enabled);
         Assert.Equal(TimeSpan.FromSeconds(2), settings.MaxTelemetryAge);
         Assert.Equal(TimeSpan.FromMinutes(15), settings.StartLateLimit);
+        Assert.Equal(TimeSpan.FromMinutes(10), settings.StartEarlyLimit); // ADR-0050
         Assert.Equal(TimeSpan.FromSeconds(30), settings.AcceptWindow);
         // No per-user console tracking yet: presence is unknown, never connected.
         Assert.Null(provider.GetRequiredService<IOperatorConsolePresence>().IsConnected(Guid.NewGuid()));
@@ -85,5 +86,24 @@ public sealed class InfrastructureDependencyInjectionTests
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<SmartCampus.Application.Features.Infrastructure.IInfrastructureMetricsCollector>());
         Assert.NotNull(provider.GetRequiredService<SmartCampus.Application.Features.RobotDiagnostics.IRobotDiagnosticsStore>());
+    }
+
+    [Theory]
+    [InlineData(null, null)]   // Unset: the option is off (ADR-0050).
+    [InlineData("60", 60)]
+    public void AddInfrastructure_ReadsTheShortNoticeOption(string? configured, int? minutes)
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:DefaultConnection"] = "Server=localhost,1433;Database=SmartCampusTests;Trusted_Connection=True;",
+            ["Tours:Shifts:0:Code"] = "S1", ["Tours:Shifts:0:Name"] = "Ca sáng",
+            ["Tours:Shifts:0:Start"] = "08:00", ["Tours:Shifts:0:End"] = "10:00",
+            ["Tours:ShortNoticeMinLeadMinutes"] = configured
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+        using var provider = new ServiceCollection().AddInfrastructure(configuration).BuildServiceProvider();
+
+        var settings = provider.GetRequiredService<SmartCampus.Application.Features.Tours.TourScheduleSettings>();
+        Assert.Equal(minutes is { } value ? TimeSpan.FromMinutes(value) : null, settings.ShortNoticeMinLead);
     }
 }

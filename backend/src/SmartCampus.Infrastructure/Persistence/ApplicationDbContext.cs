@@ -444,6 +444,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(32)
                 .IsFixedLength();
             entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.DiscardedAt).HasPrecision(3);
             entity.Property(e => e.RowVersion)
                 .IsRowVersion()
                 .IsConcurrencyToken();
@@ -455,10 +456,14 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.SourceAreaKey)
                 .HasConstraintName("FK_PoiProposals_SourceAreaKey");
 
-            entity.HasOne(d => d.CreatedByUser).WithMany(p => p.PoiProposals)
+            entity.HasOne(d => d.CreatedByUser).WithMany(p => p.PoiProposalCreatedByUsers)
                 .HasForeignKey(d => d.CreatedByUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_PoiProposals_CreatedByUserId");
+
+            entity.HasOne(d => d.DiscardedByUser).WithMany(p => p.PoiProposalDiscardedByUsers)
+                .HasForeignKey(d => d.DiscardedByUserId)
+                .HasConstraintName("FK_PoiProposals_DiscardedByUserId");
         });
 
         modelBuilder.Entity<PoiProposalRevision>(entity =>

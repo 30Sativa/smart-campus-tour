@@ -135,6 +135,9 @@ a fixed shift (`docs/lich-tour-theo-ca.md`), at least
 72 hours ahead; registration still closes 48 hours
 before the start (ADR-0035). Time, route
 and robot changes on a created Tour mean cancelling and recreating it.
+ADR-0050 adds owner-accepted exceptions: Start up to 10 minutes before the published
+time when every accepted viewer is in the waiting room, and short-notice Tours that
+replace only the 72/48/24-hour marks.
 Start is requested while READY at/after published time, validates all guards,
 claims the robot atomically, commits the permitted transition, then sends the
 first leg. Deduplicate repeated Start/commands and record actor/time/reason.

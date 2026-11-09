@@ -120,6 +120,23 @@ public sealed class TourRuntimeTests
     }
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(10)]
+    [InlineData(15)]  // The reservation buffer: an early run still starts inside the Tour's own robot hold.
+    public void StartEarlyLimit_AcceptsUpToTheReservationBuffer(int minutes) =>
+        Assert.Equal(TimeSpan.FromMinutes(minutes), new FleetCommandSettings(startEarlyLimitMinutes: minutes).StartEarlyLimit);
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(16)]
+    public void StartEarlyLimit_RefusesNegativeOrBeyondTheReservationBuffer(int minutes) =>
+        Assert.Throws<InvalidOperationException>(() => new FleetCommandSettings(startEarlyLimitMinutes: minutes));
+
+    [Fact]
+    public void StartEarlyLimit_DefaultsToTenMinutes() =>
+        Assert.Equal(TimeSpan.FromMinutes(10), new FleetCommandSettings().StartEarlyLimit);
+
+    [Theory]
     [InlineData("ACCEPTED", null, null, true)]
     [InlineData("REJECTED", null, "MAP_MISMATCH", true)]
     [InlineData("TERMINAL", "ARRIVED", null, true)]

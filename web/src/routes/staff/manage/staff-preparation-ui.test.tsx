@@ -19,6 +19,8 @@ const clients: QueryClient[] = []
 const requests: URL[] = []
 let failRegistrations = false
 let packageFailure: Response | null = null
+let discardResponse: Response | null = null
+const discardBodies: unknown[] = []
 /** An uploaded package: 10x20 cells of 0.5m with the map origin at (-1, -2). */
 const packageZip = (width: number) => zipSync({
   'map.yaml': strToU8('image: map.pgm\nmode: trinary\nresolution: 0.5\norigin: [-1, -2, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.25\n'),
@@ -43,9 +45,16 @@ function show(element: React.ReactNode, path = '/staff/manage') {
 }
 beforeEach(() => {
   requests.length = 0; failRegistrations = false; packageFailure = null; proposals = standardProposals; mapVersions = standardMaps
+  discardResponse = null; discardBodies.length = 0
   useAuthStore.getState().setAuth('test-token', { userId: 'staff-ui', username: 'staff', role: 'Staff' })
-  vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+  vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
+    if (url.pathname.endsWith('/discard')) {
+      discardBodies.push(JSON.parse(String(init?.body)))
+      if (discardResponse) return discardResponse
+      proposals = proposals.filter(item => !url.pathname.includes(item.id))
+      return respond({ ...standardProposals[0], discardedAt: '2026-11-09T05:00:00Z', canDiscard: false })
+    }
     if (url.pathname === '/api/staff/poi-proposals') return respond(proposals)
     if (url.pathname === '/api/maps/versions') return respond(mapVersions)
     if (url.pathname === '/api/maps/versions/map-old') return respond(mapVersion('map-old', 'retired-v1', []))
@@ -256,6 +265,34 @@ describe('staff preparation UI', () => {
     expect(within(chosen).getAllByRole('link')).toHaveLength(1)
     expect(within(chosen).getByRole('link', { name: 'Mở để gửi kiểm chứng' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
     expect(screen.queryByText('test123-v1', { selector: 'span' })).not.toBeInTheDocument()
+  })
+
+  it('offers to remove only a POI the server says never passed, and removes it after confirmation', async () => {
+    const draft = proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A')
+    proposals = [{ ...draft, canDiscard: true, rowVersion: 'rv-a', revision: { ...draft.revision, isSubmitted: true, navigationStatus: 'NOT_TESTED' } } as PoiProposal,
+      { ...proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C'), canDiscard: false }]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
+    fireEvent.click(within(chosen).getByRole('button', { name: 'Xoá điểm' }))
+    const dialog = screen.getByRole('dialog', { name: 'Xoá Điểm A?' })
+    expect(dialog).toHaveTextContent('Lịch sử chỉnh sửa và kiểm chứng vẫn được lưu.')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Xoá điểm' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(discardBodies).toEqual([{ expectedRevisionNumber: 1, expectedRowVersion: 'rv-a' }])
+    expect(await screen.findByRole('button', { name: 'Chọn Điểm C' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Chọn Điểm A' })).not.toBeInTheDocument())
+    expect(within(screen.getByRole('region', { name: 'Điểm đang chọn' })).queryByRole('button', { name: 'Xoá điểm' })).not.toBeInTheDocument()
+  })
+
+  it('keeps a refused removal in the dialog with the server reason', async () => {
+    const draft = proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A')
+    proposals = [{ ...draft, canDiscard: true } as PoiProposal]
+    discardResponse = new Response(JSON.stringify({ success: false, message: 'POI đã từng đạt kiểm chứng nên không thể xoá.' }), { status: 409 })
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Điểm đang chọn' })).getByRole('button', { name: 'Xoá điểm' }))
+    const dialog = screen.getByRole('dialog', { name: 'Xoá Điểm A?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Xoá điểm' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('POI đã từng đạt kiểm chứng nên không thể xoá.')
   })
 
   it('filters POIs to the maps a robot is running, and shows every POI by default', async () => {

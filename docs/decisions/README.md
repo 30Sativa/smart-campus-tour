@@ -88,7 +88,9 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0046](0046-admin-account-password-reset.md) | Admin resets a managed account's password; Admin targets refused, refresh tokens revoked, audited; username and role stay immutable | proposed 2026-11-06, pending owner approval, not implemented |
 | [0048](0048-tour-capacity-operator-change-and-t24-expiry.md) | Tour capacity (schema v1.18), Staff changes the Operator before Start, Admin cannot deactivate an account still in use, T-24h expiry of undecided items, and the invitation code guard | accepted 2026-11-08 by the owner, implemented |
 | [0047](0047-system-auto-cancel-of-unstarted-tours.md) | The system cancels a SCHEDULED/READY Tour whose robot hold ended without a Start; schema v1.17 lets the system release a reservation with no user | accepted 2026-11-08 by the owner (schema option), implemented |
+| [0050](0050-early-start-and-short-notice-tours.md) | Start up to 10 minutes early inside the shift when every viewer is in the waiting room; short-notice Tours (schema v1.19) replace only the 72/48/24-hour marks | accepted 2026-11-09 by the owner, implemented |
 | [0049](0049-m2-3-robot-local-safety.md) | M2.3 robot-local safety: motion permit and latched gate in `mode_manager`, real `localized`/`motionReady`, map content check, one goal sender, GATE A checklist | accepted 2026-11-08 by the owner, not implemented |
+| [0051](0051-staff-discard-never-passed-poi.md) | Staff soft-discard a POI proposal that never passed verification; schema v1.20 adds `PoiProposals.DiscardedAt/DiscardedByUserId` and a column-only runtime grant | accepted 2026-11-09 by the owner, implemented |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

@@ -1,4 +1,4 @@
--- SQLCMD input: SchemaHash is the current v1.18 snapshot hash; prior hashes are used only for controlled upgrades.
+-- SQLCMD input: SchemaHash is the current v1.20 snapshot hash; prior hashes are used only for controlled upgrades.
 -- Upgrade paths preserve the original bootstrap hash and advance only CampusTourSchemaVersion.
 SET NOCOUNT ON;
 DECLARE @hash nvarchar(64) = (
@@ -13,6 +13,8 @@ DECLARE @v18 nvarchar(64) = N'$(SchemaHashV18)';
 DECLARE @v110 nvarchar(64) = N'$(SchemaHashV110)';
 DECLARE @v111 nvarchar(64) = N'$(SchemaHashV111)';
 DECLARE @v112 nvarchar(64) = N'$(SchemaHashV112)';
+DECLARE @v119 nvarchar(64) = N'$(SchemaHashV119)';
+DECLARE @v118 nvarchar(64) = N'$(SchemaHashV118)';
 DECLARE @v117 nvarchar(64) = N'$(SchemaHashV117)';
 DECLARE @v116 nvarchar(64) = N'$(SchemaHashV116)';
 DECLARE @v115 nvarchar(64) = N'$(SchemaHashV115)';
@@ -67,6 +69,8 @@ DECLARE @knownPriorHash bit = CASE WHEN @hash IN (
     @v115,
     @v116,
     @v117,
+    @v119,
+    @v118,
     @v17,
     @v16,
     @v14,
@@ -177,8 +181,32 @@ DECLARE @v118ObjectsPresent bit = CASE WHEN @v117ObjectsPresent = 1 AND
         AND name=N'CK_RosterEmailChangeRequests_State' AND is_disabled=0 AND is_not_trusted=0 AND definition LIKE N'%EXPIRED%')
     THEN 1 ELSE 0 END;
 
-IF @schemaVersion = N'1.18' AND @v118ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
+-- v1.19 (ADR-0050): a Tour marked short notice.
+DECLARE @v119ObjectsPresent bit = CASE WHEN @v118ObjectsPresent = 1 AND
+    EXISTS (SELECT 1 FROM sys.columns c JOIN sys.default_constraints d ON d.object_id = c.default_object_id
+        WHERE c.object_id=OBJECT_ID(N'dbo.Tours') AND c.name=N'IsShortNotice' AND c.is_nullable=0 AND d.name=N'DF_Tours_IsShortNotice')
+    THEN 1 ELSE 0 END;
+
+-- v1.20 (ADR-0051): Staff soft-discard of a never-passed POI proposal.
+DECLARE @v120ObjectsPresent bit = CASE WHEN @v119ObjectsPresent = 1 AND
+    COL_LENGTH(N'dbo.PoiProposals', N'DiscardedAt') IS NOT NULL AND
+    COL_LENGTH(N'dbo.PoiProposals', N'DiscardedByUserId') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.PoiProposals')
+        AND name=N'FK_PoiProposals_DiscardedByUserId' AND is_disabled=0 AND is_not_trusted=0) AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.PoiProposals')
+        AND name=N'CK_PoiProposals_Discard_Complete' AND is_disabled=0 AND is_not_trusted=0)
+    THEN 1 ELSE 0 END;
+
+IF @schemaVersion = N'1.20' AND @v120ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
     SELECT 'READY';
+ELSE IF @schemaVersion = N'1.20'
+    THROW 51001, 'Database schema version marker is 1.20 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+ELSE IF @schemaVersion = N'1.19' AND @v119ObjectsPresent = 1 AND (@hash = @v119 OR @knownPriorHash = 1)
+    SELECT 'UPGRADE_REQUIRED';
+ELSE IF @schemaVersion = N'1.19'
+    THROW 51001, 'Database schema version marker is 1.19 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+ELSE IF @schemaVersion = N'1.18' AND @v118ObjectsPresent = 1 AND (@hash = @v118 OR @knownPriorHash = 1)
+    SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.18'
     THROW 51001, 'Database schema version marker is 1.18 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
 ELSE IF @schemaVersion = N'1.17' AND @v117ObjectsPresent = 1 AND (@hash = @v117 OR @knownPriorHash = 1)

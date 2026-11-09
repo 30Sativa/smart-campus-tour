@@ -666,6 +666,12 @@ in [`backend/docs/map-poi-versioning.md`](../backend/docs/map-poi-versioning.md)
 The new endpoints do not grant Admin access. Existing legacy POI rows are not
 migrated or deleted; only their old HTTP catalog interface has been retired.
 
+Under ADR-0051 (schema v1.20), Staff `POST /api/staff/poi-proposals/{id}/discard`
+soft-discards a proposal that never had a PASS on any revision; it leaves the
+Staff list and verification queue but no row is deleted. Proposal views add
+`canDiscard` and `discardedAt`; later writes to it return 409
+`POI_PROPOSAL_DISCARDED`.
+
 Under ADR-0028, a valid uploaded package alone is not selectable for new POI
 work. Map list/detail return backend-calculated `technicalCheckStatus`,
 `canUseForPoiPreparation`, a block reason code/text, and the evidence record
@@ -1165,7 +1171,8 @@ while `FleetCommands:Enabled = false`, Start returns
 |---|---|---|---|---|
 | Tour is READY | SRS §4 | DB | fail | `tourReady` |
 | Caller is `Tours.OperatorUserId` | SRS §7 (FR-36/46) | DB | POST: `403`, not a check; GET start-checks: a check telling the viewer | `callerIsOperator` |
-| `now` in `[ScheduledStartAt, ScheduledStartAt + StartLateLimitMinutes]`, default 15 | Lower bound SRS §4; upper bound Design (D2, ADR-0042 §7) | DB + CONFIG | fail | `withinStartWindow` |
+| `now` in `[ScheduledStartAt - StartEarlyLimitMinutes, ScheduledStartAt + StartLateLimitMinutes]`, defaults 10 and 15; the early limit is at most the 15-minute reservation buffer | Lower bound ADR-0050; upper bound Design (D2, ADR-0042 §7) | DB + CONFIG | fail | `withinStartWindow` |
+| Before `ScheduledStartAt`: every accepted active row holds a live browser session. From `ScheduledStartAt`: passes as not applicable | ADR-0050 | DB | no accepted row passes; before the window: not evaluated | `allViewersJoined` |
 | Active reservation for this Tour on the same robot | SRS §4, ADR-0034 | DB | fail | `reservationActive` |
 | Revision still schedulable: effective PASS run, POI evidence, map gate (the READY check, `TourTarget.RequireSchedulableRevisionAsync`); route deactivation not considered (ADR-0037) | ADR-0034 | DB | fail; detail carries the code, e.g. `ROUTE_TEST_PASS_REQUIRED` | `revisionStillSchedulable` |
 | Robot still passes the ADR-0039 rule | ADR-0039 | DB | fail | `robotEligibleForRoute` |
@@ -1204,7 +1211,7 @@ is independent: a non-Operator viewer gets every other check evaluated in full, 
 `canStart` answers whether the caller can Start now.
 `batteryInfo` always passes and never enters `blockedBy`. Configuration section
 `FleetCommands`: `Enabled` (default false),
-`MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15), and initial values not
+`MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15), `StartEarlyLimitMinutes` (10), and initial values not
 measured yet: `AcceptWindowSeconds` (30), `LegResultTimeoutSeconds` (600),
 `SweepIntervalSeconds` (5).
 
@@ -1708,6 +1715,18 @@ Public contract added by this batch. Held seats are the Tour's active PENDING an
 | `GET /api/technical/route-verifications/rerun-queue` | TechnicalStaff. Current revisions whose effective PASS has no `measurementBasis`. `GET /api/technical/dashboard` adds `kpis.routeRerunsCount` and action type `ROUTE_RERUN`. |
 
 Audit actions `ROSTER_PENDING_EXPIRED`, `REGISTRATION_EXPIRED` and `ROSTER_EXPIRY_NOTICE_{REQUESTED,STARTED,SENT,FAILED}` carry ids and counts only. The notice uses the delivery shape of the cancellation notice: one email per registration, claimed once, an uncertain send never repeated.
+
+### 3.2.y Early Start and short-notice Tours (ADR-0050, schema v1.19)
+
+| Surface | Contract |
+|---|---|
+| `GET .../tours/{id}/start-checks`, `POST .../tours/{id}/start` | Check `allViewersJoined` (table in §3.2). The read adds `opensAt`, the first instant Start is accepted. An early Start records `ReasonCode = EARLY_START` on `TOUR_STARTED`. |
+| `GET /api/staff/manage/tours/slots` | Optional `shortNotice=true` judges shifts with the short-notice lead and returns each `registrationClosesAt` as the Tour start. The response adds `shortNoticeMinLeadMinutes`, null while the option is off. |
+| `POST /api/staff/manage/tours` | `configuration.shortNoticeReason` (optional, at most 500 characters, not blank) makes the Tour short notice. 409 `SHORT_NOTICE_DISABLED` while `Tours:ShortNoticeMinLeadMinutes` is unset. |
+| Staff Tour reads | `tour.isShortNotice`; `tour.registrationClosesAt` is the Tour start for a short-notice Tour. |
+| Representative Tour and registration reads | Tour adds `registrationClosesAt`; registration summary adds `tourIsShortNotice` and `tourRegistrationClosesAt`. |
+
+A short-notice Tour replaces only the 72-hour lead, the 48-hour close and the 24-hour review close. Its list closes with READY, the T-24h job skips it, and undecided rows still block READY and Start. Every Start check is the same as for any other Tour.
 
 ### 3.3 State storage and realtime delivery
 

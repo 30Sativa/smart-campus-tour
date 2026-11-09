@@ -20,6 +20,17 @@ describe('registration deadline (48 hours before start)', () => {
     expect(closed.reason).toContain('48 giờ')
   })
 
+  it('uses the deadline the server sends, so a short-notice Tour closes at its start', () => {
+    const tour = { scheduledStartAt: start, registrationClosesAt: start }
+    expect(registrationClosesAt(tour).toISOString()).toBe(start)
+    expect(newRosterRowsAllowed(tour, Date.parse(start) - 1)).toBe(true)
+    expect(newRosterRowsAllowed(tour, Date.parse(start))).toBe(false)
+    expect(applyRegistrationDeadline(open, tour, Date.parse(start) - hour)).toBe(open)
+    const closed = applyRegistrationDeadline(open, tour, Date.parse(start))
+    expect(closed.allowed).toBe(false)
+    expect(closed.reason).not.toContain('48 giờ')
+  })
+
   it('never reopens or rewords a gate the server already closed', () => {
     const server = { allowed: false, reason: 'Tour đã khóa đăng ký.' }
     expect(applyRegistrationDeadline(server, start, 0)).toBe(server)

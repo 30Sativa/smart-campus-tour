@@ -105,6 +105,9 @@ internal static class PoiImportPlanner
             return Failed("MAP_NOT_DEPLOYED", "Robot đã chọn chưa có kiểm tra triển khai đạt mới nhất trên đúng phiên bản bản đồ này.");
 
         var proposal = proposalBySource.GetValueOrDefault(capture.Id);
+        // The source id stays reserved by the discarded proposal (UX_PoiProposals_Source), and a new revision must not revive it.
+        if (proposal?.DiscardedAt is not null)
+            return Failed(PoiProposalRules.DiscardedCode, $"POI nguồn {capture.Id} đã bị Staff xoá khỏi danh sách nên không nhập lại được. Đổi id trong tệp ghi pose để tạo POI mới.");
         // A new capture carries the current camera preset forward, and a file cannot choose one.
         if (proposal is not null && !PoiCameraPresets.IsValid(currentCameras.GetValueOrDefault(proposal.Id)))
             return Failed(MapPoiErrorCodes.CameraPresetInvalid, $"{PoiCameraPresets.InvalidMessage} Staff cần chọn lại hướng camera của POI này trước khi nhập tệp.");

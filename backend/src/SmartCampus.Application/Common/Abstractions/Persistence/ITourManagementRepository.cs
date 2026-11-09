@@ -28,6 +28,8 @@ public interface ITourManagementRepository
     Task<bool> HasRobotTourNeedingAssistanceAsync(Guid robotId, Guid? exceptTourId, CancellationToken ct);
     /// <summary>True while the robot has any open command; an UNKNOWN GoTo counts (ADR-0042 §4).</summary>
     Task<bool> HasOpenCommandAsync(Guid robotId, CancellationToken ct);
+    /// <summary>Accepted viewing rows of the Tour and how many hold a live browser session, for an early Start (ADR-0050).</summary>
+    Task<TourViewerPresence> GetViewerPresenceAsync(Guid tourId, DateTimeOffset now, CancellationToken ct);
     /// <summary>
     /// Sets Robots.CurrentTourId only if the robot is free and still dispatchable, in one UPDATE; false when it is not.
     /// UX_Robots_CurrentTour is the final guard. Caller holds the Tour root and robot reservation locks.

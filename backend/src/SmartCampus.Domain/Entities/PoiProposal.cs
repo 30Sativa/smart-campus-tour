@@ -25,7 +25,13 @@ public partial class PoiProposal
 
     public string? SourcePoiId { get; set; }
 
+    public DateTimeOffset? DiscardedAt { get; set; }
+
+    public Guid? DiscardedByUserId { get; set; }
+
     public virtual User CreatedByUser { get; set; } = null!;
+
+    public virtual User? DiscardedByUser { get; set; }
 
     public virtual MapArea? SourceAreaKeyNavigation { get; set; }
 
