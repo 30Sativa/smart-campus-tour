@@ -463,3 +463,61 @@ html[data-theme-wave]::view-transition-new(root) {
 .lp3-journey[data-journey="pinned"] .lp3-journey-art { transform: none !important; transition: none; isolation: isolate; }
 .lp3-journey[data-journey="pinned"] .lp3-journey-art img { mix-blend-mode: normal; will-change: transform; backface-visibility: hidden; }
 .lp3-journey[data-journey="pinned"] .lp3-route { will-change: transform; }
+
+/* 04 / Công nghệ: the robot taken apart in 3D (robot-explode/RobotExplodeViewer).
+   The stage reads as a drafting sheet: a dot grid behind, a metric grid on the floor,
+   the model's own name and part count in the corner, and a status rule along the bottom. */
+.lp3-tech-art[data-mode="3d"] { align-self: stretch; }
+.lp3-explode { display: grid; gap: 14px; }
+.lp3-explode__stage {
+  position: relative; height: clamp(460px, 70vh, 680px); overflow: hidden;
+  border: 1px solid var(--lp-line); border-radius: 24px;
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--lp-ink) 9%, transparent) 1px, transparent 0) 0 0 / 22px 22px,
+    radial-gradient(110% 80% at 50% 30%, var(--lp-surface) 0%, color-mix(in srgb, var(--lp-bg-sunk) 70%, var(--lp-surface)) 62%, var(--lp-bg-sunk) 100%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--lp-surface) 70%, transparent), 0 30px 60px -40px rgba(11, 21, 25, .45);
+}
+.lp3-explode[data-hovering="true"] .lp3-explode__canvas { cursor: pointer; }
+.lp3-explode__canvas { position: absolute !important; inset: 0; touch-action: pan-y; }
+
+.lp3-explode__meta { position: absolute; top: 18px; left: 20px; display: grid; gap: 3px; pointer-events: none; }
+.lp3-explode__meta span { color: var(--lp-ink-3); font-size: .64rem; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+.lp3-explode__meta strong { color: var(--lp-ink); font-size: .9rem; font-weight: 750; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.lp3-explode__hint { position: absolute; top: 22px; right: 20px; margin: 0; color: var(--lp-ink-3); font-size: .72rem; pointer-events: none; }
+
+.lp3-explode__status { display: grid; gap: 9px; padding: 0 4px; margin-top: -2px; }
+.lp3-explode__status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.lp3-explode__status-label { display: inline-flex; align-items: center; gap: 9px; min-width: 0; color: var(--lp-ink); font-size: .84rem; font-weight: 700; }
+.lp3-explode__status-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp3-explode__status-label i { flex: none; width: 10px; height: 10px; border-radius: 3px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--lp-ink) 8%, transparent); }
+.lp3-explode__status-label i[data-idle="true"] { border: 1.5px solid var(--lp-ink-3); box-shadow: none; }
+.lp3-explode__status-step { flex: none; color: var(--lp-ink-3); font-size: .72rem; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lp3-explode__track { display: block; height: 3px; border-radius: 3px; background: color-mix(in srgb, var(--lp-ink) 10%, transparent); overflow: hidden; }
+.lp3-explode__track span { display: block; height: 100%; border-radius: inherit; background: #84ab55; transform-origin: left; transform: scaleX(1); }
+
+.lp3-explode__card { position: absolute; top: 64px; right: 16px; width: min(290px, calc(100% - 32px)); padding: 18px 18px 18px 20px; border: 1px solid var(--lp-line); border-radius: 16px; background: var(--lp-surface); box-shadow: var(--lp-shadow); }
+.lp3-explode__swatch { display: block; width: 28px; height: 4px; margin-bottom: 12px; border-radius: 4px; }
+.lp3-explode__card h3 { margin: 4px 26px 0 0; font-size: 1.08rem; font-weight: 750; letter-spacing: -.02em; color: var(--lp-ink); }
+.lp3-explode__card p { margin-top: 8px; color: var(--lp-ink-2); font-size: .86rem; line-height: 1.55; }
+.lp3-explode__count { color: var(--lp-ink-3); font-size: .64rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.lp3-explode__close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: var(--lp-bg-sunk); color: var(--lp-ink-2); cursor: pointer; }
+
+.lp3-explode__bar { display: grid; gap: 10px; min-width: 0; }
+.lp3-explode__modes { display: inline-flex; justify-self: start; gap: 4px; padding: 4px; border: 1px solid var(--lp-line); border-radius: 999px; background: var(--lp-surface); }
+.lp3-explode__modes button { display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px; border: 0; border-radius: 999px; background: transparent; color: var(--lp-ink-2); font: inherit; font-size: .8rem; font-weight: 700; white-space: nowrap; cursor: pointer; transition: background-color .2s, color .2s; }
+.lp3-explode__modes button:hover { color: var(--lp-ink); }
+.lp3-explode__modes button[aria-pressed="true"] { background: var(--lp-ink); color: var(--lp-surface); }
+.lp3-explode__parts { display: flex; gap: 6px; overflow-x: auto; padding: 2px 24px 4px 0; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+.lp3-explode__parts::-webkit-scrollbar { display: none; }
+.lp3-explode__parts button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid var(--lp-line); border-radius: 999px; background: transparent; color: var(--lp-ink-2); font: inherit; font-size: .76rem; font-weight: 650; white-space: nowrap; cursor: pointer; transition: background-color .2s, color .2s, border-color .2s; }
+.lp3-explode__parts button:hover { border-color: var(--lp-line-strong); color: var(--lp-ink); }
+.lp3-explode__parts button[aria-pressed="true"] { background: var(--lp-accent); border-color: var(--lp-accent); color: var(--lp-accent-ink); }
+.lp3-explode__parts i { width: 9px; height: 9px; border-radius: 3px; box-shadow: 0 0 0 1px var(--lp-line-strong); }
+.lp3-explode__modes button:focus-visible, .lp3-explode__parts button:focus-visible, .lp3-explode__close:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 2px; }
+@media (max-width: 767px) {
+  .lp3-explode__stage { height: 500px; }
+  .lp3-explode__hint { display: none; }
+  .lp3-explode__card { top: auto; bottom: 14px; }
+  .lp3-explode__modes { justify-self: stretch; }
+  .lp3-explode__modes button { flex: 1; justify-content: center; padding-inline: 8px; }
+}
