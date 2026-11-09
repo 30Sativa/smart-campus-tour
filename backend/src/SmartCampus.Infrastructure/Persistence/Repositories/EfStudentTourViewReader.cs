@@ -18,8 +18,12 @@ public sealed class EfStudentTourViewReader(ApplicationDbContext context) : IStu
                 t.IsHeld,
                 t.ActiveRouteId,
                 t.RouteRevisionId,
-                CurrentPoiId = t.CurrentRouteStopId == null ? (Guid?)null : t.CurrentRouteStop!.PoiId,
-                LastArrivedPoiId = t.LastArrivedRouteStopId == null ? (Guid?)null : t.LastArrivedRouteStop!.PoiId,
+                // A versioned Tour (ADR-0043 D9) moves through the RevisionStop columns and lists its stops by
+                // PoiProposalRevisionId, so its position must be reported in the same ids.
+                CurrentPoiId = t.CurrentRevisionStopId != null ? (Guid?)t.CurrentRevisionStop!.PoiProposalRevisionId
+                    : t.CurrentRouteStopId != null ? t.CurrentRouteStop!.PoiId : null,
+                LastArrivedPoiId = t.LastArrivedRevisionStopId != null ? (Guid?)t.LastArrivedRevisionStop!.PoiProposalRevisionId
+                    : t.LastArrivedRouteStopId != null ? t.LastArrivedRouteStop!.PoiId : null,
             })
             .SingleOrDefaultAsync(ct);
         if (tour is null) return null;

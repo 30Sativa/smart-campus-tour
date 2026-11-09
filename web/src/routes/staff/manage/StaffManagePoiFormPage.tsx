@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, ChevronRight, CircleAlert, Info, MapPinned, MapPinOff } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CircleAlert, Info, MapPinned, MapPinOff, Square, Volume2 } from 'lucide-react'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
@@ -17,6 +17,7 @@ import { clearanceMessage, poseClearance } from '../../../features/administratio
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 import { UnsavedChangesGuard } from '../../../features/administration/UnsavedChangesGuard'
 import { AFTER_SAVE } from '../../../features/administration/after-save'
+import { canPreviewNarration, previewNarration } from '../../../features/student/use-narration-voice'
 
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
@@ -50,6 +51,9 @@ export default function StaffManagePoiFormPage() {
   const [draftOverride, setDraftOverride] = useState<Draft | null>(null)
   const [saved, setSaved] = useState<PoiProposal | null>(null)
   const [busy, setBusy] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
+  const stopPreview = useRef<(() => void) | null>(null)
+  useEffect(() => () => stopPreview.current?.(), [])
   const [error, setError] = useState<string | null>(null)
   const [poseMode, setPoseMode] = useState<PickerMode>('position')
   const current = saved ?? proposalQuery.data ?? null
@@ -247,7 +251,18 @@ export default function StaffManagePoiFormPage() {
         <div className="space-y-2 border-t border-[#e2e8f0] pt-5">
           <h2 className="text-lg font-bold text-[#2d3748]">Nội dung thuyết minh</h2>
           <div><span className={label}><label htmlFor="poi-narration">Thuyết minh</label>{required}</span><textarea id="poi-narration" aria-label="Nội dung thuyết minh" className={field} rows={4} required maxLength={4000} value={draft.narrationText} onChange={e => update({ narrationText: e.target.value })} placeholder="Nhập nội dung giới thiệu tại điểm này…" /></div>
-          <p className="text-xs text-[#718096]">Robot đọc nội dung này khi dừng tại điểm.</p>
+          <p className="text-xs text-[#718096]">Trang của học sinh tự đọc nội dung này khi robot dừng tại điểm.</p>
+          {canPreviewNarration() && (
+            <button type="button" className={buttonClass('secondary', 'sm')} disabled={!draft.narrationText.trim()}
+              onClick={() => {
+                if (previewing) { stopPreview.current?.(); return }
+                setPreviewing(true)
+                stopPreview.current = previewNarration(draft.narrationText, () => { stopPreview.current = null; setPreviewing(false) })
+              }}>
+              {previewing ? <Square size={14} aria-hidden="true" /> : <Volume2 size={14} aria-hidden="true" />}
+              {previewing ? 'Dừng đọc' : 'Nghe thử'}
+            </button>
+          )}
         </div>
         <p className="flex items-start gap-2 text-xs text-[#718096]"><Info size={14} aria-hidden="true" className="mt-0.5 shrink-0" />Gửi đề xuất để kỹ thuật viên kiểm chứng. Mỗi lần lưu tạo một bản mới.</p>
         </div>
