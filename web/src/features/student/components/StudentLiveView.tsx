@@ -7,6 +7,7 @@ import { StudentVideoPlayer } from './StudentVideoPlayer'
 import { Student2DMap } from './Student2DMap'
 import { StudentNarrationBar } from './StudentNarrationBar'
 import { useStudentStore, type StudentLiveTab } from '../student-store'
+import { useNarrationVoice } from '../use-narration-voice'
 import '../student.css'
 import '../student-live.css'
 
@@ -45,6 +46,9 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
   const storedTab = useStudentStore((s) => s.activeTab)
   const tab = tabs.some((t) => t.key === storedTab) ? storedTab : tabs[0].key
   const setTab = useStudentStore((s) => s.setActiveTab)
+  const audioMuted = useStudentStore((s) => s.audioMuted)
+  // The live stream carries no sound, so the stop's prepared narration is voiced in this browser.
+  const voice = useNarrationVoice(snapshot.narration, audioMuted)
   const baseId = useId()
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const statusDisplay = getStudentStatusDisplay(snapshot.step, snapshot.currentPoi?.title, snapshot.tourState)
@@ -77,7 +81,8 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
         <div className="st-e-main">
           <div className={`st-x-stage st-tone-${statusDisplay.tone}${snapshot.step === 'navigating' || snapshot.step === 'returning' ? ' is-moving' : ''}`}>
             <StudentVideoPlayer streamUrl={snapshot.videoStreamUrl || undefined} statusLabel={stopLabel}
-              badge={video?.badge} emptyMessage={video?.emptyMessage} />
+              badge={video?.badge} emptyMessage={video?.emptyMessage}
+              onReplayNarration={snapshot.narration ? voice.replay : undefined} />
             {/* Keep the current stop readable below the picture and its controls. */}
             <div className="st-x-caption" aria-live="polite">
               <small><MapPin size={14} aria-hidden="true" />{statusDisplay.label}</small>
@@ -114,8 +119,12 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
             <StudentNarrationBar
               title={snapshot.narration?.title || snapshot.currentPoi?.title}
               text={snapshot.narration?.text || snapshot.currentPoi?.description}
-              isPlaying={snapshot.narration?.isPlaying}
+              isPlaying={voice.speaking}
               idleText={narrationIdleText}
+              blocked={voice.blocked}
+              onEnableVoice={voice.enable}
+              noVietnameseVoice={voice.noVietnameseVoice}
+              onReplay={snapshot.narration ? voice.replay : undefined}
             />
             {snapshot.nextPoi && (
               <div className="st-e-next">

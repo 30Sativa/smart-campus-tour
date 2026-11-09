@@ -1,4 +1,4 @@
-import { Info, Volume2 } from 'lucide-react'
+import { Info, Volume2, VolumeX } from 'lucide-react'
 import { useStudentStore } from '../student-store'
 
 interface StudentNarrationBarProps {
@@ -8,6 +8,12 @@ interface StudentNarrationBarProps {
   onReplay?: () => void
   /** Shown when there is no narration for the moment. */
   idleText?: string
+  /** The browser refused to start the voice until the visitor clicks. */
+  blocked?: boolean
+  /** Click handler that unlocks sound and starts the refused narration. */
+  onEnableVoice?: () => void
+  /** The device has no Vietnamese speech voice for text narration. */
+  noVietnameseVoice?: boolean
 }
 
 export function StudentNarrationBar({
@@ -16,6 +22,9 @@ export function StudentNarrationBar({
   isPlaying = false,
   onReplay,
   idleText = 'Robot đang di chuyển giữa các điểm dừng. Thuyết minh tự động sẽ phát khi tới POI tiếp theo.',
+  blocked = false,
+  onEnableVoice,
+  noVietnameseVoice = false,
 }: StudentNarrationBarProps) {
   const isAiSpeaking = useStudentStore((s) => s.isAiSpeaking)
 
@@ -55,6 +64,16 @@ export function StudentNarrationBar({
         </p>
       ) : (
         <p>{text}</p>
+      )}
+
+      {blocked && onEnableVoice && (
+        <button type="button" onClick={onEnableVoice} className="st-chip-btn">
+          <VolumeX size={14} aria-hidden="true" /> Bật giọng thuyết minh
+        </button>
+      )}
+
+      {noVietnameseVoice && (
+        <p className="st-narr__hint" role="note">Thiết bị chưa có giọng đọc tiếng Việt, lời thuyết minh có thể đọc sai dấu. Nên dùng Chrome hoặc Edge.</p>
       )}
 
       {onReplay && (
