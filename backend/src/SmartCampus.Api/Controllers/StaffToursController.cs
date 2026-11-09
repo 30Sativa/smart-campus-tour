@@ -14,6 +14,7 @@ using SmartCampus.Application.Features.FleetHead.Queries.GetTourHeadStatus;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
+using SmartCampus.Application.Features.Tours.Commands.CreateQuickTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
 using SmartCampus.Application.Features.Tours.Commands.EndTourEarly;
 using SmartCampus.Application.Features.Tours.Commands.MarkTourReady;
@@ -25,6 +26,7 @@ using SmartCampus.Application.Features.Tours.Commands.StartTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Application.Features.Tours.Commands.ChangeTourCapacity;
 using SmartCampus.Application.Features.Tours.Commands.ChangeTourOperator;
+using SmartCampus.Application.Features.Tours.Queries.GetQuickTourPlan;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
@@ -42,7 +44,8 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] CollectionQueryParameters parameters,
         [FromQuery] string? state, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] string? phase,
-        [FromQuery(Name = "operator")] string? operatorFilter, [FromQuery] bool needsReconcile, [FromQuery] bool readyBlockers, CancellationToken ct)
+        [FromQuery(Name = "operator")] string? operatorFilter, [FromQuery] bool needsReconcile, [FromQuery] bool readyBlockers, CancellationToken ct,
+        [FromQuery] bool? shortNotice = null)
     {
         if (!string.IsNullOrWhiteSpace(parameters.Expand))
             throw new ValidationException([new ValidationFailure("Expand", "Tour expansion is not supported.")]);
@@ -53,7 +56,7 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
             string.IsNullOrWhiteSpace(parameters.Sort) ? "scheduledStartAt" : parameters.Sort.Trim(),
             parameters.Page, parameters.Size, state, from, to, phase,
             OperatorUserId: operatorFilter is null ? null : User.GetRequiredUserId(),
-            NeedsReconcile: needsReconcile, IncludeReadyBlockers: readyBlockers)), ct);
+            NeedsReconcile: needsReconcile, IncludeReadyBlockers: readyBlockers, ShortNotice: shortNotice)), ct);
         return Ok(new PagedResponse<TourSummary> { Success = true, Message = "Tours retrieved.", Data = page.Items,
             Pagination = new PaginationMetadata(page.Page, page.PageSize, page.TotalItems, page.TotalPages) });
     }
@@ -70,9 +73,19 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
 
     [HttpGet("slots")]
     public async Task<IActionResult> Slots([FromQuery] Guid routeRevisionId, [FromQuery] string robotCode,
-        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct, [FromQuery] bool shortNotice = false) =>
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct) =>
         Ok(new BaseResponse<TourSlotsView> { Success = true, Message = "Tour slots retrieved.",
-            Data = await sender.Send(new GetTourSlotsQuery(routeRevisionId, robotCode, from, to, shortNotice), ct) });
+            Data = await sender.Send(new GetTourSlotsQuery(routeRevisionId, robotCode, from, to), ct) });
+
+    /// <summary>ADR-0053: whether a quick Tour can be created now with this revision and robot.</summary>
+    [HttpGet("quick/plan")]
+    public async Task<IActionResult> QuickPlan([FromQuery] Guid routeRevisionId, [FromQuery] string robotCode, CancellationToken ct) =>
+        Ok(new BaseResponse<QuickTourPlanView> { Success = true, Message = "Quick Tour plan retrieved.",
+            Data = await sender.Send(new GetQuickTourPlanQuery(routeRevisionId, robotCode), ct) });
+
+    [HttpPost("quick")]
+    public async Task<IActionResult> CreateQuick([FromBody] CreateQuickTourRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new CreateQuickTourCommand(User.GetRequiredUserId(), request), ct), "Quick Tour created SCHEDULED.");
 
     [HttpGet("shifts")]
     public async Task<IActionResult> Shifts([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct) =>

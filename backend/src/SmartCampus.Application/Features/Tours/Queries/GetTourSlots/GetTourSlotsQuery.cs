@@ -9,7 +9,7 @@ using SmartCampus.Application.Features.Routes;
 namespace SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
 
 /// <summary>Each configured shift of each day, judged for this revision and robot (docs/lich-tour-theo-ca.md §3).</summary>
-public sealed record GetTourSlotsQuery(Guid RouteRevisionId, string RobotCode, DateOnly From, DateOnly To, bool ShortNotice = false) : IQuery<TourSlotsView>;
+public sealed record GetTourSlotsQuery(Guid RouteRevisionId, string RobotCode, DateOnly From, DateOnly To) : IQuery<TourSlotsView>;
 
 public sealed class GetTourSlotsQueryValidator : AbstractValidator<GetTourSlotsQuery>
 {
@@ -29,7 +29,6 @@ public sealed class GetTourSlotsQueryHandler(ITourManagementRepository tours, IR
 {
     public async Task<TourSlotsView> Handle(GetTourSlotsQuery query, CancellationToken ct)
     {
-        TimeSpan? shortNoticeLead = query.ShortNotice ? TourSchedule.RequireShortNoticeLead(settings) : null;
         var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, query.RouteRevisionId, lockTarget: false, ct);
         var robot = await revisions.FindPhysicalRobotAsync(query.RobotCode.Trim(), ct)
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
@@ -42,17 +41,17 @@ public sealed class GetTourSlotsQueryHandler(ITourManagementRepository tours, IR
         var active = await blocks.ListActiveAsync(query.From, query.To, ct);
         var now = clock.GetUtcNow();
         return new(query.RouteRevisionId, robot.RobotCode, plan?.MeasuredDurationSeconds, plan?.ExpectedDurationSeconds,
-            days.Select(day => new TourSlotDay(day[0].Date, day.Select(shift => Slot(shift, now, plan, holds, TourSchedule.BlockOf(active, shift), shortNoticeLead)).ToArray())).ToArray(),
-            settings.RecommendedMaxSeconds, settings.MaxCapacity, (int?)settings.ShortNoticeMinLead?.TotalMinutes);
+            days.Select(day => new TourSlotDay(day[0].Date, day.Select(shift => Slot(shift, now, plan, holds, TourSchedule.BlockOf(active, shift))).ToArray())).ToArray(),
+            settings.RecommendedMaxSeconds, settings.MaxCapacity);
     }
 
-    private static TourSlotView Slot(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan, IReadOnlyList<TourReservationHold> holds, TourShiftBlockView? adminBlock, TimeSpan? shortNoticeLead)
+    private static TourSlotView Slot(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan, IReadOnlyList<TourReservationHold> holds, TourShiftBlockView? adminBlock)
     {
         var start = TourSchedule.TourStart(shift.Date, shift.Shift);
-        var block = TourSchedule.Evaluate(shift, now, plan, holds, adminBlock, shortNoticeLead);
+        var block = TourSchedule.Evaluate(shift, now, plan, holds, adminBlock);
         var (startsAt, endsAt) = TourSchedule.ShiftWindow(shift.Date, shift.Shift);
         return new(shift.Shift.Start.Add(TourSchedule.ReservationBuffer).ToString("HH\\:mm"), start, block is null, block?.Code, block?.Message,
-            startsAt, endsAt, TourSchedule.RegistrationClosesAt(start, shortNoticeLead is not null), shift.Shift.Code, shift.Shift.Name, TourSchedule.MaxDurationSeconds(shift.Shift));
+            startsAt, endsAt, TourSchedule.RegistrationClosesAt(start, false), shift.Shift.Code, shift.Shift.Name, TourSchedule.MaxDurationSeconds(shift.Shift));
     }
 }
 

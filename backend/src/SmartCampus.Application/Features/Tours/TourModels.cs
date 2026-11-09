@@ -6,7 +6,17 @@ namespace SmartCampus.Application.Features.Tours;
 public sealed record TourInput(string Name, string? Description, Guid RouteId,
     DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl);
 public sealed record CreateTourInput(string Name, string? Description, Guid RouteRevisionId, string RobotCode,
-    Guid OperatorUserId, DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl, int Capacity, string? ShortNoticeReason = null);
+    Guid OperatorUserId, DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl, int Capacity);
+/// <summary>A quick Tour (ADR-0053): no date or shift; it holds its robot from creation and may start once ready.</summary>
+public sealed record QuickTourInput(string Name, string? Description, Guid RouteRevisionId, string RobotCode,
+    Guid OperatorUserId, string? FallbackVideoUrl, int Capacity, string Reason);
+/// <summary>
+/// Whether a quick Tour can be created now with this revision and robot, and the deadline and hold it would get. The
+/// values move with the clock; create recomputes them.
+/// </summary>
+public sealed record QuickTourPlanView(Guid RouteRevisionId, string RobotCode, int? ExpectedDurationSeconds, bool Available,
+    string? ReasonCode, string? Reason, DateTimeOffset DeadlineAt, DateTimeOffset? ReservationStartsAt, DateTimeOffset? ReservationEndsAt,
+    int WaitMinutes, int MaxCapacity);
 /// <summary>
 /// <see cref="OperatorUserId"/> keeps the Tours that account operates; <see cref="NeedsReconcile"/> keeps the Tours with an
 /// UNKNOWN GoTo, in any state. <see cref="IncludeReadyBlockers"/> evaluates READY for each SCHEDULED row of the page, the
@@ -14,7 +24,7 @@ public sealed record CreateTourInput(string Name, string? Description, Guid Rout
 /// </summary>
 public sealed record TourListRequest(string? Search, string Sort, int Page, int Size,
     string? State, DateTimeOffset? From, DateTimeOffset? To, string? Phase = null, DateTimeOffset Now = default,
-    Guid? OperatorUserId = null, bool NeedsReconcile = false, bool IncludeReadyBlockers = false);
+    Guid? OperatorUserId = null, bool NeedsReconcile = false, bool IncludeReadyBlockers = false, bool? ShortNotice = null);
 /// <summary>The Staff list's groupings of Tour state; a single <see cref="TourListRequest.State"/> cannot express them.</summary>
 public static class TourPhases
 {
@@ -51,8 +61,7 @@ public sealed record TourSlotView(string Time, DateTimeOffset StartsAt, bool Ava
     string ShiftCode, string ShiftName, int MaxDurationSeconds);
 public sealed record TourSlotDay(DateOnly Date, IReadOnlyList<TourSlotView> Slots);
 public sealed record TourSlotsView(Guid RouteRevisionId, string RobotCode, int? MeasuredDurationSeconds,
-    int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days, int RecommendedMaxSeconds, int MaxCapacity = 0,
-    int? ShortNoticeMinLeadMinutes = null);
+    int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days, int RecommendedMaxSeconds, int MaxCapacity = 0);
 /// <summary>A configured shift on one day, for drawing the calendar before a route or robot is chosen.</summary>
 public sealed record TourShiftView(string Code, string Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
     DateTimeOffset TourStartsAt, string Time, int MaxDurationSeconds, TourShiftBlockView? Block);
@@ -60,7 +69,8 @@ public sealed record TourShiftView(string Code, string Name, DateTimeOffset Star
 public sealed record TourShiftBlockView(Guid Id, string Scope, string Reason);
 public static class ScheduleBlockScope { public const string Day = "DAY"; public const string Shift = "SHIFT"; }
 public sealed record TourShiftDay(DateOnly Date, IReadOnlyList<TourShiftView> Shifts);
-public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds);
+/// <summary><see cref="QuickTourWaitMinutes"/> is null while quick Tours are switched off (ADR-0053).</summary>
+public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds, int? QuickTourWaitMinutes = null);
 public sealed record TourTargetView(RouteTestParticipantView? Operator, TourReservationView? Reservation);
 /// <summary>A Tour scheduled from a revision has null Route/ActiveRoute and carries RouteRevision instead.</summary>
 public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDetails? ActiveRoute,

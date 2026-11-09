@@ -67,10 +67,14 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
     const url = new URL(String(input), 'http://localhost')
     const path = url.pathname
     const method = init?.method ?? 'GET'
-    if (path === '/api/staff/manage/tours/slots' && url.searchParams.get('shortNotice') === 'true' && shortNoticeMinutes === null)
+    if (path === '/api/staff/manage/tours/quick/plan' && shortNoticeMinutes === null)
       return Promise.resolve(json({ success: false, message: 'x', errors: { code: 'SHORT_NOTICE_DISABLED' } }, 409))
+    if (path === '/api/staff/manage/tours/quick/plan') return Promise.resolve(json({ success: true, data: { routeRevisionId: 'revision-2', robotCode: 'amr-01',
+      expectedDurationSeconds: 1200, available: true, reasonCode: null, reason: null, deadlineAt: '2099-01-03T06:00:00Z',
+      reservationStartsAt: '2099-01-03T05:00:00Z', reservationEndsAt: '2099-01-03T06:35:00Z', waitMinutes: shortNoticeMinutes, maxCapacity: 20 } }))
+    if (path === '/api/staff/manage/tours/shifts') return Promise.resolve(json({ success: true, data: { days: [], recommendedMaxSeconds: 3600, quickTourWaitMinutes: shortNoticeMinutes } }))
     if (path === '/api/staff/manage/tours/slots') return Promise.resolve(json({ success: true, data: { routeRevisionId: 'revision-2', robotCode: 'amr-01',
-      measuredDurationSeconds: 1200, expectedDurationSeconds: expectedSeconds, recommendedMaxSeconds: 3600, shortNoticeMinLeadMinutes: shortNoticeMinutes,
+      measuredDurationSeconds: 1200, expectedDurationSeconds: expectedSeconds, recommendedMaxSeconds: 3600,
       days: [{ date: '2099-01-03', slots: slotDay }] } }))
     if (method !== 'GET') {
       writes.push({ method, path, body: JSON.parse(String(init?.body)) as Record<string, unknown> })
@@ -254,43 +258,57 @@ describe('live Tour management', () => {
   })
 
   it('asks for the Tour kind before showing the form, and lets Staff change it', async () => {
+    shortNoticeMinutes = 60
     api()
     renderAt('/staff/manage/tours/new?route=revision-2')
     expect(screen.queryByLabelText('Tên Tour')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Tour ngắn hạn/ }))
+    expect(await screen.findByText('Chưa Start sau 60 phút thì tự huỷ')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Tour nhanh/ }))
     expect(await screen.findByLabelText(/Lý do tạo gấp/)).toBeInTheDocument()
+    // A quick Tour has no date or shift (ADR-0053).
+    expect(screen.queryByLabelText(/Ngày tổ chức/)).not.toBeInTheDocument()
     expect(await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })).toBeInTheDocument()
     expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('revision-2')
     fireEvent.click(screen.getByRole('button', { name: 'Đổi loại' }))
-    fireEvent.click(screen.getByRole('button', { name: /Tour thường/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Tour theo ca/ }))
     expect(await screen.findByLabelText('Tên Tour')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Ngày tổ chức/)).toBeInTheDocument()
     expect(screen.queryByLabelText(/Lý do tạo gấp/)).not.toBeInTheDocument()
   })
 
-  it('says when the server has short notice switched off', async () => {
+  it('says when the server has quick Tours switched off', async () => {
+    api()
+    renderAt('/staff/manage/tours/new')
+    expect(await screen.findByText('Server chưa bật Tour nhanh.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Tour nhanh/ })).toBeDisabled()
+  })
+
+  it('reports a refused quick Tour from an old link once a route and robot are chosen', async () => {
     api()
     renderAt('/staff/manage/tours/new?kind=short')
     await chooseTarget()
-    pickDate()
-    expect(await screen.findByText('Server chưa bật Tour ngắn hạn. Chọn Tour thường, hoặc nhờ người quản lý server bật tùy chọn này.')).toBeInTheDocument()
+    expect(await screen.findByText('Server chưa bật Tour nhanh. Chọn Tour theo ca, hoặc nhờ người quản lý server bật tùy chọn này.')).toBeInTheDocument()
   })
 
-  it('asks the server for short-notice shifts and needs a reason before creating', async () => {
+  it('creates a quick Tour with no date or shift once the robot is free and a reason is given', async () => {
     shortNoticeMinutes = 60
     const writes = api()
-    renderAt('/staff/manage/tours/new?kind=short')
-    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour trong ngày' } })
+    renderAt('/staff/manage/tours/new?kind=quick')
+    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour trình diễn' } })
     await chooseTarget()
-    pickDate()
-    fireEvent.click(await screen.findByRole('button', { name: /Ca sáng/ }))
-    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('shortNotice=true'))).toBe(true))
-    expect(await screen.findByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
-    expect(within(await screen.findByRole('region', { name: 'Xem lại trước khi tạo' })).getByText('Khi Staff chốt Tour')).toBeInTheDocument()
+    expect(await screen.findByText(/Robot rảnh/)).toBeInTheDocument()
+    const review = within(await screen.findByRole('region', { name: 'Xem lại trước khi tạo' }))
+    expect(review.getByText('Ngay khi Tour sẵn sàng')).toBeInTheDocument()
+    expect(review.getByText('Sau 60 phút. Chưa Start thì hệ thống tự huỷ.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/tours/slots'))).toBe(false)
 
     fireEvent.change(screen.getByLabelText(/Lý do tạo gấp/), { target: { value: 'Trình diễn cho đoàn khách.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
     await waitFor(() => expect(writes).toHaveLength(1))
-    expect(writes[0].body).toMatchObject({ configuration: { name: 'Tour trong ngày', shortNoticeReason: 'Trình diễn cho đoàn khách.' } })
+    expect(writes[0]).toMatchObject({ method: 'POST', path: '/api/staff/manage/tours/quick', body: {
+      configuration: { name: 'Tour trình diễn', routeRevisionId: 'revision-2', robotCode: 'amr-01', operatorUserId: 'staff-1', capacity: 20, reason: 'Trình diễn cho đoàn khách.' } } })
+    expect(writes[0].body.configuration).not.toHaveProperty('scheduledStartAt')
   })
 
   it('picks the day and shift from the calendar link and warns when the route is over the recommended length', async () => {

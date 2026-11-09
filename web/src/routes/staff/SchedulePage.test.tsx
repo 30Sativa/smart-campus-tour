@@ -30,6 +30,7 @@ let status = 200
 let shiftStatus = 200
 let tourRows: unknown[] = []
 let tourDetail: unknown = null
+let quickWait: number | null = null
 
 function Location() {
   const { search } = useLocation()
@@ -46,16 +47,45 @@ describe('Staff Tour calendar', () => {
     tourRows = [session, evening]
     blockedDate = ''
     tourDetail = null
+    quickWait = null
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), 'http://localhost')
       urls.push(url)
       if (tourDetail && url.pathname === '/api/staff/manage/tours/tour-1') return new Response(JSON.stringify({ success: true, data: tourDetail }), { status: 200 })
       if (url.pathname === '/api/staff/manage/tours/shifts')
-        return new Response(JSON.stringify({ success: shiftStatus === 200, message: 'Không tải được.', data: { days: shiftDays(url.searchParams.get('from')!, url.searchParams.get('to')!), recommendedMaxSeconds: 3600 } }), { status: shiftStatus })
+        return new Response(JSON.stringify({ success: shiftStatus === 200, message: 'Không tải được.', data: { days: shiftDays(url.searchParams.get('from')!, url.searchParams.get('to')!), recommendedMaxSeconds: 3600, quickTourWaitMinutes: quickWait } }), { status: shiftStatus })
       return new Response(JSON.stringify({ success: status === 200, message: 'Không tải được.', data: tourRows, pagination: { page: 1, pageSize: 100, totalItems: tourRows.length, totalPages: 1 } }), { status })
     }))
   })
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+  it('has no Tour kind tabs while quick Tours are off, and creates on a shift', async () => {
+    show()
+    await screen.findByRole('button', { name: /Tour sáng thật/ })
+    expect(screen.queryByRole('tablist', { name: 'Loại Tour' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tạo Tour' })).toHaveAttribute('href', '/staff/manage/tours/new?kind=normal')
+  })
+
+  it('opens quick Tours in their own tab, listed by how long is left to Start them (ADR-0053)', async () => {
+    quickWait = 60
+    const quick = { ...session, id: 'tour-q', name: 'Tour trình diễn', isShortNotice: true, scheduledStartAt: '2099-01-05T05:00:00Z',
+      reservation: { ...session.reservation, startsAt: '2099-01-05T04:00:00Z', endsAt: '2099-01-05T05:37:00Z' } }
+    tourRows = [quick]
+    show()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Tour nhanh' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('kind=quick')
+    const list = await screen.findByRole('list', { name: 'Danh sách Tour nhanh' })
+    expect(within(list).getByRole('link', { name: 'Tour trình diễn' })).toHaveAttribute('href', '/staff/manage/tours/tour-q')
+    expect(within(list).getByText(/Hạn Start 12:00/)).toBeInTheDocument()
+    expect(within(list).getByText(/^Còn .* để Start$/)).toBeInTheDocument()
+    expect(urls.some(url => url.pathname === '/api/staff/manage/tours' && url.searchParams.get('shortNotice') === 'true')).toBe(true)
+    expect(screen.getByRole('link', { name: 'Tạo Tour nhanh' })).toHaveAttribute('href', '/staff/manage/tours/new?kind=quick')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Theo ca' }))
+    expect(screen.getByTestId('location')).not.toHaveTextContent('kind=quick')
+    // In the shift calendar the quick Tour stays visible, marked, at its latest Start.
+    expect(await screen.findByRole('button', { name: /Tour nhanh: 12:00/ })).toBeInTheDocument()
+  })
 
   it('prints only the start of a Tour whose length is unknown, never an assumed hour', async () => {
     tourRows = [{ ...session, reservation: null }]

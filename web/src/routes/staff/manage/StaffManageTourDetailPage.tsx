@@ -61,7 +61,7 @@ export default function StaffManageTourDetailPage() {
       <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <Item label="Thời gian dự kiến" value={formatSlot(tour.scheduledStartAt)} />
         <Item label="Trạng thái" value={tourStateLabel(tour, now)} />
-        {tour.isShortNotice && <Item label="Loại Tour" value="Ngắn hạn" />}
+        {tour.isShortNotice && <Item label="Loại Tour" value="Tour nhanh" />}
         <Item label="Đăng ký / lời mời" value={`${tour.registrationCount} đoàn · ${tour.invitationCount} lời mời`} />
         {openSeatsLabel(tour) && <Item label="Chỗ" value={openSeatsLabel(tour)!} />}
         <Item label="Tạo lúc" value={formatStamp(tour.createdAt)} />

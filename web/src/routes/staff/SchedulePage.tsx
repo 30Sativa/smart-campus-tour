@@ -1,11 +1,12 @@
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, FileText, Info, Lock, Map as MapIcon, Plus, Search, SlidersHorizontal, Timer, Bot, Users } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, FileText, Info, Lock, Map as MapIcon, Plus, Search, SlidersHorizontal, Timer, Bot, Users, Zap } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { LoadingPanel } from '../../components/ui/ConsolePrimitives'
 import { Drawer } from '../../components/ui/Drawer'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { useTour, useTourCalendar, useTourShifts } from '../../features/administration/tours/hooks'
 import { TourListPanel } from '../../features/administration/tours/TourListPanel'
+import { QuickTourPanel } from '../../features/administration/tours/QuickTourPanel'
 import { campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
 import { REGISTRATION_CLOSED_LABEL, TOUR_STATE_FILTER_LABEL, TOUR_STATE_LABEL, isRegistrationClosed, openSeatsLabel, tourError, tourStateLabel } from '../../features/administration/tours/tour-messages'
 import { overdueStartLabel } from '../../features/administration/tours/overdue-start'
@@ -106,8 +107,11 @@ export default function SchedulePage() {
   const query = params.get('q') ?? ''
   const monday = weekStart(day)
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
-  const tours = useTourCalendar(week[0], week[6], view !== 'list')
-  const shifts = useTourShifts(week[0], week[6], view !== 'list')
+  // Always read: besides the calendar, it says whether quick Tours are on, which decides the tabs (ADR-0053).
+  const shifts = useTourShifts(week[0], week[6])
+  const quickOn = shifts.data?.quickTourWaitMinutes != null
+  const quickTab = quickOn && params.get('kind') === 'quick'
+  const tours = useTourCalendar(week[0], week[6], view !== 'list' && !quickTab)
   const narrow = useNarrowScreen()
   // On a narrow screen the three filters fold behind one button, so the week starts higher up.
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -144,19 +148,43 @@ export default function SchedulePage() {
   const robotCount = new Set(filtered.map(tour => tour.reservation?.robotCode).filter(Boolean)).size
   const failed = tours.isError ? tours.error : shifts.isError ? shifts.error : null
 
-  const header = <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
-    <div className="min-w-0">
-      <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch tour</h1>
-      <p className="mt-1 text-sm text-[#718096]">{view === 'list' ? 'Mọi Tour theo thời gian: sắp diễn ra, đang chạy, đã kết thúc.' : 'Tour đã lên lịch và thời gian giữ robot.'}</p>
-    </div>
-    <Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>
-  </header>
+  const header = <>
+    <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch tour</h1>
+        <p className="mt-1 text-sm text-[#718096]">{quickTab ? 'Tour nhanh: không theo ca, Start khi chốt danh sách và đủ người.'
+          : view === 'list' ? 'Mọi Tour theo thời gian: sắp diễn ra, đang chạy, đã kết thúc.' : 'Tour đã lên lịch và thời gian giữ robot.'}</p>
+      </div>
+      <Link to={quickTab ? '/staff/manage/tours/new?kind=quick' : '/staff/manage/tours/new?kind=normal'} className={buttonClass('primary')}>
+        <Plus size={16} aria-hidden="true" />{quickTab ? 'Tạo Tour nhanh' : 'Tạo Tour'}</Link>
+    </header>
+    {quickOn && <div role="tablist" aria-label="Loại Tour" className="mb-4 inline-flex gap-0.5 rounded-xl border border-[#e2e8f0] bg-white p-1">
+      {([['normal', 'Theo ca', CalendarDays], ['quick', 'Tour nhanh', Zap]] as const).map(([value, label, Icon]) => {
+        const active = (value === 'quick') === quickTab
+        return <button key={value} type="button" role="tab" aria-selected={active} onClick={() => set({ kind: value === 'quick' ? 'quick' : null, tour: null }, false)}
+          className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors ${focus} ${active ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:text-[#2d3748]'}`}>
+          <Icon size={15} aria-hidden="true" />{label}</button>
+      })}
+    </div>}
+  </>
   const viewToggle = <div role="group" aria-label="Chế độ xem lịch" className="ml-auto flex rounded-xl border border-[#e2e8f0] bg-white p-1">
     {([['week', 'Tuần'], ['day', 'Ngày'], ['list', 'Danh sách']] as const).map(([value, label]) => (
       <button key={value} type="button" aria-pressed={view === value} onClick={() => set({ view: value === 'week' ? null : value, tour: null })}
         className={`min-h-8 rounded-lg px-2.5 text-sm font-semibold sm:px-4 transition-colors ${focus} ${view === value ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:text-[#2d3748]'}`}>{label}</button>
     ))}
   </div>
+
+  // A quick Tour has no shift, so its tab is a list by how soon each must start, not the week.
+  if (quickTab) return (
+    <StaffPage>
+      {header}
+      <section className={`${card} p-4 sm:p-5`} aria-label="Tour nhanh">
+        <QuickTourPanel />
+        <p className="mt-3 flex items-start gap-2 text-[13px] text-[#718096]"><Info size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
+          Tour nhanh giữ robot từ lúc tạo, nên các ca trùng khung giữ đó trong tab Theo ca không nhận Tour mới. Chưa Start trước hạn thì hệ thống tự huỷ.</p>
+      </section>
+    </StaffPage>
+  )
 
   // All three views share this frame, so switching between them moves neither the toggle nor the top of the table.
   // The list is every Tour across time, not this week: it has no week to step through and keeps its own filters and paging.
@@ -305,9 +333,9 @@ function TourCard({ tour, outside = false, showRobot, onSelect }: { tour: TourSu
   const [now] = useState(() => Date.now())
   const overdue = overdueStartLabel(tour, tour.reservation, now)
   return <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" title={tour.name}
-    aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}${robot ? `, robot ${robot}` : ''}`}
+    aria-label={`${outside ? 'Ngoài ca: ' : ''}${tour.isShortNotice ? 'Tour nhanh: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}${robot ? `, robot ${robot}` : ''}`}
     className={`block w-full rounded-lg border px-1.5 py-1 text-left transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${chipOf(tour, now)} ${focus}`}>
-    <span className="flex flex-wrap gap-x-1.5 text-[11px] tabular-nums opacity-80">{campusTime(tour.scheduledStartAt)}{robot && <span className="font-mono whitespace-nowrap">{robot}</span>}</span>
+    <span className="flex flex-wrap items-center gap-x-1.5 text-[11px] tabular-nums opacity-80">{tour.isShortNotice && <QuickMark />}{campusTime(tour.scheduledStartAt)}{robot && <span className="font-mono whitespace-nowrap">{robot}</span>}</span>
     <span className={`line-clamp-2 text-xs font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
     <span className="mt-1 inline-block rounded bg-white/70 px-1 text-[10.5px] font-semibold">{tourStateLabel(tour, now)}</span>
     {overdue && <span className="mt-1 block text-[10.5px] font-semibold text-[#9d3428]">{overdue}</span>}
@@ -356,14 +384,19 @@ function ShiftCard({ day, shift, tours, open, onSelect }: { day: string; shift: 
 function TourRows({ tours, outside = false, onSelect }: { tours: TourSummary[]; outside?: boolean; onSelect: (id: string) => void }) {
   const [now] = useState(() => Date.now())
   return <ul aria-label="Tour trong ca" className="mt-2.5 space-y-2">{tours.map(tour => <li key={tour.id}>
-    <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}`}
+    <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" aria-label={`${outside ? 'Ngoài ca: ' : ''}${tour.isShortNotice ? 'Tour nhanh: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}`}
       className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-left text-sm transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${chipOf(tour, now)} ${focus}`}>
-      <span className="font-semibold tabular-nums">{span(tour)}</span>
+      <span className="flex items-center gap-1.5 font-semibold tabular-nums">{tour.isShortNotice && <QuickMark />}{span(tour)}</span>
       <span className="min-w-0 flex-1 basis-48"><span className={`block font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
         <span className="block text-xs break-words opacity-80">{tour.routeName} · {tour.reservation ? `robot ${tour.reservation.robotCode} · giữ ${campusTime(tour.reservation.startsAt)} - ${campusTime(tour.reservation.endsAt)}` : 'không giữ robot'}</span></span>
       <span className="rounded bg-white/70 px-1.5 text-[11px] font-semibold whitespace-nowrap">{tourStateLabel(tour, now)}</span>
     </button>
   </li>)}</ul>
+}
+
+/** A quick Tour (ADR-0053) in the shift calendar: its time is its latest Start and it holds the robot from creation. */
+function QuickMark() {
+  return <span title="Tour nhanh" className="inline-flex items-center gap-0.5 rounded bg-[#fffaf0] px-1 text-[10px] font-bold text-[#7d5310]"><Zap size={10} aria-hidden="true" />Nhanh</span>
 }
 
 /** The chosen Tour: its time, robot hold and where to go next. An ended Tour reads its detail, the only place its released hold and end reason are. */
@@ -378,6 +411,7 @@ function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void 
   const endReason = ended ? detail.data?.endReason : null
   const rows: Array<[typeof Clock, string, ReactNode]> = [
     [CalendarDays, 'Ngày tổ chức', new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(tour.scheduledStartAt))],
+    ...(tour.isShortNotice ? [[Zap, 'Loại Tour', 'Tour nhanh, hạn Start là giờ ghi trên lịch'] as [typeof Clock, string, ReactNode]] : []),
     [Clock, 'Thời gian Tour', span(tour, hold)],
     [Bot, 'Robot', hold?.robotCode ?? (loading ? 'Đang tải…' : '-')],
     [CalendarDays, hold?.releasedAt ? 'Khung giữ đã trả' : 'Giữ chỗ robot', hold ? `${campusTime(hold.startsAt)} - ${campusTime(hold.endsAt)}` : loading ? 'Đang tải…' : 'Không giữ robot'],

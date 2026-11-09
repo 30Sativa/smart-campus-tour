@@ -1,6 +1,6 @@
 import { apiClient } from '../../../../api/client'
 import type { ApiResponse, PagedApiResponse } from '../../../../api/contracts/shared'
-import type { CreateTourInput, StartConfirmation, TourDetails, TourInput, TourListQuery, TourOperator, TourRobotOption, TourShifts, TourSlots,TourStartChecks, TourSummary } from '../types'
+import type { CreateTourInput, QuickTourInput, QuickTourPlan, StartConfirmation, TourDetails, TourInput, TourListQuery, TourOperator, TourRobotOption, TourShifts, TourSlots,TourStartChecks, TourSummary } from '../types'
 
 type Mutation = ApiResponse<{ id: string }>
 
@@ -16,13 +16,18 @@ export const toursApi = {
     if (query.operator) params.set('operator', query.operator)
     if (query.needsReconcile) params.set('needsReconcile', 'true')
     if (query.readyBlockers) params.set('readyBlockers', 'true')
+    if (query.shortNotice !== undefined) params.set('shortNotice', String(query.shortNotice))
     return apiClient<PagedApiResponse<TourSummary>>(`/api/staff/manage/tours?${params}`)
   },
   get: (id: string) => apiClient<ApiResponse<TourDetails>>(`/api/staff/manage/tours/${id}`).then(r => r.data!),
   operators: () => apiClient<ApiResponse<TourOperator[]>>('/api/staff/manage/tours/operators').then(r => r.data ?? []),
   robots: (routeRevisionId: string) => apiClient<ApiResponse<TourRobotOption[]>>(`/api/staff/manage/tours/robots?routeRevisionId=${encodeURIComponent(routeRevisionId)}`).then(r => r.data ?? []),
-  slots: (routeRevisionId: string, robotCode: string, from: string, to: string, shortNotice = false) =>
-    apiClient<ApiResponse<TourSlots>>(`/api/staff/manage/tours/slots?${new URLSearchParams({ routeRevisionId, robotCode, from, to, ...(shortNotice ? { shortNotice: 'true' } : {}) })}`).then(r => r.data!),
+  slots: (routeRevisionId: string, robotCode: string, from: string, to: string) =>
+    apiClient<ApiResponse<TourSlots>>(`/api/staff/manage/tours/slots?${new URLSearchParams({ routeRevisionId, robotCode, from, to })}`).then(r => r.data!),
+  quickPlan: (routeRevisionId: string, robotCode: string) =>
+    apiClient<ApiResponse<QuickTourPlan>>(`/api/staff/manage/tours/quick/plan?${new URLSearchParams({ routeRevisionId, robotCode })}`).then(r => r.data!),
+  createQuick: (requestId: string, configuration: QuickTourInput) =>
+    apiClient<Mutation>('/api/staff/manage/tours/quick', { method: 'POST', json: { requestId, configuration } }).then(r => r.data!.id),
   shifts: (from: string, to: string) =>
     apiClient<ApiResponse<TourShifts>>(`/api/staff/manage/tours/shifts?${new URLSearchParams({ from, to })}`).then(r => r.data!),
   create: (requestId: string, configuration: CreateTourInput) =>
