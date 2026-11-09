@@ -4,7 +4,7 @@ import { routeKeys } from '../routes/hooks'
 import { versionedRoutesApi } from '../routes/versioned-api'
 import { toursApi } from './api/tours'
 import { dayEnd, dayStart } from './tour-calendar'
-import type { CreateTourInput, TourInput, TourListQuery } from './types'
+import type { CreateTourInput, QuickTourInput, TourInput, TourListQuery } from './types'
 
 // Separate from the labelled Tour demo's ['admin', 'tours'] cache; never used as its fallback.
 export const tourKeys = {
@@ -31,9 +31,17 @@ export function useTourRobots(routeRevisionId: string) {
   return useQuery({ queryKey: [...tourKeys.all, 'robots', routeRevisionId], queryFn: () => toursApi.robots(routeRevisionId), enabled: Boolean(routeRevisionId) })
 }
 /** The shifts of one campus date for this route and robot. Refreshed when a create is refused, because a shift was taken meanwhile. */
-export function useTourSlots(routeRevisionId: string, robotCode: string, date: string, shortNotice = false) {
-  return useQuery({ queryKey: [...tourKeys.slots, routeRevisionId, robotCode, date, shortNotice], queryFn: () => toursApi.slots(routeRevisionId, robotCode, date, date, shortNotice),
-    enabled: Boolean(routeRevisionId && robotCode && date), retry: false })
+export function useTourSlots(routeRevisionId: string, robotCode: string, date: string, enabled = true) {
+  return useQuery({ queryKey: [...tourKeys.slots, routeRevisionId, robotCode, date], queryFn: () => toursApi.slots(routeRevisionId, robotCode, date, date),
+    enabled: enabled && Boolean(routeRevisionId && robotCode && date), retry: false })
+}
+/**
+ * Whether a quick Tour can be created now (ADR-0053). Its deadline and hold move with the clock, so it is refreshed
+ * every 30 seconds; it shares the slots key so a refused create refreshes it too.
+ */
+export function useQuickTourPlan(routeRevisionId: string, robotCode: string, enabled = true) {
+  return useQuery({ queryKey: [...tourKeys.slots, 'quick', routeRevisionId, robotCode], queryFn: () => toursApi.quickPlan(routeRevisionId, robotCode),
+    enabled: enabled && Boolean(routeRevisionId && robotCode), retry: false, refetchInterval: 30_000 })
 }
 /** The configured shifts of a campus date range, so the calendar can draw them. */
 export function useTourShifts(from: string, to: string, enabled = true) {
@@ -60,6 +68,12 @@ export function useCreateTour() {
   const client = useQueryClient()
   return useMutation({ mutationFn: ({ requestId, input }: { requestId: string; input: CreateTourInput }) =>
     toursApi.create(requestId, input), onSuccess, onError: () => client.invalidateQueries({ queryKey: tourKeys.slots }) })
+}
+export function useCreateQuickTour() {
+  const onSuccess = useInvalidateTours()
+  const client = useQueryClient()
+  return useMutation({ mutationFn: ({ requestId, input }: { requestId: string; input: QuickTourInput }) =>
+    toursApi.createQuick(requestId, input), onSuccess, onError: () => client.invalidateQueries({ queryKey: tourKeys.slots }) })
 }
 export function useUpdateTour() {
   const onSuccess = useInvalidateTours()

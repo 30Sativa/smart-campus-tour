@@ -92,6 +92,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0049](0049-m2-3-robot-local-safety.md) | M2.3 robot-local safety: motion permit and latched gate in `mode_manager`, real `localized`/`motionReady`, map content check, one goal sender, GATE A checklist | accepted 2026-11-08 by the owner, not implemented |
 | [0051](0051-staff-discard-never-passed-poi.md) | Staff soft-discard a POI proposal that never passed verification; schema v1.20 adds `PoiProposals.DiscardedAt/DiscardedByUserId` and a column-only runtime grant | accepted 2026-11-09 by the owner, implemented |
 | [0052](0052-quest-camera-on-demand.md) | The Quest camera runs only while a Tour runs on the robot or a Staff page holds an in-memory lease; the robot polls `/api/fleet/camera/v1/poll`; viewers can pause; fail-safe on backend outage | proposed 2026-11-09 (team member Thanh), implemented; robot side opt-in (`QUEST_CONTROL_URL`) |
+| [0053](0053-quick-tours.md) | Quick Tours: no date or shift, the robot held from creation, published at their latest Start, Start opens at creation once ready; supersedes the shift-bound short-notice Tour of ADR-0050 | accepted 2026-11-09 by the owner, implemented |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

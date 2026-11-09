@@ -12,6 +12,7 @@ using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.RobotCredentials;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
+using SmartCampus.Application.Features.Tours.Commands.CreateQuickTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
 using SmartCampus.Application.Features.Tours.Commands.MarkTourReady;
 using SmartCampus.Application.Features.Tours.Commands.ReopenTour;
@@ -283,8 +284,12 @@ public sealed class TourReadySqlTests
             return proposal.Revision.Id;
         }
 
-        public async Task<Guid> CreateTour(DateTimeOffset start, string? shortNoticeReason = null) =>
-            (await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new("Tour READY", null, Route.RevisionId, Robot, operatorId, start, null, 20, shortNoticeReason))))).Id;
+        public async Task<Guid> CreateTour(DateTimeOffset start) =>
+            (await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new("Tour READY", null, Route.RevisionId, Robot, operatorId, start, null, 20))))).Id;
+
+        /// <summary>ADR-0053: a quick Tour on the harness route, robot and Operator.</summary>
+        public async Task<Guid> CreateQuickTour(string reason, Guid? requestId = null) =>
+            (await Send(new CreateQuickTourCommand(staffId, new(requestId ?? Guid.NewGuid(), new("Tour nhanh", null, Route.RevisionId, Robot, operatorId, null, 20, reason))))).Id;
 
         public async Task<TResponse> Send<TResponse>(IRequest<TResponse> request)
         {
