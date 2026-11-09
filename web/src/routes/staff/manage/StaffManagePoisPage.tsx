@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { FileText, Maximize2, MapPinOff, Minus, Pencil, Plus, Send } from 'lucide-react'
+import { FileText, Maximize2, MapPinOff, Pencil, Plus, Send } from 'lucide-react'
 import { SearchField } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
@@ -11,6 +11,7 @@ import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, verificationMethodL
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
 import { fitView } from '../../../features/administration/pois/map/fit-view'
+import { ZoomableMap } from '../../../features/administration/pois/map/ZoomableMap'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 import { poiStatus, type PoiStatus } from '../../../features/administration/pois/poi-status'
 
@@ -196,27 +197,23 @@ function NoEligibleMap({ maps }: { maps: MapVersionItem[] }) {
 /** The listed POIs on their map, numbered like the list and coloured by check state; a point selects it. */
 function PoiMap({ proposals, framed, mapVersionId, mapLabel, number, selectedId, onSelect }: { proposals: PoiProposal[]; framed: PoiProposal[]; mapVersionId: string; mapLabel: string; number: Map<string, number>; selectedId?: string; onSelect: (id: string) => void }) {
   const { map, error, retry } = useMapRaster(mapVersionId)
-  const [zoom, setZoom] = useState(1)
   const frame = useRef<HTMLElement>(null)
   if (!mapVersionId) return <section className={`${card} p-6 text-center text-[13px] text-[#718096]`} aria-label="Bản đồ POI">Chưa có bản đồ cho các POI đang lọc.</section>
   if (error) return <section aria-label="Bản đồ POI"><AdminErrorPanel title="Không tải được bản đồ." description={error} onRetry={retry} /></section>
   if (!map) return <section className={`${card} overflow-hidden`} aria-label="Bản đồ POI"><SkeletonRows rows={6} label="Đang tải bản đồ" /></section>
   const points = proposals.map((p) => ({ p, at: rosToImage(map, { x: p.revision.x, y: p.revision.y }) }))
   // The frame fits every POI on this version, not just the filtered ones, so changing tab or search never re-zooms the map.
-  const { x: zx, y: zy, width: zw, height: zh, unit } = fitView(map, framed.map((p) => rosToImage(map, { x: p.revision.x, y: p.revision.y })), zoom)
+  const fitted = fitView(map, framed.map((p) => rosToImage(map, { x: p.revision.x, y: p.revision.y })))
   const tool = `grid size-9 place-items-center rounded-xl border border-[#e2e8f0] bg-white text-[#475569] transition-colors hover:bg-[#f8fafc] disabled:opacity-40 ${focus}`
   return (
     <section ref={frame} className={`${card} overflow-hidden p-4`} aria-label="Bản đồ POI">
       <div className="mb-3 flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1"><h2 className="text-lg font-bold text-[#2d3748]">Bản đồ điểm tham quan</h2><p className="text-xs text-[#718096]">{mapLabel || map.mapKey}</p></div>
         <button type="button" className={tool} aria-label="Toàn màn hình" onClick={() => { void (document.fullscreenElement ? document.exitFullscreen() : frame.current?.requestFullscreen?.()) }}><Maximize2 size={16} aria-hidden="true" /></button>
-        <button type="button" className={tool} aria-label="Phóng to" disabled={zoom >= 4} onClick={() => setZoom(z => Math.min(4, z * 1.5))}><Plus size={16} aria-hidden="true" /></button>
-        <button type="button" className={tool} aria-label="Thu nhỏ" disabled={zoom <= 1} onClick={() => setZoom(z => Math.max(1, z / 1.5))}><Minus size={16} aria-hidden="true" /></button>
       </div>
-      <svg viewBox={`${zx} ${zy} ${zw} ${zh}`} className="block h-[min(70vh,620px)] w-full rounded-xl bg-[#eef2f6]" role="img" aria-label={`Bản đồ ${map.mapKey} với ${points.length} POI`}>
-        <image href={map.imageUrl} x={0} y={0} width={map.width} height={map.height} style={{ imageRendering: 'pixelated' }} opacity={0.9} />
+      <ZoomableMap key={map.imageUrl} map={map} fitted={fitted} className="h-[min(70vh,620px)]" role="img" label={`Bản đồ ${map.mapKey} với ${points.length} POI`} reveal={points.find(({ p }) => p.id === selectedId)?.at}>
         {/* The chosen pin is drawn last so a point at the same spot never covers it. */}
-        {[...points].sort((a, b) => Number(a.p.id === selectedId) - Number(b.p.id === selectedId)).map(({ p, at }) => {
+        {({ unit }) => [...points].sort((a, b) => Number(a.p.id === selectedId) - Number(b.p.id === selectedId)).map(({ p, at }) => {
           const active = p.id === selectedId
           const n = number.get(p.id) ?? 0
           const r = (active ? 15 : 12) * unit
@@ -232,10 +229,10 @@ function PoiMap({ proposals, framed, mapVersionId, mapLabel, number, selectedId,
             </g>
           )
         })}
-      </svg>
+      </ZoomableMap>
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[#718096]">
         {([[NEUTRAL_PIN, 'Điểm tham quan'], [FAIL_PIN, STATUS.FAIL.label], [SELECTED_PIN, 'Đang chọn']] as const).map(([color, label]) => <span key={label} className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: color }} />{label}</span>)}
-        <span className="ml-auto">Chọn điểm trên bản đồ hoặc trong danh sách</span>
+        <span className="ml-auto">Cuộn chuột để phóng to, kéo để di chuyển bản đồ</span>
       </div>
     </section>
   )
