@@ -885,10 +885,10 @@ public sealed class BusinessFlowIntegrationTests
         {
             var calendarShifts = (await Body(staffCalendar)).GetProperty("data").GetProperty("days")[0].GetProperty("shifts");
             Assert.Equal(JsonValueKind.Null, calendarShifts[0].GetProperty("block").ValueKind);
-            Assert.Equal("Bảo trì robot", calendarShifts[1].GetProperty("block").GetProperty("reason").GetString());
+            Assert.Equal("Bảo trì robot", calendarShifts.EnumerateArray().Single(shift => shift.GetProperty("code").GetString() == "S2").GetProperty("block").GetProperty("reason").GetString());
         }
         using (var blockedSlots = await Get(host.Client, slotPath, staffToken))
-            Assert.Equal("SHIFT_BLOCKED", (await Body(blockedSlots)).GetProperty("data").GetProperty("days")[0].GetProperty("slots")[1].GetProperty("reasonCode").GetString());
+            Assert.Equal("SHIFT_BLOCKED", (await Body(blockedSlots)).GetProperty("data").GetProperty("days")[0].GetProperty("slots").EnumerateArray().Single(slot => slot.GetProperty("shiftCode").GetString() == "S2").GetProperty("reasonCode").GetString());
         using (var removeAsStaff = await Json(host.Client, HttpMethod.Post, $"/api/admin/schedule-blocks/{closedId}/remove", staffToken, new { requestId = Guid.NewGuid() }))
             Assert.Equal(HttpStatusCode.Forbidden, removeAsStaff.StatusCode);
         using (var reopen = await Json(host.Client, HttpMethod.Post, $"/api/admin/schedule-blocks/{closedId}/remove", adminToken, new { requestId = Guid.NewGuid() }))
