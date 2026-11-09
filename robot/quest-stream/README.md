@@ -226,6 +226,29 @@ screenrecord/FFmpeg/MediaMTX.
 
 Phía web: đặt `VITE_QUEST_STATUS_URL=http://<IP_NUC>:8080/device` trong `web/.env.local`.
 
+## Giảm độ trễ: lấy hình bằng scrcpy
+
+Đo trên NUC7PJYH + Quest 3 thật (2026-11-09): `screenrecord` trễ khoảng **5–6 s**
+dù FFmpeg giữ được `speed` 1x. Kính gửi cả hai mắt ở tần số màn hình và tự giữ
+đệm; NUC phải giải mã từng khung. `QUEST_CAPTURE=scrcpy` đẩy `scrcpy-server`
+lên kính và nhận H.264 thô **chỉ của một mắt**, tối đa `QUEST_FPS` khung/giây,
+cạnh dài tối đa 1600 px. Phần sau (FFmpeg, MediaMTX, web) không đổi.
+Không cần cài scrcpy hay module `v4l2loopback`.
+
+```bash
+bash scripts/install-scrcpy-server.sh                  # tải bin/scrcpy-server (một lần)
+sed -i '/^QUEST_CAPTURE=/d' quest-stream.env && echo 'QUEST_CAPTURE=scrcpy' >> quest-stream.env
+sudo systemctl restart quest-stream
+tail -f logs/adb.log logs/quest-stream.log             # thấy SCRCPY_START rồi STREAM_STARTED
+```
+
+| Thấy gì | Làm gì |
+|---|---|
+| `SCRCPY_ERROR ... is missing` | chạy `install-scrcpy-server.sh` |
+| `SCRCPY_ERROR scrcpy-server did not start` | xem dòng ngay trên trong `logs/adb.log`; thử bản khác: `install-scrcpy-server.sh v3.3.1` |
+| Hình lệch mắt / còn hai mắt | đặt `QUEST_SCRCPY_CROP=W:H:X:Y` (xem `adb shell wm size`, lấy nửa trái `W/2:H:0:0`) |
+| Muốn quay lại cách cũ | `QUEST_CAPTURE=screenrecord`, restart |
+
 ## Xử lý khi hỏng
 
 Hành vi tự động:

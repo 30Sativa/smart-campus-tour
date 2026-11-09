@@ -27,6 +27,8 @@ import json
 import logging
 import logging.handlers
 import os
+import random
+import re
 import shutil
 import socket
 import signal
@@ -104,6 +106,14 @@ class Config:
     capture_bitrate: int = 20_000_000
     screenrecord_limit: int = 180  # Android caps a screenrecord session at 180 s
     keep_awake: bool = False  # disable the proximity sensor while streaming
+    # "screenrecord" (adb, no setup) or "scrcpy": scrcpy-server sends only one eye, at most
+    # scrcpy_max_fps frames per second, so the NUC decodes far less and the picture lags far less.
+    capture: str = "screenrecord"
+    scrcpy_server: Path = MODULE_DIR / "bin" / "scrcpy-server"
+    scrcpy_version: str = ""  # empty = bin/scrcpy-server.version (written by install-scrcpy-server.sh)
+    scrcpy_max_fps: int = 0  # 0 = the output fps
+    scrcpy_max_size: int = 1600  # longest side sent by the Quest, 0 = full eye
+    scrcpy_crop: str = ""  # W:H:X:Y on the Quest display, empty = the chosen eye's half
 
     # Output: where FFmpeg publishes (MediaMTX RTSP) and how often a keyframe
     # is sent (a new WebRTC viewer starts on the next keyframe).
@@ -145,6 +155,12 @@ class Config:
             capture_bitrate=_env_int("QUEST_CAPTURE_BITRATE", 20_000_000),
             screenrecord_limit=_env_int("QUEST_SCREENRECORD_LIMIT", 180),
             keep_awake=_env("QUEST_KEEP_AWAKE", "0") in ("1", "true", "yes"),
+            capture=_env("QUEST_CAPTURE", "screenrecord").lower(),
+            scrcpy_server=Path(_env("QUEST_SCRCPY_SERVER", str(MODULE_DIR / "bin" / "scrcpy-server"))),
+            scrcpy_version=_env("QUEST_SCRCPY_VERSION", ""),
+            scrcpy_max_fps=_env_int("QUEST_SCRCPY_MAX_FPS", 0),
+            scrcpy_max_size=_env_int("QUEST_SCRCPY_MAX_SIZE", 1600),
+            scrcpy_crop=_env("QUEST_SCRCPY_CROP", ""),
             publish_url=_env("QUEST_PUBLISH_URL", "rtsp://127.0.0.1:8554/quest"),
             keyframe_interval=_env_float("QUEST_KEYFRAME_INTERVAL", 1.0),
             log_dir=Path(_env("QUEST_LOG_DIR", str(MODULE_DIR / "logs"))),
@@ -165,6 +181,12 @@ class Config:
             raise SystemExit("CONFIG_ERROR QUEST_ENCODER must be libx264 or h264_vaapi")
         if self.hwdec not in ("", "vaapi"):
             raise SystemExit("CONFIG_ERROR QUEST_HWDEC must be empty or 'vaapi'")
+        if self.capture not in ("screenrecord", "scrcpy"):
+            raise SystemExit("CONFIG_ERROR QUEST_CAPTURE must be 'screenrecord' or 'scrcpy'")
+        if self.scrcpy_crop and not re.fullmatch(r"\d+:\d+:\d+:\d+", self.scrcpy_crop):
+            raise SystemExit("CONFIG_ERROR QUEST_SCRCPY_CROP must look like 2064:2208:0:0")
+        if not 0 <= self.scrcpy_max_fps <= 120 or self.scrcpy_max_size < 0:
+            raise SystemExit("CONFIG_ERROR QUEST_SCRCPY_MAX_FPS must be 0-120 and QUEST_SCRCPY_MAX_SIZE >= 0")
         parts = urlsplit(self.publish_url)
         if parts.scheme not in ("rtsp", "rtsps") or not parts.hostname or len(parts.path) < 2:
             raise SystemExit("CONFIG_ERROR QUEST_PUBLISH_URL must look like rtsp://127.0.0.1:8554/quest")
@@ -213,8 +235,9 @@ def build_video_filter(cfg: Config) -> str:
     ox = f"{cfg.crop_offset_x:g}"
     oy = f"{cfg.crop_offset_y:g}"
     steps = [
-        # 1. one eye: the left (or right) half of the stereo frame
-        f"crop=w=iw/2:h=ih:x={eye_x}:y=0",
+        # 1. one eye: the left (or right) half of the stereo frame. scrcpy already
+        #    sends a single eye (cropped on the Quest), so it skips this step.
+        *([] if cfg.capture == "scrcpy" else [f"crop=w=iw/2:h=ih:x={eye_x}:y=0"]),
         # 2. a 16:9 window, `keep` of the eye's width, centred (+ offset),
         #    never larger than the eye and never outside it
         (
@@ -310,6 +333,131 @@ def build_screenrecord_command(cfg: Config, serial: str) -> List[str]:
         cmd += ["--size", cfg.capture_size]
     cmd.append("-")
     return cmd
+
+
+# --------------------------------------------------------------------------
+# scrcpy capture (QUEST_CAPTURE=scrcpy)
+# --------------------------------------------------------------------------
+
+SCRCPY_REMOTE_PATH = "/data/local/tmp/scrcpy-server.jar"
+
+
+def scrcpy_server_version(cfg: Config) -> str:
+    """The version scrcpy-server must be started with (it refuses any other)."""
+    if cfg.scrcpy_version:
+        return cfg.scrcpy_version.lstrip("v")
+    try:
+        return cfg.scrcpy_server.with_name(cfg.scrcpy_server.name + ".version").read_text("utf-8").strip().lstrip("v")
+    except OSError:
+        return ""
+
+
+def parse_wm_size(output: str) -> Optional[Tuple[int, int]]:
+    """`adb shell wm size` -> (width, height); an override size wins over the physical one."""
+    sizes = dict(re.findall(r"(Physical|Override) size:\s*(\d+x\d+)", output))
+    value = sizes.get("Override") or sizes.get("Physical")
+    if not value:
+        return None
+    w, h = value.split("x")
+    return int(w), int(h)
+
+
+def eye_crop(size: Tuple[int, int], eye: str) -> str:
+    """scrcpy crop W:H:X:Y for one half of the side-by-side Quest display."""
+    w, h = size
+    half = (w // 2) - (w // 2) % 2
+    return f"{half}:{h - h % 2}:{0 if eye == 'left' else w - half}:0"
+
+
+def build_scrcpy_server_command(cfg: Config, serial: str, scid: str, crop: str, version: str) -> List[str]:
+    """Start scrcpy-server on the Quest: raw H.264 of one eye, video only, no control."""
+    args = [
+        f"CLASSPATH={SCRCPY_REMOTE_PATH}", "app_process", "/", "com.genymobile.scrcpy.Server", version,
+        f"scid={scid}", "log_level=warn", "tunnel_forward=true",
+        "audio=false", "control=false", "cleanup=true",
+        # Plain Annex-B H.264 (what FFmpeg's -f h264 reads); the dummy byte (a 0x00, harmless
+        # before a start code) confirms the connection reached the server, not just adb.
+        "raw_stream=true", "send_dummy_byte=true",
+        "video_codec=h264", f"video_bit_rate={cfg.capture_bitrate}",
+        f"max_fps={cfg.scrcpy_max_fps or cfg.fps}", f"max_size={cfg.scrcpy_max_size}",
+        f"crop={crop}",
+    ]
+    return [cfg.adb, "-s", serial, "shell", " ".join(args)]
+
+
+def _connect_scrcpy(port: int, server: subprocess.Popen, timeout: float = 15.0) -> Optional[Tuple[socket.socket, bytes]]:
+    """Connect through the adb forward; adb accepts and drops us until the server listens."""
+    deadline = time.time() + timeout
+    while time.time() < deadline and server.poll() is None:
+        try:
+            sock = socket.create_connection(("127.0.0.1", port), timeout=3)
+            sock.settimeout(5)
+            first = sock.recv(1)
+            if first:
+                sock.settimeout(None)
+                return sock, first
+            sock.close()
+        except OSError:
+            pass
+        time.sleep(0.2)
+    return None
+
+
+def run_scrcpy_capture(cfg: Config, serial: str) -> int:
+    """`server.py --scrcpy-capture SERIAL`: raw H.264 of one eye on stdout, like screenrecord.
+
+    The supervisor runs this instead of `adb exec-out screenrecord`, so everything after
+    the capture (stall detection, FFmpeg, MediaMTX) is the same for both methods.
+    """
+    out = sys.stdout.buffer
+
+    def fail(code: int, message: str) -> int:
+        print(f"SCRCPY_ERROR {message}", file=sys.stderr, flush=True)
+        return code
+
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # run the cleanup below on stop
+    version = scrcpy_server_version(cfg)
+    if not cfg.scrcpy_server.is_file() or not version:
+        return fail(2, f"{cfg.scrcpy_server} or its version is missing; run scripts/install-scrcpy-server.sh")
+    adb = [cfg.adb, "-s", serial]
+    try:
+        subprocess.run(adb + ["push", str(cfg.scrcpy_server), SCRCPY_REMOTE_PATH],
+                       check=True, capture_output=True, timeout=30)
+        crop = cfg.scrcpy_crop
+        if not crop:
+            size = parse_wm_size(subprocess.run(adb + ["shell", "wm", "size"], capture_output=True,
+                                                text=True, timeout=10).stdout)
+            if size is None:
+                return fail(2, "cannot read the display size (adb shell wm size); set QUEST_SCRCPY_CROP")
+            crop = eye_crop(size, cfg.eye)
+        scid = f"{random.getrandbits(31):08x}"
+        port = subprocess.run(adb + ["forward", "tcp:0", f"localabstract:scrcpy_{scid}"],
+                              check=True, capture_output=True, text=True, timeout=10).stdout.strip()
+    except (subprocess.SubprocessError, OSError) as exc:
+        return fail(3, f"adb setup failed: {exc}")
+
+    print(f"SCRCPY_START version={version} crop={crop} max_fps={cfg.scrcpy_max_fps or cfg.fps} "
+          f"max_size={cfg.scrcpy_max_size}", file=sys.stderr, flush=True)
+    server = subprocess.Popen(build_scrcpy_server_command(cfg, serial, scid, crop, version),
+                              stdin=subprocess.DEVNULL, stdout=sys.stderr, stderr=sys.stderr)
+    try:
+        connected = _connect_scrcpy(int(port), server)
+        if connected is None:
+            return fail(4, "scrcpy-server did not start (wrong version, or the Quest refused it)")
+        sock, first = connected
+        with sock:
+            out.write(first)
+            while True:
+                data = sock.recv(65536)
+                if not data:
+                    return 0
+                out.write(data)
+                out.flush()
+    except (BrokenPipeError, OSError):
+        return 0
+    finally:
+        _kill(server)
+        subprocess.run(adb + ["forward", "--remove", f"tcp:{port}"], capture_output=True, timeout=5)
 
 
 # --------------------------------------------------------------------------
@@ -784,8 +932,12 @@ class Supervisor(threading.Thread):
 
     def _start_adb(self, serial: str) -> subprocess.Popen:
         adb_log = open(self.cfg.log_dir / "adb.log", "a", encoding="utf-8")
+        cmd = (
+            [sys.executable, "-u", str(Path(__file__).resolve()), "--scrcpy-capture", serial]
+            if self.cfg.capture == "scrcpy" else build_screenrecord_command(self.cfg, serial)
+        )
         return subprocess.Popen(
-            build_screenrecord_command(self.cfg, serial),
+            cmd,
             stdout=subprocess.PIPE, stderr=adb_log, stdin=subprocess.DEVNULL, bufsize=0,
         )
 
@@ -886,7 +1038,7 @@ class Supervisor(threading.Thread):
 
                 short_failures += 1
                 log.warning(
-                    "ADB_ERROR screenrecord ended after %.1fs (%d/%d) - see logs/adb.log",
+                    "ADB_ERROR %s ended after %.1fs (%d/%d) - see logs/adb.log", self.cfg.capture,
                     session, short_failures, self.MAX_SHORT_FAILURES,
                 )
                 if short_failures >= self.MAX_SHORT_FAILURES:
@@ -1002,6 +1154,8 @@ def setup_logging(cfg: Config) -> None:
 
 
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "--scrcpy-capture":
+        return run_scrcpy_capture(Config.from_env(), sys.argv[2])
     cfg = Config.from_env()
     setup_logging(cfg)
     if shutil.which(cfg.ffmpeg) is None and not Path(cfg.ffmpeg).is_file():
@@ -1031,8 +1185,8 @@ def main() -> int:
 
     log.info(
         "quest-stream: status on http://%s:%s/status, publishing to %s "
-        "(eye=%s keep=%s out=%sx%s@%s %s %s)",
-        cfg.host, cfg.port, cfg.publish_url_safe, cfg.eye, cfg.crop_keep,
+        "(capture=%s eye=%s keep=%s out=%sx%s@%s %s %s)",
+        cfg.host, cfg.port, cfg.publish_url_safe, cfg.capture, cfg.eye, cfg.crop_keep,
         cfg.width, cfg.height, cfg.fps, cfg.encoder, cfg.bitrate,
     )
     supervisor.start()
