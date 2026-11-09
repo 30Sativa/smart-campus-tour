@@ -152,6 +152,49 @@ class AdbParsingTests(unittest.TestCase):
         self.assertIn("2560x1344", cmd)
 
 
+class ScrcpyCaptureTests(unittest.TestCase):
+    def test_default_capture_is_screenrecord(self):
+        self.assertEqual(cfg().capture, "screenrecord")
+        with self.assertRaises(SystemExit):
+            cfg(capture="v4l2")
+        with self.assertRaises(SystemExit):
+            cfg(capture="scrcpy", scrcpy_crop="left")
+
+    def test_scrcpy_frames_are_one_eye_already(self):
+        both = server.build_video_filter(cfg())
+        one = server.build_video_filter(cfg(capture="scrcpy"))
+        self.assertTrue(both.startswith("crop=w=iw/2:h=ih:x=0:y=0,"))
+        self.assertNotIn("crop=w=iw/2:h=ih", one)
+        self.assertIn("fps=30", one)
+
+    def test_wm_size_prefers_override(self):
+        self.assertEqual(server.parse_wm_size("Physical size: 4128x2208\n"), (4128, 2208))
+        self.assertEqual(server.parse_wm_size("Physical size: 4128x2208\nOverride size: 3664x1920\n"), (3664, 1920))
+        self.assertIsNone(server.parse_wm_size("error: no devices"))
+
+    def test_eye_crop_is_one_half(self):
+        self.assertEqual(server.eye_crop((4128, 2208), "left"), "2064:2208:0:0")
+        self.assertEqual(server.eye_crop((4128, 2208), "right"), "2064:2208:2064:0")
+        self.assertEqual(server.eye_crop((3665, 1921), "left"), "1832:1920:0:0")
+
+    def test_server_command_asks_for_raw_h264_of_one_eye(self):
+        cmd = server.build_scrcpy_server_command(cfg(capture="scrcpy", fps=20), "S", "0abc1234", "2064:2208:0:0", "3.3.1")
+        self.assertEqual(cmd[:4], ["adb", "-s", "S", "shell"])
+        shell = cmd[4]
+        self.assertTrue(shell.startswith("CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 3.3.1 "))
+        for arg in ("scid=0abc1234", "tunnel_forward=true", "audio=false", "control=false", "raw_stream=true",
+                    "video_codec=h264", "max_fps=20", "max_size=1600", "crop=2064:2208:0:0"):
+            self.assertIn(arg, shell.split())
+
+    def test_version_comes_from_the_installed_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jar = Path(tmp) / "scrcpy-server"
+            jar.write_bytes(b"x")
+            (Path(tmp) / "scrcpy-server.version").write_text("3.3.1\n")
+            self.assertEqual(server.scrcpy_server_version(cfg(scrcpy_server=jar)), "3.3.1")
+            self.assertEqual(server.scrcpy_server_version(cfg(scrcpy_server=jar, scrcpy_version="v3.2")), "3.2")
+
+
 class BatteryParsingTests(unittest.TestCase):
     DUMPSYS = (
         "Current Battery Service state:\n"
