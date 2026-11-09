@@ -751,18 +751,30 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByText(/Robot này chưa có kiểm tra triển khai đạt mới nhất/)).toBeInTheDocument()
   })
 
-  it('lists robots ready on the POI map first and says why the others are not', async () => {
+  it('offers only robots confirmed and deployed on the POI map, and says why the others are not', async () => {
     physicalRobots = [
       makePhysicalRobot({ id: 'robot-2', robotCode: 'amr-02', displayName: 'AMR 02', latestDeployedMapKey: 'library-v2' }),
+      makePhysicalRobot({ id: 'robot-3', robotCode: 'amr-03', displayName: 'AMR 03', connectionStatus: 'UNCONFIRMED', latestDeployedMapKey: null, latestDeploymentPassed: null }),
       makePhysicalRobot(),
     ]
     renderPage(<TechnicalPoiImportPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
     await screen.findByRole('option', { name: /AMR 01 · amr-01/ })
-    const options = within(screen.getByLabelText('Robot vật lý')).getAllByRole('option').slice(1).map(option => option.textContent)
-    expect(options[0]).toMatch(/^AMR 01 · amr-01/)
-    expect(options[0]).not.toMatch(/chưa kiểm tra đạt/)
-    expect(options[1]).toMatch(/^AMR 02 · amr-02 .* · chưa kiểm tra đạt trên map này$/)
+    const options = within(screen.getByLabelText('Robot vật lý')).getAllByRole('option').slice(1) as HTMLOptionElement[]
+    expect(options[0].textContent).toMatch(/^AMR 01 · amr-01/)
+    expect(options[0].disabled).toBe(false)
+    const others = options.slice(1)
+    expect(others.every(option => option.disabled)).toBe(true)
+    expect(others.find(option => option.value === 'amr-02')?.textContent).toMatch(/ · chưa kiểm tra triển khai đạt trên map này$/)
+    expect(others.find(option => option.value === 'amr-03')?.textContent).toMatch(/^AMR 03 · amr-03 · Chưa xác nhận kết nối$/)
+  })
+
+  it('points to the map deployment check when no robot can verify the POI', async () => {
+    physicalRobots = [makePhysicalRobot({ connectionStatus: 'UNCONFIRMED', latestDeployedMapKey: null, latestDeploymentPassed: null })]
+    renderPage(<TechnicalPoiImportPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
+    expect(await screen.findByText(/Chưa có robot nào dùng được trên library-v1/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ghi kiểm tra triển khai ở Quản lý bản đồ' })).toHaveAttribute('href', '/technical/maps')
   })
 
   it('blocks saving while the chosen robot was last checked on another map, for either result', async () => {
