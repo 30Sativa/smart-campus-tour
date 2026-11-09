@@ -30,7 +30,6 @@ const CONFLICTS: Record<string, string> = {
   TOUR_DURATION_UNAVAILABLE: 'Chưa đổi được lịch hoặc tuyến của Tour đã tạo. Hãy hủy Tour rồi tạo lại.',
   ROBOT_RESERVATION_CONFLICT: 'Robot đã có Tour khác trong ca này. Chọn ca khác hoặc robot khác.',
   TOUR_LEAD_TIME_TOO_SHORT: 'Ca này quá gần hiện tại, cần tạo trước ít nhất 72 giờ. Chọn ca khác.',
-  SHORT_NOTICE_DISABLED: 'Server chưa bật Tour nhanh. Chọn Tour theo ca, hoặc nhờ người quản lý server bật tùy chọn này.',
   TOUR_SLOT_NOT_ALLOWED: 'Giờ bắt đầu không khớp ca nào. Chọn lại một ca.',
   SHIFT_BLOCKED: 'Ca này vừa bị Admin khoá. Chọn ca hoặc ngày khác.',
   ROUTE_TOO_LONG_FOR_SHIFT:'Tuyến dài hơn thời lượng tối đa của ca. Chọn tuyến ngắn hơn hoặc giảm thời gian dừng.',

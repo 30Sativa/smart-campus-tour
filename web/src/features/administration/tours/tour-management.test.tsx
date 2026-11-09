@@ -59,7 +59,7 @@ const lockedSlot = { ...freeSlot, time: '13:15', startsAt: '2099-01-03T06:15:00Z
 let slotDay = [freeSlot, lockedSlot]
 let expectedSeconds = 1320
 let refuseCreate: string | null = null
-let shortNoticeMinutes: number | null = null
+let shortNoticeMinutes = 30
 
 function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { ...TESTED, revisionId: 'revision-untested', name: 'Chưa đạt', verificationStatus: 'NOT_TESTED' }]) {
   const writes: { method: string; path: string; body: Record<string, unknown> }[] = []
@@ -67,8 +67,6 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
     const url = new URL(String(input), 'http://localhost')
     const path = url.pathname
     const method = init?.method ?? 'GET'
-    if (path === '/api/staff/manage/tours/quick/plan' && shortNoticeMinutes === null)
-      return Promise.resolve(json({ success: false, message: 'x', errors: { code: 'SHORT_NOTICE_DISABLED' } }, 409))
     if (path === '/api/staff/manage/tours/quick/plan') return Promise.resolve(json({ success: true, data: { routeRevisionId: 'revision-2', robotCode: 'amr-01',
       expectedDurationSeconds: 1200, available: true, reasonCode: null, reason: null, deadlineAt: '2099-01-03T06:00:00Z',
       reservationStartsAt: '2099-01-03T05:00:00Z', reservationEndsAt: '2099-01-03T06:35:00Z', waitMinutes: shortNoticeMinutes, maxCapacity: 20 } }))
@@ -102,7 +100,7 @@ function renderAt(path: string) {
     <Route path="/staff/manage/tours/:tourId/edit" element={<StaffManageTourEditPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
-beforeEach(() => { slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null; shortNoticeMinutes = null })
+beforeEach(() => { slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null; shortNoticeMinutes = 30 })
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
@@ -276,18 +274,11 @@ describe('live Tour management', () => {
     expect(screen.queryByLabelText(/Lý do tạo gấp/)).not.toBeInTheDocument()
   })
 
-  it('says when the server has quick Tours switched off', async () => {
-    api()
-    renderAt('/staff/manage/tours/new')
-    expect(await screen.findByText('Server chưa bật Tour nhanh.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Tour nhanh/ })).toBeDisabled()
-  })
-
-  it('reports a refused quick Tour from an old link once a route and robot are chosen', async () => {
+  it('opens the quick form from an old ?kind=short link', async () => {
     api()
     renderAt('/staff/manage/tours/new?kind=short')
     await chooseTarget()
-    expect(await screen.findByText('Server chưa bật Tour nhanh. Chọn Tour theo ca, hoặc nhờ người quản lý server bật tùy chọn này.')).toBeInTheDocument()
+    expect(await screen.findByText(/Robot rảnh/)).toBeInTheDocument()
   })
 
   it('creates a quick Tour with no date or shift once the robot is free and a reason is given', async () => {

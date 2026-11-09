@@ -221,9 +221,9 @@ public sealed class TourScheduleTests
         Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings(TourShiftsFixture.Options, 60, shortNoticeMinLeadMinutes: minutes));
 
     [Fact]
-    public void Settings_LeaveShortNoticeOffUntilConfigured()
+    public void Settings_GiveQuickToursADefaultWait_ThatConfigurationCanChange()
     {
-        Assert.Null(new TourScheduleSettings(TourShiftsFixture.Options, 60).ShortNoticeMinLead);
+        Assert.Equal(TimeSpan.FromMinutes(30), new TourScheduleSettings(TourShiftsFixture.Options, 60).ShortNoticeMinLead);
         Assert.Equal(TimeSpan.FromMinutes(45), new TourScheduleSettings(TourShiftsFixture.Options, 60, shortNoticeMinLeadMinutes: 45).ShortNoticeMinLead);
     }
 

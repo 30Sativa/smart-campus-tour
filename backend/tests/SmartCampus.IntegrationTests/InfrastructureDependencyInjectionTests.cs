@@ -89,9 +89,9 @@ public sealed class InfrastructureDependencyInjectionTests
     }
 
     [Theory]
-    [InlineData(null, null)]   // Unset: the option is off (ADR-0050).
+    [InlineData(null, 30)]   // Unset: quick Tours wait the default 30 minutes (ADR-0053).
     [InlineData("60", 60)]
-    public void AddInfrastructure_ReadsTheShortNoticeOption(string? configured, int? minutes)
+    public void AddInfrastructure_ReadsTheShortNoticeOption(string? configured, int minutes)
     {
         var values = new Dictionary<string, string?>
         {
@@ -104,6 +104,6 @@ public sealed class InfrastructureDependencyInjectionTests
         using var provider = new ServiceCollection().AddInfrastructure(configuration).BuildServiceProvider();
 
         var settings = provider.GetRequiredService<SmartCampus.Application.Features.Tours.TourScheduleSettings>();
-        Assert.Equal(minutes is { } value ? TimeSpan.FromMinutes(value) : null, settings.ShortNoticeMinLead);
+        Assert.Equal(TimeSpan.FromMinutes(minutes), settings.ShortNoticeMinLead);
     }
 }

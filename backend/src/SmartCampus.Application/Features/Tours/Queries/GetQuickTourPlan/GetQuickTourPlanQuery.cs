@@ -25,7 +25,7 @@ public sealed class GetQuickTourPlanQueryHandler(ITourManagementRepository tours
 {
     public async Task<QuickTourPlanView> Handle(GetQuickTourPlanQuery query, CancellationToken ct)
     {
-        var wait = TourSchedule.RequireShortNoticeLead(settings);
+        var wait = settings.ShortNoticeMinLead;
         var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, query.RouteRevisionId, lockTarget: false, ct);
         var robot = await revisions.FindPhysicalRobotAsync(query.RobotCode.Trim(), ct)
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");

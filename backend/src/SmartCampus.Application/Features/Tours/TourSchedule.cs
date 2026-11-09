@@ -22,6 +22,8 @@ public sealed class TourScheduleSettings
     public const int DefaultRecommendedMaxMinutes = 60;
     /// <summary>BR-26: 20 until NFR-CAP-01 passes, and the 40 of CK_Tours_Capacity is the ceiling either way (ADR-0048).</summary>
     public const int DefaultMaxCapacity = 20;
+    /// <summary>How long a quick Tour waits to be started when Tours:ShortNoticeMinLeadMinutes is not set (ADR-0053).</summary>
+    public const int DefaultShortNoticeMinLeadMinutes = 30;
     public const int CapacityCeiling = 40;
     // 15 minutes to prepare, 15 to finish and at least one minute of Tour.
     private static readonly TimeSpan MinShiftLength = TimeSpan.FromMinutes(31);
@@ -34,19 +36,17 @@ public sealed class TourScheduleSettings
     public int LongestShiftMaxSeconds => Shifts.Max(TourSchedule.MaxDurationSeconds);
     /// <summary>
     /// How long a quick (short-notice) Tour waits to be started: its latest Start is this long after creation (ADR-0053).
-    /// Null while quick Tours are switched off. The key keeps its ADR-0050 name, Tours:ShortNoticeMinLeadMinutes.
+    /// Quick Tours are always available; the key keeps its ADR-0050 name, Tours:ShortNoticeMinLeadMinutes.
     /// </summary>
-    public TimeSpan? ShortNoticeMinLead { get; }
+    public TimeSpan ShortNoticeMinLead { get; }
 
     public TourScheduleSettings(IEnumerable<TourShiftOption>? shifts, int? recommendedMaxMinutes, int? maxCapacity = null,
         int? shortNoticeMinLeadMinutes = null)
     {
-        if (shortNoticeMinLeadMinutes is { } minutes)
-        {
-            if (minutes <= 0 || TimeSpan.FromMinutes(minutes) >= TourSchedule.LeadTime)
-                throw new InvalidOperationException("Tours:ShortNoticeMinLeadMinutes must be greater than 0 and shorter than the standard lead time.");
-            ShortNoticeMinLead = TimeSpan.FromMinutes(minutes);
-        }
+        var minutes = shortNoticeMinLeadMinutes ?? DefaultShortNoticeMinLeadMinutes;
+        if (minutes <= 0 || TimeSpan.FromMinutes(minutes) >= TourSchedule.LeadTime)
+            throw new InvalidOperationException("Tours:ShortNoticeMinLeadMinutes must be greater than 0 and shorter than the standard lead time.");
+        ShortNoticeMinLead = TimeSpan.FromMinutes(minutes);
         MaxCapacity = maxCapacity ?? DefaultMaxCapacity;
         if (MaxCapacity is < 1 or > CapacityCeiling) throw new InvalidOperationException("Tours:MaxCapacity must be between 1 and 40.");
         var parsed = (shifts ?? []).Select(Parse).OrderBy(shift => shift.Start).ToArray();
@@ -113,8 +113,6 @@ public static class TourSchedule
     public static DateTimeOffset ReviewClosesAt(DateTimeOffset start, bool isShortNotice) =>
         isShortNotice ? start : start - PendingDecisionClose;
 
-    public static TimeSpan RequireShortNoticeLead(TourScheduleSettings settings) =>
-        settings.ShortNoticeMinLead ?? throw new ConflictException("Chưa bật tùy chọn Tour nhanh.", "SHORT_NOTICE_DISABLED");
 
     public static DateTimeOffset SlotStart(DateOnly date, TimeOnly slot) =>
         new DateTimeOffset(date.ToDateTime(slot), CampusOffset).ToUniversalTime();

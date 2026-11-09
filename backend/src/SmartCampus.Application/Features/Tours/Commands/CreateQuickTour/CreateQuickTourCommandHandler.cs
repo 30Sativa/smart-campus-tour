@@ -21,7 +21,7 @@ public sealed class CreateQuickTourCommandHandler(ITourManagementRepository repo
         var fingerprint = TourRequestReceipt.Fingerprint("TOUR_CREATED", null, input);
         var replay = await TourRequestReceipt.ReplayAsync(repository, command.Actor, command.Request.RequestId, "TOUR_CREATED", null, fingerprint, ct);
         if (replay.HasValue) return new(replay.Value);
-        var wait = TourSchedule.RequireShortNoticeLead(settings);
+        var wait = settings.ShortNoticeMinLead;
         var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, input.RouteRevisionId, lockTarget: true, ct);
         await TourTarget.RequireOperatorAsync(revisions, input.OperatorUserId, ct);
         var found = await revisions.FindPhysicalRobotAsync(input.RobotCode, ct)

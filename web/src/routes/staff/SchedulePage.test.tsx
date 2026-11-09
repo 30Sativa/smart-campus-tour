@@ -30,7 +30,7 @@ let status = 200
 let shiftStatus = 200
 let tourRows: unknown[] = []
 let tourDetail: unknown = null
-let quickWait: number | null = null
+let quickWait = 30
 
 function Location() {
   const { search } = useLocation()
@@ -47,7 +47,7 @@ describe('Staff Tour calendar', () => {
     tourRows = [session, evening]
     blockedDate = ''
     tourDetail = null
-    quickWait = null
+    quickWait = 30
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), 'http://localhost')
       urls.push(url)
@@ -59,15 +59,14 @@ describe('Staff Tour calendar', () => {
   })
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
-  it('has no Tour kind tabs while quick Tours are off, and creates on a shift', async () => {
+  it('opens on the shift tab, which creates a Tour on a shift', async () => {
     show()
     await screen.findByRole('button', { name: /Tour sáng thật/ })
-    expect(screen.queryByRole('tablist', { name: 'Loại Tour' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Theo ca' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('link', { name: 'Tạo Tour' })).toHaveAttribute('href', '/staff/manage/tours/new?kind=normal')
   })
 
   it('opens quick Tours in their own tab, listed by how long is left to Start them (ADR-0053)', async () => {
-    quickWait = 60
     const quick = { ...session, id: 'tour-q', name: 'Tour trình diễn', isShortNotice: true, scheduledStartAt: '2099-01-05T05:00:00Z',
       reservation: { ...session.reservation, startsAt: '2099-01-05T04:00:00Z', endsAt: '2099-01-05T05:37:00Z' } }
     tourRows = [quick]

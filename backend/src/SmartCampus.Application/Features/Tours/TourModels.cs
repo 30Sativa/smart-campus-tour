@@ -69,8 +69,8 @@ public sealed record TourShiftView(string Code, string Name, DateTimeOffset Star
 public sealed record TourShiftBlockView(Guid Id, string Scope, string Reason);
 public static class ScheduleBlockScope { public const string Day = "DAY"; public const string Shift = "SHIFT"; }
 public sealed record TourShiftDay(DateOnly Date, IReadOnlyList<TourShiftView> Shifts);
-/// <summary><see cref="QuickTourWaitMinutes"/> is null while quick Tours are switched off (ADR-0053).</summary>
-public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds, int? QuickTourWaitMinutes = null);
+/// <summary><see cref="QuickTourWaitMinutes"/>: how long a quick Tour waits to be started (ADR-0053).</summary>
+public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds, int QuickTourWaitMinutes);
 public sealed record TourTargetView(RouteTestParticipantView? Operator, TourReservationView? Reservation);
 /// <summary>A Tour scheduled from a revision has null Route/ActiveRoute and carries RouteRevision instead.</summary>
 public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDetails? ActiveRoute,
