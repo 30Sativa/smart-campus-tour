@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { ContactShadows, Grid, OrbitControls, useGLTF } from '@react-three/drei'
-import { Box3, Color, Mesh, MeshStandardMaterial, Vector3 } from 'three'
+import { Box3, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, LineDashedMaterial, LineSegments, Mesh, MeshBasicMaterial, MeshStandardMaterial, RingGeometry, Vector3, type Camera } from 'three'
 import { Expand, Pause, Play, Shrink, X } from 'lucide-react'
 import { PART_GROUPS, explodeOffset, groupOfNode, orderMoves, pairMoves, partGroup, planAssembly, stepApart, stepAt, type PartGroupId, type Step, type Vec3 } from './parts'
 import ZoomControls from './ZoomControls'
@@ -21,6 +21,8 @@ const HOME_TARGET = new Vector3(0, HOME.apart.y, 0)
 const PICKED_DISTANCE = 2.1
 
 type Piece = { mesh: Mesh; group: PartGroupId; base: Vector3; offset: Vector3; step: Step | undefined }
+/** One unit's way out of the robot: from its home along its offset, as far as its step has taken it. */
+type Leader = { home: Vector3; offset: Vector3; step: Step | undefined }
 
 function usePieces() {
   const { scene } = useGLTF(ROBOT_EXPLODE_URL, false, true)
@@ -71,6 +73,7 @@ function usePieces() {
     const plan = planAssembly(count)
     const taken = new Map<PartGroupId, number>()
     const pieces: Piece[] = []
+    const leaders: Leader[] = []
     for (const move of moves) {
       const index = taken.get(move.group) ?? 0
       taken.set(move.group, index + 1)
@@ -79,11 +82,12 @@ function usePieces() {
         // Each piece of a pair leaves towards its own side.
         const offset = new Vector3(...explodeOffset(partGroup(unit.group).explode, unit.centre))
         for (const mesh of unit.meshes) pieces.push({ mesh, group: unit.group, base: mesh.position.clone(), offset, step })
+        leaders.push({ home: new Vector3(...unit.centre), offset, step })
       }
     }
     const counts = new Map<PartGroupId, number>()
     pieces.forEach(piece => counts.set(piece.group, (counts.get(piece.group) ?? 0) + 1))
-    return { root, pieces, materials, glow, counts, steps: plan.steps, seconds: plan.turns * SECONDS_PER_TURN }
+    return { root, pieces, leaders, materials, glow, counts, steps: plan.steps, seconds: plan.turns * SECONDS_PER_TURN }
   }, [scene])
 }
 
@@ -130,6 +134,104 @@ function styleParts(model: Model, highlight: readonly PartGroupId[], hovered: Pa
   }
 }
 
+/* ---------- Effects: guide lines, snap flashes, a scan ring and a fly-in. ---------- */
+
+const FLASHES = 8
+const FLASH_SECONDS = 0.65
+const SCAN = { radius: 0.52, height: 1.42, rise: 2.4, rest: 3.2 } as const
+
+/** The effect objects, made once per model and moved every frame. */
+function makeEffects(model: Model) {
+  // Thin guide lines from where each unit belongs to where it is, like an exploded-view drawing.
+  const guidePositions = new Float32Array(model.leaders.length * 6)
+  const guideGeometry = new BufferGeometry()
+  guideGeometry.setAttribute('position', new BufferAttribute(guidePositions, 3))
+  const guides = new LineSegments(guideGeometry, new LineDashedMaterial({ color: '#4f7d8a', dashSize: 0.025, gapSize: 0.018, transparent: true, opacity: 0, depthWrite: false }))
+  guides.frustumCulled = false
+  guides.renderOrder = 5
+
+  // Rings that flash where a part snaps into place.
+  const flashes = Array.from({ length: FLASHES }, () => {
+    const ring = new Mesh(new RingGeometry(0.05, 0.062, 40), new MeshBasicMaterial({ color: GLOW, transparent: true, opacity: 0, depthTest: false, depthWrite: false, side: DoubleSide }))
+    ring.renderOrder = 30
+    ring.visible = false
+    return { ring, age: Infinity }
+  })
+
+  // A light ring sweeping up the assembled robot, like a scanner checking the build.
+  const scan = new Mesh(new RingGeometry(SCAN.radius, SCAN.radius + 0.012, 96), new MeshBasicMaterial({ color: GLOW, transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }))
+  scan.rotation.x = -Math.PI / 2
+  scan.renderOrder = 6
+  const group = new Group()
+  group.add(guides, scan, ...flashes.map(flash => flash.ring))
+  return { group, guides, guidePositions, flashes, scan, scanClock: 0, lastMoving: null as Step | null }
+}
+
+type Effects = ReturnType<typeof makeEffects>
+
+/** Draws the guide lines out to every unit that has left home; they fade in as the robot opens. */
+function drawGuides(model: Model, effects: Effects, progress: number) {
+  const positions = effects.guidePositions
+  model.leaders.forEach((leader, index) => {
+    const apart = stepApart(progress, leader.step)
+    const o = index * 6
+    positions[o] = leader.home.x; positions[o + 1] = leader.home.y; positions[o + 2] = leader.home.z
+    positions[o + 3] = leader.home.x + leader.offset.x * apart
+    positions[o + 4] = leader.home.y + leader.offset.y * apart
+    positions[o + 5] = leader.home.z + leader.offset.z * apart
+  })
+  effects.guides.geometry.attributes.position.needsUpdate = true
+  effects.guides.computeLineDistances()
+  const material = effects.guides.material as LineDashedMaterial
+  material.opacity = Math.min(1, progress * 3) * 0.55
+}
+
+/** Notes the move under way; when one has just finished going on (while assembling), its units flash. */
+function trackMoves(model: Model, effects: Effects, moving: Step | null, assembling: boolean) {
+  if (effects.lastMoving && effects.lastMoving !== moving && assembling) snap(model, effects, effects.lastMoving)
+  effects.lastMoving = moving
+}
+
+/** Starts a flash on every unit of a move that has just been put in place. */
+function snap(model: Model, effects: Effects, step: Step) {
+  for (const leader of model.leaders) {
+    if (leader.step !== step) continue
+    const free = effects.flashes.find(flash => flash.age >= FLASH_SECONDS) ?? effects.flashes[0]
+    free.age = 0
+    free.ring.position.copy(leader.home)
+    free.ring.visible = true
+  }
+}
+
+/** Grows and fades the flashes, turned to face the camera. */
+function runFlashes(effects: Effects, camera: Camera, delta: number) {
+  for (const flash of effects.flashes) {
+    if (!flash.ring.visible) continue
+    flash.age += delta
+    const t = flash.age / FLASH_SECONDS
+    if (t >= 1) { flash.ring.visible = false; continue }
+    flash.ring.quaternion.copy(camera.quaternion)
+    flash.ring.scale.setScalar(0.6 + t * 2.4)
+    const material = flash.ring.material as MeshBasicMaterial
+    material.opacity = (1 - t) * 0.95
+  }
+}
+
+/** Sweeps the scan ring up the robot every few seconds while it stands assembled. */
+function runScan(effects: Effects, progress: number, delta: number, enabled: boolean) {
+  const material = effects.scan.material as MeshBasicMaterial
+  if (!enabled || progress > 0.02) {
+    effects.scanClock = 0
+    material.opacity = 0
+    return
+  }
+  effects.scanClock = (effects.scanClock + delta) % (SCAN.rise + SCAN.rest)
+  const t = effects.scanClock / SCAN.rise
+  if (t >= 1) { material.opacity = 0; return }
+  effects.scan.position.y = 0.02 + t * SCAN.height
+  material.opacity = Math.sin(t * Math.PI) * 0.75
+}
+
 /** Put together, taken apart, looping between the two, or held where it is (while a part is being looked at). */
 type Mode = 'together' | 'apart' | 'auto' | 'hold'
 
@@ -152,6 +254,7 @@ function Robot({ model, mode, visible, highlight, hovered, zoom, onHover, onPick
   const resumed = useRef(true)
   const controls = useThree(state => state.controls) as unknown as { target: Vector3; update: () => void } | null
   const camera = useThree(state => state.camera)
+  const effects = useMemo(() => makeEffects(model), [model])
 
   useEffect(() => { clock.current = 0 }, [mode])
   // No frames are drawn while the section is away, so the first one back would span the whole pause.
@@ -174,6 +277,11 @@ function Robot({ model, mode, visible, highlight, hovered, zoom, onHover, onPick
     const moving = progress.current !== before ? stepAt(progress.current, model.steps) : null
     // Only the move under way glows, so the order can be followed one move at a time.
     placePieces(model, progress.current, highlight.length === 0 ? moving : null)
+    // A move that has just finished going on flashes where it landed.
+    trackMoves(model, effects, moving, progress.current < before)
+    drawGuides(model, effects, progress.current)
+    runFlashes(effects, camera, delta)
+    runScan(effects, progress.current, delta, highlight.length === 0)
 
     const look = `${highlight.join()}|${hovered ?? ''}`
     if (look !== styled.current) {
@@ -196,6 +304,8 @@ function Robot({ model, mode, visible, highlight, hovered, zoom, onHover, onPick
   const groupAt = (event: ThreeEvent<PointerEvent | MouseEvent>) => groupOfNode(event.object.name)
 
   return (
+    <>
+    <primitive object={effects.group} />
     <primitive
       object={model.root}
       onPointerMove={(event: ThreeEvent<PointerEvent>) => { event.stopPropagation(); onHover(groupAt(event)) }}
@@ -208,6 +318,7 @@ function Robot({ model, mode, visible, highlight, hovered, zoom, onHover, onPick
         if (group) onPick(group)
       }}
     />
+    </>
   )
 }
 
@@ -276,7 +387,7 @@ export default function RobotExplodeViewer({ focus = [], visible = true }: {
           frameloop={visible ? 'always' : 'never'}
           shadows
           dpr={[1, 1.75]}
-          camera={{ position: [2.65, 1.75, 3.2], fov: 34, near: 0.05, far: 40 }}
+          camera={{ position: [6.4, 3.9, 7.6], fov: 34, near: 0.05, far: 40 }}
           onPointerMissed={() => setPicked(null)}
         >
           <Scene

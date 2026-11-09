@@ -229,10 +229,15 @@ export const FLOWS: readonly Flow[] = [
     summary: 'Từ pin tới từng cụm',
     steps: [
       {
-        title: 'Pin cấp điện',
-        body: '[[Pin|power]] cấp điện cho [[Mini PC|power]] và [[mạch điều khiển|power]] ngay khi bật robot.',
-        signal: 'Mức pin được báo cho đội vận hành theo dõi trong suốt chuyến tham quan.',
-        links: [{ from: 'battery', to: 'pc', kind: 'power', label: 'Nguồn' }, { from: 'battery', to: 'mcu', kind: 'power', label: 'Nguồn' }],
+        title: 'Đường điện từ pin',
+        body: 'Điện đi ra từ [[pin|power]] tới [[Mini PC|power]], từ Mini PC qua cổng USB tới [[mạch STM32|power]]; STM32 bật [[contactor|command]] để điện đi tiếp tới hai [[driver HBS86H|power]].',
+        signal: 'Mức pin được báo cho đội vận hành theo dõi trong suốt chuyến tham quan; contactor do chân PA10 của STM32 điều khiển.',
+        links: [
+          { from: 'battery', to: 'pc', kind: 'power', label: 'Nguồn' },
+          { from: 'pc', to: 'mcu', kind: 'power', label: 'USB' },
+          { from: 'mcu', to: 'contactor', kind: 'command', label: 'PA10' },
+          { from: 'contactor', to: 'driver', kind: 'power', label: 'Nguồn động cơ' },
+        ],
       },
       {
         title: 'Contactor đóng mạch động cơ',
