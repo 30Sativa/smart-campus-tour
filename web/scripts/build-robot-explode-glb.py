@@ -38,7 +38,8 @@ RULES = [
     ('camera',   lambda n: n.startswith('cam-') or n.startswith('dem cam'), None),
     ('lidar',    lambda n: n.startswith('cam2'), 1500),
     ('column',   lambda n: n.startswith('than tru'), None),
-    ('quest',    lambda n: n.startswith('Meta Quest 3'), 6000),
+    # The headset keeps its full mesh: decimating it tears the curved visor and strap apart.
+    ('quest',    lambda n: n.startswith('Meta Quest 3'), None),
     ('head',     lambda n: n.startswith('Assem2s-1 Dau'), None),
     ('pantilt',  lambda n: n.startswith('Assem2s-1'), 1500),
     ('lowershell', lambda n: any(n.startswith(p) for p in ('vỏ xe dưới', 'vo duoi', 'góc bo dưới')), 1200),

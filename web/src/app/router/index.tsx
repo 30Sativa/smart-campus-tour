@@ -30,6 +30,7 @@ import { homePathForRole } from '../../auth/roles'
  */
 const PublicHomePage = lazy(() => import('../../routes/public/PublicHomePage'))
 const QuestAudioPage = lazy(() => import('../../routes/public/QuestAudioPage'))
+const RobotInsidePage = lazy(() => import('../../routes/public/RobotInsidePage'))
 
 
 // SQL GUID Tours use personal access-code/cookie entry; non-GUID IDs retain the legacy fixture flow.
@@ -67,7 +68,6 @@ const StaffManageRouteFormPage = lazy(() => import('../../routes/staff/manage/St
 const AdminAccountsPage = lazy(() => import('../../routes/admin/AdminAccountsPage'))
 const StaffManagePoisPage = lazy(() => import('../../routes/staff/manage/StaffManagePoisPage'))
 const StaffManagePoiFormPage = lazy(() => import('../../routes/staff/manage/StaffManagePoiFormPage'))
-const StaffNarrationRehearsalPage = lazy(() => import('../../routes/staff/manage/StaffNarrationRehearsalPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 const AdminSchedulePage = lazy(() => import('../../routes/admin/AdminSchedulePage'))
 const AdminRobotCredentialsPage = lazy(() => import('../../routes/admin/AdminRobotCredentialsPage'))
@@ -186,6 +186,7 @@ function MergedInto({ path, view }: { path: string; view?: string }) {
  */
 export const routes = [
   { path: '/quest/intercom', element: <Suspense fallback={<ShellFallback background="#f5f7f8" />}><QuestAudioPage /></Suspense> },
+  { path: '/ben-trong-robot', element: <Suspense fallback={<ShellFallback background="#060d11" />}><RobotInsidePage /></Suspense> },
   {
     path: '/',
     element: (
@@ -268,7 +269,6 @@ export const routes = [
       { path: 'manage/routes/:routeId/edit', element: <StaffManageRouteFormPage /> },
       { path: 'manage/pois', element: <StaffManagePoisPage /> },
       { path: 'manage/pois/new', element: <StaffManagePoiFormPage /> },
-      { path: 'manage/pois/thu-thuyet-minh', element: <StaffNarrationRehearsalPage /> },
       { path: 'manage/pois/:poiId', element: <StaffManagePoiFormPage /> },
       // Renamed with the operations redesign (2026-09-21). Migration only:
       // drop once no bookmark points at them.

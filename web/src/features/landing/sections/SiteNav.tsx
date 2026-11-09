@@ -1,23 +1,31 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Menu, Moon, Sun, X } from 'lucide-react'
 import { useAuthStore } from '../../../stores/auth-store'
 import { useThemeStore } from '../../../stores/theme-store'
 import { useLogout } from '../../../auth/use-logout'
 import { homePathForRole, isAdminRole, isRepresentativeRole, isStaffRole } from '../../../auth/roles'
-import { navLinks } from '../landing-content'
+import { ROBOT_INSIDE, navLinks } from '../landing-content'
 
 type Props = {
   /** Pauses smooth scrolling while the mobile sheet is open. */
   onLockScroll: (locked: boolean) => void
+  /**
+   * Where the section links point. The home page leaves it empty so `#cong-nghe`
+   * scrolls in place; another page passes `/` so the links lead back home.
+   */
+  base?: string
+  /** The page this navigation sits on, marked as current. */
+  current?: 'robot'
 }
+
 
 /**
  * One line at desktop, 68px tall, transparent over the hero footage and
  * frosted once the page has moved. The stuck state comes from an
  * IntersectionObserver sentinel rather than a scroll listener.
  */
-export function SiteNav({ onLockScroll }: Props) {
+export function SiteNav({ onLockScroll, base = '', current }: Props) {
   const [stuck, setStuck] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -106,7 +114,7 @@ export function SiteNav({ onLockScroll }: Props) {
 
       <header className="lp-nav" data-stuck={stuck || menuOpen} id="nav">
         <div className="lp-nav__inner">
-          <a href="#top" className="lp-brand" onClick={closeMenu}>
+          <a href={base ? base : '#top'} className="lp-brand" onClick={closeMenu}>
             <img className="lp-brand__mark" src="/images/logo.png" alt="" width={56} height={56} />
             <span className="lp-brand__lockup">
               <span className="lp-brand__name">CampusTour</span>
@@ -117,9 +125,16 @@ export function SiteNav({ onLockScroll }: Props) {
 
           <nav className="lp-navlinks" aria-label="Điều hướng chính">
             {navLinks.map((item) => (
-              <a key={item.href} href={item.href} className="lp-navlink">
-                {item.label}
-              </a>
+              <Fragment key={item.href}>
+                <a href={`${base}${item.href}`} className="lp-navlink">
+                  {item.label}
+                </a>
+                {item.href === ROBOT_INSIDE.after && (
+                  <Link to={ROBOT_INSIDE.to} className="lp-navlink" aria-current={current === 'robot' ? 'page' : undefined}>
+                    {ROBOT_INSIDE.label}
+                  </Link>
+                )}
+              </Fragment>
             ))}
           </nav>
 
@@ -172,9 +187,16 @@ export function SiteNav({ onLockScroll }: Props) {
       {menuOpen && (
         <div className="lp-sheet" id="lp-mobile-menu">
           {navLinks.map((item) => (
-            <a key={item.href} href={item.href} onClick={closeMenu}>
-              {item.label}
-            </a>
+            <Fragment key={item.href}>
+              <a href={`${base}${item.href}`} onClick={closeMenu}>
+                {item.label}
+              </a>
+              {item.href === ROBOT_INSIDE.after && (
+                <Link to={ROBOT_INSIDE.to} onClick={closeMenu} aria-current={current === 'robot' ? 'page' : undefined}>
+                  {ROBOT_INSIDE.label}
+                </Link>
+              )}
+            </Fragment>
           ))}
           {isAuthenticated ? (
             <>
