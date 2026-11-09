@@ -67,6 +67,8 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
     const url = new URL(String(input), 'http://localhost')
     const path = url.pathname
     const method = init?.method ?? 'GET'
+    if (path === '/api/staff/manage/tours/slots' && url.searchParams.get('shortNotice') === 'true' && shortNoticeMinutes === null)
+      return Promise.resolve(json({ success: false, message: 'x', errors: { code: 'SHORT_NOTICE_DISABLED' } }, 409))
     if (path === '/api/staff/manage/tours/slots') return Promise.resolve(json({ success: true, data: { routeRevisionId: 'revision-2', robotCode: 'amr-01',
       measuredDurationSeconds: 1200, expectedDurationSeconds: expectedSeconds, recommendedMaxSeconds: 3600, shortNoticeMinLeadMinutes: shortNoticeMinutes,
       days: [{ date: '2099-01-03', slots: slotDay }] } }))
@@ -102,7 +104,7 @@ afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
 it('offers only robots the chosen route can use, and says why the others are off', async () => {
   api()
-  renderAt('/staff/manage/tours/new')
+  renderAt('/staff/manage/tours/new?kind=normal')
   await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })
   expect(screen.getByLabelText('Robot')).toBeDisabled()
   fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
@@ -116,14 +118,14 @@ describe('choosing the route of a new Tour', () => {
 
   it('shows a route that must be run again as disabled, with the reason', async () => {
     api(tour(), [TESTED, remeasure])
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=normal')
     expect(await screen.findByRole('option', { name: 'Đo kiểu cũ · 1 điểm dừng (Cần chạy thử lại)' })).toBeDisabled()
     expect(screen.getByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })).toBeEnabled()
   })
 
   it('explains each route when none can be used, asking Technical only for a re-run', async () => {
     api(tour(), [remeasure, { ...TESTED, revisionId: 'revision-long', name: 'Tuyến dài', scheduleFit: 'TOO_LONG_FOR_SHIFT' }])
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=normal')
     expect(await screen.findByText('Chưa có tuyến nào dùng được để tạo Tour.')).toBeInTheDocument()
     const reasons = screen.getByRole('list', { name: 'Lý do từng tuyến' })
     expect(within(reasons).getAllByRole('listitem').map(item => item.textContent)).toEqual([
@@ -134,28 +136,28 @@ describe('choosing the route of a new Tour', () => {
 
   it('does not show the explanation while a route can be used', async () => {
     api(tour(), [TESTED, remeasure])
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=normal')
     await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })
     expect(screen.queryByText('Chưa có tuyến nào dùng được để tạo Tour.')).not.toBeInTheDocument()
   })
 
   it('selects the route named by ?route=, and loads its robots', async () => {
     api()
-    renderAt('/staff/manage/tours/new?route=revision-2')
+    renderAt('/staff/manage/tours/new?kind=normal&route=revision-2')
     await waitFor(() => expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('revision-2'))
     expect(await screen.findByRole('option', { name: 'AMR 01 · amr-01' })).toBeEnabled()
   })
 
   it('does not select a linked route that cannot be used, and says so', async () => {
     api(tour(), [TESTED, remeasure])
-    renderAt('/staff/manage/tours/new?route=revision-old')
+    renderAt('/staff/manage/tours/new?kind=normal&route=revision-old')
     expect(await screen.findByText('Tuyến vừa mở chưa dùng được để tạo Tour. Chọn tuyến khác.')).toBeInTheDocument()
     expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('')
   })
 
   it('lets Staff change a linked route', async () => {
     api(tour(), [TESTED, { ...TESTED, revisionId: 'revision-3', name: 'Tuyến khác' }])
-    renderAt('/staff/manage/tours/new?route=revision-2')
+    renderAt('/staff/manage/tours/new?kind=normal&route=revision-2')
     await waitFor(() => expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('revision-2'))
     fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-3' } })
     expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('revision-3')
@@ -177,7 +179,7 @@ describe('live Tour management', () => {
     vi.mocked(fetch).mockImplementation((input, init) => new URL(String(input), 'http://localhost').pathname === '/api/staff/manage/tours/slots'
       ? Promise.resolve(json({ success: false, message: 'Tuyến đã ngừng sử dụng nên không dùng được cho Tour mới.', errors: {} }, 404))
       : fetchTours(input, init))
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=normal')
     await screen.findByRole('option', { name: /Tuyến đã duyệt/ })
     fireEvent.change(screen.getByRole('combobox', { name: 'Tuyến đã kiểm chứng' }), { target: { value: 'revision-2' } })
     await screen.findByRole('option', { name: /amr-01/ })
@@ -191,7 +193,7 @@ describe('live Tour management', () => {
     const requested: URL[] = []
     const fetchTours = vi.mocked(fetch).getMockImplementation()!
     vi.mocked(fetch).mockImplementation((input, init) => { requested.push(new URL(String(input), 'http://localhost')); return fetchTours(input, init) })
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=normal')
     await waitFor(() => expect(requested.find(url => url.pathname === '/api/routes')?.searchParams.get('isActive')).toBe('true'))
   })
 
@@ -202,7 +204,7 @@ describe('live Tour management', () => {
 
   it('shows only tested revisions and reports when none exists', async () => {
     api(tour(), [])
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=normal')
     expect(await screen.findByText(/Chưa có tuyến nào chạy thử đạt/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
   })
@@ -227,7 +229,7 @@ describe('live Tour management', () => {
 
   it('creates a SCHEDULED Tour from an active Route with its revision and an idempotency key', async () => {
     const writes = api()
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=normal')
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour sáng thứ Bảy' } })
     await chooseTarget()
     expect(await screen.findByText('1. Thư viện')).toBeInTheDocument()
@@ -251,24 +253,36 @@ describe('live Tour management', () => {
     expect(writes[0].body.requestId).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/))
   })
 
-  it('does not offer a short-notice Tour while the server has it switched off', async () => {
+  it('asks for the Tour kind before showing the form, and lets Staff change it', async () => {
     api()
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?route=revision-2')
+    expect(screen.queryByLabelText('Tên Tour')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Tour ngắn hạn/ }))
+    expect(await screen.findByLabelText(/Lý do tạo gấp/)).toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('revision-2')
+    fireEvent.click(screen.getByRole('button', { name: 'Đổi loại' }))
+    fireEvent.click(screen.getByRole('button', { name: /Tour thường/ }))
+    expect(await screen.findByLabelText('Tên Tour')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Lý do tạo gấp/)).not.toBeInTheDocument()
+  })
+
+  it('says when the server has short notice switched off', async () => {
+    api()
+    renderAt('/staff/manage/tours/new?kind=short')
     await chooseTarget()
     pickDate()
-    await screen.findByRole('button', { name: /Ca sáng/ })
-    expect(screen.queryByRole('checkbox', { name: /Tour ngắn hạn/ })).not.toBeInTheDocument()
+    expect(await screen.findByText('Server chưa bật Tour ngắn hạn. Chọn Tour thường, hoặc nhờ người quản lý server bật tùy chọn này.')).toBeInTheDocument()
   })
 
   it('asks the server for short-notice shifts and needs a reason before creating', async () => {
     shortNoticeMinutes = 60
     const writes = api()
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=short')
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour trong ngày' } })
     await chooseTarget()
     pickDate()
     fireEvent.click(await screen.findByRole('button', { name: /Ca sáng/ }))
-    fireEvent.click(await screen.findByRole('checkbox', { name: /Tour ngắn hạn/ }))
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('shortNotice=true'))).toBe(true))
     expect(await screen.findByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
     expect(within(await screen.findByRole('region', { name: 'Xem lại trước khi tạo' })).getByText('Khi Staff chốt Tour')).toBeInTheDocument()
@@ -282,7 +296,7 @@ describe('live Tour management', () => {
   it('picks the day and shift from the calendar link and warns when the route is over the recommended length', async () => {
     expectedSeconds = 4000
     const writes = api()
-    renderAt('/staff/manage/tours/new?date=2099-01-03&shift=S1')
+    renderAt('/staff/manage/tours/new?kind=normal&date=2099-01-03&shift=S1')
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour từ lịch' } })
     expect(screen.getByLabelText(/Ngày tổ chức/)).toHaveValue('2099-01-03')
     await chooseTarget()
@@ -296,14 +310,14 @@ describe('live Tour management', () => {
 
   it('shows a route too long for one shift but does not let it be chosen', async () => {
     api(tour(), [TESTED, { ...TESTED, revisionId: 'revision-long', name: 'Tuyến dài', scheduleFit: 'TOO_LONG_FOR_SHIFT', expectedDurationSeconds: 6000 }])
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=normal')
     expect(await screen.findByRole('option', { name: 'Tuyến dài · 1 điểm dừng (Quá dài cho 1 ca)' })).toBeDisabled()
     expect(screen.getByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })).toBeEnabled()
   })
 
   it('locks a taken slot with its reason, so it cannot be chosen', async () => {
     const writes = api()
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=normal')
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour cũ' } })
     await chooseTarget()
     pickDate()
@@ -316,7 +330,7 @@ describe('live Tour management', () => {
 
   it('refreshes the slots and says why when create is refused, and drops the lost slot from the review', async () => {
     const writes = api()
-    renderAt('/staff/manage/tours/new')
+    renderAt('/staff/manage/tours/new?kind=normal')
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour trễ' } })
     await chooseTarget()
     pickDate()

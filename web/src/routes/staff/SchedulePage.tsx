@@ -68,7 +68,7 @@ const openShift = (shift: TourShift, tours: TourSummary[], now: number) =>
     ? instant(tour.reservation.startsAt) < instant(shift.endsAt) && instant(tour.reservation.endsAt) > instant(shift.startsAt)
     // No hold means no known length, so the Tour takes only the shift it starts in.
     : startsIn(tour, shift)))
-const createHref = (day: string, shift: TourShift) => `/staff/manage/tours/new?date=${day}&shift=${encodeURIComponent(shift.code)}`
+const createHref = (day: string, shift: TourShift) => `/staff/manage/tours/new?kind=normal&date=${day}&shift=${encodeURIComponent(shift.code)}`
 const shiftSpan = (shift: TourShift) => `${campusTime(shift.startsAt)}-${campusTime(shift.endsAt)}`
 /** `2099-01-05` as people read it: 05/01/2099. */
 const readableDay = (day: string) => day.split('-').reverse().join('/')

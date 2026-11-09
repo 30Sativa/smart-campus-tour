@@ -144,7 +144,7 @@ describe('Staff Tour calendar', () => {
     const week = await screen.findByRole('region', { name: 'Lịch tuần' })
     // 2099-01-05: the morning shift holds "Tour sáng thật", the afternoon one is free.
     expect(within(week).queryByRole('link', { name: 'Tạo Tour Ca sáng ngày 05/01/2099' })).not.toBeInTheDocument()
-    expect(within(week).getByRole('link', { name: 'Tạo Tour Ca chiều 1 ngày 05/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?date=2099-01-05&shift=S2')
+    expect(within(week).getByRole('link', { name: 'Tạo Tour Ca chiều 1 ngày 05/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?kind=normal&date=2099-01-05&shift=S2')
     expect(within(week).getByRole('link', { name: 'Tạo Tour Ca sáng ngày 06/01/2099' })).toBeInTheDocument()
   })
 
@@ -245,7 +245,7 @@ describe('Staff Tour calendar', () => {
   it('offers "Tạo Tour" with the day and shift on a free shift of the day view', async () => {
     show('/staff/schedule?date=2099-01-05&view=day')
     const free = await screen.findByRole('article', { name: 'Ca chiều 1 13:00-15:00' })
-    expect(within(free).getByRole('link', { name: 'Tạo Tour Ca chiều 1 ngày 05/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?date=2099-01-05&shift=S2')
+    expect(within(free).getByRole('link', { name: 'Tạo Tour Ca chiều 1 ngày 05/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?kind=normal&date=2099-01-05&shift=S2')
   })
 
   it('lists the week by day on a narrow screen, with no seven-column table', async () => {
@@ -255,7 +255,7 @@ describe('Staff Tour calendar', () => {
     const week = await screen.findByRole('region', { name: 'Lịch tuần' })
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
     expect(within(week).getAllByRole('article', { name: 'Ca sáng 08:00-10:00' })).toHaveLength(7)
-    expect(within(week).getByRole('link', { name: 'Tạo Tour Ca sáng ngày 06/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?date=2099-01-06&shift=S1')
+    expect(within(week).getByRole('link', { name: 'Tạo Tour Ca sáng ngày 06/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?kind=normal&date=2099-01-06&shift=S1')
     expect(within(week).getByRole('region', { name: 'Ngoài ca ngày 06/01/2099' })).toBeInTheDocument()
   })
 
