@@ -45,7 +45,7 @@ export function HeadCameraPresetField({ value, onChange }: { value: string; onCh
   const parts = splitHeadPreset(value)
   const problem = parts ? headPresetProblem(value) : null
   const change = (patch: Partial<HeadCameraParts>) => parts && onChange(joinHeadPreset({ ...parts, ...patch }))
-  return <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
+  return <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
     <div className="min-w-0 space-y-3">
       <fieldset>
         <legend id="poi-camera-legend" className="text-sm font-medium text-[#2d3748]">Hoạt động đầu camera VR khi robot tới điểm</legend>

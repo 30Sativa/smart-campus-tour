@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Pause, Play } from 'lucide-react'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { HEAD_PAN_LIMIT_DEG, HEAD_TILT_LIMIT_DEG, type HeadCameraParts } from '../../technical/head-camera-preset'
 import { headPlan, poseAt, type Pose } from './head-motion'
 
 /**
- * A picture of what the head will do at the POI: PAN seen from above (front up, left is positive like the robot),
- * TILT seen from the side. "Chạy thử" plays the motion at three times the robot's speed (button speed 30°/s for a
+ * A picture of what the head will do at the POI: a 3D robot whose head turns (drag to look around), or without
+ * WebGL two drawings, PAN seen from above (front up, left is positive like the robot) and TILT seen from the side. "Chạy thử" plays the motion at three times the robot's speed (button speed 30°/s for a
  * sweep, 60°/s to an angle); it is a drawing of the plan, not the robot's live state.
  */
+
+// The 3D scene (three.js and the robot CAD model) loads only when the preview is shown on a browser with WebGL.
+const HeadCamera3D = lazy(() => import('./HeadCamera3D'))
+const webgl = typeof window !== 'undefined' && typeof window.WebGLRenderingContext !== 'undefined'
 
 const SPEED_UP = 3
 /** The mechanical stop of the PAN axis (robot firmware HOME offset): 174° to the right. */
@@ -65,6 +69,45 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
   const [hx, hy] = polar(26, pose.pan)
   const tiltRad = pose.tilt * Math.PI / 180
 
+  // The SVG views: the fallback without WebGL (and in tests) and while the 3D scene loads.
+  const flat = <>
+      <svg viewBox="0 0 240 236" className="mt-1 w-full" role="img" aria-label={`Nhìn từ trên: PAN ${sideLabel(pose.pan, 'trái', 'phải')}`}>
+        <defs>
+          <radialGradient id="head-fov" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0%" stopColor="#5b9dc9" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="#5b9dc9" stopOpacity="0.05" />
+          </radialGradient>
+        </defs>
+        {/* Reach of the PAN axis: soft limits ±170°, the stop 174° to the right. */}
+        <circle cx={CX} cy={CY} r={88} fill="none" stroke="#e2e8f0" strokeWidth={1} />
+        <polyline points={arc(88, -HEAD_PAN_LIMIT_DEG, HEAD_PAN_LIMIT_DEG)} fill="none" stroke="#cbd5e1" strokeWidth={2} strokeLinecap="round" />
+        {plan.sweepDeg != null && <polyline points={arc(88, -plan.sweepDeg, plan.sweepDeg)} fill="none" stroke="#2d719e" strokeWidth={3.5} strokeLinecap="round" strokeDasharray="1 7" />}
+        {(() => { const [x, y] = polar(88, STOP_DEG); return <g><rect x={x - 5} y={y - 5} width={10} height={10} rx={2} fill="#f59e0b" transform={`rotate(${-STOP_DEG} ${x} ${y})`} /><text x={x + 9} y={y + 13} fontSize={9} fill="#b45309">Chặn</text></g> })()}
+        <text x={CX} y={24} textAnchor="middle" fontSize={10} fill="#64748b">Trước</text>
+        <text x={4} y={CY + 3} textAnchor="start" fontSize={10} fill="#64748b">Trái</text>
+        <text x={236} y={CY + 3} textAnchor="end" fontSize={10} fill="#64748b">Phải</text>
+        {/* Field of view of the Quest camera. */}
+        {!still && <path d={wedge(80, pose.pan, 28)} fill="url(#head-fov)" />}
+        {/* Robot body, front up. */}
+        <rect x={CX - 34} y={CY - 30} width={68} height={84} rx={18} fill="#ffffff" stroke="#94a3b8" strokeWidth={1.5} />
+        <path d={`M${CX - 8},${CY - 22} L${CX},${CY - 30} L${CX + 8},${CY - 22}`} fill="none" stroke="#94a3b8" strokeWidth={1.5} strokeLinecap="round" />
+        {/* Head and camera. */}
+        <circle cx={CX} cy={CY} r={18} fill="#2d3748" />
+        <line x1={CX} y1={CY} x2={hx} y2={hy} stroke="#2d3748" strokeWidth={9} strokeLinecap="round" />
+        <circle cx={hx} cy={hy} r={4} fill="#93c5fd" />
+      </svg>
+  
+      <svg viewBox="0 0 240 92" className="mt-1 w-full" role="img" aria-label={`Nhìn ngang: TILT ${sideLabel(pose.tilt, 'ngửa', 'cúi')}`}>
+        <path d={`M70,46 L${70 + 150 * Math.cos(HEAD_TILT_LIMIT_DEG * Math.PI / 180)},${46 - 150 * Math.sin(HEAD_TILT_LIMIT_DEG * Math.PI / 180)} L${70 + 150 * Math.cos(HEAD_TILT_LIMIT_DEG * Math.PI / 180)},${46 + 150 * Math.sin(HEAD_TILT_LIMIT_DEG * Math.PI / 180)} Z`} fill="#f1f5f9" />
+        {!still && <path d={`M70,46 L${70 + 140 * Math.cos(tiltRad + 0.26)},${46 - 140 * Math.sin(tiltRad + 0.26)} L${70 + 140 * Math.cos(tiltRad - 0.26)},${46 - 140 * Math.sin(tiltRad - 0.26)} Z`} fill="#5b9dc9" fillOpacity={0.22} />}
+        <rect x={52} y={52} width={20} height={36} rx={6} fill="#e2e8f0" />
+        <circle cx={62} cy={46} r={15} fill="#2d3748" />
+        <line x1={62} y1={46} x2={62 + 24 * Math.cos(tiltRad)} y2={46 - 24 * Math.sin(tiltRad)} stroke="#2d3748" strokeWidth={9} strokeLinecap="round" />
+        <text x={228} y={14} textAnchor="end" fontSize={10} fill="#64748b">Ngửa</text>
+        <text x={228} y={86} textAnchor="end" fontSize={10} fill="#64748b">Cúi</text>
+      </svg>
+  </>
+
   return <figure className="rounded-2xl border border-[#e2e8f0] bg-gradient-to-b from-[#f8fbfe] to-white p-3.5" aria-label="Mô phỏng đầu camera">
     <div className="flex items-center justify-between gap-2">
       <figcaption className="text-[13px] font-semibold text-[#2d3748]">Mô phỏng</figcaption>
@@ -73,41 +116,10 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
       </button>}
     </div>
 
-    <svg viewBox="0 0 240 236" className="mt-1 w-full" role="img" aria-label={`Nhìn từ trên: PAN ${sideLabel(pose.pan, 'trái', 'phải')}`}>
-      <defs>
-        <radialGradient id="head-fov" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0%" stopColor="#5b9dc9" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="#5b9dc9" stopOpacity="0.05" />
-        </radialGradient>
-      </defs>
-      {/* Reach of the PAN axis: soft limits ±170°, the stop 174° to the right. */}
-      <circle cx={CX} cy={CY} r={88} fill="none" stroke="#e2e8f0" strokeWidth={1} />
-      <polyline points={arc(88, -HEAD_PAN_LIMIT_DEG, HEAD_PAN_LIMIT_DEG)} fill="none" stroke="#cbd5e1" strokeWidth={2} strokeLinecap="round" />
-      {plan.sweepDeg != null && <polyline points={arc(88, -plan.sweepDeg, plan.sweepDeg)} fill="none" stroke="#2d719e" strokeWidth={3.5} strokeLinecap="round" strokeDasharray="1 7" />}
-      {(() => { const [x, y] = polar(88, STOP_DEG); return <g><rect x={x - 5} y={y - 5} width={10} height={10} rx={2} fill="#f59e0b" transform={`rotate(${-STOP_DEG} ${x} ${y})`} /><text x={x + 9} y={y + 13} fontSize={9} fill="#b45309">Chặn</text></g> })()}
-      <text x={CX} y={24} textAnchor="middle" fontSize={10} fill="#64748b">Trước</text>
-      <text x={4} y={CY + 3} textAnchor="start" fontSize={10} fill="#64748b">Trái</text>
-      <text x={236} y={CY + 3} textAnchor="end" fontSize={10} fill="#64748b">Phải</text>
-      {/* Field of view of the Quest camera. */}
-      {!still && <path d={wedge(80, pose.pan, 28)} fill="url(#head-fov)" />}
-      {/* Robot body, front up. */}
-      <rect x={CX - 34} y={CY - 30} width={68} height={84} rx={18} fill="#ffffff" stroke="#94a3b8" strokeWidth={1.5} />
-      <path d={`M${CX - 8},${CY - 22} L${CX},${CY - 30} L${CX + 8},${CY - 22}`} fill="none" stroke="#94a3b8" strokeWidth={1.5} strokeLinecap="round" />
-      {/* Head and camera. */}
-      <circle cx={CX} cy={CY} r={18} fill="#2d3748" />
-      <line x1={CX} y1={CY} x2={hx} y2={hy} stroke="#2d3748" strokeWidth={9} strokeLinecap="round" />
-      <circle cx={hx} cy={hy} r={4} fill="#93c5fd" />
-    </svg>
-
-    <svg viewBox="0 0 240 92" className="mt-1 w-full" role="img" aria-label={`Nhìn ngang: TILT ${sideLabel(pose.tilt, 'ngửa', 'cúi')}`}>
-      <path d={`M70,46 L${70 + 150 * Math.cos(HEAD_TILT_LIMIT_DEG * Math.PI / 180)},${46 - 150 * Math.sin(HEAD_TILT_LIMIT_DEG * Math.PI / 180)} L${70 + 150 * Math.cos(HEAD_TILT_LIMIT_DEG * Math.PI / 180)},${46 + 150 * Math.sin(HEAD_TILT_LIMIT_DEG * Math.PI / 180)} Z`} fill="#f1f5f9" />
-      {!still && <path d={`M70,46 L${70 + 140 * Math.cos(tiltRad + 0.26)},${46 - 140 * Math.sin(tiltRad + 0.26)} L${70 + 140 * Math.cos(tiltRad - 0.26)},${46 - 140 * Math.sin(tiltRad - 0.26)} Z`} fill="#5b9dc9" fillOpacity={0.22} />}
-      <rect x={52} y={52} width={20} height={36} rx={6} fill="#e2e8f0" />
-      <circle cx={62} cy={46} r={15} fill="#2d3748" />
-      <line x1={62} y1={46} x2={62 + 24 * Math.cos(tiltRad)} y2={46 - 24 * Math.sin(tiltRad)} stroke="#2d3748" strokeWidth={9} strokeLinecap="round" />
-      <text x={228} y={14} textAnchor="end" fontSize={10} fill="#64748b">Ngửa</text>
-      <text x={228} y={86} textAnchor="end" fontSize={10} fill="#64748b">Cúi</text>
-    </svg>
+    {webgl
+      ? <Suspense fallback={flat}><HeadCamera3D pose={pose} sweepDeg={plan.sweepDeg} still={still}
+          label={`Mô phỏng 3D: PAN ${sideLabel(pose.pan, 'trái', 'phải')}, TILT ${sideLabel(pose.tilt, 'ngửa', 'cúi')}`} /></Suspense>
+      : flat}
 
     <dl className="mt-2 grid grid-cols-3 gap-1.5 text-center">
       {[['PAN', sideLabel(pose.pan, 'trái', 'phải')], ['TILT', sideLabel(pose.tilt, 'ngửa', 'cúi')],
@@ -115,7 +127,7 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
         <div key={name} className="rounded-lg bg-[#f1f5f9] px-1.5 py-1.5"><dt className="text-[11px] text-[#64748b]">{name}</dt><dd className="text-[13px] font-semibold tabular-nums text-[#2d3748]">{value}</dd></div>)}
     </dl>
     <p className="mt-2 text-[11px] leading-snug text-[#718096]">
-      {still ? 'Đầu đứng yên khi tới điểm; người vận hành tự xoay bằng nút.' : `Chạy thử nhanh gấp ${SPEED_UP} lần robot thật. Vạch xám là tầm quay ±${HEAD_PAN_LIMIT_DEG}°, ô vàng là vật chặn.`}
+      {still ? 'Đầu đứng yên khi tới điểm; người vận hành tự xoay bằng nút.' : `Chạy thử nhanh gấp ${SPEED_UP} lần robot thật. Vạch xám là tầm quay ±${HEAD_PAN_LIMIT_DEG}°, vạch xanh là cung quét, khối vàng là vật chặn.`}
     </p>
   </figure>
 }
