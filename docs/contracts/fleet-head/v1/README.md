@@ -39,18 +39,20 @@ Response: [`poll-response-commands.json`](poll-response-commands.json), or
 | `commands` | In increasing `seq`. Only commands newer than `afterSeq` (same epoch) and not older than `FleetHead:MaxCommandAgeMs` (default 1000). Never more than the server keeps (32 per robot). |
 | `seq` | Integer, increasing per robot within an epoch. Execute each `seq` at most once; ignore `seq ≤` the last executed. |
 | `kind` | `STEP`, `JOG`, `STOP`, `ANGLE`, `SWEEP`. |
+| `sweepDeg` | `SWEEP` only, optional: degrees per side, integer 10..170. Absent = the robot's default (135°). |
 | `issuedAt` | Server time the Operator's request was accepted (UTC). Informational; the robot does not compare clocks. |
 | `panSteps`, `tiltSteps` | `STEP` only: full motor steps, −20..20, at least one non-zero → ROS `head/step`. |
 | `panDir`, `tiltDir` | `JOG` only: −1, 0 or 1 → ROS `head/jog`. `0,0` releases. |
 | `ttlMs` | `JOG` only. The robot keeps this jog only until its **own receipt time + `ttlMs`**, then releases (`head/jog 0,0`) unless a newer `JOG` arrived. |
-| `panDeg`, `tiltDeg` | `ANGLE` only: absolute degrees from the homed zero → ROS `head/set` (mode angle). The robot accepts pan −180..180, tilt −90..90 on the wire; the backend only queues the firmware soft limits, pan −170..170 and tilt −18..18. In `AUTO` mode the backend also queues `ANGLE 0/0` when the Tour leaves a POI. |
+| `panDeg`, `tiltDeg` | `ANGLE` only: absolute degrees from the homed zero → ROS `head/set` (mode angle). The robot accepts pan −180..180, tilt −90..90 on the wire; the backend only queues the firmware soft limits, pan −170..170 and tilt −18..18. In `AUTO` mode the backend queues the POI's angle at arrival and `ANGLE 0/0` when the Tour leaves a POI. |
 
 `STOP` → ROS `head/stop`, and also ends an active jog.
 
-`SWEEP` (no fields) → ROS `head/sweep`, after ending an active jog: `stm32_bridge` turns PAN left 135°, then right
-270°, then left 135° back to where it started, at button speed (30°/s), shrinking a side that would cross the soft
-limit; TILT stays. Any later head command (button, `STOP`, `ANGLE`) cancels it. The backend sends it by itself when
-the Tour is in `AUTO` head mode and the robot arrives at a POI; the Operator may also send it.
+`SWEEP` (optional `sweepDeg`) → ROS `head/sweep` (`HeadSweep.amplitude_deg`, 0 when absent), after ending an
+active jog: `stm32_bridge` turns PAN left `sweepDeg` (default 135°), then right twice that, then back to where it
+started, at button speed (30°/s), shrinking a side that would cross the soft limit; TILT stays. Any later head
+command (button, `STOP`, `ANGLE`) stops it where it is. The backend sends it by itself when the Tour is in `AUTO`
+head mode and the robot arrives at a POI whose camera preset is `SWEEP`; the Operator may also send it.
 
 Robot rules:
 
@@ -73,6 +75,7 @@ Body, one of:
 { "kind": "STOP" }
 { "kind": "ANGLE", "panDeg": 0, "tiltDeg": 0 }
 { "kind": "SWEEP" }
+{ "kind": "SWEEP", "sweepDeg": 90 }
 ```
 
 Fields that do not belong to the kind must be absent or `null`. Hold a button = send `JOG` about every 200 ms (well
@@ -96,8 +99,8 @@ COMPLETED or CANCELLED (409 `TOUR_STATE_INVALID`), so it can be chosen before St
 
 | Mode | At each POI arrival | Buttons |
 |---|---|---|
-| `AUTO` (default, `FleetHead:DefaultMode`) | The backend queues one `SWEEP` (if `FleetHead:Enabled` and the robot is polling) | Work, and cancel a running sweep |
-| `MANUAL` | Nothing | Work |
+| `AUTO` (default, `FleetHead:DefaultMode`) | The backend queues what the POI's camera preset says: `ANGLE` for `FRONT` (0/0), `LEFT` (90/0), `RIGHT` (−90/0) and `ANGLE:p,t`; `SWEEP` with its `sweepDeg`; nothing for `NONE`. When Next starts the following leg it queues `ANGLE 0/0`. Only if `FleetHead:Enabled` and the robot is polling. | Work, and stop a running sweep |
+| `MANUAL` | Nothing, at arrival or departure | Work |
 
 The mode is kept in API memory per Tour; after an API restart every Tour is back to the default.
 

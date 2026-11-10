@@ -38,7 +38,7 @@ namespace SmartCampus.Application
             services.AddSingleton<SmartCampus.Application.Features.StudentQuestions.StudentQuestionGate>();
             services.AddSingleton<SmartCampus.Application.Features.Invitations.InvitationCodeGuard>();
             services.AddSingleton<SmartCampus.Application.Features.Auth.LoginAttemptGate>();
-            services.AddSingleton<SmartCampus.Application.Features.FleetHead.HeadArrivalSweep>();
+            services.AddSingleton<SmartCampus.Application.Features.FleetHead.HeadAutoMotion>();
 
             return services;
         }

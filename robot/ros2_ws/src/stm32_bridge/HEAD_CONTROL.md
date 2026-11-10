@@ -17,7 +17,7 @@ Trạng thái: **code và test offline xong, chưa chạy với ROS thật và r
 | service | `head/stop` | `std_srvs/srv/Trigger` | Giảm tốc dừng; đang HOME thì hủy HOME (mất mốc) |
 | service | `head/off` | `std_srvs/srv/Trigger` | Tắt driver, mất mốc (TILT có thể đổ theo trọng lực) |
 | service | `head/zero` | `std_srvs/srv/Trigger` | Mốc tay tại vị trí hiện tại (dự phòng khi không HOME được) |
-| service | `head/sweep` | `std_srvs/srv/Trigger` | Xoay tự động: từ vị trí hiện tại PAN sang trái 135°, sang phải 270°, rồi về đúng chỗ cũ, 30°/s. Trả `started` sau khi FB đã phản ánh mọi lệnh đầu quay gửi trước đó (≤ 1 s); từ chối `not_ready:<trạng thái>` nếu chưa có mốc hoặc đang quay, `not_ready:command_pending` nếu FB chưa theo kịp, `already_sweeping` nếu đang quét |
+| service | `head/sweep` | `bus_interfaces/srv/HeadSweep` | Xoay tự động: từ vị trí hiện tại PAN sang trái `amplitude_deg` (0 = `head_sweep_deg`, 135°), sang phải gấp đôi, rồi về đúng chỗ cũ, 30°/s. `amplitude_deg` âm hoặc không phải số: `rejected:invalid_amplitude`. Trả `started` sau khi FB đã phản ánh mọi lệnh đầu quay gửi trước đó (≤ 1 s); từ chối `not_ready:<trạng thái>` nếu chưa có mốc hoặc đang quay, `not_ready:command_pending` nếu FB chưa theo kịp, `already_sweeping` nếu đang quét |
 | service | `contactor/set` | `std_srvs/srv/SetBool` | Bật/tắt contactor (PA10). Thành công khi một khung FB **sinh sau** lệnh này báo đúng trạng thái. Xem bảng kết quả bên dưới |
 | topic (pub) | `contactor/state` | `std_msgs/msg/Bool` | Trạng thái lệnh của PA10, 1 Hz và khi đổi |
 
@@ -27,9 +27,11 @@ phía sau, cạnh ở 174°). TILT dương = ngửa lên, giới hạn ±18° (v
 
 ## Xoay tự động ở POI (`head/sweep`)
 
-Hai chế độ do Operator chọn trên web (`PUT .../head-mode`): **Bằng tay** (chỉ nút) và
-**Tự động** (mặc định): robot tới mỗi POI thì backend gửi `SWEEP`, `fleet_bridge`
-gọi `head/sweep` của node này.
+Đầu camera làm gì ở mỗi POI do Staff chọn trong mục **Camera & tư liệu** của POI
+(nhìn trước/trái/phải, góc tùy chỉnh, quét với biên độ riêng, hoặc không tự xoay).
+Tour ở chế độ **Tự động** (mặc định) thì khi robot tới POI chọn "Quét", backend gửi
+`SWEEP` (kèm `sweepDeg` nếu có), `fleet_bridge` gọi `head/sweep` của node này với
+`amplitude_deg` tương ứng. Chế độ **Bằng tay** (`PUT .../head-mode`) bỏ qua mọi thiết lập POI.
 
 - Chuỗi lệnh `STEP` ở tốc độ nút bấm của firmware (30°/s, không cần nạp lại):
   `STEP,+trái,0` → `STEP,-(trái+phải),0` → `STEP,+phải,0`, chờ IDLE sau mỗi đoạn.
@@ -42,7 +44,7 @@ gọi `head/sweep` của node này.
   `STEP`/`JOG` chỉ đổi đích của trục được nhấn (firmware cộng `STEP` vào đích
   của đoạn quét đang chạy), nên khi đang quét bridge gửi `HEAD,<seq>,STOP` ngay
   trước chúng: đầu dừng tại chỗ rồi mới làm theo nút, không quay hết đoạn quét.
-- Bàn phím: `head_teleop` phím `x`.
+- Bàn phím: `head_teleop` phím `x` (biên độ mặc định).
 
 | Tham số | Mặc định | |
 |---|---|---|

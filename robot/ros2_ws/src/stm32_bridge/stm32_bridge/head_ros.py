@@ -10,7 +10,7 @@ nay. Tat ca ten la tuong doi -> /robot_01/... khi chay co namespace.
   srv     head/stop       std_srvs/srv/Trigger           (giam toc dung, huy HOME)
   srv     head/off        std_srvs/srv/Trigger           (tat driver, mat moc)
   srv     head/zero       std_srvs/srv/Trigger           (moc tay, du phong)
-  srv     head/sweep      std_srvs/srv/Trigger           (xoay tu dong: trai -> phai -> ve cho cu)
+  srv     head/sweep      bus_interfaces/srv/HeadSweep   (xoay tu dong: trai -> phai -> ve cho cu; amplitude_deg 0 = mac dinh)
 
 Contactor nam rieng o contactor_ros.py (khong phu thuoc bus_interfaces).
 Dau quay KHONG phu thuoc trang thai contactor: lenh HEAD gui di bat ke
@@ -55,6 +55,7 @@ from typing import Callable, Optional, Tuple
 
 from bus_interfaces.action import SetHead
 from bus_interfaces.msg import HeadJog, HeadState, HeadStep
+from bus_interfaces.srv import HeadSweep
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from std_srvs.srv import Trigger
@@ -150,7 +151,7 @@ class HeadInterface:
         node.create_service(Trigger, 'head/stop', self._srv_stop, callback_group=cb)
         node.create_service(Trigger, 'head/off', self._srv_off, callback_group=cb)
         node.create_service(Trigger, 'head/zero', self._srv_zero, callback_group=cb)
-        node.create_service(Trigger, 'head/sweep', self._srv_sweep, callback_group=cb)
+        node.create_service(HeadSweep, 'head/sweep', self._srv_sweep, callback_group=cb)
         self._action = ActionServer(
             node, SetHead, 'head/set',
             execute_callback=self._execute,
@@ -470,10 +471,16 @@ class HeadInterface:
         resp.message = 'zeroed' if resp.success else self._describe(outcome, fb, detail)
         return resp
 
-    def _srv_sweep(self, _req, resp):
+    def _srv_sweep(self, req, resp):
         if self._fw_has_head is False:
             resp.success, resp.message = False, 'firmware_without_head'
             return resp
+        # Bien do theo POI (backend: preset SWEEP:<do> trong "Camera & tu lieu"); 0 = head_sweep_deg.
+        amplitude = float(getattr(req, 'amplitude_deg', 0.0) or 0.0)
+        if not math.isfinite(amplitude) or amplitude < 0.0:
+            resp.success, resp.message = False, 'rejected:invalid_amplitude'
+            return resp
+        amplitude = amplitude or self._sweep_deg
         # Cho khung FB phan anh moi lenh dau quay da gui (vd nut tay vua bam): neu khong, "vi tri bat dau"
         # co the la vi tri cu trong khi firmware sap quay toi dich cua lenh do.
         deadline = time.monotonic() + self._cmd_timeout
@@ -503,7 +510,7 @@ class HeadInterface:
             cancel = threading.Event()
             self._sweep_cancel = cancel
             self._sweep_thread = threading.Thread(
-                target=self._run_sweep, args=(fb, cancel), name='head_sweep', daemon=True)
+                target=self._run_sweep, args=(fb, cancel, amplitude), name='head_sweep', daemon=True)
             self._sweep_thread.start()
         resp.success, resp.message = True, 'started'
         return resp
@@ -526,9 +533,9 @@ class HeadInterface:
     def _sweep_timeout(self, steps: int) -> float:
         return max(self._move_timeout, abs(steps) * self._sweep_deg_per_step / self._sweep_speed_dps * 2.0 + 5.0)
 
-    def _run_sweep(self, start: hl.HeadFeedback, cancel: threading.Event) -> None:
+    def _run_sweep(self, start: hl.HeadFeedback, cancel: threading.Event, amplitude_deg: float) -> None:
         log = self._node.get_logger()
-        left, right = hl.sweep_plan(start.pan_deg, self._sweep_deg, self._sweep_deg_per_step, self._sweep_limit_deg)
+        left, right = hl.sweep_plan(start.pan_deg, amplitude_deg, self._sweep_deg_per_step, self._sweep_limit_deg)
         log.info(f'Head sweep from pan {start.pan_deg:.1f} deg: left {left} steps, right {right} steps, back')
         for steps in (left, -(left + right), right):
             if steps == 0:
@@ -586,7 +593,9 @@ class HeadInterface:
                 goal_handle.publish_feedback(feedback)
                 last_fb_sent[0] = now
 
-        cancel_requested = (lambda: goal_handle.is_cancel_requested)
+        def cancel_requested() -> bool:
+            return goal_handle.is_cancel_requested
+
         outcome = hl.DONE
         if home:
             outcome, fb, detail = self._turn_to_front_before_home(cancel_requested, progress)

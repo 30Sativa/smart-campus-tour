@@ -79,7 +79,7 @@ describe('Staff versioned POI workflow', () => {
 
   it('groups the camera angle with the robot pose and keeps the content fields in their own card', async () => {
     renderAt('/staff/manage/pois/new')
-    const camera = await screen.findByLabelText('Góc camera')
+    const camera = await screen.findByLabelText('Hoạt động đầu camera VR khi robot tới điểm')
     expect(screen.getByRole('region', { name: 'Vị trí và hướng robot' })).toContainElement(camera)
     const content = screen.getByRole('complementary', { name: 'Nội dung điểm' })
     expect(content).not.toContainElement(camera)
@@ -123,7 +123,7 @@ describe('Staff versioned POI workflow', () => {
     }))
     renderAt('/staff/manage/pois/proposal-1')
 
-    const camera = await screen.findByLabelText('Góc camera') as HTMLSelectElement
+    const camera = await screen.findByLabelText('Hoạt động đầu camera VR khi robot tới điểm') as HTMLSelectElement
     expect(camera.value).toBe('HEAD_LEFT')
     expect(screen.getByRole('option', { name: 'Hướng cũ HEAD_LEFT, cần chọn lại' })).toBeDisabled()
   })
@@ -275,9 +275,26 @@ describe('Staff versioned POI workflow', () => {
       expect(screen.getByText('Lưu sẽ tạo bản mới và giữ kết quả đạt.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeEnabled()
       expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeDisabled()
-      fireEvent.change(screen.getByLabelText('Góc camera'), { target: { value: 'LEFT' } })
+      fireEvent.change(screen.getByLabelText('Hoạt động đầu camera VR khi robot tới điểm'), { target: { value: 'LEFT' } })
       expect(screen.getByText('Lưu sẽ tạo bản mới và phải gửi kiểm chứng lại. Tuyến và Tour đang dùng bản cũ không bị ảnh hưởng.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeEnabled()
+    })
+
+    it('saves the VR head behaviour chosen in Camera & tư liệu, with its own sweep amplitude, and refuses a bad angle', async () => {
+      serve({})
+      renderAt('/staff/manage/pois/proposal-1')
+      const head = await screen.findByLabelText('Hoạt động đầu camera VR khi robot tới điểm')
+      fireEvent.change(head, { target: { value: 'ANGLE' } })
+      fireEvent.change(screen.getByLabelText(/^PAN \(độ\)/), { target: { value: '200' } })
+      expect(screen.getByText(/Góc PAN phải từ -170 đến 170 độ/)).toBeInTheDocument()
+      expect(screen.getByText(/Còn thiếu: hoạt động đầu camera hợp lệ/)).toBeInTheDocument()
+      fireEvent.change(head, { target: { value: 'SWEEP' } })
+      expect(screen.getByText(/quay chậm sang trái, rồi sang phải, rồi về chỗ cũ/)).toBeInTheDocument()
+      fireEvent.change(screen.getByLabelText(/^Biên độ mỗi bên/), { target: { value: '90' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+      await waitFor(() => expect(writes()).toContain('/api/staff/poi-proposals/proposal-1/draft'))
+      const save = requests.find(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/draft')!
+      expect(JSON.parse(String(save.init?.body)).draft.cameraPreset).toBe('SWEEP:90')
     })
 
     it('sends an unchanged draft for checking without saving a copy of it first', async () => {

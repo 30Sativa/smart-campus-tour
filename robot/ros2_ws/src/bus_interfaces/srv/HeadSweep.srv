@@ -1,0 +1,7 @@
+# Xoay tu dong dau quay (stm32_bridge head/sweep): PAN trai amplitude_deg, phai
+# 2*amplitude_deg, roi ve dung cho cu; TILT giu nguyen. Moi ben tu thu nho de
+# khong cham gioi han mem. 0 = mac dinh cua node (tham so head_sweep_deg, 135).
+float32 amplitude_deg
+---
+bool success
+string message         # "started", "not_ready:<trang thai>", "already_sweeping", "rejected:invalid_amplitude", ...

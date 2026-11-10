@@ -41,6 +41,14 @@ def _install_stubs():
             pass
 
     bi_action.SetHead = SetHead
+    bi_srv = _stub('bus_interfaces.srv')
+    bi.srv = bi_srv
+
+    class HeadSweep:
+        class Request(_Msg):
+            pass
+
+    bi_srv.HeadSweep = HeadSweep
 
     rclpy = sys.modules.get('rclpy') or _stub('rclpy')
     ra = _stub('rclpy.action')
@@ -769,5 +777,32 @@ def test_an_angle_that_is_not_a_number_is_rejected_without_a_command():
         assert gh.final == 'aborted' and r.message == 'rejected:invalid_angle'
         r = run_goal(iface, FakeGoalHandle(mode=0, pan=0.0, tilt=float('inf')))
         assert r.message == 'rejected:invalid_angle' and len(fw.sent) == n
+    finally:
+        fw.stop()
+
+
+# ---- bien do quet theo POI (HeadSweep.amplitude_deg) --------------------------
+
+def test_a_poi_amplitude_replaces_the_default_and_zero_keeps_it():
+    node, iface, fw = _homed(move_s=0.1)
+    try:
+        resp = node.services['head/sweep'](SimpleNamespace(amplitude_deg=90.0), SimpleNamespace())
+        assert resp.success
+        assert _wait(lambda: not iface._sweep_thread.is_alive(), 5.0)
+        assert _steps(fw) == ['STEP,150,0', 'STEP,-300,0', 'STEP,150,0']      # 90 do = 150 buoc 0.6 do
+        assert node.services['head/sweep'](SimpleNamespace(amplitude_deg=0.0), SimpleNamespace()).success
+        assert _wait(lambda: not iface._sweep_thread.is_alive(), 5.0)
+        assert _steps(fw)[3:] == ['STEP,225,0', 'STEP,-450,0', 'STEP,225,0']   # 0 = head_sweep_deg (135)
+    finally:
+        fw.stop()
+
+
+def test_a_negative_or_not_a_number_amplitude_is_refused():
+    node, iface, fw = _homed()
+    try:
+        for bad in (-5.0, float('nan'), float('inf')):
+            resp = node.services['head/sweep'](SimpleNamespace(amplitude_deg=bad), SimpleNamespace())
+            assert not resp.success and resp.message == 'rejected:invalid_amplitude'
+        assert _steps(fw) == []
     finally:
         fw.stop()

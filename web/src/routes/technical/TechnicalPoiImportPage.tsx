@@ -6,7 +6,8 @@ import { Modal } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { CheckRow, DetailFact, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
-import { cameraPresetLabel, mapVersionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { mapVersionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { headPresetLabel } from '../../features/technical/head-camera-preset'
 import { errorText, poiVerifyErrors, stamp } from '../../features/technical/technical-format'
 import { useMapVersions, usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
 import type { PoiProposal, PoiRevision, PoiVerificationQueueItem } from '../../features/technical/api/technical'
@@ -122,7 +123,7 @@ function PoiDetailModal({ row, mapName, onClose, onRecord }: { row: PoiRow; mapN
         <DetailFact label="Bản đồ">{mapName}</DetailFact>
         <DetailFact label="Phiên bản POI">{revision.revisionNumber}</DetailFact>
         <DetailFact label="Tọa độ"><span className="font-mono">x {revision.x}, y {revision.y}, yaw {revision.yaw}</span></DetailFact>
-        <DetailFact label="Hướng camera">{cameraPresetLabel[revision.cameraPreset] ?? revision.cameraPreset}</DetailFact>
+        <DetailFact label="Đầu camera VR">{headPresetLabel(revision.cameraPreset)}</DetailFact>
         <DetailFact label="Thuyết minh"><span className="whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</span></DetailFact>
         {revision.fallbackVideoUrl && <DetailFact label="Video dự phòng"><span className="break-all">{revision.fallbackVideoUrl}</span></DetailFact>}
       </dl>
@@ -185,7 +186,7 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
   }
 
   return (
-    <Modal open size="lg" title={`Kiểm tra ${revision.name}`} description={`${mapName}, phiên bản POI ${revision.revisionNumber}, camera ${cameraPresetLabel[revision.cameraPreset] ?? revision.cameraPreset}. Đạt khi cả bốn kiểm tra đều đạt.`} onClose={onClose}
+    <Modal open size="lg" title={`Kiểm tra ${revision.name}`} description={`${mapName}, phiên bản POI ${revision.revisionNumber}, đầu camera ${headPresetLabel(revision.cameraPreset)}. Đạt khi cả bốn kiểm tra đều đạt.`} onClose={onClose}
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="poi-verify-form" className="space-y-3.5" onSubmit={submit}>
         <div>
@@ -219,7 +220,7 @@ function PoiResultModal({ proposalId, revision, mapName, onClose }: { proposalId
     { label: 'Camera preset được xác nhận', passed: record.cameraPresetConfirmed },
   ]
   return (
-    <Modal open size="lg" title={`Kết quả ${revision.name}`} description={`${mapName}, phiên bản POI ${revision.revisionNumber}, camera ${cameraPresetLabel[revision.cameraPreset] ?? revision.cameraPreset}.`} onClose={onClose}
+    <Modal open size="lg" title={`Kết quả ${revision.name}`} description={`${mapName}, phiên bản POI ${revision.revisionNumber}, đầu camera ${headPresetLabel(revision.cameraPreset)}.`} onClose={onClose}
       footer={<div className="flex justify-end"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button></div>}>
       <div className="space-y-3">
         {history.isPending && <p role="status" className="text-sm text-[#64748b]">Đang tải kết quả…</p>}

@@ -17,6 +17,7 @@ from typing import Optional, Protocol
 KINDS = frozenset({'STEP', 'JOG', 'STOP', 'ANGLE', 'SWEEP'})
 DEFAULT_JOG_TTL_SEC = 0.6
 MAX_STEPS = 20
+MIN_SWEEP_DEG, MAX_SWEEP_DEG = 10, 170
 
 # stm32_bridge HeadState.state -> wire head.state
 STATE_NAMES = {0: 'OFF', 1: 'IDLE', 2: 'MOVING', 3: 'HOMING', 4: 'NO_REFERENCE'}
@@ -33,6 +34,7 @@ class HeadCommand:
     pan_deg: float = 0.0
     tilt_deg: float = 0.0
     ttl_sec: float = DEFAULT_JOG_TTL_SEC
+    sweep_deg: Optional[int] = None    # SWEEP only: degrees per side; None = stm32_bridge default
 
 
 class HeadActuator(Protocol):
@@ -40,7 +42,7 @@ class HeadActuator(Protocol):
     def jog(self, pan_dir: int, tilt_dir: int) -> None: ...
     def stop(self) -> None: ...
     def angle(self, pan_deg: float, tilt_deg: float) -> None: ...
-    def sweep(self) -> None: ...
+    def sweep(self, amplitude_deg: float) -> None: ...   # 0 = the robot's default
 
 
 def _int(value, low: int, high: int, name: str) -> int:
@@ -73,6 +75,8 @@ def parse_head_command(raw: object) -> HeadCommand:
     if kind == 'ANGLE':
         return HeadCommand(seq, kind, pan_deg=_float(raw.get('panDeg'), 180.0, 'panDeg'),
                            tilt_deg=_float(raw.get('tiltDeg'), 90.0, 'tiltDeg'))
+    if kind == 'SWEEP' and raw.get('sweepDeg') is not None:
+        return HeadCommand(seq, kind, sweep_deg=_int(raw.get('sweepDeg'), MIN_SWEEP_DEG, MAX_SWEEP_DEG, 'sweepDeg'))
     return HeadCommand(seq, kind)
 
 
@@ -162,7 +166,7 @@ class HeadCommandApplier:
         elif command.kind == 'SWEEP':
             # Xoay tu dong o POI: stm32_bridge chay ca luot (trai -> phai -> ve cho cu); lenh tay sau do se huy no.
             self._release()
-            self._actuator.sweep()
+            self._actuator.sweep(float(command.sweep_deg or 0))
 
     def _release(self) -> None:
         if self._jog is not None:

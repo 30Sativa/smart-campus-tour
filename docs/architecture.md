@@ -761,7 +761,8 @@ effective `verificationMethod`, and proposals add `sourcePoiId`. Route save retu
 
 Map and pose input limits (ADR-0040): `POST /api/technical/map-versions` returns 409
 `MAP_PACKAGE_DUPLICATE` for a package already in that area. POI create and draft return 422
-`POI_CAMERA_PRESET_INVALID` unless the preset is `FRONT`, `LEFT` or `RIGHT` in any case. A newly
+`POI_CAMERA_PRESET_INVALID` unless the preset is `FRONT`, `LEFT`, `RIGHT`, `NONE`, `SWEEP`, `SWEEP:<10..170>` or `ANGLE:<pan>,<tilt>` (pan −170..170, positive left; tilt −18..18, positive up; at most one decimal), any case, stored canonical
+(ADR-0045 addendum 10/11/2026: the preset is what the VR camera head does at the POI). A newly
 written POI or route pose returns 422 `POSE_CLEARANCE_INSUFFICIENT` unless every cell within
 `Maps:PoiClearanceMeters` (default 0.30) is inside the map and free, and import preview reports it
 per file. Both 422s carry the Vietnamese message in `message` and the code in `errors.code`.
@@ -1284,8 +1285,8 @@ buttons on the Operator console:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE\|SWEEP, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?}`; 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
-| PUT | `/api/staff/manage/tours/{id}/head-mode` | `{mode: AUTO\|MANUAL}`, Operator only, until the Tour ends. AUTO (default) queues one `SWEEP` at every POI arrival (ADR-0045 addendum); in memory. |
+| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE\|SWEEP, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?, sweepDeg?}` (ANGLE within pan ±170, tilt ±18; `sweepDeg` 10..170, SWEEP only); 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
+| PUT | `/api/staff/manage/tours/{id}/head-mode` | `{mode: AUTO\|MANUAL}`, Operator only, until the Tour ends. AUTO (default) turns each POI's camera preset into one command at arrival (ANGLE, SWEEP with its `sweepDeg`, nothing for NONE) and queues `ANGLE 0/0` when Next starts the following leg (ADR-0045 addenda); MANUAL skips both. In memory. |
 | GET | `/api/staff/manage/tours/{id}/head` | Any Staff: `{enabled, mode, robotCode, connected, lastPollAt, head}` from the robot's last poll. |
 | POST | `/api/fleet/head/v1/poll` | Robot scheme. Long poll `{epoch, afterSeq, waitMs, head}` → `{epoch, commands[]}`. |
 
@@ -1295,8 +1296,9 @@ Wire: `docs/contracts/fleet-head/v1/`. Commands live only in API memory per robo
 the robot releases it at its own receipt time + `ttlMs`, so a lost network or a
 closed tab stops the head. On the robot, `fleet_bridge` (`head_enabled`) maps
 `STEP`/`JOG` to topics `head/step`/`head/jog`, `STOP` to service `head/stop`,
-`ANGLE` to action `head/set`, `SWEEP` to service `head/sweep` (left 135°, right,
-back to the start at 30°/s; any button cancels it), and reports `head/state` on its next poll. Same
+`ANGLE` to action `head/set`, `SWEEP` to service `head/sweep` (`bus_interfaces/srv/HeadSweep`, `amplitude_deg` =
+`sweepDeg` or 0 for the default 135°: left, right, back to the start at 30°/s; any button stops it), and reports
+`head/state` on its next poll. Same
 single-API-instance limit as Fleet Sync (ADR-0019).
 
 **Quest camera on demand (ADR-0052, proposed 09/11/2026; robot side opt-in).**

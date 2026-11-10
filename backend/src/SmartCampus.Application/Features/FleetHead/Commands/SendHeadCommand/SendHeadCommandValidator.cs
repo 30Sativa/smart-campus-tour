@@ -12,6 +12,8 @@ public sealed class SendHeadCommandValidator : AbstractValidator<SendHeadCommand
     public const int MaximumSteps = 20;
     public const double MaximumPanDeg = 170;
     public const double MaximumTiltDeg = 18;
+    public const int MinimumSweepDeg = 10;
+    public const int MaximumSweepDeg = 170;
 
     public SendHeadCommandValidator()
     {
@@ -43,6 +45,10 @@ public sealed class SendHeadCommandValidator : AbstractValidator<SendHeadCommand
                 RuleFor(c => c.Spec.PanDir).Must(IsDirection).WithMessage("panDir must be -1, 0 or 1.");
                 RuleFor(c => c.Spec.TiltDir).Must(IsDirection).WithMessage("tiltDir must be -1, 0 or 1.");
             });
+            When(c => c.Spec.Kind == HeadCommandKinds.Sweep, () =>
+                RuleFor(c => c.Spec.SweepDeg)
+                    .Must(deg => deg is null or (>= MinimumSweepDeg and <= MaximumSweepDeg))
+                    .WithMessage($"sweepDeg must be {MinimumSweepDeg}..{MaximumSweepDeg}."));
             When(c => c.Spec.Kind == HeadCommandKinds.Angle, () =>
             {
                 RuleFor(c => c.Spec.PanDeg)
@@ -59,12 +65,13 @@ public sealed class SendHeadCommandValidator : AbstractValidator<SendHeadCommand
 
     private static bool IsDirection(int? dir) => dir is null or -1 or 0 or 1;
 
-    private static bool OnlyFieldsOfItsKind(HeadCommandSpec spec) => spec.Kind switch
-    {
-        HeadCommandKinds.Step => spec.PanDir is null && spec.TiltDir is null && spec.PanDeg is null && spec.TiltDeg is null,
-        HeadCommandKinds.Jog => spec.PanSteps is null && spec.TiltSteps is null && spec.PanDeg is null && spec.TiltDeg is null,
-        HeadCommandKinds.Angle => spec.PanSteps is null && spec.TiltSteps is null && spec.PanDir is null && spec.TiltDir is null,
-        _ => spec.PanSteps is null && spec.TiltSteps is null && spec.PanDir is null && spec.TiltDir is null &&
-             spec.PanDeg is null && spec.TiltDeg is null
-    };
+    private static bool OnlyFieldsOfItsKind(HeadCommandSpec spec) => (spec.SweepDeg is null || spec.Kind == HeadCommandKinds.Sweep) &&
+        spec.Kind switch
+        {
+            HeadCommandKinds.Step => spec.PanDir is null && spec.TiltDir is null && spec.PanDeg is null && spec.TiltDeg is null,
+            HeadCommandKinds.Jog => spec.PanSteps is null && spec.TiltSteps is null && spec.PanDeg is null && spec.TiltDeg is null,
+            HeadCommandKinds.Angle => spec.PanSteps is null && spec.TiltSteps is null && spec.PanDir is null && spec.TiltDir is null,
+            _ => spec.PanSteps is null && spec.TiltSteps is null && spec.PanDir is null && spec.TiltDir is null &&
+                 spec.PanDeg is null && spec.TiltDeg is null
+        };
 }

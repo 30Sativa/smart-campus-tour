@@ -31,6 +31,7 @@ from std_srvs.srv import SetBool, Trigger
 
 from bus_interfaces.action import SetHead
 from bus_interfaces.msg import HeadJog, HeadState, HeadStep
+from bus_interfaces.srv import HeadSweep
 
 from stm32_bridge.head_keys import HoldDetector, parse_keys
 
@@ -50,7 +51,8 @@ class HeadTeleop(Node):
         self.create_subscription(Bool, 'contactor/state', self._on_contactor, 10)
         self.action = ActionClient(self, SetHead, 'head/set')
         self.srv = {name: self.create_client(Trigger, f'head/{name}')
-                    for name in ('stop', 'off', 'zero', 'sweep')}
+                    for name in ('stop', 'off', 'zero')}
+        self.srv['sweep'] = self.create_client(HeadSweep, 'head/sweep')
         self.contactor_cli = self.create_client(SetBool, 'contactor/set')
         self.state = None
         self.contactor = None
@@ -109,7 +111,9 @@ class HeadTeleop(Node):
         if not cli.service_is_ready():
             self.say(f'head/{name} chua san sang')
             return
-        cli.call_async(Trigger.Request()).add_done_callback(
+        # head/sweep: bien do 0 = mac dinh cua stm32_bridge (head_sweep_deg).
+        request = HeadSweep.Request() if name == 'sweep' else Trigger.Request()
+        cli.call_async(request).add_done_callback(
             lambda f: self.say(f'head/{name}: {f.result().message}'))
 
     def toggle_contactor(self):

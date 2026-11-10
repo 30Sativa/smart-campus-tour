@@ -51,7 +51,7 @@ polls and `bus_interfaces` is not imported. Independent of `commands_enabled`; t
 | `JOG` | publish `head/jog` at 10 Hz until this robot's receipt time + `ttlMs`, then `0,0` once |
 | `STOP` | release a jog, call `head/stop` |
 | `ANGLE` | release a jog, send `head/set` (mode angle), fire and forget |
-| `SWEEP` | release a jog, call `head/sweep` (stm32_bridge runs the whole left -> right -> back sweep) |
+| `SWEEP` | release a jog, call `head/sweep` (`HeadSweep`, `amplitude_deg` = `sweepDeg` or 0 for the default); stm32_bridge runs the whole left -> right -> back sweep |
 
 Each `seq` runs once, in order; a new backend `epoch` restarts the count. A failed ROS call is logged and the next
 command still runs. The latest `head/state` (fresh within 2 s) rides on the next poll. `head_wait_ms` (1500) must stay

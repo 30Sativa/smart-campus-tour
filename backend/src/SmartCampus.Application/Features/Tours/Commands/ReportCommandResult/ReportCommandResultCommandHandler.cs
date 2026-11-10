@@ -16,7 +16,7 @@ namespace SmartCampus.Application.Features.Tours.Commands.ReportCommandResult;
 /// Accepted whatever <c>FleetCommands:Enabled</c> says: what the robot reports it did is never refused.
 /// </summary>
 public sealed class ReportCommandResultCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, HeadArrivalSweep headSweep, TimeProvider clock)
+    IRouteRevisionRepository revisions, HeadAutoMotion headMotion, TimeProvider clock)
     : IRequestHandler<ReportCommandResultCommand, CommandResultAck>
 {
     public async Task<CommandResultAck> Handle(ReportCommandResultCommand result, CancellationToken ct)
@@ -90,9 +90,9 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
             var stops = await revisions.GetStopsAsync(tour.RouteRevisionId!.Value, ct);
             var stop = stops.Single(item => item.Id == command.RouteRevisionStopId);
             tour.ArriveAtStop(stop.Id, now.AddSeconds(stop.DwellSeconds), now);
-            // AUTO head mode looks around at the POI (in memory, best effort). Queued before the commit: if the commit
-            // failed the robot would still look around, which is harmless; an exact repeat never gets here.
-            headSweep.Queue(tour.Id, robotCode);
+            // AUTO head mode does what the POI's camera preset says (in memory, best effort). Queued before the commit:
+            // if the commit failed the head would still turn, which is harmless; an exact repeat never gets here.
+            headMotion.QueueArrival(tour.Id, robotCode, stop.CameraPreset);
         }
         // A CANCELLED nobody asked for during a running leg needs the Operator like a failure does.
         else if (command.State is RobotCommandStates.Failed or RobotCommandStates.Cancelled)

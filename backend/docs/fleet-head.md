@@ -35,14 +35,17 @@ Each press costs one unlocked `Tours`/`Robots` read.
 
 Environment form: `FleetHead__Enabled=true`.
 
-## Automatic sweep (ADR-0045 addendum)
+## Head behaviour at POIs (ADR-0045 addenda)
 
-`ReportCommandResultCommandHandler` calls `HeadArrivalSweep.Queue` when the current leg's GoTo to a POI is recorded
-`ARRIVED`. In `AUTO` mode, with head control on and the robot polling, it queues one `SWEEP`; otherwise nothing.
-`NextTourStopCommandHandler` calls `HeadArrivalSweep.QueueRecenter` when it starts the next leg: in `AUTO` mode it
+Everything the VR camera head does at a POI is set on the POI, in Staff "Camera & tư liệu", as its camera preset
+(`PoiCameraPresets`: `FRONT`, `LEFT`, `RIGHT`, `NONE`, `SWEEP[:deg]`, `ANGLE:pan,tilt`). The route revision stop keeps
+a copy. `ReportCommandResultCommandHandler` calls `HeadAutoMotion.QueueArrival` with the stop's preset when the current
+leg's GoTo to a POI is recorded `ARRIVED`. In `AUTO` mode, with head control on and the robot polling, it queues
+`ANGLE` (FRONT 0/0, LEFT 90/0, RIGHT −90/0, ANGLE p/t) or `SWEEP` (with `sweepDeg`), and nothing for `NONE` or an
+older unknown value. `NextTourStopCommandHandler` calls `HeadAutoMotion.QueueDeparture` when it starts the next leg: in `AUTO` mode it
 queues `ANGLE 0/0`, which also stops a sweep still running, so the robot never drives with the head turned. Both run
 inside the handler, before the commit, and never fail it. An `AUTO` Tour while `FleetHead:Enabled` is false logs
-`... skipped ... Fleet Head is disabled` at each arrival and departure, so a head that never moves is explained. Code: `Features/FleetHead/HeadArrivalSweep.cs`,
+`... skipped ... Fleet Head is disabled` at each arrival and departure, so a head that never moves is explained. Code: `Features/FleetHead/HeadAutoMotion.cs`, `Features/MapPoi/Common/PoiCameraPresets.cs`,
 `Commands/SetTourHeadMode/`, `Common/Abstractions/FleetHead/ITourHeadModeStore.cs`,
 `Integrations/FleetHead/InMemoryTourHeadModeStore.cs`.
 
@@ -61,5 +64,5 @@ inside the handler, before the commit, and never fail it. An `AUTO` Tour while `
 `tests/SmartCampus.UnitTests/FleetHeadTests.cs` (validation, Operator/RUNNING/listening rules),
 `tests/SmartCampus.IntegrationTests/FleetHeadChannelTests.cs` (long poll, expiry, epoch, queue bound; no database),
 `FleetCommandsHttpTests.HeadControl_TheOperatorOfARunningTour_TurnsTheHead_ThroughTheRobotsLongPoll`,
-`HeadAutoMode_AnArrivalAtAPoi_QueuesOneSweep_AndManualModeDoesNot` and
+`HeadAutoMode_AnArrivalAtAPoi_DoesWhatItsCameraPresetSays_AndManualModeDoesNot` and
 `HeadAutoMode_LeavingAPoi_BringsTheHeadBackToTheFront` (SQL Server).

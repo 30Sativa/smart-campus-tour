@@ -15,7 +15,7 @@ namespace SmartCampus.Application.Features.Tours.Commands.NextTourStop;
 /// leg also brings the head back to the front (ADR-0045 addendum).
 /// </summary>
 public sealed class NextTourStopCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, HeadArrivalSweep headMotion,
+    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, HeadAutoMotion headMotion,
     TimeProvider clock)
     : IRequestHandler<NextTourStopCommand, TourMutationResult>
 {
@@ -65,7 +65,7 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
         {
             TourLegDispatch.Begin(repository, settings, tour, robotId, map, target, command.Actor, now);
             // Queued before the commit, like the arrival sweep: a failed commit at worst turns the head to the front.
-            headMotion.QueueRecenter(tour.Id, robot!.RobotCode);
+            headMotion.QueueDeparture(tour.Id, robot!.RobotCode);
         }
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Next, fingerprint, now, "state");

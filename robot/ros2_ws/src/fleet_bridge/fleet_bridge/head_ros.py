@@ -3,7 +3,7 @@
 Imported only when `head_enabled` is true, so the telemetry-only bridge needs no bus_interfaces.
   STEP  -> topic head/step (HeadStep)        JOG  -> topic head/jog (HeadJog), republished at 10 Hz until its TTL
   STOP  -> service head/stop (Trigger)       ANGLE -> action head/set (SetHead, mode angle), fire and forget
-  SWEEP -> service head/sweep (Trigger): automatic left -> right -> back, run by stm32_bridge
+  SWEEP -> service head/sweep (HeadSweep): automatic left -> right -> back, run by stm32_bridge; sweepDeg -> amplitude_deg
 Feedback: topic head/state (HeadState) is sent back on the next poll.
 """
 
@@ -16,6 +16,7 @@ from typing import Optional
 
 from bus_interfaces.action import SetHead
 from bus_interfaces.msg import HeadJog, HeadState, HeadStep
+from bus_interfaces.srv import HeadSweep
 from rclpy.action import ActionClient
 from std_srvs.srv import Trigger
 
@@ -30,7 +31,7 @@ class RosHeadActuator:
         self._step_pub = node.create_publisher(HeadStep, 'head/step', 10)
         self._jog_pub = node.create_publisher(HeadJog, 'head/jog', 10)
         self._stop_client = node.create_client(Trigger, 'head/stop')
-        self._sweep_client = node.create_client(Trigger, 'head/sweep')
+        self._sweep_client = node.create_client(HeadSweep, 'head/sweep')
         self._log = node.get_logger()
         self._set_client = ActionClient(node, SetHead, 'head/set')
 
@@ -45,10 +46,12 @@ class RosHeadActuator:
             raise RuntimeError('head/stop unavailable')
         self._stop_client.call_async(Trigger.Request())
 
-    def sweep(self) -> None:
+    def sweep(self, amplitude_deg: float) -> None:
         if not self._sweep_client.service_is_ready():
             raise RuntimeError('head/sweep unavailable')
-        future = self._sweep_client.call_async(Trigger.Request())
+        request = HeadSweep.Request()
+        request.amplitude_deg = float(amplitude_deg)
+        future = self._sweep_client.call_async(request)
         future.add_done_callback(self._log_sweep)
 
     def _log_sweep(self, future) -> None:

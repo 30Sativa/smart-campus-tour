@@ -43,8 +43,8 @@ class FakeActuator:
     def angle(self, pan, tilt):
         self._record('angle', pan, tilt)
 
-    def sweep(self):
-        self._record('sweep')
+    def sweep(self, amplitude_deg):
+        self._record('sweep', amplitude_deg)
 
 
 class FixtureTests(unittest.TestCase):
@@ -61,11 +61,12 @@ class FixtureTests(unittest.TestCase):
     def test_fixture_commands_parse_and_run_in_order(self):
         epoch, commands = parse_head_poll_response(fixture('poll-response-commands.json'))
         self.assertEqual(EPOCH, epoch)
-        self.assertEqual([42, 43, 44, 45, 46], [c.seq for c in commands])
+        self.assertEqual([42, 43, 44, 45, 46, 47], [c.seq for c in commands])
         actuator = FakeActuator()
         HeadCommandApplier(actuator).apply(epoch, commands, now=100.0)
-        self.assertEqual([('step', 1, 0), ('jog', -1, 0), ('jog', 0, 0), ('stop',), ('angle', 0.0, 0.0), ('sweep',)],
-                         actuator.calls)
+        # A SWEEP without sweepDeg asks for the robot's default (0); with it, the POI's own amplitude.
+        self.assertEqual([('step', 1, 0), ('jog', -1, 0), ('jog', 0, 0), ('stop',), ('angle', 0.0, 0.0), ('sweep', 0.0),
+                          ('sweep', 90.0)], actuator.calls)
         self.assertEqual((EPOCH, []), parse_head_poll_response(fixture('poll-response-empty.json')))
 
     def test_request_fixture_is_what_the_worker_sends(self):
@@ -83,7 +84,8 @@ class ParseTests(unittest.TestCase):
                     {'seq': 1, 'kind': 'STEP', 'panSteps': 21}, {'seq': 1, 'kind': 'STEP', 'panSteps': 1.5},
                     {'seq': 1, 'kind': 'JOG', 'panDir': 2}, {'seq': 1, 'kind': 'JOG', 'panDir': 1, 'ttlMs': 0},
                     {'seq': 1, 'kind': 'ANGLE', 'panDeg': 0}, {'seq': 1, 'kind': 'ANGLE', 'panDeg': float('nan'), 'tiltDeg': 0},
-                    {'seq': 1, 'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 91}]:
+                    {'seq': 1, 'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 91}, {'seq': 1, 'kind': 'SWEEP', 'sweepDeg': 9},
+                    {'seq': 1, 'kind': 'SWEEP', 'sweepDeg': 171}, {'seq': 1, 'kind': 'SWEEP', 'sweepDeg': 90.5}]:
             with self.assertRaises(ValueError, msg=raw):
                 parse_head_command(raw)
 

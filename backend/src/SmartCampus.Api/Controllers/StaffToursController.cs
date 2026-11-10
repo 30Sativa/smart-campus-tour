@@ -148,7 +148,8 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
             Success = true,
             Message = "Head command queued.",
             Data = await sender.Send(new SendHeadCommand(id, User.GetRequiredUserId(), new HeadCommandSpec(request.Kind,
-                request.PanSteps, request.TiltSteps, request.PanDir, request.TiltDir, request.PanDeg, request.TiltDeg)), ct)
+                request.PanSteps, request.TiltSteps, request.PanDir, request.TiltDir, request.PanDeg, request.TiltDeg,
+                request.SweepDeg)), ct)
         });
 
     /// <summary>ADR-0045 addendum: AUTO sweeps the head at every POI arrival, MANUAL only follows the buttons.</summary>

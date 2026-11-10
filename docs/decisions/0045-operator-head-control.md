@@ -85,3 +85,20 @@ would write SQL rows several times per second and block navigation behind the on
   does ZERO → turn back → HOME, and a manual HOME far left turns to the front first. Park on shutdown waits until
   the head is at 0/0. The firmware and its 190° seek are unchanged.
 - The backend refuses `ANGLE` outside the firmware soft limits (pan ±170°, tilt ±18°).
+
+## Addendum 10/11/2026 (2): the VR head is configured on the POI (requested by team member Sơn)
+
+- Every head behaviour at a POI lives in the POI's "Camera & tư liệu", in the existing camera preset (FR-49: one
+  preset per POI revision, checked by Technical Staff). The vocabulary grows from `FRONT`/`LEFT`/`RIGHT` to also
+  `NONE` (head stays, Operator buttons only), `SWEEP` / `SWEEP:<10..170>` (look left, right, back, degrees per side)
+  and `ANGLE:<pan>,<tilt>` (pan ±170°, positive left; tilt ±18°, positive up). It stays one `NVARCHAR(80)` value,
+  stored canonical and copied into route revision stops, so there is no schema change; a preset change alters the
+  POI navigation fingerprint and needs a new check, as before.
+- At arrival in an `AUTO` Tour the backend turns the stop's preset into one Fleet Head command: `FRONT` 0/0,
+  `LEFT` +90°, `RIGHT` −90°, `ANGLE` as given, `SWEEP` with optional `sweepDeg`, nothing for `NONE`. Existing POIs
+  hold `FRONT`, so they now turn to the front instead of sweeping; Staff picks `SWEEP` where a look-around is wanted.
+- The Tour `AUTO`/`MANUAL` switch stays as the Operator's quick switch-off of all POI presets; departure still turns
+  the head to the front in `AUTO`.
+- Fleet Head v1 `SWEEP` gains optional `sweepDeg`; ROS `head/sweep` changes from `std_srvs/Trigger` to
+  `bus_interfaces/srv/HeadSweep` (`amplitude_deg`, 0 = default), so `bus_interfaces` must be rebuilt.
+- The route-level head steps (`RouteStops.HeadSteps`) are untouched; nothing on the robot reads them.

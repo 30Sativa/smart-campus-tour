@@ -56,7 +56,8 @@ public sealed class FleetHeadController(ISender sender) : ControllerBase
             : throw new InvalidOperationException("Authenticated Fleet Robot proof was unavailable for this request.");
 
     private static FleetHeadWireCommand Wire(HeadCommand command) => new(command.Seq, command.Kind, command.IssuedAt,
-        command.PanSteps, command.TiltSteps, command.PanDir, command.TiltDir, command.PanDeg, command.TiltDeg, command.TtlMs);
+        command.PanSteps, command.TiltSteps, command.PanDir, command.TiltDir, command.PanDeg, command.TiltDeg, command.TtlMs,
+        command.SweepDeg);
 }
 
 public sealed record FleetHeadPollRequest(Guid? Epoch, long AfterSeq, int WaitMs, FleetHeadStateRequest? Head);
@@ -76,11 +77,12 @@ public sealed record FleetHeadWireCommand(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? TiltDir,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? PanDeg,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? TiltDeg,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? TtlMs);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? TtlMs,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? SweepDeg);
 
 /// <summary>Body of PUT /api/staff/manage/tours/{id}/head-mode: <c>AUTO</c> or <c>MANUAL</c>.</summary>
 public sealed record StaffHeadModeRequest(string Mode);
 
 /// <summary>Body of POST /api/staff/manage/tours/{id}/head-commands; only the fields of <see cref="Kind"/> may be set.</summary>
 public sealed record StaffHeadCommandRequest(string Kind, int? PanSteps, int? TiltSteps, int? PanDir, int? TiltDir,
-    double? PanDeg, double? TiltDeg);
+    double? PanDeg, double? TiltDeg, int? SweepDeg = null);
