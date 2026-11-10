@@ -1,6 +1,9 @@
 #!/bin/bash
 # verify_params.sh V1|V2 [lidar_yaw_rad]   (C1 = V2)  -- READ-ONLY check of what the RUNNING Nav2 actually loaded.
 # Run in a sourced robot terminal (S3 helper + smoothws) AFTER the Nav2 launch is active. Prints PASS/FAIL.
+# verify_params.sh --angle-equal A B   exits 0 when angles A and B (rad) agree modulo 2*pi (used by the tests).
+angle_equal() { python3 -c "import math, sys; d = float('$1' or 'nan') - float('$2'); sys.exit(0 if abs(math.atan2(math.sin(d), math.cos(d))) < 1e-4 else 1)" 2>/dev/null; }
+[ "$1" = "--angle-equal" ] && { angle_equal "$2" "$3"; exit $?; }
 cfg=$1; ly=${2:-}
 case $cfg in V1) LA=0.6; DEC="-2.5";; V2|C1) LA=0.8; DEC="-1.2";; *) echo "usage: $0 V1|V2 [lidar_yaw]  (add V3 here when it exists)"; exit 2;; esac
 export ROS_SUPER_CLIENT=TRUE
@@ -50,6 +53,7 @@ for t in got:
         q = t.transform.rotation; print(round(math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z)), 4)); break
 PY
 )
-  chk "TF lidar_link yaw (rad)" "$y" "$ly"
+  # TF reports yaw in (-pi, pi], so 3.1241 and -3.1590 are the same mount: compare modulo 2*pi.
+  if angle_equal "$y" "$ly"; then echo "PASS TF lidar_link yaw (rad) = $y (expected $ly)"; else echo "FAIL TF lidar_link yaw (rad) = '${y:-<no answer>}' (expected $ly)"; ok=0; fi
 fi
 [ $ok = 1 ] && echo "== ALL PASS ($cfg)" || { echo "== FAIL: do NOT start this round"; exit 1; }
