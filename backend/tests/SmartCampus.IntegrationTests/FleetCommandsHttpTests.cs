@@ -414,6 +414,33 @@ public sealed class FleetCommandsHttpTests
         Assert.Equal(HttpStatusCode.BadRequest, bad.Status);
     }
 
+    [SchemaV11Fact]
+    public async Task HeadAutoMode_LeavingAPoi_BringsTheHeadBackToTheFront()
+    {
+        await using var b = await Bridge.Create(headEnabled: true);
+        await b.StartTour();
+
+        async Task<JsonElement> HeadPoll(long afterSeq, Guid? epoch) => (await b.Post("/api/fleet/head/v1/poll",
+            new { epoch, afterSeq, waitMs = 0, head = new { state = "IDLE", referenced = true, panDeg = 0.0, tiltDeg = 0.0 } })).Body.GetProperty("data");
+
+        var epoch = (await HeadPoll(0, null)).GetProperty("epoch").GetGuid();
+        await b.Sync(status: "IDLE");
+        var command = (await b.PollData()).GetProperty("command");
+        var path = $"/api/fleet/commands/v1/{command.GetProperty("commandId").GetGuid()}/results";
+        Assert.Equal(HttpStatusCode.OK, (await b.Post(path, b.ResultBody(command, "result-accepted.json"))).Status);
+        Assert.Equal(HttpStatusCode.OK, (await b.Post(path, b.ResultBody(command, "result-terminal-arrived.json"))).Status);
+        var sweep = Assert.Single((await HeadPoll(0, epoch)).GetProperty("commands").EnumerateArray());
+        Assert.Equal("SWEEP", sweep.GetProperty("kind").GetString());
+
+        // The Operator moves on while the head may still be sweeping: the robot must not drive with it turned.
+        await b.Sync();
+        await b.StaffPost("next", new { requestId = Guid.NewGuid(), expectedRowVersion = await b.TourVersion() });
+        var recenter = Assert.Single((await HeadPoll(sweep.GetProperty("seq").GetInt64(), epoch)).GetProperty("commands").EnumerateArray());
+        Assert.Equal("ANGLE", recenter.GetProperty("kind").GetString());
+        Assert.Equal(0.0, recenter.GetProperty("panDeg").GetDouble());
+        Assert.Equal(0.0, recenter.GetProperty("tiltDeg").GetDouble());
+    }
+
     private sealed class Bridge(World world, PoiManagementEndpointTests.ApiHost host, string secret, string operatorToken, ClientWebSocket? console) : IAsyncDisposable
     {
         private long seq;

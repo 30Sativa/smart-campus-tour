@@ -4,13 +4,14 @@ namespace SmartCampus.Application.Features.FleetHead.Commands.SendHeadCommand;
 
 /// <summary>
 /// docs/contracts/fleet-head/v1: only the fields of the kind may be set. STEP and JOG treat a missing axis as 0; ANGLE
-/// needs both. The firmware owns the real soft limits; these ranges only refuse nonsense.
+/// needs both. ANGLE uses the firmware soft limits (head_core.h HEAD_PAN_LIMIT_CDEG 17000, HEAD_TILT_LIMIT_CDEG 1800):
+/// a wider angle would be queued and then refused by the firmware without the Operator ever seeing why.
 /// </summary>
 public sealed class SendHeadCommandValidator : AbstractValidator<SendHeadCommand>
 {
     public const int MaximumSteps = 20;
-    public const double MaximumPanDeg = 180;
-    public const double MaximumTiltDeg = 90;
+    public const double MaximumPanDeg = 170;
+    public const double MaximumTiltDeg = 18;
 
     public SendHeadCommandValidator()
     {

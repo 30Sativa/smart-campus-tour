@@ -1,6 +1,7 @@
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Routes;
@@ -10,10 +11,12 @@ namespace SmartCampus.Application.Features.Tours.Commands.NextTourStop;
 
 /// <summary>
 /// The Operator leaves the current POI (ADR-0043 D12): closes the visit once, then sends the next leg, or completes the Tour
-/// when the route ends at its last POI. Movement checks apply only when a new command is created.
+/// when the route ends at its last POI. Movement checks apply only when a new command is created. In AUTO head mode a new
+/// leg also brings the head back to the front (ADR-0045 addendum).
 /// </summary>
 public sealed class NextTourStopCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, TimeProvider clock)
+    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, HeadArrivalSweep headMotion,
+    TimeProvider clock)
     : IRequestHandler<NextTourStopCommand, TourMutationResult>
 {
     public async Task<TourMutationResult> Handle(NextTourStopCommand command, CancellationToken ct)
@@ -38,9 +41,10 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
         var target = TourLegDispatch.NextTarget(tour, revision, await revisions.GetStopsAsync(revision.Id, ct));
 
         var map = await revisions.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");
+        Robot? robot = null;
         if (target is not null)
         {
-            var robot = await TourTarget.FindReservedRobotAsync(revisions, robotId, ct)
+            robot = await TourTarget.FindReservedRobotAsync(revisions, robotId, ct)
                 ?? throw new NotFoundException("Không tìm thấy robot của Tour.");
             var checks = await preflight.EvaluateMovementAsync(tour, robot, map, ct);
             if (checks.BlockedBy.Count > 0)
@@ -58,7 +62,11 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
         if (target is null)
             await TourLegDispatch.CompleteAsync(repository, tour, robotId, command.Actor, now, ct);
         else
+        {
             TourLegDispatch.Begin(repository, settings, tour, robotId, map, target, command.Actor, now);
+            // Queued before the commit, like the arrival sweep: a failed commit at worst turns the head to the front.
+            headMotion.QueueRecenter(tour.Id, robot!.RobotCode);
+        }
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Next, fingerprint, now, "state");
         return new(tour.Id);

@@ -51,8 +51,9 @@ public sealed class FleetHeadTests
         { new HeadCommandSpec("STOP", PanSteps: 1), "STOP with a field" },
         { new HeadCommandSpec("ANGLE", PanDeg: 10), "ANGLE without tilt" },
         { new HeadCommandSpec("ANGLE", PanDeg: double.NaN, TiltDeg: 0), "NaN" },
-        { new HeadCommandSpec("ANGLE", PanDeg: 181, TiltDeg: 0), "pan beyond 180" },
-        { new HeadCommandSpec("ANGLE", PanDeg: 0, TiltDeg: 91), "tilt beyond 90" },
+        { new HeadCommandSpec("ANGLE", PanDeg: 170.5, TiltDeg: 0), "pan beyond the firmware limit of 170" },
+        { new HeadCommandSpec("ANGLE", PanDeg: 0, TiltDeg: -18.5), "tilt beyond the firmware limit of 18" },
+        { new HeadCommandSpec("ANGLE", PanDeg: 0, TiltDeg: 45), "tilt far beyond the mechanical range" },
         { new HeadCommandSpec("ANGLE", PanDeg: 0, TiltDeg: 0, PanSteps: 1), "ANGLE with a STEP field" },
         { new HeadCommandSpec("SWEEP", PanDeg: 135), "SWEEP takes no field" },
         { new HeadCommandSpec("sweep"), "lower-case SWEEP" }
@@ -294,6 +295,52 @@ public sealed class FleetHeadTests
         var deaf = new FakeChannel { Connected = false };
         Assert.False(Sweep(deaf, new FakeModes()).Queue(TourId, Robot));
         Assert.Empty(deaf.Queued);
+    }
+
+    [Fact]
+    public void Departure_InAutoMode_QueuesAnAngleBackToTheFront()
+    {
+        var channel = new FakeChannel { Connected = true };
+        Assert.True(Sweep(channel, new FakeModes()).QueueRecenter(TourId, Robot));
+        var queued = Assert.Single(channel.Queued);
+        Assert.Equal((Robot, new HeadCommandSpec("ANGLE", PanDeg: 0, TiltDeg: 0)), (queued.Robot, queued.Spec));
+    }
+
+    [Fact]
+    public void Departure_QueuesNothing_InManualMode_WhileOff_OrWhenTheRobotIsNotListening()
+    {
+        var manual = new FakeModes();
+        manual.SetMode(TourId, "MANUAL");
+        var connected = new FakeChannel { Connected = true };
+        Assert.False(Sweep(connected, manual).QueueRecenter(TourId, Robot));
+        Assert.False(Sweep(connected, new FakeModes(), enabled: false).QueueRecenter(TourId, Robot));
+        Assert.Empty(connected.Queued);
+        var deaf = new FakeChannel { Connected = false };
+        Assert.False(Sweep(deaf, new FakeModes()).QueueRecenter(TourId, Robot));
+        Assert.Empty(deaf.Queued);
+    }
+
+    [Fact]
+    public void AnAutoTour_WhileHeadControlIsOff_SaysWhyNothingMoves()
+    {
+        var logger = new ListLogger();
+        var sweep = new HeadArrivalSweep(new FakeChannel { Connected = true }, new FakeModes(), Settings(enabled: false), logger);
+        Assert.False(sweep.Queue(TourId, Robot));
+        Assert.Contains(logger.Messages, message => message.Contains("FleetHead:Enabled=false"));
+        var manual = new FakeModes();
+        manual.SetMode(TourId, "MANUAL");
+        var quiet = new ListLogger();
+        Assert.False(new HeadArrivalSweep(new FakeChannel { Connected = true }, manual, Settings(enabled: false), quiet).Queue(TourId, Robot));
+        Assert.Empty(quiet.Messages);
+    }
+
+    private sealed class ListLogger : Microsoft.Extensions.Logging.ILogger<HeadArrivalSweep>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
     }
 
     [Fact]

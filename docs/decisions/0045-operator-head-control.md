@@ -74,3 +74,14 @@ would write SQL rows several times per second and block navigation behind the on
 - Best effort: no sweep while `FleetHead:Enabled` is false, the robot is not polling, or the head is not IDLE with a
   reference. The arrival is recorded either way. Next is not blocked by a running sweep; the head may still be turned
   when the robot leaves. This is not the FR-49 checked camera preset, which stays M2.5 work.
+
+## Addendum 10/11/2026: review fixes
+
+- Next in `AUTO` queues `ANGLE 0/0` with the new leg: the robot no longer drives off with the head turned.
+- A manual `STEP`/`JOG` during a sweep first sends `HEAD STOP`: the firmware adds a STEP to the running segment's
+  target, so the head used to finish the segment (a "right 5 steps" ended at 132° left).
+- The PAN home seek only finds the stop from 174° right to 16° left, and the sweep spends seconds beyond 16° left.
+  `stm32_bridge` now remembers the real PAN angle on disk; after an STM32 reset or power loss far left, auto-home
+  does ZERO → turn back → HOME, and a manual HOME far left turns to the front first. Park on shutdown waits until
+  the head is at 0/0. The firmware and its 190° seek are unchanged.
+- The backend refuses `ANGLE` outside the firmware soft limits (pan ±170°, tilt ±18°).

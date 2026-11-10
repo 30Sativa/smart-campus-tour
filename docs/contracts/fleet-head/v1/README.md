@@ -43,7 +43,7 @@ Response: [`poll-response-commands.json`](poll-response-commands.json), or
 | `panSteps`, `tiltSteps` | `STEP` only: full motor steps, −20..20, at least one non-zero → ROS `head/step`. |
 | `panDir`, `tiltDir` | `JOG` only: −1, 0 or 1 → ROS `head/jog`. `0,0` releases. |
 | `ttlMs` | `JOG` only. The robot keeps this jog only until its **own receipt time + `ttlMs`**, then releases (`head/jog 0,0`) unless a newer `JOG` arrived. |
-| `panDeg`, `tiltDeg` | `ANGLE` only: absolute degrees from the homed zero, pan −180..180, tilt −90..90 → ROS `head/set` (mode angle). The firmware refuses angles outside its soft limits. |
+| `panDeg`, `tiltDeg` | `ANGLE` only: absolute degrees from the homed zero → ROS `head/set` (mode angle). The robot accepts pan −180..180, tilt −90..90 on the wire; the backend only queues the firmware soft limits, pan −170..170 and tilt −18..18. In `AUTO` mode the backend also queues `ANGLE 0/0` when the Tour leaves a POI. |
 
 `STOP` → ROS `head/stop`, and also ends an active jog.
 

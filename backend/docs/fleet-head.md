@@ -39,7 +39,10 @@ Environment form: `FleetHead__Enabled=true`.
 
 `ReportCommandResultCommandHandler` calls `HeadArrivalSweep.Queue` when the current leg's GoTo to a POI is recorded
 `ARRIVED`. In `AUTO` mode, with head control on and the robot polling, it queues one `SWEEP`; otherwise nothing.
-It runs inside the handler, before the commit, and never fails the result. Code: `Features/FleetHead/HeadArrivalSweep.cs`,
+`NextTourStopCommandHandler` calls `HeadArrivalSweep.QueueRecenter` when it starts the next leg: in `AUTO` mode it
+queues `ANGLE 0/0`, which also stops a sweep still running, so the robot never drives with the head turned. Both run
+inside the handler, before the commit, and never fail it. An `AUTO` Tour while `FleetHead:Enabled` is false logs
+`... skipped ... Fleet Head is disabled` at each arrival and departure, so a head that never moves is explained. Code: `Features/FleetHead/HeadArrivalSweep.cs`,
 `Commands/SetTourHeadMode/`, `Common/Abstractions/FleetHead/ITourHeadModeStore.cs`,
 `Integrations/FleetHead/InMemoryTourHeadModeStore.cs`.
 
@@ -48,10 +51,15 @@ It runs inside the handler, before the commit, and never fails the result. Code:
 - In memory per API instance (ADR-0019 single instance). An API restart changes the epoch; queued presses are gone.
 - Only a `RUNNING` Tour enables control, so a physical robot cannot be turned from the web before a Tour can start
   on it. Bench tests use `ros2 run stm32_bridge head_teleop`.
-- No per-press audit. Firmware soft limits are enforced on the robot, not here.
+- No per-press audit. `ANGLE` is refused outside the firmware soft limits (pan ±170°, tilt ±18°) so the Operator
+  sees the error; STEP/JOG stop at those limits on the robot.
+- The mode is not persisted: after an API restart every Tour is `FleetHead:DefaultMode` again (an Operator's
+  `MANUAL` is lost).
 
 ## Tests
 
 `tests/SmartCampus.UnitTests/FleetHeadTests.cs` (validation, Operator/RUNNING/listening rules),
 `tests/SmartCampus.IntegrationTests/FleetHeadChannelTests.cs` (long poll, expiry, epoch, queue bound; no database),
-`FleetCommandsHttpTests.HeadControl_TheOperatorOfARunningTour_TurnsTheHead_ThroughTheRobotsLongPoll` (SQL Server).
+`FleetCommandsHttpTests.HeadControl_TheOperatorOfARunningTour_TurnsTheHead_ThroughTheRobotsLongPoll`,
+`HeadAutoMode_AnArrivalAtAPoi_QueuesOneSweep_AndManualModeDoesNot` and
+`HeadAutoMode_LeavingAPoi_BringsTheHeadBackToTheFront` (SQL Server).
