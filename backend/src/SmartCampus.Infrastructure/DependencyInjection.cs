@@ -107,6 +107,7 @@ public static class DependencyInjection
             configuration.GetValue<int?>("Tours:ShortNoticeMinLeadMinutes")));
 
         services.AddScoped<IAuditLogReader, EfAuditLogReader>();
+        services.AddScoped<IStaffNotificationReader, EfStaffNotificationReader>();
         services.AddScoped<ITourManagementTransaction, EfTourManagementTransaction>();
         services.AddScoped<IRepresentativeRepository, EfRepresentativeRepository>();
         services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();
