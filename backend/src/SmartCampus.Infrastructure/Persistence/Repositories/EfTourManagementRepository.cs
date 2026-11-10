@@ -68,7 +68,6 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
             _ => query
         };
         if (request.OperatorUserId is { } operatorUserId) query = query.Where(t => t.OperatorUserId == operatorUserId);
-        if (request.ShortNotice is { } shortNotice) query = query.Where(t => t.IsShortNotice == shortNotice);
         if (request.NeedsReconcile)
             query = query.Where(t => t.RobotCommands.Any(c => c.Kind == RobotCommandKinds.GoTo && c.State == RobotCommandStates.Unknown));
         if (request.From.HasValue) query = query.Where(t => t.ScheduledStartAt >= request.From.Value);
