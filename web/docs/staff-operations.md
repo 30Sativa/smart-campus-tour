@@ -116,6 +116,13 @@ Done since the first M2 console, listed so these rows are not re-opened:
   (`operationalStatus`, `assistanceReason`, `currentStep`, `commandState`,
   `needsReconcile`); `useRunningTours` reads a detail only when an older server
   omits it. Ended Tours that still need Reconcile raise an overview alert and a bell item.
+- The bell (`features/staff/StaffBell.tsx`) has two parts. "Cần chú ý" is open Tour work;
+  it shows a loading or failed state instead of "Không có việc cần chú ý." until every
+  Tour query answered. "Từ Technical Staff" reads `GET /api/staff/notifications` every
+  20 s: POI verified/rejected, Route test PASS/FAIL, map deployment check and robot
+  inspection released, each linking to the POI, Route, POI page or robot page. Read
+  state is per account in this browser (`staff-notices-read:<userId>`), like the
+  Representative bell; the count is open work plus unread notices.
 - Releasing a held robot: `/technical/robots` marks a robot that needs inspection,
   or whose holding Tour has ended, as "Chờ kiểm tra tại chỗ" (a robot in a running
   Tour shows "Đang chạy Tour") and offers "Trả robot về sử dụng" behind a required
