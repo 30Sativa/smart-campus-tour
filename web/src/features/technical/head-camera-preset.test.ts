@@ -27,3 +27,17 @@ describe('POI camera preset of the VR head', () => {
       expect(headPresetProblem(bad), bad).not.toBeNull()
   })
 })
+
+import { headPlan } from '../administration/pois/head-motion'
+
+describe('the motion drawn in the preview', () => {
+  it('sweeps left, right and back at button speed, and moves to an angle at angle speed', () => {
+    const sweep = headPlan(splitHeadPreset('SWEEP:90')!)
+    expect(sweep.legs.map(leg => [leg.to.pan, leg.seconds])).toEqual([[90, 3], [-90, 6], [0, 3]])
+    expect(sweep.sweepDeg).toBe(90)
+    const angle = headPlan(splitHeadPreset('ANGLE:-120,10')!)
+    expect(angle.target).toEqual({ pan: -120, tilt: 10 })
+    expect(angle.legs[0].seconds).toBe(2)
+    expect(headPlan(splitHeadPreset('NONE')!).legs).toEqual([])
+  })
+})
