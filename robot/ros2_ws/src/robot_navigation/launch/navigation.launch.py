@@ -34,6 +34,7 @@ from launch.actions import (DeclareLaunchArgument, GroupAction,
 from launch.actions import Shutdown
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.logging import get_logger
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node, PushRosNamespace, SetRemap
 from launch_ros.parameter_descriptions import ParameterValue
@@ -61,6 +62,17 @@ def _check_map(context, *args, **kwargs):
                             '  Kiem tra lai duong dan (phai la file .yaml da luu).'),
                 Shutdown(reason=f'map file not found: {path}')]
     return [LogInfo(msg=f'[navigation] Dung map: {path}')]
+
+
+def _warn_if_lidar_yaw_defaulted(context):
+    # Runs before DeclareLaunchArgument('lidar_yaw'), so the key exists only when
+    # the command line or a parent launch passed it.
+    if 'lidar_yaw' not in context.launch_configurations:
+        get_logger('robot_calibration').warning(
+            'lidar_yaw not given: using the launch default -0.2225 rad, the LiDAR '
+            'mount before 2026-10-20. Pass lidar_yaw:=<rad> for the current mount; '
+            'the preflight TF check fails when it does not match.')
+    return []
 
 
 def generate_launch_description():
@@ -137,6 +149,7 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        OpaqueFunction(function=_warn_if_lidar_yaw_defaulted),
         DeclareLaunchArgument(
             'robot_id', default_value='',
             description='ROS namespace for this robot. Use robot_01 for the '

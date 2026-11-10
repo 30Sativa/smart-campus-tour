@@ -1,10 +1,23 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
+from launch.actions import (DeclareLaunchArgument, GroupAction,
+                            IncludeLaunchDescription, OpaqueFunction)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.logging import get_logger
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
+
+
+def _warn_if_lidar_yaw_defaulted(context):
+    # Runs before DeclareLaunchArgument('lidar_yaw'), so the key exists only when
+    # the command line or a parent launch passed it.
+    if 'lidar_yaw' not in context.launch_configurations:
+        get_logger('robot_calibration').warning(
+            'lidar_yaw not given: using the launch default -0.2225 rad, the LiDAR '
+            'mount before 2026-10-20. Pass lidar_yaw:=<rad> for the current mount; '
+            'the preflight TF check fails when it does not match.')
+    return []
 
 
 def generate_launch_description():
@@ -62,6 +75,7 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        OpaqueFunction(function=_warn_if_lidar_yaw_defaulted),
         DeclareLaunchArgument(
             'robot_id', default_value='',
             description='ROS namespace for this robot. Use robot_01 for the '
