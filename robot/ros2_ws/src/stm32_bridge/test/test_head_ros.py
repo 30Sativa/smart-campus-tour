@@ -258,7 +258,8 @@ class FakeGoalHandle:
 def make(params=None, **fw_kw):
     # Mac dinh tat HOME tu dong de cac test cu kiem dung tung lenh; test rieng
     # ben duoi bat lai.
-    node = FakeNode({'head_auto_home': False, **(params or {})})
+    # Khong ghi file nho goc PAN vao ~/.ros khi test; test rieng truyen duong dan tam.
+    node = FakeNode({'head_auto_home': False, 'head_pan_memory_file': '', **(params or {})})
     holder = {}
     iface = HeadInterface(node, lambda build: holder['fw'].send(build))
     fw = FakeFirmware(iface, **fw_kw)
@@ -606,5 +607,167 @@ def test_sweep_never_starts_from_a_position_a_just_sent_command_is_changing():
         resp = _sweep(node)
         assert not resp.success and resp.message == 'not_ready:moving'
         assert _steps(fw) == ['STEP,5,0']
+    finally:
+        fw.stop()
+
+
+# ---- lenh tay trong luc quet: dung doan dang chay ----------------------------
+
+def test_a_manual_step_during_a_sweep_stops_the_running_segment_before_stepping():
+    # Firmware cong STEP vao DICH: khong co STOP truoc thi dau van quay het 135 do sang trai.
+    node, iface, fw = _homed(move_s=0.5)
+    try:
+        assert _sweep(node).success
+        assert _wait(lambda: len(_steps(fw)) == 1, 2.0)
+        node.subs['head/step'](SimpleNamespace(pan_steps=-5, tilt_steps=0))
+        assert _wait(lambda: not iface._sweep_thread.is_alive(), 3.0)
+        stop_i = next(i for i, s in enumerate(fw.sent) if s.endswith(',STOP'))
+        step_i = next(i for i, s in enumerate(fw.sent) if s.endswith(',STEP,-5,0'))
+        assert stop_i == step_i - 1
+        assert _wait(lambda: fw.state == hl.STATE_IDLE, 2.0)
+        assert fw.pan == -300, 'dung tai cho roi nhich phai 5 buoc, khong chay toi 135 do trai'
+        assert _steps(fw) == ['STEP,225,0', 'STEP,-5,0']
+    finally:
+        fw.stop()
+
+
+def test_a_tilt_only_jog_during_a_sweep_also_stops_the_pan_segment():
+    node, iface, fw = _homed(move_s=0.5)
+    try:
+        assert _sweep(node).success
+        assert _wait(lambda: len(_steps(fw)) == 1, 2.0)
+        node.subs['head/jog'](SimpleNamespace(pan=0, tilt=1))
+        jog_i = next(i for i, s in enumerate(fw.sent) if s.endswith(',JOG,0,1'))
+        assert fw.sent[jog_i - 1].endswith(',STOP')
+    finally:
+        fw.stop()
+
+
+def test_a_manual_step_without_a_sweep_sends_no_stop():
+    node, iface, fw = _homed(move_s=0.1)
+    try:
+        node.subs['head/step'](SimpleNamespace(pan_steps=3, tilt_steps=0))
+        assert fw.sent[-1].endswith(',STEP,3,0') and not fw.sent[-2].endswith(',STOP')
+    finally:
+        fw.stop()
+
+
+# ---- tat bridge: cho dau ve 0/0 xong -----------------------------------------
+
+def test_park_on_shutdown_waits_until_the_head_is_back_at_zero():
+    node, iface, fw = _homed(move_s=0.4)
+    try:
+        assert run_goal(iface, FakeGoalHandle(mode=0, pan=135.0)).success
+        pumped = []
+        t0 = time.monotonic()
+        iface.shutdown(pump=lambda: pumped.append(1))
+        assert time.monotonic() - t0 >= 0.35 and pumped
+        assert fw.pan == 0 and fw.state == hl.STATE_IDLE
+        assert any('Head park done' in str(x) for x in node.logs)
+    finally:
+        fw.stop()
+
+
+def test_park_wait_gives_up_after_its_timeout():
+    node, iface, fw = _homed(params={'head_park_timeout': 0.3}, move_s=5.0)
+    try:
+        fw.state, fw.pan = hl.STATE_IDLE, 9000
+        time.sleep(0.05)
+        t0 = time.monotonic()
+        iface.shutdown(pump=lambda: None)
+        assert time.monotonic() - t0 < 1.0
+        assert any('Head park not confirmed' in str(x) for x in node.logs)
+    finally:
+        fw.stop()
+
+
+# ---- nho goc PAN qua mat dien, HOME an toan -----------------------------------
+
+def _memory(path):
+    import json
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def test_auto_home_after_a_power_loss_far_left_turns_back_before_home(tmp_path):
+    path = str(tmp_path / 'head_pan.json')
+    node, iface, fw = make(params={'head_auto_home': True, 'head_pan_memory_file': path}, move_s=0.2)
+    try:
+        assert _wait(lambda: fw.state == hl.STATE_IDLE and len(_homes(fw)) == 1)
+        assert run_goal(iface, FakeGoalHandle(mode=0, pan=135.0)).success
+        assert _wait(lambda: (_memory(path) or {}).get('pan_deg') == 135.0)
+        n = len(fw.sent)
+        fw.reset_mcu()                                  # mat dien khi dau dang 135 do trai
+        assert _wait(lambda: len(_homes(fw)) == 2 and fw.state == hl.STATE_IDLE, 5.0)
+        after = [s.split(',', 2)[2] for s in fw.sent[n:]]
+        assert after == ['ZERO', '-13500,0', 'HOME']
+        assert _wait(lambda: _memory(path) == {'referenced': True, 'pan_deg': 0.0})
+    finally:
+        fw.stop()
+
+
+def test_the_remembered_pan_stays_the_real_angle_while_turning_back(tmp_path):
+    path = str(tmp_path / 'head_pan.json')
+    node, iface, fw = make(params={'head_pan_memory_file': path})
+    try:
+        iface._pan_offset = 120.0                       # nhu ngay sau ZERO tam o 120 do trai
+        run_goal(iface, FakeGoalHandle(mode=1))
+        assert _wait(lambda: (_memory(path) or {}).get('pan_deg') == 120.0)
+    finally:
+        iface._pan_offset = 0.0
+        fw.stop()
+
+
+def test_auto_home_near_the_front_or_after_head_off_just_homes(tmp_path):
+    path = str(tmp_path / 'head_pan.json')
+    node, iface, fw = make(params={'head_auto_home': True, 'head_pan_memory_file': path}, move_s=0.1)
+    try:
+        assert _wait(lambda: fw.state == hl.STATE_IDLE and len(_homes(fw)) == 1)
+        assert run_goal(iface, FakeGoalHandle(mode=0, pan=8.0)).success   # trong vung an toan
+        assert _wait(lambda: (_memory(path) or {}).get('pan_deg') == 8.0)
+        n = len(fw.sent)
+        fw.reset_mcu()
+        assert _wait(lambda: len(_homes(fw)) == 2 and fw.state == hl.STATE_IDLE)
+        assert [s.split(',', 2)[2] for s in fw.sent[n:]] == ['HOME']
+        # head/off: dau co the bi xoay tay -> khong con biet goc, khong dung goc cu.
+        assert run_goal(iface, FakeGoalHandle(mode=0, pan=120.0)).success
+        assert node.services['head/off'](None, SimpleNamespace()).success
+        assert _wait(lambda: _memory(path) == {'referenced': False})
+        n = len(fw.sent)
+        fw.reset_mcu()
+        assert _wait(lambda: len(_homes(fw)) == 3)
+        assert [s.split(',', 2)[2] for s in fw.sent[n:]] == ['HOME']
+    finally:
+        fw.stop()
+
+
+def test_a_manual_home_far_left_turns_to_the_front_first():
+    node, iface, fw = _homed(move_s=0.1)
+    try:
+        assert run_goal(iface, FakeGoalHandle(mode=0, pan=135.0, tilt=10.0)).success
+        n = len(fw.sent)
+        r = run_goal(iface, FakeGoalHandle(mode=1))
+        assert r.success and r.message == 'homed'
+        assert [s.split(',', 2)[2] for s in fw.sent[n:]] == ['0,1000', 'HOME']
+        r = run_goal(iface, FakeGoalHandle(mode=0, pan=-150.0))       # ben phai: HOME ngay
+        n = len(fw.sent)
+        assert run_goal(iface, FakeGoalHandle(mode=1)).success
+        assert [s.split(',', 2)[2] for s in fw.sent[n:]] == ['HOME']
+    finally:
+        fw.stop()
+
+
+def test_an_angle_that_is_not_a_number_is_rejected_without_a_command():
+    node, iface, fw = _homed()
+    try:
+        n = len(fw.sent)
+        gh = FakeGoalHandle(mode=0, pan=float('nan'))
+        r = run_goal(iface, gh)
+        assert gh.final == 'aborted' and r.message == 'rejected:invalid_angle'
+        r = run_goal(iface, FakeGoalHandle(mode=0, pan=0.0, tilt=float('inf')))
+        assert r.message == 'rejected:invalid_angle' and len(fw.sent) == n
     finally:
         fw.stop()

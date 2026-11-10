@@ -207,6 +207,10 @@ class FleetBridgeNode(Node):
         if self._head_worker is not None:
             self._head_worker.start()
             self.get_logger().info('Fleet Head enabled: Operator head buttons reach stm32_bridge head/*.')
+        else:
+            # Off by default: say so, otherwise "the head never sweeps at a POI" looks like a bug.
+            self.get_logger().info('Fleet Head disabled (head_enabled: false): Operator head buttons and the '
+                                   'automatic POI sweep do not reach this robot.')
         if self._diagnostics_worker is not None:
             self._diagnostics_worker.start()
             self.get_logger().info('Mini PC diagnostics report enabled.')

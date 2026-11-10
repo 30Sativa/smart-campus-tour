@@ -52,7 +52,11 @@ class RosHeadActuator:
         future.add_done_callback(self._log_sweep)
 
     def _log_sweep(self, future) -> None:
-        result = future.result()
+        try:
+            result = future.result()
+        except Exception as error:  # noqa: BLE001 - a failed call must not raise inside the executor
+            self._log.warning(f'Head sweep call failed ({type(error).__name__}).')
+            return
         if result is not None and not result.success:
             self._log.warning(f'Head sweep refused by stm32_bridge: {result.message}')
 

@@ -142,6 +142,8 @@ class HeadCommandApplier:
     def _execute(self, command: HeadCommand, now: float) -> None:
         if command.kind == 'STEP':
             if command.pan_steps or command.tilt_steps:
+                # A live JOG would be re-published by tick() and override the step: release it first.
+                self._release()
                 self._actuator.step(command.pan_steps, command.tilt_steps)
         elif command.kind == 'JOG':
             direction = (command.pan_dir, command.tilt_dir)

@@ -143,9 +143,9 @@ class ApplierTests(unittest.TestCase):
         self.applier.tick(1.2)
         self.assertFalse(self.applier.jogging)
 
-    def test_release_stop_angle_and_sweep_end_a_jog(self):
+    def test_release_stop_angle_sweep_and_step_end_a_jog(self):
         for ender in [{'kind': 'JOG', 'panDir': 0, 'tiltDir': 0}, {'kind': 'STOP'}, {'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 0},
-                      {'kind': 'SWEEP'}]:
+                      {'kind': 'SWEEP'}, {'kind': 'STEP', 'panSteps': -2}]:
             actuator = FakeActuator()
             applier = HeadCommandApplier(actuator)
             applier.apply(EPOCH, [parse_head_command({'seq': 1, 'kind': 'JOG', 'tiltDir': 1}),
@@ -162,6 +162,13 @@ class ApplierTests(unittest.TestCase):
         self.assertEqual([('stop',), ('step', 1, 0)], actuator.calls)
         self.assertEqual(1, len(logs))
         self.assertEqual((EPOCH, 2), applier.cursor())
+
+    def test_a_step_during_a_jog_is_not_overridden_by_the_jog_keepalive(self):
+        self.apply([{'seq': 1, 'kind': 'JOG', 'panDir': 1, 'ttlMs': 600},
+                    {'seq': 2, 'kind': 'STEP', 'panSteps': -3}], now=0.0)
+        self.applier.tick(0.1)
+        self.applier.tick(0.2)
+        self.assertEqual([('jog', 1, 0), ('jog', 0, 0), ('step', -3, 0)], self.actuator.calls)
 
     def test_release_without_jog_publishes_nothing(self):
         self.applier.release()
