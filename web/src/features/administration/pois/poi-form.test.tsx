@@ -129,6 +129,29 @@ describe('Staff versioned POI workflow', () => {
     expect(screen.getByText('Chọn lại hoạt động để xem mô phỏng.')).toBeInTheDocument()
   })
 
+  it('shows a stored LEFT as the custom angle 90° left, and editing it saves a custom angle', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })
+      if (url.pathname === '/api/maps/versions') return response([eligibleMap])
+      if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(new Blob(['zip']))
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1') return response({ ...proposal, revision: { ...proposal.revision, cameraPreset: 'LEFT' } })
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1/draft') return response(proposal)
+      return response(null)
+    }))
+    renderAt('/staff/manage/pois/proposal-1')
+
+    await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
+    expect(screen.getByRole('radio', { name: /Góc tùy chỉnh/ })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Trái 90°' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('spinbutton', { name: /^PAN/ })).toHaveValue(90)
+    fireEvent.change(screen.getByRole('spinbutton', { name: /^PAN/ }), { target: { value: '60' } })
+    expect(screen.getByRole('button', { name: 'Trái 90°' })).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+    await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/draft')).toBe(true))
+    const save = requests.find(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/draft')!
+    expect(JSON.parse(String(save.init?.body)).draft.cameraPreset).toBe('ANGLE:60,0')
+  })
+
   it('blocks creating a POI from the list until a map has passed its technical check', async () => {
     const pendingMap = { ...eligibleMap, technicalCheckStatus: 'PENDING', canUseForPoiPreparation: false }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
@@ -276,7 +299,9 @@ describe('Staff versioned POI workflow', () => {
       expect(screen.getByText('Lưu sẽ tạo bản mới và giữ kết quả đạt.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeEnabled()
       expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeDisabled()
-      fireEvent.click(screen.getByRole('radio', { name: /Bên trái/ }))
+      fireEvent.click(screen.getByRole('radio', { name: /Góc tùy chỉnh/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Trái 90°' }))
+      expect(screen.getByRole('img', { name: 'Nhìn từ trên: PAN 90° trái' })).toBeInTheDocument()
       expect(screen.getByText('Lưu sẽ tạo bản mới và phải gửi kiểm chứng lại. Tuyến và Tour đang dùng bản cũ không bị ảnh hưởng.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeEnabled()
     })
@@ -296,7 +321,6 @@ describe('Staff versioned POI workflow', () => {
       fireEvent.click(screen.getByRole('radio', { name: /Quét trái, phải/ }))
       expect(screen.getByText(/quay chậm sang trái, rồi sang phải, rồi về chỗ cũ/)).toBeInTheDocument()
       fireEvent.change(screen.getByRole('spinbutton', { name: /^Biên độ mỗi bên/ }), { target: { value: '90' } })
-      expect(screen.getByText('12 giây')).toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
       await waitFor(() => expect(writes()).toContain('/api/staff/poi-proposals/proposal-1/draft'))
       const save = requests.find(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/draft')!

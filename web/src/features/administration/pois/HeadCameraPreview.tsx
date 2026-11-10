@@ -64,7 +64,6 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
   }
 
   const pose = playing ?? plan.target
-  const totalSeconds = plan.legs.reduce((sum, leg) => sum + leg.seconds, 0)
   const still = parts.mode === 'NONE'
   const [hx, hy] = polar(26, pose.pan)
   const tiltRad = pose.tilt * Math.PI / 180
@@ -111,7 +110,7 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
   return <figure className="rounded-2xl border border-[#e2e8f0] bg-gradient-to-b from-[#f8fbfe] to-white p-3.5" aria-label="Mô phỏng đầu camera">
     <div className="flex items-center justify-between gap-2">
       <figcaption className="text-[13px] font-semibold text-[#2d3748]">Mô phỏng</figcaption>
-      {!still && <button type="button" onClick={play} className={buttonClass('ghost', 'sm')} aria-pressed={Boolean(playing)}>
+      {!still && <button type="button" onClick={play} className={buttonClass('ghost', 'sm')} aria-pressed={Boolean(playing)} title={`Phát nhanh gấp ${SPEED_UP} lần robot thật`}>
         {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}{playing ? 'Dừng' : 'Chạy thử'}
       </button>}
     </div>
@@ -121,13 +120,9 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
           label={`Mô phỏng 3D: PAN ${sideLabel(pose.pan, 'trái', 'phải')}, TILT ${sideLabel(pose.tilt, 'ngửa', 'cúi')}`} /></Suspense>
       : flat}
 
-    <dl className="mt-2 grid grid-cols-3 gap-1.5 text-center">
-      {[['PAN', sideLabel(pose.pan, 'trái', 'phải')], ['TILT', sideLabel(pose.tilt, 'ngửa', 'cúi')],
-        ['Thời gian', still ? '-' : `${Math.round(totalSeconds)} giây`]].map(([name, value]) =>
+    <dl className="mt-2 grid grid-cols-2 gap-1.5 text-center">
+      {[['PAN', sideLabel(pose.pan, 'trái', 'phải')], ['TILT', sideLabel(pose.tilt, 'ngửa', 'cúi')]].map(([name, value]) =>
         <div key={name} className="rounded-lg bg-[#f1f5f9] px-1.5 py-1.5"><dt className="text-[11px] text-[#64748b]">{name}</dt><dd className="text-[13px] font-semibold tabular-nums text-[#2d3748]">{value}</dd></div>)}
     </dl>
-    <p className="mt-2 text-[11px] leading-snug text-[#718096]">
-      {still ? 'Đầu đứng yên khi tới điểm; người vận hành tự xoay bằng nút.' : `Chạy thử nhanh gấp ${SPEED_UP} lần robot thật. Vạch xám là tầm quay ±${HEAD_PAN_LIMIT_DEG}°, vạch xanh là cung quét, khối vàng là vật chặn.`}
-    </p>
   </figure>
 }
