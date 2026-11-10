@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { Notice } from '../AdminUi'
-import { fromLocalInput, toLocalInput } from '../admin-format'
+import { formatSlot, fromLocalInput, toLocalInput } from '../admin-format'
 import { useRoute, useRoutes } from '../routes/hooks'
 import { routeIssue } from '../routes/route-messages'
 import { mapAreaName } from '../map-labels'
@@ -59,14 +59,20 @@ export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = f
       <legend className="sr-only">Thông tin Tour</legend>
       {(clientError || error) && <Notice tone="danger">{clientError || error}</Notice>}
       <label className="block text-sm">Tên Tour<input required maxLength={150} className={inputClass} value={name} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Tham quan từ xa · Sáng thứ Bảy" /></label>
-      <label className="block text-sm">Thời gian dự kiến<input required type="datetime-local" disabled={scheduleLocked || Boolean(fixedStops)} className={inputClass} value={schedule} onChange={e => setSchedule(e.target.value)} />
-        <span className="mt-1 block text-xs text-[#64748b]">Giờ theo máy đang dùng. Tới giờ robot không tự chạy; Staff bắt đầu thủ công.</span></label>
+      {/* A Tour on a route revision keeps its time, route and robot; showing locked inputs read as if they could change. */}
+      {fixedStops ? <dl className="grid gap-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm sm:grid-cols-2">
+        <div><dt className="text-xs text-[#64748b]">Thời gian dự kiến</dt><dd className="font-medium text-[#0f172a]">{formatSlot(initial?.scheduledStartAt)}</dd></div>
+        <div><dt className="text-xs text-[#64748b]">Tuyến</dt><dd className="font-medium text-[#0f172a]">{currentRoute?.name ?? '-'}</dd>
+          <dd className="text-xs text-[#64748b]">Đúng bản đã chọn lúc tạo, không đổi theo bản tuyến mới.</dd></div>
+      </dl>
+        : <label className="block text-sm">Thời gian dự kiến<input required type="datetime-local" disabled={scheduleLocked} className={inputClass} value={schedule} onChange={e => setSchedule(e.target.value)} />
+        <span className="mt-1 block text-xs text-[#64748b]">Giờ theo máy đang dùng. Tới giờ robot không tự chạy; Staff bắt đầu thủ công.</span></label>}
       <label className="block text-sm">Mô tả<textarea maxLength={1000} rows={3} className={inputClass} value={description} onChange={e => setDescription(e.target.value)} placeholder="Nội dung ngắn đại diện trường sẽ thấy khi đăng ký." /></label>
-      <label className="block text-sm">Tuyến<select title="" required aria-label="Tuyến" disabled={scheduleLocked || Boolean(fixedStops)} className={inputClass} value={routeId} onChange={e => setRouteId(e.target.value)}>
+      {!fixedStops && <label className="block text-sm">Tuyến<select title="" required aria-label="Tuyến" disabled={scheduleLocked} className={inputClass} value={routeId} onChange={e => setRouteId(e.target.value)}>
         <option value="">— Chọn tuyến khả dụng —</option>
         {options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
       </select>
-        <span className="mt-1 block text-xs text-[#64748b]">{routes.isError ? 'Không tải được danh mục tuyến.' : fixedStops ? 'Tour dùng đúng bản tuyến đã chạy thử lúc tạo.' : 'Danh sách này chỉ có tuyến kiểu cũ.'}</span></label>
+        <span className="mt-1 block text-xs text-[#64748b]">{routes.isError ? 'Không tải được danh mục tuyến.' : 'Danh sách này chỉ có tuyến kiểu cũ.'}</span></label>}
       <label className="block text-sm">Video dự phòng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
       {fixedStops ? <Notice tone="info">Muốn đổi lịch, tuyến hoặc robot, hãy hủy Tour rồi tạo lại; ở đây chỉ sửa được tên, mô tả và video.</Notice>
         : scheduleLocked && <Notice tone="info">Tour đã có đăng ký hoặc lịch sử nên lịch và tuyến bị khóa; chỉ sửa được tên, mô tả và video.</Notice>}

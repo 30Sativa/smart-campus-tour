@@ -60,6 +60,8 @@ let slotDay = [freeSlot, lockedSlot]
 let expectedSeconds = 1320
 let refuseCreate: string | null = null
 let shortNoticeMinutes = 30
+/** What `/api/routes/route-2/revisions` returns as the route's current revision. */
+let currentRevision: Record<string, unknown> = { ...TESTED, revisionHistory: [] }
 
 function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { ...TESTED, revisionId: 'revision-untested', name: 'Chưa đạt', verificationStatus: 'NOT_TESTED' }]) {
   const writes: { method: string; path: string; body: Record<string, unknown> }[] = []
@@ -76,6 +78,7 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
       if (refuseCreate) return Promise.resolve(json({ success: false, message: 'x', errors: { code: refuseCreate } }, 409))
       return Promise.resolve(json({ success: true, data: { id: 'tour-1' } }))
     }
+    if (path === '/api/routes/route-2/revisions') return Promise.resolve(json({ success: true, data: currentRevision }))
     if (path === '/api/routes') return Promise.resolve(json({ data: testedRoutes, pagination: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 } }))
     if (path === '/api/staff/manage/tours/robots') return Promise.resolve(json({ success: true, data: [
       { robotCode: 'amr-01', displayName: 'AMR 01', usable: true, blockReason: null },
@@ -97,7 +100,7 @@ function renderAt(path: string) {
     <Route path="/staff/manage/tours/:tourId/edit" element={<StaffManageTourEditPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
-beforeEach(() => { slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null; shortNoticeMinutes = 30 })
+beforeEach(() => { slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null; shortNoticeMinutes = 30; currentRevision = { ...TESTED, revisionHistory: [] } })
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
@@ -219,11 +222,32 @@ describe('live Tour management', () => {
 
     renderAt('/staff/manage/tours/tour-1/edit')
     expect(await screen.findByText('1. Thư viện')).toBeInTheDocument()
-    expect(screen.getByLabelText('Tuyến')).toBeDisabled()
+    // Its time and route are shown as facts, not as locked inputs that read as if they could change.
+    expect(screen.queryByLabelText('Tuyến')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Thời gian dự kiến/)).not.toBeInTheDocument()
+    expect(screen.getByText('Đúng bản đã chọn lúc tạo, không đổi theo bản tuyến mới.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tên mới' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
     await waitFor(() => expect(writes).toHaveLength(1))
     expect(writes[0].body).toMatchObject({ expectedRouteVersion: null, configuration: { name: 'Tên mới', routeId: 'route-1' } })
+  })
+
+  it('says when the route of a Tour still to run has a newer revision, which the Tour does not follow', async () => {
+    api(versionedTour)
+    const view = renderAt('/staff/manage/tours/tour-1')
+    expect(await screen.findByText('1. Thư viện')).toBeInTheDocument()
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/api/routes/route-2/revisions'))).toBe(true))
+    expect(screen.queryByText(/Tuyến đã có bản mới/)).not.toBeInTheDocument()
+    view.unmount()
+
+    currentRevision = { ...TESTED, revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'PASS',
+      revisionHistory: [{ revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'PASS', createdAt: '2099-01-02T08:32:00Z' }] }
+    api(versionedTour)
+    renderAt('/staff/manage/tours/tour-1')
+    expect(await screen.findByText(/Tuyến đã có bản mới lưu .*, đã chạy thử đạt\. Tour này vẫn chạy bản đã chọn lúc tạo/)).toBeInTheDocument()
+    expect(screen.getByText(/Muốn Tour đi theo bản mới, hủy Tour rồi tạo lại\./)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Xem bản mới' })).toHaveAttribute('href', '/staff/manage/routes/route-2')
+    expect(screen.getByRole('link', { name: 'Xem bản Tour đang dùng' })).toHaveAttribute('href', '/staff/manage/routes/route-2?revisionId=revision-2')
   })
 
   it('creates a SCHEDULED Tour from an active Route with its revision and an idempotency key', async () => {
