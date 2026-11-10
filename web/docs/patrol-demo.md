@@ -25,14 +25,14 @@ active-Tour observations or represent six connected physical robots. An active
 Tour keeps its existing observation surface. Tasks, events and metrics here
 belong only to this browser session. Reset/reload clears them.
 
-Robot visuals come from
-`robot/ros2_ws/src/robot_description/urdf/robot_expanded_sim.urdf` and its STL
-meshes. Regenerate the web-owned GLB with
-`cd web && node scripts/export-robot-model.mjs`. Joint/visual origins, STL
-millimetre-to-metre scales, materials and floor contact are preserved, with ROS
-Z-up converted to Three Y-up. The robot is approximately 0.810 × 0.570 × 0.494 m
-and uses the campus model's display scale. The original fixed camera mount is
-preserved. Map survey units and measured ROS alignment still need calibration.
+Robot visuals are the current robot (SolidWorks `A_Full_Xe`): the Home page model
+`web/public/models/robot/campus-amr-explode.glb`, built by
+`web/scripts/build-robot-explode-glb.py` and coloured from
+`web/src/features/landing/robot-explode/parts.ts`. The twin turns it a quarter left
+so it faces +X like the ROS robot frame. It is about 0.803 × 0.563 × 1.276 m (with
+the column and the pan/tilt head carrying the Quest 3) and uses the campus model's
+display scale. The ROS URDF (`robot/ros2_ws/src/robot_description`) is not used here.
+Map survey units and measured ROS alignment still need calibration.
 
 Ten POIs approximate the annotated screenshot locations, snapped to usable
 floor of `web/public/models/simulator-map/NVHSV_Tang6_V3_modern_v2.glb`.
