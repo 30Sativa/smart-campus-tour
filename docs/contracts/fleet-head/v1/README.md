@@ -38,7 +38,7 @@ Response: [`poll-response-commands.json`](poll-response-commands.json), or
 | `epoch` | The server's current epoch. Send it back next time. |
 | `commands` | In increasing `seq`. Only commands newer than `afterSeq` (same epoch) and not older than `FleetHead:MaxCommandAgeMs` (default 1000). Never more than the server keeps (32 per robot). |
 | `seq` | Integer, increasing per robot within an epoch. Execute each `seq` at most once; ignore `seq ≤` the last executed. |
-| `kind` | `STEP`, `JOG`, `STOP`, `ANGLE`. |
+| `kind` | `STEP`, `JOG`, `STOP`, `ANGLE`, `SWEEP`. |
 | `issuedAt` | Server time the Operator's request was accepted (UTC). Informational; the robot does not compare clocks. |
 | `panSteps`, `tiltSteps` | `STEP` only: full motor steps, −20..20, at least one non-zero → ROS `head/step`. |
 | `panDir`, `tiltDir` | `JOG` only: −1, 0 or 1 → ROS `head/jog`. `0,0` releases. |
@@ -46,6 +46,11 @@ Response: [`poll-response-commands.json`](poll-response-commands.json), or
 | `panDeg`, `tiltDeg` | `ANGLE` only: absolute degrees from the homed zero, pan −180..180, tilt −90..90 → ROS `head/set` (mode angle). The firmware refuses angles outside its soft limits. |
 
 `STOP` → ROS `head/stop`, and also ends an active jog.
+
+`SWEEP` (no fields) → ROS `head/sweep`, after ending an active jog: `stm32_bridge` turns PAN left 135°, then right
+270°, then left 135° back to where it started, at button speed (30°/s), shrinking a side that would cross the soft
+limit; TILT stays. Any later head command (button, `STOP`, `ANGLE`) cancels it. The backend sends it by itself when
+the Tour is in `AUTO` head mode and the robot arrives at a POI; the Operator may also send it.
 
 Robot rules:
 
@@ -67,6 +72,7 @@ Body, one of:
 { "kind": "JOG",   "panDir": -1, "tiltDir": 0 }
 { "kind": "STOP" }
 { "kind": "ANGLE", "panDeg": 0, "tiltDeg": 0 }
+{ "kind": "SWEEP" }
 ```
 
 Fields that do not belong to the kind must be absent or `null`. Hold a button = send `JOG` about every 200 ms (well
@@ -83,8 +89,20 @@ under `ttlMs`); release = `JOG` with `0,0` (or `STOP`).
 | 409 | `HEAD_ROBOT_NOT_CONNECTED` | The robot has not polled within `FleetHead:RobotConnectedWithinMs`. |
 | 429 | `RATE_LIMITED` | `FleetHead` policy. |
 
+### `PUT /api/staff/manage/tours/{id}/head-mode`
+
+Body `{ "mode": "AUTO" }` or `{ "mode": "MANUAL" }`. Only this Tour's Operator (403 otherwise), until the Tour is
+COMPLETED or CANCELLED (409 `TOUR_STATE_INVALID`), so it can be chosen before Start. `data` = `{ tourId, mode }`.
+
+| Mode | At each POI arrival | Buttons |
+|---|---|---|
+| `AUTO` (default, `FleetHead:DefaultMode`) | The backend queues one `SWEEP` (if `FleetHead:Enabled` and the robot is polling) | Work, and cancel a running sweep |
+| `MANUAL` | Nothing | Work |
+
+The mode is kept in API memory per Tour; after an API restart every Tour is back to the default.
+
 ### `GET /api/staff/manage/tours/{id}/head`
 
-Any Staff. `data` = `{ enabled, robotCode, connected, lastPollAt, head }`, where `head` is the robot's last report
+Any Staff. `data` = `{ enabled, mode, robotCode, connected, lastPollAt, head }`, where `head` is the robot's last report
 (`state`, `referenced`, `panDeg`, `tiltDeg`, `observedAt`, `receivedAt`) or `null`. `robotCode` is `null` before
 Start.

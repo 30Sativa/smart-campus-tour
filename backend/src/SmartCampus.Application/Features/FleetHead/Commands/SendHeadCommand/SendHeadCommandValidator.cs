@@ -21,7 +21,7 @@ public sealed class SendHeadCommandValidator : AbstractValidator<SendHeadCommand
         {
             RuleFor(c => c.Spec.Kind)
                 .Must(kind => kind is not null && HeadCommandKinds.All.Contains(kind))
-                .WithMessage("kind must be STEP, JOG, STOP or ANGLE.");
+                .WithMessage("kind must be STEP, JOG, STOP, ANGLE or SWEEP.");
             RuleFor(c => c.Spec)
                 .Must(OnlyFieldsOfItsKind)
                 .WithName("kind")

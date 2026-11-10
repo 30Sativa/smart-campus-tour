@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
-KINDS = frozenset({'STEP', 'JOG', 'STOP', 'ANGLE'})
+KINDS = frozenset({'STEP', 'JOG', 'STOP', 'ANGLE', 'SWEEP'})
 DEFAULT_JOG_TTL_SEC = 0.6
 MAX_STEPS = 20
 
@@ -40,6 +40,7 @@ class HeadActuator(Protocol):
     def jog(self, pan_dir: int, tilt_dir: int) -> None: ...
     def stop(self) -> None: ...
     def angle(self, pan_deg: float, tilt_deg: float) -> None: ...
+    def sweep(self) -> None: ...
 
 
 def _int(value, low: int, high: int, name: str) -> int:
@@ -156,6 +157,10 @@ class HeadCommandApplier:
         elif command.kind == 'ANGLE':
             self._release()
             self._actuator.angle(command.pan_deg, command.tilt_deg)
+        elif command.kind == 'SWEEP':
+            # Xoay tu dong o POI: stm32_bridge chay ca luot (trai -> phai -> ve cho cu); lenh tay sau do se huy no.
+            self._release()
+            self._actuator.sweep()
 
     def _release(self) -> None:
         if self._jog is not None:

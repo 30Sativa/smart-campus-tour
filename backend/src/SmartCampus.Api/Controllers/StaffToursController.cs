@@ -10,6 +10,7 @@ using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.FleetHead.Commands.SendHeadCommand;
+using SmartCampus.Application.Features.FleetHead.Commands.SetTourHeadMode;
 using SmartCampus.Application.Features.FleetHead.Queries.GetTourHeadStatus;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
@@ -148,6 +149,17 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
             Message = "Head command queued.",
             Data = await sender.Send(new SendHeadCommand(id, User.GetRequiredUserId(), new HeadCommandSpec(request.Kind,
                 request.PanSteps, request.TiltSteps, request.PanDir, request.TiltDir, request.PanDeg, request.TiltDeg)), ct)
+        });
+
+    /// <summary>ADR-0045 addendum: AUTO sweeps the head at every POI arrival, MANUAL only follows the buttons.</summary>
+    [HttpPut("{id:guid}/head-mode")]
+    [RequestSizeLimit(1024)]
+    public async Task<ActionResult<BaseResponse<TourHeadModeResult>>> SetHeadMode(Guid id, [FromBody] StaffHeadModeRequest request,
+        CancellationToken ct) =>
+        Ok(new BaseResponse<TourHeadModeResult>
+        {
+            Success = true, Message = "Head mode set.",
+            Data = await sender.Send(new SetTourHeadMode(id, User.GetRequiredUserId(), request.Mode), ct)
         });
 
     [HttpGet("{id:guid}/head")]

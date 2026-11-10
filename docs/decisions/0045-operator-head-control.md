@@ -61,3 +61,16 @@ would write SQL rows several times per second and block navigation behind the on
 - Because only a `RUNNING` Tour enables control, the head cannot be turned from the web on a physical robot until a
   Tour can start on it (`IsDispatchEnabled`, M2.3). Bench control stays on `head_teleop` / ROS CLI.
 - Camera presets at POI arrival (FR-49, M2.5) and FRONT before legs remain separate work; they may reuse `ANGLE`.
+
+## Addendum 09/11/2026: automatic sweep at POIs (requested by team member Sơn)
+
+- Two head modes per Tour, chosen by the Operator: `MANUAL` (buttons only) and `AUTO` (default). In `AUTO`, when the
+  robot's GoTo to a POI is recorded `ARRIVED` for the Tour's current leg, the backend queues one `SWEEP` on Fleet Head
+  v1. Nothing is persisted; the mode lives in API memory (`FleetHead:DefaultMode` after a restart).
+- The sweep runs on the robot (`stm32_bridge` service `head/sweep`): PAN left 135°, right 270°, left 135° back to the
+  starting position, TILT unchanged, at the firmware's button speed (30°/s, no firmware change). Each side shrinks so
+  the head never presses the soft limit, so the step counts always sum to zero and the head returns exactly.
+- Buttons win: any manual head command cancels a running sweep, and the sweep sends nothing after it.
+- Best effort: no sweep while `FleetHead:Enabled` is false, the robot is not polling, or the head is not IDLE with a
+  reference. The arrival is recorded either way. Next is not blocked by a running sweep; the head may still be turned
+  when the robot leaves. This is not the FR-49 checked camera preset, which stays M2.5 work.

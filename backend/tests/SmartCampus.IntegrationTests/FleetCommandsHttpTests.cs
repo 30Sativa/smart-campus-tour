@@ -375,6 +375,45 @@ public sealed class FleetCommandsHttpTests
     }
 
     /// <summary>The bridge's side of the wire, against a real API process on the World's database.</summary>
+    /// <summary>ADR-0045 addendum: in AUTO mode the robot's POI arrival queues one SWEEP; MANUAL queues nothing.</summary>
+    [SchemaV11Fact]
+    public async Task HeadAutoMode_AnArrivalAtAPoi_QueuesOneSweep_AndManualModeDoesNot()
+    {
+        await using var b = await Bridge.Create(headEnabled: true);
+        var status = await b.OperatorCall(HttpMethod.Get, "head");
+        Assert.Equal("AUTO", status.Body.GetProperty("data").GetProperty("mode").GetString());
+        await b.StartTour();
+
+        async Task<JsonElement> HeadPoll(long afterSeq, Guid? epoch) => (await b.Post("/api/fleet/head/v1/poll",
+            new { epoch, afterSeq, waitMs = 0, head = new { state = "IDLE", referenced = true, panDeg = 0.0, tiltDeg = 0.0 } })).Body.GetProperty("data");
+        async Task Arrive()
+        {
+            await b.Sync(status: "IDLE");
+            var command = (await b.PollData()).GetProperty("command");
+            var path = $"/api/fleet/commands/v1/{command.GetProperty("commandId").GetGuid()}/results";
+            Assert.Equal(HttpStatusCode.OK, (await b.Post(path, b.ResultBody(command, "result-accepted.json"))).Status);
+            Assert.Equal(HttpStatusCode.OK, (await b.Post(path, b.ResultBody(command, "result-terminal-arrived.json"))).Status);
+        }
+
+        var first = await HeadPoll(0, null);                       // the robot is listening
+        var epoch = first.GetProperty("epoch").GetGuid();
+        await Arrive();
+        var sweep = Assert.Single((await HeadPoll(0, epoch)).GetProperty("commands").EnumerateArray());
+        Assert.Equal("SWEEP", sweep.GetProperty("kind").GetString());
+        Assert.False(sweep.TryGetProperty("panDeg", out _));
+
+        var manual = await b.OperatorCall(HttpMethod.Put, "head-mode", new { mode = "MANUAL" });
+        Assert.True(manual.Status == HttpStatusCode.OK, manual.Body.ToString());
+        Assert.Equal("MANUAL", (await b.OperatorCall(HttpMethod.Get, "head")).Body.GetProperty("data").GetProperty("mode").GetString());
+        await b.Sync();
+        await b.StaffPost("next", new { requestId = Guid.NewGuid(), expectedRowVersion = await b.TourVersion() });
+        await Arrive();
+        Assert.Empty((await HeadPoll(sweep.GetProperty("seq").GetInt64(), epoch)).GetProperty("commands").EnumerateArray());
+
+        var bad = await b.OperatorCall(HttpMethod.Put, "head-mode", new { mode = "SOMETIMES" });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.Status);
+    }
+
     private sealed class Bridge(World world, PoiManagementEndpointTests.ApiHost host, string secret, string operatorToken, ClientWebSocket? console) : IAsyncDisposable
     {
         private long seq;

@@ -183,6 +183,12 @@ class FakeFirmware:
         # STEP / JOG
         if not ref:
             return self._err('head_not_zeroed')
+        if p[2] == 'STEP':
+            # Nhu firmware: cong vao dich, chan o gioi han mem (PAN 0.6 do/buoc, TILT 1.8 do/buoc).
+            pan = max(-17000, min(17000, self.target[0] + int(p[3]) * 60))
+            tilt = max(-1800, min(1800, self.target[1] + int(p[4]) * 180))
+            self.target = (pan, tilt)
+            self.state, self.busy_until = hl.STATE_MOVING, now + self.move_s
         self.head_seq = seq
 
     def _err(self, kind):
@@ -493,5 +499,112 @@ def test_no_park_without_reference_or_when_disabled():
         n = len(fw.sent)
         iface.shutdown()
         assert len(fw.sent) == n
+    finally:
+        fw.stop()
+
+
+# ---- head/sweep: xoay tu dong trai -> phai -> ve cho cu ------------------------
+
+def _steps(fw):
+    return [s.split(',', 2)[2] for s in fw.sent if ',STEP,' in s]
+
+
+def _homed(params=None, **fw_kw):
+    node, iface, fw = make(params=params, **fw_kw)
+    run_goal(iface, FakeGoalHandle(mode=1))
+    return node, iface, fw
+
+
+def _sweep(node):
+    return node.services['head/sweep'](None, SimpleNamespace())
+
+
+def test_sweep_goes_left_then_right_then_back_to_where_it_started():
+    node, iface, fw = _homed(move_s=0.1)
+    try:
+        resp = _sweep(node)
+        assert resp.success and resp.message == 'started'
+        assert _wait(lambda: not iface._sweep_thread.is_alive(), 5.0)
+        assert _steps(fw) == ['STEP,225,0', 'STEP,-450,0', 'STEP,225,0']   # 135 do = 225 buoc 0.6 do
+        assert fw.pan == 0 and fw.state == hl.STATE_IDLE
+    finally:
+        fw.stop()
+
+
+def test_sweep_shrinks_a_side_instead_of_hitting_the_soft_limit_and_still_returns():
+    node, iface, fw = _homed(move_s=0.1)
+    try:
+        assert run_goal(iface, FakeGoalHandle(mode=0, pan=100.0)).success
+        assert _sweep(node).success
+        assert _wait(lambda: not iface._sweep_thread.is_alive(), 5.0)
+        # Con 70 do toi +170: 116 buoc (69.6 do) sang trai, du 225 buoc sang phai.
+        assert _steps(fw) == ['STEP,116,0', 'STEP,-341,0', 'STEP,225,0']
+        assert fw.pan == 10000
+        # Ve dung cho cu bang STEP: khong can lenh goc sua sai (HEAD,<seq>,<pan>,<tilt> co 3 dau phay).
+        assert not any(s.startswith('HEAD,') and s.count(',') == 3 for s in fw.sent[-3:])
+    finally:
+        fw.stop()
+
+
+def test_a_manual_button_stops_the_sweep_and_nothing_follows_it():
+    node, iface, fw = _homed(move_s=0.4)
+    try:
+        assert _sweep(node).success
+        assert _wait(lambda: len(_steps(fw)) == 1, 2.0)
+        node.subs['head/jog'](SimpleNamespace(pan=-1, tilt=0))        # Operator giu nut
+        assert _wait(lambda: not iface._sweep_thread.is_alive(), 3.0)
+        after_jog = fw.sent[fw.sent.index(next(s for s in fw.sent if ',JOG,-1,0' in s)):]
+        assert not any(',STEP,' in s for s in after_jog[1:])
+        assert _steps(fw) == ['STEP,225,0']
+    finally:
+        fw.stop()
+
+
+def test_a_release_without_an_active_jog_does_not_stop_the_sweep():
+    node, iface, fw = _homed(move_s=0.1)
+    try:
+        node.subs['head/jog'](SimpleNamespace(pan=0, tilt=0))         # fleet_bridge nha nut truoc khi quet
+        assert _sweep(node).success
+        node.subs['head/jog'](SimpleNamespace(pan=0, tilt=0))
+        assert _wait(lambda: not iface._sweep_thread.is_alive(), 5.0)
+        assert len(_steps(fw)) == 3 and fw.pan == 0
+    finally:
+        fw.stop()
+
+
+def test_sweep_is_refused_without_reference_while_moving_or_twice():
+    node, iface, fw = make(move_s=0.5)
+    try:
+        assert _sweep(node).message == 'not_ready:off'
+        run_goal(iface, FakeGoalHandle(mode=1))
+        fw.send(lambda s: f'HEAD,{s},9000,0')
+        time.sleep(0.1)
+        assert _sweep(node).message == 'not_ready:moving'
+        assert _wait(lambda: fw.state == hl.STATE_IDLE, 2.0)
+        time.sleep(0.05)
+        assert _sweep(node).success
+        assert _sweep(node).message == 'already_sweeping'
+    finally:
+        fw.stop()
+
+
+def test_sweep_of_zero_degrees_moves_nothing():
+    node, iface, fw = _homed(params={'head_sweep_deg': 0.0})
+    try:
+        assert _sweep(node).success
+        assert _wait(lambda: not iface._sweep_thread.is_alive(), 2.0)
+        assert _steps(fw) == []
+    finally:
+        fw.stop()
+
+
+def test_sweep_never_starts_from_a_position_a_just_sent_command_is_changing():
+    # Nut tay vua gui ma firmware chua bao FB moi: luot quet khong duoc lay vi tri cu lam diem ve.
+    node, iface, fw = _homed(move_s=0.5)
+    try:
+        node.subs['head/step'](SimpleNamespace(pan_steps=5, tilt_steps=0))
+        resp = _sweep(node)
+        assert not resp.success and resp.message == 'not_ready:moving'
+        assert _steps(fw) == ['STEP,5,0']
     finally:
         fw.stop()

@@ -6,6 +6,7 @@ Operator head buttons (ADR-0045, **proposed**, `FleetHead:Enabled = false` by de
 | Endpoint | Who |
 |---|---|
 | `POST /api/staff/manage/tours/{id}/head-commands` | The Tour's Operator, Tour `RUNNING`, robot polling. |
+| `PUT /api/staff/manage/tours/{id}/head-mode` | The Tour's Operator, until the Tour ends: `AUTO` or `MANUAL`. |
 | `GET /api/staff/manage/tours/{id}/head` | Any Staff. |
 | `POST /api/fleet/head/v1/poll` | The robot (Fleet Sync scheme), long poll. |
 
@@ -29,9 +30,18 @@ Each press costs one unlocked `Tours`/`Robots` read.
 | `FleetHead:JogTtlMs` | 600 | Deadman sent with each JOG; the web repeats JOG about every 200 ms while held. |
 | `FleetHead:MaxWaitMs` | 1500 | Longest long-poll hold. Keep it below any reverse-proxy read timeout. |
 | `FleetHead:RobotConnectedWithinMs` | 3000 | `HEAD_ROBOT_NOT_CONNECTED` after this long without a poll. |
+| `FleetHead:DefaultMode` | `AUTO` | Head mode of a Tour nobody set (and of every Tour after an API restart). |
 | `FleetHead:RateLimit:PermitLimit` / `WindowSeconds` | 1200 / 60 | Per client IP, separate from `FleetSync`. |
 
 Environment form: `FleetHead__Enabled=true`.
+
+## Automatic sweep (ADR-0045 addendum)
+
+`ReportCommandResultCommandHandler` calls `HeadArrivalSweep.Queue` when the current leg's GoTo to a POI is recorded
+`ARRIVED`. In `AUTO` mode, with head control on and the robot polling, it queues one `SWEEP`; otherwise nothing.
+It runs inside the handler, before the commit, and never fails the result. Code: `Features/FleetHead/HeadArrivalSweep.cs`,
+`Commands/SetTourHeadMode/`, `Common/Abstractions/FleetHead/ITourHeadModeStore.cs`,
+`Integrations/FleetHead/InMemoryTourHeadModeStore.cs`.
 
 ## Limits
 

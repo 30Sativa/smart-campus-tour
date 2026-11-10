@@ -17,12 +17,36 @@ Trạng thái: **code và test offline xong, chưa chạy với ROS thật và r
 | service | `head/stop` | `std_srvs/srv/Trigger` | Giảm tốc dừng; đang HOME thì hủy HOME (mất mốc) |
 | service | `head/off` | `std_srvs/srv/Trigger` | Tắt driver, mất mốc (TILT có thể đổ theo trọng lực) |
 | service | `head/zero` | `std_srvs/srv/Trigger` | Mốc tay tại vị trí hiện tại (dự phòng khi không HOME được) |
+| service | `head/sweep` | `std_srvs/srv/Trigger` | Xoay tự động: từ vị trí hiện tại PAN sang trái 135°, sang phải 270°, rồi về đúng chỗ cũ, 30°/s. Trả `started` sau khi FB đã phản ánh mọi lệnh đầu quay gửi trước đó (≤ 1 s); từ chối `not_ready:<trạng thái>` nếu chưa có mốc hoặc đang quay, `not_ready:command_pending` nếu FB chưa theo kịp, `already_sweeping` nếu đang quét |
 | service | `contactor/set` | `std_srvs/srv/SetBool` | Bật/tắt contactor (PA10). Thành công khi một khung FB **sinh sau** lệnh này báo đúng trạng thái. Xem bảng kết quả bên dưới |
 | topic (pub) | `contactor/state` | `std_msgs/msg/Bool` | Trạng thái lệnh của PA10, 1 Hz và khi đổi |
 
 Quy ước góc: PAN dương = quay trái, 0° = phía trước, giới hạn ±170° (vật cản
 phía sau, cạnh ở 174°). TILT dương = ngửa lên, giới hạn ±18° (vật cản cúi
 20°). Góc làm tròn tới bước: PAN 0,6°, TILT 1,8° (driver bước đủ).
+
+## Xoay tự động ở POI (`head/sweep`)
+
+Hai chế độ do Operator chọn trên web (`PUT .../head-mode`): **Bằng tay** (chỉ nút) và
+**Tự động** (mặc định): robot tới mỗi POI thì backend gửi `SWEEP`, `fleet_bridge`
+gọi `head/sweep` của node này.
+
+- Chuỗi lệnh `STEP` ở tốc độ nút bấm của firmware (30°/s, không cần nạp lại):
+  `STEP,+trái,0` → `STEP,-(trái+phải),0` → `STEP,+phải,0`, chờ IDLE sau mỗi đoạn.
+  Tổng bước bằng 0 nên đầu về **đúng** vị trí bắt đầu; TILT giữ nguyên. Khoảng
+  19 s với ±135°.
+- Mỗi bên tối đa `head_sweep_deg` (135°), tự thu nhỏ để không chạm giới hạn mềm
+  ±170° (đầu đang ở +100° thì chỉ quay trái 69,6°).
+- **Tay thắng:** bất kỳ lệnh tay nào (`head/jog` khác 0, `head/step`, `head/set`,
+  `head/stop|off|zero`) hủy lượt quét, và lượt quét không gửi thêm lệnh nào sau đó.
+- Bàn phím: `head_teleop` phím `x`.
+
+| Tham số | Mặc định | |
+|---|---|---|
+| `head_sweep_deg` | 135 | Biên độ mỗi bên (0 = không quay) |
+| `head_sweep_pan_deg_per_step` | 0,6 | **Phải khớp firmware** (bước đủ, hộp số 3:1). Vi bước 1/16 → 0,0375 |
+| `head_sweep_pan_limit_deg` | 170 | **Phải khớp** `HEAD_PAN_LIMIT_CDEG` |
+| `head_sweep_speed_dps` | 30 | Chỉ để tính timeout; tốc độ thật là `HEAD_JOG_SPEED_DPS` của firmware |
 
 ## Tự động khi khởi động
 

@@ -170,6 +170,27 @@ public sealed class FleetHeadChannelTests
         Assert.All(batches, b => Assert.Single(b.Commands));
     }
 
+    [Fact]
+    public void ModeStore_DefaultsFromSettings_KeepsEachTourApart_AndRefusesNonsense()
+    {
+        var store = new InMemoryTourHeadModeStore(new FleetHeadSettings(defaultMode: HeadModes.Manual));
+        var tour = Guid.NewGuid();
+        Assert.Equal("MANUAL", store.GetMode(tour));
+        store.SetMode(tour, HeadModes.Auto);
+        Assert.Equal("AUTO", store.GetMode(tour));
+        Assert.Equal("MANUAL", store.GetMode(Guid.NewGuid()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => store.SetMode(tour, "auto"));
+    }
+
+    [Fact]
+    public async Task Sweep_IsQueuedWithoutFieldsOrTtl()
+    {
+        var channel = Channel();
+        channel.Enqueue(Robot, new HeadCommandSpec("SWEEP"));
+        var sweep = Assert.Single((await channel.PollAsync(Robot, null, 0, TimeSpan.Zero, null, default)).Commands);
+        Assert.Equal(("SWEEP", (int?)null, (int?)null, (double?)null), (sweep.Kind, sweep.TtlMs, sweep.PanSteps, sweep.PanDeg));
+    }
+
     // ---- contract fixtures -----------------------------------------------------------------------------------------
 
     [Fact]

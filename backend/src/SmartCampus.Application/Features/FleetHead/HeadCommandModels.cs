@@ -7,8 +7,19 @@ public static class HeadCommandKinds
     public const string Jog = "JOG";
     public const string Stop = "STOP";
     public const string Angle = "ANGLE";
+    /// <summary>Automatic look-around: the robot turns PAN left, then right, then back to where it started.</summary>
+    public const string Sweep = "SWEEP";
 
-    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { Step, Jog, Stop, Angle };
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { Step, Jog, Stop, Angle, Sweep };
+}
+
+/// <summary>Per-Tour head mode: AUTO sweeps at every POI arrival, MANUAL only follows the Operator's buttons.</summary>
+public static class HeadModes
+{
+    public const string Manual = "MANUAL";
+    public const string Auto = "AUTO";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { Manual, Auto };
 }
 
 /// <summary>Wire values of <c>head.state</c>, mapped from stm32_bridge <c>head/state</c>.</summary>

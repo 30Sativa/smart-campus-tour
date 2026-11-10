@@ -1284,8 +1284,9 @@ buttons on the Operator console:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?}`; 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
-| GET | `/api/staff/manage/tours/{id}/head` | Any Staff: `{enabled, robotCode, connected, lastPollAt, head}` from the robot's last poll. |
+| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE\|SWEEP, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?}`; 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
+| PUT | `/api/staff/manage/tours/{id}/head-mode` | `{mode: AUTO\|MANUAL}`, Operator only, until the Tour ends. AUTO (default) queues one `SWEEP` at every POI arrival (ADR-0045 addendum); in memory. |
+| GET | `/api/staff/manage/tours/{id}/head` | Any Staff: `{enabled, mode, robotCode, connected, lastPollAt, head}` from the robot's last poll. |
 | POST | `/api/fleet/head/v1/poll` | Robot scheme. Long poll `{epoch, afterSeq, waitMs, head}` → `{epoch, commands[]}`. |
 
 Wire: `docs/contracts/fleet-head/v1/`. Commands live only in API memory per robot
@@ -1294,7 +1295,8 @@ Wire: `docs/contracts/fleet-head/v1/`. Commands live only in API memory per robo
 the robot releases it at its own receipt time + `ttlMs`, so a lost network or a
 closed tab stops the head. On the robot, `fleet_bridge` (`head_enabled`) maps
 `STEP`/`JOG` to topics `head/step`/`head/jog`, `STOP` to service `head/stop`,
-`ANGLE` to action `head/set`, and reports `head/state` on its next poll. Same
+`ANGLE` to action `head/set`, `SWEEP` to service `head/sweep` (left 135°, right,
+back to the start at 30°/s; any button cancels it), and reports `head/state` on its next poll. Same
 single-API-instance limit as Fleet Sync (ADR-0019).
 
 **Quest camera on demand (ADR-0052, proposed 09/11/2026; robot side opt-in).**

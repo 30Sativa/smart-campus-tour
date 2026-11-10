@@ -10,6 +10,7 @@ nay. Tat ca ten la tuong doi -> /robot_01/... khi chay co namespace.
   srv     head/stop       std_srvs/srv/Trigger           (giam toc dung, huy HOME)
   srv     head/off        std_srvs/srv/Trigger           (tat driver, mat moc)
   srv     head/zero       std_srvs/srv/Trigger           (moc tay, du phong)
+  srv     head/sweep      std_srvs/srv/Trigger           (xoay tu dong: trai -> phai -> ve cho cu)
 
 Contactor nam rieng o contactor_ros.py (khong phu thuoc bus_interfaces).
 Dau quay KHONG phu thuoc trang thai contactor: lenh HEAD gui di bat ke
@@ -23,6 +24,14 @@ Tu dong (tham so):
   head_park_on_shutdown tat bridge khi dau dang co moc -> dua ve 0/0 truoc,
                         de lan HOME sau bat dau gan phia truoc (PAN chi quay
                         190 do khi HOME, xem firmware head_core.h).
+
+Xoay tu dong (head/sweep, chi PAN, TILT giu nguyen): tu vi tri hien tai quay
+trai head_sweep_deg, roi phai 2*head_sweep_deg, roi trai head_sweep_deg ve dung
+cho cu. Dung lenh STEP nen chay o toc do nut bam cua firmware
+(HEAD_JOG_SPEED_DPS, 30 do/s), cho IDLE sau moi doan. Moi ben duoc thu nho de
+khong cham gioi han mem. Lenh tay (head/jog khac 0, head/step, head/set,
+head/stop|off|zero) luon thang: no huy luot quet, luot quet khong gui them lenh
+nao sau do.
 
 Logic thuan (dinh dang lenh, doc FB, ket qua theo seq, deadman JOG) nam o
 head_link.py va duoc test khong can ROS.
@@ -53,7 +62,9 @@ class HeadInterface:
     def __init__(self, node, send_seq_command: Callable[[Callable[[int], str]], Optional[int]]):
         """send_seq_command(build) cap seq, gui build(seq) + CRLF, tra seq hoac None."""
         self._node = node
-        self._send = send_seq_command
+        self._send_raw = send_seq_command
+        # seq cua lenh HEAD gui gan nhat: head/sweep cho FB theo kip no truoc khi lay vi tri bat dau.
+        self._last_head_sent: Optional[int] = None
 
         node.declare_parameter('head_jog_timeout', 0.25)
         node.declare_parameter('head_state_rate_hz', 10.0)
@@ -62,6 +73,12 @@ class HeadInterface:
         node.declare_parameter('head_command_timeout', 1.0)
         node.declare_parameter('head_auto_home', True)
         node.declare_parameter('head_park_on_shutdown', True)
+        # head/sweep. pan_deg_per_step va pan_limit_deg PHAI khop firmware head_core.h
+        # (buoc du qua hop so 3:1 = 0.6 do; HEAD_PAN_LIMIT_CDEG = 17000). sweep_speed_dps chi de tinh timeout.
+        node.declare_parameter('head_sweep_deg', 135.0)
+        node.declare_parameter('head_sweep_pan_deg_per_step', 0.6)
+        node.declare_parameter('head_sweep_pan_limit_deg', 170.0)
+        node.declare_parameter('head_sweep_speed_dps', 30.0)
         self._move_timeout = float(node.get_parameter('head_move_timeout').value)
         self._home_timeout = float(node.get_parameter('head_home_timeout').value)
         self._cmd_timeout = float(node.get_parameter('head_command_timeout').value)
@@ -69,6 +86,17 @@ class HeadInterface:
         self._park_on_shutdown = bool(node.get_parameter('head_park_on_shutdown').value)
         self._auto_home_thread: Optional[threading.Thread] = None
         self._auto_home_last_try: Optional[float] = None
+        self._sweep_deg = float(node.get_parameter('head_sweep_deg').value)
+        self._sweep_deg_per_step = float(node.get_parameter('head_sweep_pan_deg_per_step').value)
+        self._sweep_limit_deg = float(node.get_parameter('head_sweep_pan_limit_deg').value)
+        self._sweep_speed_dps = float(node.get_parameter('head_sweep_speed_dps').value)
+        if self._sweep_deg < 0.0 or min(self._sweep_deg_per_step, self._sweep_limit_deg, self._sweep_speed_dps) <= 0.0:
+            raise ValueError('head_sweep_* parameters must be positive (head_sweep_deg may be 0).')
+        # Khoa nay xep thu tu "kiem tra huy + gui STEP" cua luot quet voi "dat co huy" cua lenh tay:
+        # sau khi lenh tay dat co, luot quet khong bao gio gui them lenh.
+        self._sweep_lock = threading.Lock()
+        self._sweep_cancel: Optional[threading.Event] = None
+        self._sweep_thread: Optional[threading.Thread] = None
         rate = float(node.get_parameter('head_state_rate_hz').value)
         self._state_period = 1.0 / rate if rate > 0.0 else 0.1
 
@@ -92,12 +120,20 @@ class HeadInterface:
         node.create_service(Trigger, 'head/stop', self._srv_stop, callback_group=cb)
         node.create_service(Trigger, 'head/off', self._srv_off, callback_group=cb)
         node.create_service(Trigger, 'head/zero', self._srv_zero, callback_group=cb)
+        node.create_service(Trigger, 'head/sweep', self._srv_sweep, callback_group=cb)
         self._action = ActionServer(
             node, SetHead, 'head/set',
             execute_callback=self._execute,
             goal_callback=lambda _goal: GoalResponse.ACCEPT,
             cancel_callback=lambda _goal: CancelResponse.ACCEPT,
             callback_group=cb)
+
+    def _send(self, build: Callable[[int], str]) -> Optional[int]:
+        seq = self._send_raw(build)
+        if seq is not None:
+            with self._cond:
+                self._last_head_sent = seq
+        return seq
 
     # ---- duoc stm32_bridge_node goi (thread timer) -------------------------
     def on_feedback_line(self, line: str) -> None:
@@ -132,6 +168,7 @@ class HeadInterface:
                 self._send(lambda seq: hl.cmd_head_jog(seq, d[0], d[1]))
 
     def shutdown(self) -> None:
+        self._preempt_sweep()
         with self._jog_lock:
             jogging = self._jog.active
             self._jog.reset()
@@ -169,6 +206,7 @@ class HeadInterface:
         self._auto_home_thread.start()
 
     def _run_auto_home(self) -> None:
+        self._preempt_sweep()
         log = self._node.get_logger()
         log.info('Head auto-home: HEAD,HOME (PAN right to the stop then back to 0, '
                  'TILT down to the stop then up to level)')
@@ -204,6 +242,10 @@ class HeadInterface:
             return
         now = time.monotonic()
         with self._jog_lock:
+            # Nha nut khi khong co JOG nao dang chay thi khong phai lenh tay: khong huy luot quet
+            # (fleet_bridge nha JOG ngay truoc khi goi head/sweep).
+            if int(msg.pan) != 0 or int(msg.tilt) != 0 or self._jog.active:
+                self._preempt_sweep()
             d = self._jog.on_jog(int(msg.pan), int(msg.tilt), now)
             if d is not None:
                 self._send(lambda seq: hl.cmd_head_jog(seq, d[0], d[1]))
@@ -213,6 +255,7 @@ class HeadInterface:
             return
         if msg.pan_steps == 0 and msg.tilt_steps == 0:
             return
+        self._preempt_sweep()
         self._send(lambda seq: hl.cmd_head_step(seq, int(msg.pan_steps), int(msg.tilt_steps)))
 
     # ---- cho ket qua theo seq -----------------------------------------------
@@ -269,6 +312,7 @@ class HeadInterface:
 
     # ---- service -------------------------------------------------------------
     def _srv_stop(self, _req, resp):
+        self._preempt_sweep()
         with self._jog_lock:
             self._jog.reset()
         outcome, fb, detail = self._send_and_wait(
@@ -279,6 +323,7 @@ class HeadInterface:
         return resp
 
     def _srv_off(self, _req, resp):
+        self._preempt_sweep()
         with self._jog_lock:
             self._jog.reset()
         outcome, fb, detail = self._send_and_wait(
@@ -288,16 +333,98 @@ class HeadInterface:
         return resp
 
     def _srv_zero(self, _req, resp):
+        self._preempt_sweep()
         outcome, fb, detail = self._send_and_wait(
             lambda seq: hl.cmd_head_word(seq, 'ZERO'), self._cmd_timeout)
         resp.success = outcome == hl.DONE
         resp.message = 'zeroed' if resp.success else self._describe(outcome, fb, detail)
         return resp
 
+    def _srv_sweep(self, _req, resp):
+        if self._fw_has_head is False:
+            resp.success, resp.message = False, 'firmware_without_head'
+            return resp
+        # Cho khung FB phan anh moi lenh dau quay da gui (vd nut tay vua bam): neu khong, "vi tri bat dau"
+        # co the la vi tri cu trong khi firmware sap quay toi dich cua lenh do.
+        deadline = time.monotonic() + self._cmd_timeout
+        with self._cond:
+            while True:
+                fb, fb_mono, last = self._fb, self._fb_mono, self._last_head_sent
+                caught_up = fb is not None and (last is None or hl.seq_at_or_after(fb.fb_seq, last))
+                remaining = deadline - time.monotonic()
+                if caught_up or remaining <= 0.0:
+                    break
+                self._cond.wait(remaining)
+        if fb is None or fb_mono is None or time.monotonic() - fb_mono > FEEDBACK_STALE_S:
+            resp.success, resp.message = False, 'no_feedback'
+            return resp
+        if not caught_up:
+            resp.success, resp.message = False, 'not_ready:command_pending'
+            return resp
+        if fb.state != hl.STATE_IDLE:
+            # Can co moc va dang dung yen: chua HOME, dang HOME hay dang quay thi khong quet.
+            resp.success = False
+            resp.message = 'not_ready:' + hl.STATE_NAMES.get(fb.state, str(fb.state))
+            return resp
+        with self._sweep_lock:
+            if self._sweep_thread is not None and self._sweep_thread.is_alive():
+                resp.success, resp.message = False, 'already_sweeping'
+                return resp
+            cancel = threading.Event()
+            self._sweep_cancel = cancel
+            self._sweep_thread = threading.Thread(
+                target=self._run_sweep, args=(fb, cancel), name='head_sweep', daemon=True)
+            self._sweep_thread.start()
+        resp.success, resp.message = True, 'started'
+        return resp
+
+    def _preempt_sweep(self) -> None:
+        """Lenh tay thang: huy luot quet dang chay (neu co)."""
+        with self._sweep_lock:
+            if self._sweep_cancel is not None:
+                self._sweep_cancel.set()
+
+    def _sweep_send(self, cancel: threading.Event, build: Callable[[int], str]) -> Optional[int]:
+        with self._sweep_lock:
+            if cancel.is_set():
+                return None
+            return self._send(build)
+
+    def _sweep_timeout(self, steps: int) -> float:
+        return max(self._move_timeout, abs(steps) * self._sweep_deg_per_step / self._sweep_speed_dps * 2.0 + 5.0)
+
+    def _run_sweep(self, start: hl.HeadFeedback, cancel: threading.Event) -> None:
+        log = self._node.get_logger()
+        left, right = hl.sweep_plan(start.pan_deg, self._sweep_deg, self._sweep_deg_per_step, self._sweep_limit_deg)
+        log.info(f'Head sweep from pan {start.pan_deg:.1f} deg: left {left} steps, right {right} steps, back')
+        for steps in (left, -(left + right), right):
+            if steps == 0:
+                continue
+            seq = self._sweep_send(cancel, lambda s, n=steps: hl.cmd_head_step(s, n, 0))
+            if seq is None:
+                log.info('Head sweep stopped: ' + ('manual command' if cancel.is_set() else 'serial_unavailable'))
+                return
+            outcome, fb, detail = self._wait_outcome(seq, self._sweep_timeout(steps), cancel_requested=cancel.is_set)
+            if outcome != hl.DONE:
+                if outcome == 'timeout' and not cancel.is_set():
+                    self._sweep_send(cancel, lambda s: hl.cmd_head_word(s, 'STOP'))
+                log.info('Head sweep stopped: ' + ('manual command' if cancel.is_set() or outcome == hl.SUPERSEDED
+                                                   else self._describe(outcome, fb, detail)))
+                return
+        with self._cond:
+            fb = self._fb
+        # STEP cong tru deu nhau nen da ve dung cho cu; neu lech hon nua buoc (vd gioi han thay doi) thi sua bang goc.
+        if fb is not None and abs(fb.pan_deg - start.pan_deg) > self._sweep_deg_per_step / 2.0:
+            seq = self._sweep_send(cancel, lambda s: hl.cmd_head_angle(s, start.pan_deg, start.tilt_deg))
+            if seq is not None:
+                self._wait_outcome(seq, self._move_timeout, cancel_requested=cancel.is_set)
+        log.info('Head sweep done')
+
     # ---- action --------------------------------------------------------------
     def _execute(self, goal_handle):
         goal = goal_handle.request
         home = goal.mode == SetHead.Goal.MODE_HOME
+        self._preempt_sweep()
         with self._jog_lock:
             self._jog.reset()
         if home:

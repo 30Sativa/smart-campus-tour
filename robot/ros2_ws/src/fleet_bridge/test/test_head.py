@@ -43,6 +43,9 @@ class FakeActuator:
     def angle(self, pan, tilt):
         self._record('angle', pan, tilt)
 
+    def sweep(self):
+        self._record('sweep')
+
 
 class FixtureTests(unittest.TestCase):
     def test_fixtures_are_the_shared_contract(self):
@@ -58,10 +61,11 @@ class FixtureTests(unittest.TestCase):
     def test_fixture_commands_parse_and_run_in_order(self):
         epoch, commands = parse_head_poll_response(fixture('poll-response-commands.json'))
         self.assertEqual(EPOCH, epoch)
-        self.assertEqual([42, 43, 44, 45], [c.seq for c in commands])
+        self.assertEqual([42, 43, 44, 45, 46], [c.seq for c in commands])
         actuator = FakeActuator()
         HeadCommandApplier(actuator).apply(epoch, commands, now=100.0)
-        self.assertEqual([('step', 1, 0), ('jog', -1, 0), ('jog', 0, 0), ('stop',), ('angle', 0.0, 0.0)], actuator.calls)
+        self.assertEqual([('step', 1, 0), ('jog', -1, 0), ('jog', 0, 0), ('stop',), ('angle', 0.0, 0.0), ('sweep',)],
+                         actuator.calls)
         self.assertEqual((EPOCH, []), parse_head_poll_response(fixture('poll-response-empty.json')))
 
     def test_request_fixture_is_what_the_worker_sends(self):
@@ -139,8 +143,9 @@ class ApplierTests(unittest.TestCase):
         self.applier.tick(1.2)
         self.assertFalse(self.applier.jogging)
 
-    def test_release_stop_and_angle_end_a_jog(self):
-        for ender in [{'kind': 'JOG', 'panDir': 0, 'tiltDir': 0}, {'kind': 'STOP'}, {'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 0}]:
+    def test_release_stop_angle_and_sweep_end_a_jog(self):
+        for ender in [{'kind': 'JOG', 'panDir': 0, 'tiltDir': 0}, {'kind': 'STOP'}, {'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 0},
+                      {'kind': 'SWEEP'}]:
             actuator = FakeActuator()
             applier = HeadCommandApplier(actuator)
             applier.apply(EPOCH, [parse_head_command({'seq': 1, 'kind': 'JOG', 'tiltDir': 1}),

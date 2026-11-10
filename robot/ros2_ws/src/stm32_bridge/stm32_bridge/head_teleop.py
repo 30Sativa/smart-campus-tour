@@ -11,6 +11,8 @@ Phim:
   0   ve goc 0/0 (can da HOME)
   space  dung (head/stop)      o  tat driver (head/off)
   z   dat moc tay tai vi tri hien tai (head/zero)
+  x   xoay tu dong: trai -> phai -> ve cho cu (head/sweep); phim dieu khien dau (mui ten,
+      space, h, 0, o, z) huy luot xoay
   c   bat/tat contactor        q  thoat
 """
 import select
@@ -33,7 +35,7 @@ from bus_interfaces.msg import HeadJog, HeadState, HeadStep
 from stm32_bridge.head_keys import HoldDetector, parse_keys
 
 STATE_NAMES = {0: 'OFF', 1: 'IDLE', 2: 'MOVING', 3: 'HOMING', 4: 'NO_REF'}
-HELP = ('Mui ten/WASD: nhan=1 buoc, giu=quay | h=HOME 0=ve 0 space=dung '
+HELP = ('Mui ten/WASD: nhan=1 buoc, giu=quay | h=HOME 0=ve 0 x=xoay tu dong space=dung '
         'o=tat driver z=moc tay c=contactor q=thoat')
 
 
@@ -48,7 +50,7 @@ class HeadTeleop(Node):
         self.create_subscription(Bool, 'contactor/state', self._on_contactor, 10)
         self.action = ActionClient(self, SetHead, 'head/set')
         self.srv = {name: self.create_client(Trigger, f'head/{name}')
-                    for name in ('stop', 'off', 'zero')}
+                    for name in ('stop', 'off', 'zero', 'sweep')}
         self.contactor_cli = self.create_client(SetBool, 'contactor/set')
         self.state = None
         self.contactor = None
@@ -162,6 +164,8 @@ def main(args=None):
                         node.trigger('off')
                     elif k == 'z':
                         node.trigger('zero')
+                    elif k == 'x':
+                        node.trigger('sweep')
                     elif k == 'c':
                         node.toggle_contactor()
                     else:

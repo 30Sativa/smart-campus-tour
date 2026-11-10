@@ -78,6 +78,9 @@ public sealed record FleetHeadWireCommand(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? TiltDeg,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? TtlMs);
 
+/// <summary>Body of PUT /api/staff/manage/tours/{id}/head-mode: <c>AUTO</c> or <c>MANUAL</c>.</summary>
+public sealed record StaffHeadModeRequest(string Mode);
+
 /// <summary>Body of POST /api/staff/manage/tours/{id}/head-commands; only the fields of <see cref="Kind"/> may be set.</summary>
 public sealed record StaffHeadCommandRequest(string Kind, int? PanSteps, int? TiltSteps, int? PanDir, int? TiltDir,
     double? PanDeg, double? TiltDeg);

@@ -3,6 +3,7 @@
 Imported only when `head_enabled` is true, so the telemetry-only bridge needs no bus_interfaces.
   STEP  -> topic head/step (HeadStep)        JOG  -> topic head/jog (HeadJog), republished at 10 Hz until its TTL
   STOP  -> service head/stop (Trigger)       ANGLE -> action head/set (SetHead, mode angle), fire and forget
+  SWEEP -> service head/sweep (Trigger): automatic left -> right -> back, run by stm32_bridge
 Feedback: topic head/state (HeadState) is sent back on the next poll.
 """
 
@@ -29,6 +30,8 @@ class RosHeadActuator:
         self._step_pub = node.create_publisher(HeadStep, 'head/step', 10)
         self._jog_pub = node.create_publisher(HeadJog, 'head/jog', 10)
         self._stop_client = node.create_client(Trigger, 'head/stop')
+        self._sweep_client = node.create_client(Trigger, 'head/sweep')
+        self._log = node.get_logger()
         self._set_client = ActionClient(node, SetHead, 'head/set')
 
     def step(self, pan_steps: int, tilt_steps: int) -> None:
@@ -41,6 +44,17 @@ class RosHeadActuator:
         if not self._stop_client.service_is_ready():
             raise RuntimeError('head/stop unavailable')
         self._stop_client.call_async(Trigger.Request())
+
+    def sweep(self) -> None:
+        if not self._sweep_client.service_is_ready():
+            raise RuntimeError('head/sweep unavailable')
+        future = self._sweep_client.call_async(Trigger.Request())
+        future.add_done_callback(self._log_sweep)
+
+    def _log_sweep(self, future) -> None:
+        result = future.result()
+        if result is not None and not result.success:
+            self._log.warning(f'Head sweep refused by stm32_bridge: {result.message}')
 
     def angle(self, pan_deg: float, tilt_deg: float) -> None:
         if not self._set_client.server_is_ready():

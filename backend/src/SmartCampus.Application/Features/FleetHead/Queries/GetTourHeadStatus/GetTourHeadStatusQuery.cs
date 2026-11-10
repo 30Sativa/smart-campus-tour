@@ -7,6 +7,7 @@ public sealed record GetTourHeadStatusQuery(Guid TourId) : IQuery<TourHeadStatus
 /// <summary>What the Operator console shows next to the head buttons. <see cref="RobotCode"/> is null before Start.</summary>
 public sealed record TourHeadStatus(
     bool Enabled,
+    string Mode,
     string? RobotCode,
     bool Connected,
     DateTimeOffset? LastPollAt,
