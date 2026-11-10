@@ -1,18 +1,14 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pause, Play } from 'lucide-react'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { HEAD_PAN_LIMIT_DEG, HEAD_TILT_LIMIT_DEG, type HeadCameraParts } from '../../technical/head-camera-preset'
 import { headPlan, poseAt, type Pose } from './head-motion'
 
 /**
- * A picture of what the head will do at the POI: a 3D robot whose head turns (drag to look around), or without
- * WebGL two drawings, PAN seen from above (front up, left is positive like the robot) and TILT seen from the side. "Chạy thử" plays the motion at three times the robot's speed (button speed 30°/s for a
+ * A picture of what the head will do at the POI: PAN seen from above (front up, left is positive like the robot) and
+ * TILT seen from the side. "Chạy thử" plays the motion at three times the robot's speed (button speed 30°/s for a
  * sweep, 60°/s to an angle); it is a drawing of the plan, not the robot's live state.
  */
-
-// The 3D scene (three.js and the robot CAD model) loads only when the preview is shown on a browser with WebGL.
-const HeadCamera3D = lazy(() => import('./HeadCamera3D'))
-const webgl = typeof window !== 'undefined' && typeof window.WebGLRenderingContext !== 'undefined'
 
 const SPEED_UP = 3
 /** The mechanical stop of the PAN axis (robot firmware HOME offset): 174° to the right. */
@@ -68,8 +64,7 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
   const [hx, hy] = polar(26, pose.pan)
   const tiltRad = pose.tilt * Math.PI / 180
 
-  // The SVG views: the fallback without WebGL (and in tests) and while the 3D scene loads.
-  const flat = <>
+  const views = <>
       <svg viewBox="0 0 240 236" className="mt-1 w-full" role="img" aria-label={`Nhìn từ trên: PAN ${sideLabel(pose.pan, 'trái', 'phải')}`}>
         <defs>
           <radialGradient id="head-fov" cx="0.5" cy="0.5" r="0.5">
@@ -115,10 +110,7 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
       </button>}
     </div>
 
-    {webgl
-      ? <Suspense fallback={flat}><HeadCamera3D pose={pose} sweepDeg={plan.sweepDeg} still={still}
-          label={`Mô phỏng 3D: PAN ${sideLabel(pose.pan, 'trái', 'phải')}, TILT ${sideLabel(pose.tilt, 'ngửa', 'cúi')}`} /></Suspense>
-      : flat}
+    {views}
 
     <dl className="mt-2 grid grid-cols-2 gap-1.5 text-center">
       {[['PAN', sideLabel(pose.pan, 'trái', 'phải')], ['TILT', sideLabel(pose.tilt, 'ngửa', 'cúi')]].map(([name, value]) =>
