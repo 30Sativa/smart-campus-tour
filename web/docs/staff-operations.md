@@ -161,6 +161,13 @@ Done since the first M2 console, listed so these rows are not re-opened:
 - POI summaries, rows and map markers share an explicit map-version selection.
   Empty filters and API errors are distinct. Route cards keep revision history
   collapsed and support server pagination.
+- A Tour runs the route revision it was created on (ADR-0034); saving a route
+  makes a new revision and moves no Tour. The route editor names the Tours
+  scheduled on the route (`GET /api/staff/routes/{id}/scheduled-tours`) before a
+  save, and the detail of a Tour still to run says when its route has a newer
+  revision (`GET /api/routes/{id}/revisions`), with links to both. The Tour edit
+  page shows its time and route as facts, not locked inputs. Moving a Tour to a
+  newer revision still means cancelling and creating it again.
 
 ## Roles
 

@@ -13,6 +13,8 @@ import { staffMapLabels } from '../../../features/administration/map-labels'
 import { errorText } from '../../../features/technical/technical-format'
 import { usePoiProposals } from '../../../features/technical/technical-hooks'
 import { versionedRoutesApi, type VersionedRouteDraft } from '../../../features/administration/routes/versioned-api'
+import { RouteScheduledToursList } from '../../../features/administration/routes/RouteScheduledTours'
+import { useRouteScheduledTours } from '../../../features/administration/routes/hooks'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
 import { RouteMap } from '../../../features/administration/routes/RouteMap'
 import { UnsavedChangesGuard } from '../../../features/administration/UnsavedChangesGuard'
@@ -48,6 +50,8 @@ export default function StaffManageRouteFormPage() {
   const { routeId } = useParams()
   const navigate = useNavigate()
   const source = useQuery({ queryKey: ['versioned-routes', routeId], queryFn: () => versionedRoutesApi.get(routeId!), enabled: Boolean(routeId) })
+  // Saving makes a new revision; these Tours keep the one they were created on (ADR-0034).
+  const scheduledTours = useRouteScheduledTours(routeId)
   const proposals = usePoiProposals()
   const maps = useQuery({ queryKey: ['technical', 'maps'], queryFn: technicalApi.listMaps })
   const [draftOverride, setDraftOverride] = useState<Draft | null>(null)
@@ -179,6 +183,10 @@ export default function StaffManageRouteFormPage() {
     <Link to="/staff/manage/routes" className="mb-3 inline-flex text-sm text-[#2d719e]">← Danh sách tuyến</Link>
     <PageHeader eyebrow="Tuyến" title={routeId ? 'Sửa tuyến' : 'Tạo tuyến'} description="Tuyến gắn với đúng một bản đồ và chỉ gồm các POI đã đạt kiểm chứng trên bản đồ đó." />
     <div className="mb-4"><Notice>Lưu xong, gửi kiểm chứng để Kỹ thuật chạy thử toàn tuyến. Chỉ tuyến chạy thử đạt mới dùng được để tạo Tour.</Notice></div>
+    {scheduledTours.data && scheduledTours.data.length > 0 && <div className="mb-4"><Notice tone="warn">
+      <p>{scheduledTours.data.length} Tour đã lên lịch trên tuyến này vẫn chạy bản đã chọn lúc tạo, không tự đổi theo bản bạn sắp lưu. Muốn Tour đi theo bản mới, chờ bản mới chạy thử đạt rồi hủy Tour và tạo lại.</p>
+      <RouteScheduledToursList tours={scheduledTours.data} />
+    </Notice></div>}
 
     <nav aria-label="Các bước tạo tuyến" className="mb-4">
       <ol className="grid gap-2 sm:grid-cols-4">{STEPS.map((label, index) => {
