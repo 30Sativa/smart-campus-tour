@@ -36,6 +36,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
     public const string MovementFailedCode = "MOVE_PRECONDITION_FAILED";
     public const string TransportCheck = "commandTransportEnabled";
     public const string AllViewersJoinedCheck = "allViewersJoined";
+    public const string HasAcceptedRowsCheck = "hasAcceptedRows";
 
     /// <summary>
     /// <paramref name="viewer"/> adds <c>callerIsOperator</c> (the read only; Start answers 403 instead).
@@ -65,6 +66,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         var incident = robot is not null && await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, null, ct);
         var openCommand = robot is not null && await repository.HasOpenCommandAsync(robot.Id, ct);
         var pending = await registrations.HasPendingDecisionsAsync(tour.Id, ct);
+        var accepted = !pending && await registrations.HasAcceptedRowsAsync(tour.Id, ct);
         var snapshot = robot is null ? null
             : telemetry.GetLatest().FirstOrDefault(item => string.Equals(item.Robot.RobotCode, robot.RobotCode, StringComparison.Ordinal));
         // Read after every lock, so a wait cannot carry the Tour out of its window unnoticed.
@@ -112,6 +114,12 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
 
         list.Add("noPendingDecisions", "DB", !pending,
             pending ? "Còn dòng đăng ký hoặc yêu cầu đổi email đang chờ Staff duyệt." : "Không còn quyết định đang chờ.");
+        // READY needs an accepted row (NO_ACCEPTED_ROWS); Start rechecks it, since a row can leave a READY Tour.
+        if (pending)
+            list.Skip("noPendingDecisions", "DB", [HasAcceptedRowsCheck]);
+        else
+            list.Add(HasAcceptedRowsCheck, "DB", accepted,
+                accepted ? "Tour có dòng đăng ký đã được duyệt." : TourReadiness.NoAcceptedRowsMessage);
 
         // ADR-0050: Start before the published time leaves nobody behind. From the published time a missing viewer no longer holds the Tour.
         if (now >= tour.ScheduledStartAt)

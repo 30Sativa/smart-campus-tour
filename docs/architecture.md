@@ -1147,6 +1147,7 @@ decision, not an SRS requirement. Data source: `DB`, `TELEMETRY` (in-memory Flee
 | Active reservation (`ReleasedAt IS NULL`) for this Tour on its robot | SRS §4, ADR-0034 | DB | fail | `RESERVATION_MISSING` |
 | Robot passes the ADR-0039 usable-robot rule for the revision's map version/SHA | ADR-0039 | DB | fail | `ROBOT_NOT_READY_FOR_ROUTE` |
 | No pending row or email-change decision | SRS §4 (FR-16) | DB | fail | `PENDING_DECISIONS` |
+| At least one active ACCEPTED roster row; reported only when no decision is pending | ADR-0054 | DB | fail | `NO_ACCEPTED_ROWS` |
 | `ScheduledStartAt > now` | Design | DB + clock | fail | `START_TIME_PASSED` |
 
 Only root causes are reported. Fail-closed applies to the READY decision (any
@@ -1157,7 +1158,7 @@ keeps both null together) reports only `ROUTE_VERSION_REQUIRED`, skipping the
 Operator, revision, reservation and robot rows. A Tour without an active
 reservation reports only `RESERVATION_MISSING`, skipping the robot row. The
 independent rows (`TOUR_STATE_INVALID`, `PENDING_DECISIONS`, `START_TIME_PASSED`)
-always run and are all reported.
+always run and are all reported. `NO_ACCEPTED_ROWS` runs only when `PENDING_DECISIONS` passed.
 
 A deactivated route does not block READY: ADR-0037 §5/§7 stops only Tour create
 and slots, and existing Tours keep their route.
@@ -1182,6 +1183,7 @@ while `FleetCommands:Enabled = false`, Start returns
 | `Robots.CurrentTourId IS NULL` | SRS §4 (atomic claim) | DB | fail | `robotNotHeldByOtherTour` |
 | `Robots.IsDispatchEnabled = 1` (set by Technical Staff with GATE A evidence, ADR-0049) | Design (ADR-0042 §6) | DB | fail | `robotDispatchEnabled` |
 | No pending row/email decision (recheck) | SRS §4 | DB | fail | `noPendingDecisions` |
+| At least one active ACCEPTED roster row (recheck); needs `noPendingDecisions` | ADR-0054 | DB | fail | `hasAcceptedRows` |
 | No open incident: no Tour holding this robot (`Robots.CurrentTourId`, or a RUNNING Tour with `AssignedRobotId` = robot) has `OperationalStatus = NEEDS_ASSISTANCE`. `NeedsInspection` is the separate `robotNotNeedsInspection` check (refined 03/11/2026, no duplicate report); replace when an incident store exists | SRS §7 (FR-36/46); definition is Design (ADR-0042 open decision 3) | DB | missing data fails | `noOpenIncident` |
 | No unresolved command for the robot: no `RobotCommands` row with `IsOpen = 1` (an UNKNOWN GoTo counts) | SRS §7 | DB | fail | `noUnresolvedCommand` |
 | Latest telemetry received by server ≤ `FleetCommands:MaxTelemetryAgeSeconds` (default 2) ago; not Fleet Sync `SyncFreshness` | SRS §7 | TELEMETRY + CONFIG | fail ("robot chưa báo") | `telemetryFresh` |
@@ -1204,7 +1206,7 @@ input runs only when that check passed, otherwise it is `passed: false` with det
 robot, incident, command and telemetry row needs `reservationActive`;
 `robotEligibleForRoute`/`robotMapMatchesRoute` also need the Tour's revision;
 `mapContextMatches`, `executionIdle`, `robotLocalized` and `motionReady` need
-`telemetryFresh`. Independent rows (`tourReady`, `withinStartWindow`,
+`telemetryFresh`; `hasAcceptedRows` needs `noPendingDecisions`. Independent rows (`tourReady`, `withinStartWindow`,
 `revisionStillSchedulable`, `noPendingDecisions`, console, confirmations,
 transport) always run. `NeedsInspection = 1` fails only `robotNotNeedsInspection`;
 `noOpenIncident` fails only for a holding Tour in NEEDS_ASSISTANCE. `callerIsOperator`

@@ -493,7 +493,7 @@ public sealed class TourManagementEndpointTests
         Assert.False(detail.Permissions.CanMarkReady);
         Assert.False(detail.Permissions.CanReopen);
         // Operator, revision, reservation and robot all need the exact revision, so they are not reported.
-        Assert.Equal(["ROUTE_VERSION_REQUIRED"], detail.Permissions.ReadyBlockers!.Select(b => b.Code));
+        Assert.Equal(["ROUTE_VERSION_REQUIRED", "NO_ACCEPTED_ROWS"], detail.Permissions.ReadyBlockers!.Select(b => b.Code));
         Assert.All(detail.Permissions.ReadyBlockers!, b => Assert.False(string.IsNullOrWhiteSpace(b.Message)));
 
         // An independent check still reports next to the root cause.
