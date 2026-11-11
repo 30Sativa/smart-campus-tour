@@ -38,8 +38,13 @@ Biến từ shell người gọi (domain, overlay đã source, super client) **k
 | `robot calibration accept DIR [--yes]` | Đưa candidate thành `LIDAR_YAW` khi `DIR/verdict.txt` là PASS | Không (ghi profile, có backup) |
 | `robot logs [prune [--yes]]` | Xem / dọn log phiên (§5) | Không |
 
-`--dry-run` (với manual, map, nav, teleop, stop, preflight, record, lidar-check) in đúng argv và env
-rồi thoát, không tạo thư mục, không lấy lock. `--dry-run` đặt sau `--` cũng vẫn được hiểu là chạy thử.
+**`--dry-run` ở bất kỳ vị trí nào** (trước lệnh con, sau lệnh con, sau `--`, lặp lại) đều biến
+**mọi** lệnh thành chạy thử. Chạy thử chỉ in argv và env; không khởi động tiến trình, không tạo
+thư mục hay lock, không ghi profile, không xoá log, không gọi ROS. Riêng:
+- `calibration accept --yes` và `logs prune --yes` kèm `--dry-run` vẫn chỉ liệt kê;
+- `shell --dry-run` chỉ in env.
+
+Test chạy đủ 13 lệnh × 3 vị trí, rồi kiểm cây file không đổi và chương trình exec giả không chạy.
 
 ## 3. Một workflow mỗi lúc; teleop riêng
 
@@ -68,20 +73,46 @@ rồi thoát, không tạo thư mục, không lấy lock. `--dry-run` đặt sau
 
 Tốc độ bị chặn cứng: tối đa 0.30 m/s và 1.00 rad/s.
 
-`fleet_bridge` không bị chặn, vì ở chế độ telemetry nó chạy song song với NAV2 là hợp lệ. Nhưng
-`robot status` liệt kê nó, và `robot nav` cảnh báo: khi bật `commands_enabled`, nó là một nơi gửi
-goal thứ hai.
+**`fleet_bridge`.** Launcher đọc `commands_enabled` từ chính các `--params-file` của tiến trình đang
+chạy (qua `/proc`, không gọi ROS); file sau ghi đè file trước, giống ROS.
+- `robot nav` **từ chối** khi giá trị là `true`: sẽ có hai nơi gửi goal, và ADR-0049 khi đó còn
+  đòi `require_motion_permit`.
+- `robot nav` cũng **từ chối** khi không xác định được giá trị, ví dụ một file tham số đã bị xoá.
+- Khi giá trị là `false` (telemetry), `robot nav` chạy kèm một dòng ghi chú.
+- `robot status` in `commands_enabled` của từng `fleet_bridge` đang chạy.
+
+Kiểm tra ngày 11/11 trên MiniPC: `fleet_bridge` (khởi động 17:10) chạy với `fleet_bridge.yaml` đã
+cài (`commands_enabled: false`) cộng file tham số do launch tạo (URL, `robot_code`, `map_key`,
+`frame_id`). Như vậy nó chỉ gửi telemetry.
+
+**Lock và nhận diện tiến trình:**
+- Lock là `flock`, nên được nhả khi tiến trình chết. File lock còn sót lại đọc ra là "trống"
+  (`status` thăm dò bằng shared lock trên fd chỉ đọc, không ghi gì).
+- Phiên được coi là còn sống khi **cả** pid **lẫn** start time trong `/proc/<pid>/stat` đều khớp,
+  nên pid bị tái sử dụng không giữ phiên cũ "sống", và log của nó có thể được dọn.
+- Tiến trình khởi động tay ngoài launcher được phát hiện qua `/proc`, nhưng chỉ các tiến trình
+  của cùng user; tiến trình chạy bằng root không thấy được.
+
+**Stop key** báo `SOFTWARE STOP NOT AVAILABLE … PRESS THE HARDWARE E-STOP` nếu sau 5 s không
+với tới được `mode_manager`.
 
 Launcher **không bao giờ** đặt `require_motion_permit`, không gửi `cmd_vel` hay goal, và không
 khởi động motor ngoài lệnh launch mà người vận hành gõ.
 
 ## 4. Calibration LiDAR
 
-| Trường hợp | Kết quả |
-|---|---|
-| `LIDAR_YAW` = giá trị của một baseline đã chạy trên robot (`robot-baseline-20261102`: −3.0695) | Dùng được |
-| `LIDAR_YAW` khác, có `LIDAR_YAW_EVIDENCE` = thư mục kiểm tường với `verdict=PASS`, `tf_ok=True`, `candidate_rad` = giá trị này (so modulo 2π) | Dùng được |
-| Mọi trường hợp khác, kể cả sửa tay `LIDAR_YAW=3.1241` | **Bị từ chối** cho manual, map và nav. Không có cờ nào bỏ qua được |
+Đã từng chạy **không có nghĩa** là đã kiểm chứng. Launcher phân biệt ba trạng thái:
+
+| Trạng thái | Khi nào | manual | map | nav |
+|---|---|---|---|---|
+| `validated` | `LIDAR_YAW_EVIDENCE` = thư mục kiểm tường có `verdict=PASS`, `tf_ok=True`, `candidate_rad` = giá trị này (so modulo 2π) | được | được | được |
+| `legacy_baseline` | Giá trị của một baseline đã từng chạy (`robot-baseline-20261102`: −3.0695), chưa ai kiểm | được (MANUAL không dùng LiDAR) | **từ chối** | **từ chối** |
+| `unverified` | Mọi trường hợp khác, kể cả sửa tay `LIDAR_YAW=3.1241` | từ chối | từ chối | từ chối |
+
+- Không có cờ nào bỏ qua được bảng trên.
+- **Tái hiện baseline 02/11 vẫn làm được**, bằng lệnh launch gõ tay trong
+  `robot-baseline-2026-11-02.md` §2 (tag `robot-baseline-20261102`). Launcher không tự cho phép
+  map/nav với giá trị chưa kiểm chứng.
 
 **Đường đi của candidate:**
 1. `robot lidar-check …` (drive power off). Bước này luôn dùng `LIDAR_YAW_CANDIDATE`; `--lidar-yaw`
@@ -92,7 +123,7 @@ khởi động motor ngoài lệnh launch mà người vận hành gõ.
 
 **Rollback:** `cp runtime.env.bak-<giờ> ~/.config/sct-robot/runtime.env`.
 
-Thêm một baseline mới vào `BASELINE_LIDAR_YAWS` là thay đổi code, phải qua review.
+Thêm một giá trị vào `LEGACY_BASELINE_LIDAR_YAWS` là thay đổi code, phải qua review.
 
 ## 5. Log theo phiên
 
@@ -119,10 +150,14 @@ Thêm một baseline mới vào `BASELINE_LIDAR_YAWS` là thay đổi code, ph�
    Điền giá trị hiện tại của MiniPC:
    - `SCT_ROBOT_ROOT=$HOME/smart-campus-tour/robot`;
    - `SCT_OVERLAY=$HOME/.cache/armtc/smoothws/install` (runtime đang chạy, **giữ nguyên**).
-2. Đưa wrapper vào `PATH`, trỏ vào một bản **không đổi theo checkout**:
+2. Tạo một **release chỉ chứa tool** từ commit đã review (bất biến, chỉ đọc, không build ROS),
+   rồi đưa wrapper vào `PATH`:
    ```bash
-   ln -s <thư mục staged hoặc checkout đã review>/robot/scripts/robot ~/.local/bin/robot
+   robot/scripts/stage-runtime <tag-hoặc-sha> --tools-only        # -> ~/.cache/sct-runtime/tools-<sha>/
+   ln -s ~/.cache/sct-runtime/tools-<sha>/robot/scripts/robot ~/.local/bin/robot
    ```
+   `robot status` in dòng `launcher release … (commit: …)`. Nếu dòng này là `CHECKOUT … (follows
+   edits …)` thì launcher đang chạy từ một worktree có thể thay đổi.
    `~/.local/bin` đã nằm trong `PATH` của Ubuntu khi thư mục tồn tại.
 3. Kiểm tra (không chạy gì trên robot): `robot status`, `robot manual --dry-run`, `robot nav --dry-run`.
    So env in ra với `bash -ic env` hiện tại.
