@@ -35,6 +35,9 @@ class Firmware:
         self.send_feedback = True
         self.running = True
         self.master = None
+        # One loop iteration and a stall/reboot never interleave: the loop takes its
+        # local copy of master under this lock.
+        self.lock = threading.Lock()
         self._open_pty()
         threading.Thread(target=self._loop, daemon=True).start()
 
@@ -49,7 +52,8 @@ class Firmware:
         self.buffer = b''
 
     def reboot(self, silent_s):
-        master, slave, self.master = self.master, self.slave, None
+        with self.lock:
+            master, slave, self.master = self.master, self.slave, None
         os.close(slave)
         os.close(master)
         os.unlink(self.link)
@@ -59,34 +63,50 @@ class Firmware:
         self._open_pty()
 
     def stall_output(self):
-        """Stop draining the bridge's output and fill the kernel buffer."""
-        self.master, slave = None, self.slave
+        """Stop draining the bridge's output and keep the kernel buffer full.
+
+        Two things freed room after a single fill, each enough for the bridge to keep
+        writing ~10 s (CMD frames at 20 Hz), past this test's deadline for "stalled for
+        more than" (an intermittent fail): the loop reading the master once more, and
+        the tty layer moving queued bytes into the 4 KiB line-discipline buffer
+        asynchronously. The lock stops the first; topping the buffer up until the
+        firmware stops covers the second. The bridge still has to detect the stall.
+        """
+        with self.lock:
+            self.master, slave = None, self.slave
         os.set_blocking(slave, False)
-        try:
-            while True:
-                os.write(slave, b'x' * 256)
-        except BlockingIOError:
-            pass
+
+        def top_up():
+            while self.running:
+                try:
+                    os.write(slave, b'x' * 256)
+                except BlockingIOError:
+                    time.sleep(0.005)
+                except OSError:
+                    return
+
+        threading.Thread(target=top_up, daemon=True).start()
 
     def _loop(self):
         while self.running:
-            master = self.master
-            if master is not None:
-                try:
-                    self.buffer += os.read(master, 4096)
-                    while b'\n' in self.buffer:
-                        line, self.buffer = self.buffer.split(b'\n', 1)
-                        self.received.append((time.monotonic(), line.strip().decode()))
-                except (BlockingIOError, OSError):
-                    pass
-                if self.send_feedback:
-                    self.seq += 1
-                    frame = (f'FB,{self.seq},{self.left},{self.right},20,OK,'
-                             f'{self.yaw_cdeg},1\r\n')
+            with self.lock:
+                master = self.master
+                if master is not None:
                     try:
-                        os.write(master, frame.encode())
+                        self.buffer += os.read(master, 4096)
+                        while b'\n' in self.buffer:
+                            line, self.buffer = self.buffer.split(b'\n', 1)
+                            self.received.append((time.monotonic(), line.strip().decode()))
                     except (BlockingIOError, OSError):
                         pass
+                    if self.send_feedback:
+                        self.seq += 1
+                        frame = (f'FB,{self.seq},{self.left},{self.right},20,OK,'
+                                 f'{self.yaw_cdeg},1\r\n')
+                        try:
+                            os.write(master, frame.encode())
+                        except (BlockingIOError, OSError):
+                            pass
             time.sleep(0.02)
 
     def frames(self, start, end):
