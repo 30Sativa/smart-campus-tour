@@ -36,6 +36,10 @@ class ModeManagerNode(Node):
             'nav2_cancel_service', 'navigate_to_pose/_action/cancel_goal')
         self.declare_parameter('require_motion_permit', False)
         self.declare_parameter('motion_permit_timeout', 0.6)
+        # stm32_bridge's level: wheels may move. A loss while Nav2 is driving
+        # latches the Nav2 branch until that goal has ended.
+        self.declare_parameter('require_stm32_link', False)
+        self.declare_parameter('stm32_link_timeout', 0.6)
         self.declare_parameter(
             'nav2_status_topic', 'navigate_to_pose/_action/status')
 
@@ -61,6 +65,13 @@ class ModeManagerNode(Node):
         self._motion_gate = MotionGate(
             bool(self.get_parameter('require_motion_permit').value),
             self._positive_float_parameter('motion_permit_timeout', 0.6))
+        # Not latched at start: with nothing to resume, a bridge still booting
+        # must not need a reset, and a goal sent before it is up latches anyway.
+        self._link_gate = MotionGate(
+            bool(self.get_parameter('require_stm32_link').value),
+            self._positive_float_parameter('stm32_link_timeout', 0.6),
+            start_latched=False)
+        self._last_link_cancel_time = 0.0
         self._last_gate_state = ''
         self._nav2_active_goals: Optional[int] = None
         self._nav2_status_sub = None
@@ -109,6 +120,11 @@ class ModeManagerNode(Node):
             self.create_subscription(
                 Bool, 'motion_permit', self._motion_permit_callback,
                 motion_gate_qos)
+        if self._link_gate.required:
+            self.create_subscription(
+                Bool, 'stm32_link_ok', self._stm32_link_callback,
+                motion_gate_qos)
+        if self._motion_gate.required or self._link_gate.required:
             self._nav2_status_sub = self.create_subscription(
                 GoalStatusArray,
                 str(self.get_parameter('nav2_status_topic').value),
@@ -125,7 +141,8 @@ class ModeManagerNode(Node):
             f'nav_timeout={self.nav_timeout:.3f}s, '
             f'output_rate_hz={output_rate_hz:.1f}, '
             f'manual_priority_in_explore={self.manual_priority_in_explore}, '
-            f'require_motion_permit={self._motion_gate.required}')
+            f'require_motion_permit={self._motion_gate.required}, '
+            f'require_stm32_link={self._link_gate.required}')
         self._publish_state()
         self._publish_zero('startup')
 
@@ -184,6 +201,9 @@ class ModeManagerNode(Node):
     def _motion_permit_callback(self, msg: Bool):
         self._motion_gate.on_permit(msg.data, self._now())
 
+    def _stm32_link_callback(self, msg: Bool):
+        self._link_gate.on_permit(msg.data, self._now())
+
     def _nav2_status_callback(self, msg: GoalStatusArray):
         self._nav2_active_goals = sum(
             1 for item in msg.status_list
@@ -218,6 +238,42 @@ class ModeManagerNode(Node):
             self._publish_gate_state()
         return nav_allowed
 
+    def _update_link_gate(self, now: float, nav_recent: bool) -> bool:
+        """Stop Nav2 from carrying on by itself after an STM32 link fault.
+
+        stm32_bridge alone cannot do it: its re-arm accepts any zero command,
+        and Nav2's own abort, retry and recovery publish zero while the goal
+        is still alive. The latch ends only when that goal has ended, so more
+        motion needs a new goal.
+        """
+        if not self._link_gate.required:
+            return True
+        was_latched = self._link_gate.latch_reason is not None
+        allowed = self._link_gate.update(now, nav_recent, False)
+        if self._link_gate.latch_reason is None:
+            return allowed
+        if not was_latched:
+            self._nav_cmd = None
+            self._last_nav_time = None
+            self.get_logger().error(
+                'STM32 link lost while Nav2 was driving: Nav2 velocity stays '
+                'zero until that goal has ended and the link is back.')
+        # Cancelling only ends the goal sooner; the latch does not depend on it.
+        if self._nav2_active_goals != 0 and now - self._last_link_cancel_time >= 1.0:
+            self._last_link_cancel_time = now
+            self._request_nav2_cancel()
+        status_alive = (self._nav2_status_sub is not None and self.count_publishers(
+            self._nav2_status_sub.topic_name) > 0)
+        if not nav_recent:
+            cleared, _message = self._link_gate.reset(
+                now, False, status_alive, self._nav2_active_goals)
+            if cleared:
+                self._nav_cmd = None
+                self._last_nav_time = None
+                self.get_logger().warn('STM32 link latch cleared: goal ended, link back.')
+                return True
+        return False
+
     def _publish_gate_state(self):
         msg = String()
         msg.data = self._motion_gate.state(self._now())
@@ -228,6 +284,7 @@ class ModeManagerNode(Node):
         now = self._now()
         nav_recent = self._is_recent(self._last_nav_time, self.nav_timeout, now)
         nav_allowed = self._update_motion_gate(now, nav_recent)
+        nav_allowed = self._update_link_gate(now, nav_recent) and nav_allowed
 
         if self._emergency_stop:
             self._publish_zero('emergency_stop')

@@ -2169,6 +2169,7 @@ and `emergency_stop_state` topic do not change.
 | `motion_permit` | `std_msgs/Bool`, RELIABLE, VOLATILE, every 0.2 s | `fleet_bridge`, only when `commands_enabled` | `mode_manager` | 3.1 |
 | `motion_gate_state` | `std_msgs/String` (`DISABLED`, `OPEN`, `BLOCKED`, `LATCHED:<reason>`), VOLATILE, 2 Hz | `mode_manager` | `fleet_bridge` | 3.1 |
 | `motion_inhibit_reset` | `std_srvs/Trigger` | `mode_manager` | A person on the robot; never `fleet_bridge` or the backend | 3.1 |
+| `stm32_link_ok` | `std_msgs/Bool`, RELIABLE, VOLATILE, 20 Hz: `stm32_bridge` may command the wheels | `stm32_bridge` | `mode_manager` (`require_stm32_link`) | Link safety |
 | `hardware_estop_state` | `std_msgs/Bool`, from a new field in the FB frame (`robot/docs/PROTOCOL_FB.md`) | `stm32_bridge` | `mode_manager`, `fleet_bridge` | 3.4, input pin not yet confirmed |
 
 New parameters are `require_motion_permit` on `mode_manager` (default `false`)

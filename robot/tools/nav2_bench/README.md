@@ -55,6 +55,10 @@ python3 aggregate.py V1 V2 <candidate>            # bảng trung vị theo kịc
 - `range_max` của scan giả **phải lớn hơn** `obstacle_max_range` (12 m). Nếu bằng nhau,
   Nav2 dựng "tường ma" cách robot 12 m: đó là nguyên nhân lỗi tuyến dài R2 cũ.
 
+**Lỗi link STM32 với Nav2 thật** (`sim/link_faults.sh [--no-guards]`): bridge, EKF và
+`mode_manager` thật qua pty giả firmware; tiêm hở FB, MCU reboot, bridge crash. Workspace
+phải đã build. Kết quả ở `$NAV2_BENCH_OUT/link_faults/`.
+
 **Độ trung thực:** đã đối chiếu V1 trong sim với robot thật (thời gian chặng, gia tốc góc,
 góc quay ở đích, phanh cuối lần quay). Sim "sạch" hơn thật: không trượt bánh, không người,
 không lỗi AMCL thật. **Chỉ dùng để so sánh tương đối.**

@@ -122,6 +122,10 @@ def generate_launch_description():
             'require_motion_permit', default_value='false',
             description='ADR-0049 motion gate. Must be true whenever '
                         'fleet_bridge has commands_enabled: true.'),
+        DeclareLaunchArgument(
+            'require_stm32_link', default_value='true',
+            description='Latch the Nav2 branch when the STM32 link is lost '
+                        'while Nav2 is driving, until that goal has ended.'),
         # Measured 2026-10-15: in the straight corridor the walls appear
         # rotated 12.5-13.3 deg in the scan while wheel odometry and the
         # LiDAR wall distances show the robot driving parallel to them (4
@@ -213,6 +217,9 @@ def generate_launch_description():
                     'nav_timeout': 0.5,
                     'require_motion_permit': ParameterValue(
                         LaunchConfiguration('require_motion_permit'),
+                        value_type=bool),
+                    'require_stm32_link': ParameterValue(
+                        LaunchConfiguration('require_stm32_link'),
                         value_type=bool),
                 },
             ],

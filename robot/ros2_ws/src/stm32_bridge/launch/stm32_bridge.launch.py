@@ -45,6 +45,9 @@ def generate_launch_description():
     sonar_max_range = LaunchConfiguration('sonar_max_range')
     sonar_field_of_view = LaunchConfiguration('sonar_field_of_view')
     feedback_timeout = LaunchConfiguration('feedback_timeout')
+    feedback_recovery_time = LaunchConfiguration('feedback_recovery_time')
+    serial_write_stall_timeout = LaunchConfiguration('serial_write_stall_timeout')
+    ekf_toggle_service = LaunchConfiguration('ekf_toggle_service')
     feedback_counts_are_cumulative = LaunchConfiguration(
         'feedback_counts_are_cumulative')
     feedback_rate_warn_hz = LaunchConfiguration('feedback_rate_warn_hz')
@@ -124,7 +127,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'max_steps_per_sec',
             default_value='12000.0',
-            description='Expected maximum step rate for feedback jump warnings.'),
+            description='Firmware STEP rate clamp. A count delta the firmware '
+                        'could not have issued at this rate is treated as an '
+                        'MCU reboot, so do not set it below the real clamp.'),
         DeclareLaunchArgument(
             'max_wheel_speed_mm_s',
             default_value='250.0',
@@ -229,8 +234,24 @@ def generate_launch_description():
             description='SR04T field of view in radians.'),
         DeclareLaunchArgument(
             'feedback_timeout',
+            default_value='0.4',
+            description='Hold the wheels (STOP only) if no STM32 feedback '
+                        'is received for this many seconds.'),
+        DeclareLaunchArgument(
+            'feedback_recovery_time',
+            default_value='0.5',
+            description='After a fault, feedback must stay steady this long '
+                        'before wheel commands are sent again.'),
+        DeclareLaunchArgument(
+            'serial_write_stall_timeout',
             default_value='1.0',
-            description='Warn if no STM32 feedback is received for this many seconds.'),
+            description='Close and reopen the port if the kernel refuses '
+                        'serial output for this many seconds.'),
+        DeclareLaunchArgument(
+            'ekf_toggle_service',
+            default_value='toggle',
+            description='robot_localization service that pauses the EKF while '
+                        'feedback is missing. Empty disables the pause.'),
         DeclareLaunchArgument(
             'feedback_counts_are_cumulative',
             default_value='true',
@@ -302,6 +323,12 @@ def generate_launch_description():
                     sonar_field_of_view, value_type=float),
                 'feedback_timeout': ParameterValue(
                     feedback_timeout, value_type=float),
+                'feedback_recovery_time': ParameterValue(
+                    feedback_recovery_time, value_type=float),
+                'serial_write_stall_timeout': ParameterValue(
+                    serial_write_stall_timeout, value_type=float),
+                'ekf_toggle_service': ParameterValue(
+                    ekf_toggle_service, value_type=str),
                 'feedback_counts_are_cumulative': ParameterValue(
                     feedback_counts_are_cumulative, value_type=bool),
                 'feedback_rate_warn_hz': ParameterValue(

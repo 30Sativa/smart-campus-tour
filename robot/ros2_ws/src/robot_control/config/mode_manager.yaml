@@ -10,4 +10,7 @@
     # ADR-0049. Must be true whenever fleet_bridge has commands_enabled: true.
     require_motion_permit: false
     motion_permit_timeout: 0.6
+    # Overridden to true by manual_mode.launch.py, which runs the real bridge.
+    require_stm32_link: false
+    stm32_link_timeout: 0.6
     nav2_status_topic: navigate_to_pose/_action/status
