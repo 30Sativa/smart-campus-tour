@@ -57,5 +57,9 @@ print(f'TF lidar_link yaw {tf} rad -> {"PASS" if tf_ok else "FAIL"} (expected {y
 print(f'wall method {math.degrees(mount):+.2f} deg vs candidate {math.degrees(yaw):+.2f} deg: difference {d:+.2f} deg')
 verdict = 'PASS' if tf_ok and abs(d) <= 1.5 else ('FAIL' if abs(d) > 3.0 or not tf_ok else 'INCONCLUSIVE (1.5-3 deg: re-measure the tape)')
 print(f'== {verdict}')
+# Machine-readable record for `robot calibration accept` (robot/docs/robot-launcher.md).
+with open(out + '/verdict.txt', 'w') as f:
+    f.write(f'verdict={verdict.split()[0]}\ncandidate_rad={yaw}\nwall_mount_deg={math.degrees(mount):.3f}\n'
+            f'difference_deg={d:.3f}\ntf_ok={tf_ok}\n')
 sys.exit(0 if verdict == 'PASS' else 1)
 PY
