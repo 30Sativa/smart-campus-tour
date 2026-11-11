@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Domain.Entities;
 using SmartCampus.Infrastructure.Authentication;
 using SmartCampus.Infrastructure.Integrations.FleetSync;
@@ -501,7 +502,7 @@ public sealed class BusinessFlowIntegrationTests
         using var badCamera = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, Draft(0.5m, "UP"));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, badCamera.StatusCode);
         var badCameraBody = await Body(badCamera);
-        Assert.Equal("Hướng camera chỉ được là Phía trước, Bên trái hoặc Bên phải.", badCameraBody.GetProperty("message").GetString());
+        Assert.Equal(PoiCameraPresets.InvalidMessage, badCameraBody.GetProperty("message").GetString());
         Assert.Equal("POI_CAMERA_PRESET_INVALID", badCameraBody.GetProperty("errors").GetProperty("code").GetString());
         using var tooClose = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, Draft(0.1m, "FRONT"));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, tooClose.StatusCode);
