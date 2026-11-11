@@ -506,9 +506,12 @@ def test_scan_filter_parameters_match_the_launched_node_name():
     filter_config = yaml.safe_load(
         _read('robot_control/config/scan_range_filter.yaml'))
     assert list(filter_config) == ['/**/scan_range_filter']
-    launch = _read('robot_navigation/launch/navigation.launch.py')
+    # The node is declared once in lidar.launch.py, which navigation includes;
+    # test_workflow_launch_contract.py pins the resolved node in every workflow.
+    launch = _read('robot_control/launch/lidar.launch.py')
     assert "name='scan_range_filter'" in launch
     assert "executable='scan_to_scan_filter_chain'" in launch
+    assert "'lidar.launch.py'" in _read('robot_navigation/launch/navigation.launch.py')
 
 
 # ------------------------------------------------------ footprint/inflation
