@@ -170,6 +170,27 @@ public sealed class FleetHeadChannelTests
         Assert.All(batches, b => Assert.Single(b.Commands));
     }
 
+    [Fact]
+    public void ModeStore_DefaultsFromSettings_KeepsEachTourApart_AndRefusesNonsense()
+    {
+        var store = new InMemoryTourHeadModeStore(new FleetHeadSettings(defaultMode: HeadModes.Manual));
+        var tour = Guid.NewGuid();
+        Assert.Equal("MANUAL", store.GetMode(tour));
+        store.SetMode(tour, HeadModes.Auto);
+        Assert.Equal("AUTO", store.GetMode(tour));
+        Assert.Equal("MANUAL", store.GetMode(Guid.NewGuid()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => store.SetMode(tour, "auto"));
+    }
+
+    [Fact]
+    public async Task Sweep_IsQueuedWithoutFieldsOrTtl()
+    {
+        var channel = Channel();
+        channel.Enqueue(Robot, new HeadCommandSpec("SWEEP"));
+        var sweep = Assert.Single((await channel.PollAsync(Robot, null, 0, TimeSpan.Zero, null, default)).Commands);
+        Assert.Equal(("SWEEP", (int?)null, (int?)null, (double?)null), (sweep.Kind, sweep.TtlMs, sweep.PanSteps, sweep.PanDeg));
+    }
+
     // ---- contract fixtures -----------------------------------------------------------------------------------------
 
     [Fact]
@@ -183,7 +204,7 @@ public sealed class FleetHeadChannelTests
         var data = Fixture("poll-response-commands.json")["data"]!;
         var kinds = data["commands"]!.AsArray().Select(c => c!["kind"]!.GetValue<string>()).ToArray();
         Assert.True(kinds.All(HeadCommandKinds.All.Contains));
-        Assert.Equal(HeadCommandKinds.All.Order().ToArray(), kinds.Order().ToArray());
+        Assert.Equal(HeadCommandKinds.All.Order().ToArray(), kinds.Distinct().Order().ToArray());
         Assert.Empty(Fixture("poll-response-empty.json")["data"]!["commands"]!.AsArray());
     }
 
@@ -193,10 +214,12 @@ public sealed class FleetHeadChannelTests
         var expected = Fixture("poll-response-commands.json")["data"]!["commands"]!.AsArray();
         var wire = new[]
         {
-            new FleetHeadWireCommand(42, "STEP", DateTimeOffset.UnixEpoch, 1, 0, null, null, null, null, null),
-            new FleetHeadWireCommand(43, "JOG", DateTimeOffset.UnixEpoch, null, null, -1, 0, null, null, 600),
-            new FleetHeadWireCommand(44, "STOP", DateTimeOffset.UnixEpoch, null, null, null, null, null, null, null),
-            new FleetHeadWireCommand(45, "ANGLE", DateTimeOffset.UnixEpoch, null, null, null, null, 0, 0, null)
+            new FleetHeadWireCommand(42, "STEP", DateTimeOffset.UnixEpoch, 1, 0, null, null, null, null, null, null),
+            new FleetHeadWireCommand(43, "JOG", DateTimeOffset.UnixEpoch, null, null, -1, 0, null, null, 600, null),
+            new FleetHeadWireCommand(44, "STOP", DateTimeOffset.UnixEpoch, null, null, null, null, null, null, null, null),
+            new FleetHeadWireCommand(45, "ANGLE", DateTimeOffset.UnixEpoch, null, null, null, null, 0, 0, null, null),
+            new FleetHeadWireCommand(46, "SWEEP", DateTimeOffset.UnixEpoch, null, null, null, null, null, null, null, null),
+            new FleetHeadWireCommand(47, "SWEEP", DateTimeOffset.UnixEpoch, null, null, null, null, null, null, null, 90)
         };
         for (var i = 0; i < wire.Length; i++)
         {

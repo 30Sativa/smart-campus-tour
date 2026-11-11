@@ -11,6 +11,8 @@ Phim:
   0   ve goc 0/0 (can da HOME)
   space  dung (head/stop)      o  tat driver (head/off)
   z   dat moc tay tai vi tri hien tai (head/zero)
+  x   xoay tu dong: trai -> phai -> ve cho cu (head/sweep); phim dieu khien dau (mui ten,
+      space, h, 0, o, z) huy luot xoay
   c   bat/tat contactor        q  thoat
 """
 import select
@@ -29,11 +31,12 @@ from std_srvs.srv import SetBool, Trigger
 
 from bus_interfaces.action import SetHead
 from bus_interfaces.msg import HeadJog, HeadState, HeadStep
+from bus_interfaces.srv import HeadSweep
 
 from stm32_bridge.head_keys import HoldDetector, parse_keys
 
 STATE_NAMES = {0: 'OFF', 1: 'IDLE', 2: 'MOVING', 3: 'HOMING', 4: 'NO_REF'}
-HELP = ('Mui ten/WASD: nhan=1 buoc, giu=quay | h=HOME 0=ve 0 space=dung '
+HELP = ('Mui ten/WASD: nhan=1 buoc, giu=quay | h=HOME 0=ve 0 x=xoay tu dong space=dung '
         'o=tat driver z=moc tay c=contactor q=thoat')
 
 
@@ -49,6 +52,7 @@ class HeadTeleop(Node):
         self.action = ActionClient(self, SetHead, 'head/set')
         self.srv = {name: self.create_client(Trigger, f'head/{name}')
                     for name in ('stop', 'off', 'zero')}
+        self.srv['sweep'] = self.create_client(HeadSweep, 'head/sweep')
         self.contactor_cli = self.create_client(SetBool, 'contactor/set')
         self.state = None
         self.contactor = None
@@ -107,7 +111,9 @@ class HeadTeleop(Node):
         if not cli.service_is_ready():
             self.say(f'head/{name} chua san sang')
             return
-        cli.call_async(Trigger.Request()).add_done_callback(
+        # head/sweep: bien do 0 = mac dinh cua stm32_bridge (head_sweep_deg).
+        request = HeadSweep.Request() if name == 'sweep' else Trigger.Request()
+        cli.call_async(request).add_done_callback(
             lambda f: self.say(f'head/{name}: {f.result().message}'))
 
     def toggle_contactor(self):
@@ -162,6 +168,8 @@ def main(args=None):
                         node.trigger('off')
                     elif k == 'z':
                         node.trigger('zero')
+                    elif k == 'x':
+                        node.trigger('sweep')
                     elif k == 'c':
                         node.toggle_contactor()
                     else:

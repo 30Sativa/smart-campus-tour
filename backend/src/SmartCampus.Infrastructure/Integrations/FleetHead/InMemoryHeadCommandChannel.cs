@@ -29,7 +29,7 @@ public sealed class InMemoryHeadCommandChannel(FleetHeadSettings settings, TimeP
             queue.Items.RemoveAll(item => item.IssuedAt < now - settings.MaxCommandAge);
             command = new HeadCommand(++queue.LastSeq, spec.Kind, now, spec.PanSteps, spec.TiltSteps, spec.PanDir,
                 spec.TiltDir, spec.PanDeg, spec.TiltDeg,
-                spec.Kind == HeadCommandKinds.Jog ? (int)settings.JogTtl.TotalMilliseconds : null);
+                spec.Kind == HeadCommandKinds.Jog ? (int)settings.JogTtl.TotalMilliseconds : null, spec.SweepDeg);
             queue.Items.Add(command);
             var overflow = queue.Items.Count - FleetHeadSettings.MaximumQueuedPerRobot;
             if (overflow > 0) queue.Items.RemoveRange(0, overflow);

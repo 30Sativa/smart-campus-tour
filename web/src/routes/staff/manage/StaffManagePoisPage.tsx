@@ -9,7 +9,8 @@ import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { useDiscardPoiProposal, useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
 import { errorText } from '../../../features/technical/technical-format'
 import type { MapVersionItem, PoiProposal } from '../../../features/technical/api/technical'
-import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { NARRATION_NEEDED, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { headPresetLabel } from '../../../features/technical/head-camera-preset'
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
 import { fitView } from '../../../features/administration/pois/map/fit-view'
@@ -169,7 +170,7 @@ function PoiDetail({ proposal }: { proposal: PoiProposal }) {
     : NEXT_STEP[status]
   const tone = needsNarration ? NEXT_TONE.WAIT : NEXT_TONE[status]
   const facts: Array<[string, string]> = [
-    ['Góc camera', cameraPresetLabel[proposal.revision.cameraPreset] ?? proposal.revision.cameraPreset],
+    ['Đầu camera VR', headPresetLabel(proposal.revision.cameraPreset)],
     ['Thuyết minh', proposal.revision.narrationText ? 'Đã có nội dung' : 'Chưa có nội dung'],
     ['Cách kiểm chứng', proposal.revision.verificationMethod ? verificationMethodLabel[proposal.revision.verificationMethod] ?? '-' : '-'],
   ]

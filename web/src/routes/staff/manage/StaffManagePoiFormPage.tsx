@@ -9,7 +9,9 @@ import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
 import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { NARRATION_NEEDED, mapCheckLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { headPresetProblem } from '../../../features/technical/head-camera-preset'
+import { HeadCameraPresetField } from '../../../features/administration/pois/HeadCameraPresetField'
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
@@ -88,6 +90,11 @@ export default function StaffManagePoiFormPage() {
     if ((action === 'save' && current && !changed) || (waiting && changed)) return
     if (!mapEligible || historicalReadOnly || !draft.mapVersionId || !draft.name.trim() || !draft.purpose.trim() || !draft.narrationText.trim() || draft.x == null || draft.y == null || draft.yaw == null) {
       setError('Cần chọn bản đồ, nhập tên, mục đích, nội dung thuyết minh và đặt vị trí cùng hướng trên bản đồ.')
+      return
+    }
+    const cameraProblem = headPresetProblem(draft.cameraPreset)
+    if (cameraProblem) {
+      setError(cameraProblem)
       return
     }
     // The server skips this for a pose kept from the current revision, so a content edit stays possible.
@@ -178,7 +185,7 @@ export default function StaffManagePoiFormPage() {
   const saveBlocked = Boolean(current) && (!changed || waiting)
   // Sending again adds nothing when the revision it would send is already submitted or already holds a PASS.
   const submitBlocked = Boolean(current) && (waiting || (!changed && (current!.revision.isSubmitted || passed)) || (changed && !navigationChanged && passed))
-  const missing = [!draft.mapVersionId && 'bản đồ', !placed && 'vị trí', draft.yaw == null && 'hướng robot', !draft.name.trim() && 'tên POI', !draft.purpose.trim() && 'mục đích', !draft.narrationText.trim() && 'thuyết minh'].filter(Boolean) as string[]
+  const missing = [!draft.mapVersionId && 'bản đồ', !placed && 'vị trí', draft.yaw == null && 'hướng robot', !draft.name.trim() && 'tên POI', !draft.purpose.trim() && 'mục đích', !draft.narrationText.trim() && 'thuyết minh', headPresetProblem(draft.cameraPreset) && 'hoạt động đầu camera hợp lệ'].filter(Boolean) as string[]
   const field = `${inputClass} mt-1.5`
   const label = 'flex items-center gap-1 text-sm font-medium text-[#2d3748]'
   const required = <span aria-hidden="true" className="text-[#c53030]">*</span>
@@ -229,8 +236,7 @@ export default function StaffManagePoiFormPage() {
         </details>
         <div className="mt-5 space-y-2 border-t border-[#e2e8f0] pt-5">
           <h2 className="text-lg font-bold text-[#2d3748]">Camera & tư liệu</h2>
-          <div><label htmlFor="poi-camera" className={label}>Góc camera tại POI</label><select id="poi-camera" aria-label="Góc camera" className={field} value={draft.cameraPreset} onChange={e => update({ cameraPreset: e.target.value })}>{!(draft.cameraPreset in cameraPresetLabel) && <option value={draft.cameraPreset} disabled>Hướng cũ {draft.cameraPreset}, cần chọn lại</option>}{Object.entries(cameraPresetLabel).map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select></div>
-          <p className="text-xs text-[#718096]">Khác với hướng thân robot được đặt trên bản đồ.</p>
+          <HeadCameraPresetField value={draft.cameraPreset} onChange={cameraPreset => update({ cameraPreset })} />
           <details className="group rounded-xl border border-[#e2e8f0] text-sm" open={Boolean(draft.fallbackVideoUrl)}>
             <summary className={`flex cursor-pointer list-none items-center gap-2 rounded-xl px-3.5 py-2.5 font-medium text-[#2d3748] [&::-webkit-details-marker]:hidden ${focus}`}><ChevronRight size={15} aria-hidden="true" className="text-[#718096] transition-transform group-open:rotate-90" />Video dự phòng HTTPS <span className="font-normal text-[#718096]">(không bắt buộc)</span></summary>
             <div className="border-t border-[#e2e8f0] p-3.5"><label className="block text-sm text-[#2d3748]">Đường dẫn video<input className={field} type="url" maxLength={2048} pattern="https://.*" value={draft.fallbackVideoUrl} onChange={e => update({ fallbackVideoUrl: e.target.value })} placeholder="https://…" /></label></div>

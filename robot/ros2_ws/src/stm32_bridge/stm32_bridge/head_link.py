@@ -5,6 +5,7 @@ Contract serial: robot/docs/PROTOCOL_FB.md (lenh HEAD/CONTACTOR, FB truong
 19-23). Node ROS (stm32_bridge_node.py) chi noi day cac ham nay voi topic,
 service va action.
 """
+import math
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -126,6 +127,23 @@ def cmd_head_jog(seq: int, pan_dir: int, tilt_dir: int) -> str:
 
 def cmd_contactor(seq: int, on: bool) -> str:
     return f'CONTACTOR,{seq},{"ON" if on else "OFF"}'
+
+
+# ---- Xoay quet tu dong (head/sweep) -----------------------------------------
+def sweep_plan(start_deg: float, amplitude_deg: float, deg_per_step: float,
+               limit_deg: float) -> Tuple[int, int]:
+    """(so buoc sang trai, so buoc sang phai) cho mot luot quet tu start_deg.
+
+    Moi ben toi da amplitude_deg, nhung khong vuot gioi han mem +/-limit_deg
+    (firmware chan STEP o gioi han, khi do tong buoc khong con bang 0 va dau
+    khong ve dung cho cu). Chuoi lenh: STEP +trai, STEP -(trai+phai),
+    STEP +phai -> tong = 0, ve dung vi tri bat dau."""
+    if deg_per_step <= 0.0 or amplitude_deg <= 0.0 or limit_deg <= 0.0:
+        return 0, 0
+    wanted = int(round(amplitude_deg / deg_per_step))
+    room_left = int(math.floor((limit_deg - start_deg) / deg_per_step + 1e-6))
+    room_right = int(math.floor((limit_deg + start_deg) / deg_per_step + 1e-6))
+    return max(0, min(wanted, room_left)), max(0, min(wanted, room_right))
 
 
 # ---- Theo doi ket qua mot lenh HEAD theo seq --------------------------------

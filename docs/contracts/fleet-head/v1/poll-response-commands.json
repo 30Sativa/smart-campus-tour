@@ -7,7 +7,9 @@
       { "seq": 42, "kind": "STEP", "issuedAt": "2026-11-05T12:00:00.120Z", "panSteps": 1, "tiltSteps": 0 },
       { "seq": 43, "kind": "JOG", "issuedAt": "2026-11-05T12:00:00.300Z", "panDir": -1, "tiltDir": 0, "ttlMs": 600 },
       { "seq": 44, "kind": "STOP", "issuedAt": "2026-11-05T12:00:01.000Z" },
-      { "seq": 45, "kind": "ANGLE", "issuedAt": "2026-11-05T12:00:01.200Z", "panDeg": 0, "tiltDeg": 0 }
+      { "seq": 45, "kind": "ANGLE", "issuedAt": "2026-11-05T12:00:01.200Z", "panDeg": 0, "tiltDeg": 0 },
+      { "seq": 46, "kind": "SWEEP", "issuedAt": "2026-11-05T12:00:02.000Z" },
+      { "seq": 47, "kind": "SWEEP", "issuedAt": "2026-11-05T12:00:30.000Z", "sweepDeg": 90 }
     ]
   },
   "errors": null

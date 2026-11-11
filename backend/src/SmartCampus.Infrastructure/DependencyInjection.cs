@@ -69,8 +69,10 @@ public static class DependencyInjection
             configuration.GetValue<int?>("FleetHead:MaxCommandAgeMs") ?? 1000,
             configuration.GetValue<int?>("FleetHead:JogTtlMs") ?? 600,
             configuration.GetValue<int?>("FleetHead:MaxWaitMs") ?? 1500,
-            configuration.GetValue<int?>("FleetHead:RobotConnectedWithinMs") ?? 3000));
+            configuration.GetValue<int?>("FleetHead:RobotConnectedWithinMs") ?? 3000,
+            (configuration.GetValue<string?>("FleetHead:DefaultMode") ?? HeadModes.Auto).Trim().ToUpperInvariant()));
         services.AddSingleton<IHeadCommandChannel, InMemoryHeadCommandChannel>();
+        services.AddSingleton<ITourHeadModeStore, InMemoryTourHeadModeStore>();
         services.AddScoped<ITourHeadControlReader, EfTourHeadControlReader>();
         // ADR-0052: the Quest camera runs only while a Tour runs or a Staff page holds a lease. In memory, like head control.
         services.AddSingleton(new FleetCameraSettings(configuration.GetValue<int?>("FleetCamera:LeaseSeconds") ?? 120,

@@ -674,7 +674,7 @@ describe('Technical Staff API integration', () => {
     const detail = within(screen.getByRole('dialog', { name: 'Library' }))
     expect(detail.getByText('Giới thiệu thư viện.')).toBeInTheDocument()
     expect(detail.getByText('x 1, y 2, yaw 0')).toBeInTheDocument()
-    expect(detail.getByText('Phía trước')).toBeInTheDocument()
+    expect(detail.getByText('Nhìn phía trước')).toBeInTheDocument()
     fireEvent.click(detail.getByRole('button', { name: 'Ghi kết quả' }))
     expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
     expect(screen.getByText('Nội dung thuyết minh, chỉ đọc')).toBeInTheDocument()

@@ -111,7 +111,7 @@ diagrams are not yet redrawn or accepted.
 | Rule | Where | Refusal |
 |---|---|---|
 | One version per package within an area | `POST /api/technical/map-versions` | 409 `MAP_PACKAGE_DUPLICATE`, naming the area and version |
-| Camera preset is `FRONT`, `LEFT` or `RIGHT`, any case, stored upper | POI create and draft; pose file for a POI holding another value | 422 `POI_CAMERA_PRESET_INVALID`; per file in preview and import |
+| Camera preset (VR head at the POI) is `FRONT`, `LEFT`, `RIGHT`, `NONE`, `SWEEP`, `SWEEP:<10..170>` or `ANGLE:<pan>,<tilt>` (pan −170..170, positive left; tilt −18..18, positive up; at most one decimal), any case, stored canonical | POI create and draft; pose file for a POI holding another value | 422 `POI_CAMERA_PRESET_INVALID`; per file in preview and import |
 | Every cell within `Maps:PoiClearanceMeters` (default 0.30) is inside the map and free | POI create and draft, pose file preview and import, route start and end | 422 `POSE_CLEARANCE_INSUFFICIENT`; per file in preview and import |
 
 `GET /api/maps/versions` and `GET /api/maps/versions/{id}` return `poiClearanceMeters`, so the picker draws the circle the server checks. A revision keeping its predecessor's map and X/Y, a route revision keeping a pose on the same map, and a verification record are not new pose writes and keep the single-cell check.

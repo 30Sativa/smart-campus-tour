@@ -1,23 +1,36 @@
 import { Suspense, useMemo, useRef, type ReactNode } from 'react'
-import { useFrame, useLoader } from '@react-three/fiber'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { Group, Mesh } from 'three'
+import { useFrame } from '@react-three/fiber'
+import { useGLTF } from '@react-three/drei'
+import { Group, Mesh, MeshStandardMaterial } from 'three'
+import { PART_GROUPS, groupOfNode, type PartGroupId } from '../landing/robot-explode/parts'
 import type { RobotPose } from './demo-motion'
 import { mapToScenePose, type Affine2D } from './map-config'
 
+/** The current robot (SolidWorks `A_Full_Xe`), the same file the Home page takes apart. */
+const ROBOT_URL = `${import.meta.env.BASE_URL}models/robot/campus-amr-explode.glb`
+/** That model faces +Z; the twin's robot frame faces +X (ROS forward, left is -Z), a quarter turn left. */
+export const CAD_ROBOT_TURN = Math.PI / 2
+
 function CadRobot() {
-  const gltf = useLoader(GLTFLoader, `${import.meta.env.BASE_URL}models/robot/campus-amr.glb`)
+  const { scene } = useGLTF(ROBOT_URL, false, true)
   const model = useMemo(() => {
-    const root = gltf.scene.clone(true)
-    root.traverse(child => { if (child instanceof Mesh) { child.castShadow = true; child.receiveShadow = true } })
+    const root = scene.clone(true)
+    const materials = new Map<PartGroupId, MeshStandardMaterial>(PART_GROUPS.map(group =>
+      [group.id, new MeshStandardMaterial({ color: group.color, metalness: group.metalness, roughness: group.roughness })]))
+    root.traverse(child => {
+      if (!(child instanceof Mesh)) return
+      const group = groupOfNode(child.name)
+      if (group) child.material = materials.get(group)!
+      child.castShadow = true; child.receiveShadow = true
+    })
     return root
-  }, [gltf.scene])
-  return <primitive object={model} dispose={null} />
+  }, [scene])
+  return <primitive object={model} rotation={[0, CAD_ROBOT_TURN, 0]} dispose={null} />
 }
 
 /**
- * The CampusTour robot in the 3D scene: a two-wheel platform carrying the
- * camera on a pan head.
+ * The CampusTour robot in the 3D scene: with `cad`, the real robot (two-wheel base, column, pan/tilt head
+ * with the Quest 3); otherwise a light two-wheel marker carrying the camera on a pan head.
  *
  * - It eases toward each new pose rather than jumping, so a ~1 Hz telemetry
  *   stream still reads as motion; `smoothing` is how fast it catches up. It
