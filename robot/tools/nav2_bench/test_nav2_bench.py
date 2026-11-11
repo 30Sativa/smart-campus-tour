@@ -55,3 +55,15 @@ def test_tx_rebuild_and_rotation_end_decel(tmp_path):
 def test_verify_params_rejects_unknown_config():
     r = subprocess.run(['bash', os.path.join(HERE, 'verify_params.sh'), 'V9'], capture_output=True, text=True)
     assert r.returncode == 2 and 'usage' in r.stdout
+
+
+def test_verify_params_lidar_yaw_compares_modulo_two_pi():
+    def same(a, b):
+        r = subprocess.run(['bash', os.path.join(HERE, 'verify_params.sh'), '--angle-equal', a, b], capture_output=True)
+        return r.returncode == 0
+    assert same('-3.0695', '-3.0695')
+    assert same('3.1242', '-3.1590')        # TF prints (-pi, pi]; the launch arg may be outside it
+    assert same('-3.1416', '3.1416')
+    assert not same('3.1241', '-3.0695')    # the 02/11 baseline and the candidate differ by 5.1 deg
+    assert not same('-3.0695', '-3.0700')
+    assert not same('', '-3.0695')          # no TF answer is a failure
