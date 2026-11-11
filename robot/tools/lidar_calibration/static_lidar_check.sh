@@ -26,10 +26,14 @@ out=${out:-$HOME/amr_logs/runs/$(date +%Y%m%d_%H%M)_static_lidar_check}
 [ -e "$out" ] && { echo "REFUSED: $out exists (one new directory per session)"; exit 2; }
 mkdir -p "$out"
 
-source /opt/ros/humble/setup.bash
+# The URDF comes from the runtime the caller selected (`robot lidar-check` builds it);
+# /opt/ros alone has no robot_description.
+prefix=$(ros2 pkg prefix robot_description 2>/dev/null) \
+  || { echo "REFUSED: robot_description not found; run through 'robot lidar-check' or source the runtime first" >&2; rmdir "$out"; exit 2; }
 unset ROS_DISCOVERY_SERVER ROS_SUPER_CLIENT FASTRTPS_DEFAULT_PROFILES_FILE
 export ROS_DOMAIN_ID=${STATIC_CHECK_DOMAIN:-97} ROS_LOCALHOST_ONLY=1 ROS_LOG_DIR="$out/ros_log"
-xacro_file=$(ros2 pkg prefix robot_description)/share/robot_description/urdf/robot.urdf.xacro
+[ "$ROS_DOMAIN_ID" = 30 ] && { echo "REFUSED: STATIC_CHECK_DOMAIN must not be the robot domain 30" >&2; exit 2; }
+xacro_file=$prefix/share/robot_description/urdf/robot.urdf.xacro
 xacro "$xacro_file" use_sim:=false use_ros2_control:=false lidar_yaw:="$yaw" > "$out/robot.urdf" || exit 1
 python3 -c "import sys, yaml; print(yaml.safe_dump({'robot_state_publisher': {'ros__parameters': {'robot_description': open(sys.argv[1]).read()}}}))" \
   "$out/robot.urdf" > "$out/rsp.yaml"

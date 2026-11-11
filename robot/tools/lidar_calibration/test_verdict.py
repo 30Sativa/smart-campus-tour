@@ -31,3 +31,18 @@ def test_verdicts(tmp_path, wall_deg, tf_yaw, want, code):
     assert r.returncode == code and v['verdict'] == want, r.stdout + r.stderr
     assert v['candidate_rad'] == '3.1241'
     assert re.fullmatch(r'-?\d+\.\d{3}', v['difference_deg'])
+
+
+def test_refuses_without_a_runtime_and_leaves_no_session_dir(tmp_path):
+    out = tmp_path / 'session'
+    r = subprocess.run(['bash', os.path.join(HERE, 'static_lidar_check.sh'), '--motor-power-off-confirmed', '--side', 'right',
+                        '--front-cm', '100', '--rear-cm', '100', '--baseline-m', '0.6', '--out', str(out)],
+                       env={'HOME': str(tmp_path), 'PATH': '/usr/bin:/bin'}, capture_output=True, text=True, timeout=30)
+    assert r.returncode == 2 and 'robot_description not found' in r.stderr
+    assert not out.exists()
+
+
+def test_refuses_without_the_power_off_confirmation(tmp_path):
+    r = subprocess.run(['bash', os.path.join(HERE, 'static_lidar_check.sh'), '--side', 'right', '--front-cm', '1',
+                        '--rear-cm', '1', '--baseline-m', '0.6', '--out', str(tmp_path / 's')], capture_output=True, text=True)
+    assert r.returncode == 2 and 'motor-power-off-confirmed' in r.stdout
