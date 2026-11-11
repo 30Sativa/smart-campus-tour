@@ -226,7 +226,7 @@ check runs; without fresh telemetry the other telemetry checks do not run.
 `batteryInfo` is informational and always passes.
 
 Configuration section `FleetCommands`: `Enabled` (default false),
-`MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15), `AcceptWindowSeconds` (30,
+`MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15, at most the 15-minute reservation buffer), `AcceptWindowSeconds` (30,
 initial value, not measured), `LegResultTimeoutSeconds`, `SweepIntervalSeconds`. `operatorConsoleConnected` has
 no source yet (`IOperatorConsolePresence` returns unknown) and always fails;
 `robotDispatchEnabled` passes once Technical Staff set `IsDispatchEnabled` through

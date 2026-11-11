@@ -1,7 +1,8 @@
 # ADR-0052: The Quest camera runs only while someone needs it
 
-- **Status:** Proposed 09/11/2026 at the request of team member Thanh; implemented. The robot side is opt-in
-  (`QUEST_CONTROL_URL` empty = the camera runs whenever the Quest is plugged in, as before).
+- **Status:** Implemented and deployed 09/11/2026 (#253, API documentation #254), proposed by team member Thanh; the
+  11/11/2026 review asked for this line to show that it is in use. No separate owner acceptance is recorded. The robot
+  side is opt-in (`QUEST_CONTROL_URL` empty = the camera runs whenever the Quest is plugged in, as before).
 - **Related:** ADR-0019 (Fleet Sync, robot authentication, single API instance), ADR-0045 (in-memory Fleet Head v1,
   the same pattern), `robot/quest-stream/README.md` ("Chỉ bật camera khi cần", "Phát ra Internet").
 

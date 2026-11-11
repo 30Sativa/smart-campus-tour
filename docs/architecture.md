@@ -1215,7 +1215,8 @@ is independent: a non-Operator viewer gets every other check evaluated in full, 
 `canStart` answers whether the caller can Start now.
 `batteryInfo` always passes and never enters `blockedBy`. Configuration section
 `FleetCommands`: `Enabled` (default false),
-`MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15), `StartEarlyLimitMinutes` (10), and initial values not
+`MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15), `StartEarlyLimitMinutes` (10) (startup refuses either
+limit above the 15-minute reservation buffer), and initial values not
 measured yet: `AcceptWindowSeconds` (30), `LegResultTimeoutSeconds` (600),
 `SweepIntervalSeconds` (5).
 

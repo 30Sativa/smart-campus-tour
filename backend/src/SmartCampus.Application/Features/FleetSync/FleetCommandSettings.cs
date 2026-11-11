@@ -19,8 +19,11 @@ public sealed class FleetCommandSettings
                 $"FleetCommands:StartEarlyLimitMinutes must be between 0 and {Tours.TourSchedule.ReservationBuffer.TotalMinutes:0}.");
         if (maxTelemetryAgeSeconds <= 0)
             throw new InvalidOperationException("FleetCommands:MaxTelemetryAgeSeconds must be positive.");
-        if (startLateLimitMinutes < 0)
-            throw new InvalidOperationException("FleetCommands:StartLateLimitMinutes must not be negative.");
+        // A late Start must stay inside the robot hold too: a shift fits the run plus one buffer on each side, so a run
+        // started more than one buffer late would end after the hold and could overlap the next Tour's.
+        if (startLateLimitMinutes < 0 || TimeSpan.FromMinutes(startLateLimitMinutes) > Tours.TourSchedule.ReservationBuffer)
+            throw new InvalidOperationException(
+                $"FleetCommands:StartLateLimitMinutes must be between 0 and {Tours.TourSchedule.ReservationBuffer.TotalMinutes:0}.");
         if (acceptWindowSeconds <= 0)
             throw new InvalidOperationException("FleetCommands:AcceptWindowSeconds must be positive.");
         if (legResultTimeoutSeconds <= 0)
