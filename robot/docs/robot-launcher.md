@@ -68,6 +68,10 @@ rồi thoát, không tạo thư mục, không lấy lock. `--dry-run` đặt sau
 
 Tốc độ bị chặn cứng: tối đa 0.30 m/s và 1.00 rad/s.
 
+`fleet_bridge` không bị chặn, vì ở chế độ telemetry nó chạy song song với NAV2 là hợp lệ. Nhưng
+`robot status` liệt kê nó, và `robot nav` cảnh báo: khi bật `commands_enabled`, nó là một nơi gửi
+goal thứ hai.
+
 Launcher **không bao giờ** đặt `require_motion_permit`, không gửi `cmd_vel` hay goal, và không
 khởi động motor ngoài lệnh launch mà người vận hành gõ.
 
