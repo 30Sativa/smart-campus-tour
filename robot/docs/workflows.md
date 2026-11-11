@@ -86,6 +86,10 @@ Nav2 V1 (`nav2_params_smooth.yaml`) đã bị xoá khỏi source ngày 02/11. Fi
 
 ## 5. Chạy từng workflow
 
+> Khi launcher `robot` đã được cài ([robot-launcher.md](robot-launcher.md)): `robot manual`,
+> `robot map`, `robot nav`, `robot teleop`, `robot stop`, `robot preflight <wf>` thay cho các khối
+> lệnh dưới đây, không cần `export`/`source`. Các lệnh dưới vẫn dùng được khi chưa cài.
+
 **Môi trường terminal:** mỗi terminal là terminal mới. Dòng dưới là runtime hiện tại; khi đã có
 overlay staged thì làm theo [runtime-deploy.md](runtime-deploy.md):
 

@@ -28,6 +28,9 @@ permission to execute it.
 - [Test readiness 2026-11-10](test-readiness-2026-11-10.md) — what may run on the
   robot now (offline / static / controlled motion / blocked), preflight and
   PASS/FAIL per step, the static LiDAR check, the E-stop/link-safety audit.
+- [Launcher `robot`](robot-launcher.md) — per-process environment from one machine
+  profile, one workflow at a time, teleop and stop separate, candidate LiDAR yaw only
+  for the static check, session logs and retention. Not installed yet.
 - [Runtime deploy and rollback](runtime-deploy.md) — how the MiniPC runtime
   differs from source today, staging an immutable overlay from one commit, and
   rolling back by sourcing the previous overlay.
