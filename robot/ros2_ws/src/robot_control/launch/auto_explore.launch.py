@@ -1,13 +1,26 @@
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, GroupAction,
-                            IncludeLaunchDescription, SetLaunchConfiguration)
+                            IncludeLaunchDescription, OpaqueFunction,
+                            SetLaunchConfiguration)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.logging import get_logger
 from launch.substitutions import (LaunchConfiguration, PathJoinSubstitution,
                                   PythonExpression)
 from launch_ros.actions import Node, PushRosNamespace, SetRemap
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
+
+
+def _warn_if_lidar_yaw_defaulted(context):
+    # Runs before DeclareLaunchArgument('lidar_yaw'), so the key exists only when
+    # the command line or a parent launch passed it.
+    if 'lidar_yaw' not in context.launch_configurations:
+        get_logger('robot_calibration').warning(
+            'lidar_yaw not given: using the launch default -0.2225 rad, the LiDAR '
+            'mount before 2026-10-20. Pass lidar_yaw:=<rad> for the current mount; '
+            'the preflight TF check fails when it does not match.')
+    return []
 
 
 def generate_launch_description():
@@ -73,6 +86,7 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        OpaqueFunction(function=_warn_if_lidar_yaw_defaulted),
         DeclareLaunchArgument(
             'robot_id', default_value='',
             description='ROS namespace for this robot.'),
@@ -111,6 +125,20 @@ def generate_launch_description():
                               default_value=default_explorer_params,
                               description='Frontier explorer parameter file.'),
 
+        # Real-robot calibration: same names and defaults as manual_mode.launch.py
+        # and navigation.launch.py, forwarded explicitly so a mapping run gets the
+        # same TF and odometry as navigation (test_workflow_launch_contract.py).
+        DeclareLaunchArgument('lidar_yaw', default_value='-0.2225',
+                              description='base_link->lidar_link yaw (rad) for the '
+                                          'current mount; the default is the mount '
+                                          'before 2026-10-20.'),
+        DeclareLaunchArgument('wheel_base', default_value='0.4714',
+                              description='Effective wheel separation (m).'),
+        DeclareLaunchArgument('wheel_radius', default_value='0.09725',
+                              description='Wheel radius (m).'),
+        DeclareLaunchArgument('odom_linear_scale', default_value='1.0',
+                              description='Distance-only odometry scale.'),
+
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(manual_launch),
             launch_arguments={
@@ -120,6 +148,10 @@ def generate_launch_description():
                 'initial_mode': 'explore',
                 'use_sim_time': use_sim_time,
                 'enable_teleop': enable_teleop,
+                'lidar_yaw': LaunchConfiguration('lidar_yaw'),
+                'wheel_base': LaunchConfiguration('wheel_base'),
+                'wheel_radius': LaunchConfiguration('wheel_radius'),
+                'odom_linear_scale': LaunchConfiguration('odom_linear_scale'),
             }.items(),
         ),
 

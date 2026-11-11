@@ -15,6 +15,7 @@ def generate_launch_description():
     baudrate = LaunchConfiguration('baudrate')
     wheel_base = LaunchConfiguration('wheel_base')
     wheel_radius = LaunchConfiguration('wheel_radius')
+    odom_linear_scale = LaunchConfiguration('odom_linear_scale')
     steps_per_rev = LaunchConfiguration('steps_per_rev')
     microstep = LaunchConfiguration('microstep')
     gear_ratio = LaunchConfiguration('gear_ratio')
@@ -102,6 +103,12 @@ def generate_launch_description():
             'wheel_radius',
             default_value='0.09725',
             description='Wheel radius in meters, used for odometry.'),
+        DeclareLaunchArgument(
+            'odom_linear_scale',
+            default_value='1.0',
+            description='Odometry-only translation scale (Localization V2). '
+                        '1.0 = unchanged. Does not affect rotation, commands '
+                        'or joint_states.'),
         DeclareLaunchArgument(
             'steps_per_rev',
             default_value='200.0',
@@ -256,6 +263,7 @@ def generate_launch_description():
                 'baudrate': ParameterValue(baudrate, value_type=int),
                 'wheel_base': ParameterValue(wheel_base, value_type=float),
                 'wheel_radius': ParameterValue(wheel_radius, value_type=float),
+                'odom_linear_scale': ParameterValue(odom_linear_scale, value_type=float),
                 'steps_per_rev': ParameterValue(steps_per_rev, value_type=float),
                 'microstep': ParameterValue(microstep, value_type=float),
                 'gear_ratio': ParameterValue(gear_ratio, value_type=float),
