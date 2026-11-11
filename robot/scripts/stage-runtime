@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# stage-runtime <git-ref> [--dest DIR] [--packages "pkg ..."]
+# stage-runtime <git-ref> [--dest DIR] [--packages "pkg ..."] [--tools-only]
+#
+# Every release also carries robot/scripts, robot/tools and robot/config of the same
+# commit (DIR/robot/...), so the launcher can be installed from it:
+#     ln -s DIR/robot/scripts/robot ~/.local/bin/robot
+# --tools-only stages just those (no colcon build), e.g. to install the launcher while the
+# ROS overlay stays what it is.
 #
 # Build an immutable runtime overlay from one commit, next to (never over) the overlays
 # already in use. The sources are exported with `git archive`, so the install does not
@@ -12,11 +18,12 @@
 # overlays are untouched). See robot/docs/runtime-deploy.md.
 set -euo pipefail
 ref=${1:-}; shift || true
-dest=; pkgs=
+dest=; pkgs=; tools_only=0
 while [[ $# -gt 0 ]]; do
   case $1 in
     --dest) dest=$2; shift 2;;
     --packages) pkgs=$2; shift 2;;
+    --tools-only) tools_only=1; shift;;
     *) echo "unknown argument $1" >&2; exit 2;;
   esac
 done
@@ -24,10 +31,23 @@ done
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 sha=$(git -C "$repo" rev-parse --verify "$ref^{commit}") || { echo "unknown ref $ref" >&2; exit 2; }
 short=${sha:0:10}
-dest=${dest:-$HOME/.cache/sct-runtime/$short}
+if [[ $tools_only = 1 ]]; then dest=${dest:-$HOME/.cache/sct-runtime/tools-$short}; else dest=${dest:-$HOME/.cache/sct-runtime/$short}; fi
 [[ -e "$dest" ]] && { echo "REFUSED: $dest exists; overlays are never rebuilt in place" >&2; exit 2; }
 [[ -f /opt/ros/humble/setup.bash ]] || { echo "ROS 2 Humble is not installed" >&2; exit 1; }
 
+mkdir -p "$dest"
+git -C "$repo" archive "$sha" robot/scripts robot/tools robot/config | tar -x -C "$dest"
+if [[ $tools_only = 1 ]]; then
+  {
+    echo "ref: $ref"; echo "commit: $sha"; echo "describe: $(git -C "$repo" describe --tags --always "$sha")"
+    echo "built: $(date -Iseconds) on $(hostname)"; echo "kind: tools only (robot/scripts, robot/tools, robot/config)"
+  } > "$dest/PROVENANCE"
+  chmod -R a-w "$dest/robot"
+  cat "$dest/PROVENANCE"
+  echo
+  echo "Staged, not installed. To install the launcher: ln -s $dest/robot/scripts/robot ~/.local/bin/robot"
+  exit 0
+fi
 mkdir -p "$dest/src"
 git -C "$repo" archive "$sha" robot/ros2_ws/src | tar -x -C "$dest/src" --strip-components=3
 set +u
@@ -47,7 +67,7 @@ select=()
   echo "packages: $(ls "$dest/install" | grep -v -E '\.(bash|sh|zsh|ps1|py)$|COLCON_IGNORE' | tr '\n' ' ')"
 } > "$dest/PROVENANCE"
 rm -rf "$dest/build"
-chmod -R a-w "$dest/src" "$dest/install"
+chmod -R a-w "$dest/src" "$dest/install" "$dest/robot"
 cat "$dest/PROVENANCE"
 echo
 echo "Staged, not in use. In a NEW terminal: source robot/scripts/source-minipc; source $dest/install/setup.bash"
