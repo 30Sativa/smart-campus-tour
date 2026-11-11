@@ -103,9 +103,16 @@ def main(argv):
     executor.add_node(node)
     spinner = threading.Thread(target=executor.spin, daemon=True)
     spinner.start()
+    t0 = time.time()
+    warned = False
     for name, client in (('emergency_stop', estop), ('cancel_goal', cancel)):
         while not client.wait_for_service(timeout_sec=1.0):
             print(f'waiting for {ns}/{name} ...', flush=True)
+            if not warned and time.time() - t0 > 5.0:
+                # No mode_manager (or wrong domain/namespace): this key cannot stop anything.
+                print('SOFTWARE STOP NOT AVAILABLE: mode_manager is not reachable. If the robot moves, '
+                      'PRESS THE HARDWARE E-STOP.', flush=True)
+                warned = True
     print('READY: Enter = SOFTWARE STOP (cmd_vel forced to 0 + cancel all goals), r = release, q = quit', flush=True)
     print('       This does NOT cut motor power. The hardware E-stop is the physical button.', flush=True)
     while True:

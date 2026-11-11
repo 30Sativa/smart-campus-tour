@@ -95,3 +95,16 @@ def test_record_session_starts_and_closes_a_bag(tmp_path):
     r = subprocess.run(['bash', script, 'stop', str(d)], env=env, capture_output=True, text=True, timeout=40)
     assert r.returncode == 0 and 'bag closed' in r.stdout, r.stdout + r.stderr
     assert (d / 'bag' / 'metadata.yaml').is_file()
+
+
+def test_stopkey_says_when_it_cannot_reach_mode_manager(tmp_path):
+    env = private_env(65)
+    p = subprocess.Popen([sys.executable, os.path.join(HERE, 'stopkey.py'), '/robot_01'], env=env,
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        out, _ = p.communicate(timeout=9)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        out, _ = p.communicate()
+    assert 'SOFTWARE STOP NOT AVAILABLE' in out and 'HARDWARE E-STOP' in out, out
+    assert 'READY' not in out
