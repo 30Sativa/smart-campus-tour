@@ -12,13 +12,17 @@ rules; this file only covers what is specific to `robot/`.
 robot/
 ├── ros2_ws/src/          ROS 2 packages (see robot/README.md for the table)
 ├── firmware/stm32/       STM32G431 motor controller firmware (STM32CubeIDE)
-├── docker/               container entrypoint
-├── tools/                PowerShell motor bring-up / debug scripts
-├── docs/                 current status, operating guides and dated history
+├── docker/               container entrypoint and image contracts
+├── tools/                operator and analysis tools: preflight/, ops/ (stop key,
+│                         bag recorder), lidar_calibration/, nav2_bench/, route_test/,
+│                         odom_calibration/, rviz_over_ssh/; *.ps1 = Windows motor bring-up
+├── docs/                 current guides (workflows.md first) and dated evidence
+├── robot_maps/           maps and POI fixtures (README.md: which map is the baseline)
 ├── scripts/verify        this folder's verification gate
 ├── scripts/source-minipc `source` it on the miniPC HOST for native ROS procs
+├── scripts/stage-runtime immutable runtime overlay from one commit (docs/runtime-deploy.md)
 ├── Dockerfile            builds the ROS 2 image (build context = robot/)
-└── docker-compose.yml    what the miniPC runs
+└── docker-compose.yml    laptop debug / simulation profiles only; never the robot
 ```
 
 New contributors and AI agents should read **`robot/docs/README.md`** and
@@ -31,10 +35,13 @@ Serial contract between the STM32 firmware and `stm32_bridge`:
 **`robot/docs/PROTOCOL_FB.md`** — single source of truth, read it before
 touching either side of the wire.
 Per-phase design, close-out criteria and error tables: **`robot/docs/phase*.md`**.
-Current Nav2 development baseline: **`robot/docs/nav2-baseline-v2.md`** (V2, opt-in,
-not yet fully hardware validated); V1 stays frozen for comparison/rollback in
-**`robot/docs/nav2-baseline-v1.md`**. Latest robot status:
-**`robot/docs/robot-status-2026-10-22.md`**. Nav2 motion metrics, offline sim and
+The three real-robot workflows (MANUAL, BUILD MAP, NAV2), command ownership and
+calibration: **`robot/docs/workflows.md`**. Running baseline:
+**`robot/docs/robot-baseline-2026-11-02.md`** (Nav2 V2 params
+**`robot/docs/nav2-baseline-v2.md`**; V1 is history in
+**`robot/docs/nav2-baseline-v1.md`**, tag `nav2-baseline-v1`). What may run on the
+robot now: **`robot/docs/test-readiness-2026-11-10.md`**. MiniPC runtime vs source,
+deploy and rollback: **`robot/docs/runtime-deploy.md`**. Nav2 motion metrics, offline sim and
 hardware A/B tools: **`robot/tools/nav2_bench/`** (measure V3+ with the same tools). Current R3 design,
 deployment status and rollback: **`robot/docs/dds-isolation.md`** and
 **`robot/docs/r3-dds-readiness-2026-10-17.md`**. A command written in a runbook
