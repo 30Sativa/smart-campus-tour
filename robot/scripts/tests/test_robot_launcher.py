@@ -59,9 +59,10 @@ def profile(w, **over):
     w['profile'].write_text(''.join(f'{k}={v}\n' for k, v in values.items() if v is not None))
 
 
-def fake_process(w, pid, cmd, domain='77'):
+def fake_process(w, pid, cmd, domain='77', ticks=12345):
     d = w['proc'] / str(pid)
     d.mkdir()
+    (d / 'stat').write_text(f'{pid} (x) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 {ticks} 0 0')
     (d / 'cmdline').write_bytes(cmd.replace(' ', '\0').encode() + b'\0')
     (d / 'environ').write_bytes(f'ROS_DOMAIN_ID={domain}\0'.encode())
 
@@ -76,6 +77,16 @@ def robot(w, *args, extra_env=None, timeout=60, popen=False):
     if popen:
         return subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     return subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=timeout)
+
+
+def validated(w):
+    """Profile with the candidate accepted on a PASS static check (what map and nav need)."""
+    ev = w['tmp'] / 'accepted_check'
+    ev.mkdir(exist_ok=True)
+    (ev / 'verdict.txt').write_text('verdict=PASS\ncandidate_rad=3.1241\nwall_mount_deg=-180.8\n'
+                                    'difference_deg=0.2\ntf_ok=True\n')
+    profile(w, LIDAR_YAW='3.1241', LIDAR_YAW_EVIDENCE=ev)
+    return ev
 
 
 def dry(w, *args, **kw):
@@ -98,6 +109,7 @@ def test_manual_dry_run(world):
 
 
 def test_map_and_nav_dry_runs(world):
+    validated(world)
     assert dry(world, 'map')['argv'][-2:] == ['max_wheel_speed_mm_s:=250.0', 'rviz:=false']
     nav = dry(world, 'nav')['argv']
     assert nav[:4] == ['ros2', 'launch', 'robot_navigation', 'navigation.launch.py']
@@ -107,7 +119,8 @@ def test_map_and_nav_dry_runs(world):
 
 
 def test_nav_needs_the_goal_checker_plugin(world):
-    profile(world, SCT_OVERLAY='')
+    ev = validated(world)
+    profile(world, SCT_OVERLAY='', LIDAR_YAW='3.1241', LIDAR_YAW_EVIDENCE=ev)
     r = robot(world, 'nav', '--dry-run')
     assert r.returncode == 2 and 'robot_nav_plugins' in r.stderr
 
@@ -179,7 +192,7 @@ def test_accept_writes_only_a_pass_and_keeps_a_backup(world):
 # ---- one workflow at a time -------------------------------------------------------------
 def test_running_robot_processes_block_a_second_workflow(world):
     fake_process(world, 4242, '/usr/bin/python3 /x/install/stm32_bridge/lib/stm32_bridge/stm32_bridge_node --ros-args')
-    r = robot(world, 'map', '--dry-run')
+    r = robot(world, 'manual', '--dry-run')
     assert r.returncode == 2 and 'stm32_bridge_node[4242]' in r.stderr
     r = robot(world, 'lidar-check', '--dry-run')
     assert r.returncode == 2 and 'owns the LiDAR alone' in r.stderr
@@ -203,14 +216,15 @@ def test_the_workflow_lock_is_held_by_the_launched_process(world):
         session = got['env']['ROS_LOG_DIR'][:-len('/ros_log')]
         assert os.path.isfile(os.path.join(session, '.sct-session'))
         assert json.load(open(os.path.join(session, 'session.json')))['pid'] == first.pid
-        r = robot(world, 'nav', '--dry-run')
+        r = robot(world, 'manual', '--dry-run')
         assert r.returncode == 2 and 'workflow manual already running' in r.stderr
         status = robot(world, 'status')
         assert status.returncode == 0 and '"workflow": "manual"' in status.stdout
     finally:
         first.send_signal(signal.SIGTERM)
         first.wait(10)
-    assert dry(world, 'nav')['argv'][2] == 'robot_navigation'                       # lock released with the process
+    assert dry(world, 'manual')['argv'][2] == 'robot_control'                       # lock released with the process
+    assert (world['state'] / 'workflow.lock').exists()                              # a stale file reads as free
 
 
 # ---- teleop -------------------------------------------------------------------------------
@@ -268,11 +282,12 @@ def test_status_is_read_only(world):
     before = sorted(str(p) for p in world['tmp'].rglob('*'))
     r = robot(world, 'status')
     assert r.returncode == 0, r.stderr
-    assert 'domain 77' in r.stdout and 'baseline robot-baseline-20261102' in r.stdout
+    assert 'domain 77' in r.stdout and 'legacy_baseline (ran as robot-baseline-20261102' in r.stdout
+    assert 'launcher allows: manual\n' in r.stdout
     assert 'candidate    3.1241 rad (static check only' in r.stdout
     assert sorted(str(p) for p in world['tmp'].rglob('*')) == before
     profile(world, LIDAR_YAW='3.1241')
-    assert 'NOT usable for motion' in robot(world, 'status').stdout
+    assert 'unverified' in robot(world, 'status').stdout and 'allows: nothing' in robot(world, 'status').stdout
 
 
 # ---- logs ---------------------------------------------------------------------------------
@@ -283,7 +298,7 @@ def session(w, name, age_days, size, pid=None, marker=True):
     (d / 'bag').mkdir()
     if marker:
         (d / '.sct-session').write_text('')
-    (d / 'session.json').write_text(json.dumps({'pid': pid}))
+    (d / 'session.json').write_text(json.dumps({'pid': pid, 'start_ticks': 12345}))
     t = time.time() - age_days * 86400
     os.utime(d, (t, t))
     return d
@@ -320,12 +335,101 @@ def test_the_committed_example_profile_is_valid(world):
     world['profile'].write_text(text + f'\nSCT_LOG_ROOT={world["logs"]}\nMIN_FREE_GB=0\n')
     r = robot(world, 'status')
     assert r.returncode == 0, r.stderr
-    assert 'baseline robot-baseline-20261102' in r.stdout
+    assert 'legacy_baseline' in r.stdout
 
 
-def test_a_running_fleet_bridge_is_shown_and_warned_about(world):
-    fake_process(world, 7000, '/usr/bin/python3 /x/install/fleet_bridge/lib/fleet_bridge/fleet_bridge --ros-args -r __ns:=/robot_01')
-    assert 'fleet_bridge' in robot(world, 'status').stdout
+FB = '/usr/bin/python3 /x/install/fleet_bridge/lib/fleet_bridge/fleet_bridge --ros-args -r __ns:=/robot_01'
+
+
+def fleet_bridge(w, *yaml_texts):
+    files = []
+    for i, text in enumerate(yaml_texts):
+        f = w['tmp'] / f'fb_params_{i}.yaml'
+        if text is not None:
+            f.write_text(text)
+        files.append(str(f))
+    fake_process(w, 7000, FB + ''.join(f' --params-file {f}' for f in files))
+
+
+def test_nav_runs_beside_a_telemetry_only_fleet_bridge(world):
+    validated(world)
+    fleet_bridge(world, '/**/fleet_bridge:\n  ros__parameters:\n    commands_enabled: false\n',
+                 '/robot_01/fleet_bridge:\n  ros__parameters:\n    backend_url: x\n')
     r = robot(world, 'nav', '--dry-run')
-    assert r.returncode == 0 and 'two goal owners' in r.stderr
-    assert 'two goal owners' not in robot(world, 'manual', '--dry-run').stderr
+    assert r.returncode == 0 and 'telemetry-only' in r.stderr, r.stderr
+    assert 'commands_enabled=False' in robot(world, 'status').stdout
+
+
+@pytest.mark.parametrize('files', [
+    ('/**/fleet_bridge:\n  ros__parameters:\n    commands_enabled: false\n',
+     '/robot_01/fleet_bridge:\n  ros__parameters:\n    commands_enabled: true\n'),   # a later file wins
+    ('/**/fleet_bridge:\n  ros__parameters:\n    commands_enabled: false\n', None),   # unreadable later file
+])
+def test_nav_is_refused_beside_a_commanding_or_unknown_fleet_bridge(world, files):
+    validated(world)
+    fleet_bridge(world, *files)
+    r = robot(world, 'nav', '--dry-run')
+    assert r.returncode == 2 and 'two goal owners' in r.stderr, r.stderr
+    assert robot(world, 'manual', '--dry-run').returncode == 0          # manual has no Nav2 to command
+
+
+# ---- calibration states ------------------------------------------------------------------
+def test_legacy_baseline_allows_manual_only(world):
+    assert dry(world, 'manual')['argv'][-1] == 'lidar_yaw:=-3.0695'
+    for workflow in ('map', 'nav'):
+        r = robot(world, workflow, '--dry-run')
+        assert r.returncode == 2 and 'it is legacy_baseline' in r.stderr and 'robot-baseline-2026-11-02.md' in r.stderr
+
+
+# ---- --dry-run never acts -----------------------------------------------------------------
+def snapshot(w):
+    out = {}
+    for path in sorted(w['tmp'].rglob('*')):
+        if path.is_file():
+            out[str(path)] = path.read_bytes()
+        else:
+            out[str(path)] = None
+    return out
+
+
+@pytest.mark.parametrize('args', [
+    ['manual'], ['map'], ['nav'], ['teleop'], ['stop'], ['preflight', 'nav'], ['record', 'start', '/tmp/x'],
+    ['lidar-check', '--', '--motor-power-off-confirmed'], ['calibration', 'accept', 'CHECK', '--yes'],
+    ['logs', 'prune', '--yes'], ['shell'], ['env'], ['status'],
+])
+@pytest.mark.parametrize('where', ['first', 'after_command', 'last'])
+def test_dry_run_anywhere_starts_nothing_and_writes_nothing(world, args, where):
+    ev = validated(world)
+    args = [str(ev) if a == 'CHECK' else a for a in args]
+    session(world, 'old', 90, 10)                                     # something prune could delete
+    fake_process(world, 5000, MM)                                     # so teleop has a mode_manager
+    marker = world['tmp'] / 'EXECUTED'
+    fake = world['tmp'] / 'fake_exec.sh'
+    fake.write_text(f'#!/bin/sh\ntouch {marker}\n')
+    fake.chmod(0o755)
+    before = snapshot(world)
+    argv = {'first': ['--dry-run', *args], 'after_command': [args[0], '--dry-run', *args[1:]], 'last': [*args, '--dry-run']}[where]
+    r = robot(world, *argv, extra_env={'SCT_ROBOT_TEST_EXEC': str(fake)})
+    assert not marker.exists(), (argv, r.stdout, r.stderr)
+    assert snapshot(world) == before, argv
+
+
+# ---- process identity ------------------------------------------------------------------
+def test_a_reused_pid_does_not_keep_an_old_session_alive(world):
+    d = session(world, 'old_nav', 40, 1000, pid=6100)
+    info = json.loads((d / 'session.json').read_text())
+    info['start_ticks'] = 111
+    (d / 'session.json').write_text(json.dumps(info))
+    fake_process(world, 6100, 'some unrelated program')
+    (world['proc'] / '6100' / 'stat').write_text('6100 (prog) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 999 0 0')
+    assert 'LIVE' not in robot(world, 'logs').stdout
+    robot(world, 'logs', 'prune', '--yes')
+    assert not (d / 'ros_log').exists()
+    (world['proc'] / '6100' / 'stat').write_text('6100 (prog) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 111 0 0')
+    d2 = session(world, 'old_map', 40, 1000, pid=6100)
+    info = json.loads((d2 / 'session.json').read_text())
+    info['start_ticks'] = 111
+    (d2 / 'session.json').write_text(json.dumps(info))
+    assert 'LIVE' in robot(world, 'logs').stdout                     # same pid AND same start: still running
+    robot(world, 'logs', 'prune', '--yes')
+    assert (d2 / 'ros_log').exists()

@@ -37,9 +37,11 @@ STATE_DIR = os.environ.get('SCT_ROBOT_STATE', os.path.expanduser('~/.local/state
 PROC = os.environ.get('SCT_PROC_ROOT', '/proc')
 ROS_SETUP = '/opt/ros/humble'
 WORKFLOWS = ('manual', 'map', 'nav')
-# LiDAR yaw values that have run on the robot as a recorded baseline. Any other value
-# needs LIDAR_YAW_EVIDENCE: a static check directory whose verdict.txt is PASS for it.
-BASELINE_LIDAR_YAWS = {'robot-baseline-20261102': -3.0695}
+# LiDAR yaw values that ran on the robot as a recorded baseline. Having run is not
+# having been checked: these are 'legacy_baseline', enough for MANUAL (no LiDAR consumer)
+# but not for BUILD MAP or NAV2, which need 'validated' (a PASS static check as evidence).
+LEGACY_BASELINE_LIDAR_YAWS = {'robot-baseline-20261102': -3.0695}
+CALIBRATION_ALLOWS = {'manual': ('validated', 'legacy_baseline'), 'map': ('validated',), 'nav': ('validated',)}
 TELEOP_LIMITS = {'TELEOP_SPEED': 0.30, 'TELEOP_TURN': 1.00}        # m/s, rad/s hard caps
 PROFILE_KEYS = {
     'SCT_ROBOT_ROOT': None, 'SCT_OVERLAY': '', 'ROBOT_ID': None,
@@ -119,23 +121,23 @@ def read_verdict(directory):
 
 
 def calibration(p):
-    """(usable_for_motion, explanation) for the profile's LIDAR_YAW."""
+    """(state, explanation): state is 'validated', 'legacy_baseline' or 'unverified'."""
     yaw = float(p['LIDAR_YAW'])
     if p['LIDAR_YAW_EVIDENCE']:
         try:
             v = read_verdict(p['LIDAR_YAW_EVIDENCE'])
         except Refused as exc:
-            return False, f'LIDAR_YAW {yaw} cites evidence that cannot be read: {exc}'
+            return 'unverified', f'LIDAR_YAW {yaw} cites evidence that cannot be read: {exc}'
         if v.get('verdict') != 'PASS' or v.get('tf_ok') != 'True':
-            return False, f'evidence {p["LIDAR_YAW_EVIDENCE"]} is {v.get("verdict")}, not PASS'
+            return 'unverified', f'evidence {p["LIDAR_YAW_EVIDENCE"]} is {v.get("verdict")}, not PASS'
         if not angle_equal(v.get('candidate_rad', 'nan'), yaw):
-            return False, f'evidence was measured for {v.get("candidate_rad")}, profile says {yaw}'
-        return True, f'static wall check PASS ({p["LIDAR_YAW_EVIDENCE"]}, difference {v.get("difference_deg")} deg)'
-    for tag, value in BASELINE_LIDAR_YAWS.items():
+            return 'unverified', f'evidence was measured for {v.get("candidate_rad")}, profile says {yaw}'
+        return 'validated', f'static wall check PASS ({p["LIDAR_YAW_EVIDENCE"]}, difference {v.get("difference_deg")} deg)'
+    for tag, value in LEGACY_BASELINE_LIDAR_YAWS.items():
         if angle_equal(value, yaw):
-            return True, f'baseline {tag}'
-    return False, (f'LIDAR_YAW {yaw} is neither a recorded baseline value nor backed by a PASS static check '
-                   f'(set LIDAR_YAW_EVIDENCE through "robot calibration accept")')
+            return 'legacy_baseline', f'ran as {tag}; never checked (offline analysis puts it about 5 deg off)'
+    return 'unverified', (f'LIDAR_YAW {yaw} is neither a legacy baseline value nor backed by a PASS static check '
+                          f'(set LIDAR_YAW_EVIDENCE through "robot calibration accept")')
 
 
 def resolve_data(p):
@@ -194,6 +196,16 @@ def package_prefix(env, pkg):
 
 
 # ---- processes ----------------------------------------------------------------------
+def start_ticks(pid, proc=PROC):
+    """Kernel start time of a process (clock ticks since boot), or None. With the pid it
+    identifies one process even after the pid is reused."""
+    try:
+        stat = open(os.path.join(proc, str(pid), 'stat')).read()
+        return int(stat.rsplit(')', 1)[1].split()[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
 def scan_processes(proc=PROC):
     """Own-user processes that matter, with domain and namespace."""
     found = []
@@ -203,7 +215,9 @@ def scan_processes(proc=PROC):
         try:
             if os.stat(base).st_uid != uid or int(pid) == os.getpid():
                 continue
-            cmd = open(os.path.join(base, 'cmdline'), 'rb').read().replace(b'\0', b' ').decode(errors='replace').strip()
+            raw = open(os.path.join(base, 'cmdline'), 'rb').read()
+            args = [x.decode(errors='replace') for x in raw.split(b'\0') if x]
+            cmd = ' '.join(args)
         except (OSError, ValueError):
             continue
         if not cmd or re.search(r'(^|/)robot (status|env)', cmd):
@@ -221,8 +235,32 @@ def scan_processes(proc=PROC):
                         envd = {}
                     ns = re.search(r'__ns:=(\S+)', cmd)
                     found.append(dict(pid=int(pid), name=name, domain=envd.get('ROS_DOMAIN_ID'),
-                                      namespace=ns.group(1) if ns else None, cmd=cmd[:160]))
+                                      namespace=ns.group(1) if ns else None, cmd=cmd[:160], args=args))
     return found
+
+
+def fleet_bridge_commands(entry):
+    """commands_enabled of a running fleet_bridge from its --params-file files (True, False
+    or None when it cannot be told). Later files override earlier ones, as in ROS."""
+    try:
+        import yaml
+    except ImportError:
+        return None
+    args = entry.get('args', [])
+    files = [args[i + 1] for i, x in enumerate(args[:-1]) if x == '--params-file']
+    if not files:
+        return None
+    value = False                                     # the node's declared default
+    for path in files:
+        try:
+            data = yaml.safe_load(open(path)) or {}
+        except (OSError, yaml.YAMLError):
+            return None                                # a file we cannot read may set it
+        for node in data.values() if isinstance(data, dict) else []:
+            params = (node or {}).get('ros__parameters', {}) if isinstance(node, dict) else {}
+            if 'commands_enabled' in params:
+                value = params['commands_enabled']
+    return value if isinstance(value, bool) else None
 
 
 def robot_nodes(procs):
@@ -231,17 +269,20 @@ def robot_nodes(procs):
 
 # ---- lock and sessions --------------------------------------------------------------
 def lock_info(name):
+    """Contents of a held lock, or None. Probes with a shared lock on a read-only fd, so it
+    never writes and a stale file (holder gone) reads as free."""
     path = os.path.join(STATE_DIR, name + '.lock')
-    if not os.path.exists(path):
-        return None
-    fd = os.open(path, os.O_RDWR)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fd = os.open(path, os.O_RDONLY)
+    except FileNotFoundError:
+        return None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
         fcntl.flock(fd, fcntl.LOCK_UN)
-        return None                                    # nobody holds it
+        return None
     except BlockingIOError:
         try:
-            return json.loads(open(path).read() or '{}')
+            return json.loads(os.read(fd, 65536) or b'{}')
         except ValueError:
             return {'workflow': '?'}
     finally:
@@ -294,7 +335,8 @@ def sessions(p):
         logs = os.path.join(d, 'ros_log')
         size = sum(os.path.getsize(os.path.join(a, f)) for a, _, fs in os.walk(logs) for f in fs) if os.path.isdir(logs) else 0
         pid = info.get('pid')
-        alive = bool(pid) and os.path.exists(os.path.join(PROC, str(pid)))
+        # a pid alone can be reused by an unrelated process; the start time must match too
+        alive = bool(pid) and start_ticks(pid) is not None and start_ticks(pid) == info.get('start_ticks')
         out.append(dict(dir=d, size=size, mtime=os.path.getmtime(d), alive=alive, has_logs=os.path.isdir(logs)))
     return out
 
@@ -335,9 +377,11 @@ def workflow_argv(p, workflow):
 
 
 def check_workflow(p, env, workflow, procs):
-    ok, why = calibration(p)
-    if not ok:
-        raise Refused(f'calibration: {why}')
+    state, why = calibration(p)
+    if state not in CALIBRATION_ALLOWS[workflow]:
+        raise Refused(f'calibration: {workflow} needs LIDAR_YAW {" or ".join(CALIBRATION_ALLOWS[workflow])}, '
+                      f'it is {state}: {why}. To reproduce the 2026-11-02 baseline exactly, use the launch '
+                      'command in robot/docs/robot-baseline-2026-11-02.md by hand')
     held = lock_info('workflow')
     if held:
         raise Refused(f'workflow {held.get("workflow")} already running (pid {held.get("pid")}, {held.get("session")})')
@@ -353,9 +397,14 @@ def check_workflow(p, env, workflow, procs):
         if not package_prefix(env, 'robot_nav_plugins'):
             raise Refused('robot_nav_plugins is not in this runtime (Nav2 V2 needs LatchedGoalChecker); '
                           'set SCT_OVERLAY to an overlay that has it')
-    if workflow == 'nav' and any(x['name'] == 'fleet_bridge' for x in procs):
-        print('WARNING: fleet_bridge is running. Telemetry only is fine; with commands_enabled it also sends '
-              'Nav2 goals, so there would be two goal owners. Check its parameters before driving.', file=sys.stderr)
+    for fb in (x for x in procs if x['name'] == 'fleet_bridge'):
+        commands = fleet_bridge_commands(fb)
+        if workflow == 'nav' and commands is not False:
+            raise Refused(f'fleet_bridge[{fb["pid"]}] runs with commands_enabled={commands}: it can send Nav2 goals '
+                          'itself (two goal owners, and ADR-0049 then needs require_motion_permit). Stop it, or run '
+                          'it telemetry-only (commands_enabled: false) first')
+        if workflow == 'nav':
+            print(f'note: fleet_bridge[{fb["pid"]}] is telemetry-only (commands_enabled: false)', file=sys.stderr)
     for pkg in ('robot_control', 'stm32_bridge', 'robot_description') + (('robot_navigation',) if workflow == 'nav' else ()):
         if not package_prefix(env, pkg):
             raise Refused(f'package {pkg} not found in this runtime')
@@ -388,7 +437,8 @@ def run(argv, env, dry_run, lock=None, session=None, extra_env=None):
     if lock:
         fd = take_lock(lock[0], lock[1])
     if session:
-        json.dump(dict(argv=argv, pid=os.getpid(), env=env_diff(env), started=dt.datetime.now().isoformat()),
+        json.dump(dict(argv=argv, pid=os.getpid(), start_ticks=start_ticks(os.getpid(), '/proc'),
+                       env=env_diff(env), started=dt.datetime.now().isoformat()),
                   open(os.path.join(session, 'session.json'), 'w'), indent=1)
     sys.stdout.flush()
     test_exec = os.environ.get('SCT_ROBOT_TEST_EXEC')     # offline tests only: run this instead of argv[0]
@@ -397,10 +447,26 @@ def run(argv, env, dry_run, lock=None, session=None, extra_env=None):
     os.execvpe(argv[0], argv, env)
 
 
+def launcher_origin():
+    """Where this launcher runs from: a staged release (PROVENANCE) or a checkout."""
+    prov = os.path.join(os.path.dirname(ROBOT_DIR), 'PROVENANCE')
+    if os.path.isfile(prov):
+        first = [x for x in open(prov).read().split('\n') if x.startswith(('commit:', 'describe:'))]
+        return f'release {ROBOT_DIR} ({"; ".join(first)})'
+    r = subprocess.run(['git', '-C', ROBOT_DIR, 'status', '--porcelain', '--untracked-files=no', '--', '.'],
+                       capture_output=True, text=True)
+    head = subprocess.run(['git', '-C', ROBOT_DIR, 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True)
+    if head.returncode == 0:
+        return (f'CHECKOUT {ROBOT_DIR} @ {head.stdout.strip()}{" DIRTY" if r.stdout.strip() else ""} '
+                '(follows edits; install from a release: robot/scripts/stage-runtime --tools-only)')
+    return f'{ROBOT_DIR} (no PROVENANCE, not a git checkout)'
+
+
 def cmd_status(p):
-    ok_cal, why = calibration(p)
+    state, why = calibration(p)
     m, n = resolve_data(p)
     print(f'profile      {PROFILE}')
+    print(f'launcher     {launcher_origin()}')
     print(f'robot root   {p["SCT_ROBOT_ROOT"]}  (.env, base install, maps)')
     print(f'overlay      {p["SCT_OVERLAY"] or "(none)"}')
     prov = os.path.join(os.path.dirname(p['SCT_OVERLAY'].rstrip('/')), 'PROVENANCE') if p['SCT_OVERLAY'] else ''
@@ -417,7 +483,8 @@ def cmd_status(p):
     except Refused as exc:
         print(f'environment  REFUSED: {exc}')
     print(f'robot_id     {p["ROBOT_ID"]}')
-    print(f'lidar_yaw    {p["LIDAR_YAW"]} rad -> {"usable" if ok_cal else "NOT usable"} for motion: {why}')
+    allowed = [w for w, ok in CALIBRATION_ALLOWS.items() if state in ok]
+    print(f'lidar_yaw    {p["LIDAR_YAW"]} rad: {state} ({why}); launcher allows: {", ".join(allowed) or "nothing"}')
     if p['LIDAR_YAW_CANDIDATE']:
         print(f'candidate    {p["LIDAR_YAW_CANDIDATE"]} rad (static check only: robot lidar-check)')
     print(f'map / params {m} | {n}')
@@ -425,7 +492,8 @@ def cmd_status(p):
     held = lock_info('workflow')
     print(f'workflow     {"running: " + json.dumps(held) if held else "none (no launcher lock)"}')
     for x in procs:
-        print(f'  {x["name"]:18s} pid {x["pid"]:<7d} domain {x["domain"]} ns {x["namespace"]}')
+        extra = f' commands_enabled={fleet_bridge_commands(x)}' if x['name'] == 'fleet_bridge' else ''
+        print(f'  {x["name"]:18s} pid {x["pid"]:<7d} domain {x["domain"]} ns {x["namespace"]}{extra}')
     if not procs:
         print('  no robot, teleop, recorder or stop-key process')
     ss = sessions(p)
@@ -504,22 +572,18 @@ def main(argv=None):
     sub.add_parser('env')
     sub.add_parser('shell')
     for w in WORKFLOWS:
-        sub.add_parser(w).add_argument('--dry-run', action='store_true')
+        sub.add_parser(w)
     t = sub.add_parser('teleop')
-    t.add_argument('--dry-run', action='store_true')
     t.add_argument('--speed', type=float)
     t.add_argument('--turn', type=float)
-    sub.add_parser('stop').add_argument('--dry-run', action='store_true')
+    sub.add_parser('stop')
     pf = sub.add_parser('preflight')
     pf.add_argument('workflow', choices=WORKFLOWS)
     pf.add_argument('--static', action='store_true')
-    pf.add_argument('--dry-run', action='store_true')
     rec = sub.add_parser('record')
     rec.add_argument('action', choices=('start', 'stop'))
     rec.add_argument('dir', nargs='?')
-    rec.add_argument('--dry-run', action='store_true')
     lc = sub.add_parser('lidar-check', help='args after -- go to static_lidar_check.sh')
-    lc.add_argument('--dry-run', action='store_true')
     lc.add_argument('rest', nargs=argparse.REMAINDER)
     cal = sub.add_parser('calibration')
     cal.add_argument('action', choices=('accept',))
@@ -528,19 +592,28 @@ def main(argv=None):
     lg = sub.add_parser('logs')
     lg.add_argument('action', nargs='?', choices=('prune',))
     lg.add_argument('--yes', action='store_true')
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # --dry-run anywhere (before the subcommand, after '--', twice) means a dry run of
+    # whatever command it is; it never reaches argparse or a passthrough tool.
+    dry_run = '--dry-run' in argv
+    argv = [x for x in argv if x != '--dry-run']
     a = ap.parse_args(argv)
+    a.dry_run = dry_run
     try:
         p = load_profile()
         if a.cmd in (None, 'status'):
             return cmd_status(p)
         if a.cmd == 'logs':
-            return cmd_logs(p, a.action == 'prune', a.yes)
+            return cmd_logs(p, a.action == 'prune', a.yes and not a.dry_run)
         if a.cmd == 'calibration':
-            return cmd_accept(p, a.dir, a.yes)
+            return cmd_accept(p, a.dir, a.yes and not a.dry_run)
         env = build_env(p)
         if a.cmd == 'env':
             for k, v in sorted(env.items()):
                 print(f'{k}={v}')
+            return 0
+        if a.cmd == 'shell' and a.dry_run:
+            print(json.dumps(dict(argv=['bash', '--noprofile', '--norc', '-i'], env=env_diff(env)), indent=1))
             return 0
         if a.cmd == 'shell':
             env['PS1'] = f'[robot {p["ROBOT_ID"]} d{env["ROS_DOMAIN_ID"]}] \\w$ '
@@ -590,9 +663,6 @@ def main(argv=None):
             if robot_nodes(procs) or lock_info('workflow'):
                 raise Refused('stop the running workflow first; the static check owns the LiDAR alone')
             rest = [x for x in a.rest if x != '--']
-            if '--dry-run' in rest:                    # never run the real check because the flag came late
-                rest.remove('--dry-run')
-                a.dry_run = True
             if '--lidar-yaw' in rest:
                 raise Refused('the static check always uses LIDAR_YAW_CANDIDATE from the profile')
             argv = ['bash', os.path.join(tools, 'lidar_calibration', 'static_lidar_check.sh'), *rest,
