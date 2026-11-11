@@ -344,7 +344,7 @@ def test_lidar_clears_no_returns_without_clearing_near_range_rejects():
     supplements an isolated test of the installed Nav2 obstacle layer.
     """
     params = yaml.safe_load(_read('robot_control/config/scan_range_filter.yaml'))
-    filters = params['/**/scan_filter_chain']['ros__parameters']
+    filters = params['/**/scan_range_filter']['ros__parameters']   # the launches' node name
     ranges = filters['filter1']['params']
     assert math.isnan(ranges['lower_replacement_value'])
     assert ranges['upper_replacement_value'] == math.inf
