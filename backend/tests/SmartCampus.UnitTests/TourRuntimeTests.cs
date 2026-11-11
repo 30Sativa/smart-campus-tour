@@ -132,6 +132,22 @@ public sealed class TourRuntimeTests
     public void StartEarlyLimit_RefusesNegativeOrBeyondTheReservationBuffer(int minutes) =>
         Assert.Throws<InvalidOperationException>(() => new FleetCommandSettings(startEarlyLimitMinutes: minutes));
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(15)]  // The reservation buffer, and the default.
+    public void StartLateLimit_AcceptsUpToTheReservationBuffer(int minutes) =>
+        Assert.Equal(TimeSpan.FromMinutes(minutes), new FleetCommandSettings(startLateLimitMinutes: minutes).StartLateLimit);
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(16)]
+    public void StartLateLimit_RefusesNegativeOrBeyondTheReservationBuffer(int minutes) =>
+        Assert.Throws<InvalidOperationException>(() => new FleetCommandSettings(startLateLimitMinutes: minutes));
+
+    [Fact]
+    public void StartLateLimit_DefaultsToFifteenMinutes() =>
+        Assert.Equal(TimeSpan.FromMinutes(15), new FleetCommandSettings().StartLateLimit);
+
     [Fact]
     public void StartEarlyLimit_DefaultsToTenMinutes() =>
         Assert.Equal(TimeSpan.FromMinutes(10), new FleetCommandSettings().StartEarlyLimit);

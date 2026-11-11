@@ -1,9 +1,18 @@
 # ADR-0049: M2.3 robot-local safety before a physical robot accepts fleet commands
 
-- **Status:** Accepted 08/11/2026 by the repository owner, with the changes recorded here. **Not implemented**: no
-  permit topic, motion gate, readiness source, map content check or dispatch writer exists yet. Every number below is
-  accepted as a target and must be measured at GATE A. Acceptance does not authorize physical motion. Amended
-  08/11/2026 by the owner during step 3.2: the `faultCode` order (Decision 3) and the monitored actions (Decision 5).
+- **Status:** Accepted 08/11/2026 by the repository owner, with the changes recorded here. Amended 08/11/2026 by the
+  owner during step 3.2: the `faultCode` order (Decision 3) and the monitored actions (Decision 5).
+  **Implemented in code, not proven on hardware** (status refreshed 11/11/2026):
+  - step 3.1, the motion permit and latched gate in `mode_manager` (#228);
+  - step 3.2, real `localized`/`motionReady`, the map content check and one goal sender (#230), with the permit kept
+    when map evidence is only missing rather than wrong (#232);
+  - step 3.3, the audited `IsDispatchEnabled` writer `POST /api/technical/physical-robots/{id}/dispatch` (#231);
+  - STM32 link loss held as a state, not a one-shot stop (#270).
+
+  **Still open:** no GATE A record exists, so every number below is still a target, not a measurement, and no robot
+  may have `IsDispatchEnabled` set. Step 3.4 (Decision 10), the hardware E-stop input wired to the STM32 and read by
+  `stm32_bridge` as `hardware_estop_state`, is not implemented and waits for a person to confirm the input pin; until
+  then the Decision 10 operating rule applies. Acceptance and the code above do not authorize physical motion.
 - **Supplements:** ADR-0042 (M2 command transport, D-items on `IsDispatchEnabled`), ADR-0043 D11/D13.
 - **Related:** `docs/architecture.md` §3.5, §3.6, §6; ADR-0008, ADR-0019, ADR-0021, ADR-0040;
   `docs/requirements/campus-tour-scope.md` §7; `robot/docs/robot-baseline-2026-11-02.md`.
