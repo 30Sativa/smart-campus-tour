@@ -14,6 +14,14 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1   # -> robot/
 SRC="ros2_ws/src"
 
+# Tests must never join the robot's graph. On the MiniPC an interactive shell carries
+# the robot .env (domain 30, loopback Discovery Server), so pin every test process to
+# a private localhost-only domain without a Discovery Server. Tests that need their
+# own domain still set it themselves.
+export ROS_DOMAIN_ID="${VERIFY_ROS_DOMAIN_ID:-101}" ROS_LOCALHOST_ONLY=1
+unset ROS_DISCOVERY_SERVER ROS_SUPER_CLIENT FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
+if [ "$ROS_DOMAIN_ID" = 30 ]; then echo "VERIFY_ROS_DOMAIN_ID must not be the robot domain 30" >&2; exit 2; fi
+
 FAILURES=0
 SKIPS=()
 
