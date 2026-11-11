@@ -98,10 +98,10 @@ public sealed class TourShortNoticeSqlTests
         var checks = await w.H.Send(new GetTourStartChecksQuery(id, w.H.OperatorId));
         Assert.Equal(w.Noon, checks.OpensAt);
         Assert.True(checks.Checks.Single(check => check.Id == "withinStartWindow").Passed);
-        // No accepted row, so nobody can be left behind.
+        // No accepted row, so nobody can be left behind; but nobody to run it for either.
         Assert.True(checks.Checks.Single(check => check.Id == TourStartPreflight.AllViewersJoinedCheck).Passed);
         // Every other Start check still decides.
-        foreach (var expected in new[] { "tourReady", "robotDispatchEnabled", "telemetryFresh", "commandTransportEnabled" })
+        foreach (var expected in new[] { "tourReady", TourStartPreflight.HasAcceptedRowsCheck, "robotDispatchEnabled", "telemetryFresh", "commandTransportEnabled" })
             Assert.Contains(expected, checks.BlockedBy);
 
         Assert.Equal(w.H.Start.AddMinutes(-10), (await w.H.Send(new GetTourStartChecksQuery(w.H.TourId, w.H.OperatorId))).OpensAt);

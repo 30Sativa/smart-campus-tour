@@ -93,6 +93,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0051](0051-staff-discard-never-passed-poi.md) | Staff soft-discard a POI proposal that never passed verification; schema v1.20 adds `PoiProposals.DiscardedAt/DiscardedByUserId` and a column-only runtime grant | accepted 2026-11-09 by the owner, implemented |
 | [0052](0052-quest-camera-on-demand.md) | The Quest camera runs only while a Tour runs on the robot or a Staff page holds an in-memory lease; the robot polls `/api/fleet/camera/v1/poll`; viewers can pause; fail-safe on backend outage | proposed 2026-11-09 (team member Thanh), implemented; robot side opt-in (`QUEST_CONTROL_URL`) |
 | [0053](0053-quick-tours.md) | Quick Tours: no date or shift, the robot held from creation, published at their latest Start, Start opens at creation once ready; supersedes the shift-bound short-notice Tour of ADR-0050 | accepted 2026-11-09 by the owner, implemented |
+| [0054](0054-ready-needs-an-accepted-row.md) | READY needs at least one accepted roster row (`NO_ACCEPTED_ROWS`), reported only once no decision is pending; Start rechecks it (`hasAcceptedRows`); amends ADR-0042 and ADR-0053 | accepted 2026-11-11 by the owner, implemented |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend
