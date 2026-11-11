@@ -56,7 +56,9 @@ NODE_PATTERNS = {
     'frontier_explorer': r'simple_frontier_explorer',
 }
 COMMAND_SOURCES = {'teleop_keyboard': r'teleop_twist_keyboard', 'teleop_joy': r'/teleop_node( |$)'}
-OTHER = {'bag_record': r'ros2 bag record', 'stopkey': r'stopkey\.py', 'preflight': r'preflight\.py'}
+OTHER = {'bag_record': r'ros2 bag record', 'stopkey': r'stopkey\.py', 'preflight': r'preflight\.py',
+         # telemetry by default; with commands_enabled it is a second navigation-goal owner
+         'fleet_bridge': r'/fleet_bridge/fleet_bridge( |$)'}
 
 
 class Refused(Exception):
@@ -351,6 +353,9 @@ def check_workflow(p, env, workflow, procs):
         if not package_prefix(env, 'robot_nav_plugins'):
             raise Refused('robot_nav_plugins is not in this runtime (Nav2 V2 needs LatchedGoalChecker); '
                           'set SCT_OVERLAY to an overlay that has it')
+    if workflow == 'nav' and any(x['name'] == 'fleet_bridge' for x in procs):
+        print('WARNING: fleet_bridge is running. Telemetry only is fine; with commands_enabled it also sends '
+              'Nav2 goals, so there would be two goal owners. Check its parameters before driving.', file=sys.stderr)
     for pkg in ('robot_control', 'stm32_bridge', 'robot_description') + (('robot_navigation',) if workflow == 'nav' else ()):
         if not package_prefix(env, pkg):
             raise Refused(f'package {pkg} not found in this runtime')

@@ -321,3 +321,11 @@ def test_the_committed_example_profile_is_valid(world):
     r = robot(world, 'status')
     assert r.returncode == 0, r.stderr
     assert 'baseline robot-baseline-20261102' in r.stdout
+
+
+def test_a_running_fleet_bridge_is_shown_and_warned_about(world):
+    fake_process(world, 7000, '/usr/bin/python3 /x/install/fleet_bridge/lib/fleet_bridge/fleet_bridge --ros-args -r __ns:=/robot_01')
+    assert 'fleet_bridge' in robot(world, 'status').stdout
+    r = robot(world, 'nav', '--dry-run')
+    assert r.returncode == 0 and 'two goal owners' in r.stderr
+    assert 'two goal owners' not in robot(world, 'manual', '--dry-run').stderr
