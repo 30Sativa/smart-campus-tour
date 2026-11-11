@@ -17,7 +17,7 @@ npm run dev               # http://localhost:5173
 | Variable | Meaning | Example |
 |---|---|---|
 | `VITE_API_BASE_URL` | Backend API base URL, used by `src/api/client.ts` and the SignalR hub factory | `https://localhost:7092` |
-| `VITE_QUEST_WHEP_URL` | Optional Quest WebRTC endpoint; empty keeps the current video source | `http://10.80.192.207:8889/quest/whep` |
+| `VITE_QUEST_WHEP_URL` | **Dev server only**: the NUC's own MediaMTX in the LAN. A production build ignores it; deployed pages get the relay URL and a token from the API (ADR-0055) | `http://10.80.192.207:8889/quest/whep` |
 | `VITE_QUEST_ICE_SERVERS` | Optional comma-separated STUN URLs | `stun:stun.l.google.com:19302` |
 
 `web/.env` is tracked with empty values as the shared list of variables.

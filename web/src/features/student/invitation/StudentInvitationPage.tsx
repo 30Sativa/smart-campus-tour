@@ -9,6 +9,7 @@ import { StudentLiveView } from '../components/StudentLiveView'
 import { StudentEndScreen } from '../components/StudentEndScreen'
 import { LiveStudentAiAssistant } from '../components/LiveStudentAiAssistant'
 import { FALLBACK_BADGE } from '../components/StudentVideoPlayer'
+import { useStudentStreamAccess } from '../../quest-stream/stream-access'
 import { buildLiveSnapshot, getStudentTourView, isVideoFile, type StudentTourInfo } from './student-tour-view'
 import '../student.css'
 import '../student-expedition.css'
@@ -72,6 +73,8 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const sessionLabel = shared ? 'Màn hình xem chung' : 'Phiên lời mời cá nhân'
   const snapshot = info ? buildLiveSnapshot(info, view.data) : null
   const fallback = info?.fallbackVideoUrl ?? null
+  // ADR-0055: the relay URL and a short token, renewed while the Tour runs; refused once access ends.
+  const quest = useStudentStreamAccess(tourId, snapshot?.tourState === 'Running' && !leave.isPending)
   const status = <>
     {leave.isError && <p role="alert" className="st-session-error">{accessError(leave.error)}</p>}
     {info && session.isError && <p role="alert" className="st-session-error">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên có thể hết hạn trong thời gian mất kết nối; kết nối lại để kiểm tra.</p>}
@@ -119,6 +122,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
     body = <>
       <StudentLiveView
         snapshot={snapshot}
+        quest={quest}
         showMap={false}
         idleTitle="Buổi tham quan đang diễn ra"
         narrationIdleText={snapshot.step === 'in_progress'

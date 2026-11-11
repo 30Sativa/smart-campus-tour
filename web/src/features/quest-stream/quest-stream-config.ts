@@ -2,20 +2,18 @@ import { resolveWhepUrl } from './whep'
 import { resolveDeviceUrl } from './quest-device'
 
 /**
- * WebRTC (WHEP) endpoint of the Quest 3 live stream: MediaMTX on the robot
- * NUC, fed by robot/quest-stream, e.g. `http://10.80.192.207:8889/quest/whep`
- * (`http://10.80.192.207:8889/quest` works too).
- *
- * Unset = no Quest stream: the pages keep their current video source. Read the
- * env vars here only; components import these constants.
+ * Dev only: the WebRTC (WHEP) endpoint of MediaMTX on the robot NUC in the
+ * same LAN, e.g. `http://10.80.192.207:8889/quest/whep`. A production build
+ * never reads `VITE_QUEST_WHEP_URL` (the branch is removed at build time), so
+ * the public relay's address is not in the bundle: pages get it, with a
+ * token, from the API (ADR-0055). Read the env vars here only.
  */
-export const QUEST_WHEP_URL: string | null = resolveWhepUrl(import.meta.env.VITE_QUEST_WHEP_URL)
+export const QUEST_DEV_WHEP_URL: string | null = import.meta.env.DEV
+  ? resolveWhepUrl(import.meta.env.VITE_QUEST_WHEP_URL)
+  : null
 
-if (import.meta.env.VITE_QUEST_WHEP_URL?.trim() && !QUEST_WHEP_URL) {
+if (import.meta.env.DEV && import.meta.env.VITE_QUEST_WHEP_URL?.trim() && !QUEST_DEV_WHEP_URL) {
   console.warn('[quest-stream] VITE_QUEST_WHEP_URL is not a WHEP URL like http://<NUC_IP>:8889/quest/whep')
-}
-if (import.meta.env.VITE_QUEST_STREAM_URL?.trim() && !import.meta.env.VITE_QUEST_WHEP_URL) {
-  console.warn('[quest-stream] VITE_QUEST_STREAM_URL (HLS) is no longer used: set VITE_QUEST_WHEP_URL=http://<NUC_IP>:8889/quest/whep')
 }
 
 /**

@@ -3,118 +3,51 @@
 #
 # The NUC pushes the 720p H.264 stream once, over SRT (UDP 8890, encrypted with a
 # passphrase). Browsers watch it over WebRTC (WHEP, HTTPS on 8889):
-#   https://<DOMAIN>:8889/quest/whep   -> VITE_QUEST_WHEP_URL on Vercel
+#   https://<DOMAIN>:8889/quest/whep?token=<backend token>
 # MediaMTX only forwards packets (no re-encoding), so it needs almost no CPU.
 #
-#   sudo bash install-relay.sh stream.fptcampustour.cloud          # install / update
-#   sudo bash install-relay.sh stream.fptcampustour.cloud --show   # print the NUC push URL again
+# ADR-0055: MediaMTX asks the backend about every connection (authMethod: http).
+# The backend lets the NUC publish with its user/password and a browser read only
+# with a short-lived token it issued. mediamtx-relay-reaper asks again every 5 s
+# about each open WebRTC session and kicks the ones the backend now refuses
+# (End Early, revoked session, expired Staff lease).
+#
+#   sudo ROBOT_CODE=amr_01 bash install-relay.sh stream.fptcampustour.cloud  # install / update
+#   sudo bash install-relay.sh stream.fptcampustour.cloud --show             # print the API and NUC lines again
 #   sudo bash install-relay.sh --remove
+#   bash install-relay.sh <domain> --print-config   # mediamtx.yml from the environment (tests, no root)
+#   bash install-relay.sh --print-reaper            # the reaper script (tests, no root)
 #
 # Needs a TLS certificate for DOMAIN first (see the README, "Phát ra Internet"):
 #   /etc/letsencrypt/live/<DOMAIN>/{fullchain,privkey}.pem, or set CERT_DIR=/path.
+# API_URL defaults to https://api.<DOMAIN without its first label>.
 # Safe to run again: secrets are generated once and kept in /etc/mediamtx-relay/secrets.env.
 set -euo pipefail
 
-CONF_DIR=/etc/mediamtx-relay
+CONF_DIR=${CONF_DIR:-/etc/mediamtx-relay}
 BIN=/usr/local/bin/mediamtx
+REAPER_BIN=/usr/local/bin/mediamtx-relay-reaper
 UNIT=/etc/systemd/system/mediamtx-relay.service
+REAPER_UNIT=/etc/systemd/system/mediamtx-relay-reaper.service
 HOOK=/etc/letsencrypt/renewal-hooks/deploy/mediamtx-relay
 
-[ "$(id -u)" -eq 0 ] || { echo "Run with sudo"; exit 1; }
-
-if [ "${1:-}" = "--remove" ]; then
-  systemctl disable --now mediamtx-relay 2>/dev/null || true
-  rm -f "$UNIT" "$HOOK"
-  systemctl daemon-reload
-  echo "Relay removed (kept $CONF_DIR and $BIN)."
-  exit 0
-fi
-
-DOMAIN=${1:?usage: sudo bash install-relay.sh <domain> [--show]}
-CERT_DIR=${CERT_DIR:-/etc/letsencrypt/live/$DOMAIN}
-
-# --- secrets (generated once) -------------------------------------------------
-install -d -m 0750 "$CONF_DIR"
-if [ ! -f "$CONF_DIR/secrets.env" ]; then
-  gen() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$1"; }
-  umask 077
-  printf 'PUBLISH_USER=nuc\nPUBLISH_PASS=%s\nSRT_PASSPHRASE=%s\n' "$(gen 24)" "$(gen 32)" >"$CONF_DIR/secrets.env"
-fi
-# shellcheck disable=SC1091
-. "$CONF_DIR/secrets.env"
-
-show() {
-  echo
-  echo "== Web (Vercel env) =="
-  echo "VITE_QUEST_WHEP_URL=https://$DOMAIN:8889/quest/whep"
-  echo
-  echo "== NUC: put this line in robot/quest-stream/relay-push.env (keep it secret) =="
-  echo "RELAY_SRT_URL=srt://$DOMAIN:8890?streamid=publish:quest:$PUBLISH_USER:$PUBLISH_PASS&passphrase=$SRT_PASSPHRASE&pbkeylen=16&latency=300000&pkt_size=1316"
-}
-if [ "${2:-}" = "--show" ]; then show; exit 0; fi
-
-[ -r "$CERT_DIR/fullchain.pem" ] && [ -r "$CERT_DIR/privkey.pem" ] \
-  || { echo "No certificate in $CERT_DIR (fullchain.pem, privkey.pem). Get one for $DOMAIN first, or set CERT_DIR."; exit 1; }
-
-# --- public IP: browsers must be told the Elastic IP, not the private VPC IP ----
-PUBLIC_IP=${PUBLIC_IP:-}
-if [ -z "$PUBLIC_IP" ]; then
-  TOKEN=$(curl -fsS -m 3 -X PUT http://169.254.169.254/latest/api/token \
-    -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null || true)
-  PUBLIC_IP=$(curl -fsS -m 3 -H "X-aws-ec2-metadata-token: $TOKEN" \
-    http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)
-fi
-[ -n "$PUBLIC_IP" ] || PUBLIC_IP=$(getent ahostsv4 "$DOMAIN" | awk 'NR==1{print $1}')
-[ -n "$PUBLIC_IP" ] || { echo "Cannot find the public IP; run again with PUBLIC_IP=x.x.x.x"; exit 1; }
-
-# --- MediaMTX binary ------------------------------------------------------------
-case "$(uname -m)" in x86_64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; *) echo "Unsupported CPU"; exit 1 ;; esac
-if [ ! -x "$BIN" ] || [ -n "${MEDIAMTX_VERSION:-}" ]; then
-  VERSION=${MEDIAMTX_VERSION:-$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
-    https://github.com/bluenviron/mediamtx/releases/latest | sed 's#.*/tag/##')}
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-  curl -fL --retry 3 -o "$TMP/m.tgz" \
-    "https://github.com/bluenviron/mediamtx/releases/download/$VERSION/mediamtx_${VERSION}_linux_${ARCH}.tar.gz"
-  tar -xzf "$TMP/m.tgz" -C "$TMP" mediamtx
-  install -m 0755 "$TMP/mediamtx" "$BIN"
-fi
-id mediamtx >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin mediamtx
-
-# --- certificate copy readable by the service (refreshed by the Certbot hook) ---
-install -d -o root -g mediamtx -m 0750 "$CONF_DIR/tls"
-install -o root -g mediamtx -m 0644 "$CERT_DIR/fullchain.pem" "$CONF_DIR/tls/fullchain.pem"
-install -o root -g mediamtx -m 0640 "$CERT_DIR/privkey.pem" "$CONF_DIR/tls/privkey.pem"
-
-# --- config -------------------------------------------------------------------------
-umask 027
-cat >"$CONF_DIR/mediamtx.yml" <<YML
+# --- the relay configuration --------------------------------------------------------
+# Inputs: PUBLISH_USER SRT_PASSPHRASE RELAY_KEY PUBLIC_IP API_URL CONF_DIR
+print_config() {
+  cat <<YML
 # Generated by install-relay.sh. Edit the script, not this file.
 logLevel: info
 logDestinations: [stdout]
 readTimeout: 10s
 writeTimeout: 10s
 
-authMethod: internal
-authInternalUsers:
-  # The NUC publishes with these credentials (inside the SRT stream id).
-  - user: $PUBLISH_USER
-    pass: $PUBLISH_PASS
-    ips: []
-    permissions:
-      - action: publish
-        path: quest
-  # Anyone may watch: the tour page itself decides who sees the player.
-  - user: any
-    pass:
-    ips: []
-    permissions:
-      - action: read
-        path: quest
-  - user: any
-    pass:
-    ips: ['127.0.0.1', '::1']
-    permissions:
-      - action: api
+# ADR-0055: the backend decides every publish and read. The NUC publishes as
+# $PUBLISH_USER with its password; a browser reads with ?token=<backend token>.
+authMethod: http
+authHTTPAddress: $API_URL/api/internal/stream-relay/auth?key=$RELAY_KEY
+# Only the control API skips the backend check; it listens on 127.0.0.1.
+authHTTPExclude:
+  - action: api
 
 api: yes
 apiAddress: 127.0.0.1:9997
@@ -146,7 +79,138 @@ paths:
     source: publisher
     srtPublishPassphrase: $SRT_PASSPHRASE
 YML
-chgrp mediamtx "$CONF_DIR" "$CONF_DIR/mediamtx.yml"
+}
+
+# --- the reaper: cut open sessions the backend no longer allows ---------------------
+print_reaper() {
+  cat <<'REAPER'
+#!/usr/bin/env bash
+# Generated by install-relay.sh (ADR-0055). Every REAPER_INTERVAL seconds: list the
+# relay's WebRTC sessions, ask the backend about each one, and kick a session only on
+# an explicit 403. A backend that does not answer, or answers 401 (wrong key), kicks
+# nobody: an outage must not black out a running Tour (ADR-0052).
+set -uo pipefail
+: "${API_URL:?}" "${RELAY_KEY:?}"
+MTX_API=${MTX_API:-http://127.0.0.1:9997}
+INTERVAL=${REAPER_INTERVAL:-5}
+ONCE=${REAPER_ONCE:-0}
+while :; do
+  if list=$(curl -fsS -m 3 "$MTX_API/v3/webrtcsessions/list?itemsPerPage=1000" 2>/dev/null); then
+    # A session without a query cannot be checked (a MediaMTX that does not report it): leave it.
+    printf '%s' "$list" | jq -c '.items[]? | select((.query // "") != "") | {id, path, query}' |
+    while IFS= read -r session; do
+      id=$(printf '%s' "$session" | jq -r .id)
+      body=$(printf '%s' "$session" | jq -c '{path, query}')
+      code=$(curl -s -o /dev/null -w '%{http_code}' -m 5 -X POST -H 'Content-Type: application/json' \
+        --data "$body" "$API_URL/api/internal/stream-relay/recheck?key=$RELAY_KEY" || true)
+      if [ "$code" = 403 ]; then
+        if curl -fsS -m 3 -X POST "$MTX_API/v3/webrtcsessions/kick/$id" >/dev/null 2>&1; then
+          echo "kicked $id: access ended"
+        fi
+      elif [ "$code" != 204 ]; then
+        echo "recheck of $id answered ${code:-nothing}; session left open"
+      fi
+    done
+  fi
+  [ "$ONCE" = 1 ] && exit 0
+  sleep "$INTERVAL"
+done
+REAPER
+}
+
+if [ "${1:-}" = "--print-reaper" ]; then print_reaper; exit 0; fi
+if [ "${2:-}" = "--print-config" ]; then
+  : "${PUBLISH_USER:?}" "${SRT_PASSPHRASE:?}" "${RELAY_KEY:?}" "${PUBLIC_IP:?}" "${API_URL:?}"
+  print_config
+  exit 0
+fi
+
+[ "$(id -u)" -eq 0 ] || { echo "Run with sudo"; exit 1; }
+
+if [ "${1:-}" = "--remove" ]; then
+  systemctl disable --now mediamtx-relay-reaper 2>/dev/null || true
+  systemctl disable --now mediamtx-relay 2>/dev/null || true
+  rm -f "$UNIT" "$REAPER_UNIT" "$HOOK"
+  systemctl daemon-reload
+  echo "Relay removed (kept $CONF_DIR, $BIN and $REAPER_BIN)."
+  exit 0
+fi
+
+DOMAIN=${1:?usage: sudo ROBOT_CODE=<robot> bash install-relay.sh <domain> [--show]}
+CERT_DIR=${CERT_DIR:-/etc/letsencrypt/live/$DOMAIN}
+API_URL=${API_URL:-https://api.${DOMAIN#*.}}
+
+# --- secrets (generated once; an older install gains RELAY_KEY) ---------------------
+install -d -m 0750 "$CONF_DIR"
+gen() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$1"; }
+umask 077
+if [ ! -f "$CONF_DIR/secrets.env" ]; then
+  printf 'PUBLISH_USER=nuc\nPUBLISH_PASS=%s\nSRT_PASSPHRASE=%s\n' "$(gen 24)" "$(gen 32)" >"$CONF_DIR/secrets.env"
+fi
+grep -q '^RELAY_KEY=' "$CONF_DIR/secrets.env" || printf 'RELAY_KEY=%s\n' "$(gen 48)" >>"$CONF_DIR/secrets.env"
+if [ -n "${ROBOT_CODE:-}" ]; then
+  sed -i '/^ROBOT_CODE=/d' "$CONF_DIR/secrets.env"
+  printf 'ROBOT_CODE=%s\n' "$ROBOT_CODE" >>"$CONF_DIR/secrets.env"
+fi
+# shellcheck disable=SC1091
+. "$CONF_DIR/secrets.env"
+
+show() {
+  echo
+  echo "== API: add to /etc/campustour/api.env, then restart the API (keep it secret) =="
+  echo "QuestRelay__WhepUrl=https://$DOMAIN:8889/quest/whep"
+  echo "QuestRelay__RobotCode=${ROBOT_CODE:-<the robot code, e.g. amr_01: run again with ROBOT_CODE=...>}"
+  echo "QuestRelay__Key=$RELAY_KEY"
+  echo "QuestRelay__PublishUser=$PUBLISH_USER"
+  echo "QuestRelay__PublishPasswordSha256=$(printf '%s' "$PUBLISH_PASS" | sha256sum | cut -c1-64)"
+  echo
+  echo "== NUC: put this line in robot/quest-stream/relay-push.env (keep it secret) =="
+  echo "RELAY_SRT_URL=srt://$DOMAIN:8890?streamid=publish:quest:$PUBLISH_USER:$PUBLISH_PASS&passphrase=$SRT_PASSPHRASE&pbkeylen=16&latency=300000&pkt_size=1316"
+  echo
+  echo "== Vercel: delete VITE_QUEST_WHEP_URL; pages get the relay URL and a token from the API =="
+}
+if [ "${2:-}" = "--show" ]; then show; exit 0; fi
+
+[ -r "$CERT_DIR/fullchain.pem" ] && [ -r "$CERT_DIR/privkey.pem" ] \
+  || { echo "No certificate in $CERT_DIR (fullchain.pem, privkey.pem). Get one for $DOMAIN first, or set CERT_DIR."; exit 1; }
+command -v jq >/dev/null || { apt-get update -qq && apt-get install -y -qq jq; }
+
+# --- public IP: browsers must be told the Elastic IP, not the private VPC IP ----
+PUBLIC_IP=${PUBLIC_IP:-}
+if [ -z "$PUBLIC_IP" ]; then
+  TOKEN=$(curl -fsS -m 3 -X PUT http://169.254.169.254/latest/api/token \
+    -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null || true)
+  PUBLIC_IP=$(curl -fsS -m 3 -H "X-aws-ec2-metadata-token: $TOKEN" \
+    http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)
+fi
+[ -n "$PUBLIC_IP" ] || PUBLIC_IP=$(getent ahostsv4 "$DOMAIN" | awk 'NR==1{print $1}')
+[ -n "$PUBLIC_IP" ] || { echo "Cannot find the public IP; run again with PUBLIC_IP=x.x.x.x"; exit 1; }
+
+# --- MediaMTX binary ------------------------------------------------------------
+case "$(uname -m)" in x86_64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; *) echo "Unsupported CPU"; exit 1 ;; esac
+if [ ! -x "$BIN" ] || [ -n "${MEDIAMTX_VERSION:-}" ]; then
+  VERSION=${MEDIAMTX_VERSION:-$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+    https://github.com/bluenviron/mediamtx/releases/latest | sed 's#.*/tag/##')}
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+  curl -fL --retry 3 -o "$TMP/m.tgz" \
+    "https://github.com/bluenviron/mediamtx/releases/download/$VERSION/mediamtx_${VERSION}_linux_${ARCH}.tar.gz"
+  tar -xzf "$TMP/m.tgz" -C "$TMP" mediamtx
+  install -m 0755 "$TMP/mediamtx" "$BIN"
+fi
+id mediamtx >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin mediamtx
+
+# --- certificate copy readable by the service (refreshed by the Certbot hook) ---
+install -d -o root -g mediamtx -m 0750 "$CONF_DIR/tls"
+install -o root -g mediamtx -m 0644 "$CERT_DIR/fullchain.pem" "$CONF_DIR/tls/fullchain.pem"
+install -o root -g mediamtx -m 0640 "$CERT_DIR/privkey.pem" "$CONF_DIR/tls/privkey.pem"
+
+# --- config, reaper -------------------------------------------------------------------
+umask 027
+print_config >"$CONF_DIR/mediamtx.yml"
+printf 'API_URL=%s\nRELAY_KEY=%s\n' "$API_URL" "$RELAY_KEY" >"$CONF_DIR/reaper.env"
+chgrp mediamtx "$CONF_DIR" "$CONF_DIR/mediamtx.yml" "$CONF_DIR/reaper.env"
+print_reaper >"$REAPER_BIN"
+chmod 0755 "$REAPER_BIN"
 
 cat >"$UNIT" <<UNIT
 [Unit]
@@ -169,6 +233,28 @@ PrivateTmp=yes
 WantedBy=multi-user.target
 UNIT
 
+cat >"$REAPER_UNIT" <<UNIT
+[Unit]
+Description=Cut Quest relay viewers whose access ended (ADR-0055)
+After=mediamtx-relay.service
+BindsTo=mediamtx-relay.service
+
+[Service]
+User=mediamtx
+Group=mediamtx
+EnvironmentFile=$CONF_DIR/reaper.env
+ExecStart=$REAPER_BIN
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 # Certbot renews the certificate: copy it again and restart the relay.
 if [ -d /etc/letsencrypt ]; then
   install -d /etc/letsencrypt/renewal-hooks/deploy
@@ -177,16 +263,17 @@ if [ -d /etc/letsencrypt ]; then
 case "\${RENEWED_LINEAGE:-}" in *"/$DOMAIN") ;; *) exit 0 ;; esac
 install -o root -g mediamtx -m 0644 "\$RENEWED_LINEAGE/fullchain.pem" $CONF_DIR/tls/fullchain.pem
 install -o root -g mediamtx -m 0640 "\$RENEWED_LINEAGE/privkey.pem" $CONF_DIR/tls/privkey.pem
-systemctl restart mediamtx-relay
+systemctl restart mediamtx-relay mediamtx-relay-reaper
 HOOKEOF
   chmod 0755 "$HOOK"
 fi
 
 systemctl daemon-reload
-systemctl enable mediamtx-relay >/dev/null
+systemctl enable mediamtx-relay mediamtx-relay-reaper >/dev/null
 systemctl restart mediamtx-relay
+systemctl restart mediamtx-relay-reaper
 sleep 2
-systemctl --no-pager --lines=5 status mediamtx-relay || true
+systemctl --no-pager --lines=5 status mediamtx-relay mediamtx-relay-reaper || true
 
 if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
   ufw allow 8889/tcp comment "Quest relay WHEP"
@@ -197,5 +284,6 @@ fi
 
 echo
 echo "Public IP announced to browsers: $PUBLIC_IP"
+echo "Every connection is checked by: $API_URL/api/internal/stream-relay/auth"
 echo "AWS Security Group must allow inbound: 8889/tcp, 8189/udp, 8189/tcp, 8890/udp"
 show

@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using SmartCampus.Api.Common.Responses;
+using SmartCampus.Application.Features.StreamRelay;
 using SmartCampus.Application.Features.StudentTour;
 
 namespace SmartCampus.Api.Controllers;
@@ -17,5 +18,15 @@ public sealed class StudentTourController(ISender sender, IConfiguration configu
         var view = await sender.Send(new GetStudentTourViewQuery(tourId, Request.Cookies[StudentSessionCookie.Name(tourId)]), ct);
         Response.Headers.CacheControl = "no-store";
         return Ok(new BaseResponse<StudentTourView> { Success = true, Message = "OK", Data = view });
+    }
+
+    /// <summary>ADR-0055: the relay URL and a short-lived token for this session; the page asks again before it expires.</summary>
+    [HttpGet("stream-access")]
+    public async Task<ActionResult<BaseResponse<StreamAccess>>> StreamAccess(Guid tourId, CancellationToken ct)
+    {
+        StudentSessionCookie.EnsureAllowedOrigin(Request, configuration);
+        var access = await sender.Send(new GetStudentStreamAccessQuery(tourId, Request.Cookies[StudentSessionCookie.Name(tourId)]), ct);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new BaseResponse<StreamAccess> { Success = true, Message = "OK", Data = access });
     }
 }

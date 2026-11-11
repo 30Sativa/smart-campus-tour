@@ -9,7 +9,7 @@ import {
   VolumeX,
 } from 'lucide-react'
 import { useStudentStore } from '../student-store'
-import { QUEST_WHEP_URL } from '../../quest-stream/quest-stream-config'
+import { DEV_QUEST_SOURCE, type QuestSource } from '../../quest-stream/stream-access'
 import { useWhepStream } from '../../quest-stream/use-whep-stream'
 import { usePageVisible } from '../../quest-stream/use-page-visible'
 
@@ -27,6 +27,8 @@ interface StudentVideoPlayerProps {
   badge?: string
   /** Shown over the poster when there is neither a Quest stream nor a video source. */
   emptyMessage?: string
+  /** The live relay URL and token from the API (ADR-0055); null = no live stream. Defaults to the dev-only LAN URL. */
+  quest?: QuestSource | null
 }
 
 export const FALLBACK_BADGE = 'Video dự phòng · chế độ suy giảm'
@@ -45,6 +47,7 @@ export function StudentVideoPlayer({
   active = true,
   badge,
   emptyMessage,
+  quest = DEV_QUEST_SOURCE,
 }: StudentVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -59,12 +62,12 @@ export function StudentVideoPlayer({
   const setAudioMuted = useStudentStore((s) => s.setAudioMuted)
   const isAiSpeaking = useStudentStore((s) => s.isAiSpeaking)
 
-  // With VITE_QUEST_WHEP_URL set, the Quest 3 live stream (WebRTC from
+  // With a relay source from the API, the Quest 3 live stream (WebRTC from
   // MediaMTX) replaces the tour's video source; the hook owns connecting and
   // reconnecting it.
-  const questUrl = QUEST_WHEP_URL
+  const questUrl = quest?.whepUrl ?? null
   const sampleVideo = !questUrl && streamUrl?.startsWith('/videos/')
-  const { status: questStatus, retry: retryQuest } = useWhepStream(videoRef, questUrl, active && !livePaused && visible)
+  const { status: questStatus, retry: retryQuest } = useWhepStream(videoRef, questUrl, active && !livePaused && visible, quest?.token)
   // SRS v1.9: when the live stream is lost, viewers get the Tour's fallback
   // video, labelled as a degraded mode, while the live stream keeps reconnecting.
   const degraded = Boolean(questUrl && streamUrl && (questStatus === 'offline' || questStatus === 'error'))

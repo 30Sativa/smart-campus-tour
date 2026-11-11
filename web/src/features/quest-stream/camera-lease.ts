@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../../api/client'
 import type { ApiResponse } from '../../api/contracts/shared'
+import type { StreamAccess } from './stream-access'
 
 /** `POST /api/staff/manage/robots/{code}/camera-lease` (ADR-0052). */
 export type RobotCameraStatus = {
@@ -12,6 +13,8 @@ export type RobotCameraStatus = {
   robotListening: boolean
   lastPollAt: string | null
   leaseUntil: string | null
+  /** Relay URL and this Staff user's token (ADR-0055); null when the relay does not carry this robot. */
+  stream?: StreamAccess | null
 }
 
 /** Well inside the backend's 2-minute lease, so an open page never lets the camera go off. */

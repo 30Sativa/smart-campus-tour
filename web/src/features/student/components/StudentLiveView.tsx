@@ -4,6 +4,7 @@ import type { PoiDetail, StudentSession, StudentTourSnapshot } from '../student-
 import { getStudentStatusDisplay } from '../student-status'
 import { POI_PROGRESS_LABEL, poiMinutes, poiProgress } from '../student-route'
 import { StudentVideoPlayer } from './StudentVideoPlayer'
+import type { QuestSource } from '../../quest-stream/stream-access'
 import { Student2DMap } from './Student2DMap'
 import { StudentNarrationBar } from './StudentNarrationBar'
 import { useStudentStore, type StudentLiveTab } from '../student-store'
@@ -27,6 +28,8 @@ interface StudentLiveViewProps {
   video?: { badge?: string; emptyMessage?: string }
   /** Extra content under the journey rail, e.g. a fallback video link. */
   notice?: ReactNode
+  /** The live relay URL and token (ADR-0055). Omitted = the dev-only LAN URL; null = no live stream. */
+  quest?: QuestSource | null
 }
 
 const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
@@ -41,7 +44,7 @@ const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
  * On phones those panels stack in the same reading order.
  * Every tab stays mounted so the AI conversation survives a tab switch.
  */
-export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narrationIdleText, video, notice }: StudentLiveViewProps) {
+export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narrationIdleText, video, notice, quest }: StudentLiveViewProps) {
   const tabs = showMap ? TABS : TABS.filter((t) => t.key !== 'map')
   const storedTab = useStudentStore((s) => s.activeTab)
   const tab = tabs.some((t) => t.key === storedTab) ? storedTab : tabs[0].key
@@ -81,7 +84,7 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
         <div className="st-e-main">
           <div className={`st-x-stage st-tone-${statusDisplay.tone}${snapshot.step === 'navigating' || snapshot.step === 'returning' ? ' is-moving' : ''}`}>
             <StudentVideoPlayer streamUrl={snapshot.videoStreamUrl || undefined} statusLabel={stopLabel}
-              badge={video?.badge} emptyMessage={video?.emptyMessage}
+              badge={video?.badge} emptyMessage={video?.emptyMessage} {...(quest === undefined ? {} : { quest })}
               onReplayNarration={snapshot.narration ? voice.replay : undefined} />
             {/* Keep the current stop readable below the picture and its controls. */}
             <div className="st-x-caption" aria-live="polite">

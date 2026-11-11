@@ -26,6 +26,7 @@ using SmartCampus.Application.Features.Infrastructure;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.RobotDiagnostics;
 using SmartCampus.Application.Features.Routes;
+using SmartCampus.Application.Features.StreamRelay;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Infrastructure.Integrations.RobotDiagnostics;
 using SmartCampus.Infrastructure.Services;
@@ -80,6 +81,13 @@ public static class DependencyInjection
             configuration.GetValue<int?>("FleetCamera:RobotListeningWithinSeconds") ?? 20));
         services.AddSingleton<ICameraDemandStore, InMemoryCameraDemandStore>();
         services.AddScoped<IRobotCameraReader, EfRobotCameraReader>();
+        // ADR-0055: reading the public relay needs a backend token; unset QuestRelay hands out none.
+        services.AddSingleton(new StreamRelaySettings(configuration["QuestRelay:WhepUrl"],
+            configuration["QuestRelay:RobotCode"], configuration["QuestRelay:Key"],
+            configuration["QuestRelay:PublishUser"], configuration["QuestRelay:PublishPasswordSha256"],
+            configuration["QuestRelay:Path"], configuration.GetValue<int?>("QuestRelay:TokenSeconds") ?? 120));
+        services.AddScoped<IStreamEntitlementReader, EfStreamEntitlementReader>();
+        services.AddScoped<StreamEntitlement>();
         services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
         services.AddSingleton<JwtTokenSettings>();
         services.AddSingleton(TimeProvider.System);
