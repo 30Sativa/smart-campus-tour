@@ -71,7 +71,7 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
               <ul className="mt-2 space-y-1.5" aria-label="Điều kiện chốt chưa đạt">{blockers.map(blocker => <li key={blocker.code} className="flex items-start gap-2 text-[13px] text-[#334155]">
                 <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-[#fef2f2] text-[#dc2626]"><X size={10} strokeWidth={3} aria-hidden="true" /></span>
                 {/* The server does not say whether rows or email requests remain, so this opens every registration of the Tour, not the pending queue. */}
-                <span>{blocker.message}{blocker.code === 'PENDING_DECISIONS' && <> <Link to={`/staff/manage/registrations?tourId=${tour.id}`} className="font-semibold text-[#2563eb] underline-offset-2 hover:underline">Xem đăng ký của Tour</Link></>}</span>
+                <span>{blocker.message}{(blocker.code === 'PENDING_DECISIONS' || blocker.code === 'NO_ACCEPTED_ROWS') && <> <Link to={`/staff/manage/registrations?tourId=${tour.id}`} className="font-semibold text-[#2563eb] underline-offset-2 hover:underline">Xem đăng ký của Tour</Link></>}</span>
               </li>)}</ul>
             </>
             : <p className="text-[13px] font-semibold text-[#15803d]">Tour đủ điều kiện chốt.</p>}

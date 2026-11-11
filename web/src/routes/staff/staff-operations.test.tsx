@@ -448,6 +448,16 @@ describe('READY and Reopen on Tour preparation', () => {
     expect(screen.queryByText(/chưa có trên hệ thống thật/)).not.toBeInTheDocument()
   })
 
+  it('sends Staff to the registrations when nobody was accepted for the Tour', async () => {
+    tour = detail('SCHEDULED', { permissions: { canEditMetadata: true, canChangeScheduleAndRoute: true, canCancel: true, canMarkReady: false, canReopen: false,
+      readyBlockers: [{ code: 'NO_ACCEPTED_ROWS', message: 'Tour chưa có dòng đăng ký nào được duyệt.' }] } })
+    renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)
+    const list = await screen.findByRole('list', { name: 'Điều kiện chốt chưa đạt' })
+    expect(within(list).getByText('Tour chưa có dòng đăng ký nào được duyệt.')).toBeInTheDocument()
+    expect(within(list).getByRole('link', { name: 'Xem đăng ký của Tour' })).toHaveAttribute('href', '/staff/manage/registrations?tourId=tour-1')
+    expect(screen.getByRole('button', { name: /Chốt Tour/ })).toBeDisabled()
+  })
+
   it.each(['CANCELLED', 'COMPLETED'] as const)('does not print seats for a %s Tour', async state => {
     const base = detail(state)
     tour = { ...base, tour: { ...base.tour, capacity: 20, heldSeats: 8 } }

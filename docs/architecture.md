@@ -60,6 +60,7 @@ branch-request endpoint is implemented here.
 | POST | `/api/admin/schedule-blocks` | Admin only. `{requestId, date, shiftCode, reason}`; null `shiftCode` closes the whole day; returns `{id, scope, reason}`. 400 for a date before today (Vietnam date), an unknown shift or a blank reason. 409 `SCHEDULE_BLOCK_EXISTS` for a duplicate block, or a whole-day block and a single-shift block on one day; 409 `SHIFT_HAS_TOURS` with `errors.blockers` naming each uncancelled Tour. Takes the same per-date lock as Tour create. Audited as `SCHEDULE_BLOCK_CREATED`. |
 | POST | `/api/admin/schedule-blocks/{id}/remove` | Admin only. `{requestId}`; allowed for past dates too. 404 when missing, 409 `SCHEDULE_BLOCK_ALREADY_REMOVED`. Audited as `SCHEDULE_BLOCK_REMOVED`. |
 | GET | `/api/admin/system-audit-logs` | Admin only. Paged audit entries, newest first, filtered by `action`, `actor`, `from`, `to`. Safe columns only, never `DataJson`. |
+| GET | `/api/staff/notifications` | Staff only (Admin/TechnicalStaff 403). `size` 1-50 (default 30). The newest audit rows of Technical Staff outcomes Staff acts on, newest first: `POI_TECHNICAL_VERIFIED`, `POI_POSE_CAPTURE_VERIFIED`, `POI_TECHNICAL_REJECTED`, `ROUTE_TEST_PASSED`, `ROUTE_TEST_FAILED`, `MAP_DEPLOYMENT_CHECK_RECORDED` (`resultCode` PASS/FAIL) and `ROBOT_INSPECTION_RELEASED`. Each row is `{id, occurredAt, action, resultCode, targetId, subject, revisionNumber, robotCode, actorName}`; `targetId` is the POI proposal, Route, map version or robot to open, null with `subject` when the target is gone. A read projection of the audit log: no new table, never `DataJson`. Read state is the browser's (per account); there is no push event, the web polls. |
 | GET | `/api/staff/manage/tours/operators` | Active single-role Staff accounts a new Tour can name as Operator (ADR-0034). |
 | POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. The schedule must be exactly the Tour start of a configured shift (409 `TOUR_SLOT_NOT_ALLOWED`), at least 72 hours ahead (409 `TOUR_LEAD_TIME_TOO_SHORT`); a run without a measurement basis returns 409 `ROUTE_TEST_REMEASURE_REQUIRED`. Creates a SCHEDULED Tour on one exact tested revision and holds the robot for the whole shift (`docs/lich-tour-theo-ca.md`); 409 `ROUTE_TOO_LONG_FOR_SHIFT`, `SHIFT_BLOCKED`, `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
 | PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`; cancel and recreate instead. Cancelling releases the reservation. |
@@ -761,7 +762,8 @@ effective `verificationMethod`, and proposals add `sourcePoiId`. Route save retu
 
 Map and pose input limits (ADR-0040): `POST /api/technical/map-versions` returns 409
 `MAP_PACKAGE_DUPLICATE` for a package already in that area. POI create and draft return 422
-`POI_CAMERA_PRESET_INVALID` unless the preset is `FRONT`, `LEFT` or `RIGHT` in any case. A newly
+`POI_CAMERA_PRESET_INVALID` unless the preset is `FRONT`, `LEFT`, `RIGHT`, `NONE`, `SWEEP`, `SWEEP:<10..170>` or `ANGLE:<pan>,<tilt>` (pan −170..170, positive left; tilt −18..18, positive up; at most one decimal), any case, stored canonical
+(ADR-0045 addendum 10/11/2026: the preset is what the VR camera head does at the POI). A newly
 written POI or route pose returns 422 `POSE_CLEARANCE_INSUFFICIENT` unless every cell within
 `Maps:PoiClearanceMeters` (default 0.30) is inside the map and free, and import preview reports it
 per file. Both 422s carry the Vietnamese message in `message` and the code in `errors.code`.
@@ -1146,6 +1148,7 @@ decision, not an SRS requirement. Data source: `DB`, `TELEMETRY` (in-memory Flee
 | Active reservation (`ReleasedAt IS NULL`) for this Tour on its robot | SRS §4, ADR-0034 | DB | fail | `RESERVATION_MISSING` |
 | Robot passes the ADR-0039 usable-robot rule for the revision's map version/SHA | ADR-0039 | DB | fail | `ROBOT_NOT_READY_FOR_ROUTE` |
 | No pending row or email-change decision | SRS §4 (FR-16) | DB | fail | `PENDING_DECISIONS` |
+| At least one active ACCEPTED roster row; reported only when no decision is pending | ADR-0054 | DB | fail | `NO_ACCEPTED_ROWS` |
 | `ScheduledStartAt > now` | Design | DB + clock | fail | `START_TIME_PASSED` |
 
 Only root causes are reported. Fail-closed applies to the READY decision (any
@@ -1156,7 +1159,7 @@ keeps both null together) reports only `ROUTE_VERSION_REQUIRED`, skipping the
 Operator, revision, reservation and robot rows. A Tour without an active
 reservation reports only `RESERVATION_MISSING`, skipping the robot row. The
 independent rows (`TOUR_STATE_INVALID`, `PENDING_DECISIONS`, `START_TIME_PASSED`)
-always run and are all reported.
+always run and are all reported. `NO_ACCEPTED_ROWS` runs only when `PENDING_DECISIONS` passed.
 
 A deactivated route does not block READY: ADR-0037 §5/§7 stops only Tour create
 and slots, and existing Tours keep their route.
@@ -1171,7 +1174,7 @@ while `FleetCommands:Enabled = false`, Start returns
 |---|---|---|---|---|
 | Tour is READY | SRS §4 | DB | fail | `tourReady` |
 | Caller is `Tours.OperatorUserId` | SRS §7 (FR-36/46) | DB | POST: `403`, not a check; GET start-checks: a check telling the viewer | `callerIsOperator` |
-| `now` in `[ScheduledStartAt - StartEarlyLimitMinutes, ScheduledStartAt + StartLateLimitMinutes]`, defaults 10 and 15; the early limit is at most the 15-minute reservation buffer | Lower bound ADR-0050; upper bound Design (D2, ADR-0042 §7) | DB + CONFIG | fail | `withinStartWindow` |
+| `now` in `[ScheduledStartAt - StartEarlyLimitMinutes, ScheduledStartAt + StartLateLimitMinutes]`, defaults 10 and 15; the early limit is at most the 15-minute reservation buffer. A short-notice Tour opens when its robot hold opens (a quick Tour: at creation) | Lower bound ADR-0050, ADR-0053; upper bound Design (D2, ADR-0042 §7) | DB + CONFIG | fail | `withinStartWindow` |
 | Before `ScheduledStartAt`: every accepted active row holds a live browser session. From `ScheduledStartAt`: passes as not applicable | ADR-0050 | DB | no accepted row passes; before the window: not evaluated | `allViewersJoined` |
 | Active reservation for this Tour on the same robot | SRS §4, ADR-0034 | DB | fail | `reservationActive` |
 | Revision still schedulable: effective PASS run, POI evidence, map gate (the READY check, `TourTarget.RequireSchedulableRevisionAsync`); route deactivation not considered (ADR-0037) | ADR-0034 | DB | fail; detail carries the code, e.g. `ROUTE_TEST_PASS_REQUIRED` | `revisionStillSchedulable` |
@@ -1181,6 +1184,7 @@ while `FleetCommands:Enabled = false`, Start returns
 | `Robots.CurrentTourId IS NULL` | SRS §4 (atomic claim) | DB | fail | `robotNotHeldByOtherTour` |
 | `Robots.IsDispatchEnabled = 1` (set by Technical Staff with GATE A evidence, ADR-0049) | Design (ADR-0042 §6) | DB | fail | `robotDispatchEnabled` |
 | No pending row/email decision (recheck) | SRS §4 | DB | fail | `noPendingDecisions` |
+| At least one active ACCEPTED roster row (recheck); needs `noPendingDecisions` | ADR-0054 | DB | fail | `hasAcceptedRows` |
 | No open incident: no Tour holding this robot (`Robots.CurrentTourId`, or a RUNNING Tour with `AssignedRobotId` = robot) has `OperationalStatus = NEEDS_ASSISTANCE`. `NeedsInspection` is the separate `robotNotNeedsInspection` check (refined 03/11/2026, no duplicate report); replace when an incident store exists | SRS §7 (FR-36/46); definition is Design (ADR-0042 open decision 3) | DB | missing data fails | `noOpenIncident` |
 | No unresolved command for the robot: no `RobotCommands` row with `IsOpen = 1` (an UNKNOWN GoTo counts) | SRS §7 | DB | fail | `noUnresolvedCommand` |
 | Latest telemetry received by server ≤ `FleetCommands:MaxTelemetryAgeSeconds` (default 2) ago; not Fleet Sync `SyncFreshness` | SRS §7 | TELEMETRY + CONFIG | fail ("robot chưa báo") | `telemetryFresh` |
@@ -1203,7 +1207,7 @@ input runs only when that check passed, otherwise it is `passed: false` with det
 robot, incident, command and telemetry row needs `reservationActive`;
 `robotEligibleForRoute`/`robotMapMatchesRoute` also need the Tour's revision;
 `mapContextMatches`, `executionIdle`, `robotLocalized` and `motionReady` need
-`telemetryFresh`. Independent rows (`tourReady`, `withinStartWindow`,
+`telemetryFresh`; `hasAcceptedRows` needs `noPendingDecisions`. Independent rows (`tourReady`, `withinStartWindow`,
 `revisionStillSchedulable`, `noPendingDecisions`, console, confirmations,
 transport) always run. `NeedsInspection = 1` fails only `robotNotNeedsInspection`;
 `noOpenIncident` fails only for a holding Tour in NEEDS_ASSISTANCE. `callerIsOperator`
@@ -1284,8 +1288,9 @@ buttons on the Operator console:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?}`; 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
-| GET | `/api/staff/manage/tours/{id}/head` | Any Staff: `{enabled, robotCode, connected, lastPollAt, head}` from the robot's last poll. |
+| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE\|SWEEP, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?, sweepDeg?}` (ANGLE within pan ±170, tilt ±18; `sweepDeg` 10..170, SWEEP only); 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
+| PUT | `/api/staff/manage/tours/{id}/head-mode` | `{mode: AUTO\|MANUAL}`, Operator only, until the Tour ends. AUTO (default) turns each POI's camera preset into one command at arrival (ANGLE, SWEEP with its `sweepDeg`, nothing for NONE) and queues `ANGLE 0/0` when Next starts the following leg (ADR-0045 addenda); MANUAL skips both. In memory. |
+| GET | `/api/staff/manage/tours/{id}/head` | Any Staff: `{enabled, mode, robotCode, connected, lastPollAt, head}` from the robot's last poll. |
 | POST | `/api/fleet/head/v1/poll` | Robot scheme. Long poll `{epoch, afterSeq, waitMs, head}` → `{epoch, commands[]}`. |
 
 Wire: `docs/contracts/fleet-head/v1/`. Commands live only in API memory per robot
@@ -1294,8 +1299,24 @@ Wire: `docs/contracts/fleet-head/v1/`. Commands live only in API memory per robo
 the robot releases it at its own receipt time + `ttlMs`, so a lost network or a
 closed tab stops the head. On the robot, `fleet_bridge` (`head_enabled`) maps
 `STEP`/`JOG` to topics `head/step`/`head/jog`, `STOP` to service `head/stop`,
-`ANGLE` to action `head/set`, and reports `head/state` on its next poll. Same
+`ANGLE` to action `head/set`, `SWEEP` to service `head/sweep` (`bus_interfaces/srv/HeadSweep`, `amplitude_deg` =
+`sweepDeg` or 0 for the default 135°: left, right, back to the start at 30°/s; any button stops it), and reports
+`head/state` on its next poll. Same
 single-API-instance limit as Fleet Sync (ADR-0019).
+
+**Quest camera on demand (ADR-0052, proposed 09/11/2026; robot side opt-in).**
+The robot's Quest stream runs only while a Tour assigned to it is `RUNNING` or a Staff
+lease has not expired:
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/staff/manage/robots/{robotCode}/camera-lease` | Staff role, no body. Extends the lease to now + `FleetCamera:LeaseSeconds` (120); 200 `{robotCode, wanted, reason, robotListening, lastPollAt, leaseUntil}`; 404 unknown or deactivated robot; 400 invalid code. The pre-start check page renews it every 30 s while visible. |
+| POST | `/api/fleet/camera/v1/poll` | Robot scheme, no body, `FleetSync` rate-limit policy. 200 `{wanted, reason: TOUR_RUNNING\|STAFF_WATCHING\|IDLE, pollSeconds}`. |
+
+Leases and last polls live only in API memory (single instance, ADR-0019); nothing is
+written to SQL. `robot/quest-stream` (`QUEST_CONTROL_URL=auto`) polls with the Fleet Sync
+identity, pauses capture when not wanted (`/status` state `paused`, `/device` stream
+`paused`) and keeps capturing after 60 s without an answer unless `QUEST_CONTROL_FAILSAFE=off`.
 
 Rotating head/pan presets remain a V1 requirement outside the navigation wire
 MVP. FRONT gating is the current orchestration decision described above, not a
@@ -1721,12 +1742,12 @@ Audit actions `ROSTER_PENDING_EXPIRED`, `REGISTRATION_EXPIRED` and `ROSTER_EXPIR
 | Surface | Contract |
 |---|---|
 | `GET .../tours/{id}/start-checks`, `POST .../tours/{id}/start` | Check `allViewersJoined` (table in §3.2). The read adds `opensAt`, the first instant Start is accepted. An early Start records `ReasonCode = EARLY_START` on `TOUR_STARTED`. |
-| `GET /api/staff/manage/tours/slots` | Optional `shortNotice=true` judges shifts with the short-notice lead and returns each `registrationClosesAt` as the Tour start. The response adds `shortNoticeMinLeadMinutes`, null while the option is off. |
-| `POST /api/staff/manage/tours` | `configuration.shortNoticeReason` (optional, at most 500 characters, not blank) makes the Tour short notice. 409 `SHORT_NOTICE_DISABLED` while `Tours:ShortNoticeMinLeadMinutes` is unset. |
-| Staff Tour reads | `tour.isShortNotice`; `tour.registrationClosesAt` is the Tour start for a short-notice Tour. |
+| `POST /api/staff/manage/tours` | A quick Tour (ADR-0053) is created through the same call: `configuration.shortNoticeReason` (at most 500 characters, not blank) with `scheduledStartAt` null. The server sets `scheduledStartAt` to the latest Start (now + `Tours:ShortNoticeMinLeadMinutes`, 30 when unset, next whole minute), holds the robot `[now, latest Start + expected + 15 min]` with no shift, and records `TOUR_CREATED_SHORT_NOTICE` with the reason. A reason with a start, or no reason and no start, is 400. 409 `SHIFT_BLOCKED` when the hold reaches a closed day or shift, `ROBOT_RESERVATION_CONFLICT` on any other hold. Always available. |
+| `GET .../tours/shifts`, `GET .../tours/slots` | Shifts read adds `quickTourWaitMinutes`. Slots are for Tours on a shift only: `shortNotice` and `shortNoticeMinLeadMinutes` are removed. |
+| Staff Tour reads | `tour.isShortNotice` (a quick Tour); `tour.registrationClosesAt` is its latest Start. |
 | Representative Tour and registration reads | Tour adds `registrationClosesAt`; registration summary adds `tourIsShortNotice` and `tourRegistrationClosesAt`. |
 
-A short-notice Tour replaces only the 72-hour lead, the 48-hour close and the 24-hour review close. Its list closes with READY, the T-24h job skips it, and undecided rows still block READY and Start. Every Start check is the same as for any other Tour.
+A short-notice Tour replaces the 72-hour lead, the 48-hour close and the 24-hour review close. Its list closes with READY, the T-24h job skips it, and undecided rows still block READY and Start. Since ADR-0053 every new short-notice Tour is a quick Tour with no shift: Start, and `opensAt`, open when its robot hold opens (creation), `allViewersJoined` applies before its latest Start, and every other Start check is the same as for any other Tour. The late limit and automatic cancellation run from its latest Start.
 
 ### 3.3 State storage and realtime delivery
 

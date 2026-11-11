@@ -9,8 +9,10 @@ public sealed class FleetHeadSettings
     public const int MaximumQueuedPerRobot = 32;
 
     public FleetHeadSettings(bool enabled = false, int maxCommandAgeMs = 1000, int jogTtlMs = 600, int maxWaitMs = 1500,
-        int robotConnectedWithinMs = 3000)
+        int robotConnectedWithinMs = 3000, string defaultMode = HeadModes.Auto)
     {
+        if (!HeadModes.All.Contains(defaultMode))
+            throw new InvalidOperationException("FleetHead:DefaultMode must be AUTO or MANUAL.");
         if (maxCommandAgeMs <= 0)
             throw new InvalidOperationException("FleetHead:MaxCommandAgeMs must be positive.");
         if (jogTtlMs <= 0)
@@ -24,6 +26,7 @@ public sealed class FleetHeadSettings
         JogTtl = TimeSpan.FromMilliseconds(jogTtlMs);
         MaxWait = TimeSpan.FromMilliseconds(maxWaitMs);
         RobotConnectedWithin = TimeSpan.FromMilliseconds(robotConnectedWithinMs);
+        DefaultMode = defaultMode;
     }
 
     public bool Enabled { get; }
@@ -35,4 +38,6 @@ public sealed class FleetHeadSettings
     public TimeSpan MaxWait { get; }
     /// <summary>The robot counts as listening while a poll is open or ended no longer ago than this.</summary>
     public TimeSpan RobotConnectedWithin { get; }
+    /// <summary>Head mode of a Tour whose Operator has not chosen one (in memory, so also after an API restart).</summary>
+    public string DefaultMode { get; }
 }

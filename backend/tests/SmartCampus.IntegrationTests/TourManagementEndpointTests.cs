@@ -439,7 +439,8 @@ public sealed class TourManagementEndpointTests
         Assert.False(list.Single(c => c.GetProperty("id").GetString() == "callerIsOperator").GetProperty("passed").GetBoolean());
         Assert.DoesNotContain(list, c => c.GetProperty("source").GetString() == "OPERATOR_CONFIRMATION");
         var blockedBy = checks.GetProperty("blockedBy").EnumerateArray().Select(b => b.GetString()).ToArray();
-        Assert.Equal(["tourReady", "callerIsOperator", "reservationActive", "revisionStillSchedulable", "operatorConsoleConnected",
+        // Nobody was accepted for it either (ADR-0054).
+        Assert.Equal(["tourReady", "callerIsOperator", "reservationActive", "revisionStillSchedulable", "hasAcceptedRows", "operatorConsoleConnected",
             "commandTransportEnabled"], blockedBy.Where(b => b != "withinStartWindow"));
         await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/start", start, HttpStatusCode.Forbidden);
         await f.Send(HttpMethod.Get, $"/api/staff/manage/tours/{Guid.NewGuid()}/start-checks", expected: HttpStatusCode.NotFound);
@@ -493,7 +494,7 @@ public sealed class TourManagementEndpointTests
         Assert.False(detail.Permissions.CanMarkReady);
         Assert.False(detail.Permissions.CanReopen);
         // Operator, revision, reservation and robot all need the exact revision, so they are not reported.
-        Assert.Equal(["ROUTE_VERSION_REQUIRED"], detail.Permissions.ReadyBlockers!.Select(b => b.Code));
+        Assert.Equal(["ROUTE_VERSION_REQUIRED", "NO_ACCEPTED_ROWS"], detail.Permissions.ReadyBlockers!.Select(b => b.Code));
         Assert.All(detail.Permissions.ReadyBlockers!, b => Assert.False(string.IsNullOrWhiteSpace(b.Message)));
 
         // An independent check still reports next to the root cause.

@@ -61,3 +61,44 @@ would write SQL rows several times per second and block navigation behind the on
 - Because only a `RUNNING` Tour enables control, the head cannot be turned from the web on a physical robot until a
   Tour can start on it (`IsDispatchEnabled`, M2.3). Bench control stays on `head_teleop` / ROS CLI.
 - Camera presets at POI arrival (FR-49, M2.5) and FRONT before legs remain separate work; they may reuse `ANGLE`.
+
+## Addendum 09/11/2026: automatic sweep at POIs (requested by team member Sơn)
+
+- Two head modes per Tour, chosen by the Operator: `MANUAL` (buttons only) and `AUTO` (default). In `AUTO`, when the
+  robot's GoTo to a POI is recorded `ARRIVED` for the Tour's current leg, the backend queues one `SWEEP` on Fleet Head
+  v1. Nothing is persisted; the mode lives in API memory (`FleetHead:DefaultMode` after a restart).
+- The sweep runs on the robot (`stm32_bridge` service `head/sweep`): PAN left 135°, right 270°, left 135° back to the
+  starting position, TILT unchanged, at the firmware's button speed (30°/s, no firmware change). Each side shrinks so
+  the head never presses the soft limit, so the step counts always sum to zero and the head returns exactly.
+- Buttons win: any manual head command cancels a running sweep, and the sweep sends nothing after it.
+- Best effort: no sweep while `FleetHead:Enabled` is false, the robot is not polling, or the head is not IDLE with a
+  reference. The arrival is recorded either way. Next is not blocked by a running sweep; the head may still be turned
+  when the robot leaves. This is not the FR-49 checked camera preset, which stays M2.5 work.
+
+## Addendum 10/11/2026: review fixes
+
+- Next in `AUTO` queues `ANGLE 0/0` with the new leg: the robot no longer drives off with the head turned.
+- A manual `STEP`/`JOG` during a sweep first sends `HEAD STOP`: the firmware adds a STEP to the running segment's
+  target, so the head used to finish the segment (a "right 5 steps" ended at 132° left).
+- The PAN home seek only finds the stop from 174° right to 16° left, and the sweep spends seconds beyond 16° left.
+  `stm32_bridge` now remembers the real PAN angle on disk; after an STM32 reset or power loss far left, auto-home
+  does ZERO → turn back → HOME, and a manual HOME far left turns to the front first. Park on shutdown waits until
+  the head is at 0/0. The firmware and its 190° seek are unchanged.
+- The backend refuses `ANGLE` outside the firmware soft limits (pan ±170°, tilt ±18°).
+
+## Addendum 10/11/2026 (2): the VR head is configured on the POI (requested by team member Sơn)
+
+- Every head behaviour at a POI lives in the POI's "Camera & tư liệu", in the existing camera preset (FR-49: one
+  preset per POI revision, checked by Technical Staff). The vocabulary grows from `FRONT`/`LEFT`/`RIGHT` to also
+  `NONE` (head stays, Operator buttons only), `SWEEP` / `SWEEP:<10..170>` (look left, right, back, degrees per side)
+  and `ANGLE:<pan>,<tilt>` (pan ±170°, positive left; tilt ±18°, positive up). It stays one `NVARCHAR(80)` value,
+  stored canonical and copied into route revision stops, so there is no schema change; a preset change alters the
+  POI navigation fingerprint and needs a new check, as before.
+- At arrival in an `AUTO` Tour the backend turns the stop's preset into one Fleet Head command: `FRONT` 0/0,
+  `LEFT` +90°, `RIGHT` −90°, `ANGLE` as given, `SWEEP` with optional `sweepDeg`, nothing for `NONE`. Existing POIs
+  hold `FRONT`, so they now turn to the front instead of sweeping; Staff picks `SWEEP` where a look-around is wanted.
+- The Tour `AUTO`/`MANUAL` switch stays as the Operator's quick switch-off of all POI presets; departure still turns
+  the head to the front in `AUTO`.
+- Fleet Head v1 `SWEEP` gains optional `sweepDeg`; ROS `head/sweep` changes from `std_srvs/Trigger` to
+  `bus_interfaces/srv/HeadSweep` (`amplitude_deg`, 0 = default), so `bus_interfaces` must be rebuilt.
+- The route-level head steps (`RouteStops.HeadSteps`) are untouched; nothing on the robot reads them.

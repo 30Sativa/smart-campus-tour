@@ -1,5 +1,5 @@
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, FileText, Info, Lock, Map as MapIcon, Plus, Search, SlidersHorizontal, Timer, Bot, Users } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, FileText, Info, Lock, Map as MapIcon, Plus, Search, SlidersHorizontal, Timer, Bot, Users, Zap } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { LoadingPanel } from '../../components/ui/ConsolePrimitives'
 import { Drawer } from '../../components/ui/Drawer'
@@ -68,7 +68,7 @@ const openShift = (shift: TourShift, tours: TourSummary[], now: number) =>
     ? instant(tour.reservation.startsAt) < instant(shift.endsAt) && instant(tour.reservation.endsAt) > instant(shift.startsAt)
     // No hold means no known length, so the Tour takes only the shift it starts in.
     : startsIn(tour, shift)))
-const createHref = (day: string, shift: TourShift) => `/staff/manage/tours/new?date=${day}&shift=${encodeURIComponent(shift.code)}`
+const createHref = (day: string, shift: TourShift) => `/staff/manage/tours/new?kind=normal&date=${day}&shift=${encodeURIComponent(shift.code)}`
 const shiftSpan = (shift: TourShift) => `${campusTime(shift.startsAt)}-${campusTime(shift.endsAt)}`
 /** `2099-01-05` as people read it: 05/01/2099. */
 const readableDay = (day: string) => day.split('-').reverse().join('/')
@@ -305,9 +305,9 @@ function TourCard({ tour, outside = false, showRobot, onSelect }: { tour: TourSu
   const [now] = useState(() => Date.now())
   const overdue = overdueStartLabel(tour, tour.reservation, now)
   return <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" title={tour.name}
-    aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}${robot ? `, robot ${robot}` : ''}`}
+    aria-label={`${outside ? 'Ngoài ca: ' : ''}${tour.isShortNotice ? 'Tour nhanh: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}${robot ? `, robot ${robot}` : ''}`}
     className={`block w-full rounded-lg border px-1.5 py-1 text-left transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${chipOf(tour, now)} ${focus}`}>
-    <span className="flex flex-wrap gap-x-1.5 text-[11px] tabular-nums opacity-80">{campusTime(tour.scheduledStartAt)}{robot && <span className="font-mono whitespace-nowrap">{robot}</span>}</span>
+    <span className="flex flex-wrap items-center gap-x-1.5 text-[11px] tabular-nums opacity-80">{tour.isShortNotice && <QuickMark />}{campusTime(tour.scheduledStartAt)}{robot && <span className="font-mono whitespace-nowrap">{robot}</span>}</span>
     <span className={`line-clamp-2 text-xs font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
     <span className="mt-1 inline-block rounded bg-white/70 px-1 text-[10.5px] font-semibold">{tourStateLabel(tour, now)}</span>
     {overdue && <span className="mt-1 block text-[10.5px] font-semibold text-[#9d3428]">{overdue}</span>}
@@ -356,14 +356,19 @@ function ShiftCard({ day, shift, tours, open, onSelect }: { day: string; shift: 
 function TourRows({ tours, outside = false, onSelect }: { tours: TourSummary[]; outside?: boolean; onSelect: (id: string) => void }) {
   const [now] = useState(() => Date.now())
   return <ul aria-label="Tour trong ca" className="mt-2.5 space-y-2">{tours.map(tour => <li key={tour.id}>
-    <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}`}
+    <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" aria-label={`${outside ? 'Ngoài ca: ' : ''}${tour.isShortNotice ? 'Tour nhanh: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}`}
       className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-left text-sm transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${chipOf(tour, now)} ${focus}`}>
-      <span className="font-semibold tabular-nums">{span(tour)}</span>
+      <span className="flex items-center gap-1.5 font-semibold tabular-nums">{tour.isShortNotice && <QuickMark />}{span(tour)}</span>
       <span className="min-w-0 flex-1 basis-48"><span className={`block font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
         <span className="block text-xs break-words opacity-80">{tour.routeName} · {tour.reservation ? `robot ${tour.reservation.robotCode} · giữ ${campusTime(tour.reservation.startsAt)} - ${campusTime(tour.reservation.endsAt)}` : 'không giữ robot'}</span></span>
       <span className="rounded bg-white/70 px-1.5 text-[11px] font-semibold whitespace-nowrap">{tourStateLabel(tour, now)}</span>
     </button>
   </li>)}</ul>
+}
+
+/** A quick Tour (ADR-0053) in the shift calendar: its time is its latest Start and it holds the robot from creation. */
+function QuickMark() {
+  return <span title="Tour nhanh" className="inline-flex items-center gap-0.5 rounded bg-[#fffaf0] px-1 text-[10px] font-bold text-[#7d5310]"><Zap size={10} aria-hidden="true" />Nhanh</span>
 }
 
 /** The chosen Tour: its time, robot hold and where to go next. An ended Tour reads its detail, the only place its released hold and end reason are. */
@@ -378,6 +383,7 @@ function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void 
   const endReason = ended ? detail.data?.endReason : null
   const rows: Array<[typeof Clock, string, ReactNode]> = [
     [CalendarDays, 'Ngày tổ chức', new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(tour.scheduledStartAt))],
+    ...(tour.isShortNotice ? [[Zap, 'Loại Tour', 'Tour nhanh, hạn Start là giờ ghi trên lịch'] as [typeof Clock, string, ReactNode]] : []),
     [Clock, 'Thời gian Tour', span(tour, hold)],
     [Bot, 'Robot', hold?.robotCode ?? (loading ? 'Đang tải…' : '-')],
     [CalendarDays, hold?.releasedAt ? 'Khung giữ đã trả' : 'Giữ chỗ robot', hold ? `${campusTime(hold.startsAt)} - ${campusTime(hold.endsAt)}` : loading ? 'Đang tải…' : 'Không giữ robot'],

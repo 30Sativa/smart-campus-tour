@@ -7,6 +7,7 @@ import { notify } from '../../../components/ui/toast-store'
 import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { formatSlot, formatStamp } from '../../../features/administration/admin-format'
 import { passedAt } from '../../../features/administration/routes/route-messages'
+import { NewerRevisionNotice } from '../../../features/administration/routes/NewerRevisionNotice'
 import { mapAreaName } from '../../../features/administration/map-labels'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
 import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
@@ -61,7 +62,7 @@ export default function StaffManageTourDetailPage() {
       <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <Item label="Thời gian dự kiến" value={formatSlot(tour.scheduledStartAt)} />
         <Item label="Trạng thái" value={tourStateLabel(tour, now)} />
-        {tour.isShortNotice && <Item label="Loại Tour" value="Ngắn hạn" />}
+        {tour.isShortNotice && <Item label="Loại Tour" value="Tour nhanh" />}
         <Item label="Đăng ký / lời mời" value={`${tour.registrationCount} đoàn · ${tour.invitationCount} lời mời`} />
         {openSeatsLabel(tour) && <Item label="Chỗ" value={openSeatsLabel(tour)!} />}
         <Item label="Tạo lúc" value={formatStamp(tour.createdAt)} />
@@ -81,8 +82,9 @@ export default function StaffManageTourDetailPage() {
     {routeRevision && <section className={`${panelClass} mt-3 p-4`} aria-label="Tuyến của Tour">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-[15px] font-semibold">Tuyến: {routeRevision.name}</h2>
-        <Link to={`/staff/manage/routes/${routeRevision.routeId}?revisionId=${routeRevision.revisionId}`} className="text-sm text-[#2d719e]">Mở tuyến</Link>
+        <Link to={`/staff/manage/routes/${routeRevision.routeId}?revisionId=${routeRevision.revisionId}`} className="text-sm text-[#2d719e]">Xem bản Tour đang dùng</Link>
       </div>
+      {(tour.state === 'SCHEDULED' || tour.state === 'READY') && <NewerRevisionNotice routeId={routeRevision.routeId} revisionId={routeRevision.revisionId} />}
       <p className="mt-1 text-sm text-[#64748b]">{routePassedAt && `Tuyến đã chạy thử đạt ngày ${campusShortDate(routePassedAt)} · `}{routeRevision.stops.length} điểm dừng</p>
       <ol className="mt-3 divide-y divide-[#e2e8f0]">{routeRevision.stops.map(stop => <li key={stop.poiRevisionId} className="py-2.5 text-sm">
         <span className="font-medium">{stop.stopOrder}. {stop.name}</span>

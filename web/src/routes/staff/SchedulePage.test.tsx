@@ -51,11 +51,21 @@ describe('Staff Tour calendar', () => {
       urls.push(url)
       if (tourDetail && url.pathname === '/api/staff/manage/tours/tour-1') return new Response(JSON.stringify({ success: true, data: tourDetail }), { status: 200 })
       if (url.pathname === '/api/staff/manage/tours/shifts')
-        return new Response(JSON.stringify({ success: shiftStatus === 200, message: 'Không tải được.', data: { days: shiftDays(url.searchParams.get('from')!, url.searchParams.get('to')!), recommendedMaxSeconds: 3600 } }), { status: shiftStatus })
+        return new Response(JSON.stringify({ success: shiftStatus === 200, message: 'Không tải được.', data: { days: shiftDays(url.searchParams.get('from')!, url.searchParams.get('to')!), recommendedMaxSeconds: 3600, quickTourWaitMinutes: 30 } }), { status: shiftStatus })
       return new Response(JSON.stringify({ success: status === 200, message: 'Không tải được.', data: tourRows, pagination: { page: 1, pageSize: 100, totalItems: tourRows.length, totalPages: 1 } }), { status })
     }))
   })
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+  it('marks a quick Tour in the shift calendar at its latest Start (ADR-0053)', async () => {
+    const quick = { ...session, id: 'tour-q', name: 'Tour trình diễn', isShortNotice: true, scheduledStartAt: '2099-01-05T05:00:00Z',
+      reservation: { ...session.reservation, startsAt: '2099-01-05T04:00:00Z', endsAt: '2099-01-05T05:37:00Z' } }
+    tourRows = [session, quick]
+    show('/staff/schedule?date=2099-01-05&tour=tour-q')
+    expect(await screen.findByRole('button', { name: /Tour nhanh: 12:00/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Tour nhanh: 09:00/ })).not.toBeInTheDocument()
+    expect(within(await screen.findByRole('dialog')).getByText('Loại Tour')).toBeInTheDocument()
+  })
 
   it('prints only the start of a Tour whose length is unknown, never an assumed hour', async () => {
     tourRows = [{ ...session, reservation: null }]
@@ -144,7 +154,7 @@ describe('Staff Tour calendar', () => {
     const week = await screen.findByRole('region', { name: 'Lịch tuần' })
     // 2099-01-05: the morning shift holds "Tour sáng thật", the afternoon one is free.
     expect(within(week).queryByRole('link', { name: 'Tạo Tour Ca sáng ngày 05/01/2099' })).not.toBeInTheDocument()
-    expect(within(week).getByRole('link', { name: 'Tạo Tour Ca chiều 1 ngày 05/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?date=2099-01-05&shift=S2')
+    expect(within(week).getByRole('link', { name: 'Tạo Tour Ca chiều 1 ngày 05/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?kind=normal&date=2099-01-05&shift=S2')
     expect(within(week).getByRole('link', { name: 'Tạo Tour Ca sáng ngày 06/01/2099' })).toBeInTheDocument()
   })
 
@@ -245,7 +255,7 @@ describe('Staff Tour calendar', () => {
   it('offers "Tạo Tour" with the day and shift on a free shift of the day view', async () => {
     show('/staff/schedule?date=2099-01-05&view=day')
     const free = await screen.findByRole('article', { name: 'Ca chiều 1 13:00-15:00' })
-    expect(within(free).getByRole('link', { name: 'Tạo Tour Ca chiều 1 ngày 05/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?date=2099-01-05&shift=S2')
+    expect(within(free).getByRole('link', { name: 'Tạo Tour Ca chiều 1 ngày 05/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?kind=normal&date=2099-01-05&shift=S2')
   })
 
   it('lists the week by day on a narrow screen, with no seven-column table', async () => {
@@ -255,7 +265,7 @@ describe('Staff Tour calendar', () => {
     const week = await screen.findByRole('region', { name: 'Lịch tuần' })
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
     expect(within(week).getAllByRole('article', { name: 'Ca sáng 08:00-10:00' })).toHaveLength(7)
-    expect(within(week).getByRole('link', { name: 'Tạo Tour Ca sáng ngày 06/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?date=2099-01-06&shift=S1')
+    expect(within(week).getByRole('link', { name: 'Tạo Tour Ca sáng ngày 06/01/2099' })).toHaveAttribute('href', '/staff/manage/tours/new?kind=normal&date=2099-01-06&shift=S1')
     expect(within(week).getByRole('region', { name: 'Ngoài ca ngày 06/01/2099' })).toBeInTheDocument()
   })
 

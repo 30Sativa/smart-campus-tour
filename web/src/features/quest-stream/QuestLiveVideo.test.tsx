@@ -177,6 +177,42 @@ describe('QuestLiveVideo (WebRTC / WHEP)', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('pauses on request: closes the connection, then reconnects on resume', async () => {
+    render(<QuestLiveVideo src={WHEP_URL} />)
+    await negotiated(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Tạm dừng hình' }))
+    expect(pcs[0].closed).toBe(true)
+    expect(screen.getByText('Đã tạm dừng hình')).toBeInTheDocument()
+    expect(screen.getByText('Tạm dừng')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Tạm dừng hình' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục xem' }))
+    await negotiated(1)
+    expect(posts()).toHaveLength(2)
+  })
+
+  it('stops pulling the stream while the tab is hidden', async () => {
+    let state: DocumentVisibilityState = 'visible'
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => state)
+    render(<QuestLiveVideo src={WHEP_URL} />)
+    await negotiated(0)
+
+    state = 'hidden'
+    act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+    expect(pcs[0].closed).toBe(true)
+
+    state = 'visible'
+    act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+    await negotiated(1)
+    vi.restoreAllMocks()
+  })
+
+  it('explains a missing picture with the hint it is given', async () => {
+    fetchMock.mockImplementationOnce(async () => answer(404))
+    render(<QuestLiveVideo src={WHEP_URL} offlineHint="Đang bật camera trên robot." />)
+    await waitFor(() => expect(screen.getByText('Đang bật camera trên robot.')).toBeInTheDocument())
+  })
+
   it('backs off 2 s, 4 s, 8 s, then every 10 s', () => {
     expect([0, 1, 2, 3, 9].map(retryDelayMs)).toEqual([2000, 4000, 8000, 10000, 10000])
   })

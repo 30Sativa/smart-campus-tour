@@ -136,8 +136,12 @@ a fixed shift (`docs/lich-tour-theo-ca.md`), at least
 before the start (ADR-0035). Time, route
 and robot changes on a created Tour mean cancelling and recreating it.
 ADR-0050 adds owner-accepted exceptions: Start up to 10 minutes before the published
-time when every accepted viewer is in the waiting room, and short-notice Tours that
-replace only the 72/48/24-hour marks.
+time when every accepted viewer is in the waiting room, and short-notice registration
+rules without the 72/48/24-hour marks. ADR-0053 makes every short-notice Tour a quick
+Tour: no date or shift, the robot held from creation, published at its latest Start
+(creation plus a configured wait, 30 minutes by default), and Start accepted from
+creation once READY with every accepted viewer in the waiting room. Tours on a shift
+are unchanged.
 Start is requested while READY at/after published time, validates all guards,
 claims the robot atomically, commits the permitted transition, then sends the
 first leg. Deduplicate repeated Start/commands and record actor/time/reason.

@@ -3,6 +3,7 @@
 - **Status:** Accepted by the repository owner, 2026-11-09. No advisor approval is recorded.
 - **Amends:** ADR-0009 ("no button that skips the published time"), ADR-0035 decision 1 (72-hour lead time, for short-notice Tours only), ADR-0042 §7 and the lower bound of `withinStartWindow`, BR-05/ADR-0048 (T-24h, for short-notice Tours only).
 - **Schema:** v1.19, `Tours.IsShortNotice`.
+- **Superseded in part:** decisions 3 to 5 by ADR-0053 (quick Tours); decisions 1, 2 and the short-notice registration rules stay.
 
 ## Context
 
@@ -18,7 +19,7 @@ A Tour holds its robot for its own shift only. Starting outside that shift could
 
 1. **Early Start stays inside the shift.** Start is accepted from `FleetCommands:StartEarlyLimitMinutes` before the published time, default 10. Startup refuses more than the 15-minute reservation buffer, so an early run always begins inside the Tour's own hold and needs no new overlap check.
 2. **Nobody is left behind.** Before the published time the `allViewersJoined` check needs every accepted row to hold a live browser session. It is read from data, so no on-site tick stands in for it. A Tour with no accepted row passes. From the published time the check passes as not applicable. An early Start is recorded on `TOUR_STARTED` with `ReasonCode = EARLY_START`.
-3. **Short-notice Tours.** Staff may mark a new Tour short notice, with a required reason recorded as a `TOUR_CREATED_SHORT_NOTICE` event. Only `Tours:ShortNoticeMinLeadMinutes` is configured, and while it is unset the option is off and requests return 409 `SHORT_NOTICE_DISABLED`.
+3. **Short-notice Tours.** Staff may mark a new Tour short notice, with a required reason recorded as a `TOUR_CREATED_SHORT_NOTICE` event. Only `Tours:ShortNoticeMinLeadMinutes` is configured, and while it is unset the option is off and requests return 409 `SHORT_NOTICE_DISABLED`. `appsettings.json` ships it at 30 minutes (owner request, 09/11/2026) so a deployed server has the option without editing `/etc/campustour/api.env`; setting the value empty there switches it off again.
 4. **What a short-notice Tour changes.** The lead time becomes that minimum instead of 72 hours. Registration and review have no 48-hour or 24-hour mark and close at the published time. Staff closes the list with READY, the T-24h job skips the Tour, and undecided rows still block READY and Start.
 5. **What it does not change.** It still uses a fixed free shift, a tested route revision, the robot hold, Admin blocks, READY and every Start check. Robot readiness, dispatch, map, route revision and motion checks have no exception for either feature.
 6. **The 72/48/24-hour values stay constants.** A system-wide setting was rejected: it would move the deadlines of every open Tour and require a restart.

@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import Lenis from '@studio-freight/lenis'
+import { Link } from 'react-router'
 import { ArrowRight, BatteryCharging, Bot, MapPin, MessageCircle, Radar, Radio, Route, Video } from 'lucide-react'
 import { SiteNav } from '../../features/landing/sections/SiteNav'
 import { Hero } from '../../features/landing/sections/Hero'
@@ -18,15 +19,15 @@ const steps = [
 ]
 
 /**
- * Parts of the robot, in the order of the numbered rings already drawn on
- * `technology-robot-quest.png`; `spot` is the centre of that ring, in percent,
- * so each button sits exactly on top of the picture's own number.
+ * Technologies of the robot beside its 3D model in section 04; `parts` are the
+ * groups of the model (`features/landing/robot-explode/parts.ts`) each item
+ * lights up.
  */
 const technology: TechItem[] = [
-  { icon: Radar, title: 'LiDAR & tự hành', body: 'Cảm biến LiDAR quét quanh robot để định vị, tránh vật cản và bám theo tuyến đã chuẩn bị qua từng điểm tham quan.', spot: { x: 33, y: 63.5 } },
-  { icon: BatteryCharging, title: 'Pin & nguồn điện', body: 'Pin trên robot cấp điện cho động cơ và máy tính; mức pin hiện cho đội vận hành theo dõi.', spot: { x: 62.8, y: 58 } },
-  { icon: Radio, title: 'Vị trí đồng bộ', body: 'Cùng một vị trí phục vụ bản đồ 2D của học sinh và Twin 3D của đội vận hành.', spot: { x: 42.8, y: 70.5 } },
-  { icon: Video, title: 'Nguồn hình trực tiếp', body: 'Kính Meta Quest 3 trên trụ giữ truyền góc nhìn của chuyến đi tới học sinh.', spot: { x: 60.6, y: 9.6 } },
+  { icon: Radar, title: 'LiDAR & tự hành', body: 'Cảm biến LiDAR quét quanh robot để định vị, tránh vật cản và bám theo tuyến đã chuẩn bị qua từng điểm tham quan.', parts: ['lidar', 'sonar', 'pc'] },
+  { icon: BatteryCharging, title: 'Pin & nguồn điện', body: 'Pin trên robot cấp điện cho động cơ và máy tính; mức pin hiện cho đội vận hành theo dõi.', parts: ['battery'] },
+  { icon: Radio, title: 'Vị trí đồng bộ', body: 'Cùng một vị trí phục vụ bản đồ 2D của học sinh và Twin 3D của đội vận hành.', parts: ['pc', 'pcb'] },
+  { icon: Video, title: 'Nguồn hình trực tiếp', body: 'Kính Meta Quest 3 trên trụ giữ truyền góc nhìn của chuyến đi tới học sinh.', parts: ['quest', 'head', 'pantilt'] },
 ]
 
 /** Labelled buildings on `twin-smartbus.png`, in percent of the picture. */
@@ -313,6 +314,7 @@ export default function PublicHomePage() {
           <div className="lp3-container">
             <div className="lp3-section-head"><span className="lp3-kicker" data-reveal>04 / Công nghệ</span><h2 data-reveal>Công nghệ đứng sau<br />mỗi điểm dừng.</h2><p data-reveal>Robot tự hành, nguồn hình và dữ liệu vận hành cùng kết nối trong một tour.</p></div>
             <TechShowcase items={technology} />
+            <Link to="/ben-trong-robot" className="lp3-outline-link lp3-tech-more">Xem dữ liệu chạy bên trong robot <ArrowRight size={18} aria-hidden="true" /></Link>
           </div>
         </section>
         <CtaBand />

@@ -152,6 +152,58 @@ class AdbParsingTests(unittest.TestCase):
         self.assertIn("2560x1344", cmd)
 
 
+class ScrcpyCaptureTests(unittest.TestCase):
+    def test_default_capture_is_screenrecord(self):
+        self.assertEqual(cfg().capture, "screenrecord")
+        with self.assertRaises(SystemExit):
+            cfg(capture="v4l2")
+        with self.assertRaises(SystemExit):
+            cfg(capture="scrcpy", scrcpy_crop="left")
+
+    def test_scrcpy_frames_are_one_eye_already(self):
+        both = server.build_video_filter(cfg())
+        one = server.build_video_filter(cfg(capture="scrcpy"))
+        self.assertTrue(both.startswith("crop=w=iw/2:h=ih:x=0:y=0,"))
+        self.assertNotIn("crop=w=iw/2:h=ih", one)
+        self.assertIn("fps=30", one)
+
+    def test_wm_size_prefers_override(self):
+        self.assertEqual(server.parse_wm_size("Physical size: 4128x2208\n"), (4128, 2208))
+        self.assertEqual(server.parse_wm_size("Physical size: 4128x2208\nOverride size: 3664x1920\n"), (3664, 1920))
+        self.assertIsNone(server.parse_wm_size("error: no devices"))
+
+    def test_eye_crop_is_one_half(self):
+        self.assertEqual(server.eye_crop((4128, 2208), "left"), "2064:2208:0:0")
+        self.assertEqual(server.eye_crop((4128, 2208), "right"), "2064:2208:2064:0")
+        self.assertEqual(server.eye_crop((3665, 1921), "left"), "1832:1920:0:0")
+
+    def test_server_command_asks_for_raw_h264_of_one_eye(self):
+        cmd = server.build_scrcpy_server_command(cfg(capture="scrcpy", fps=20), "S", "0abc1234", "2064:2208:0:0", "3.3.1")
+        self.assertEqual(cmd[:4], ["adb", "-s", "S", "shell"])
+        shell = cmd[4]
+        self.assertTrue(shell.startswith("CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 3.3.1 "))
+        for arg in ("scid=0abc1234", "tunnel_forward=true", "audio=false", "control=false", "raw_stream=true",
+                    "video_codec=h264", "max_fps=20", "max_size=1600", "crop=2064:2208:0:0"):
+            self.assertIn(arg, shell.split())
+
+    def test_angle_is_sent_only_when_set(self):
+        plain = server.build_scrcpy_server_command(cfg(capture="scrcpy"), "S", "0abc1234", "2064:2208:0:0", "5.0.1")
+        self.assertNotIn("angle=", plain[4])
+        tilted = server.build_scrcpy_server_command(
+            cfg(capture="scrcpy", scrcpy_angle=-12.5), "S", "0abc1234", "2064:2208:0:0", "5.0.1")
+        self.assertIn("angle=-12.5", tilted[4].split())
+        with self.assertRaises(SystemExit):
+            cfg(capture="scrcpy", scrcpy_angle=400)
+
+    def test_version_comes_from_the_installed_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jar = Path(tmp) / "scrcpy-server"
+            jar.write_bytes(b"x")
+            (Path(tmp) / "scrcpy-server.version").write_text("3.3.1\n")
+            self.assertEqual(server.scrcpy_server_version(cfg(scrcpy_server=jar)), "3.3.1")
+            self.assertEqual(server.scrcpy_server_version(cfg(scrcpy_server=jar, scrcpy_version="v3.2")), "3.2")
+
+
 class BatteryParsingTests(unittest.TestCase):
     DUMPSYS = (
         "Current Battery Service state:\n"
@@ -494,6 +546,149 @@ class EndToEndWithSimulatedQuest(unittest.TestCase):
                     mtx.stop()
                 proc.terminate()
                 proc.wait(timeout=15)
+
+
+class CameraDemandTests(unittest.TestCase):
+    """ADR-0052: capture only while the backend says someone needs the camera."""
+
+    class Response:
+        def __init__(self, body):
+            self.body = json.dumps(body).encode("utf-8")
+
+        def read(self):
+            return self.body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.credential = Path(self.tmp.name) / "amr_01.credential"
+        self.credential.write_text("secret-token\n")
+        self.now = 1000.0
+        self.requests = []
+        self.answer = {"success": True, "data": {"wanted": False, "reason": "IDLE", "pollSeconds": 5}}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def opener(self, request, timeout):
+        self.requests.append(request)
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.Response(self.answer)
+
+    def demand(self, **kw):
+        c = cfg(control_url="https://api.example/api/fleet/camera/v1/poll", robot_code="amr_01",
+                robot_credential_file=str(self.credential), **kw)
+        return server.CameraDemand(c, opener=self.opener, clock=lambda: self.now)
+
+    def test_without_a_control_url_the_camera_is_always_wanted(self):
+        d = server.CameraDemand(cfg())
+        self.assertFalse(d.enabled)
+        self.assertTrue(d.wanted())
+        self.assertEqual(d.reason(), "ALWAYS_ON")
+
+    def test_asks_as_the_fleet_robot_and_follows_the_answer(self):
+        d = self.demand()
+        d.poll_once()
+        self.assertFalse(d.wanted())
+        self.assertEqual(d.reason(), "IDLE")
+        self.assertTrue(d.changed.is_set())
+        request = self.requests[0]
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(request.get_header("Authorization"), "Bearer secret-token")
+        self.assertEqual(request.get_header("X-robot-code"), "amr_01")
+
+        self.answer = {"success": True, "data": {"wanted": True, "reason": "TOUR_RUNNING", "pollSeconds": 5}}
+        d.changed.clear()
+        d.poll_once()
+        self.assertTrue(d.wanted())
+        self.assertEqual(d.reason(), "TOUR_RUNNING")
+        self.assertTrue(d.changed.is_set())
+
+    def test_backend_outage_keeps_the_last_answer_then_fails_safe(self):
+        d = self.demand(control_grace=60.0)
+        d.poll_once()  # IDLE
+        self.answer = urllib.error.URLError("connection refused")
+        self.now += 30
+        d.poll_once()
+        self.assertFalse(d.wanted(), "within the grace period the last answer holds")
+        self.now += 31
+        self.assertTrue(d.wanted(), "after the grace period the failsafe keeps a Tour's camera running")
+        self.assertIn("BACKEND_UNREACHABLE", d.reason())
+
+    def test_failsafe_off_keeps_the_camera_off_without_an_answer(self):
+        self.answer = urllib.error.URLError("no route")
+        d = self.demand(control_failsafe=False)
+        d.poll_once()
+        self.assertFalse(d.wanted())
+
+    def test_a_refused_credential_is_reported(self):
+        self.answer = urllib.error.HTTPError("https://api.example", 401, "Unauthorized", {}, None)
+        d = self.demand()
+        d.poll_once()
+        self.assertIn("credential was refused", d.snapshot()["error"])
+        self.assertTrue(d.wanted(), "never answered: failsafe")
+
+    def test_an_answer_without_wanted_is_not_trusted(self):
+        self.answer = {"success": True, "data": {}}
+        d = self.demand(control_failsafe=False)
+        d.poll_once()
+        self.assertFalse(d.wanted())
+        self.assertIsNotNone(d.snapshot()["error"])
+
+    def test_auto_url_comes_from_the_fleet_sync_settings(self):
+        env = Path(self.tmp.name) / "fleet-sync.env"
+        env.write_text("# saved by setup_fleet_sync.py\nFLEET_SYNC_URL=https://api.example/api/fleet/v1/sync\n"
+                       "FLEET_ROBOT_CODE='amr_01'\nFLEET_ROBOT_CREDENTIAL_FILE=/home/u/.config/campustour/amr_01.credential\n")
+        url, code, cred = server.resolve_control_settings("auto", "", "", server.read_env_file(env))
+        self.assertEqual(url, "https://api.example/api/fleet/camera/v1/poll")
+        self.assertEqual(code, "amr_01")
+        self.assertEqual(cred, "/home/u/.config/campustour/amr_01.credential")
+        self.assertEqual(server.read_env_file(Path(self.tmp.name) / "missing.env"), {})
+        with self.assertRaises(SystemExit):
+            server.resolve_control_settings("auto", "", "", {})
+
+    def test_a_control_url_needs_the_robot_identity(self):
+        with self.assertRaises(SystemExit):
+            cfg(control_url="https://api.example/api/fleet/camera/v1/poll")
+        with self.assertRaises(SystemExit):
+            cfg(control_url="ftp://api.example/x", robot_code="amr_01", robot_credential_file="/x")
+
+    def test_paused_is_its_own_stream_state(self):
+        self.assertEqual(server.stream_summary("paused"), "paused")
+        self.assertEqual(server.stream_summary("offline"), "lost")
+
+    def test_an_idle_robot_never_touches_the_quest(self):
+        class Off:
+            enabled = True
+            changed = threading.Event()
+
+            def wanted(self):
+                return False
+
+            def reason(self):
+                return "IDLE"
+
+        status = server.Status()
+        # adb would fail loudly (ADB_ERROR) if the supervisor tried to list devices.
+        sup = server.Supervisor(cfg(adb="/nonexistent/adb"), status, Off())
+        sup.start()
+        try:
+            deadline = time.time() + 3
+            while status.state != "paused" and time.time() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(status.state, "paused")
+            self.assertEqual(status.reason, "CAMERA_OFF: IDLE")
+            time.sleep(0.6)
+            self.assertEqual(status.state, "paused")
+        finally:
+            sup.stop()
+            sup.join(timeout=5)
 
 
 if __name__ == "__main__":

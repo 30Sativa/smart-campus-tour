@@ -29,8 +29,9 @@
     localized_max_xy_variance: 0.09
     localized_max_yaw_variance: 0.05
     motion_ready_max_odom_age_sec: 0.5
-    # ADR-0045 Operator head buttons (docs/contracts/fleet-head/v1). Off by default; needs stm32_bridge head/*
-    # in the same namespace and FleetHead:Enabled on the backend.
+    # ADR-0045 Operator head buttons and the automatic POI sweep (docs/contracts/fleet-head/v1). Off by default;
+    # needs stm32_bridge head/* in the same namespace and FleetHead:Enabled on the backend. While false, the head
+    # never moves from the web and never sweeps at a POI (the node logs this at startup).
     head_enabled: false
     head_base_url: ""
     head_wait_ms: 1500

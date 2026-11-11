@@ -10,6 +10,7 @@ using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.FleetHead.Commands.SendHeadCommand;
+using SmartCampus.Application.Features.FleetHead.Commands.SetTourHeadMode;
 using SmartCampus.Application.Features.FleetHead.Queries.GetTourHeadStatus;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
@@ -70,9 +71,9 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
 
     [HttpGet("slots")]
     public async Task<IActionResult> Slots([FromQuery] Guid routeRevisionId, [FromQuery] string robotCode,
-        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct, [FromQuery] bool shortNotice = false) =>
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct) =>
         Ok(new BaseResponse<TourSlotsView> { Success = true, Message = "Tour slots retrieved.",
-            Data = await sender.Send(new GetTourSlotsQuery(routeRevisionId, robotCode, from, to, shortNotice), ct) });
+            Data = await sender.Send(new GetTourSlotsQuery(routeRevisionId, robotCode, from, to), ct) });
 
     [HttpGet("shifts")]
     public async Task<IActionResult> Shifts([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct) =>
@@ -147,7 +148,19 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
             Success = true,
             Message = "Head command queued.",
             Data = await sender.Send(new SendHeadCommand(id, User.GetRequiredUserId(), new HeadCommandSpec(request.Kind,
-                request.PanSteps, request.TiltSteps, request.PanDir, request.TiltDir, request.PanDeg, request.TiltDeg)), ct)
+                request.PanSteps, request.TiltSteps, request.PanDir, request.TiltDir, request.PanDeg, request.TiltDeg,
+                request.SweepDeg)), ct)
+        });
+
+    /// <summary>ADR-0045 addendum: AUTO sweeps the head at every POI arrival, MANUAL only follows the buttons.</summary>
+    [HttpPut("{id:guid}/head-mode")]
+    [RequestSizeLimit(1024)]
+    public async Task<ActionResult<BaseResponse<TourHeadModeResult>>> SetHeadMode(Guid id, [FromBody] StaffHeadModeRequest request,
+        CancellationToken ct) =>
+        Ok(new BaseResponse<TourHeadModeResult>
+        {
+            Success = true, Message = "Head mode set.",
+            Data = await sender.Send(new SetTourHeadMode(id, User.GetRequiredUserId(), request.Mode), ct)
         });
 
     [HttpGet("{id:guid}/head")]

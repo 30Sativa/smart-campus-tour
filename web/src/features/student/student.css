@@ -69,6 +69,7 @@
 .st .st-narr h4 { font-size: var(--st-font-lg); margin-bottom: 12px; }
 .st .st-narr__ic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--st-radius); background: var(--st-selected); color: var(--st-green); flex: none; }
 .st .st-narr__duck { color: var(--st-info); }
+.st .st-narr__hint { margin-top: 6px; font-size: 0.8125rem; color: var(--st-info); }
 .st .st-ai { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; color: var(--st-ink); }
 .st .st-ai__head { display: flex; align-items: flex-start; gap: 12px; padding: 0 0 16px; border-bottom: 1px solid var(--st-line); }
 .st .st-ai__title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: var(--st-font-sm); font-weight: 600; }

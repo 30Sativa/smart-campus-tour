@@ -10,6 +10,7 @@ import { useRequestId } from '../../features/administration/tours/hooks'
 import type { StartConfirmation, TourStartChecks } from '../../features/administration/tours/types'
 import { QuestLiveVideo } from '../../features/quest-stream/QuestLiveVideo'
 import { QUEST_WHEP_URL } from '../../features/quest-stream/quest-stream-config'
+import { cameraLeaseHint, useCameraLease } from '../../features/quest-stream/camera-lease'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { isTourStale, useOperationTour, useStartChecks, useStartTour } from '../../features/staff/operations/hooks'
 import { useNow } from '../../features/staff/use-now'
@@ -76,6 +77,8 @@ export default function StartCheckPage() {
   const tour = useOperationTour(tourId)
   const ready = tour.data?.tour.state === 'READY'
   const checks = useStartChecks(tourId, ready)
+  // ADR-0052: while this page is open the robot's camera stays on, so the preview is ready before Start.
+  const cameraLease = useCameraLease(ready && QUEST_WHEP_URL ? tour.data?.reservation?.robotCode : null)
   const start = useStartTour()
   const navigate = useNavigate()
   const [confirmation, setConfirmation] = useState<StartConfirmation>(NONE)
@@ -191,7 +194,8 @@ export default function StartCheckPage() {
           </section>
           <section className={panelClass} aria-label="Hình camera">
             <PanelHead title="Hình camera" />
-            <div className="p-3">{QUEST_WHEP_URL ? <QuestLiveVideo label={reservation?.robotCode} />
+            <div className="p-3">{QUEST_WHEP_URL ? <QuestLiveVideo label={reservation?.robotCode}
+              offlineHint={cameraLeaseHint(cameraLease.data, cameraLease.isError)} />
               : <p className="text-[13px] leading-5 text-[#64748b]">Chưa cấu hình luồng camera (VITE_QUEST_WHEP_URL). Xem hình trên thiết bị trước khi xác nhận.</p>}</div>
           </section>
           <section className={panelClass} aria-label="Tuyến của Tour">

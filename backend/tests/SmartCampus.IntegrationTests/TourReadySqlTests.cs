@@ -48,6 +48,7 @@ public sealed class TourReadySqlTests
     public async Task MarkReady_LocksTheTour_RecordsEventAndReceipt_AndTouchesNoRobot()
     {
         await using var h = await Harness.Create();
+        await h.AddAcceptedRow();
         var detail = await h.Detail();
         Assert.True(detail.Permissions.CanMarkReady);
         Assert.Empty(detail.Permissions.ReadyBlockers!);
@@ -78,13 +79,14 @@ public sealed class TourReadySqlTests
     public async Task EachBlocker_IsReportedWithItsOwnCode_AndNothingIsWritten()
     {
         await using var h = await Harness.Create();
+        await h.AddAcceptedRow();
         await h.AssertBlocked(["START_TIME_PASSED"],
             $"UPDATE dbo.Tours SET ScheduledStartAt = DATEADD(MINUTE, -1, SYSDATETIMEOFFSET());",
             $"UPDATE dbo.Tours SET ScheduledStartAt = '{h.Start:O}';");
         await h.AssertBlocked(["OPERATOR_REQUIRED"],
             $"UPDATE dbo.Users SET IsActive = 0 WHERE Id = '{h.OperatorId}';",
             $"UPDATE dbo.Users SET IsActive = 1 WHERE Id = '{h.OperatorId}';");
-        await h.AssertBlocked(["PENDING_DECISIONS"], h.PendingRowSql(), "UPDATE dbo.RosterRows SET ParticipationState = 'REJECTED';");
+        await h.AssertBlocked(["PENDING_DECISIONS"], h.PendingRowSql(), Harness.RejectPendingSql);
         // The robot rule needs the reserved robot, so only the root cause is reported.
         await h.AssertBlocked(["RESERVATION_MISSING"],
             $"UPDATE dbo.TourRobotReservations SET ReleasedAt = SYSDATETIMEOFFSET(), ReleasedByUserId = '{h.StaffId}';",
@@ -103,9 +105,29 @@ public sealed class TourReadySqlTests
     }
 
     [SchemaV11Fact]
+    public async Task ATourNobodyWasAcceptedFor_IsNotReady_UntilARowIsAccepted()
+    {
+        await using var h = await Harness.Create();
+        await h.AssertBlocked(["NO_ACCEPTED_ROWS"]);
+        // While rows wait for review, they are the root cause: once decided they may be the accepted ones.
+        await h.AssertBlocked(["PENDING_DECISIONS"], h.PendingRowSql(), Harness.RejectPendingSql);
+        // A rejected or removed row is nobody to run the Tour for.
+        await h.AssertBlocked(["NO_ACCEPTED_ROWS"]);
+        await h.AssertBlocked(["NO_ACCEPTED_ROWS"],
+            "UPDATE dbo.RosterRows SET ParticipationState = 'ACCEPTED', IsActive = 0;", "UPDATE dbo.RosterRows SET ParticipationState = 'REJECTED', IsActive = 1;");
+
+        await h.AddAcceptedRow();
+        var detail = await h.Detail();
+        Assert.True(detail.Permissions.CanMarkReady);
+        await h.Ready(new(Guid.NewGuid(), detail.Tour.RowVersion));
+        Assert.Equal("READY", (await h.Detail()).Tour.State);
+    }
+
+    [SchemaV11Fact]
     public async Task SeveralBlockers_AreAllReported_InTableOrder()
     {
         await using var h = await Harness.Create();
+        await h.AddAcceptedRow();
         await h.Database.ExecuteAsync($"""
             UPDATE dbo.Users SET IsActive = 0 WHERE Id = '{h.OperatorId}';
             UPDATE dbo.Tours SET ScheduledStartAt = DATEADD(MINUTE, -1, SYSDATETIMEOFFSET());
@@ -118,6 +140,7 @@ public sealed class TourReadySqlTests
     public async Task ConcurrentReady_HasOneWinner_AndOneConflict()
     {
         await using var h = await Harness.Create();
+        await h.AddAcceptedRow();
         var version = (await h.Detail()).Tour.RowVersion;
         var results = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => Capture(h.Ready(new(Guid.NewGuid(), version)))));
 
@@ -134,6 +157,7 @@ public sealed class TourReadySqlTests
     public async Task Receipts_ReplayARetry_RefuseReuseAndStaleVersions()
     {
         await using var h = await Harness.Create();
+        await h.AddAcceptedRow();
         var opened = (await h.Detail()).Tour.RowVersion;
         var ready = new MarkTourReadyRequest(Guid.NewGuid(), opened);
         await h.Ready(ready);
@@ -164,6 +188,7 @@ public sealed class TourReadySqlTests
     public async Task Reopen_ReturnsToScheduled_KeepsTheReservation_AndAllowsReadyAgain()
     {
         await using var h = await Harness.Create();
+        await h.AddAcceptedRow();
         var scheduled = await h.Version();
         Assert.Equal("TOUR_STATE_INVALID", (await Assert.ThrowsAsync<ConflictException>(() =>
             h.Reopen(new(Guid.NewGuid(), scheduled, "Chưa READY")))).Code);
@@ -283,8 +308,12 @@ public sealed class TourReadySqlTests
             return proposal.Revision.Id;
         }
 
-        public async Task<Guid> CreateTour(DateTimeOffset start, string? shortNoticeReason = null) =>
-            (await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new("Tour READY", null, Route.RevisionId, Robot, operatorId, start, null, 20, shortNoticeReason))))).Id;
+        public async Task<Guid> CreateTour(DateTimeOffset start) =>
+            (await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new("Tour READY", null, Route.RevisionId, Robot, operatorId, start, null, 20))))).Id;
+
+        /// <summary>ADR-0053: a quick Tour on the harness route, robot and Operator.</summary>
+        public async Task<Guid> CreateQuickTour(string reason, Guid? requestId = null) =>
+            (await Send(new CreateTourCommand(staffId, new(requestId ?? Guid.NewGuid(), new("Tour nhanh", null, Route.RevisionId, Robot, operatorId, null, null, 20, reason))))).Id;
 
         public async Task<TResponse> Send<TResponse>(IRequest<TResponse> request)
         {
@@ -308,6 +337,21 @@ public sealed class TourReadySqlTests
             var robot = await db.Robots.AsNoTracking().SingleAsync(item => item.RobotCode == Robot);
             await Send(new DeactivatePhysicalRobotCommand(robot.Id, technicalId, new(Guid.NewGuid(), Convert.ToBase64String(robot.RowVersion), "Hỏng động cơ")));
         }
+
+        /// <summary>One registration whose only row Staff accepted: READY needs one (NO_ACCEPTED_ROWS).</summary>
+        public Task AddAcceptedRow(Guid? tour = null)
+        {
+            var registration = Guid.NewGuid();
+            return database.ExecuteAsync($"""
+                INSERT dbo.GroupRegistrations (Id, TourId, RepresentativeUserId, SchoolName, GroupName, ContactName, ContactEmail, State, SubmittedAt, CreatedAt)
+                VALUES ('{registration}', '{tour ?? TourId}', '{staffId}', N'THPT Đã duyệt', N'Nhóm', N'Liên hệ', N'accepted@example.test', 'SUBMITTED', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+                INSERT dbo.RosterRows (Id, RegistrationId, RowNumber, RowType, DisplayName, Email, ParticipationState, IsActive, CreatedAt)
+                VALUES ('{Guid.NewGuid()}', '{registration}', 1, 'SHARED_VIEWING', N'Phòng máy chiếu', N'accepted.room@example.test', 'ACCEPTED', 1, SYSDATETIMEOFFSET());
+                """);
+        }
+
+        /// <summary>Rejects only the rows <see cref="PendingRowSql"/> added, keeping the accepted one.</summary>
+        public const string RejectPendingSql = "UPDATE dbo.RosterRows SET ParticipationState = 'REJECTED' WHERE ParticipationState = 'PENDING';";
 
         /// <summary>One registration whose only row still waits for Staff review.</summary>
         public string PendingRowSql()

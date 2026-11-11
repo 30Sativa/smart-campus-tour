@@ -36,6 +36,7 @@ let mapEligible = true
 let extraProposals: unknown[] = []
 let submissionFailureBody: unknown = null
 let currentRoute = structuredClone(route)
+let scheduledTours: unknown[] = []
 let clearanceMeters: number | undefined
 
 function renderAt(path: string, client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
@@ -60,6 +61,7 @@ describe('Staff versioned Route workflow', () => {
     submissionFailureBody = null
     currentRoute = structuredClone(route)
     clearanceMeters = undefined
+    scheduledTours = []
     useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'staff-token', user: { userId: 'staff-1', username: 'staff', role: 'Staff' } })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://localhost'); requests.push({ url, init })
@@ -69,6 +71,7 @@ describe('Staff versioned Route workflow', () => {
       if (url.pathname === '/api/routes' && init?.method !== 'POST') return response([currentRoute])
       if (url.pathname === '/api/staff/routes' && init?.method === 'POST') return response(route)
       if (url.pathname === '/api/routes/route-1/revisions') return response(currentRoute)
+      if (url.pathname === '/api/staff/routes/route-1/scheduled-tours') return response(scheduledTours)
       if (url.pathname === '/api/staff/routes/route-1/revisions/route-rev-1/submit') {
         await new Promise(resolve => setTimeout(resolve, 40))
         if (submissionFailure) return new Response(JSON.stringify(submissionFailureBody ?? { message: submissionFailure === 409 ? 'Revision đã cũ.' : 'Lỗi máy chủ.' }), { status: submissionFailure })
@@ -220,6 +223,20 @@ describe('Staff versioned Route workflow', () => {
     expect(screen.getByText('Chưa sang bước tiếp được: điểm kết thúc quá gần điểm dừng cuối Verified hall.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: /Quay về điểm bắt đầu/ }))
     expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeEnabled()
+  })
+
+  it('warns before saving that the Tours scheduled on the route keep the current revision (ADR-0034)', async () => {
+    renderAt('/staff/manage/routes/route-1/edit')
+    await screen.findByLabelText('Tên tuyến')
+    await waitFor(() => expect(requests.some(request => request.url.pathname === '/api/staff/routes/route-1/scheduled-tours')).toBe(true))
+    expect(screen.queryByText(/không tự đổi theo bản bạn sắp lưu/)).not.toBeInTheDocument()
+  })
+
+  it('names those Tours, each linking to its page', async () => {
+    scheduledTours = [{ id: 'tour-9', name: 'Tour sáng thứ Bảy', scheduledStartAt: '2099-01-03T01:15:00Z', state: 'READY' }]
+    renderAt('/staff/manage/routes/route-1/edit')
+    expect(await screen.findByText('1 Tour đã lên lịch trên tuyến này vẫn chạy bản đã chọn lúc tạo, không tự đổi theo bản bạn sắp lưu. Muốn Tour đi theo bản mới, chờ bản mới chạy thử đạt rồi hủy Tour và tạo lại.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tour sáng thứ Bảy' })).toHaveAttribute('href', '/staff/manage/tours/tour-9')
   })
 
   it('opens every step of an existing route and keeps its saved start', async () => {

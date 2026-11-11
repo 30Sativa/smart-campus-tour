@@ -31,9 +31,9 @@ export function useTourRobots(routeRevisionId: string) {
   return useQuery({ queryKey: [...tourKeys.all, 'robots', routeRevisionId], queryFn: () => toursApi.robots(routeRevisionId), enabled: Boolean(routeRevisionId) })
 }
 /** The shifts of one campus date for this route and robot. Refreshed when a create is refused, because a shift was taken meanwhile. */
-export function useTourSlots(routeRevisionId: string, robotCode: string, date: string, shortNotice = false) {
-  return useQuery({ queryKey: [...tourKeys.slots, routeRevisionId, robotCode, date, shortNotice], queryFn: () => toursApi.slots(routeRevisionId, robotCode, date, date, shortNotice),
-    enabled: Boolean(routeRevisionId && robotCode && date), retry: false })
+export function useTourSlots(routeRevisionId: string, robotCode: string, date: string, enabled = true) {
+  return useQuery({ queryKey: [...tourKeys.slots, routeRevisionId, robotCode, date], queryFn: () => toursApi.slots(routeRevisionId, robotCode, date, date),
+    enabled: enabled && Boolean(routeRevisionId && robotCode && date), retry: false })
 }
 /** The configured shifts of a campus date range, so the calendar can draw them. */
 export function useTourShifts(from: string, to: string, enabled = true) {

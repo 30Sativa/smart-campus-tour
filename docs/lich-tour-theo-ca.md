@@ -44,12 +44,16 @@ Trên form tạo/sửa tuyến:
 | Ca | Giữ robot | Tour bắt đầu | Tour kết thúc muộn nhất |
 |---|---|---|---|
 | S1 · Ca sáng | 08:00–10:00 | 08:15 | 09:45 |
+| S4 · Ca trưa | 11:00–12:00 | 11:15 | 11:45 |
 | S2 · Ca chiều 1 | 13:00–15:00 | 13:15 | 14:45 |
 | S3 · Ca chiều 2 | 16:00–18:00 | 16:15 | 17:45 |
+| S5 · Ca tối | 19:00–21:00 | 19:15 | 20:45 |
 
 - Ca là khung **giữ robot**, đã gồm 15 phút chuẩn bị và 15 phút kết thúc (đúng `ReservationBuffer` hiện có).
   Giờ bắt đầu Tour = đầu ca + 15 phút.
-- Giữa hai ca nghỉ ít nhất 1 tiếng để sạc pin và reset robot. Riêng buổi trưa nghỉ dài hơn.
+- Giữa hai ca nghỉ ít nhất 1 tiếng để sạc pin và reset robot.
+- S4 và S5 thêm ngày 09/11/2026 để có thêm chỗ trong ngày, lúc đó nhằm cho Tour ngắn hạn (ADR-0050); từ ADR-0053 Tour nhanh không cần ca nữa. Mã ca mới
+  nằm sau S3 để Tour đã tạo giữ nguyên mã. S4 chỉ dài 1 tiếng nên chỉ nhận tuyến chạy tối đa 30 phút.
 - Mỗi robot nhận tối đa 1 Tour mỗi ca. Tour mới giữ robot trọn ca (`StartsAt` = đầu ca, `EndsAt` = cuối ca),
   không còn tính khung giữ theo thời lượng.
 - Staff không gõ giờ nữa: chọn ngày rồi chọn ca. Server chỉ nhận `ScheduledStartAt` trùng đúng giờ bắt đầu Tour
@@ -121,8 +125,10 @@ Số điểm dừng thiếu và thời gian dừng ngoài 15–300 giây là l�
 "Tours": {
   "Shifts": [
     { "Code": "S1", "Name": "Ca sáng",    "Start": "08:00", "End": "10:00" },
+    { "Code": "S4", "Name": "Ca trưa",    "Start": "11:00", "End": "12:00" },
     { "Code": "S2", "Name": "Ca chiều 1", "Start": "13:00", "End": "15:00" },
-    { "Code": "S3", "Name": "Ca chiều 2", "Start": "16:00", "End": "18:00" }
+    { "Code": "S3", "Name": "Ca chiều 2", "Start": "16:00", "End": "18:00" },
+    { "Code": "S5", "Name": "Ca tối",     "Start": "19:00", "End": "21:00" }
   ],
   "RecommendedMaxMinutes": 60
 },
@@ -389,3 +395,27 @@ Nguồn: SRS v0.2 BR-24, UC-TOUR-07, BR-27, FR-40, AC-19; quyết định kỹ t
   `SCHEDULED`/`READY` đã quá T+15'. Nhãn chỉ để hiển thị, quyết định do server.
 - **Khi triển khai:** cần nâng cấp database lên v1.17 (patch `upgrade-v1.16-to-v1.17-system-reservation-release.sql`) trước hoặc
   cùng API này, theo đường nâng cấp có backup như v1.16.
+
+## 12. Tour nhanh (ADR-0053, 09/11/2026)
+
+Tour nhanh dùng cho buổi trình diễn hoặc đoàn khách đột xuất. Nó **không theo ca**; mọi quy tắc của Tour theo ca ở các
+mục trên giữ nguyên.
+
+- **Tạo:** cùng form và cùng API tạo Tour (`POST /api/staff/manage/tours`), chỉ bớt ràng buộc: chọn loại "Tour nhanh", chọn
+  tuyến đã chạy thử đạt, robot, người vận hành, sức chứa và ghi **lý do** (bắt buộc, gửi `shortNoticeReason`). Không chọn ngày,
+  không chọn ca (`scheduledStartAt` để trống), không cần báo trước 72 giờ. Robot đang bận thì tạo báo lỗi kèm lý do.
+- **Hạn Start:** lúc tạo + `Tours:ShortNoticeMinLeadMinutes`, làm tròn lên phút. Mặc định 30 phút (đúng giá trị đã có trong
+  `appsettings.json`); không còn công tắc bật/tắt. Hạn Start cũng là giờ ghi cho người xem.
+- **Giữ robot:** từ lúc tạo đến hạn Start + thời lượng tuyến + 15 phút. Vẫn kiểm tra trùng khung giữ robot của mọi Tour khác
+  (kể cả Tour theo ca), và bị từ chối nếu khung giữ chạm vào ngày hoặc ca Admin đã khoá. Tuyến không được dài hơn ca dài nhất.
+- **Luồng:** tạo → (đại diện trường đăng ký, Staff duyệt nếu có người xem) → chốt READY → **Start ngay**, không chờ tới giờ.
+  Trước hạn Start, Start cần mọi điểm xem đã duyệt đang ở phòng chờ; Tour không có điểm xem nào cũng Start được. Mọi kiểm tra
+  an toàn robot giữ nguyên.
+- **Đăng ký:** như Tour ngắn hạn của ADR-0050: không có mốc 48 giờ và 24 giờ; đăng ký đóng khi Staff chốt READY, muộn nhất
+  là hạn Start; job T−24h bỏ qua Tour này.
+- **Quá hạn:** chưa Start tới hạn Start + 15 phút thì hệ thống tự huỷ như mục 11 và trả robot.
+- **Web:** không có tab hay trang riêng. Trong Lịch Tour, Tour nhanh hiện ở giờ hạn Start với nhãn "Nhanh" (thường ở dòng
+  "Ngoài ca"), và ca bị nó giữ robot không nhận Tour mới. Danh sách và trang chi tiết ghi "Tour nhanh".
+- **Bỏ:** cách "Tour ngắn hạn gắn vào ca" của ADR-0050 (`shortNotice` trên `/slots`, `shortNoticeReason` khi tạo Tour theo ca).
+- **Để sau:** email mời vẫn ghi một giờ cố định (với Tour nhanh là hạn Start); Staff tự thêm người xem cho Tour nhanh cần quyết
+  định riêng.

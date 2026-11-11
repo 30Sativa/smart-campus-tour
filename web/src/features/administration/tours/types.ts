@@ -8,8 +8,9 @@ export type TourInput = {
 }
 export type CreateTourInput = {
   name: string; description: string | null; routeRevisionId: string; robotCode: string
-  operatorUserId: string; scheduledStartAt: string; fallbackVideoUrl: string | null; capacity: number
-  /** Set only for a short-notice Tour (ADR-0050). */
+  /** The chosen shift's start; null for a quick Tour, whose latest Start the server sets (ADR-0053). */
+  operatorUserId: string; scheduledStartAt: string | null; fallbackVideoUrl: string | null; capacity: number
+  /** Set only for a quick Tour, and then required. */
   shortNoticeReason?: string | null
 }
 export type TourOperator = { userId: string; fullName: string; username: string }
@@ -20,7 +21,10 @@ export type TourSummary = {
   scheduledStartAt: string; state: TourState; createdByUserId: string; createdAt: string; updatedAt: string | null
   /** When registration closes, from a server that sends it. Absent otherwise: see `registrationClosesAtOf`. */
   registrationClosesAt?: string | null
-  /** Staff closes the list of this Tour with READY; there is no 72/48/24-hour schedule (ADR-0050). */
+  /**
+   * A quick Tour (ADR-0053): no shift, Start opens at creation, `scheduledStartAt` is its latest Start. Staff closes its
+   * list with READY; there is no 72/48/24-hour schedule (ADR-0050).
+   */
   isShortNotice?: boolean
   rowVersion: string; registrationCount: number; invitationCount: number; routeRevisionId: string | null
   /** Seats of the Tour and the rows holding one (BR-26). An older server omits them. */
@@ -112,11 +116,10 @@ export type TourSlots = {
   days: { date: string; slots: TourSlot[] }[]
   recommendedMaxSeconds: number
   maxCapacity?: number
-  /** The least notice of a short-notice Tour; null or absent while the option is off (ADR-0050). */
-  shortNoticeMinLeadMinutes?: number | null
 }
 /** A configured shift on one day, for the calendar before a route or robot is chosen. */
 export type TourShift = { code: string; name: string; startsAt: string; endsAt: string; tourStartsAt: string; time: string; maxDurationSeconds: number; block: TourShiftBlock | null }
 /** An Admin closure of this shift; `scope` says whether it covers the whole day (docs/lich-tour-theo-ca.md §5). */
 export type TourShiftBlock = { id: string; scope: 'DAY' | 'SHIFT'; reason: string }
-export type TourShifts = { days: { date: string; shifts: TourShift[] }[]; recommendedMaxSeconds: number }
+/** `quickTourWaitMinutes`: how long a quick Tour waits to be started (ADR-0053). */
+export type TourShifts = { days: { date: string; shifts: TourShift[] }[]; recommendedMaxSeconds: number; quickTourWaitMinutes: number }

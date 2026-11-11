@@ -35,7 +35,7 @@ internal static class MapPoiValidationRules
     {
         Name = draft.Name.Trim(), Purpose = draft.Purpose.Trim(),
         Description = string.IsNullOrWhiteSpace(draft.Description) ? null : draft.Description.Trim(),
-        CameraPreset = draft.CameraPreset.Trim().ToUpperInvariant(),
+        CameraPreset = PoiCameraPresets.Normalize(draft.CameraPreset) ?? draft.CameraPreset.Trim().ToUpperInvariant(),
         NarrationText = string.IsNullOrWhiteSpace(draft.NarrationText) ? null : draft.NarrationText.Trim(),
         FallbackVideoUrl = string.IsNullOrWhiteSpace(draft.FallbackVideoUrl) ? null : draft.FallbackVideoUrl.Trim()
     };

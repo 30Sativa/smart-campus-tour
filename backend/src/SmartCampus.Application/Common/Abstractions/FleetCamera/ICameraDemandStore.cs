@@ -1,0 +1,18 @@
+namespace SmartCampus.Application.Common.Abstractions.FleetCamera;
+
+/// <summary>
+/// In-memory, per-robot camera demand of ADR-0052: when each robot last asked and until when Staff keep its camera on.
+/// Nothing is persisted; an API restart forgets both, and the next robot poll and Staff renewal restore them.
+/// Implemented in Infrastructure; safe for concurrent callers. Robot codes compare case-insensitively.
+/// </summary>
+public interface ICameraDemandStore
+{
+    void RecordPoll(string robotCode, DateTimeOffset at);
+
+    DateTimeOffset? GetLastPoll(string robotCode);
+
+    /// <summary>Keeps the camera on at least until <paramref name="until"/>; returns the resulting lease end.</summary>
+    DateTimeOffset ExtendLease(string robotCode, DateTimeOffset until);
+
+    DateTimeOffset? GetLease(string robotCode);
+}

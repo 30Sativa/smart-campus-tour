@@ -17,12 +17,41 @@ Trạng thái: **code và test offline xong, chưa chạy với ROS thật và r
 | service | `head/stop` | `std_srvs/srv/Trigger` | Giảm tốc dừng; đang HOME thì hủy HOME (mất mốc) |
 | service | `head/off` | `std_srvs/srv/Trigger` | Tắt driver, mất mốc (TILT có thể đổ theo trọng lực) |
 | service | `head/zero` | `std_srvs/srv/Trigger` | Mốc tay tại vị trí hiện tại (dự phòng khi không HOME được) |
+| service | `head/sweep` | `bus_interfaces/srv/HeadSweep` | Xoay tự động: từ vị trí hiện tại PAN sang trái `amplitude_deg` (0 = `head_sweep_deg`, 135°), sang phải gấp đôi, rồi về đúng chỗ cũ, 30°/s. `amplitude_deg` âm hoặc không phải số: `rejected:invalid_amplitude`. Trả `started` sau khi FB đã phản ánh mọi lệnh đầu quay gửi trước đó (≤ 1 s); từ chối `not_ready:<trạng thái>` nếu chưa có mốc hoặc đang quay, `not_ready:command_pending` nếu FB chưa theo kịp, `already_sweeping` nếu đang quét |
 | service | `contactor/set` | `std_srvs/srv/SetBool` | Bật/tắt contactor (PA10). Thành công khi một khung FB **sinh sau** lệnh này báo đúng trạng thái. Xem bảng kết quả bên dưới |
 | topic (pub) | `contactor/state` | `std_msgs/msg/Bool` | Trạng thái lệnh của PA10, 1 Hz và khi đổi |
 
 Quy ước góc: PAN dương = quay trái, 0° = phía trước, giới hạn ±170° (vật cản
 phía sau, cạnh ở 174°). TILT dương = ngửa lên, giới hạn ±18° (vật cản cúi
 20°). Góc làm tròn tới bước: PAN 0,6°, TILT 1,8° (driver bước đủ).
+
+## Xoay tự động ở POI (`head/sweep`)
+
+Đầu camera làm gì ở mỗi POI do Staff chọn trong mục **Camera & tư liệu** của POI
+(nhìn trước/trái/phải, góc tùy chỉnh, quét với biên độ riêng, hoặc không tự xoay).
+Tour ở chế độ **Tự động** (mặc định) thì khi robot tới POI chọn "Quét", backend gửi
+`SWEEP` (kèm `sweepDeg` nếu có), `fleet_bridge` gọi `head/sweep` của node này với
+`amplitude_deg` tương ứng. Chế độ **Bằng tay** (`PUT .../head-mode`) bỏ qua mọi thiết lập POI.
+
+- Chuỗi lệnh `STEP` ở tốc độ nút bấm của firmware (30°/s, không cần nạp lại):
+  `STEP,+trái,0` → `STEP,-(trái+phải),0` → `STEP,+phải,0`, chờ IDLE sau mỗi đoạn.
+  Tổng bước bằng 0 nên đầu về **đúng** vị trí bắt đầu; TILT giữ nguyên. Khoảng
+  19 s với ±135°.
+- Mỗi bên tối đa `head_sweep_deg` (135°), tự thu nhỏ để không chạm giới hạn mềm
+  ±170° (đầu đang ở +100° thì chỉ quay trái 69,6°).
+- **Tay thắng:** bất kỳ lệnh tay nào (`head/jog` khác 0, `head/step`, `head/set`,
+  `head/stop|off|zero`) hủy lượt quét, và lượt quét không gửi thêm lệnh nào sau đó.
+  `STEP`/`JOG` chỉ đổi đích của trục được nhấn (firmware cộng `STEP` vào đích
+  của đoạn quét đang chạy), nên khi đang quét bridge gửi `HEAD,<seq>,STOP` ngay
+  trước chúng: đầu dừng tại chỗ rồi mới làm theo nút, không quay hết đoạn quét.
+- Bàn phím: `head_teleop` phím `x` (biên độ mặc định).
+
+| Tham số | Mặc định | |
+|---|---|---|
+| `head_sweep_deg` | 135 | Biên độ mỗi bên (0 = không quay) |
+| `head_sweep_pan_deg_per_step` | 0,6 | **Phải khớp firmware** (bước đủ, hộp số 3:1). Vi bước 1/16 → 0,0375 |
+| `head_sweep_pan_limit_deg` | 170 | **Phải khớp** `HEAD_PAN_LIMIT_CDEG` |
+| `head_sweep_speed_dps` | 30 | Chỉ để tính timeout; tốc độ thật là `HEAD_JOG_SPEED_DPS` của firmware |
 
 ## Tự động khi khởi động
 
@@ -33,9 +62,24 @@ phía sau, cạnh ở 174°). TILT dương = ngửa lên, giới hạn ±18° (v
   nhưng **không** chạy lại sau `head/off` của người dùng (lúc đó `head_seq≠0`).
   Thất bại (mất serial…) thì thử lại sau 5 s.
 - **Về 0 trước khi tắt** (`head_park_on_shutdown`): bridge tắt khi đầu đang có
-  mốc thì gửi `HEAD,<seq>,0,0`; firmware tự chạy về 0 kể cả khi bridge đã
-  thoát. Lý do: seek PAN chỉ 190°, nên lần HOME sau phải bắt đầu trong khoảng
-  174° phải – 16° trái.
+  mốc thì gửi `HEAD,<seq>,0,0` và **chờ tới khi về xong** (tối đa
+  `head_park_timeout`, 4 s; vẫn đọc FB dù executor đã dừng). Lý do: seek PAN chỉ
+  190°, nên lần HOME sau phải bắt đầu trong khoảng 174° phải – 16° trái; cắt
+  điện ngay sau khi tắt bridge mà đầu còn ở 135° trái thì HOME sai mốc.
+- **Nhớ góc PAN qua mất điện** (`head_pan_memory_file`, mặc định
+  `~/.ros/stm32_bridge/head_pan.json`): khi có mốc, bridge ghi góc PAN thật ra
+  file (đổi ≥ 0,5°, tối đa 5 lần/giây, ghi kiểu tạm-rồi-đổi-tên). `head/off`
+  hoặc HOME bị hủy ghi "không có mốc" (đầu có thể bị xoay tay). Khi STM32 vừa
+  khởi động lại (`head_seq=0`) file **không** bị ghi đè.
+- **HOME an toàn:** nếu file cho thấy đầu đang lệch trái quá
+  `head_home_safe_left_deg` (10°) lúc mất điện, HOME tự động làm
+  `ZERO` (mốc tạm tại chỗ) → quay phải đúng góc đó về gần 0 → `HOME`. Trong lúc
+  đó file vẫn ghi góc thật (cộng phần lệch), nên mất điện lần nữa giữa chừng vẫn
+  đúng. `head/set` HOME (bấm tay) khi đầu đang có mốc và lệch trái quá 10° cũng
+  quay về 0 trước rồi mới HOME. Phía phải không cần: tìm vật chặn 190° về bên
+  phải luôn chạm.
+  Giới hạn: nếu ai đó xoay đầu bằng tay khi mất điện, góc trong file sai; khi
+  đó tắt `head_auto_home` và HOME bằng tay sau khi đưa đầu về phía trước.
 - **Contactor bật khi khởi động**: firmware bật PA10 lúc boot. Bridge
   (`contactor_on_at_startup`) gửi `CONTACTOR,<seq>,ON` một lần nếu khung FB
   đầu tiên báo đang tắt. Sau đó chỉ bật/tắt theo `contactor/set`.
@@ -50,6 +94,7 @@ phía sau, cạnh ở 174°). TILT dương = ngửa lên, giới hạn ±18° (v
 | `rejected:head_limit` | Góc ngoài giới hạn mềm |
 | `rejected:head_not_zeroed` | Chưa có mốc: phải HOME trước |
 | `rejected:head_busy` | Đang HOME |
+| `rejected:invalid_angle` | `pan_deg`/`tilt_deg` là NaN hoặc vô cực: không gửi lệnh |
 | `superseded` | Một lệnh HEAD mới hơn (goal khác, JOG, STEP…) đã thay thế |
 | `aborted:off` / `aborted:no_reference` | Bị `head/off` hoặc `head/stop` giữa chừng |
 | `aborted:stm32_reset` | STM32 khởi động lại giữa chừng (mất nguồn, rút USB): đầu quay OFF, phải HOME lại |
@@ -85,6 +130,9 @@ làm mất `contactor/set`. Trạng thái là trạng thái **lệnh** của PA1
 | `head_command_timeout` | 1 s | Timeout xác nhận `head/off`, `head/zero` |
 | `head_auto_home` | `true` | HOME tự động khi STM32 vừa khởi động |
 | `head_park_on_shutdown` | `true` | Đưa đầu về 0/0 khi tắt bridge |
+| `head_park_timeout` | 4 s | Chờ tối đa bấy nhiêu cho đầu về 0/0 khi tắt (dưới 5 s của `ros2 launch`) |
+| `head_pan_memory_file` | `~/.ros/stm32_bridge/head_pan.json` | Nơi nhớ góc PAN qua mất điện; chuỗi rỗng = tắt |
+| `head_home_safe_left_deg` | 10° | Lệch trái quá góc này thì quay về 0 trước khi HOME (firmware chịu được tới 16°) |
 | `enable_contactor` | `true` | Bật giao diện contactor (độc lập với `enable_head`) |
 | `contactor_on_at_startup` | `true` | Gửi `CONTACTOR,ON` một lần khi bridge khởi động nếu đang tắt |
 | `contactor_command_timeout` | 1 s | Timeout xác nhận `contactor/set` |

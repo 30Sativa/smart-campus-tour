@@ -43,6 +43,9 @@ class FakeActuator:
     def angle(self, pan, tilt):
         self._record('angle', pan, tilt)
 
+    def sweep(self, amplitude_deg):
+        self._record('sweep', amplitude_deg)
+
 
 class FixtureTests(unittest.TestCase):
     def test_fixtures_are_the_shared_contract(self):
@@ -58,10 +61,12 @@ class FixtureTests(unittest.TestCase):
     def test_fixture_commands_parse_and_run_in_order(self):
         epoch, commands = parse_head_poll_response(fixture('poll-response-commands.json'))
         self.assertEqual(EPOCH, epoch)
-        self.assertEqual([42, 43, 44, 45], [c.seq for c in commands])
+        self.assertEqual([42, 43, 44, 45, 46, 47], [c.seq for c in commands])
         actuator = FakeActuator()
         HeadCommandApplier(actuator).apply(epoch, commands, now=100.0)
-        self.assertEqual([('step', 1, 0), ('jog', -1, 0), ('jog', 0, 0), ('stop',), ('angle', 0.0, 0.0)], actuator.calls)
+        # A SWEEP without sweepDeg asks for the robot's default (0); with it, the POI's own amplitude.
+        self.assertEqual([('step', 1, 0), ('jog', -1, 0), ('jog', 0, 0), ('stop',), ('angle', 0.0, 0.0), ('sweep', 0.0),
+                          ('sweep', 90.0)], actuator.calls)
         self.assertEqual((EPOCH, []), parse_head_poll_response(fixture('poll-response-empty.json')))
 
     def test_request_fixture_is_what_the_worker_sends(self):
@@ -79,7 +84,8 @@ class ParseTests(unittest.TestCase):
                     {'seq': 1, 'kind': 'STEP', 'panSteps': 21}, {'seq': 1, 'kind': 'STEP', 'panSteps': 1.5},
                     {'seq': 1, 'kind': 'JOG', 'panDir': 2}, {'seq': 1, 'kind': 'JOG', 'panDir': 1, 'ttlMs': 0},
                     {'seq': 1, 'kind': 'ANGLE', 'panDeg': 0}, {'seq': 1, 'kind': 'ANGLE', 'panDeg': float('nan'), 'tiltDeg': 0},
-                    {'seq': 1, 'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 91}]:
+                    {'seq': 1, 'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 91}, {'seq': 1, 'kind': 'SWEEP', 'sweepDeg': 9},
+                    {'seq': 1, 'kind': 'SWEEP', 'sweepDeg': 171}, {'seq': 1, 'kind': 'SWEEP', 'sweepDeg': 90.5}]:
             with self.assertRaises(ValueError, msg=raw):
                 parse_head_command(raw)
 
@@ -139,8 +145,9 @@ class ApplierTests(unittest.TestCase):
         self.applier.tick(1.2)
         self.assertFalse(self.applier.jogging)
 
-    def test_release_stop_and_angle_end_a_jog(self):
-        for ender in [{'kind': 'JOG', 'panDir': 0, 'tiltDir': 0}, {'kind': 'STOP'}, {'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 0}]:
+    def test_release_stop_angle_sweep_and_step_end_a_jog(self):
+        for ender in [{'kind': 'JOG', 'panDir': 0, 'tiltDir': 0}, {'kind': 'STOP'}, {'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 0},
+                      {'kind': 'SWEEP'}, {'kind': 'STEP', 'panSteps': -2}]:
             actuator = FakeActuator()
             applier = HeadCommandApplier(actuator)
             applier.apply(EPOCH, [parse_head_command({'seq': 1, 'kind': 'JOG', 'tiltDir': 1}),
@@ -157,6 +164,13 @@ class ApplierTests(unittest.TestCase):
         self.assertEqual([('stop',), ('step', 1, 0)], actuator.calls)
         self.assertEqual(1, len(logs))
         self.assertEqual((EPOCH, 2), applier.cursor())
+
+    def test_a_step_during_a_jog_is_not_overridden_by_the_jog_keepalive(self):
+        self.apply([{'seq': 1, 'kind': 'JOG', 'panDir': 1, 'ttlMs': 600},
+                    {'seq': 2, 'kind': 'STEP', 'panSteps': -3}], now=0.0)
+        self.applier.tick(0.1)
+        self.applier.tick(0.2)
+        self.assertEqual([('jog', 1, 0), ('jog', 0, 0), ('step', -3, 0)], self.actuator.calls)
 
     def test_release_without_jog_publishes_nothing(self):
         self.applier.release()

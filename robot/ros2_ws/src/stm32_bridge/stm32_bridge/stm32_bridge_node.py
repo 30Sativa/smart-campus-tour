@@ -1453,7 +1453,8 @@ class Stm32BridgeNode(Node):
         try:
             self.get_logger().info('Sending stop command before shutdown.')
             if self._head is not None:
-                self._head.shutdown()
+                # Executor da dung: dua ham doc serial de cho dau ve 0/0 xong.
+                self._head.shutdown(pump=self._read_feedback)
             self._send_stop()
         finally:
             self._close_serial('shutdown')

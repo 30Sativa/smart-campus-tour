@@ -22,6 +22,8 @@ public sealed class TourScheduleSettings
     public const int DefaultRecommendedMaxMinutes = 60;
     /// <summary>BR-26: 20 until NFR-CAP-01 passes, and the 40 of CK_Tours_Capacity is the ceiling either way (ADR-0048).</summary>
     public const int DefaultMaxCapacity = 20;
+    /// <summary>How long a quick Tour waits to be started when Tours:ShortNoticeMinLeadMinutes is not set (ADR-0053).</summary>
+    public const int DefaultShortNoticeMinLeadMinutes = 30;
     public const int CapacityCeiling = 40;
     // 15 minutes to prepare, 15 to finish and at least one minute of Tour.
     private static readonly TimeSpan MinShiftLength = TimeSpan.FromMinutes(31);
@@ -32,18 +34,19 @@ public sealed class TourScheduleSettings
     public int MaxCapacity { get; }
     /// <summary>The longest Tour any shift can hold; a route needing more fits no shift.</summary>
     public int LongestShiftMaxSeconds => Shifts.Max(TourSchedule.MaxDurationSeconds);
-    /// <summary>The least notice a short-notice Tour needs (ADR-0050); null while the option is switched off.</summary>
-    public TimeSpan? ShortNoticeMinLead { get; }
+    /// <summary>
+    /// How long a quick (short-notice) Tour waits to be started: its latest Start is this long after creation (ADR-0053).
+    /// Quick Tours are always available; the key keeps its ADR-0050 name, Tours:ShortNoticeMinLeadMinutes.
+    /// </summary>
+    public TimeSpan ShortNoticeMinLead { get; }
 
     public TourScheduleSettings(IEnumerable<TourShiftOption>? shifts, int? recommendedMaxMinutes, int? maxCapacity = null,
         int? shortNoticeMinLeadMinutes = null)
     {
-        if (shortNoticeMinLeadMinutes is { } minutes)
-        {
-            if (minutes <= 0 || TimeSpan.FromMinutes(minutes) >= TourSchedule.LeadTime)
-                throw new InvalidOperationException("Tours:ShortNoticeMinLeadMinutes must be greater than 0 and shorter than the standard lead time.");
-            ShortNoticeMinLead = TimeSpan.FromMinutes(minutes);
-        }
+        var minutes = shortNoticeMinLeadMinutes ?? DefaultShortNoticeMinLeadMinutes;
+        if (minutes <= 0 || TimeSpan.FromMinutes(minutes) >= TourSchedule.LeadTime)
+            throw new InvalidOperationException("Tours:ShortNoticeMinLeadMinutes must be greater than 0 and shorter than the standard lead time.");
+        ShortNoticeMinLead = TimeSpan.FromMinutes(minutes);
         MaxCapacity = maxCapacity ?? DefaultMaxCapacity;
         if (MaxCapacity is < 1 or > CapacityCeiling) throw new InvalidOperationException("Tours:MaxCapacity must be between 1 and 40.");
         var parsed = (shifts ?? []).Select(Parse).OrderBy(shift => shift.Start).ToArray();
@@ -110,8 +113,6 @@ public static class TourSchedule
     public static DateTimeOffset ReviewClosesAt(DateTimeOffset start, bool isShortNotice) =>
         isShortNotice ? start : start - PendingDecisionClose;
 
-    public static TimeSpan RequireShortNoticeLead(TourScheduleSettings settings) =>
-        settings.ShortNoticeMinLead ?? throw new ConflictException("Chưa bật tùy chọn Tour ngắn hạn.", "SHORT_NOTICE_DISABLED");
 
     public static DateTimeOffset SlotStart(DateOnly date, TimeOnly slot) =>
         new DateTimeOffset(date.ToDateTime(slot), CampusOffset).ToUniversalTime();
@@ -163,17 +164,14 @@ public static class TourSchedule
 
     /// <summary>
     /// Null when the shift can be used. Order: lead time, remeasure, length, Admin block, then any hold still in
-    /// force inside the shift, including an older Tour held at an odd time. <paramref name="shortNoticeLead"/> replaces only
-    /// the lead time; every other rule is the same for a short-notice Tour (ADR-0050).
+    /// force inside the shift, including an older Tour held at an odd time, such as a quick Tour (ADR-0053).
     /// </summary>
     public static TourSlotBlock? Evaluate(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan,
-        IReadOnlyCollection<TourReservationHold> holds, TourShiftBlockView? adminBlock = null, TimeSpan? shortNoticeLead = null)
+        IReadOnlyCollection<TourReservationHold> holds, TourShiftBlockView? adminBlock = null)
     {
         var start = TourStart(shift.Date, shift.Shift);
-        if (start - now < (shortNoticeLead ?? LeadTime))
-            return new(LeadTimeTooShort, shortNoticeLead is { } lead
-                ? $"Quá gần hiện tại, Tour ngắn hạn cần tạo trước ít nhất {lead.TotalMinutes:0} phút"
-                : "Quá gần hiện tại, cần tạo trước ít nhất 72 giờ");
+        if (start - now < LeadTime)
+            return new(LeadTimeTooShort, "Quá gần hiện tại, cần tạo trước ít nhất 72 giờ");
         if (plan is null) return new(RemeasureRequired, "Cần chạy thử lại tuyến để đo theo định nghĩa mới");
         var max = MaxDurationSeconds(shift.Shift);
         if (plan.ExpectedDurationSeconds > max)
@@ -183,6 +181,59 @@ public static class TourSchedule
         var (startsAt, endsAt) = ShiftWindow(shift.Date, shift.Shift);
         var clash = holds.Where(hold => hold.StartsAt < endsAt && hold.EndsAt > startsAt).OrderBy(hold => hold.StartsAt).FirstOrDefault();
         return clash is null ? null : new(ReservationOverlap, $"Trùng khung giữ robot của Tour {clash.TourName}");
+    }
+
+    /// <summary>
+    /// A quick Tour's latest Start, which is also its published time (ADR-0053): creation plus the configured wait, on the
+    /// next whole minute.
+    /// </summary>
+    public static DateTimeOffset QuickTourDeadline(DateTimeOffset now, TimeSpan wait)
+    {
+        var ticks = (now + wait).UtcTicks;
+        return new DateTimeOffset((ticks + TimeSpan.TicksPerMinute - 1) / TimeSpan.TicksPerMinute * TimeSpan.TicksPerMinute, TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// A quick Tour holds its robot from creation until a run started at the latest Start, plus the finish buffer, would
+    /// end. Start may come at any moment inside it, so the hold needs no shift (ADR-0053).
+    /// </summary>
+    public static (DateTimeOffset StartsAt, DateTimeOffset EndsAt) QuickTourHold(DateTimeOffset now, DateTimeOffset deadline, int expectedSeconds) =>
+        (now, deadline + TimeSpan.FromSeconds(expectedSeconds) + ReservationBuffer);
+
+    /// <summary>The campus dates a hold touches, in order, so their Admin locks are taken the same way every time.</summary>
+    public static IReadOnlyList<DateOnly> DatesOf(DateTimeOffset startsAt, DateTimeOffset endsAt)
+    {
+        var dates = new List<DateOnly>();
+        for (var date = CampusDate(startsAt); date <= CampusDate(endsAt); date = date.AddDays(1)) dates.Add(date);
+        return dates;
+    }
+
+    /// <summary>The first Admin block whose day, or whose shift, overlaps the hold; null when none does.</summary>
+    public static TourScheduleBlock? QuickTourAdminBlock(TourScheduleSettings settings, IEnumerable<TourScheduleBlock> activeBlocks,
+        DateTimeOffset startsAt, DateTimeOffset endsAt) =>
+        activeBlocks.OrderBy(block => block.BlockDate).ThenBy(block => block.ShiftCode is not null).FirstOrDefault(block =>
+        {
+            var shift = block.ShiftCode is null ? null : settings.Shifts.FirstOrDefault(item => item.Code == block.ShiftCode);
+            if (block.ShiftCode is not null && shift is null) return false;
+            var (from, to) = shift is null ? DayWindow(block.BlockDate) : ShiftWindow(block.BlockDate, shift);
+            return from < endsAt && to > startsAt;
+        });
+
+    /// <summary>
+    /// Null when a quick Tour can be created now (ADR-0053). Order: remeasure, length (no longer than the longest shift
+    /// holds), Admin block, then any hold of the robot over this Tour's own hold.
+    /// </summary>
+    public static TourSlotBlock? EvaluateQuickTour(TourScheduleSettings settings, DateTimeOffset now, DateTimeOffset deadline,
+        TourReservationPlan? plan, IReadOnlyCollection<TourReservationHold> holds, IEnumerable<TourScheduleBlock> activeBlocks)
+    {
+        if (plan is null) return new(RemeasureRequired, "Cần chạy thử lại tuyến để đo theo định nghĩa mới");
+        if (plan.ExpectedDurationSeconds > settings.LongestShiftMaxSeconds)
+            return new(RouteTooLongForShift, $"Tuyến cần {Minutes(plan.ExpectedDurationSeconds)}, Tour dài nhất được {Minutes(settings.LongestShiftMaxSeconds)}");
+        var (startsAt, endsAt) = QuickTourHold(now, deadline, plan.ExpectedDurationSeconds);
+        if (QuickTourAdminBlock(settings, activeBlocks, startsAt, endsAt) is { } block)
+            return new(ShiftBlocked, $"{(block.ShiftCode is null ? "Ngày" : "Ca")} trong thời gian giữ robot đã bị khoá: {block.Reason}");
+        var clash = holds.Where(hold => hold.StartsAt < endsAt && hold.EndsAt > startsAt).OrderBy(hold => hold.StartsAt).FirstOrDefault();
+        return clash is null ? null : new(ReservationOverlap, $"Robot đang được giữ cho Tour {clash.TourName} từ {clash.StartsAt.ToOffset(CampusOffset):HH\\:mm dd\\/MM}");
     }
 
     public static void EnsureUsable(TourSlotBlock? block)

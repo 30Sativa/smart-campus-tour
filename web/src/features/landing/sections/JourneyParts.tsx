@@ -1,7 +1,23 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { MessageCircle } from 'lucide-react'
 import { prefersReducedMotion } from '../landing-motion'
+import type { PartGroupId } from '../robot-explode/parts'
+import { ViewerBoundary } from '../robot-explode/ViewerBoundary'
+
+// three.js and the robot model load only once section 04 comes near the screen.
+const RobotExplodeViewer = lazy(() => import('../robot-explode/RobotExplodeViewer'))
+
+const NO_PARTS: readonly PartGroupId[] = []
+
+function canUseWebGL() {
+  try {
+    const canvas = document.createElement('canvas')
+    return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'))
+  } catch {
+    return false
+  }
+}
 
 /* Pieces of the "Hành trình" motion layer on the public Home page. Each one
    renders its finished, readable state first; motion is added on top only
@@ -122,38 +138,64 @@ export type TechItem = {
   icon: LucideIcon
   title: string
   body: string
-  /** Where the part sits on the landing-page robot illustration, in percent. */
-  spot: { x: number; y: number }
+  /** Parts of the 3D robot this item lights up when the visitor points at it. */
+  parts?: readonly PartGroupId[]
 }
 
-/** The exploded robot with numbered hotspots tied to the list beside it. */
+/**
+ * Section 04: the robot from its SolidWorks assembly, taken apart and put back
+ * together in 3D, beside the list of technologies. Pointing at a list item
+ * lights up its parts. Until the model has loaded a quiet placeholder holds
+ * its place (no picture: the old illustration showed a different robot).
+ */
 export function TechShowcase({ items }: { items: readonly TechItem[] }) {
   const [active, setActive] = useState(0)
+  const [focused, setFocused] = useState<number | null>(null)
+  const [mode, setMode] = useState<'waiting' | '3d' | 'none'>('waiting')
+  const [visible, setVisible] = useState(false)
+  const artRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const node = artRef.current
+    if (!node || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(([entry]) => {
+      const near = Boolean(entry?.isIntersecting)
+      setVisible(near)
+      if (near) setMode(current => (current !== 'waiting' ? current : canUseWebGL() ? '3d' : 'none'))
+    }, { rootMargin: '240px 0px' })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  const placeholder = (text: string, busy: boolean) => (
+    <div className="lp3-tech-wait" role="status">
+      {busy && <span className="lp3-tech-wait__ring" aria-hidden="true" />}
+      <p>{text}</p>
+    </div>
+  )
+  const focus = (focused === null ? undefined : items[focused]?.parts) ?? NO_PARTS
+
   return (
     <div className="lp3-tech-grid">
-      <div className="lp3-tech-art" data-reveal data-reveal-media>
-        <img src="/images/home-3d/technology-robot-quest.png" alt="Mô hình 3D robot CampusTour với linh kiện bên trong, cảm biến LiDAR, trụ giữ kính Meta Quest 3 và một bánh xe bên hông" loading="lazy" decoding="async" />
-        {items.map((item, index) => (
-          <button
-            key={item.title}
-            type="button"
-            className="lp3-hotspot"
-            data-active={active === index}
-            style={{ left: `${item.spot.x}%`, top: `${item.spot.y}%` }}
-            aria-label={`Xem bộ phận: ${item.title}`}
-            aria-pressed={active === index}
-            onMouseEnter={() => setActive(index)}
-            onFocus={() => setActive(index)}
-            onClick={() => setActive(index)}
-          >
-            0{index + 1}
-          </button>
-        ))}
-        <span>MÔ HÌNH ROBOT MINH HỌA</span>
+      <div className="lp3-tech-art" data-mode="3d" ref={artRef} data-reveal data-reveal-media>
+        {mode === '3d' ? (
+          <ViewerBoundary fallback={placeholder('Không tải được mô hình 3D.', false)}>
+            <Suspense fallback={placeholder('Đang tải mô hình 3D…', true)}>
+              <RobotExplodeViewer focus={focus} visible={visible} />
+            </Suspense>
+          </ViewerBoundary>
+        ) : placeholder(mode === 'none' ? 'Trình duyệt này không hiển thị được mô hình 3D.' : 'Đang tải mô hình 3D…', mode === 'waiting')}
       </div>
       <div className="lp3-tech-list">
         {items.map((item, index) => (
-          <div className="lp3-tech-item" key={item.title} data-active={active === index} data-reveal onMouseEnter={() => setActive(index)}>
+          <div
+            className="lp3-tech-item"
+            key={item.title}
+            data-active={active === index}
+            data-reveal
+            onMouseEnter={() => { setActive(index); setFocused(index) }}
+            onMouseLeave={() => setFocused(null)}
+          >
             <span className="lp3-tech-number">0{index + 1}</span>
             <item.icon size={23} strokeWidth={1.7} aria-hidden="true" />
             <div><h3>{item.title}</h3><p>{item.body}</p></div>

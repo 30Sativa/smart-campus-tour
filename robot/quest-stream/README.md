@@ -34,6 +34,8 @@ Hai dịch vụ chạy trên NUC:
 | `scripts/check-quest.sh` | kiểm tra adb, ffmpeg, MediaMTX, cổng WebRTC, kính |
 | `scripts/start-stream.sh` / `stop-stream.sh` | chạy/dừng `server.py` bằng tay (không qua systemd) |
 | `scripts/measure.sh` | đo độ phân giải, fps, bitrate, số người xem, CPU, RAM |
+| `relay/install-relay.sh` | cài relay MediaMTX công khai trên EC2 (mục "Phát ra Internet") |
+| `scripts/install-relay-push.sh`, `scripts/relay-push.sh` | NUC đẩy luồng lên relay (dịch vụ `quest-relay-push`) |
 | `quest-stream.env.example` | tham số của `server.py` (copy thành `quest-stream.env`) |
 | `mediamtx.env.example` | tham số MediaMTX (copy thành `mediamtx.env`) |
 | `systemd/*.service` | mẫu dịch vụ (được `install-services.sh` điền đường dẫn) |
@@ -226,6 +228,35 @@ screenrecord/FFmpeg/MediaMTX.
 
 Phía web: đặt `VITE_QUEST_STATUS_URL=http://<IP_NUC>:8080/device` trong `web/.env.local`.
 
+## Giảm độ trễ: lấy hình bằng scrcpy
+
+Đo trên NUC7PJYH + Quest 3 thật (2026-11-09): `screenrecord` trễ khoảng **5–6 s**
+dù FFmpeg giữ được `speed` 1x. Kính gửi cả hai mắt ở tần số màn hình và tự giữ
+đệm; NUC phải giải mã từng khung. `QUEST_CAPTURE=scrcpy` đẩy `scrcpy-server`
+lên kính và nhận H.264 thô **chỉ của một mắt**, tối đa `QUEST_FPS` khung/giây,
+cạnh dài tối đa 1600 px. Phần sau (FFmpeg, MediaMTX, web) không đổi.
+Không cần cài scrcpy hay module `v4l2loopback`.
+
+```bash
+bash scripts/install-scrcpy-server.sh                  # tải bin/scrcpy-server (một lần)
+sed -i '/^QUEST_CAPTURE=/d' quest-stream.env && echo 'QUEST_CAPTURE=scrcpy' >> quest-stream.env
+sudo systemctl restart quest-stream
+tail -f logs/adb.log logs/quest-stream.log             # thấy SCRCPY_START rồi STREAM_STARTED
+```
+
+| Thấy gì | Làm gì |
+|---|---|
+| `SCRCPY_ERROR ... is missing` | chạy `install-scrcpy-server.sh` |
+| `SCRCPY_ERROR scrcpy-server did not start` | xem dòng ngay trên trong `logs/adb.log`; thử bản khác: `install-scrcpy-server.sh v3.3.1` |
+| Hình lệch mắt / còn hai mắt | đặt `QUEST_SCRCPY_CROP=W:H:X:Y` (xem `adb shell wm size`, lấy nửa trái `W/2:H:0:0`) |
+| Hình bị nghiêng | `QUEST_SCRCPY_ANGLE=<độ>` (xoay theo chiều kim đồng hồ, số âm là ngược lại; xoay ngay trên kính, không tốn CPU NUC). Thử từng 5° |
+| Muốn quay lại cách cũ | `QUEST_CAPTURE=screenrecord`, restart |
+
+**Với scrcpy, để trống `QUEST_HWDEC`.** Đo trên NUC7PJYH (10 s hình từ kính, một
+mắt 1496x1600): giải mã bằng CPU 162 fps, giải mã VAAPI chỉ 7.7 fps (chậm hơn
+thời gian thực, hình dồn lại, trễ tăng dần tới cả phút). Cả chuỗi CPU (giải mã,
+cắt, scale, libx264 ultrafast) đạt 43 fps, đủ cho `QUEST_FPS=30`.
+
 ## Xử lý khi hỏng
 
 Hành vi tự động:
@@ -294,6 +325,104 @@ xem cạnh kính, chụp ảnh cả hai; hiệu hai số là độ trễ.
 NUC7PJYH (Pentium Silver J5005) yếu hơn và phải giải mã 3664x1920 từ kính: đo lại
 bằng `scripts/measure.sh`; nếu `speed` < 1.0 hoặc CPU > 80 % thì làm theo mục
 "Hình giật".
+
+## Chỉ bật camera khi cần (ADR-0052)
+
+Mặc định `quest-stream` phát liên tục khi kính được cắm. Đặt `QUEST_CONTROL_URL=auto` trong
+`quest-stream.env` để NUC hỏi backend mỗi 5 giây và **chỉ quay khi có người cần hình**:
+
+| Backend trả lời | Khi nào |
+|---|---|
+| `TOUR_RUNNING` | Có Tour đang `RUNNING` trên robot này (học sinh và người vận hành đang xem) |
+| `STAFF_WATCHING` | Trang "Kiểm tra trước khi bắt đầu" của Staff đang mở cho robot này (gia hạn mỗi 30 s, hết hạn sau 2 phút) |
+| `IDLE` | Không ai cần: NUC dừng scrcpy/FFmpeg, kính không quay, MediaMTX báo "không có luồng" |
+
+Khi đang tắt, `/status` có `"state": "paused"`, `"reason": "CAMERA_OFF: IDLE"`; bật lại mất khoảng 20–30 s
+(trang Staff mở sớm trước giờ Start là đủ). Backend không trả lời quá `QUEST_CONTROL_GRACE` (60 s):
+`QUEST_CONTROL_FAILSAFE=on` (mặc định) giữ camera chạy để Tour không mất hình.
+
+NUC dùng chính danh tính robot của Fleet Sync (`~/.config/campustour/fleet-sync.env` do
+`robot/scripts/setup_fleet_sync.py` tạo). Chưa có file đó: chạy script này một lần với credential lấy từ trang
+Kỹ thuật, hoặc đặt `QUEST_ROBOT_CODE` + `QUEST_ROBOT_CREDENTIAL_FILE`.
+
+```bash
+sed -i '/^QUEST_CONTROL_URL=/d' quest-stream.env && echo 'QUEST_CONTROL_URL=auto' >> quest-stream.env
+sudo systemctl restart quest-stream
+curl -s localhost:8080/status | python3 -m json.tool | grep -A5 '"camera"'   # enabled, wanted, reason
+```
+
+Phía người xem (web): nút tạm dừng trên khung hình, và tự ngắt khi tab bị ẩn; mở lại tab là nối lại.
+
+## Phát ra Internet (trang deploy https://www.fptcampustour.cloud)
+
+Trình duyệt ngoài Internet không tới được NUC trong LAN, và trang HTTPS không gọi
+được `http://10.x`. NUC đẩy luồng 720p **một lần** lên MediaMTX trên EC2 (đang
+chạy backend), EC2 phát WebRTC cho mọi học sinh:
+
+```
+NUC: MediaMTX local ──quest-relay-push (ffmpeg -c copy, SRT có mã hoá)──▶ EC2: mediamtx-relay
+                                                                          │ WebRTC (WHEP, HTTPS :8889)
+LAN vẫn xem trực tiếp từ NUC như cũ                                       ▼
+                                                     https://stream.fptcampustour.cloud:8889/quest/whep
+```
+
+Không mã hoá lại ở đâu cả nên NUC và EC2 gần như không tốn CPU. Chi phí là băng
+thông ra của EC2: mỗi người xem nhận đúng `QUEST_VIDEO_BITRATE`. Ở 2 Mbit/s,
+40 học sinh x 1 giờ khoảng 36 GB; AWS miễn phí 100 GB ra Internet mỗi tháng.
+
+**1. DNS + AWS (một lần)**
+
+- Bản ghi `A`: `stream.fptcampustour.cloud` → Elastic IP của EC2.
+- Security Group của EC2, inbound: `8889/tcp`, `8189/udp`, `8189/tcp`, `8890/udp`
+  (nguồn `0.0.0.0/0`).
+- Chứng chỉ cho `stream.fptcampustour.cloud`, cùng cách đang làm cho `api.`
+  (Certbot DNS-01, xem `backend/docs/ec2-deployment.md`), ví dụ
+  `sudo certbot certonly --dns-<plugin> -d stream.fptcampustour.cloud`.
+  Cách khác nếu mở được cổng 80: `sudo certbot certonly --standalone -d stream.fptcampustour.cloud`.
+
+**2. EC2: cài relay**
+
+```bash
+# trên máy có repo: scp robot/quest-stream/relay/install-relay.sh <user>@<EC2>:~
+sudo bash install-relay.sh stream.fptcampustour.cloud
+```
+
+Script tải MediaMTX, tạo mật khẩu (một lần, `/etc/mediamtx-relay/secrets.env`),
+chép chứng chỉ, cài dịch vụ `mediamtx-relay` và hook gia hạn Certbot, rồi in ra
+hai dòng: `VITE_QUEST_WHEP_URL=...` và `RELAY_SRT_URL=...`. In lại:
+`sudo bash install-relay.sh stream.fptcampustour.cloud --show`.
+Log: `journalctl -u mediamtx-relay -f`.
+
+**3. NUC: đẩy lên relay**
+
+```bash
+cd ~/smart-campus-tour/robot/quest-stream
+nano relay-push.env                      # dán dòng RELAY_SRT_URL=... từ bước 2
+bash scripts/install-relay-push.sh       # cài + chạy dịch vụ quest-relay-push
+journalctl -u quest-relay-push -f        # không có lỗi là đang đẩy
+```
+
+Giảm băng thông (khuyên dùng khi phát ra Internet), trong `quest-stream.env`:
+`QUEST_VIDEO_BITRATE=2M`, `QUEST_VIDEO_MAXRATE=2500k`, rồi `sudo systemctl restart quest-stream`.
+
+Kiểm tra trên EC2: `curl -s localhost:9997/v3/paths/get/quest` phải có `"ready": true`.
+Mở `https://stream.fptcampustour.cloud:8889/quest` trong Chrome: thấy hình là xong phía máy chủ.
+
+**4. Vercel**
+
+Project web → Settings → Environment Variables (Production):
+`VITE_QUEST_WHEP_URL=https://stream.fptcampustour.cloud:8889/quest/whep`, rồi
+Redeploy (biến `VITE_*` chỉ được đọc lúc build).
+
+| Triệu chứng | Nguyên nhân thường gặp |
+|---|---|
+| `quest-relay-push` log `Input/output error` liên tục | sai `RELAY_SRT_URL`, hoặc `8890/udp` chưa mở trong Security Group |
+| log `404 Not Found` | stream trên NUC chưa `live` (`curl localhost:8080/status`) |
+| Trang `:8889/quest` mở được nhưng xoay mãi | `8189/udp` và `8189/tcp` chưa mở, hoặc sai IP công khai (chạy lại script với `PUBLIC_IP=<Elastic IP>`) |
+| Trình duyệt báo lỗi chứng chỉ | chứng chỉ không đúng tên `stream.fptcampustour.cloud` |
+
+Chưa đưa qua relay: đàm thoại staff (`quest-mic`, `staff-mic`) và
+`VITE_QUEST_STATUS_URL` (`/device`) vẫn chỉ chạy trong LAN.
 
 ## Ngoài LAN
 

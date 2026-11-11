@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManagePoiFormPage from '../../../routes/staff/manage/StaffManagePoiFormPage'
@@ -79,7 +79,7 @@ describe('Staff versioned POI workflow', () => {
 
   it('groups the camera angle with the robot pose and keeps the content fields in their own card', async () => {
     renderAt('/staff/manage/pois/new')
-    const camera = await screen.findByLabelText('Góc camera')
+    const camera = await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
     expect(screen.getByRole('region', { name: 'Vị trí và hướng robot' })).toContainElement(camera)
     const content = screen.getByRole('complementary', { name: 'Nội dung điểm' })
     expect(content).not.toContainElement(camera)
@@ -123,9 +123,33 @@ describe('Staff versioned POI workflow', () => {
     }))
     renderAt('/staff/manage/pois/proposal-1')
 
-    const camera = await screen.findByLabelText('Góc camera') as HTMLSelectElement
-    expect(camera.value).toBe('HEAD_LEFT')
-    expect(screen.getByRole('option', { name: 'Hướng cũ HEAD_LEFT, cần chọn lại' })).toBeDisabled()
+    const camera = await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
+    expect(screen.getByText('Hướng cũ HEAD_LEFT, cần chọn lại.')).toBeInTheDocument()
+    expect(within(camera).getAllByRole('radio').some(radio => (radio as HTMLInputElement).checked)).toBe(false)
+    expect(screen.getByText('Chọn lại hoạt động để xem mô phỏng.')).toBeInTheDocument()
+  })
+
+  it('shows a stored LEFT as the custom angle 90° left, and editing it saves a custom angle', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })
+      if (url.pathname === '/api/maps/versions') return response([eligibleMap])
+      if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(new Blob(['zip']))
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1') return response({ ...proposal, revision: { ...proposal.revision, cameraPreset: 'LEFT' } })
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1/draft') return response(proposal)
+      return response(null)
+    }))
+    renderAt('/staff/manage/pois/proposal-1')
+
+    await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
+    expect(screen.getByRole('radio', { name: /Góc tùy chỉnh/ })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Trái 90°' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('spinbutton', { name: /^PAN/ })).toHaveValue(90)
+    fireEvent.change(screen.getByRole('spinbutton', { name: /^PAN/ }), { target: { value: '60' } })
+    expect(screen.getByRole('button', { name: 'Trái 90°' })).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+    await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/draft')).toBe(true))
+    const save = requests.find(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/draft')!
+    expect(JSON.parse(String(save.init?.body)).draft.cameraPreset).toBe('ANGLE:60,0')
   })
 
   it('blocks creating a POI from the list until a map has passed its technical check', async () => {
@@ -275,9 +299,32 @@ describe('Staff versioned POI workflow', () => {
       expect(screen.getByText('Lưu sẽ tạo bản mới và giữ kết quả đạt.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeEnabled()
       expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeDisabled()
-      fireEvent.change(screen.getByLabelText('Góc camera'), { target: { value: 'LEFT' } })
+      fireEvent.click(screen.getByRole('radio', { name: /Góc tùy chỉnh/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Trái 90°' }))
+      expect(screen.getByRole('img', { name: 'Nhìn từ trên: PAN 90° trái' })).toBeInTheDocument()
       expect(screen.getByText('Lưu sẽ tạo bản mới và phải gửi kiểm chứng lại. Tuyến và Tour đang dùng bản cũ không bị ảnh hưởng.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeEnabled()
+    })
+
+    it('saves the VR head behaviour chosen in Camera & tư liệu, with its own sweep amplitude, and refuses a bad angle', async () => {
+      serve({})
+      renderAt('/staff/manage/pois/proposal-1')
+      await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
+      fireEvent.click(screen.getByRole('radio', { name: /Góc tùy chỉnh/ }))
+      fireEvent.change(screen.getByRole('spinbutton', { name: /^PAN/ }), { target: { value: '45' } })
+      fireEvent.change(screen.getByRole('slider', { name: 'Thanh kéo TILT' }), { target: { value: '-10' } })
+      expect(screen.getByRole('img', { name: 'Nhìn từ trên: PAN 45° trái' })).toBeInTheDocument()
+      expect(screen.getByRole('img', { name: 'Nhìn ngang: TILT 10° cúi' })).toBeInTheDocument()
+      fireEvent.change(screen.getByRole('spinbutton', { name: /^PAN/ }), { target: { value: '200' } })
+      expect(screen.getByText(/Góc PAN phải từ -170 đến 170 độ/)).toBeInTheDocument()
+      expect(screen.getByText(/Còn thiếu: hoạt động đầu camera hợp lệ/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('radio', { name: /Quét trái, phải/ }))
+      expect(screen.getByText(/quay chậm sang trái, rồi sang phải, rồi về chỗ cũ/)).toBeInTheDocument()
+      fireEvent.change(screen.getByRole('spinbutton', { name: /^Biên độ mỗi bên/ }), { target: { value: '90' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+      await waitFor(() => expect(writes()).toContain('/api/staff/poi-proposals/proposal-1/draft'))
+      const save = requests.find(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/draft')!
+      expect(JSON.parse(String(save.init?.body)).draft.cameraPreset).toBe('SWEEP:90')
     })
 
     it('sends an unchanged draft for checking without saving a copy of it first', async () => {

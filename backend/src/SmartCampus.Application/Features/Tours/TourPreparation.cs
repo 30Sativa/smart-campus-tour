@@ -18,7 +18,7 @@ internal static class TourPreparation
     public static CreateTourInput Normalize(CreateTourInput input) => input with
     {
         Name = input.Name.Trim(), Description = Optional(input.Description), RobotCode = input.RobotCode.Trim(),
-        FallbackVideoUrl = Optional(input.FallbackVideoUrl), ScheduledStartAt = input.ScheduledStartAt.ToUniversalTime(),
+        FallbackVideoUrl = Optional(input.FallbackVideoUrl), ScheduledStartAt = input.ScheduledStartAt?.ToUniversalTime(),
         ShortNoticeReason = Optional(input.ShortNoticeReason)
     };
 

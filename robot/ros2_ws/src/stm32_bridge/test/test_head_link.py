@@ -11,6 +11,7 @@ from stm32_bridge.head_link import (  # noqa: E402
     command_outcome, deg_to_cdeg, head_error_kind, next_seq,
     parse_head_feedback, seq_at_or_after,
 )
+from stm32_bridge import head_link as hl  # noqa: E402
 
 FB19 = 'FB,9,100,110,20,OK,9000,1,1234,1,0,0,2000,1,500,0,2,4,1'
 
@@ -160,3 +161,20 @@ def test_jog_relay_direction_change_is_immediate():
     assert r.on_jog(-1, 0, 0.01) == (-1, 0)
     assert r.on_jog(-1, 1, 0.02) == (-1, 1)
     assert r.on_jog(7, -9, 0.03) == (1, -1)        # kep ve -1/0/1
+
+
+def test_sweep_plan_is_symmetric_from_the_front():
+    assert hl.sweep_plan(0.0, 135.0, 0.6, 170.0) == (225, 225)
+
+
+def test_sweep_plan_never_crosses_the_soft_limit():
+    assert hl.sweep_plan(100.0, 135.0, 0.6, 170.0) == (116, 225)    # 70 do con lai ben trai
+    assert hl.sweep_plan(-169.8, 135.0, 0.6, 170.0) == (225, 0)     # sat gioi han phai
+    assert hl.sweep_plan(169.8, 135.0, 0.6, 170.0) == (0, 225)
+
+
+def test_sweep_plan_with_microsteps_and_degenerate_input():
+    assert hl.sweep_plan(0.0, 135.0, 0.0375, 170.0) == (3600, 3600)  # 1/16 vi buoc
+    assert hl.sweep_plan(0.0, 0.0, 0.6, 170.0) == (0, 0)
+    assert hl.sweep_plan(0.0, 135.0, 0.0, 170.0) == (0, 0)
+    assert hl.sweep_plan(200.0, 135.0, 0.6, 170.0) == (0, 225)       # ngoai gioi han: chi quay vao trong

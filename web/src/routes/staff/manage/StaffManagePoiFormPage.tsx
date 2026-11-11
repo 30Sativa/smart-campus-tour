@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, ChevronRight, CircleAlert, Info, MapPinned, MapPinOff } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CircleAlert, Info, MapPinned, MapPinOff, Square, Volume2 } from 'lucide-react'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
@@ -9,7 +9,9 @@ import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
 import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { NARRATION_NEEDED, mapCheckLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { headPresetProblem } from '../../../features/technical/head-camera-preset'
+import { HeadCameraPresetField } from '../../../features/administration/pois/HeadCameraPresetField'
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
@@ -17,6 +19,7 @@ import { clearanceMessage, poseClearance } from '../../../features/administratio
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 import { UnsavedChangesGuard } from '../../../features/administration/UnsavedChangesGuard'
 import { AFTER_SAVE } from '../../../features/administration/after-save'
+import { canPreviewNarration, previewNarration } from '../../../features/student/use-narration-voice'
 
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
@@ -50,6 +53,9 @@ export default function StaffManagePoiFormPage() {
   const [draftOverride, setDraftOverride] = useState<Draft | null>(null)
   const [saved, setSaved] = useState<PoiProposal | null>(null)
   const [busy, setBusy] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
+  const stopPreview = useRef<(() => void) | null>(null)
+  useEffect(() => () => stopPreview.current?.(), [])
   const [error, setError] = useState<string | null>(null)
   const [poseMode, setPoseMode] = useState<PickerMode>('position')
   const current = saved ?? proposalQuery.data ?? null
@@ -84,6 +90,11 @@ export default function StaffManagePoiFormPage() {
     if ((action === 'save' && current && !changed) || (waiting && changed)) return
     if (!mapEligible || historicalReadOnly || !draft.mapVersionId || !draft.name.trim() || !draft.purpose.trim() || !draft.narrationText.trim() || draft.x == null || draft.y == null || draft.yaw == null) {
       setError('Cần chọn bản đồ, nhập tên, mục đích, nội dung thuyết minh và đặt vị trí cùng hướng trên bản đồ.')
+      return
+    }
+    const cameraProblem = headPresetProblem(draft.cameraPreset)
+    if (cameraProblem) {
+      setError(cameraProblem)
       return
     }
     // The server skips this for a pose kept from the current revision, so a content edit stays possible.
@@ -174,7 +185,7 @@ export default function StaffManagePoiFormPage() {
   const saveBlocked = Boolean(current) && (!changed || waiting)
   // Sending again adds nothing when the revision it would send is already submitted or already holds a PASS.
   const submitBlocked = Boolean(current) && (waiting || (!changed && (current!.revision.isSubmitted || passed)) || (changed && !navigationChanged && passed))
-  const missing = [!draft.mapVersionId && 'bản đồ', !placed && 'vị trí', draft.yaw == null && 'hướng robot', !draft.name.trim() && 'tên POI', !draft.purpose.trim() && 'mục đích', !draft.narrationText.trim() && 'thuyết minh'].filter(Boolean) as string[]
+  const missing = [!draft.mapVersionId && 'bản đồ', !placed && 'vị trí', draft.yaw == null && 'hướng robot', !draft.name.trim() && 'tên POI', !draft.purpose.trim() && 'mục đích', !draft.narrationText.trim() && 'thuyết minh', headPresetProblem(draft.cameraPreset) && 'hoạt động đầu camera hợp lệ'].filter(Boolean) as string[]
   const field = `${inputClass} mt-1.5`
   const label = 'flex items-center gap-1 text-sm font-medium text-[#2d3748]'
   const required = <span aria-hidden="true" className="text-[#c53030]">*</span>
@@ -225,8 +236,7 @@ export default function StaffManagePoiFormPage() {
         </details>
         <div className="mt-5 space-y-2 border-t border-[#e2e8f0] pt-5">
           <h2 className="text-lg font-bold text-[#2d3748]">Camera & tư liệu</h2>
-          <div><label htmlFor="poi-camera" className={label}>Góc camera tại POI</label><select id="poi-camera" aria-label="Góc camera" className={field} value={draft.cameraPreset} onChange={e => update({ cameraPreset: e.target.value })}>{!(draft.cameraPreset in cameraPresetLabel) && <option value={draft.cameraPreset} disabled>Hướng cũ {draft.cameraPreset}, cần chọn lại</option>}{Object.entries(cameraPresetLabel).map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select></div>
-          <p className="text-xs text-[#718096]">Khác với hướng thân robot được đặt trên bản đồ.</p>
+          <HeadCameraPresetField value={draft.cameraPreset} onChange={cameraPreset => update({ cameraPreset })} />
           <details className="group rounded-xl border border-[#e2e8f0] text-sm" open={Boolean(draft.fallbackVideoUrl)}>
             <summary className={`flex cursor-pointer list-none items-center gap-2 rounded-xl px-3.5 py-2.5 font-medium text-[#2d3748] [&::-webkit-details-marker]:hidden ${focus}`}><ChevronRight size={15} aria-hidden="true" className="text-[#718096] transition-transform group-open:rotate-90" />Video dự phòng HTTPS <span className="font-normal text-[#718096]">(không bắt buộc)</span></summary>
             <div className="border-t border-[#e2e8f0] p-3.5"><label className="block text-sm text-[#2d3748]">Đường dẫn video<input className={field} type="url" maxLength={2048} pattern="https://.*" value={draft.fallbackVideoUrl} onChange={e => update({ fallbackVideoUrl: e.target.value })} placeholder="https://…" /></label></div>
@@ -247,7 +257,18 @@ export default function StaffManagePoiFormPage() {
         <div className="space-y-2 border-t border-[#e2e8f0] pt-5">
           <h2 className="text-lg font-bold text-[#2d3748]">Nội dung thuyết minh</h2>
           <div><span className={label}><label htmlFor="poi-narration">Thuyết minh</label>{required}</span><textarea id="poi-narration" aria-label="Nội dung thuyết minh" className={field} rows={4} required maxLength={4000} value={draft.narrationText} onChange={e => update({ narrationText: e.target.value })} placeholder="Nhập nội dung giới thiệu tại điểm này…" /></div>
-          <p className="text-xs text-[#718096]">Robot đọc nội dung này khi dừng tại điểm.</p>
+          <p className="text-xs text-[#718096]">Trang của học sinh tự đọc nội dung này khi robot dừng tại điểm.</p>
+          {canPreviewNarration() && (
+            <button type="button" className={buttonClass('secondary', 'sm')} disabled={!draft.narrationText.trim()}
+              onClick={() => {
+                if (previewing) { stopPreview.current?.(); return }
+                setPreviewing(true)
+                stopPreview.current = previewNarration(draft.narrationText, () => { stopPreview.current = null; setPreviewing(false) })
+              }}>
+              {previewing ? <Square size={14} aria-hidden="true" /> : <Volume2 size={14} aria-hidden="true" />}
+              {previewing ? 'Dừng đọc' : 'Nghe thử'}
+            </button>
+          )}
         </div>
         <p className="flex items-start gap-2 text-xs text-[#718096]"><Info size={14} aria-hidden="true" className="mt-0.5 shrink-0" />Gửi đề xuất để kỹ thuật viên kiểm chứng. Mỗi lần lưu tạo một bản mới.</p>
         </div>

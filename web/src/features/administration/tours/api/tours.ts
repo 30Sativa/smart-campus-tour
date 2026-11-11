@@ -21,8 +21,8 @@ export const toursApi = {
   get: (id: string) => apiClient<ApiResponse<TourDetails>>(`/api/staff/manage/tours/${id}`).then(r => r.data!),
   operators: () => apiClient<ApiResponse<TourOperator[]>>('/api/staff/manage/tours/operators').then(r => r.data ?? []),
   robots: (routeRevisionId: string) => apiClient<ApiResponse<TourRobotOption[]>>(`/api/staff/manage/tours/robots?routeRevisionId=${encodeURIComponent(routeRevisionId)}`).then(r => r.data ?? []),
-  slots: (routeRevisionId: string, robotCode: string, from: string, to: string, shortNotice = false) =>
-    apiClient<ApiResponse<TourSlots>>(`/api/staff/manage/tours/slots?${new URLSearchParams({ routeRevisionId, robotCode, from, to, ...(shortNotice ? { shortNotice: 'true' } : {}) })}`).then(r => r.data!),
+  slots: (routeRevisionId: string, robotCode: string, from: string, to: string) =>
+    apiClient<ApiResponse<TourSlots>>(`/api/staff/manage/tours/slots?${new URLSearchParams({ routeRevisionId, robotCode, from, to })}`).then(r => r.data!),
   shifts: (from: string, to: string) =>
     apiClient<ApiResponse<TourShifts>>(`/api/staff/manage/tours/shifts?${new URLSearchParams({ from, to })}`).then(r => r.data!),
   create: (requestId: string, configuration: CreateTourInput) =>

@@ -27,7 +27,7 @@ Two vocabularies are kept apart on every screen:
 | `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu: a verdict first (before the window opens: when it opens and how long until then), then only the root causes grouped by who clears them: Tour and operator, Robot (each row tagged with its server source, e.g. "Robot tự báo" for telemetry, plus what to do), and the M2.3 system gates in one box nobody on site can open; the full list folded per group; Start and the 4 on-site confirmations in a sticky side column (confirmations shown only to the assigned Operator) | `GET …/start-checks` (polled 3 s), `POST …/start` |
 | `/staff/live[/:id]` | Điều hành trực tiếp: freshness line, a situation card (what is happening and the one step it calls for: Next, Retry leg or Reconcile), Tour state, command card with the robot's own leg report, route, robot telemetry, a separate End Early panel | Tour detail `execution`/`allowedActions` (polled 3 s), `POST …/next`, `…/retry-leg`, `…/end-early`, `…/commands/{commandId}/reconcile`, `/hubs/operations` |
 | `/staff/manage/tours/:id` | Tour preparation, now with **Chốt Tour** and **Mở lại** | `permissions.canMarkReady/canReopen/readyBlockers`, `POST …/ready`, `POST …/reopen` |
-| `/staff/schedule` | Lịch Tour: week grid, day by robot (and every Tour of the day below it), or the list view (`?view=list`): every Tour across time, paged, by phase (`?tab=`) or state (`?state=`), with search. The list view is the former Danh sách Tour page | `GET /api/staff/manage/tours` (`from&to` for week and day, `phase`/`state` for the list) |
+| `/staff/schedule` | Lịch Tour: week grid, day by robot (and every Tour of the day below it), or the list view (`?view=list`): every Tour across time, paged, by phase (`?tab=`) or state (`?state=`), with search. The list view is the former Danh sách Tour page. In the shift views a quick Tour (ADR-0053) is marked "Nhanh" at its latest Start | `GET /api/staff/manage/tours` (`from&to` for week and day, `phase`/`state` for the list), `GET .../tours/shifts` |
 | `/staff/manage/tours` | Redirect to `/staff/schedule?view=list`, keeping `tab`/`state` | — |
 | `/staff/robot`, `/staff/history` | unchanged, already API-backed | — |
 
@@ -116,6 +116,15 @@ Done since the first M2 console, listed so these rows are not re-opened:
   (`operationalStatus`, `assistanceReason`, `currentStep`, `commandState`,
   `needsReconcile`); `useRunningTours` reads a detail only when an older server
   omits it. Ended Tours that still need Reconcile raise an overview alert and a bell item.
+- The bell (`features/staff/StaffBell.tsx`) has two parts. "Cần chú ý" is open Tour work;
+  it shows a loading or failed state instead of "Không có việc cần chú ý." until every
+  Tour query answered. "Từ Technical Staff" reads `GET /api/staff/notifications` every
+  20 s: POI verified/rejected, Route test PASS/FAIL, map deployment check and robot
+  inspection released, each linking to the POI, Route, POI page or robot page. Read
+  state is per account in this browser (`staff-notices-read:<userId>`), like the
+  Representative bell; the count is open work plus notices not yet seen. Opening the
+  bell counts as seeing them: the count drops to the open work, and what was new stays
+  highlighted until the panel closes.
 - Releasing a held robot: `/technical/robots` marks a robot that needs inspection,
   or whose holding Tour has ended, as "Chờ kiểm tra tại chỗ" (a robot in a running
   Tour shows "Đang chạy Tour") and offers "Trả robot về sử dụng" behind a required
@@ -161,6 +170,13 @@ Done since the first M2 console, listed so these rows are not re-opened:
 - POI summaries, rows and map markers share an explicit map-version selection.
   Empty filters and API errors are distinct. Route cards keep revision history
   collapsed and support server pagination.
+- A Tour runs the route revision it was created on (ADR-0034); saving a route
+  makes a new revision and moves no Tour. The route editor names the Tours
+  scheduled on the route (`GET /api/staff/routes/{id}/scheduled-tours`) before a
+  save, and the detail of a Tour still to run says when its route has a newer
+  revision (`GET /api/routes/{id}/revisions`), with links to both. The Tour edit
+  page shows its time and route as facts, not locked inputs. Moving a Tour to a
+  newer revision still means cancelling and creating it again.
 
 ## Roles
 

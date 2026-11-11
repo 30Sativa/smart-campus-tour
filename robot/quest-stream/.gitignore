@@ -3,3 +3,5 @@ mediamtx.env
 logs/*
 !logs/.gitkeep
 __pycache__/
+bin/
+relay-push.env

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SmartCampus.Application.Common.Abstractions.Authentication;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
+using SmartCampus.Application.Common.Abstractions.FleetCamera;
 using SmartCampus.Application.Common.Abstractions.FleetHead;
 using SmartCampus.Infrastructure.Authentication.Jwt;
 using SmartCampus.Infrastructure.Authentication;
@@ -14,10 +15,12 @@ using SmartCampus.Infrastructure.Persistence;
 using SmartCampus.Infrastructure.Persistence.Repositories;
 using SmartCampus.Infrastructure.Persistence.Seeding;
 using SmartCampus.Infrastructure.Integrations.FleetSync;
+using SmartCampus.Infrastructure.Integrations.FleetCamera;
 using SmartCampus.Infrastructure.Integrations.FleetHead;
 using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Infrastructure.Integrations.Invitations;
 using SmartCampus.Application.Features.FleetSync;
+using SmartCampus.Application.Features.FleetCamera;
 using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.Infrastructure;
 using SmartCampus.Application.Features.MapPoi;
@@ -66,9 +69,17 @@ public static class DependencyInjection
             configuration.GetValue<int?>("FleetHead:MaxCommandAgeMs") ?? 1000,
             configuration.GetValue<int?>("FleetHead:JogTtlMs") ?? 600,
             configuration.GetValue<int?>("FleetHead:MaxWaitMs") ?? 1500,
-            configuration.GetValue<int?>("FleetHead:RobotConnectedWithinMs") ?? 3000));
+            configuration.GetValue<int?>("FleetHead:RobotConnectedWithinMs") ?? 3000,
+            (configuration.GetValue<string?>("FleetHead:DefaultMode") ?? HeadModes.Auto).Trim().ToUpperInvariant()));
         services.AddSingleton<IHeadCommandChannel, InMemoryHeadCommandChannel>();
+        services.AddSingleton<ITourHeadModeStore, InMemoryTourHeadModeStore>();
         services.AddScoped<ITourHeadControlReader, EfTourHeadControlReader>();
+        // ADR-0052: the Quest camera runs only while a Tour runs or a Staff page holds a lease. In memory, like head control.
+        services.AddSingleton(new FleetCameraSettings(configuration.GetValue<int?>("FleetCamera:LeaseSeconds") ?? 120,
+            configuration.GetValue<int?>("FleetCamera:PollSeconds") ?? 5,
+            configuration.GetValue<int?>("FleetCamera:RobotListeningWithinSeconds") ?? 20));
+        services.AddSingleton<ICameraDemandStore, InMemoryCameraDemandStore>();
+        services.AddScoped<IRobotCameraReader, EfRobotCameraReader>();
         services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
         services.AddSingleton<JwtTokenSettings>();
         services.AddSingleton(TimeProvider.System);
@@ -98,6 +109,7 @@ public static class DependencyInjection
             configuration.GetValue<int?>("Tours:ShortNoticeMinLeadMinutes")));
 
         services.AddScoped<IAuditLogReader, EfAuditLogReader>();
+        services.AddScoped<IStaffNotificationReader, EfStaffNotificationReader>();
         services.AddScoped<ITourManagementTransaction, EfTourManagementTransaction>();
         services.AddScoped<IRepresentativeRepository, EfRepresentativeRepository>();
         services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();

@@ -71,7 +71,7 @@ public sealed class TourStartPreflightSqlTests
             UPDATE dbo.Tours SET OperationalStatus = NULL WHERE Id = '{w.OtherTourId}';
             """);
         await w.AssertBlocked(["robotDispatchEnabled"], "UPDATE dbo.Robots SET IsDispatchEnabled = 0;", "UPDATE dbo.Robots SET IsDispatchEnabled = 1;");
-        await w.AssertBlocked(["noPendingDecisions"], w.H.PendingRowSql(), "UPDATE dbo.RosterRows SET ParticipationState = 'REJECTED';");
+        await w.AssertBlocked(["noPendingDecisions"], w.H.PendingRowSql(), TourReadySqlTests.Harness.RejectPendingSql);
         await w.AssertBlocked([]);
     }
 
@@ -166,7 +166,7 @@ public sealed class TourStartPreflightSqlTests
             Assert.Equal(w.H.Start.AddMinutes(-10), read.OpensAt);
             Assert.True(Assert.Single(read.Checks, c => c.Id == "withinStartWindow").Passed);
             Assert.Equal([TourStartPreflight.AllViewersJoinedCheck, Transport], read.BlockedBy);
-            Assert.Contains("1/2", Assert.Single(read.Checks, c => c.Id == TourStartPreflight.AllViewersJoinedCheck).Detail);
+            Assert.Contains("2/3", Assert.Single(read.Checks, c => c.Id == TourStartPreflight.AllViewersJoinedCheck).Detail);
             var refused = await w.StartRefused();
             Assert.Equal("START_PRECONDITION_FAILED", refused.Code);
         }
@@ -179,6 +179,26 @@ public sealed class TourStartPreflightSqlTests
         w.Clock.Now = w.H.Start.AddMinutes(-11);
         await w.Report();
         Assert.Equal(["withinStartWindow", Transport], (await w.StartRefused()).BlockedBy);
+    }
+
+    [SchemaV11Fact]
+    public async Task AReadyTourWhoseAcceptedRowsLeft_CannotStart()
+    {
+        await using var w = await World.Create();
+        Assert.True(Assert.Single((await w.Checks()).Checks, c => c.Id == TourStartPreflight.HasAcceptedRowsCheck).Passed);
+
+        await w.H.Database.ExecuteAsync("UPDATE dbo.RosterRows SET ParticipationState = 'REMOVED';");
+        var read = await w.Checks();
+        Assert.Equal([TourStartPreflight.HasAcceptedRowsCheck, Transport], read.BlockedBy);
+        var refused = await w.StartRefused();
+        Assert.Equal("START_PRECONDITION_FAILED", refused.Code);
+        Assert.Equal([TourStartPreflight.HasAcceptedRowsCheck, Transport], refused.BlockedBy);
+
+        // While a row waits for review, that is the root cause; the accepted-row check waits for it.
+        await w.H.Database.ExecuteAsync(w.H.PendingRowSql());
+        read = await w.Checks();
+        Assert.Equal(["noPendingDecisions", Transport], read.BlockedBy);
+        Assert.False(Assert.Single(read.Checks, c => c.Id == TourStartPreflight.HasAcceptedRowsCheck).Passed);
     }
 
     [SchemaV11Fact]
@@ -323,6 +343,9 @@ public sealed class TourStartPreflightSqlTests
             var world = new World(harness, clock, console);
             // Created now, before the clock moves to the start: Tour create requires its lead time.
             world.OtherTourId = await harness.CreateTour(harness.Start.AddDays(1));
+            // READY needs an accepted row (NO_ACCEPTED_ROWS); this viewer is already in the waiting room, so an early Start is not held by it.
+            await world.Join(await world.AddAcceptedViewer("base"));
+            await harness.AddAcceptedRow(world.OtherTourId);
             await harness.Ready(new(Guid.NewGuid(), await harness.Version()));
             await harness.Database.ExecuteAsync(world.AssignMapSql + " UPDATE dbo.Robots SET IsDispatchEnabled = 1;");
             await using (var db = harness.Context())

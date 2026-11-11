@@ -12,7 +12,8 @@ public sealed record TourStartConfirmation(bool? RobotPlaced, bool? AreaClear, b
 
 /// <summary>
 /// <see cref="CanStart"/> is true only when every returned check passed. <see cref="OpensAt"/> is the first instant Start
-/// is accepted (ScheduledStartAt − StartEarlyLimit, ADR-0050); null on movement checks during a Tour.
+/// is accepted (ScheduledStartAt − StartEarlyLimit, ADR-0050; creation for a quick Tour, ADR-0053); null on movement
+/// checks during a Tour.
 /// </summary>
 public sealed record TourStartChecks(IReadOnlyList<ConflictCheck> Checks, bool CanStart, IReadOnlyList<string> BlockedBy)
 {
@@ -35,6 +36,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
     public const string MovementFailedCode = "MOVE_PRECONDITION_FAILED";
     public const string TransportCheck = "commandTransportEnabled";
     public const string AllViewersJoinedCheck = "allViewersJoined";
+    public const string HasAcceptedRowsCheck = "hasAcceptedRows";
 
     /// <summary>
     /// <paramref name="viewer"/> adds <c>callerIsOperator</c> (the read only; Start answers 403 instead).
@@ -64,10 +66,12 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         var incident = robot is not null && await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, null, ct);
         var openCommand = robot is not null && await repository.HasOpenCommandAsync(robot.Id, ct);
         var pending = await registrations.HasPendingDecisionsAsync(tour.Id, ct);
+        var accepted = !pending && await registrations.HasAcceptedRowsAsync(tour.Id, ct);
         var snapshot = robot is null ? null
             : telemetry.GetLatest().FirstOrDefault(item => string.Equals(item.Robot.RobotCode, robot.RobotCode, StringComparison.Ordinal));
         // Read after every lock, so a wait cannot carry the Tour out of its window unnoticed.
         var now = clock.GetUtcNow();
+        var opensAt = StartOpensAt(tour, reservation);
 
         var list = new Checklist();
         list.Add("tourReady", "DB", tour.State == "READY" && !tour.HasExecutionState,
@@ -75,7 +79,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         if (viewer is { } caller)
             list.Add("callerIsOperator", "DB", tour.OperatorUserId == caller,
                 tour.OperatorUserId == caller ? "Bạn là người vận hành của Tour." : "Chỉ người vận hành được giao cho Tour mới Start được.");
-        list.Add("withinStartWindow", "DB", Window(tour.ScheduledStartAt, now, out var windowDetail), windowDetail);
+        list.Add("withinStartWindow", "DB", Window(tour.ScheduledStartAt, opensAt, now, out var windowDetail), windowDetail);
 
         list.Add("reservationActive", "DB", robot is not null,
             robot is not null ? $"Tour đang giữ robot {robot.RobotCode}."
@@ -110,11 +114,17 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
 
         list.Add("noPendingDecisions", "DB", !pending,
             pending ? "Còn dòng đăng ký hoặc yêu cầu đổi email đang chờ Staff duyệt." : "Không còn quyết định đang chờ.");
+        // READY needs an accepted row (NO_ACCEPTED_ROWS); Start rechecks it, since a row can leave a READY Tour.
+        if (pending)
+            list.Skip("noPendingDecisions", "DB", [HasAcceptedRowsCheck]);
+        else
+            list.Add(HasAcceptedRowsCheck, "DB", accepted,
+                accepted ? "Tour có dòng đăng ký đã được duyệt." : TourReadiness.NoAcceptedRowsMessage);
 
         // ADR-0050: Start before the published time leaves nobody behind. From the published time a missing viewer no longer holds the Tour.
         if (now >= tour.ScheduledStartAt)
             list.Add(AllViewersJoinedCheck, "DB", true, "Không áp dụng: đã tới giờ bắt đầu.");
-        else if (now >= tour.ScheduledStartAt - settings.StartEarlyLimit)
+        else if (now >= opensAt)
         {
             var viewers = await repository.GetViewerPresenceAsync(tour.Id, now, ct);
             list.Add(AllViewersJoinedCheck, "DB", viewers.Joined == viewers.Accepted,
@@ -151,7 +161,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         // D3: battery is shown, never blocks.
         list.Info("batteryInfo", "TELEMETRY", snapshot?.Report.BatteryPercent is { } battery
             ? $"Pin {battery:0.#}% (chỉ hiển thị, không chặn Start)." : "Robot chưa báo pin (chỉ hiển thị, không chặn Start).");
-        return list.Result() with { OpensAt = tour.ScheduledStartAt - settings.StartEarlyLimit };
+        return list.Result() with { OpensAt = opensAt };
     }
 
     /// <summary>
@@ -202,16 +212,22 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
             settings.Enabled ? "Command transport đang bật." : "FleetCommands:Enabled = false nên backend không tạo lệnh cho robot.");
 
     /// <summary>
-    /// [start − StartEarlyLimit, start + StartLateLimit]. The early bound never exceeds the reservation buffer, so an
-    /// early run starts inside the robot hold of the Tour's own shift and needs no new overlap check (ADR-0050).
+    /// The first instant Start is accepted. ScheduledStartAt − StartEarlyLimit: the early limit never exceeds the
+    /// reservation buffer, so an early run starts inside the robot hold of the Tour's own shift (ADR-0050). A short-notice
+    /// Tour opens when its robot hold does: a quick Tour holds from creation and its published time is its latest Start
+    /// (ADR-0053); one held for a whole shift under ADR-0050 opens at the shift opening, still inside its hold.
     /// </summary>
-    private bool Window(DateTimeOffset start, DateTimeOffset now, out string detail)
+    private DateTimeOffset StartOpensAt(Tour tour, TourRobotReservation? reservation) =>
+        tour.IsShortNotice && reservation is not null && reservation.StartsAt < tour.ScheduledStartAt
+            ? reservation.StartsAt : tour.ScheduledStartAt - settings.StartEarlyLimit;
+
+    /// <summary>[<paramref name="earliest"/>, start + StartLateLimit].</summary>
+    private bool Window(DateTimeOffset start, DateTimeOffset earliest, DateTimeOffset now, out string detail)
     {
-        var earliest = start - settings.StartEarlyLimit;
         var latest = start + settings.StartLateLimit;
         detail = now < earliest
-                ? settings.StartEarlyLimit > TimeSpan.Zero
-                    ? $"Chưa tới giờ được Start; Start mở từ {settings.StartEarlyLimit.TotalMinutes:0} phút trước giờ bắt đầu."
+                ? earliest < start
+                    ? $"Chưa tới giờ được Start; Start mở từ {(start - earliest).TotalMinutes:0} phút trước giờ bắt đầu."
                     : "Chưa tới giờ bắt đầu của Tour."
             : now > latest ? $"Đã quá {settings.StartLateLimit.TotalMinutes:0} phút sau giờ bắt đầu của Tour."
             : now < start ? "Đang trong khung Start sớm; cần mọi điểm xem đã vào phòng chờ."

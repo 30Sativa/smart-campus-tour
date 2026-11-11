@@ -27,6 +27,8 @@ import json
 import logging
 import logging.handlers
 import os
+import random
+import re
 import shutil
 import socket
 import signal
@@ -39,7 +41,9 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
+from urllib.request import Request, urlopen
 
 MODULE_DIR = Path(__file__).resolve().parent
 
@@ -104,6 +108,23 @@ class Config:
     capture_bitrate: int = 20_000_000
     screenrecord_limit: int = 180  # Android caps a screenrecord session at 180 s
     keep_awake: bool = False  # disable the proximity sensor while streaming
+    # "screenrecord" (adb, no setup) or "scrcpy": scrcpy-server sends only one eye, at most
+    # scrcpy_max_fps frames per second, so the NUC decodes far less and the picture lags far less.
+    capture: str = "screenrecord"
+    scrcpy_server: Path = MODULE_DIR / "bin" / "scrcpy-server"
+    scrcpy_version: str = ""  # empty = bin/scrcpy-server.version (written by install-scrcpy-server.sh)
+    scrcpy_max_fps: int = 0  # 0 = the output fps
+    scrcpy_max_size: int = 1600  # longest side sent by the Quest, 0 = full eye
+    scrcpy_crop: str = ""  # W:H:X:Y on the Quest display, empty = the chosen eye's half
+    scrcpy_angle: float = 0.0  # rotate the eye image clockwise on the Quest (degrees), after the crop
+
+    # Camera on demand (ADR-0052): capture only while the backend says someone needs the camera
+    # (a Tour runs on this robot, or a Staff page holds a lease). Empty control_url = always capture.
+    control_url: str = ""  # https://<api>/api/fleet/camera/v1/poll ("auto" in the env = from FLEET_SYNC_URL)
+    robot_code: str = ""  # the Fleet robot identity (FLEET_ROBOT_CODE)
+    robot_credential_file: str = ""  # the Fleet robot credential (FLEET_ROBOT_CREDENTIAL_FILE)
+    control_failsafe: bool = True  # capture when the backend has never answered / not for control_grace
+    control_grace: float = 60.0  # keep the last answer this long while the backend cannot be reached
 
     # Output: where FFmpeg publishes (MediaMTX RTSP) and how often a keyframe
     # is sent (a new WebRTC viewer starts on the next keyframe).
@@ -145,12 +166,27 @@ class Config:
             capture_bitrate=_env_int("QUEST_CAPTURE_BITRATE", 20_000_000),
             screenrecord_limit=_env_int("QUEST_SCREENRECORD_LIMIT", 180),
             keep_awake=_env("QUEST_KEEP_AWAKE", "0") in ("1", "true", "yes"),
+            capture=_env("QUEST_CAPTURE", "screenrecord").lower(),
+            scrcpy_server=Path(_env("QUEST_SCRCPY_SERVER", str(MODULE_DIR / "bin" / "scrcpy-server"))),
+            scrcpy_version=_env("QUEST_SCRCPY_VERSION", ""),
+            scrcpy_max_fps=_env_int("QUEST_SCRCPY_MAX_FPS", 0),
+            scrcpy_max_size=_env_int("QUEST_SCRCPY_MAX_SIZE", 1600),
+            scrcpy_crop=_env("QUEST_SCRCPY_CROP", ""),
+            scrcpy_angle=_env_float("QUEST_SCRCPY_ANGLE", 0.0),
             publish_url=_env("QUEST_PUBLISH_URL", "rtsp://127.0.0.1:8554/quest"),
             keyframe_interval=_env_float("QUEST_KEYFRAME_INTERVAL", 1.0),
             log_dir=Path(_env("QUEST_LOG_DIR", str(MODULE_DIR / "logs"))),
             stall_timeout=_env_float("QUEST_STALL_TIMEOUT", 10.0),
             device_poll=_env_float("QUEST_DEVICE_POLL", 5.0),
         )
+        cfg.control_url, cfg.robot_code, cfg.robot_credential_file = resolve_control_settings(
+            _env("QUEST_CONTROL_URL", ""),
+            _env("QUEST_ROBOT_CODE", ""),
+            _env("QUEST_ROBOT_CREDENTIAL_FILE", ""),
+            read_env_file(Path(_env("QUEST_FLEET_ENV", str(Path.home() / ".config" / "campustour" / "fleet-sync.env")))),
+        )
+        cfg.control_failsafe = _env("QUEST_CONTROL_FAILSAFE", "on").lower() in ("1", "on", "true", "yes")
+        cfg.control_grace = _env_float("QUEST_CONTROL_GRACE", 60.0)
         cfg.validate()
         return cfg
 
@@ -165,6 +201,23 @@ class Config:
             raise SystemExit("CONFIG_ERROR QUEST_ENCODER must be libx264 or h264_vaapi")
         if self.hwdec not in ("", "vaapi"):
             raise SystemExit("CONFIG_ERROR QUEST_HWDEC must be empty or 'vaapi'")
+        if self.control_url:
+            if urlsplit(self.control_url).scheme not in ("https", "http"):
+                raise SystemExit("CONFIG_ERROR QUEST_CONTROL_URL must be https://<api>/api/fleet/camera/v1/poll or 'auto'")
+            if not self.robot_code or not self.robot_credential_file:
+                raise SystemExit("CONFIG_ERROR QUEST_CONTROL_URL needs the robot code and credential file "
+                                 "(fleet-sync.env from robot/scripts/setup_fleet_sync.py, or QUEST_ROBOT_CODE + "
+                                 "QUEST_ROBOT_CREDENTIAL_FILE)")
+        if self.control_grace < 0:
+            raise SystemExit("CONFIG_ERROR QUEST_CONTROL_GRACE must be >= 0")
+        if self.capture not in ("screenrecord", "scrcpy"):
+            raise SystemExit("CONFIG_ERROR QUEST_CAPTURE must be 'screenrecord' or 'scrcpy'")
+        if self.scrcpy_crop and not re.fullmatch(r"\d+:\d+:\d+:\d+", self.scrcpy_crop):
+            raise SystemExit("CONFIG_ERROR QUEST_SCRCPY_CROP must look like 2064:2208:0:0")
+        if not 0 <= self.scrcpy_max_fps <= 120 or self.scrcpy_max_size < 0:
+            raise SystemExit("CONFIG_ERROR QUEST_SCRCPY_MAX_FPS must be 0-120 and QUEST_SCRCPY_MAX_SIZE >= 0")
+        if not -360 <= self.scrcpy_angle <= 360:
+            raise SystemExit("CONFIG_ERROR QUEST_SCRCPY_ANGLE must be between -360 and 360 degrees")
         parts = urlsplit(self.publish_url)
         if parts.scheme not in ("rtsp", "rtsps") or not parts.hostname or len(parts.path) < 2:
             raise SystemExit("CONFIG_ERROR QUEST_PUBLISH_URL must look like rtsp://127.0.0.1:8554/quest")
@@ -213,8 +266,9 @@ def build_video_filter(cfg: Config) -> str:
     ox = f"{cfg.crop_offset_x:g}"
     oy = f"{cfg.crop_offset_y:g}"
     steps = [
-        # 1. one eye: the left (or right) half of the stereo frame
-        f"crop=w=iw/2:h=ih:x={eye_x}:y=0",
+        # 1. one eye: the left (or right) half of the stereo frame. scrcpy already
+        #    sends a single eye (cropped on the Quest), so it skips this step.
+        *([] if cfg.capture == "scrcpy" else [f"crop=w=iw/2:h=ih:x={eye_x}:y=0"]),
         # 2. a 16:9 window, `keep` of the eye's width, centred (+ offset),
         #    never larger than the eye and never outside it
         (
@@ -313,6 +367,135 @@ def build_screenrecord_command(cfg: Config, serial: str) -> List[str]:
 
 
 # --------------------------------------------------------------------------
+# scrcpy capture (QUEST_CAPTURE=scrcpy)
+# --------------------------------------------------------------------------
+
+SCRCPY_REMOTE_PATH = "/data/local/tmp/scrcpy-server.jar"
+
+
+def scrcpy_server_version(cfg: Config) -> str:
+    """The version scrcpy-server must be started with (it refuses any other)."""
+    if cfg.scrcpy_version:
+        return cfg.scrcpy_version.lstrip("v")
+    try:
+        return cfg.scrcpy_server.with_name(cfg.scrcpy_server.name + ".version").read_text("utf-8").strip().lstrip("v")
+    except OSError:
+        return ""
+
+
+def parse_wm_size(output: str) -> Optional[Tuple[int, int]]:
+    """`adb shell wm size` -> (width, height); an override size wins over the physical one."""
+    sizes = dict(re.findall(r"(Physical|Override) size:\s*(\d+x\d+)", output))
+    value = sizes.get("Override") or sizes.get("Physical")
+    if not value:
+        return None
+    w, h = value.split("x")
+    return int(w), int(h)
+
+
+def eye_crop(size: Tuple[int, int], eye: str) -> str:
+    """scrcpy crop W:H:X:Y for one half of the side-by-side Quest display."""
+    w, h = size
+    half = (w // 2) - (w // 2) % 2
+    return f"{half}:{h - h % 2}:{0 if eye == 'left' else w - half}:0"
+
+
+def build_scrcpy_server_command(cfg: Config, serial: str, scid: str, crop: str, version: str) -> List[str]:
+    """Start scrcpy-server on the Quest: raw H.264 of one eye, video only, no control."""
+    args = [
+        f"CLASSPATH={SCRCPY_REMOTE_PATH}", "app_process", "/", "com.genymobile.scrcpy.Server", version,
+        f"scid={scid}", "log_level=warn", "tunnel_forward=true",
+        "audio=false", "control=false", "cleanup=true",
+        # Plain Annex-B H.264 (what FFmpeg's -f h264 reads); the dummy byte (a 0x00, harmless
+        # before a start code) confirms the connection reached the server, not just adb.
+        "raw_stream=true", "send_dummy_byte=true",
+        "video_codec=h264", f"video_bit_rate={cfg.capture_bitrate}",
+        f"max_fps={cfg.scrcpy_max_fps or cfg.fps}", f"max_size={cfg.scrcpy_max_size}",
+        f"crop={crop}",
+    ]
+    if cfg.scrcpy_angle:
+        # Rotates after the crop, on the Quest (scrcpy >= 3.0); only sent when set, so
+        # older servers that do not know the option still start.
+        args.append(f"angle={cfg.scrcpy_angle:g}")
+    return [cfg.adb, "-s", serial, "shell", " ".join(args)]
+
+
+def _connect_scrcpy(port: int, server: subprocess.Popen, timeout: float = 15.0) -> Optional[Tuple[socket.socket, bytes]]:
+    """Connect through the adb forward; adb accepts and drops us until the server listens."""
+    deadline = time.time() + timeout
+    while time.time() < deadline and server.poll() is None:
+        try:
+            sock = socket.create_connection(("127.0.0.1", port), timeout=3)
+            sock.settimeout(5)
+            first = sock.recv(1)
+            if first:
+                sock.settimeout(None)
+                return sock, first
+            sock.close()
+        except OSError:
+            pass
+        time.sleep(0.2)
+    return None
+
+
+def run_scrcpy_capture(cfg: Config, serial: str) -> int:
+    """`server.py --scrcpy-capture SERIAL`: raw H.264 of one eye on stdout, like screenrecord.
+
+    The supervisor runs this instead of `adb exec-out screenrecord`, so everything after
+    the capture (stall detection, FFmpeg, MediaMTX) is the same for both methods.
+    """
+    out = sys.stdout.buffer
+
+    def fail(code: int, message: str) -> int:
+        print(f"SCRCPY_ERROR {message}", file=sys.stderr, flush=True)
+        return code
+
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # run the cleanup below on stop
+    version = scrcpy_server_version(cfg)
+    if not cfg.scrcpy_server.is_file() or not version:
+        return fail(2, f"{cfg.scrcpy_server} or its version is missing; run scripts/install-scrcpy-server.sh")
+    adb = [cfg.adb, "-s", serial]
+    try:
+        subprocess.run(adb + ["push", str(cfg.scrcpy_server), SCRCPY_REMOTE_PATH],
+                       check=True, capture_output=True, timeout=30)
+        crop = cfg.scrcpy_crop
+        if not crop:
+            size = parse_wm_size(subprocess.run(adb + ["shell", "wm", "size"], capture_output=True,
+                                                text=True, timeout=10).stdout)
+            if size is None:
+                return fail(2, "cannot read the display size (adb shell wm size); set QUEST_SCRCPY_CROP")
+            crop = eye_crop(size, cfg.eye)
+        scid = f"{random.getrandbits(31):08x}"
+        port = subprocess.run(adb + ["forward", "tcp:0", f"localabstract:scrcpy_{scid}"],
+                              check=True, capture_output=True, text=True, timeout=10).stdout.strip()
+    except (subprocess.SubprocessError, OSError) as exc:
+        return fail(3, f"adb setup failed: {exc}")
+
+    print(f"SCRCPY_START version={version} crop={crop} max_fps={cfg.scrcpy_max_fps or cfg.fps} "
+          f"max_size={cfg.scrcpy_max_size} angle={cfg.scrcpy_angle:g}", file=sys.stderr, flush=True)
+    server = subprocess.Popen(build_scrcpy_server_command(cfg, serial, scid, crop, version),
+                              stdin=subprocess.DEVNULL, stdout=sys.stderr, stderr=sys.stderr)
+    try:
+        connected = _connect_scrcpy(int(port), server)
+        if connected is None:
+            return fail(4, "scrcpy-server did not start (wrong version, or the Quest refused it)")
+        sock, first = connected
+        with sock:
+            out.write(first)
+            while True:
+                data = sock.recv(65536)
+                if not data:
+                    return 0
+                out.write(data)
+                out.flush()
+    except (BrokenPipeError, OSError):
+        return 0
+    finally:
+        _kill(server)
+        subprocess.run(adb + ["forward", "--remove", f"tcp:{port}"], capture_output=True, timeout=5)
+
+
+# --------------------------------------------------------------------------
 # ADB helpers
 # --------------------------------------------------------------------------
 
@@ -383,7 +566,7 @@ def pick_quest(
 
 @dataclass
 class Status:
-    state: str = "starting"  # starting | connecting | live | offline | error | stopped
+    state: str = "starting"  # starting | connecting | live | paused | offline | error | stopped
     reason: str = ""
     serial: str = ""
     model: str = ""
@@ -435,6 +618,151 @@ class Status:
                 "publish": cfg.publish_url_safe,
                 "whepPath": f"/{cfg.path_name}/whep",
             }
+
+
+# --------------------------------------------------------------------------
+# Camera on demand (ADR-0052)
+# --------------------------------------------------------------------------
+
+FLEET_SYNC_PATH = "/api/fleet/v1/sync"
+CAMERA_POLL_PATH = "/api/fleet/camera/v1/poll"
+
+
+def read_env_file(path: Path) -> Dict[str, str]:
+    """KEY=VALUE lines (as written by robot/scripts/setup_fleet_sync.py); missing file = {}."""
+    values: Dict[str, str] = {}
+    try:
+        text = path.read_text("utf-8")
+    except OSError:
+        return values
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        values[key.strip()] = value.strip().strip("'\"")
+    return values
+
+
+def resolve_control_settings(url: str, robot_code: str, credential_file: str,
+                             fleet_env: Dict[str, str]) -> Tuple[str, str, str]:
+    """(control URL, robot code, credential file); 'auto' derives the URL from FLEET_SYNC_URL."""
+    robot_code = robot_code or fleet_env.get("FLEET_ROBOT_CODE", "")
+    credential_file = credential_file or fleet_env.get("FLEET_ROBOT_CREDENTIAL_FILE", "")
+    if url.lower() == "auto":
+        sync_url = fleet_env.get("FLEET_SYNC_URL", "")
+        if not sync_url.endswith(FLEET_SYNC_PATH):
+            raise SystemExit("CONFIG_ERROR QUEST_CONTROL_URL=auto needs FLEET_SYNC_URL=https://<api>/api/fleet/v1/sync "
+                             "in fleet-sync.env (robot/scripts/setup_fleet_sync.py), or set the full URL")
+        url = sync_url[: -len(FLEET_SYNC_PATH)] + CAMERA_POLL_PATH
+    return url, robot_code, credential_file
+
+
+class CameraDemand(threading.Thread):
+    """Asks the backend every few seconds whether anyone needs this robot's camera.
+
+    Without a control URL the camera is always wanted (the behaviour before ADR-0052). When the backend
+    cannot answer, the last answer holds for ``control_grace`` seconds, then ``control_failsafe`` decides:
+    by default the camera keeps running, so a backend outage never blacks out a running Tour.
+    """
+
+    def __init__(self, cfg: Config, opener=urlopen, clock=time.time):
+        super().__init__(name="camera-demand", daemon=True)
+        self.cfg = cfg
+        self.enabled = bool(cfg.control_url)
+        self.changed = threading.Event()
+        self.stop_event = threading.Event()
+        self._opener = opener
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._wanted: Optional[bool] = None
+        self._reason = ""
+        self._last_ok = 0.0
+        self._error = ""
+        self._poll = 5.0
+
+    def wanted(self) -> bool:
+        if not self.enabled:
+            return True
+        with self._lock:
+            if self._wanted is not None and self._clock() - self._last_ok <= self.cfg.control_grace:
+                return self._wanted
+            return self.cfg.control_failsafe
+
+    def reason(self) -> str:
+        if not self.enabled:
+            return "ALWAYS_ON"
+        with self._lock:
+            if self._wanted is not None and self._clock() - self._last_ok <= self.cfg.control_grace:
+                return self._reason
+            return f"BACKEND_UNREACHABLE ({self._error or 'no answer yet'})"
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            last_ok = self._last_ok
+            error = self._error
+        return {"enabled": self.enabled, "wanted": self.wanted(), "reason": self.reason(),
+                "lastAnswerAt": round(last_ok, 3) if last_ok else None, "error": error or None}
+
+    def poll_once(self) -> None:
+        before = self.wanted()
+        try:
+            credential = Path(self.cfg.robot_credential_file).read_text("utf-8").strip()
+            request = Request(self.cfg.control_url, data=b"", method="POST", headers={
+                "Authorization": f"Bearer {credential}",
+                "X-Robot-Code": self.cfg.robot_code,
+                "Content-Type": "application/json",
+            })
+            with self._opener(request, timeout=8) as response:
+                body = json.loads(response.read().decode("utf-8"))
+            data = body.get("data") or {}
+            if not isinstance(data.get("wanted"), bool):
+                raise ValueError("answer without data.wanted")
+            with self._lock:
+                self._wanted = data["wanted"]
+                self._reason = str(data.get("reason") or "")
+                self._last_ok = self._clock()
+                self._error = ""
+                poll = data.get("pollSeconds")
+                if isinstance(poll, (int, float)) and 1 <= poll <= 60:
+                    self._poll = float(poll)
+        except HTTPError as exc:
+            why = (f"HTTP {exc.code}: the robot credential was refused (check {self.cfg.robot_credential_file})"
+                   if exc.code in (401, 403) else f"HTTP {exc.code}")
+            self._fail(why)
+        except (URLError, OSError, ValueError) as exc:
+            self._fail(str(getattr(exc, "reason", exc)))
+        if self.wanted() != before:
+            log.info("CAMERA_DEMAND %s (%s)", "on" if self.wanted() else "off", self.reason())
+            self.changed.set()
+
+    def _fail(self, why: str) -> None:
+        with self._lock:
+            if why != self._error:
+                log.warning("CAMERA_DEMAND_ERROR %s", why)
+            self._error = why
+
+    def run(self) -> None:
+        while not self.stop_event.is_set():
+            self.poll_once()
+            self.stop_event.wait(self._poll)
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        self.changed.set()
+
+
+class AlwaysWanted:
+    """Stand-in when no CameraDemand is given: capture whenever the Quest is attached."""
+
+    enabled = False
+    changed = threading.Event()
+
+    def wanted(self) -> bool:
+        return True
+
+    def reason(self) -> str:
+        return "ALWAYS_ON"
 
 
 # --------------------------------------------------------------------------
@@ -546,6 +874,8 @@ def stream_summary(state: str) -> str:
         return "live"
     if state in ("starting", "connecting"):
         return "connecting"
+    if state == "paused":
+        return "paused"  # ADR-0052: nobody needs the camera, so it is off on purpose
     return "lost"
 
 
@@ -620,10 +950,11 @@ class Supervisor(threading.Thread):
     SHORT_SESSION = 3.0  # an adb session shorter than this is a failure, not a rollover
     MAX_SHORT_FAILURES = 5
 
-    def __init__(self, cfg: Config, status: Status):
+    def __init__(self, cfg: Config, status: Status, demand=None):
         super().__init__(name="supervisor", daemon=True)
         self.cfg = cfg
         self.status = status
+        self.demand = demand if demand is not None else AlwaysWanted()
         self.stop_event = threading.Event()
         self._ffmpeg: Optional[subprocess.Popen] = None
         self._adb: Optional[subprocess.Popen] = None
@@ -640,6 +971,25 @@ class Supervisor(threading.Thread):
         """Interruptible sleep. Returns True if we should stop."""
         return self.stop_event.wait(seconds)
 
+    def _wait_for_demand(self, seconds: float) -> bool:
+        """Sleep until the camera demand changes, at most ``seconds``. Returns True if we should stop."""
+        deadline = time.time() + seconds
+        while time.time() < deadline:
+            if self.demand.changed.wait(0.5):
+                self.demand.changed.clear()
+                break
+            if self.stop_event.is_set():
+                return True
+        return self.stop_event.is_set()
+
+    def _pause(self) -> None:
+        """ADR-0052: nobody needs the camera. Nothing runs on the Quest; MediaMTX reports no stream."""
+        reason = self.demand.reason()
+        if self.status.state != "paused":
+            log.info("CAMERA_OFF %s", reason)
+        self._keep_awake(self.status.serial, False)
+        self.status.set("paused", f"CAMERA_OFF: {reason}")
+
     def run(self) -> None:
         poll = self.cfg.poll_min
         ffmpeg_backoff = 2.0
@@ -647,6 +997,13 @@ class Supervisor(threading.Thread):
         last_missing_reason = None
         last_mediamtx_reason = None
         while not self.stop_event.is_set():
+            if not self.demand.wanted():
+                self._pause()
+                if self._wait_for_demand(5.0):
+                    break
+                continue
+            if self.status.state == "paused":
+                log.info("CAMERA_ON %s", self.demand.reason())
             try:
                 devices = list_devices(self.cfg)
             except AdbUnavailable as exc:
@@ -694,6 +1051,8 @@ class Supervisor(threading.Thread):
 
             if self.stop_event.is_set():
                 break
+            if outcome == "paused":
+                continue  # the loop top pauses until someone needs the camera again
             if outcome == "ffmpeg":
                 if lived > 60:
                     ffmpeg_backoff = 2.0
@@ -784,8 +1143,12 @@ class Supervisor(threading.Thread):
 
     def _start_adb(self, serial: str) -> subprocess.Popen:
         adb_log = open(self.cfg.log_dir / "adb.log", "a", encoding="utf-8")
+        cmd = (
+            [sys.executable, "-u", str(Path(__file__).resolve()), "--scrcpy-capture", serial]
+            if self.cfg.capture == "scrcpy" else build_screenrecord_command(self.cfg, serial)
+        )
         return subprocess.Popen(
-            build_screenrecord_command(self.cfg, serial),
+            cmd,
             stdout=subprocess.PIPE, stderr=adb_log, stdin=subprocess.DEVNULL, bufsize=0,
         )
 
@@ -821,7 +1184,7 @@ class Supervisor(threading.Thread):
     def _run_session(self, serial: str) -> str:
         """Run until something breaks.
 
-        Returns 'disconnected', 'stalled', 'ffmpeg', 'adb' or 'stop'.
+        Returns 'disconnected', 'stalled', 'ffmpeg', 'adb', 'paused' or 'stop'.
         """
         run_id = time.strftime("%Y%m%d%H%M%S")
         self.cfg.log_dir.mkdir(parents=True, exist_ok=True)
@@ -845,6 +1208,9 @@ class Supervisor(threading.Thread):
                 # Watch this adb session.
                 while not self.stop_event.is_set():
                     time.sleep(0.5)
+                    if not self.demand.wanted():
+                        self._pause()
+                        return "paused"
                     if self._ffmpeg.poll() is not None:
                         log.error("FFMPEG_ERROR exit=%s %s", self._ffmpeg.returncode, self._ffmpeg_tail())
                         self.status.set("error", "FFMPEG_ERROR: encoder stopped, restarting")
@@ -886,7 +1252,7 @@ class Supervisor(threading.Thread):
 
                 short_failures += 1
                 log.warning(
-                    "ADB_ERROR screenrecord ended after %.1fs (%d/%d) - see logs/adb.log",
+                    "ADB_ERROR %s ended after %.1fs (%d/%d) - see logs/adb.log", self.cfg.capture,
                     session, short_failures, self.MAX_SHORT_FAILURES,
                 )
                 if short_failures >= self.MAX_SHORT_FAILURES:
@@ -916,7 +1282,7 @@ class Supervisor(threading.Thread):
 # --------------------------------------------------------------------------
 
 
-def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = None):
+def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = None, demand=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "QuestStream/2.0"
 
@@ -954,7 +1320,10 @@ def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = N
             if path in ("/health", "/healthz"):
                 return self._json(200, {"ok": True})
             if path == "/status":
-                return self._json(200, status.snapshot(cfg))
+                body = status.snapshot(cfg)
+                if demand is not None:
+                    body["camera"] = demand.snapshot()
+                return self._json(200, body)
             if path == "/device":
                 # The headset (adb + battery) and the video, kept apart: a
                 # connected headset can still have no live picture.
@@ -1002,6 +1371,8 @@ def setup_logging(cfg: Config) -> None:
 
 
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "--scrcpy-capture":
+        return run_scrcpy_capture(Config.from_env(), sys.argv[2])
     cfg = Config.from_env()
     setup_logging(cfg)
     if shutil.which(cfg.ffmpeg) is None and not Path(cfg.ffmpeg).is_file():
@@ -1009,12 +1380,13 @@ def main() -> int:
         return 2
 
     status = Status()
-    supervisor = Supervisor(cfg, status)
+    demand = CameraDemand(cfg)
+    supervisor = Supervisor(cfg, status, demand)
     device = DeviceStatus()
     monitor = DeviceMonitor(cfg, device)
 
     try:
-        httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status, device))
+        httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status, device, demand))
     except OSError as exc:
         log.error("HTTP_ERROR cannot listen on %s:%s: %s", cfg.host, cfg.port, exc)
         return 3
@@ -1024,6 +1396,7 @@ def main() -> int:
         log.info("Signal %s received, stopping", signum)
         supervisor.stop()
         monitor.stop()
+        demand.stop()
         threading.Thread(target=httpd.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, shutdown)
@@ -1031,10 +1404,15 @@ def main() -> int:
 
     log.info(
         "quest-stream: status on http://%s:%s/status, publishing to %s "
-        "(eye=%s keep=%s out=%sx%s@%s %s %s)",
-        cfg.host, cfg.port, cfg.publish_url_safe, cfg.eye, cfg.crop_keep,
+        "(capture=%s eye=%s keep=%s out=%sx%s@%s %s %s)",
+        cfg.host, cfg.port, cfg.publish_url_safe, cfg.capture, cfg.eye, cfg.crop_keep,
         cfg.width, cfg.height, cfg.fps, cfg.encoder, cfg.bitrate,
     )
+    if demand.enabled:
+        log.info("CAMERA_DEMAND asking %s as %s (failsafe %s after %.0fs without an answer)",
+                 cfg.control_url, cfg.robot_code, "on" if cfg.control_failsafe else "off", cfg.control_grace)
+        demand.poll_once()  # decide before the first capture, so an idle robot never starts the Quest
+        demand.start()
     supervisor.start()
     monitor.start()
     try:
@@ -1042,6 +1420,7 @@ def main() -> int:
     finally:
         supervisor.stop()
         monitor.stop()
+        demand.stop()
         supervisor.join(timeout=10)
         httpd.server_close()
     return 0

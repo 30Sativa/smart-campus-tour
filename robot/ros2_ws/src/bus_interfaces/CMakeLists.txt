@@ -13,6 +13,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/HeadStep.msg"
   "action/GoToStop.action"
   "action/SetHead.action"
+  "srv/HeadSweep.srv"
   DEPENDENCIES action_msgs std_msgs
 )
 

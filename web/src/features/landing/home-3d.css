@@ -43,27 +43,29 @@ html.dark .lp3 {
 .lp3-section-head p { margin-top: 20px; max-width: 54ch; font-size: clamp(1rem, 1.35vw, 1.28rem); line-height: 1.6; color: var(--lp-ink-2); }
 
 /* The first viewport lets the hero image continue behind the navigation. */
-.lp3 .lp-nav { background: transparent; border-bottom-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.lp3:not(.lp3-page) .lp-nav { background: transparent; border-bottom-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .lp3 .lp-nav[data-stuck="true"] { background: var(--lp-nav-bg); border-bottom-color: var(--lp-line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-.lp3 .lp-nav[data-stuck="false"] { --lp-ink: #ffffff; --lp-ink-2: rgba(255,255,255,.84); --lp-line-strong: rgba(255,255,255,.42); }
-.lp3 .lp-nav[data-stuck="false"] .lp-brand,
-.lp3 .lp-nav[data-stuck="false"] .lp-navlink,
-.lp3 .lp-nav[data-stuck="false"] .lp-themebtn { color: #fff; }
-.lp3 .lp-nav[data-stuck="false"] .lp-brand,
-.lp3 .lp-nav[data-stuck="false"] .lp-navlink,
-.lp3 .lp-nav[data-stuck="false"] .lp-themebtn {
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] { --lp-ink: #ffffff; --lp-ink-2: rgba(255,255,255,.84); --lp-line-strong: rgba(255,255,255,.42); }
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-brand,
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-navlink,
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-themebtn { color: #fff; }
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-brand,
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-navlink,
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-themebtn {
   text-shadow: 0 2px 4px rgba(0,0,0,.82), 0 0 10px rgba(0,0,0,.42);
   -webkit-text-stroke: .25px rgba(0,0,0,.28);
 }
-.lp3 .lp-nav[data-stuck="false"] .lp-brand__mark { filter: brightness(0) invert(1); }
-.lp3 .lp-nav[data-stuck="false"] .lp-btn--ghost {
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-brand__mark { filter: brightness(0) invert(1); }
+.lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-btn--ghost {
   color: #fff;
   border-color: rgba(255,255,255,.78);
   background: rgba(9,40,43,.28);
   box-shadow: 0 2px 12px rgba(0,0,0,.2), inset 0 0 0 1px rgba(255,255,255,.1);
   text-shadow: 0 1px 3px rgba(0,0,0,.8);
 }
-html.dark .lp3 .lp-nav[data-stuck="false"] { --lp-ink: #f2f7f2; --lp-ink-2: #bad0ca; --lp-line-strong: rgba(230,247,235,.3); }
+html.dark .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] { --lp-ink: #f2f7f2; --lp-ink-2: #bad0ca; --lp-line-strong: rgba(230,247,235,.3); }
+/* Pages without a hero photo keep the solid nav from the top, with the page's own ink. */
+.lp3-page .lp-nav[data-stuck="false"] { --lp-ink: inherit; --lp-ink-2: inherit; --lp-line-strong: inherit; background: var(--lp-nav-bg); border-bottom-color: var(--lp-line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
 .lp3 .lp-nav__inner { height: 76px; max-width: 1600px; }
 .lp3 .lp-brand__name { font-weight: 800; letter-spacing: -.045em; }
 html.dark .lp3 .lp-nav .lp-brand__mark { filter: brightness(0) invert(1); }
@@ -164,9 +166,6 @@ html.dark .lp3-student { background: #103337; }
 /* Exploded robot */
 .lp3-tech-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(310px, .75fr); gap: clamp(28px, 5vw, 82px); align-items: center; margin-top: 40px; }
 .lp3-tech-art { position: relative; }
-.lp3-tech-art img { display: block; width: 100%; mix-blend-mode: multiply; }
-html.dark .lp3-tech-art img { mix-blend-mode: normal; border-radius: 20px; }
-.lp3-tech-art > span { position: absolute; bottom: 4%; left: 0; color: var(--lp-ink-3); font-size: .67rem; letter-spacing: .18em; }
 .lp3-tech-list { border-top: 1px solid var(--lp-line); }
 .lp3-tech-item { display: grid; grid-template-columns: 38px 26px 1fr; gap: 15px; padding: 26px 0; border-bottom: 1px solid var(--lp-line); }
 .lp3-tech-number { color: #84ab55; font-size: .76rem; font-weight: 800; }
@@ -292,13 +291,11 @@ html[data-theme-wave]::view-transition-new(root) {
 .lp3-outline-link:active { transform: translateY(0) scale(.97); }
 
 .lp3-journey-art { transition: transform .8s cubic-bezier(.22,1,.36,1); }
-.lp3-tech-art img,
 .lp3-video img { transition: transform .85s cubic-bezier(.22,1,.36,1); }
 .lp3-steps h3,
 .lp3-tech-item h3 { transition: transform .35s ease, color .35s ease; }
 @media (hover: hover) {
   .lp3-journey-art:hover { transform: perspective(1200px) rotateY(-2deg) translateY(-8px); }
-  .lp3-tech-art:hover img { transform: translateY(-10px) scale(1.035); }
   .lp3-browser:hover .lp3-video img { transform: scale(1.045); }
   .lp3-steps li:hover h3,
   .lp3-tech-item:hover h3 { transform: translateX(5px); color: #6d9f47; }
@@ -313,7 +310,6 @@ html[data-theme-wave]::view-transition-new(root) {
   .lp3-steps-link a,
   .lp3-steps-link a svg,
   .lp3-journey-art,
-  .lp3-tech-art img,
   .lp3-video img,
   .lp3-steps h3,
   .lp3-tech-item h3 { transition: none; }
@@ -422,16 +418,8 @@ html[data-theme-wave]::view-transition-new(root) {
 @keyframes lp3-blink { 50% { opacity: .25; } }
 @keyframes lp3-status-in { from { opacity: 0; translate: 0 6px; } }
 
-/* Robot hotspots tied to the technology list */
-.lp3-hotspot { position: absolute; display: grid; place-items: center; width: 38px; height: 38px; margin: -19px 0 0 -19px; border: 0; border-radius: 50%; background: #123a3d; color: #d6f18d; font: inherit; font-size: .72rem; font-weight: 800; cursor: pointer; box-shadow: 0 0 0 6px rgba(214, 241, 141, .35); transition: background-color .3s, color .3s, box-shadow .3s; }
-.lp3-hotspot[data-active="true"] { background: #d6f18d; color: #102d31; box-shadow: 0 0 0 4px #102d31, 0 0 0 14px rgba(214, 241, 141, .5); }
-.lp3-hotspot:focus-visible { outline: 2px solid #d6f18d; outline-offset: 6px; }
 .lp3-tech-item[data-active="true"] h3 { transform: translateX(5px); color: #6d9f47; }
 .lp3-tech-item[data-active="true"] .lp3-tech-number { color: #6d9f47; }
-@media (hover: hover) {
-  /* The hotspots sit on the picture, so it no longer lifts on hover. */
-  .lp3-tech-art:hover img { transform: none; }
-}
 
 @media (max-width: 767px) {
   /* Keep the robot in the visible slice of the portrait hero and twin. */
@@ -463,3 +451,148 @@ html[data-theme-wave]::view-transition-new(root) {
 .lp3-journey[data-journey="pinned"] .lp3-journey-art { transform: none !important; transition: none; isolation: isolate; }
 .lp3-journey[data-journey="pinned"] .lp3-journey-art img { mix-blend-mode: normal; will-change: transform; backface-visibility: hidden; }
 .lp3-journey[data-journey="pinned"] .lp3-route { will-change: transform; }
+
+/* 04 / Công nghệ: the robot taken apart in 3D (robot-explode/RobotExplodeViewer).
+   The stage reads as a drafting sheet: a dot grid behind, a metric grid on the floor,
+   the model's own name and part count in the corner, and a status rule along the bottom. */
+.lp3-tech-art[data-mode="3d"] { align-self: stretch; }
+/* Holds the stage's place until the model arrives: the same sheet, empty, with a quiet ring. */
+.lp3-tech-wait {
+  display: grid; place-content: center; justify-items: center; gap: 14px; height: clamp(460px, 70vh, 680px);
+  border: 1px solid var(--lp-line); border-radius: 24px; color: var(--lp-ink-3); font-size: .86rem;
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--lp-ink) 9%, transparent) 1px, transparent 0) 0 0 / 22px 22px,
+    radial-gradient(110% 80% at 50% 30%, var(--lp-surface) 0%, var(--lp-bg-sunk) 100%);
+}
+.lp3-tech-wait p { margin: 0; }
+.lp3-tech-wait__ring { width: 34px; height: 34px; border: 2.5px solid color-mix(in srgb, var(--lp-ink) 14%, transparent); border-top-color: #84ab55; border-radius: 50%; animation: lp3-spin .9s linear infinite; }
+@keyframes lp3-spin { to { transform: rotate(360deg); } }
+.lp3-explode { display: grid; gap: 14px; }
+.lp3-explode__stage {
+  position: relative; height: clamp(460px, 70vh, 680px); overflow: hidden;
+  border: 1px solid var(--lp-line); border-radius: 24px;
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--lp-ink) 9%, transparent) 1px, transparent 0) 0 0 / 22px 22px,
+    radial-gradient(110% 80% at 50% 30%, var(--lp-surface) 0%, color-mix(in srgb, var(--lp-bg-sunk) 70%, var(--lp-surface)) 62%, var(--lp-bg-sunk) 100%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--lp-surface) 70%, transparent), 0 30px 60px -40px rgba(11, 21, 25, .45);
+}
+.lp3-explode[data-hovering="true"] .lp3-explode__canvas { cursor: pointer; }
+.lp3-explode__canvas { position: absolute !important; inset: 0; touch-action: pan-y; }
+
+.lp3-explode__meta { position: absolute; top: 18px; left: 20px; display: grid; gap: 3px; pointer-events: none; }
+.lp3-explode__meta span { color: var(--lp-ink-3); font-size: .64rem; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+.lp3-explode__meta strong { color: var(--lp-ink); font-size: .9rem; font-weight: 750; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.lp3-explode__hint { position: absolute; top: 22px; right: 20px; margin: 0; color: var(--lp-ink-3); font-size: .72rem; pointer-events: none; }
+
+
+.lp3-explode__card { position: absolute; top: 64px; right: 16px; width: min(290px, calc(100% - 32px)); padding: 18px 18px 18px 20px; border: 1px solid var(--lp-line); border-radius: 16px; background: var(--lp-surface); box-shadow: var(--lp-shadow); }
+.lp3-explode__swatch { display: block; width: 28px; height: 4px; margin-bottom: 12px; border-radius: 4px; }
+.lp3-explode__card h3 { margin: 4px 26px 0 0; font-size: 1.08rem; font-weight: 750; letter-spacing: -.02em; color: var(--lp-ink); }
+.lp3-explode__card p { margin-top: 8px; color: var(--lp-ink-2); font-size: .86rem; line-height: 1.55; }
+.lp3-explode__count { color: var(--lp-ink-3); font-size: .64rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.lp3-explode__close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: var(--lp-bg-sunk); color: var(--lp-ink-2); cursor: pointer; }
+
+.lp3-explode__bar { display: grid; gap: 10px; min-width: 0; }
+
+/* Zoom buttons in the bottom-right corner of a 3D stage. */
+.lp3-zoom { position: absolute; z-index: 2; right: 14px; bottom: 14px; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--lp-line); border-radius: 999px; background: color-mix(in srgb, var(--lp-surface) 90%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 6px 18px rgba(8,30,32,.08); }
+.lp3-zoom button { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px; border: 0; border-radius: 999px; background: transparent; color: var(--lp-ink-2); font-size: .72rem; font-weight: 750; font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color .15s, color .15s; }
+.lp3-zoom button:hover:not(:disabled) { background: var(--lp-bg-sunk); color: var(--lp-ink); }
+.lp3-zoom button:disabled { opacity: .38; cursor: default; }
+.lp3-zoom .lp3-zoom__level { min-width: 46px; }
+.lp3-zoom .lp3-zoom__level:disabled { opacity: .7; }
+.lp3-zoom button:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 1px; }
+.lp3-explode__modes { display: inline-flex; justify-self: start; gap: 4px; padding: 4px; border: 1px solid var(--lp-line); border-radius: 999px; background: var(--lp-surface); }
+.lp3-explode__modes button { display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px; border: 0; border-radius: 999px; background: transparent; color: var(--lp-ink-2); font: inherit; font-size: .8rem; font-weight: 700; white-space: nowrap; cursor: pointer; transition: background-color .2s, color .2s; }
+.lp3-explode__modes button:hover { color: var(--lp-ink); }
+.lp3-explode__modes button[aria-pressed="true"] { background: var(--lp-ink); color: var(--lp-surface); }
+.lp3-explode__modes button:focus-visible, .lp3-zoom button:focus-visible, .lp3-explode__close:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 2px; }
+@media (max-width: 767px) {
+  .lp3-explode__stage { height: 500px; }
+  .lp3-explode__hint { display: none; }
+  .lp3-explode__card { top: auto; bottom: 60px; }
+  .lp3-explode__modes { justify-self: stretch; }
+  .lp3-explode__modes button { flex: 1; justify-content: center; padding-inline: 8px; }
+}
+
+/* 05 / Bên trong robot (sections/RobotFlowSection): steps scroll on the left while the
+   robot and the signal diagram stay in view on the right. Signal colours come from
+   robot-explode/flows.ts: red commands, blue readings, amber power, violet video. */
+.lp3-flow__tabs { display: flex; gap: 8px; margin-top: 36px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.lp3-flow__tabs::-webkit-scrollbar { display: none; }
+.lp3-flow__tabs button { display: grid; gap: 3px; min-width: 168px; padding: 13px 16px; border: 1px solid var(--lp-line); border-radius: 14px; background: transparent; color: var(--lp-ink-2); font: inherit; text-align: left; cursor: pointer; transition: background-color .2s, color .2s, border-color .2s; }
+.lp3-flow__tabs button strong { color: var(--lp-ink); font-size: .92rem; font-weight: 750; }
+.lp3-flow__tabs button span { font-size: .74rem; }
+.lp3-flow__tabs button:hover { border-color: var(--lp-line-strong); }
+.lp3-flow__tabs button[aria-selected="true"] { border-color: var(--lp-ink); background: var(--lp-ink); color: color-mix(in srgb, var(--lp-surface) 78%, transparent); }
+.lp3-flow__tabs button[aria-selected="true"] strong { color: var(--lp-surface); }
+.lp3-flow__tabs button:focus-visible, .lp3-flow__more:focus-visible, .lp3-flow__dots button:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 2px; }
+
+.lp3-flow__grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: clamp(24px, 3.5vw, 56px); margin-top: 28px; align-items: start; }
+.lp3-flow__panel { display: grid; gap: 18px; }
+.lp3-flow__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.lp3-flow__step { border-left: 2px solid var(--lp-line); transition: border-color .3s; }
+.lp3-flow__step[data-active="true"] { border-left-color: #e5554a; }
+.lp3-flow__step-head { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 0 10px 18px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; opacity: .5; transition: opacity .25s; }
+.lp3-flow__step-head:hover { opacity: .85; }
+.lp3-flow__step[data-active="true"] .lp3-flow__step-head { opacity: 1; cursor: default; }
+.lp3-flow__num { flex: none; font-size: 1.5rem; font-weight: 800; line-height: 1; letter-spacing: -.04em; color: transparent; -webkit-text-stroke: 1.2px var(--lp-ink-3); font-variant-numeric: tabular-nums; transition: font-size .3s; }
+.lp3-flow__step[data-active="true"] .lp3-flow__num { font-size: clamp(2.4rem, 4vw, 3.4rem); -webkit-text-stroke-color: #e5554a; }
+.lp3-flow__step h3 { font-size: 1.02rem; font-weight: 720; letter-spacing: -.02em; color: var(--lp-ink); text-wrap: balance; }
+.lp3-flow__step[data-active="true"] h3 { font-size: clamp(1.3rem, 2vw, 1.7rem); font-weight: 780; letter-spacing: -.03em; }
+.lp3-flow__step-body { display: grid; gap: 12px; padding: 2px 0 18px 20px; animation: lp3-flow-open .35s ease both; }
+.lp3-flow__step-body > p { max-width: 48ch; color: var(--lp-ink-2); font-size: 1rem; line-height: 1.7; }
+@keyframes lp3-flow-open { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.lp3-flow__nav { display: flex; align-items: center; gap: 10px; }
+.lp3-flow__nav button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid var(--lp-line-strong); border-radius: 999px; background: var(--lp-surface); color: var(--lp-ink); font: inherit; font-size: .88rem; font-weight: 700; cursor: pointer; transition: background-color .15s, border-color .15s, transform .15s; }
+.lp3-flow__nav button:hover { border-color: var(--lp-ink); }
+.lp3-flow__nav button:active { transform: scale(.97); }
+.lp3-flow__nav .lp3-flow__next { margin-left: auto; border-color: var(--lp-ink); background: var(--lp-ink); color: var(--lp-surface); }
+.lp3-flow__nav .lp3-flow__next:hover { background: color-mix(in srgb, var(--lp-ink) 86%, #e5554a); }
+.lp3-flow__nav button:focus-visible, .lp3-flow__step-head:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 2px; }
+.lp3-flow__count { color: var(--lp-ink-3); font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.lp3-flow__term { background: none; color: var(--lp-ink); font-weight: 650; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.lp3-flow__links { display: grid; gap: 6px; margin: 4px 0 0; padding: 0; list-style: none; }
+.lp3-flow__links li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--lp-ink); font-size: .84rem; font-weight: 650; }
+.lp3-flow__links i { width: 18px; height: 3px; border-radius: 3px; }
+.lp3-flow__links span { color: var(--lp-ink-3); font-weight: 550; }
+.lp3-flow__more { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--lp-ink); font: inherit; font-size: .84rem; font-weight: 700; cursor: pointer; }
+.lp3-flow__more svg { transition: transform .2s; }
+.lp3-flow__more[aria-expanded="true"] svg { transform: rotate(180deg); }
+.lp3-flow__signal { max-width: 52ch; padding: 12px 14px; border-radius: 10px; background: var(--lp-bg-sunk); color: var(--lp-ink-2); font-size: .82rem; line-height: 1.6; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.lp3-flow__sticky { position: sticky; top: 84px; display: grid; gap: 12px; }
+.lp3-flow__view { position: sticky; top: 92px; display: grid; gap: 10px; }
+.lp3-flow__stage { position: relative; height: clamp(360px, calc(100vh - 230px), 640px); overflow: hidden; border: 1px solid var(--lp-line); border-radius: 22px;
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--lp-ink) 9%, transparent) 1px, transparent 0) 0 0 / 22px 22px,
+    radial-gradient(110% 80% at 50% 35%, var(--lp-surface) 0%, var(--lp-bg-sunk) 100%); }
+.lp3-flow__zoomable { position: absolute; inset: 0; }
+.lp3-flow__canvas { position: absolute !important; inset: 0; touch-action: pan-y; }
+.lp3-flow__dots { position: absolute; z-index: 1; top: 16px; left: 50%; display: flex; gap: 10px; transform: translateX(-50%); }
+.lp3-flow__dots button { width: 11px; height: 11px; padding: 0; border: 1.5px solid var(--lp-ink-3); border-radius: 50%; background: transparent; cursor: pointer; transition: background-color .2s, border-color .2s, transform .2s; }
+.lp3-flow__dots button[aria-current="step"] { border-color: #e5554a; background: #e5554a; transform: scale(1.15); }
+.lp3-flow__now { position: absolute; left: 16px; bottom: 14px; z-index: 1; max-width: calc(100% - 170px); margin: 0; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--lp-surface) 88%, transparent); color: var(--lp-ink); font-size: .8rem; font-weight: 700; pointer-events: none; }
+.lp3-flow__now span { color: var(--lp-ink-3); font-weight: 650; }
+.lp3-flow__loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; color: var(--lp-ink-3); font-size: .86rem; text-align: center; }
+
+/* Current running down a live wire: a faint glow under it, and two sparks
+   chasing each other to the receiver, each a fading coloured tail with a
+   white-hot head at its front. */
+.lp3-flow__legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0 4px; color: var(--lp-ink-2); font-size: .78rem; }
+.lp3-flow__legend span { display: inline-flex; align-items: center; gap: 7px; }
+.lp3-flow__legend i { width: 18px; height: 3px; border-radius: 3px; }
+.lp3-flow__axis-label { padding: 2px 8px; border-radius: 999px; background: #0f5b66; color: #fff; font-size: .68rem; font-weight: 750; letter-spacing: .02em; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 10px rgba(8,30,32,.18); }
+
+@media (max-width: 899px) {
+  .lp3-flow__grid { grid-template-columns: 1fr; }
+  .lp3-flow__view { position: static; order: -1; }
+  .lp3-flow__stage { height: 52vh; min-height: 300px; }
+}
+
+/* Its own page (/ben-trong-robot): the section opens the page under the navigation. */
+.lp3-flow[data-page="true"] { padding-top: clamp(120px, 12vw, 168px); }
+.lp3-section-head h1 { margin-top: 20px; font-size: clamp(2.65rem, 5vw, 5.4rem); line-height: 1.08; letter-spacing: -.055em; font-weight: 800; max-width: 20ch; color: var(--lp-ink); }
+/* The link from section 04 on the light page, which the dark twin section's outline link style would leave unreadable. */
+.lp3-tech-more { border-color: var(--lp-line-strong); color: var(--lp-ink) !important; }
+.lp3-tech-more:hover { border-color: var(--lp-ink); }

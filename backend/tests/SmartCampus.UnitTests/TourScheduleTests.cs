@@ -152,22 +152,65 @@ public sealed class TourScheduleTests
     }
 
     [Fact]
-    public void ShortNotice_ReplacesOnlyTheLeadTime()
+    public void QuickTourDeadline_IsTheWaitFromNow_OnTheNextWholeMinute()
     {
-        var lead = TimeSpan.FromMinutes(60);
-        Assert.Null(TourSchedule.Evaluate(MorningOnDay, Start.AddMinutes(-60), Plan, [], shortNoticeLead: lead));
-        var late = TourSchedule.Evaluate(MorningOnDay, Start.AddMinutes(-59), Plan, [], shortNoticeLead: lead);
-        Assert.Equal(TourSchedule.LeadTimeTooShort, late!.Code);
-        Assert.Equal("Quá gần hiện tại, Tour ngắn hạn cần tạo trước ít nhất 60 phút", late.Message);
+        var wait = TimeSpan.FromMinutes(60);
+        Assert.Equal(Start.AddMinutes(60), TourSchedule.QuickTourDeadline(Start, wait));
+        Assert.Equal(Start.AddMinutes(61), TourSchedule.QuickTourDeadline(Start.AddSeconds(1), wait));
+    }
 
-        // Everything else still decides: a held shift, an Admin block, a route that has not been measured or does not fit.
-        var hold = new TourReservationHold("Tour cũ", Start, Start.AddMinutes(30));
-        var closed = new TourShiftBlockView(Guid.NewGuid(), ScheduleBlockScope.Shift, "Bảo trì");
-        var now = Start.AddHours(-2);
-        Assert.Equal(TourSchedule.ReservationOverlap, TourSchedule.Evaluate(MorningOnDay, now, Plan, [hold], shortNoticeLead: lead)!.Code);
-        Assert.Equal(TourSchedule.ShiftBlocked, TourSchedule.Evaluate(MorningOnDay, now, Plan, [], closed, lead)!.Code);
-        Assert.Equal(TourSchedule.RemeasureRequired, TourSchedule.Evaluate(MorningOnDay, now, null, [], shortNoticeLead: lead)!.Code);
-        Assert.Equal(TourSchedule.RouteTooLongForShift, TourSchedule.Evaluate(MorningOnDay, now, new(6000, 6000), [], shortNoticeLead: lead)!.Code);
+    [Fact]
+    public void QuickTourHold_RunsFromNow_UntilARunStartedAtTheDeadlineHasFinished()
+    {
+        var deadline = Start.AddMinutes(60);
+        Assert.Equal((Start, deadline.AddSeconds(1200).AddMinutes(15)), TourSchedule.QuickTourHold(Start, deadline, 1200));
+    }
+
+    [Fact]
+    public void DatesOf_ListsEveryCampusDateAHoldTouches()
+    {
+        var lateEvening = TourSchedule.SlotStart(Day, new TimeOnly(23, 30));
+        Assert.Equal(new[] { Day }, TourSchedule.DatesOf(Start, Start.AddHours(2)));
+        Assert.Equal(new[] { Day, Day.AddDays(1) }, TourSchedule.DatesOf(lateEvening, lateEvening.AddHours(1)));
+    }
+
+    [Theory]
+    [InlineData("Trình diễn", false, 20, true)]
+    [InlineData("  ", false, 20, false)]
+    [InlineData("Trình diễn", true, 20, false)]   // A quick Tour has no start of its own (ADR-0053).
+    [InlineData(null, false, 20, false)]          // A Tour on a shift needs one.
+    [InlineData(null, true, 20, true)]
+    [InlineData("Trình diễn", false, 21, false)]
+    public void CreateTourInput_IsEitherOnAShift_OrQuickWithAReason(string? reason, bool withStart, int capacity, bool valid) =>
+        Assert.Equal(valid, new CreateTourInputValidator(Settings).Validate(
+            new CreateTourInput("Tour", null, Guid.NewGuid(), "amr", Guid.NewGuid(), withStart ? Start : (DateTimeOffset?)null, null, capacity, reason)).IsValid);
+
+    private static TourScheduleBlock Block(DateOnly date, string? shift) => new() { Id = Guid.NewGuid(), BlockDate = date, ShiftCode = shift, Reason = "Bảo trì" };
+
+    [Fact]
+    public void EvaluateQuickTour_NeedsNoShift_ButKeepsTheRouteAdminAndRobotRules()
+    {
+        // 12:00, outside every shift; the hold is 12:00 to 13:35.
+        var now = TourSchedule.SlotStart(Day, new TimeOnly(12, 0));
+        var deadline = now.AddMinutes(60);
+        Assert.Null(TourSchedule.EvaluateQuickTour(Settings, now, deadline, Plan, [], []));
+
+        Assert.Equal(TourSchedule.RemeasureRequired, TourSchedule.EvaluateQuickTour(Settings, now, deadline, null, [], [])!.Code);
+        Assert.Null(TourSchedule.EvaluateQuickTour(Settings, now, deadline, new(5400, 5400), [], []));
+        Assert.Equal(TourSchedule.RouteTooLongForShift, TourSchedule.EvaluateQuickTour(Settings, now, deadline, new(5401, 5401), [], [])!.Code);
+
+        // An Admin block counts when its day, or its shift, overlaps the hold.
+        Assert.Equal(TourSchedule.ShiftBlocked, TourSchedule.EvaluateQuickTour(Settings, now, deadline, Plan, [], [Block(Day, "S2")])!.Code);
+        Assert.Equal(TourSchedule.ShiftBlocked, TourSchedule.EvaluateQuickTour(Settings, now, deadline, Plan, [], [Block(Day, null)])!.Code);
+        Assert.Null(TourSchedule.EvaluateQuickTour(Settings, now, deadline, Plan, [], [Block(Day, "S1"), Block(Day.AddDays(1), null)]));
+
+        // Another Tour's hold over this one, even one on a shift, keeps the robot.
+        var shift = new TourReservationHold("Ca chiều", TourSchedule.SlotStart(Day, new TimeOnly(13, 0)), TourSchedule.SlotStart(Day, new TimeOnly(15, 0)));
+        var clash = TourSchedule.EvaluateQuickTour(Settings, now, deadline, Plan, [shift], []);
+        Assert.Equal(TourSchedule.ReservationOverlap, clash!.Code);
+        Assert.Equal("Robot đang được giữ cho Tour Ca chiều từ 13:00 01/12", clash.Message);
+        var ended = new TourReservationHold("Sáng", Start.AddMinutes(-15), now);
+        Assert.Null(TourSchedule.EvaluateQuickTour(Settings, now, deadline, Plan, [ended], []));
     }
 
     [Theory]
@@ -178,9 +221,9 @@ public sealed class TourScheduleTests
         Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings(TourShiftsFixture.Options, 60, shortNoticeMinLeadMinutes: minutes));
 
     [Fact]
-    public void Settings_LeaveShortNoticeOffUntilConfigured()
+    public void Settings_GiveQuickToursADefaultWait_ThatConfigurationCanChange()
     {
-        Assert.Null(new TourScheduleSettings(TourShiftsFixture.Options, 60).ShortNoticeMinLead);
+        Assert.Equal(TimeSpan.FromMinutes(30), new TourScheduleSettings(TourShiftsFixture.Options, 60).ShortNoticeMinLead);
         Assert.Equal(TimeSpan.FromMinutes(45), new TourScheduleSettings(TourShiftsFixture.Options, 60, shortNoticeMinLeadMinutes: 45).ShortNoticeMinLead);
     }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { FileText, Maximize2, MapPinOff, Pencil, Plus, Send, Trash2 } from 'lucide-react'
+import { FileText, Maximize2, MapPinOff, Pencil, Plus, Send, Trash2, Volume2 } from 'lucide-react'
 import { SearchField } from '../../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
@@ -9,7 +9,8 @@ import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { useDiscardPoiProposal, useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
 import { errorText } from '../../../features/technical/technical-format'
 import type { MapVersionItem, PoiProposal } from '../../../features/technical/api/technical'
-import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { NARRATION_NEEDED, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { headPresetLabel } from '../../../features/technical/head-camera-preset'
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
 import { fitView } from '../../../features/administration/pois/map/fit-view'
@@ -79,10 +80,13 @@ export default function StaffManagePoisPage() {
         <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Điểm tham quan (POI)</h1>
         <p className="mt-1 text-sm text-[#718096]">Chọn điểm trên bản đồ hoặc trong danh sách. Chỉ điểm đã đạt mới dùng được khi tạo tuyến.</p>
       </div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+      <Link to="/staff/manage/pois/thu-thuyet-minh" className={buttonClass('secondary')}><Volume2 size={16} aria-hidden="true" />Chạy thử thuyết minh</Link>
       {blocked
         // The reason is printed, not a hover tooltip, so it reaches touch screens and screen readers too.
         ? <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1"><span id="poi-create-blocked" className="text-xs text-[#b7791f]">Chưa có bản đồ nào đạt kiểm tra kỹ thuật</span><button type="button" disabled aria-describedby="poi-create-blocked" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</button></span>
         : <Link to="/staff/manage/pois/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</Link>}
+      </div>
     </header>
 
     {/* One toolbar for everything that narrows the view: map, robot filter, search and status. */}
@@ -166,7 +170,7 @@ function PoiDetail({ proposal }: { proposal: PoiProposal }) {
     : NEXT_STEP[status]
   const tone = needsNarration ? NEXT_TONE.WAIT : NEXT_TONE[status]
   const facts: Array<[string, string]> = [
-    ['Góc camera', cameraPresetLabel[proposal.revision.cameraPreset] ?? proposal.revision.cameraPreset],
+    ['Đầu camera VR', headPresetLabel(proposal.revision.cameraPreset)],
     ['Thuyết minh', proposal.revision.narrationText ? 'Đã có nội dung' : 'Chưa có nội dung'],
     ['Cách kiểm chứng', proposal.revision.verificationMethod ? verificationMethodLabel[proposal.revision.verificationMethod] ?? '-' : '-'],
   ]
