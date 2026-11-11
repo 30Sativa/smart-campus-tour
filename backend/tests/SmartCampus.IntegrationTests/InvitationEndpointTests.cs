@@ -550,6 +550,118 @@ public sealed class InvitationEndpointTests
         Assert.Single(assistant.Requests);
     }
 
+    private const string RelayKey = "integration-relay-key-0123456789-abcdef";
+
+    private static async Task<(HttpStatusCode Status, JsonElement Body)> StreamAccessAsync(HttpClient client, Guid tour, string? cookie)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/student/tours/{tour}/stream-access");
+        if (cookie is not null) request.Headers.Add("Cookie", cookie);
+        using var response = await client.SendAsync(request);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return (response.StatusCode, json.RootElement.Clone());
+    }
+
+    private static async Task<HttpStatusCode> RelayAsync(HttpClient client, string operation, object body, string key = RelayKey)
+    {
+        using var response = await client.PostAsJsonAsync($"/api/internal/stream-relay/{operation}?key={key}", body);
+        return response.StatusCode;
+    }
+
+    [SchemaV11Fact]
+    public async Task StreamAccess_OnlyForALiveSessionOnTheRelaysRobot_AndTheRelayFollowsIt()
+    {
+        await using var f = await Fixture.CreateAsync();
+        var settings = Settings().ToDictionary(p => p.Key, p => p.Value);
+        settings["QuestRelay__WhepUrl"] = "https://stream.example.test:8889/quest/whep";
+        settings["QuestRelay__RobotCode"] = "amr_stream";
+        settings["QuestRelay__Key"] = RelayKey;
+        settings["QuestRelay__PublishUser"] = "nuc";
+        settings["QuestRelay__PublishPasswordSha256"] = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData("nuc-pass"u8));
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, settings);
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
+        var invitationId = item.GetProperty("id").GetGuid();
+        var cookie = CookieHeader((await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitationId))).Cookie!);
+        var (streamRobot, otherRobot) = (Guid.NewGuid(), Guid.NewGuid());
+        await using (var db = f.Context())
+        {
+            foreach (var (robotId, code) in new[] { (streamRobot, "amr_stream"), (otherRobot, "amr_other") })
+                db.Robots.Add(new SmartCampus.Domain.Entities.Robot { Id = robotId, RobotCode = code, SourceType = "PHYSICAL", DisplayName = code,
+                    IsDispatchEnabled = false, NeedsInspection = false, CreatedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await StreamAccessAsync(host.Client, f.TourId, null)).Status);
+        // A scheduled Tour with no hold on the relay's robot: nothing to watch yet.
+        var waiting = await StreamAccessAsync(host.Client, f.TourId, cookie);
+        Assert.Equal(HttpStatusCode.Conflict, waiting.Status);
+        Assert.Equal("STREAM_NOT_AVAILABLE", waiting.Body.GetProperty("errors").GetProperty("code").GetString());
+
+        // The waiting room: a READY Tour holding the relay's robot.
+        await f.Database.ExecuteAsync($"""
+            ALTER TABLE dbo.TourRobotReservations NOCHECK CONSTRAINT ALL;
+            INSERT dbo.TourRobotReservations (Id, TourId, RobotId, RouteTestRunId, MeasuredDurationSeconds, StartsAt, EndsAt, ReservedByUserId, ReservedAt)
+            VALUES (NEWID(), '{f.TourId}', '{streamRobot}', NEWID(), 600, SYSDATETIMEOFFSET(), DATEADD(HOUR, 1, SYSDATETIMEOFFSET()), NEWID(), SYSDATETIMEOFFSET());
+            UPDATE dbo.Tours SET State='READY';
+            """);
+        var ready = await StreamAccessAsync(host.Client, f.TourId, cookie);
+        Assert.Equal(HttpStatusCode.OK, ready.Status);
+
+        await f.Database.ExecuteAsync($"UPDATE dbo.Tours SET State='RUNNING',StartedAt=SYSDATETIMEOFFSET(),AssignedRobotId='{otherRobot}';");
+        Assert.Equal(HttpStatusCode.Conflict, (await StreamAccessAsync(host.Client, f.TourId, cookie)).Status);
+
+        await f.Database.ExecuteAsync($"UPDATE dbo.Tours SET AssignedRobotId='{streamRobot}';");
+        var running = await StreamAccessAsync(host.Client, f.TourId, cookie);
+        Assert.Equal(HttpStatusCode.OK, running.Status);
+        var data = running.Body.GetProperty("data");
+        Assert.Equal("https://stream.example.test:8889/quest/whep", data.GetProperty("whepUrl").GetString());
+        var token = data.GetProperty("token").GetString()!;
+        var expiresAt = data.GetProperty("expiresAt").GetDateTimeOffset();
+        Assert.InRange(expiresAt - DateTimeOffset.UtcNow, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(121));
+
+        object Read(string? query) => new { action = "read", path = "quest", protocol = "webrtc", query, user = "", password = "", token = "" };
+        Assert.Equal(HttpStatusCode.NoContent, await RelayAsync(host.Client, "auth", Read("token=" + token)));
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "auth", Read(null)));
+        Assert.Equal(HttpStatusCode.Unauthorized, await RelayAsync(host.Client, "auth", Read("token=" + token), key: "wrong-key"));
+        Assert.Equal(HttpStatusCode.NoContent, await RelayAsync(host.Client, "auth",
+            new { action = "publish", path = "quest", protocol = "srt", user = "nuc", password = "nuc-pass" }));
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "auth",
+            new { action = "publish", path = "quest", protocol = "srt", user = "nuc", password = "wrong" }));
+        Assert.Equal(HttpStatusCode.NoContent, await RelayAsync(host.Client, "recheck", new { path = "quest", query = "token=" + token }));
+
+        // End Early or completion: no new token, the relay refuses the old one, and the reaper is told to kick.
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='CANCELLED',EndedAt=SYSDATETIMEOFFSET();");
+        Assert.Equal(HttpStatusCode.Conflict, (await StreamAccessAsync(host.Client, f.TourId, cookie)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "auth", Read("token=" + token)));
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "recheck", new { path = "quest", query = "token=" + token }));
+
+        // A revoked invitation ends the session: 401, and its token stops working too.
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='RUNNING',EndedAt=NULL;");
+        Assert.Equal(HttpStatusCode.NoContent, await RelayAsync(host.Client, "recheck", new { path = "quest", query = "token=" + token }));
+        var current = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitationId}/revoke", Write(current, Guid.NewGuid()))).Status);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await StreamAccessAsync(host.Client, f.TourId, cookie)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "auth", Read("token=" + token)));
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "recheck", new { path = "quest", query = "token=" + token }));
+    }
+
+    [SchemaV11Fact]
+    public async Task StreamAccess_WithoutARelayConfigured_HandsOutNothing()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
+        var cookie = CookieHeader((await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, item.GetProperty("id").GetGuid()))).Cookie!);
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='RUNNING',StartedAt=SYSDATETIMEOFFSET();");
+
+        Assert.Equal(HttpStatusCode.Conflict, (await StreamAccessAsync(host.Client, f.TourId, cookie)).Status);
+        Assert.Equal(HttpStatusCode.Unauthorized, await RelayAsync(host.Client, "auth",
+            new { action = "publish", path = "quest", user = "nuc", password = "nuc-pass" }));
+    }
+
     private static async Task<(HttpStatusCode Status, JsonElement Body)> AskAsync(HttpClient client, Guid tour, string? cookie, string text)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/student/tours/{tour}/questions");

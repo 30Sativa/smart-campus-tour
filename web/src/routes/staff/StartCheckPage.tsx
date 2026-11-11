@@ -9,7 +9,7 @@ import { formatSlot } from '../../features/administration/admin-format'
 import { useRequestId } from '../../features/administration/tours/hooks'
 import type { StartConfirmation, TourStartChecks } from '../../features/administration/tours/types'
 import { QuestLiveVideo } from '../../features/quest-stream/QuestLiveVideo'
-import { QUEST_WHEP_URL } from '../../features/quest-stream/quest-stream-config'
+import { DEV_QUEST_SOURCE, toQuestSource } from '../../features/quest-stream/stream-access'
 import { cameraLeaseHint, useCameraLease } from '../../features/quest-stream/camera-lease'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { isTourStale, useOperationTour, useStartChecks, useStartTour } from '../../features/staff/operations/hooks'
@@ -78,7 +78,9 @@ export default function StartCheckPage() {
   const ready = tour.data?.tour.state === 'READY'
   const checks = useStartChecks(tourId, ready)
   // ADR-0052: while this page is open the robot's camera stays on, so the preview is ready before Start.
-  const cameraLease = useCameraLease(ready && QUEST_WHEP_URL ? tour.data?.reservation?.robotCode : null)
+  // ADR-0055: each renewal also brings the relay URL and this Staff user's token.
+  const cameraLease = useCameraLease(ready ? tour.data?.reservation?.robotCode : null)
+  const cameraSource = (cameraLease.isError ? null : toQuestSource(cameraLease.data?.stream)) ?? DEV_QUEST_SOURCE
   const start = useStartTour()
   const navigate = useNavigate()
   const [confirmation, setConfirmation] = useState<StartConfirmation>(NONE)
@@ -194,9 +196,11 @@ export default function StartCheckPage() {
           </section>
           <section className={panelClass} aria-label="Hình camera">
             <PanelHead title="Hình camera" />
-            <div className="p-3">{QUEST_WHEP_URL ? <QuestLiveVideo label={reservation?.robotCode}
+            <div className="p-3">{cameraSource ? <QuestLiveVideo source={cameraSource} label={reservation?.robotCode}
               offlineHint={cameraLeaseHint(cameraLease.data, cameraLease.isError)} />
-              : <p className="text-[13px] leading-5 text-[#64748b]">Chưa cấu hình luồng camera (VITE_QUEST_WHEP_URL). Xem hình trên thiết bị trước khi xác nhận.</p>}</div>
+              : <p className="text-[13px] leading-5 text-[#64748b]">{cameraLease.isPending && ready
+                ? 'Đang xin quyền xem camera…'
+                : 'Máy chủ chưa cấp luồng camera cho robot này. Xem hình trên thiết bị trước khi xác nhận.'}</p>}</div>
           </section>
           <section className={panelClass} aria-label="Tuyến của Tour">
             <PanelHead title="Tuyến" description={`${summary.registrationCount} đoàn đăng ký · ${summary.invitationCount} lời mời`} />

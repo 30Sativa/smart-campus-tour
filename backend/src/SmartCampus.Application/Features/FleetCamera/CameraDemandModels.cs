@@ -15,14 +15,18 @@ public static class CameraDemandReasons
 /// <summary>Answer to the robot's poll: capture and publish while <see cref="Wanted"/>.</summary>
 public sealed record CameraDemand(bool Wanted, string Reason, int PollSeconds);
 
-/// <summary>What a Staff page learns when it renews its lease.</summary>
+/// <summary>
+/// What a Staff page learns when it renews its lease. <see cref="Stream"/> is the relay URL and token (ADR-0055), null
+/// when the relay is not configured or carries another robot.
+/// </summary>
 public sealed record RobotCameraStatus(
     string RobotCode,
     bool Wanted,
     string Reason,
     bool RobotListening,
     DateTimeOffset? LastPollAt,
-    DateTimeOffset? LeaseUntil);
+    DateTimeOffset? LeaseUntil,
+    StreamRelay.StreamAccess? Stream = null);
 
 public static class CameraDemandRules
 {

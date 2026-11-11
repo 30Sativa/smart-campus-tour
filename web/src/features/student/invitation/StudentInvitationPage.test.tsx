@@ -9,7 +9,7 @@ import { useAuthStore } from '../../../stores/auth-store'
 // These invitation cases exercise a Tour without a configured livestream.
 vi.mock('../../quest-stream/quest-stream-config', async importOriginal => ({
   ...await importOriginal<typeof import('../../quest-stream/quest-stream-config')>(),
-  QUEST_WHEP_URL: null,
+  QUEST_DEV_WHEP_URL: null,
 }))
 
 const tourId = '11111111-1111-1111-1111-111111111111'

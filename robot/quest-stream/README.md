@@ -176,8 +176,10 @@ Trên máy chạy web (máy Windows), thư mục `web/`, file `web/.env.local`
 VITE_QUEST_WHEP_URL=http://10.80.192.207:8889/quest/whep
 ```
 
-(`VITE_QUEST_STREAM_URL=...m3u8` của bản HLS cũ không còn dùng.) Biến `VITE_*`
-chỉ đọc lúc khởi động, sửa xong phải chạy lại:
+(`VITE_QUEST_STREAM_URL=...m3u8` của bản HLS cũ không còn dùng.) **Chỉ dùng khi
+chạy dev** (`npm run dev`): bản build production không đọc biến này (ADR-0055), trang
+deploy lấy địa chỉ relay kèm token từ API. Biến `VITE_*` chỉ đọc lúc khởi động, sửa
+xong phải chạy lại:
 
 ```bash
 npm install
@@ -278,7 +280,7 @@ Hành vi tự động:
 | `/status` = `offline` | xem `reason`: chưa cắm, `unauthorized`, `offline` (bảng ở bước 3) |
 | `/status` = `connecting`, log `STREAM_STALLED` | kính tắt màn hình: đeo kính hoặc `QUEST_KEEP_AWAKE=1` |
 | `/status` = `live`, nhưng `:8889/quest` không có hình (xoay mãi) | **UDP 8189 bị chặn**: `sudo ufw allow 8189/udp`; NUC nhiều card mạng → đặt `MTX_WEBRTCADDITIONALHOSTS` |
-| `:8889/quest` có hình, web vẫn "Mất tín hiệu" | sai `VITE_QUEST_WHEP_URL` (phải có `/quest/whep`), quên chạy lại `npm run dev`, hoặc trang HTTPS gọi HTTP. Xem Console (F12) |
+| `:8889/quest` có hình, web dev vẫn "Mất tín hiệu" | sai `VITE_QUEST_WHEP_URL` (phải có `/quest/whep`), quên chạy lại `npm run dev`, hoặc trang HTTPS gọi HTTP. Xem Console (F12) |
 | Hình giật, `speed` < 1.0 trong `measure.sh` | CPU NUC không kịp: `QUEST_X264_PRESET=ultrafast`, `QUEST_CAPTURE_SIZE=2560x1344`, hoặc `QUEST_ENCODER=h264_vaapi` |
 | Còn viền đen/méo | giảm `QUEST_CROP_KEEP`, chỉnh `QUEST_CROP_OFFSET_X/Y` |
 
@@ -360,11 +362,20 @@ Trình duyệt ngoài Internet không tới được NUC trong LAN, và trang HT
 chạy backend), EC2 phát WebRTC cho mọi học sinh:
 
 ```
-NUC: MediaMTX local ──quest-relay-push (ffmpeg -c copy, SRT có mã hoá)──▶ EC2: mediamtx-relay
+NUC: MediaMTX local ──quest-relay-push (ffmpeg -c copy, SRT có mã hoá)──▶ EC2: mediamtx-relay ──hỏi quyền──▶ API
                                                                           │ WebRTC (WHEP, HTTPS :8889)
 LAN vẫn xem trực tiếp từ NUC như cũ                                       ▼
-                                                     https://stream.fptcampustour.cloud:8889/quest/whep
+                                          https://stream.fptcampustour.cloud:8889/quest/whep?token=…
 ```
+
+**Ai được xem (ADR-0055).** Relay hỏi backend mỗi lần có kết nối (`authMethod: http`):
+NUC được phát bằng user/mật khẩu của nó; trình duyệt chỉ được xem khi có token do backend
+cấp (sống 2 phút, trang tự xin lại): học sinh có phiên còn hiệu lực của Tour đang chạy
+hoặc đang ở phòng chờ trên đúng robot này, hoặc Staff đang giữ lease camera. Không có
+token thì không xem được, kể cả khi biết URL. Dịch vụ `mediamtx-relay-reaper` hỏi lại
+backend mỗi 5 giây cho từng người đang xem và cắt người không còn quyền (End Early, phiên
+bị thu hồi, Tour kết thúc, lease Staff hết hạn). Backend không trả lời thì không ai mới vào
+xem được, người đang xem vẫn xem tiếp.
 
 Không mã hoá lại ở đâu cả nên NUC và EC2 gần như không tốn CPU. Chi phí là băng
 thông ra của EC2: mỗi người xem nhận đúng `QUEST_VIDEO_BITRATE`. Ở 2 Mbit/s,
@@ -380,18 +391,36 @@ thông ra của EC2: mỗi người xem nhận đúng `QUEST_VIDEO_BITRATE`. Ở
   `sudo certbot certonly --dns-<plugin> -d stream.fptcampustour.cloud`.
   Cách khác nếu mở được cổng 80: `sudo certbot certonly --standalone -d stream.fptcampustour.cloud`.
 
-**2. EC2: cài relay**
+**2. EC2: cài (hoặc cài lại) relay**
 
 ```bash
 # trên máy có repo: scp robot/quest-stream/relay/install-relay.sh <user>@<EC2>:~
-sudo bash install-relay.sh stream.fptcampustour.cloud
+sudo ROBOT_CODE=<mã robot có kính, ví dụ amr_01> bash install-relay.sh stream.fptcampustour.cloud
 ```
 
-Script tải MediaMTX, tạo mật khẩu (một lần, `/etc/mediamtx-relay/secrets.env`),
-chép chứng chỉ, cài dịch vụ `mediamtx-relay` và hook gia hạn Certbot, rồi in ra
-hai dòng: `VITE_QUEST_WHEP_URL=...` và `RELAY_SRT_URL=...`. In lại:
-`sudo bash install-relay.sh stream.fptcampustour.cloud --show`.
-Log: `journalctl -u mediamtx-relay -f`.
+Script tải MediaMTX, tạo mật khẩu và khoá relay (một lần, `/etc/mediamtx-relay/secrets.env`;
+bản cài cũ được thêm `RELAY_KEY`, mật khẩu NUC giữ nguyên), chép chứng chỉ, cài dịch vụ
+`mediamtx-relay` và `mediamtx-relay-reaper`, hook gia hạn Certbot, rồi in ra:
+
+- năm dòng `QuestRelay__...` cho API;
+- dòng `RELAY_SRT_URL=...` cho NUC (không đổi nếu đã cài trước đây).
+
+API mặc định là `https://api.<phần sau dấu chấm đầu của tên miền>`; khác thì đặt `API_URL=...`.
+In lại: `sudo bash install-relay.sh stream.fptcampustour.cloud --show`.
+Log: `journalctl -u mediamtx-relay -u mediamtx-relay-reaper -f`.
+
+**2b. EC2: cho API biết relay**
+
+Chép năm dòng `QuestRelay__...` vào `/etc/campustour/api.env` rồi khởi động lại API
+(như khi đổi cấu hình khác của API, `backend/docs/ec2-deployment.md`). Thiếu các dòng này
+thì API không cấp token và relay từ chối mọi người xem: an toàn, nhưng không ai có hình.
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' \
+  -d '{"action":"read","path":"quest","query":""}' \
+  "https://api.fptcampustour.cloud/api/internal/stream-relay/auth?key=$(sudo grep -Po '^RELAY_KEY=\K.*' /etc/mediamtx-relay/secrets.env)"
+# 403 = API đã nhận khoá và từ chối người xem không có token (đúng). 401 = API chưa có QuestRelay__*.
+```
 
 **3. NUC: đẩy lên relay**
 
@@ -405,14 +434,15 @@ journalctl -u quest-relay-push -f        # không có lỗi là đang đẩy
 Giảm băng thông (khuyên dùng khi phát ra Internet), trong `quest-stream.env`:
 `QUEST_VIDEO_BITRATE=2M`, `QUEST_VIDEO_MAXRATE=2500k`, rồi `sudo systemctl restart quest-stream`.
 
-Kiểm tra trên EC2: `curl -s localhost:9997/v3/paths/get/quest` phải có `"ready": true`.
-Mở `https://stream.fptcampustour.cloud:8889/quest` trong Chrome: thấy hình là xong phía máy chủ.
+Kiểm tra trên EC2: `curl -s localhost:9997/v3/paths/get/quest` phải có `"ready": true`
+(NUC phát được nghĩa là API đã nhận mật khẩu của NUC). Mở
+`https://stream.fptcampustour.cloud:8889/quest` trong Chrome: **không** được thấy hình
+(không có token). Hình chỉ hiện trên trang học sinh hoặc trang "Kiểm tra trước khi bắt đầu".
 
 **4. Vercel**
 
-Project web → Settings → Environment Variables (Production):
-`VITE_QUEST_WHEP_URL=https://stream.fptcampustour.cloud:8889/quest/whep`, rồi
-Redeploy (biến `VITE_*` chỉ được đọc lúc build).
+Project web → Settings → Environment Variables: **xoá** `VITE_QUEST_WHEP_URL` (bản build
+production không còn đọc biến này), rồi Redeploy. Trang lấy địa chỉ relay và token từ API.
 
 | Triệu chứng | Nguyên nhân thường gặp |
 |---|---|
@@ -420,6 +450,9 @@ Redeploy (biến `VITE_*` chỉ được đọc lúc build).
 | log `404 Not Found` | stream trên NUC chưa `live` (`curl localhost:8080/status`) |
 | Trang `:8889/quest` mở được nhưng xoay mãi | `8189/udp` và `8189/tcp` chưa mở, hoặc sai IP công khai (chạy lại script với `PUBLIC_IP=<Elastic IP>`) |
 | Trình duyệt báo lỗi chứng chỉ | chứng chỉ không đúng tên `stream.fptcampustour.cloud` |
+| `quest-relay-push` bị từ chối sau khi cài lại relay | API chưa có `QuestRelay__PublishUser`/`QuestRelay__PublishPasswordSha256`, hoặc API đang không chạy (relay hỏi API cả khi NUC phát) |
+| Trang học sinh "Mất tín hiệu", log relay `authentication failed` | API trả 401: thiếu hoặc sai `QuestRelay__Key`; hoặc `QuestRelay__RobotCode` không phải robot của Tour |
+| Log reaper `recheck ... answered 401` | `reaper.env` và `api.env` khác khoá: chạy lại install-relay.sh rồi chép lại dòng `QuestRelay__Key` |
 
 Chưa đưa qua relay: đàm thoại staff (`quest-mic`, `staff-mic`) và
 `VITE_QUEST_STATUS_URL` (`/device`) vẫn chỉ chạy trong LAN.

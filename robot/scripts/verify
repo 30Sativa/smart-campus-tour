@@ -170,6 +170,17 @@ else
   fi
 fi
 
+section "Tier 1.9 - Quest relay installer and reaper (stdlib unittest, ADR-0055)"
+if ! command -v python3 >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+  skip "python3 or jq not found" "Quest relay installer tests"
+else
+  if python3 -B -m unittest discover -s quest-stream/tests -p 'test_relay_install.py' -v; then
+    ok
+  else
+    fail
+  fi
+fi
+
 # ---------------------------------------------------------------- TIER 2
 
 section "Tier 2 - colcon build + test"

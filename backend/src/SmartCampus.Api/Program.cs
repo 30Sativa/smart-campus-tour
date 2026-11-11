@@ -153,6 +153,10 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(SmartCampus.Api.Controllers.FleetHeadRateLimit.Policy, context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
         { PermitLimit = fleetHeadPermitLimit, Window = TimeSpan.FromSeconds(fleetHeadWindowSeconds), QueueLimit = 0 }));
+    // ADR-0055: the relay asks once per connection and its reaper once per open session every 5 s, from one host.
+    options.AddPolicy(SmartCampus.Api.Controllers.StreamRelayRateLimit.Policy, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = 1200, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddCors(options => options.AddPolicy("WebClient", policy =>
 {

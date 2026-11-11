@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
 import { LoaderCircle, Pause, Play, RotateCcw, VideoOff } from 'lucide-react'
-import { QUEST_WHEP_URL } from './quest-stream-config'
+import { DEV_QUEST_SOURCE, type QuestSource } from './stream-access'
 import { usePageVisible } from './use-page-visible'
 import { useWhepStream, type LiveStreamStatus } from './use-whep-stream'
 
 const COPY: Record<Exclude<LiveStreamStatus, 'live'>, { title: string; hint: string }> = {
-  idle: { title: 'Chưa cấu hình nguồn hình Quest', hint: 'Đặt VITE_QUEST_WHEP_URL rồi khởi động lại web.' },
+  idle: { title: 'Chưa có quyền xem hình Quest', hint: 'Máy chủ chưa cấp nguồn hình cho trang này.' },
   connecting: { title: 'Đang kết nối nguồn hình…', hint: 'Hình ảnh sẽ xuất hiện khi kính bắt đầu phát.' },
   offline: { title: 'Không có tín hiệu từ kính Quest', hint: 'Kiểm tra cáp USB, kính đang bật, dịch vụ quest-stream và mediamtx trên miniPC. Đang tự thử lại…' },
   error: { title: 'Trình duyệt không phát được hình trực tiếp (WebRTC)', hint: 'Hãy dùng Chrome, Edge, Firefox hoặc Safari bản mới.' },
@@ -20,8 +20,8 @@ const BADGE: Record<LiveStreamStatus, { label: string; className: string; dot: s
 }
 
 type QuestLiveVideoProps = {
-  /** WHEP endpoint. Defaults to VITE_QUEST_WHEP_URL. */
-  src?: string | null
+  /** Relay URL and token from the API (ADR-0055). Defaults to the dev-only LAN URL. */
+  source?: QuestSource | null
   /** Shown next to the status badge, e.g. the robot's name. */
   label?: string | null
   /** Replaces the "no signal" hint, e.g. while the robot is still switching its camera on. */
@@ -37,11 +37,12 @@ const PAUSED_BADGE = { label: 'Tạm dừng', className: 'bg-white/85 text-[#475
  * The viewer can pause it, and a hidden tab stops pulling it; either way the
  * WebRTC connection is closed, so no bandwidth is spent on a picture nobody sees.
  */
-export function QuestLiveVideo({ src = QUEST_WHEP_URL, label, offlineHint, className = '' }: QuestLiveVideoProps) {
+export function QuestLiveVideo({ source = DEV_QUEST_SOURCE, label, offlineHint, className = '' }: QuestLiveVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [paused, setPaused] = useState(false)
   const visible = usePageVisible()
-  const { status, retry } = useWhepStream(videoRef, src, !paused && visible)
+  const src = source?.whepUrl ?? null
+  const { status, retry } = useWhepStream(videoRef, src, !paused && visible, source?.token)
   const badge = paused ? PAUSED_BADGE : BADGE[status]
 
   return (

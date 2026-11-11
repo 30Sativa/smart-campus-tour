@@ -80,14 +80,20 @@ afterEach(() => {
 const posts = () => fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
 
 describe('QuestLiveVideo (WebRTC / WHEP)', () => {
-  it('says the stream is not configured when there is no WHEP URL', () => {
-    render(<QuestLiveVideo src={null} />)
-    expect(screen.getByText('Chưa cấu hình nguồn hình Quest')).toBeInTheDocument()
+  it('connects to nothing without a source from the server (ADR-0055)', () => {
+    render(<QuestLiveVideo source={null} />)
+    expect(screen.getByText('Chưa có quyền xem hình Quest')).toBeInTheDocument()
     expect(pcs).toHaveLength(0)
   })
 
+  it('connects with the token in the WHEP URL', async () => {
+    render(<QuestLiveVideo source={{ whepUrl: WHEP_URL, token: 'v1.T.abc' }} />)
+    await waitFor(() => expect(posts()).toHaveLength(1))
+    expect(posts()[0][0]).toBe(`${WHEP_URL}?token=v1.T.abc`)
+  })
+
   it('offers receive-only video to the WHEP endpoint, then shows the live picture', async () => {
-    const { container } = render(<QuestLiveVideo src={WHEP_URL} label="AMR-01" />)
+    const { container } = render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} label="AMR-01" />)
     expect(screen.getByText('Đang kết nối nguồn hình…')).toBeInTheDocument()
 
     await negotiated(0)
@@ -115,7 +121,7 @@ describe('QuestLiveVideo (WebRTC / WHEP)', () => {
     // Install the fake clock before the failed connection schedules its retry.
     vi.useFakeTimers()
     fetchMock.mockImplementationOnce(async () => answer(404))
-    render(<QuestLiveVideo src={WHEP_URL} />)
+    render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} />)
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     expect(screen.getByText('Không có tín hiệu từ kính Quest')).toBeInTheDocument()
     expect(pcs[0].closed).toBe(true)
@@ -130,12 +136,12 @@ describe('QuestLiveVideo (WebRTC / WHEP)', () => {
     fetchMock.mockImplementationOnce(async () => {
       throw new TypeError('Failed to fetch')
     })
-    render(<QuestLiveVideo src={WHEP_URL} />)
+    render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} />)
     await waitFor(() => expect(screen.getByText('Không có tín hiệu từ kính Quest')).toBeInTheDocument())
   })
 
   it('reconnects when the connection fails after going live', async () => {
-    const { container } = render(<QuestLiveVideo src={WHEP_URL} />)
+    const { container } = render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} />)
     await negotiated(0)
     act(() => {
       container.querySelector('video')!.dispatchEvent(new Event('playing'))
@@ -154,7 +160,7 @@ describe('QuestLiveVideo (WebRTC / WHEP)', () => {
 
   it('reconnects immediately when the user presses retry', async () => {
     fetchMock.mockImplementationOnce(async () => answer(404))
-    render(<QuestLiveVideo src={WHEP_URL} />)
+    render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /Thử lại ngay/ })).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /Thử lại ngay/ }))
@@ -163,7 +169,7 @@ describe('QuestLiveVideo (WebRTC / WHEP)', () => {
   })
 
   it('closes the connection and frees the server session on unmount', async () => {
-    const { unmount } = render(<QuestLiveVideo src={WHEP_URL} />)
+    const { unmount } = render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} />)
     await negotiated(0)
     unmount()
     expect(pcs[0].closed).toBe(true)
@@ -172,13 +178,13 @@ describe('QuestLiveVideo (WebRTC / WHEP)', () => {
 
   it('says so when the browser has no WebRTC', async () => {
     vi.stubGlobal('RTCPeerConnection', undefined)
-    render(<QuestLiveVideo src={WHEP_URL} />)
+    render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} />)
     await waitFor(() => expect(screen.getByText('Trình duyệt không phát được hình trực tiếp (WebRTC)')).toBeInTheDocument())
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('pauses on request: closes the connection, then reconnects on resume', async () => {
-    render(<QuestLiveVideo src={WHEP_URL} />)
+    render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} />)
     await negotiated(0)
     fireEvent.click(screen.getByRole('button', { name: 'Tạm dừng hình' }))
     expect(pcs[0].closed).toBe(true)
@@ -194,7 +200,7 @@ describe('QuestLiveVideo (WebRTC / WHEP)', () => {
   it('stops pulling the stream while the tab is hidden', async () => {
     let state: DocumentVisibilityState = 'visible'
     vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => state)
-    render(<QuestLiveVideo src={WHEP_URL} />)
+    render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} />)
     await negotiated(0)
 
     state = 'hidden'
@@ -209,7 +215,7 @@ describe('QuestLiveVideo (WebRTC / WHEP)', () => {
 
   it('explains a missing picture with the hint it is given', async () => {
     fetchMock.mockImplementationOnce(async () => answer(404))
-    render(<QuestLiveVideo src={WHEP_URL} offlineHint="Đang bật camera trên robot." />)
+    render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} offlineHint="Đang bật camera trên robot." />)
     await waitFor(() => expect(screen.getByText('Đang bật camera trên robot.')).toBeInTheDocument())
   })
 

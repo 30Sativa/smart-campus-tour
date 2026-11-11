@@ -1310,13 +1310,29 @@ lease has not expired:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/staff/manage/robots/{robotCode}/camera-lease` | Staff role, no body. Extends the lease to now + `FleetCamera:LeaseSeconds` (120); 200 `{robotCode, wanted, reason, robotListening, lastPollAt, leaseUntil}`; 404 unknown or deactivated robot; 400 invalid code. The pre-start check page renews it every 30 s while visible. |
+| POST | `/api/staff/manage/robots/{robotCode}/camera-lease` | Staff role, no body. Extends the lease to now + `FleetCamera:LeaseSeconds` (120); 200 `{robotCode, wanted, reason, robotListening, lastPollAt, leaseUntil, stream}`; `stream` (ADR-0055) is `{whepUrl, token, expiresAt}` for this Staff user when the public relay carries this robot, else null; 404 unknown or deactivated robot; 400 invalid code. The pre-start check page renews it every 30 s while visible, which also renews the token. |
 | POST | `/api/fleet/camera/v1/poll` | Robot scheme, no body, `FleetSync` rate-limit policy. 200 `{wanted, reason: TOUR_RUNNING\|STAFF_WATCHING\|IDLE, pollSeconds}`. |
 
 Leases and last polls live only in API memory (single instance, ADR-0019); nothing is
 written to SQL. `robot/quest-stream` (`QUEST_CONTROL_URL=auto`) polls with the Fleet Sync
 identity, pauses capture when not wanted (`/status` state `paused`, `/device` stream
 `paused`) and keeps capturing after 60 s without an answer unless `QUEST_CONTROL_FAILSAFE=off`.
+
+**Who may watch the public relay (ADR-0055, proposed 11/11/2026).** The public MediaMTX relay
+uses `authMethod: http`: it asks the backend about every publish and read. The relay URL is
+`QuestRelay:WhepUrl` and is not in the web bundle; a page gets it with a token:
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/student/tours/{tourId}/stream-access` | Student session cookie (allowed origin). 200 `{whepUrl, token, expiresAt}` while the session is open, unexpired and unrevoked on an active ACCEPTED row and the Tour is `RUNNING` with `AssignedRobotId` = `QuestRelay:RobotCode`, or `SCHEDULED`/`READY` with an unreleased reservation on that robot. 401 without a valid session; 409 `STREAM_NOT_AVAILABLE` otherwise (ended or cancelled Tour, another robot, no relay configured). `no-store`. |
+| POST | `/api/internal/stream-relay/auth?key=` | Anonymous; only the relay knows `QuestRelay:Key`. Body is MediaMTX's `{user, password, token, ip, action, path, protocol, id, query}`. 204 allows `publish` with `QuestRelay:PublishUser` and a password whose SHA-256 is `QuestRelay:PublishPasswordSha256`, or `read` of `QuestRelay:Path` (`quest`) with an unexpired token in the `token` query parameter whose holder may still watch; 403 refuses; 401 wrong key or relay not configured. `StreamRelay` rate limit (1200/min/IP). |
+| POST | `/api/internal/stream-relay/recheck?key=` | Same key. Body `{path, query}` of an open WebRTC session, sent every 5 s by `mediamtx-relay-reaper` on the relay host. 204 while the holder may still watch (the token's expiry is ignored), 403 when not, and the reaper then kicks the session through the MediaMTX API on `127.0.0.1:9997`; 401 wrong key. |
+
+Token: `v1.<S|T>.<session or user id>.<robot>.<expires>.<HMAC-SHA256>`, key derived from
+`QuestRelay:Key`, life `QuestRelay:TokenSeconds` (120, 30..300). A Student token holds while the
+rule above holds; a Staff token while a camera lease on that robot is live. The browser adds it as
+`?token=` to the WHEP URL and fetches a new one at half its life; a refused renewal closes the
+player. All `QuestRelay` values unset: no token is issued and the relay refuses every reader.
 
 Rotating head/pan presets remain a V1 requirement outside the navigation wire
 MVP. FRONT gating is the current orchestration decision described above, not a

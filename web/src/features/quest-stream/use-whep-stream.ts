@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { QUEST_ICE_SERVERS } from './quest-stream-config'
+import { withToken } from './stream-access'
 import { startWhep, WhepError, type WhepSession } from './whep'
 
 /**
@@ -28,12 +29,21 @@ const WATCHDOG_MS = 2_000
  * reconnects with back-off when the server has no stream, the connection
  * drops or the picture freezes, and tears everything down on unmount or when
  * `whepUrl` changes.
+ *
+ * `token` (ADR-0055) is added as `?token=` on each connect. A new token does
+ * not reconnect: the relay checks it only when a connection opens, so a
+ * playing stream keeps playing and the next reconnect uses the newest one.
  */
 export function useWhepStream(
   videoRef: RefObject<HTMLVideoElement | null>,
   whepUrl: string | null,
   enabled = true,
+  token?: string | null,
 ) {
+  const tokenRef = useRef(token)
+  useEffect(() => {
+    tokenRef.current = token
+  }, [token])
   const [session, setSession] = useState(0) // bump = reconnect now
   const key = whepUrl && enabled ? `${whepUrl}#${session}` : null
   const [reported, setReported] = useState<{ key: string | null; status: LiveStreamStatus }>({ key: null, status: 'idle' })
@@ -125,7 +135,7 @@ export function useWhepStream(
       const controller = new AbortController()
       abort = controller
       try {
-        const s = await startWhep(whepUrl, video, {
+        const s = await startWhep(withToken(whepUrl, tokenRef.current), video, {
           iceServers: QUEST_ICE_SERVERS,
           signal: controller.signal,
           onDisconnect: () => {
