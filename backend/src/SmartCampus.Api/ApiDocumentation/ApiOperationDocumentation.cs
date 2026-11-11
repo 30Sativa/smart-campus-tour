@@ -39,6 +39,7 @@ internal static class ApiOperationDocumentation
             ["AdminScheduleBlocksController.Create"] = ("[Admin] Khoá một ngày hoặc một ca", "Body `{requestId, date, shiftCode, reason}`; `shiftCode` null closes the whole day and `reason` is required. Records `SCHEDULE_BLOCK_CREATED`; a retry with the same `requestId` returns the same block. 409 `SHIFT_HAS_TOURS` with `errors.blockers` naming each Tour not cancelled in that day or shift; 409 `SCHEDULE_BLOCK_EXISTS` when the shift or day is already closed, including a day with a separately closed shift. Requires Admin. " + JwtErrors),
             ["AdminScheduleBlocksController.Remove"] = ("[Admin] Gỡ khoá lịch", "Body `{requestId}`. Stamps who removed the block and when, keeping the row, and records `SCHEDULE_BLOCK_REMOVED`. 404 for an unknown block; 409 `SCHEDULE_BLOCK_ALREADY_REMOVED`. Requires Admin. " + JwtErrors),
 
+            ["StaffNotificationsController.List"] = ("[Staff] Xem thông báo từ Technical Staff", "Lists the newest Technical Staff outcomes Staff acts on, newest first: POI verified or rejected, Route test PASS or FAIL, map deployment check and robot inspection released. `size` 1..50 (default 30). Each row has `id`, `occurredAt`, `action`, `resultCode`, `targetId` (the POI proposal, Route, map version or robot), `subject`, `revisionNumber`, `robotCode` and `actorName`; `targetId` and `subject` are null when the target is gone. A read projection of the audit log: no raw audit data, no read state, no push event. Requires Staff. " + JwtErrors),
             ["AdminAuditLogsController.List"] = ("[Admin] Xem nhật ký hệ thống", "Lists append-only audit entries newest first with optional `action`, `actor`, `from` and `to` filters plus `page` and `size` (at most 100). Returns safe columns only; raw audit data is never exposed. Read-only. " + JwtErrors),
 
             ["RobotCredentialsController.ListAudit"] = ("[Admin] Lọc nhật ký khóa robot", "Lists append-only robot credential audit rows with optional action, robotCode, actorUserId and time-range filters plus `page`. Data contains a safe hint, reason and source, never the secret or hash. Admin only; no edit/delete API exists. " + JwtErrors),
@@ -232,6 +233,7 @@ internal static class ApiOperationDocumentation
         }
         if (controller == "StaffTours")
             return ("Tour Staff — Quản lý Tour", summary, description);
+        if (controller == "StaffNotifications") return ("Tour Staff — Notifications", summary, description);
         if (controller == "StaffRegistrations") return ("Tour Staff — Registration Review", summary, description);
         if (controller == "AdminInfrastructure") return ("Administration — Infrastructure", summary, description);
         if (controller == "TechnicalDashboard") return ("Technical Staff — Dashboard & Diagnostics", summary, description);
