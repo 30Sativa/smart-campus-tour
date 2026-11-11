@@ -439,7 +439,8 @@ public sealed class TourManagementEndpointTests
         Assert.False(list.Single(c => c.GetProperty("id").GetString() == "callerIsOperator").GetProperty("passed").GetBoolean());
         Assert.DoesNotContain(list, c => c.GetProperty("source").GetString() == "OPERATOR_CONFIRMATION");
         var blockedBy = checks.GetProperty("blockedBy").EnumerateArray().Select(b => b.GetString()).ToArray();
-        Assert.Equal(["tourReady", "callerIsOperator", "reservationActive", "revisionStillSchedulable", "operatorConsoleConnected",
+        // Nobody was accepted for it either (ADR-0054).
+        Assert.Equal(["tourReady", "callerIsOperator", "reservationActive", "revisionStillSchedulable", "hasAcceptedRows", "operatorConsoleConnected",
             "commandTransportEnabled"], blockedBy.Where(b => b != "withinStartWindow"));
         await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/start", start, HttpStatusCode.Forbidden);
         await f.Send(HttpMethod.Get, $"/api/staff/manage/tours/{Guid.NewGuid()}/start-checks", expected: HttpStatusCode.NotFound);
