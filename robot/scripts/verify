@@ -14,6 +14,14 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1   # -> robot/
 SRC="ros2_ws/src"
 
+# Tests must never join the robot's graph. On the MiniPC an interactive shell carries
+# the robot .env (domain 30, loopback Discovery Server), so pin every test process to
+# a private localhost-only domain without a Discovery Server. Tests that need their
+# own domain still set it themselves.
+export ROS_DOMAIN_ID="${VERIFY_ROS_DOMAIN_ID:-101}" ROS_LOCALHOST_ONLY=1
+unset ROS_DISCOVERY_SERVER ROS_SUPER_CLIENT FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
+if [ "$ROS_DOMAIN_ID" = 30 ]; then echo "VERIFY_ROS_DOMAIN_ID must not be the robot domain 30" >&2; exit 2; fi
+
 FAILURES=0
 SKIPS=()
 
@@ -93,17 +101,27 @@ sys.exit(1 if bad else 0)
 fi
 
 section "Tier 1.4 - URDF/xacro parse"
-XACROS=$(find "$SRC" -name '*.xacro' -not -path '*/build/*' -not -path '*/install/*' 2>/dev/null)
-if [ -z "$XACROS" ]; then
-  skip "no .xacro files found" "xacro parse"
+# robot.urdf.xacro is the only entry point; the other .xacro files are fragments it
+# includes (parsing them alone fails on macros defined elsewhere). It resolves
+# $(find robot_description), so render it against a throwaway ament index that
+# points at the source package: nothing has to be built or installed.
+TOP="$SRC/robot_description/urdf/robot.urdf.xacro"
+if [ ! -f "$TOP" ]; then
+  skip "robot_description/urdf/robot.urdf.xacro not found" "xacro parse"
 elif ! command -v xacro >/dev/null 2>&1; then
   skip "xacro not on PATH (needs a sourced ROS 2 env)" "xacro parse"
 else
+  IDX=$(mktemp -d)
+  mkdir -p "$IDX/share/ament_index/resource_index/packages"
+  : > "$IDX/share/ament_index/resource_index/packages/robot_description"
+  ln -s "$(cd "$SRC/robot_description" && pwd)" "$IDX/share/robot_description"
   bad=0
-  while IFS= read -r f; do
-    [ -z "$f" ] && continue
-    xacro "$f" > /dev/null || { echo "  ^ failed: $f"; bad=$((bad + 1)); }
-  done <<< "$XACROS"
+  for mode in "use_sim:=false use_ros2_control:=false" "use_sim:=false use_ros2_control:=false lidar_yaw:=3.1241" "use_sim:=true"; do
+    # shellcheck disable=SC2086
+    AMENT_PREFIX_PATH="$IDX:${AMENT_PREFIX_PATH:-}" xacro "$TOP" $mode > /dev/null \
+      || { echo "  ^ failed: robot.urdf.xacro $mode"; bad=$((bad + 1)); }
+  done
+  rm -rf "$IDX"
   if [ "$bad" -gt 0 ]; then fail; else ok; fi
 fi
 
@@ -134,9 +152,9 @@ fi
 
 section "Tier 1.7 - Remote-debug tools and robot scripts (pytest)"
 if ! python3 -c 'import pytest, yaml' >/dev/null 2>&1; then
-  skip "python3 pytest/PyYAML not available" "rviz_over_ssh + odom_calibration + nav2_bench + route_test + script tests"
+  skip "python3 pytest/PyYAML not available" "rviz_over_ssh + odom_calibration + nav2_bench + route_test + preflight + lidar_calibration + ops + script tests"
 else
-  if python3 -B -m pytest -q -p no:cacheprovider tools/rviz_over_ssh tools/odom_calibration tools/nav2_bench tools/route_test scripts/tests; then ok; else fail; fi
+  if python3 -B -m pytest -q -p no:cacheprovider tools/rviz_over_ssh tools/odom_calibration tools/nav2_bench tools/route_test tools/preflight tools/lidar_calibration tools/ops scripts/tests; then ok; else fail; fi
 fi
 
 section "Tier 1.8 - Fleet Bridge offline unit tests (stdlib unittest)"

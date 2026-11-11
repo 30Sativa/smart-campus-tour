@@ -22,6 +22,20 @@ permission to execute it.
 
 ## Current architecture and operations
 
+- [Three workflows: MANUAL, BUILD MAP, NAV2](workflows.md) — **read first**: the
+  shared core and what each workflow adds, who may drive `cmd_vel`, calibration
+  arguments, which config each workflow loads, commands and tools.
+- [Test readiness 2026-11-10](test-readiness-2026-11-10.md) — what may run on the
+  robot now (offline / static / controlled motion / blocked), preflight and
+  PASS/FAIL per step, the static LiDAR check, the E-stop/link-safety audit.
+- [Launcher `robot`](robot-launcher.md) — per-process environment from one machine
+  profile, one workflow at a time, teleop and stop separate, candidate LiDAR yaw only
+  for the static check, session logs and retention. Not installed yet.
+- [Runtime deploy and rollback](runtime-deploy.md) — how the MiniPC runtime
+  differs from source today, staging an immutable overlay from one commit, and
+  rolling back by sourcing the previous overlay.
+- [Maps and POI](../robot_maps/README.md) — which map is the baseline and where
+  new maps go.
 - [Native runtime](native-runtime.md) — provisioning, build and layered
   operation on the physical MiniPC.
 - [R1 ROS Fleet Bridge](fleet-bridge.md) — telemetry-only TF observation,
@@ -40,6 +54,8 @@ permission to execute it.
   params file was removed on 2026-11-02 (git tag `nav2-baseline-v1`).
 - [DDS isolation and RViz over SSH](dds-isolation.md) — R3 design, viewer,
   bridge, safeguards and staged transition.
+Dated evidence (true for its date; later pages supersede it):
+
 - [Robot status 2026-10-22](robot-status-2026-10-22.md) — LiDAR mount
   moved (yaw now about −4.8°, `lidar_yaw:=-0.0833` arg), START↔POI_03 done,
   Nav2 Baseline V2, sessions without rosbag and the `go.sh` guard, next steps.
@@ -80,8 +96,9 @@ permission to execute it.
 - [Phase 1 MiniPC deployment checklist](phase1-deploy-minipc.md) is retained
   as a historical record. Its old clone/build procedure was superseded by
   [Native runtime](native-runtime.md).
-- [Phase 3 Nav2](phase3-nav2.md) is explicitly historical; use Baseline V1 and
-  current navigation package documentation for active navigation behavior.
+- [Phase 3 Nav2](phase3-nav2.md) is explicitly historical; use the
+  [2026-11-02 baseline](robot-baseline-2026-11-02.md) and [workflows.md](workflows.md)
+  for active navigation behavior.
 
 Firmware pin, wiring, flashing and IMU guides live under
 `robot/firmware/stm32/motor_controller/docs/`. ROS package contracts and

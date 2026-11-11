@@ -3,9 +3,9 @@
 The single physical robot runs its ROS 2 Humble graph directly on Ubuntu 22.04 on the miniPC. There is one owner for STM32, RPLiDAR, EKF, mode manager, map_server/AMCL and Nav2. Docker remains available for CI image builds, laptop debug tools and Gazebo simulation; it is not a second physical startup path.
 
 The provisioning steps below describe a fresh native installation. The
-existing MiniPC has a V1 Nav2 overlay and a separate R3 debug overlay; their
-checkout and install provenance is recorded in
-[project-status.md](project-status.md). Do not infer the active runtime from
+existing MiniPC runs overlays that follow other checkouts; measure them with
+`robot/scripts/runtime_provenance.py` and deploy a reviewed commit as described
+in [runtime-deploy.md](runtime-deploy.md). Do not infer the active runtime from
 the checkout at `$HOME/smart-campus-tour` alone.
 
 ## Fresh miniPC
@@ -43,7 +43,10 @@ This writes a machine-local report under `robot/.native-state/` (ignored by Git)
 
 ## Layered bring-up
 
-Start one launch per terminal and stop it before switching layers:
+The exact, current commands for the physical robot (namespace, `lidar_yaw`,
+Nav2 V2 parameters, preflight, teleop) are in [workflows.md](workflows.md);
+the layers below show the order. Start one launch per terminal and stop it
+before switching layers:
 
 ```bash
 # 1. STM32 + URDF + EKF + mode manager
@@ -56,7 +59,7 @@ ros2 launch robot_control manual_mapping.launch.py \
 
 # 3. On a saved map, LiDAR-only localization and Nav2 (camera is opt-in)
 ros2 launch robot_navigation navigation.launch.py \
-  map:="$ROBOT_MAP_DIR/campus_map.yaml" enable_camera:=false rviz:=false
+  map:="$ROBOT_MAP_DIR/map2.yaml" enable_camera:=false rviz:=false
 ```
 
 Give AMCL a 2D Pose Estimate, then inspect lifecycle state, TF freshness and LaserScan rate. Only after this baseline is stable add Astra in a separate camera terminal and restart navigation with `enable_camera:=true`. Finally start person perception with its explicit model path and `camera_enable_color:=true`. Perception is opt-in and is never required for LiDAR-only Nav2.

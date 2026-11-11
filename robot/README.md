@@ -6,14 +6,14 @@ For a new contributor, read [robot/AGENTS.md](AGENTS.md), then the
 distinguishes code, offline tests, hardware tests, readiness and deployment;
 its machine observations are dated snapshots.
 
-**R3 status (2026-10-17):** S0b remote RViz through SSH is deployed and has
-shown map, LiDAR, TF and RobotModel on the real system. DDS S1–S3 are still
-not deployed. On the current laptop, `amr-rviz --r3` selects R3 while bare
-`amr-rviz` deliberately keeps the legacy viewer as default. Keep that default
-until the R3 transition and viewer are accepted. See
-[`docs/dds-isolation.md`](docs/dds-isolation.md) and
-[`docs/r3-dds-readiness-2026-10-17.md`](docs/r3-dds-readiness-2026-10-17.md)
-before any DDS transition.
+**Current state (2026-11-11):** the real robot runs the
+[2026-11-02 baseline](docs/robot-baseline-2026-11-02.md) (Nav2 V2 +
+`lidar_yaw:=-3.0695`). DDS isolation S3 is deployed (2026-10-19). How the three
+workflows MANUAL, BUILD MAP and NAV2 are built and run:
+[docs/workflows.md](docs/workflows.md). What may run on the robot now:
+[docs/test-readiness-2026-11-10.md](docs/test-readiness-2026-11-10.md). How the
+MiniPC runtime differs from source and how to deploy a commit:
+[docs/runtime-deploy.md](docs/runtime-deploy.md).
 
 ## Architecture
 
@@ -118,9 +118,15 @@ Gazebo simulation; it is not used to start the physical robot. See
 [`docs/native-runtime.md`](docs/native-runtime.md).
 
 1. Provision the host with `robot/scripts/install-native`.
-2. Run the optional Astra host setup, then `robot/scripts/build-native`.
+2. Run the optional Astra host setup, then `robot/scripts/build-native` (a
+   symlink install that follows its checkout, for development). To run a
+   reviewed commit on the robot, stage an immutable overlay with
+   `robot/scripts/stage-runtime <ref>` instead
+   ([docs/runtime-deploy.md](docs/runtime-deploy.md)).
 3. Source `robot/scripts/source-minipc` in every runtime terminal.
-4. Bring up base/odom, LiDAR, localization and LiDAR-only Nav2 in layers.
+4. Bring up base/odom, LiDAR, localization and LiDAR-only Nav2 in layers, with
+   `robot/tools/preflight/preflight.py` before anything moves
+   ([docs/workflows.md](docs/workflows.md)).
 5. Add Astra and person perception only after the baseline is stable.
 6. Flash STM32 manually with ST-Link when required.
 
@@ -263,6 +269,10 @@ Run the bridge from inside the container:
 ```bash
 ros2 launch stm32_bridge stm32_bridge.launch.py port:=/dev/ttyACM0 baudrate:=115200
 ```
+
+The commands below show the launch files in a container. On the physical
+robot always pass `robot_id:=robot_01` and the current `lidar_yaw:=<rad>` and
+follow [docs/workflows.md](docs/workflows.md).
 
 Run the real-robot manual stack:
 

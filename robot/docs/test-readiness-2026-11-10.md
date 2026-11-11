@@ -73,7 +73,7 @@ terminal khác.
    `~/amr_logs/runs/<giờ>_static_lidar_check/`.
 
 ```bash
-bash ~/sct-test-ready/robot/tools/lidar_calibration/static_lidar_check.sh --motor-power-off-confirmed \
+bash $R/robot/tools/lidar_calibration/static_lidar_check.sh --motor-power-off-confirmed \
   --side right --front-cm <F> --rear-cm <R> --baseline-m <L> --lidar-yaw 3.1241
 ```
 
@@ -150,9 +150,10 @@ export ROBOT_RUNTIME_ROOT="$HOME/smart-campus-tour/robot"; source "$HOME/sct-r3-
 **Lệnh dùng chung:**
 
 ```bash
-PF="python3 $HOME/sct-test-ready/robot/tools/preflight/preflight.py"   # preflight, chỉ đọc
-python3 ~/.cache/armtc/analysis/stopkey.py /robot_01                    # dừng khẩn, mở sẵn
-~/amr_logs/tools_r3s5/rec_start.sh <thư mục phiên>                      # ghi bag
+R=<checkout chứa robot/tools>   # branch này; ~/sct-test-ready cho đến khi merge
+PF="python3 $R/robot/tools/preflight/preflight.py"                      # preflight, chỉ đọc
+python3 $R/robot/tools/ops/stopkey.py /robot_01                         # dừng khẩn, mở sẵn
+bash $R/robot/tools/ops/record_session.sh start <thư mục phiên>         # ghi bag; stop khi xong
 ```
 
 ### 5.1 MANUAL
@@ -246,4 +247,4 @@ ros2 run nav2_map_server map_saver_cli -f ~/amr_logs/runs/<phiên>/map_test --ro
 |---|---|
 | Góc LiDAR | Launch lại với `lidar_yaw:=-3.0695` (baseline 02/11), rồi `verify_params.sh V2 -3.0695` |
 | Branch | Không deploy nên runtime không đổi. Bỏ branch, hoặc `git revert` từng commit |
-| Phiên test | Ctrl+C theo thứ tự route_test → recorder (`rec_stop.sh`) → launch, luôn bằng SIGINT. Chỉ đọc bag sau khi recorder đóng |
+| Phiên test | Ctrl+C theo thứ tự route_test → recorder (`record_session.sh stop <phiên>`) → launch, luôn bằng SIGINT. Chỉ đọc bag sau khi recorder đóng |

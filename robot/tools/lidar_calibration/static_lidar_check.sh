@@ -26,10 +26,14 @@ out=${out:-$HOME/amr_logs/runs/$(date +%Y%m%d_%H%M)_static_lidar_check}
 [ -e "$out" ] && { echo "REFUSED: $out exists (one new directory per session)"; exit 2; }
 mkdir -p "$out"
 
-source /opt/ros/humble/setup.bash
+# The URDF comes from the runtime the caller selected (`robot lidar-check` builds it);
+# /opt/ros alone has no robot_description.
+prefix=$(ros2 pkg prefix robot_description 2>/dev/null) \
+  || { echo "REFUSED: robot_description not found; run through 'robot lidar-check' or source the runtime first" >&2; rmdir "$out"; exit 2; }
 unset ROS_DISCOVERY_SERVER ROS_SUPER_CLIENT FASTRTPS_DEFAULT_PROFILES_FILE
 export ROS_DOMAIN_ID=${STATIC_CHECK_DOMAIN:-97} ROS_LOCALHOST_ONLY=1 ROS_LOG_DIR="$out/ros_log"
-xacro_file=$(ros2 pkg prefix robot_description)/share/robot_description/urdf/robot.urdf.xacro
+[ "$ROS_DOMAIN_ID" = 30 ] && { echo "REFUSED: STATIC_CHECK_DOMAIN must not be the robot domain 30" >&2; exit 2; }
+xacro_file=$prefix/share/robot_description/urdf/robot.urdf.xacro
 xacro "$xacro_file" use_sim:=false use_ros2_control:=false lidar_yaw:="$yaw" > "$out/robot.urdf" || exit 1
 python3 -c "import sys, yaml; print(yaml.safe_dump({'robot_state_publisher': {'ros__parameters': {'robot_description': open(sys.argv[1]).read()}}}))" \
   "$out/robot.urdf" > "$out/rsp.yaml"
@@ -57,5 +61,9 @@ print(f'TF lidar_link yaw {tf} rad -> {"PASS" if tf_ok else "FAIL"} (expected {y
 print(f'wall method {math.degrees(mount):+.2f} deg vs candidate {math.degrees(yaw):+.2f} deg: difference {d:+.2f} deg')
 verdict = 'PASS' if tf_ok and abs(d) <= 1.5 else ('FAIL' if abs(d) > 3.0 or not tf_ok else 'INCONCLUSIVE (1.5-3 deg: re-measure the tape)')
 print(f'== {verdict}')
+# Machine-readable record for `robot calibration accept` (robot/docs/robot-launcher.md).
+with open(out + '/verdict.txt', 'w') as f:
+    f.write(f'verdict={verdict.split()[0]}\ncandidate_rad={yaw}\nwall_mount_deg={math.degrees(mount):.3f}\n'
+            f'difference_deg={d:.3f}\ntf_ok={tf_ok}\n')
 sys.exit(0 if verdict == 'PASS' else 1)
 PY

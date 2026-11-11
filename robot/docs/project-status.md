@@ -1,5 +1,24 @@
 # Robot architecture and handoff status
 
+> **Latest update, 2026-11-11.** Đọc các mục này trước; các mục cũ hơn bên dưới là bản chụp có ngày.
+>
+> - **Baseline đang chạy:** [robot-baseline-2026-11-02.md](robot-baseline-2026-11-02.md).
+>   Gồm Nav2 V2 (tag `nav2-baseline-v2`), AMCL `localization_params.yaml` và `lidar_yaw:=-3.0695`
+>   (tag `robot-baseline-20261102`). Mặc định của launch vẫn là −0.2225 (góc lắp trước 20/10),
+>   nên lệnh baseline **phải** truyền `lidar_yaw`.
+> - **Candidate `lidar_yaw:=3.1241`** (≈ −181°): OFFLINE VALIDATED, chưa HARDWARE VALIDATED,
+>   không phải mặc định ([test-readiness-2026-11-10.md](test-readiness-2026-11-10.md)).
+> - **Ba workflow và cách chạy:** [workflows.md](workflows.md).
+> - **Runtime MiniPC khác source:** overlay `smoothws` symlink vào `~/sct-nav-smooth` (73b86307),
+>   các package khác lấy từ checkout `~/smart-campus-tour` có thay đổi chưa commit. Xem và đổi theo
+>   [runtime-deploy.md](runtime-deploy.md), kiểm bằng `robot/scripts/runtime_provenance.py`.
+> - **An toàn:**
+>   - E-stop A10 chưa đo, nên **không chạy trên sàn**;
+>   - link-safety (`c4a9b4bf`, branch `feature/claude/bridge-link-safety`) chưa review, chưa deploy;
+>   - chưa có collision_monitor, nên không chạy NAV2 khi có người.
+> - Không còn `nav2_params_smooth.yaml` (V1) trong source; chỉ còn trong overlay `smoothws`
+>   và trong tag `nav2-baseline-v1`.
+>
 > **Latest update, 2026-10-22:** Nav2 **Baseline V2** is the development baseline
 > ([nav2-baseline-v2.md](nav2-baseline-v2.md); opt-in, not fully hardware validated;
 > V1 frozen for rollback). The LiDAR mount moved on 2026-10-20/21 (yaw about −4.8°;
@@ -31,7 +50,8 @@ robot. Recheck the named Git refs and machine-local state before acting.
    [robot/AGENTS.md](../AGENTS.md) for safety and robot-specific constraints.
 2. Read [robot/README.md](../README.md) for the package map and operating
    model, then this page for the verified state snapshot.
-3. For navigation, read [Nav2 Baseline V1](nav2-baseline-v1.md). For remote
+3. For navigation, read [Robot baseline 2026-11-02](robot-baseline-2026-11-02.md)
+   and [workflows.md](workflows.md) (V1 is history: [nav2-baseline-v1.md](nav2-baseline-v1.md)). For remote
    display and DDS transition, read [DDS isolation](dds-isolation.md) and the
    dated [R3 readiness report](r3-dds-readiness-2026-10-17.md).
 4. Read the relevant package README, source and tests before changing code.
@@ -68,7 +88,7 @@ localization and navigation sensor. The Astra Pro is supplementary for local
 obstacles and person perception. The package map, TF layout and launch entry
 points are in [robot/README.md](../README.md) and the package READMEs.
 
-The current navigation configuration is **Nav2 Baseline V1**: LiDAR yaw
+*(Snapshot 2026-10-17; superseded by the 2026-11-11 block at the top.)* At that time the navigation configuration was **Nav2 Baseline V1**: LiDAR yaw
 −0.2225 rad, the opt-in smooth parameter file, `LatchedGoalChecker`, and a
 0.20 m/s FollowPath target. It is a development/test baseline, not a
 production-ready navigation claim. Its defaults and limitations are recorded
