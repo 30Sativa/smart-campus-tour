@@ -41,23 +41,28 @@ describe('StaffBell', () => {
     expect(await within(panel).findByText('Không có việc cần chú ý.')).toBeInTheDocument()
   })
 
-  it('remembers what this account read, one at a time or all at once', async () => {
+  it('clears the count once opened, keeps what was new marked while open, and remembers it', async () => {
     stubApi()
     const { unmount } = renderBell()
-    fireEvent.click(await screen.findByRole('button', { name: /2 thông báo chưa đọc/ }))
-    fireEvent.click(screen.getByRole('link', { name: /POI "Thư viện"/ }))
-    expect(screen.getByRole('button', { name: 'Thông báo, 1 thông báo chưa đọc' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Thông báo, 1 thông báo chưa đọc' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Đánh dấu đã đọc (1)' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Thông báo, 2 thông báo chưa đọc' }))
+    // Opening is seeing: the count is gone at once.
     expect(screen.getByRole('button', { name: 'Thông báo' })).toBeInTheDocument()
+    const panel = screen.getByRole('region', { name: 'Bảng thông báo' })
+    // What was new is still marked while the panel is open.
+    expect(within(panel).getAllByText('Chưa đọc:', { exact: false })).toHaveLength(2)
+    expect(within(panel).queryByRole('button', { name: /Đánh dấu đã đọc/ })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thông báo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Thông báo' }))
+    expect(within(screen.getByRole('region', { name: 'Bảng thông báo' })).queryByText('Chưa đọc:', { exact: false })).not.toBeInTheDocument()
     unmount()
 
     renderBell()
-    // Reads survive a reload: the bell comes back with nothing unread.
+    // Seen survives a reload: the bell comes back without a count.
     await screen.findByRole('button', { name: 'Thông báo' })
     fireEvent.click(screen.getByRole('button', { name: 'Thông báo' }))
     expect(await screen.findByRole('link', { name: /POI "Thư viện"/ })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Đánh dấu đã đọc/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Chưa đọc:', { exact: false })).not.toBeInTheDocument()
   })
 
   it('never says "nothing to do" when the Tours could not be read', async () => {

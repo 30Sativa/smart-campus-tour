@@ -122,7 +122,9 @@ Done since the first M2 console, listed so these rows are not re-opened:
   20 s: POI verified/rejected, Route test PASS/FAIL, map deployment check and robot
   inspection released, each linking to the POI, Route, POI page or robot page. Read
   state is per account in this browser (`staff-notices-read:<userId>`), like the
-  Representative bell; the count is open work plus unread notices.
+  Representative bell; the count is open work plus notices not yet seen. Opening the
+  bell counts as seeing them: the count drops to the open work, and what was new stays
+  highlighted until the panel closes.
 - Releasing a held robot: `/technical/robots` marks a robot that needs inspection,
   or whose holding Tour has ended, as "Chờ kiểm tra tại chỗ" (a robot in a running
   Tour shows "Đang chạy Tour") and offers "Trả robot về sử dụng" behind a required

@@ -18,7 +18,7 @@ const LINK: Record<AttentionItem['tone'] | StaffNotice['tone'], string> = { dang
  * The bell at the top right of operations, in two parts: what needs a person
  * now, from real Tours (a Tour that needs assistance first), and what Technical
  * Staff decided on Staff's POIs, Routes, maps and held robots. The count is the
- * open work plus the notices this account has not read.
+ * open work plus the notices this account has not seen; opening the bell sees them.
  */
 export function StaffBell() {
   const running = useRunningTours()
@@ -38,6 +38,15 @@ export function StaffBell() {
   const now = useNow(60_000)
 
   const [open, setOpen] = useState(false)
+  // Opening the bell is seeing it: the count clears, but what was new stays marked until the panel closes.
+  const [newOnOpen, setNewOnOpen] = useState<ReadonlySet<string>>(new Set())
+  const toggle = () => {
+    if (!open) {
+      setNewOnOpen(new Set(unread.map((notice) => notice.id)))
+      markRead(unread.map((notice) => notice.id))
+    }
+    setOpen(!open)
+  }
   const panelId = useId()
   const wrapRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -62,7 +71,7 @@ export function StaffBell() {
   const label = parts.length ? `Thông báo, ${parts.join(', ')}` : 'Thông báo'
   return (
     <div ref={wrapRef} className="relative">
-      <button ref={buttonRef} type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls={panelId} aria-label={label}
+      <button ref={buttonRef} type="button" onClick={toggle} aria-expanded={open} aria-controls={panelId} aria-label={label}
         className={`relative grid size-9 shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${open ? 'bg-[#eceef1] text-[#374151]' : 'text-[#6b7280] hover:bg-[#eceef1] hover:text-[#374151]'}`}>
         <Bell size={17} aria-hidden="true" />
         {count > 0 && (
@@ -116,7 +125,7 @@ export function StaffBell() {
               {notices.length > 0 ? (
                 <ul className="divide-y divide-[#f3f4f6]">
                   {notices.map((notice) => {
-                    const isUnread = !readIds.has(notice.id)
+                    const isUnread = !readIds.has(notice.id) || newOnOpen.has(notice.id)
                     const body = (
                       <>
                         <span aria-hidden="true" className={`mt-1.5 size-2 shrink-0 rounded-full ${isUnread ? DOT[notice.tone] : 'bg-[#d1d5db]'}`} />
