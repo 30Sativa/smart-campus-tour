@@ -8,6 +8,7 @@ interpreter because other tests in this package stub ROS imports.
 
 import ast
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -68,7 +69,14 @@ def run_launch_probe(launch_path, extra_json):
         for p in evaluate_parameters(node_context, node._Node__parameters):
             if isinstance(p, dict):
                 params.update({k: v for k, v in p.items() if isinstance(v, (str, int, float, bool))})
-        nodes.append(dict(package=node.node_package, executable=node.node_executable, params=params))
+        remaps = [(perform_substitutions(node_context, list(a)) if not isinstance(a, str) else a,
+                   perform_substitutions(node_context, list(b)) if not isinstance(b, str) else b)
+                  for a, b in (node._Node__remappings or [])]
+        files = [str(p) for p in evaluate_parameters(node_context, node._Node__parameters) if not isinstance(p, dict)]
+        nodes.append(dict(package=node.node_package, executable=node.node_executable, params=params,
+                          name=node._Node__expanded_node_name, namespace=node._Node__expanded_node_namespace,
+                          remaps=remaps, param_files=[os.path.relpath(f, SRC) if f.startswith(str(SRC)) else f for f in files],
+                          condition=node.condition.evaluate(node_context) if node.condition else True))
         return []
 
     context = LaunchContext()
@@ -195,6 +203,36 @@ def test_calibration_is_forwarded_explicitly(workflow):
     text = (SRC / HARDWARE_LAUNCHES[workflow]).read_text()
     for name in CALIBRATION_DEFAULTS:
         assert (f"'{name}': LaunchConfiguration('{name}')," in text or f"'{name}': {name}," in text), name
+
+
+
+LIDAR_DRIVER = dict(
+    package='rplidar_ros', executable='rplidar_node', name='rplidar_node', namespace='/robot_01',
+    params={'channel_type': 'serial', 'serial_port': '/dev/ttyUSB0', 'serial_baudrate': 256000,
+            'frame_id': 'lidar_link', 'inverted': False, 'angle_compensate': True, 'scan_mode': 'Sensitivity'},
+    remaps=[['scan', 'scan_raw']], param_files=[], condition=True)
+SCAN_FILTER = dict(
+    package='laser_filters', executable='scan_to_scan_filter_chain', name='scan_range_filter', namespace='/robot_01',
+    params={}, remaps=[['scan', 'scan_raw'], ['scan_filtered', 'scan']],
+    param_files=['robot_control/config/scan_range_filter.yaml'], condition=True)
+
+
+@pytest.mark.parametrize('workflow', ['mapping', 'mapping_gamepad', 'explore', 'navigation'])
+def test_the_lidar_chain_is_the_same_in_every_lidar_workflow(workflow):
+    """/scan_raw from the driver, /scan from the body filter: the contract SLAM, AMCL and
+    both costmaps read. Pinned so a launch refactor cannot change it."""
+    r = probe(workflow)
+    got = {n['package']: {k: n[k] for k in LIDAR_DRIVER} for n in r['nodes'] if n['package'] in ('rplidar_ros', 'laser_filters')}
+    for want in (LIDAR_DRIVER, SCAN_FILTER):
+        have = dict(got[want['package']])
+        have['remaps'] = [list(x) for x in have['remaps']]
+        assert have == want, (workflow, have)
+
+
+def test_lidar_can_be_disabled():
+    r = probe('navigation', enable_lidar='false')
+    assert not [n for n in r['nodes'] if n['package'] in ('rplidar_ros', 'laser_filters')]
+    assert any(n['package'] == 'nav2_amcl' for n in r['nodes'])         # the rest still comes up
 
 
 if __name__ == '__main__':
