@@ -38,7 +38,10 @@ def test_refuses_without_a_runtime_and_leaves_no_session_dir(tmp_path):
     r = subprocess.run(['bash', os.path.join(HERE, 'static_lidar_check.sh'), '--motor-power-off-confirmed', '--side', 'right',
                         '--front-cm', '100', '--rear-cm', '100', '--baseline-m', '0.6', '--out', str(out)],
                        env={'HOME': str(tmp_path), 'PATH': '/usr/bin:/bin'}, capture_output=True, text=True, timeout=30)
-    assert r.returncode == 2 and 'robot_description not found' in r.stderr
+    # On the MiniPC a live robot stack refuses first, for the better reason; either way
+    # nothing starts and no session directory is left behind.
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert 'robot_description not found' in r.stderr or 'robot processes are running' in r.stdout
     assert not out.exists()
 
 
