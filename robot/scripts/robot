@@ -9,6 +9,10 @@ startup file, an overlay or a symlink. See robot/docs/robot-launcher.md.
   robot status                      read-only: profile, runtime, calibration, processes, logs
   robot env | shell                 print the environment / open a shell with it
   robot manual | map | nav          start one workflow (refused while another runs)
+  robot nav --fleet                 NAV2 with the ADR-0049 motion gate (require_motion_permit)
+  robot fleet [--commands]          fleet_bridge: telemetry; --commands also takes Tours from the
+                                    backend, only beside a 'robot nav --fleet' session
+  robot reset-latch                 clear the motion gate latch (a person decides it is safe)
   robot teleop                      keyboard teleop for the running workflow
   robot stop                        SOFTWARE stop key (not the hardware E-stop)
   robot preflight <workflow> [--static]
@@ -41,13 +45,15 @@ WORKFLOWS = ('manual', 'map', 'nav')
 # having been checked: these are 'legacy_baseline', enough for MANUAL (no LiDAR consumer)
 # but not for BUILD MAP or NAV2, which need 'validated' (a PASS static check as evidence).
 LEGACY_BASELINE_LIDAR_YAWS = {'robot-baseline-20261102': -3.0695}
-CALIBRATION_ALLOWS = {'manual': ('validated', 'legacy_baseline'), 'map': ('validated',), 'nav': ('validated',)}
+# Project demo: the state is reported and warned about, it does not block a workflow.
+CALIBRATION_ALLOWS = {w: ('validated', 'legacy_baseline', 'unverified') for w in ('manual', 'map', 'nav')}
 TELEOP_LIMITS = {'TELEOP_SPEED': 0.30, 'TELEOP_TURN': 1.00}        # m/s, rad/s hard caps
 PROFILE_KEYS = {
     'SCT_ROBOT_ROOT': None, 'SCT_OVERLAY': '', 'ROBOT_ID': None,
     'LIDAR_YAW': None, 'LIDAR_YAW_EVIDENCE': '', 'LIDAR_YAW_CANDIDATE': '', 'LIDAR_YAW_PREVIOUS': '',
     'MAP': 'map2.yaml', 'NAV2_PARAMS': 'nav2_params_v2.yaml', 'MAP_MAX_WHEEL_SPEED_MM_S': '250.0',
     'TELEOP_SPEED': '0.1', 'TELEOP_TURN': '0.3',
+    'FLEET_ENV_FILE': '~/.config/campustour/fleet-sync.env',
     'SCT_LOG_ROOT': '~/amr_logs/runs', 'LOG_KEEP_DAYS': '30', 'LOG_MAX_MB': '2000', 'MIN_FREE_GB': '5',
 }
 NODE_PATTERNS = {
@@ -364,7 +370,7 @@ def env_diff(env):
     return {k: env[k] for k in shown if k in env}
 
 
-def workflow_argv(p, workflow):
+def workflow_argv(p, workflow, fleet=False):
     m, n = resolve_data(p)
     base = [f'robot_id:={p["ROBOT_ID"]}', f'lidar_yaw:={p["LIDAR_YAW"]}']
     if workflow == 'manual':
@@ -373,15 +379,74 @@ def workflow_argv(p, workflow):
         return ['ros2', 'launch', 'robot_control', 'manual_mapping.launch.py', *base,
                 f'max_wheel_speed_mm_s:={p["MAP_MAX_WHEEL_SPEED_MM_S"]}', 'rviz:=false']
     return ['ros2', 'launch', 'robot_navigation', 'navigation.launch.py', *base, f'map:={m}',
-            'enable_camera:=false', 'rviz:=false', f'nav2_params_file:={n}']
+            'enable_camera:=false', 'rviz:=false', f'nav2_params_file:={n}'] + \
+        (['require_motion_permit:=true'] if fleet else [])
+
+
+FLEET_ENV_KEYS = ('FLEET_SYNC_URL', 'FLEET_ROBOT_CODE', 'FLEET_ROBOT_MAP_KEY', 'FLEET_ROBOT_FRAME_ID',
+                  'FLEET_ROBOT_CREDENTIAL_FILE')
+
+
+def share_file(env, pkg, *rel):
+    prefix = package_prefix(env, pkg)
+    return os.path.join(prefix, 'share', pkg, *rel) if prefix else None
+
+
+def check_fleet_runtime(env, commands):
+    """The runtime must carry the ADR-0049 gate before a fleet session (smoothws does not)."""
+    nav_launch = share_file(env, 'robot_navigation', 'launch', 'navigation.launch.py')
+    if not nav_launch or 'require_motion_permit' not in open(nav_launch).read():
+        raise Refused('this runtime has no motion gate (navigation.launch.py lacks require_motion_permit); '
+                      'stage an overlay from main and point SCT_OVERLAY at it (robot/docs/runtime-deploy.md)')
+    if commands:
+        prefix = package_prefix(env, 'fleet_bridge')
+        found = prefix and any('motion_permit_ros.py' in files for _, _, files in os.walk(os.path.join(prefix, 'lib')))
+        if not found:
+            raise Refused('fleet_bridge in this runtime has no motion permit publisher (motion_permit_ros.py)')
+
+
+def read_fleet_env(p):
+    """FLEET_* settings for fleet_bridge from the machine file; values are never printed."""
+    path = p['FLEET_ENV_FILE']
+    if not os.path.isfile(path):
+        raise Refused(f'fleet settings not found: {path}')
+    values = {}
+    for raw in open(path, encoding='utf-8'):
+        m = re.fullmatch(r'\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)=(.*)', raw.rstrip('\n'))
+        if m and m.group(1) in FLEET_ENV_KEYS:
+            v = m.group(2).strip()
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in '"\'':
+                v = v[1:-1]
+            values[m.group(1)] = v
+    missing = [k for k in FLEET_ENV_KEYS if not values.get(k)]
+    if missing:
+        raise Refused(f'{path} lacks {", ".join(missing)}')
+    if not os.path.isfile(os.path.expanduser(values['FLEET_ROBOT_CREDENTIAL_FILE'])):
+        raise Refused('FLEET_ROBOT_CREDENTIAL_FILE does not point to a file')
+    return values
+
+
+def fleet_argv(p, env, values, commands):
+    params = share_file(env, 'fleet_bridge', 'config', 'fleet_bridge.yaml')
+    if not params:
+        raise Refused('package fleet_bridge not found in this runtime')
+    argv = ['ros2', 'run', 'fleet_bridge', 'fleet_bridge', '--ros-args', '-r', f'__ns:=/{p["ROBOT_ID"]}',
+            '--params-file', params, '-p', f'backend_url:={values["FLEET_SYNC_URL"]}',
+            '-p', f'robot_code:={values["FLEET_ROBOT_CODE"]}', '-p', f'map_key:={values["FLEET_ROBOT_MAP_KEY"]}',
+            '-p', f'frame_id:={values["FLEET_ROBOT_FRAME_ID"]}']
+    if commands:
+        # ADR-0049: commands only together with the motion permit; report period below 2 s.
+        argv += ['-p', 'commands_enabled:=true', '-p', 'report_period_sec:=0.5']
+    return argv
 
 
 def check_workflow(p, env, workflow, procs):
     state, why = calibration(p)
     if state not in CALIBRATION_ALLOWS[workflow]:
-        raise Refused(f'calibration: {workflow} needs LIDAR_YAW {" or ".join(CALIBRATION_ALLOWS[workflow])}, '
-                      f'it is {state}: {why}. To reproduce the 2026-11-02 baseline exactly, use the launch '
-                      'command in robot/docs/robot-baseline-2026-11-02.md by hand')
+        raise Refused(f'calibration: {workflow} does not accept LIDAR_YAW in state {state}: {why}')
+    if state != 'validated' and workflow in ('map', 'nav'):
+        print(f'WARNING: LIDAR_YAW {p["LIDAR_YAW"]} is {state} ({why}). {workflow} runs anyway; '
+              'localization may be a few degrees off.', file=sys.stderr)
     held = lock_info('workflow')
     if held:
         raise Refused(f'workflow {held.get("workflow")} already running (pid {held.get("pid")}, {held.get("session")})')
@@ -400,9 +465,8 @@ def check_workflow(p, env, workflow, procs):
     for fb in (x for x in procs if x['name'] == 'fleet_bridge'):
         commands = fleet_bridge_commands(fb)
         if workflow == 'nav' and commands is not False:
-            raise Refused(f'fleet_bridge[{fb["pid"]}] runs with commands_enabled={commands}: it can send Nav2 goals '
-                          'itself (two goal owners, and ADR-0049 then needs require_motion_permit). Stop it, or run '
-                          'it telemetry-only (commands_enabled: false) first')
+            print(f'WARNING: fleet_bridge[{fb["pid"]}] runs with commands_enabled={commands}: Tours from the web '
+                  'will send goals; do not also send goals from RViz or route_test.', file=sys.stderr)
         if workflow == 'nav':
             print(f'note: fleet_bridge[{fb["pid"]}] is telemetry-only (commands_enabled: false)', file=sys.stderr)
     for pkg in ('robot_control', 'stm32_bridge', 'robot_description') + (('robot_navigation',) if workflow == 'nav' else ()):
@@ -572,7 +636,13 @@ def main(argv=None):
     sub.add_parser('env')
     sub.add_parser('shell')
     for w in WORKFLOWS:
-        sub.add_parser(w)
+        wp = sub.add_parser(w)
+        if w == 'nav':
+            wp.add_argument('--fleet', action='store_true',
+                            help='start mode_manager with require_motion_permit for a fleet command session')
+    fl = sub.add_parser('fleet')
+    fl.add_argument('--commands', action='store_true')
+    sub.add_parser('reset-latch')
     t = sub.add_parser('teleop')
     t.add_argument('--speed', type=float)
     t.add_argument('--turn', type=float)
@@ -621,12 +691,16 @@ def main(argv=None):
         procs = scan_processes()
         tools = os.path.join(ROBOT_DIR, 'tools')
         if a.cmd in WORKFLOWS:
+            fleet = bool(getattr(a, 'fleet', False))
             check_workflow(p, env, a.cmd, procs)
-            argv = workflow_argv(p, a.cmd)
+            if fleet:
+                check_fleet_runtime(env, commands=False)
+            argv = workflow_argv(p, a.cmd, fleet)
             if a.dry_run:
                 return run(argv, env, True, lock=('workflow', a.cmd), session='(new session directory)')
             session = new_session(p, a.cmd)
-            return run(argv, env, False, lock=('workflow', dict(workflow=a.cmd, pid=os.getpid(), session=session)),
+            return run(argv, env, False, lock=('workflow', dict(workflow=a.cmd, fleet=fleet, pid=os.getpid(),
+                                                                session=session)),
                        session=session, extra_env={'ROS_LOG_DIR': os.path.join(session, 'ros_log')})
         if a.cmd == 'teleop':
             speed = a.speed if a.speed is not None else float(p['TELEOP_SPEED'])
@@ -657,6 +731,42 @@ def main(argv=None):
                 raise Refused('no session directory: give one, or start a workflow with robot first')
             argv = ['bash', os.path.join(tools, 'ops', 'record_session.sh'), a.action, d]
             return run(argv, env, a.dry_run, extra_env={'ROBOT_NS': '/' + p['ROBOT_ID']})
+        if a.cmd == 'fleet':
+            if any(x['name'] == 'fleet_bridge' for x in procs) or lock_info('fleet'):
+                raise Refused('a fleet_bridge is already running')
+            values = read_fleet_env(p)
+            if a.commands:
+                held = lock_info('workflow') or {}
+                if held.get('workflow') != 'nav':
+                    raise Refused('fleet --commands needs a running "robot nav" session (Nav2 receives the goals); '
+                                  'start that first')
+                if not held.get('fleet'):
+                    print('note: "robot nav" runs without --fleet, so there is no motion permit: if the link to the '
+                          'backend drops during a leg the robot finishes that leg. Keep someone at the E-stop.',
+                          file=sys.stderr)
+                if any(x['name'] in COMMAND_SOURCES for x in procs):
+                    print('note: a teleop is running; manual commands override Nav2 and cancel its goal',
+                          file=sys.stderr)
+                if held.get('fleet'):
+                    check_fleet_runtime(env, commands=True)
+            argv = fleet_argv(p, env, values, a.commands)
+            extra = dict(values, ROS_LOG_DIR=tool_log_dir(p, 'fleet', a.dry_run))
+            if a.dry_run:          # FLEET_* values stay out of the printed environment
+                return run(argv, env, True, lock=('fleet', dict(commands=a.commands)))
+            if a.commands:
+                print('fleet_bridge WITH COMMANDS: Tours started on the web will move the robot. Keep someone at '
+                      'the E-stop.' + (' Clear the gate with "robot reset-latch" when ready.'
+                                       if (lock_info('workflow') or {}).get('fleet') else ''))
+            return run(argv, env, False, lock=('fleet', dict(commands=a.commands, pid=os.getpid())), extra_env=extra)
+        if a.cmd == 'reset-latch':
+            held = lock_info('workflow') or {}
+            if not held.get('fleet'):
+                raise Refused('no "robot nav --fleet" session: nothing to reset')
+            argv = ['ros2', 'service', 'call', f'/{p["ROBOT_ID"]}/motion_inhibit_reset', 'std_srvs/srv/Trigger', '{}']
+            if not a.dry_run:
+                print('Clearing the motion gate latch: only when the robot, the area and the attendant are ready.')
+            return run(argv, env, a.dry_run, extra_env={'ROS_SUPER_CLIENT': 'TRUE',
+                                                        'ROS_LOG_DIR': tool_log_dir(p, 'reset', a.dry_run)})
         if a.cmd == 'lidar-check':
             if not p['LIDAR_YAW_CANDIDATE']:
                 raise Refused('LIDAR_YAW_CANDIDATE is not set in the profile')
