@@ -2,11 +2,8 @@ import type { DrivePoint } from '../drive'
 import { StudioFloor, StudioLights } from './StudioStage'
 import type { DriveWorld } from './world'
 
-/** Two stops far apart on a straight line: the story drives the robot from one towards the other. */
-export const STUDIO_STOPS = [
-  { x: 0, y: 0, label: 'Sân khấu' },
-  { x: 400, y: 0, label: 'Phía trước' },
-] as const
+/** The one place on the stage: the robot stands there, nose along +x. */
+export const STUDIO_STOPS = [{ x: 0, y: 0, label: 'Sân khấu' }] as const
 
 /** The robot alone on a stage (the home page's section 04). */
 export const studioWorld: DriveWorld = {

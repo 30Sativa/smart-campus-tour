@@ -1,56 +1,26 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Grid } from '@react-three/drei'
-import { CanvasTexture, Object3D, SRGBColorSpace, type DirectionalLight, type Group } from 'three'
+import { Object3D, type DirectionalLight, type Group } from 'three'
 import type { MapProps } from './world'
 
-/* The robot alone on a dark stage, for the home page: no map to load, only a
-   floor that follows it and a grid that slides past while it drives in the
-   scroll story's first chapters. */
+/* The robot alone on a dark stage, for the home page's parts (no map to load). */
 
-const FLOOR = '#16232d'
-
-/** A soft round pool of light on the floor: bright round the robot, fading into the dark. */
-function poolTexture() {
-  const size = 256
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const context = canvas.getContext('2d')
-  if (context) {
-    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
-    gradient.addColorStop(0, 'rgba(120, 160, 180, 0.32)')
-    gradient.addColorStop(0.35, 'rgba(70, 105, 125, 0.16)')
-    gradient.addColorStop(1, 'rgba(22, 35, 45, 0)')
-    context.fillStyle = gradient
-    context.fillRect(0, 0, size, size)
-  }
-  const texture = new CanvasTexture(canvas)
-  texture.colorSpace = SRGBColorSpace
-  return texture
-}
-
-/** The stage floor round the robot, a pool of light under it and the grid. */
+/** A quiet floor round the robot: its shadow and a fine grid fading into the dark. */
 export function StudioFloor({ driveRef }: MapProps) {
   const follow = useRef<Group>(null)
-  const pool = useMemo(() => poolTexture(), [])
   useFrame(() => {
     const { x, y } = driveRef.current
-    follow.current?.position.set(x, 0, y)
+    follow.current?.position.set(x, 0.01, y)
   })
   return (
-    <group>
-      <group ref={follow}>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <circleGeometry args={[60, 64]} />
-          <meshStandardMaterial color={FLOOR} roughness={0.92} metalness={0.05} />
-        </mesh>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0]} renderOrder={1}>
-          <planeGeometry args={[9, 9]} />
-          <meshBasicMaterial map={pool} transparent depthWrite={false} />
-        </mesh>
-      </group>
-      <Grid position={[0, 0.006, 0]} args={[30, 30]} cellSize={0.5} cellThickness={0.55} cellColor="#2a3f4d" sectionSize={2.5} sectionThickness={1} sectionColor="#3c5a6c" fadeDistance={26} fadeStrength={1.4} infiniteGrid />
+    <group ref={follow}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[6, 64]} />
+        <shadowMaterial transparent opacity={0.4} />
+      </mesh>
+      {/* A little above the shadow, not in its plane, so the two do not fight over the same depth. */}
+      <Grid position={[0, 0.004, 0]} args={[10, 10]} cellSize={0.1} cellThickness={0.6} cellColor="#9fb3bf" sectionSize={0.5} sectionThickness={1} sectionColor="#7f97a6" fadeDistance={8} fadeStrength={1.6} infiniteGrid />
     </group>
   )
 }

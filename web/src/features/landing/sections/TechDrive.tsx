@@ -1,28 +1,30 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Gamepad2 } from 'lucide-react'
+import { ArrowRight, Gamepad2, Play } from 'lucide-react'
 import { ViewerBoundary } from '../robot-explode/ViewerBoundary'
 import { canUseWebGL } from '../robot-explode/webgl'
-import { STORY_CHAPTERS, STORY_SCREENS, storyPhase, storyProgress } from '../robot-explode/story'
+import { STORY_CHAPTERS } from '../robot-explode/story'
 import { prefersReducedMotion } from '../landing-motion'
 import { ROBOT_DRIVE } from '../landing-content'
+import { IntroVideo } from './IntroVideo'
 
-// three.js and the robot model load only once section 04 comes near the screen; the maps live on the test-drive page.
-const RobotShowcase = lazy(() => import('../robot-explode/RobotShowcase'))
-
-
-const DONE = STORY_CHAPTERS.length
+// three.js and the robot model load once section 04 comes near the screen, while the intro video plays;
+// the maps live on the test-drive page.
+const RobotPartsViewer = lazy(() => import('../robot-explode/RobotPartsViewer'))
 
 const More = () => <Link to="/ben-trong-robot" className="lp3-td__btn lp3-td__more">Xem dữ liệu chạy bên trong robot <ArrowRight size={16} aria-hidden="true" /></Link>
 /** The same link, short, beside the test drive (its name still says where it goes). */
 const Inside = () => <Link to="/ben-trong-robot" className="lp3-td__btn lp3-td__more" aria-label="Xem dữ liệu chạy bên trong robot">Bên trong robot <ArrowRight size={16} aria-hidden="true" /></Link>
 const Drive = () => <Link to={ROBOT_DRIVE.to} className="lp3-td__btn lp3-td__btn--lime lp3-td__drive"><Gamepad2 size={17} aria-hidden="true" />Lái thử robot</Link>
 
-/** The section's title and text beside the robot, once the story has played. */
-function Intro() {
+/** The section's title and links beside the robot's parts, and the way back to the video. */
+function Intro({ watched, onWatch }: { watched: boolean; onWatch: () => void }) {
   return (
     <>
-      <span className="lp3-td__kicker"><i aria-hidden="true" />04 / Công nghệ · mô hình 3D</span>
+      <div className="lp3-td__heading">
+        <span className="lp3-td__kicker"><i aria-hidden="true" />04 / Công nghệ · mô hình 3D</span>
+        <button type="button" className="lp3-td__replay" onClick={onWatch}><Play size={12} aria-hidden="true" />{watched ? 'Xem lại video' : 'Xem video giới thiệu'}</button>
+      </div>
       <h2 className="lp3-td__title">Công nghệ đứng sau <em>mỗi điểm dừng.</em></h2>
       <p className="lp3-td__lead">Xoay, bung và mở vỏ robot để xem từng linh kiện. Muốn tự cầm lái? Mở bản đồ lái thử.</p>
       <div className="lp3-td__go">
@@ -33,7 +35,7 @@ function Intro() {
   )
 }
 
-/** One chapter of the story: its number, a two-line title (the second dimmed) and a line of text. */
+/** One chapter of the intro video: its number, a two-line title (the second dimmed) and a line of text. */
 function Chapter({ index }: { index: number }) {
   const chapter = STORY_CHAPTERS[index]
   return (
@@ -50,57 +52,55 @@ function Chapter({ index }: { index: number }) {
   )
 }
 
+const renderChapter = (index: number) => <Chapter index={index} />
+
 /**
- * Section 04 / Công nghệ: the robot alone on a dark stage, no map. It opens
- * with a scroll story: the section is several screens tall and its card stays
- * on screen while the visitor scrolls, which plays five chapters like a film
- * scrubbed by the scroll bar (the robot driving, a scan along it, its digital
- * model, the route ahead, the decision on its computer). The last screen
- * shows its parts: the visitor turns it, takes it apart, opens it and picks
+ * Section 04 / Công nghệ, one screen tall. It opens with a short intro video
+ * of the robot (five chapters, their text over it, skippable); meanwhile the
+ * 3D robot loads underneath, and at the end of the video the section turns to
+ * its parts: the visitor turns it, takes it apart, opens its casing and picks
  * parts. "Lái thử robot" leads to the test-drive page with the maps. Visitors
- * who ask for reduced motion get the parts straight away.
+ * who ask for reduced motion get the parts straight away, the video one click
+ * off.
  *
- * The robot loads only once the section comes near the screen; until then,
- * and where WebGL is missing, the text stands on a dark backdrop with a status.
+ * Where WebGL is missing, the text stands on a dark backdrop with a status.
  */
 export function TechDrive() {
   const [reduced] = useState(prefersReducedMotion)
-  const [mode, setMode] = useState<'waiting' | '3d' | 'none'>('waiting')
-  const [visible, setVisible] = useState(false)
-  const [chapter, setChapter] = useState(reduced ? DONE : 0)
-  const storyRef = useRef(reduced ? 1 : 0)
+  const [phase, setPhase] = useState<'intro' | 'parts'>(reduced ? 'parts' : 'intro')
+  /** The video's layer, kept a moment after the intro so it can fade. */
+  const [introShown, setIntroShown] = useState(!reduced)
+  const [watched, setWatched] = useState(false)
+  const [replay, setReplay] = useState(0)
+  const [near, setNear] = useState(false)
+  const [inView, setInView] = useState(false)
+  const [webgl, setWebgl] = useState<boolean | null>(null)
   const ref = useRef<HTMLElement>(null)
 
   useEffect(() => {
     const node = ref.current
     if (!node || typeof IntersectionObserver === 'undefined') return
-    const observer = new IntersectionObserver(([entry]) => {
-      const near = Boolean(entry?.isIntersecting)
-      setVisible(near)
-      if (near) setMode(current => (current !== 'waiting' ? current : canUseWebGL() ? '3d' : 'none'))
-    }, { rootMargin: '320px 0px' })
-    observer.observe(node)
-    return () => observer.disconnect()
+    const ahead = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return
+      setNear(true)
+      setWebgl(current => current ?? canUseWebGL())
+    }, { rootMargin: '480px 0px' })
+    const seen = new IntersectionObserver(([entry]) => setInView((entry?.intersectionRatio ?? 0) > 0.3), { threshold: [0, 0.3, 0.6] })
+    ahead.observe(node)
+    seen.observe(node)
+    return () => { ahead.disconnect(); seen.disconnect() }
   }, [])
 
-  // Scroll position → story progress, read every frame while the section is near (smooth scrolling included).
   useEffect(() => {
-    const node = ref.current
-    if (reduced || !visible || !node) return
-    let frame = 0
-    const read = () => {
-      const box = node.getBoundingClientRect()
-      const range = box.height - window.innerHeight
-      const story = storyProgress(range > 0 ? -box.top / range : 1)
-      storyRef.current = story
-      setChapter(storyPhase(story).index)
-      frame = requestAnimationFrame(read)
-    }
-    frame = requestAnimationFrame(read)
-    return () => cancelAnimationFrame(frame)
-  }, [reduced, visible])
+    if (phase !== 'parts' || !introShown) return
+    const id = window.setTimeout(() => setIntroShown(false), 700)
+    return () => window.clearTimeout(id)
+  }, [phase, introShown])
 
-  const intro = chapter >= DONE ? <Intro /> : <Chapter index={chapter} />
+  const finish = useCallback(() => { setPhase('parts'); setWatched(true) }, [])
+  const watch = useCallback(() => { setIntroShown(true); setPhase('intro'); setReplay(value => value + 1) }, [])
+
+  const intro = <Intro watched={watched} onWatch={watch} />
   const still = (text: string, busy: boolean) => (
     <div className="lp3-td lp3-td--still">
       <div className="lp3-td__scrim" aria-hidden="true" />
@@ -108,17 +108,27 @@ export function TechDrive() {
       <p className="lp3-td__wait" role="status">{busy && <span aria-hidden="true" />}{text}</p>
     </div>
   )
+  const showingIntro = phase === 'intro'
 
   return (
-    <section className="lp3-techdrive" id="cong-nghe" ref={ref} aria-label="04 / Công nghệ" data-story={reduced ? 'off' : 'on'} style={{ ['--td-screens' as string]: STORY_SCREENS + 2 }}>
+    <section className="lp3-techdrive" id="cong-nghe" ref={ref} aria-label="04 / Công nghệ" data-phase={phase}>
       <div className="lp3-techdrive__pin">
-        {mode === '3d' ? (
-          <ViewerBoundary fallback={still('Không tải được mô hình 3D.', false)}>
-            <Suspense fallback={still('Đang tải mô hình robot…', true)}>
-              <RobotShowcase visible={visible} intro={intro} storyRef={storyRef} chapter={chapter} driveTo={ROBOT_DRIVE.to} />
-            </Suspense>
-          </ViewerBoundary>
-        ) : still(mode === 'none' ? 'Trình duyệt này không hiển thị được mô hình 3D.' : 'Đang tải mô hình robot…', mode === 'waiting')}
+        <div className="lp3-techdrive__stack">
+          <div className="lp3-techdrive__layer" aria-hidden={showingIntro || undefined} inert={showingIntro}>
+            {webgl === false
+              ? still('Trình duyệt này không hiển thị được mô hình 3D.', false)
+              : near && webgl
+                ? (
+                    <ViewerBoundary fallback={still('Không tải được mô hình 3D.', false)}>
+                      <Suspense fallback={still('Đang tải mô hình robot…', true)}>
+                        <RobotPartsViewer visible={inView && !showingIntro} intro={intro} driveTo={ROBOT_DRIVE.to} />
+                      </Suspense>
+                    </ViewerBoundary>
+                  )
+                : still('Đang tải mô hình robot…', true)}
+          </div>
+          {introShown && <IntroVideo active={inView && showingIntro} leaving={!showingIntro} replay={replay} chapter={renderChapter} onDone={finish} />}
+        </div>
       </div>
     </section>
   )
