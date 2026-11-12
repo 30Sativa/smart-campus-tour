@@ -240,3 +240,22 @@ export function stepAt(progress: number, steps: ReadonlyMap<PartGroupId, Step[]>
   }
   return null
 }
+
+/** The casing: it opens out of the way, and turns see-through, to show a part inside the robot. */
+export const CASING: ReadonlySet<PartGroupId> = new Set(['shell', 'lowershell', 'lid', 'screw'])
+/** Lifted together with the lid when the robot is opened: the top plate and everything standing on it. */
+const TOP_SECTION: ReadonlySet<PartGroupId> = new Set(['lid', 'lidar', 'column', 'pantilt', 'head', 'quest'])
+/** How far the top section rises, in metres, and how much of their way out the side panels and screws go. */
+export const OPEN = { lift: 0.32, sides: 0.55 } as const
+
+/**
+ * Where a part goes when the robot is opened (not taken apart): the top
+ * section rises off the frame and the side panels and screws slide part of
+ * their way out, so the boards, battery and motors inside can be seen. Parts
+ * inside stay where they are. `apart` is the part's offset when taken apart.
+ */
+export function openOffset(group: PartGroupId, apart: Vec3): Vec3 {
+  if (TOP_SECTION.has(group)) return [0, OPEN.lift, 0]
+  if (group === 'shell' || group === 'lowershell' || group === 'screw') return [apart[0] * OPEN.sides, apart[1] * OPEN.sides, apart[2] * OPEN.sides]
+  return [0, 0, 0]
+}

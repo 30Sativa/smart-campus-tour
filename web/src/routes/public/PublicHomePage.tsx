@@ -1,13 +1,12 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import Lenis from '@studio-freight/lenis'
-import { Link } from 'react-router'
-import { ArrowRight, BatteryCharging, Bot, MapPin, MessageCircle, Radar, Radio, Route, Video } from 'lucide-react'
+import { ArrowRight, Bot, MapPin, MessageCircle, Radio, Route, Video } from 'lucide-react'
 import { SiteNav } from '../../features/landing/sections/SiteNav'
 import { Hero } from '../../features/landing/sections/Hero'
 import { CtaBand } from '../../features/landing/sections/CtaBand'
 import { SiteFooter } from '../../features/landing/sections/SiteFooter'
-import { AiPreview, CyclingStatus, JourneyRouteOverlay, TechShowcase } from '../../features/landing/sections/JourneyParts'
-import type { TechItem } from '../../features/landing/sections/JourneyParts'
+import { AiPreview, CyclingStatus, JourneyRouteOverlay } from '../../features/landing/sections/JourneyParts'
+import { TechDrive } from '../../features/landing/sections/TechDrive'
 import { EASE, ScrollTrigger, gsap, prefersReducedMotion, revealOnScroll } from '../../features/landing/landing-motion'
 import '../../features/landing/landing.css'
 import '../../features/landing/home-3d.css'
@@ -16,18 +15,6 @@ const steps = [
   { number: '01', title: 'Đại diện đăng ký đoàn', body: 'Chọn buổi tham quan đã công bố và gửi danh sách học sinh để được duyệt.' },
   { number: '02', title: 'Học sinh vào phòng chờ', body: 'Mở link được chia sẻ, nhập mã đoàn và đối chiếu họ tên, lớp.' },
   { number: '03', title: 'Cả lớp xem tour trực tiếp', body: 'Một robot đi qua các điểm dừng; mỗi học sinh theo dõi trên trình duyệt của mình.' },
-]
-
-/**
- * Technologies of the robot beside its 3D model in section 04; `parts` are the
- * groups of the model (`features/landing/robot-explode/parts.ts`) each item
- * lights up.
- */
-const technology: TechItem[] = [
-  { icon: Radar, title: 'LiDAR & tự hành', body: 'Cảm biến LiDAR quét quanh robot để định vị, tránh vật cản và bám theo tuyến đã chuẩn bị qua từng điểm tham quan.', parts: ['lidar', 'sonar', 'pc'] },
-  { icon: BatteryCharging, title: 'Pin & nguồn điện', body: 'Pin trên robot cấp điện cho động cơ và máy tính; mức pin hiện cho đội vận hành theo dõi.', parts: ['battery'] },
-  { icon: Radio, title: 'Vị trí đồng bộ', body: 'Cùng một vị trí phục vụ bản đồ 2D của học sinh và Twin 3D của đội vận hành.', parts: ['pc', 'pcb'] },
-  { icon: Video, title: 'Nguồn hình trực tiếp', body: 'Kính Meta Quest 3 trên trụ giữ truyền góc nhìn của chuyến đi tới học sinh.', parts: ['quest', 'head', 'pantilt'] },
 ]
 
 /** Labelled buildings on `twin-smartbus.png`, in percent of the picture. */
@@ -195,7 +182,7 @@ export default function PublicHomePage() {
       const hotspots = root.querySelectorAll('.lp3-hotspot')
       if (hotspots.length) gsap.fromTo(hotspots, { scale: 0 }, {
         scale: 1, duration: 0.7, stagger: 0.15, ease: 'back.out(2.2)',
-        scrollTrigger: { trigger: '.lp3-tech-art', start: 'top 75%' },
+        scrollTrigger: { trigger: '#cong-nghe', start: 'top 75%' },
       })
 
       const ctaLines = root.querySelectorAll('#cta-title .lp3-line > span')
@@ -310,13 +297,7 @@ export default function PublicHomePage() {
           </div>
         </section>
 
-        <section className="lp3-tech lp3-section" id="cong-nghe">
-          <div className="lp3-container">
-            <div className="lp3-section-head"><span className="lp3-kicker" data-reveal>04 / Công nghệ</span><h2 data-reveal>Công nghệ đứng sau<br />mỗi điểm dừng.</h2><p data-reveal>Robot tự hành, nguồn hình và dữ liệu vận hành cùng kết nối trong một tour.</p></div>
-            <TechShowcase items={technology} />
-            <Link to="/ben-trong-robot" className="lp3-outline-link lp3-tech-more">Xem dữ liệu chạy bên trong robot <ArrowRight size={18} aria-hidden="true" /></Link>
-          </div>
-        </section>
+        <TechDrive />
         <CtaBand />
       </main>
       <SiteFooter />

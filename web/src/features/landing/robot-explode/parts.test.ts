@@ -4,7 +4,7 @@ import { Box3, Mesh, Vector3 } from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 import { describe, expect, it } from 'vitest'
-import { ASSEMBLY_ORDER, PART_GROUPS, explodeOffset, groupOfNode, orderMoves, pairMoves, partGroup, planAssembly, stepApart, stepAt } from './parts'
+import { ASSEMBLY_ORDER, CASING, OPEN, PART_GROUPS, explodeOffset, groupOfNode, openOffset, orderMoves, pairMoves, partGroup, planAssembly, stepApart, stepAt } from './parts'
 
 describe('robot part catalog', () => {
   it('names each group once and reads the group from a model node name', () => {
@@ -126,5 +126,20 @@ describe('exploded robot asset', () => {
     expect(size.z).toBeCloseTo(0.803, 2)
     expect(size.y).toBeCloseTo(1.276, 2)
     expect(bounds.min.y).toBeCloseTo(0, 3)
+  })
+})
+
+describe('opening the robot to show a part', () => {
+  it('lifts the top section, slides the side panels part of the way and leaves the inside in place', () => {
+    expect(openOffset('lid', [0, 0.5, 0])).toEqual([0, OPEN.lift, 0])
+    expect(openOffset('quest', [0, 1.12, 0])).toEqual([0, OPEN.lift, 0])
+    expect(openOffset('shell', [0.58, 0, 0])).toEqual([0.58 * OPEN.sides, 0, 0])
+    expect(openOffset('battery', [0.1, 0.22, 0])).toEqual([0, 0, 0])
+    expect(openOffset('pc', [0, 0.36, 0])).toEqual([0, 0, 0])
+  })
+
+  it('counts only the shell, lid and screws as casing', () => {
+    expect([...CASING].sort()).toEqual(['lid', 'lowershell', 'screw', 'shell'])
+    for (const id of CASING) expect(PART_GROUPS.some(group => group.id === id)).toBe(true)
   })
 })

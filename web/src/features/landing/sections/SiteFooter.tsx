@@ -25,6 +25,7 @@ const columns: FooterColumn[] = [
     links: [
       { href: '#cong-nghe', label: 'Công nghệ robot' },
       { href: '/ben-trong-robot', label: 'Bên trong robot' },
+      { href: '/lai-thu-robot', label: 'Lái thử robot' },
       { href: '#gioi-thieu', label: 'Digital Twin' },
     ],
   },
