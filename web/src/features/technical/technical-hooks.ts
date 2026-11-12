@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { notify, type ToastInput } from '../../components/ui/toast-store'
 import { versionedRoutesApi } from '../administration/routes/versioned-api'
-import { technicalApi, type ReleaseRobotInspectionInput, type RouteTestRunInput } from './api/technical'
+import { technicalApi, type ReleaseRobotInspectionInput, type RouteTestRunInput, type SetRobotDispatchInput } from './api/technical'
 import { diagnosticsApi } from './api/diagnostics-api'
 
 const keys = {
@@ -136,6 +136,12 @@ export const useReleaseRobotInspection = () => useTechnicalMutation(
     title: `Đã trả ${input.robotCode} về sử dụng`,
     detail: 'Robot không còn bị giữ và có thể được xếp cho Tour mới.',
   }))
+
+export const useSetRobotDispatch = () => useTechnicalMutation(
+  (input: SetRobotDispatchInput & { robotCode: string }) => technicalApi.setRobotDispatch(input),
+  keys.physicalRobots, input => input.enabled
+    ? { title: `Đã cho phép điều phối ${input.robotCode}`, detail: 'Tour bắt đầu trên web giờ có thể gửi lệnh cho robot khi backend bật FleetCommands.' }
+    : { title: `Đã tắt điều phối ${input.robotCode}`, detail: 'Tour mới không gửi lệnh cho robot nữa. Lệnh đang chạy không bị dừng.' })
 
 export function useAssignRobotMap() {
   const client = useQueryClient()

@@ -28,7 +28,7 @@ let requests: Array<{ url: URL; init?: RequestInit }> = []
 const makePhysicalRobot = (overrides: Partial<PhysicalRobotOption> = {}): PhysicalRobotOption => ({
   id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-27T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map',
   connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-27T10:01:00Z', rowVersion: 'AAAAAAAAAAA=', assignedMapVersionId: 'map-v1', assignedAreaName: 'Library', assignedVersionNumber: 1, assignedMapKey: 'library-v1', assignedFrameId: 'map', mapAssignedAt: '2026-10-27T10:00:00Z', mapAssignedByName: 'Technical', latestDeployedMapKey: 'library-v1', latestDeployedFrameId: 'map', latestDeploymentPassed: true,
-  needsInspection: false, currentTourId: null, currentTourName: null, currentTourState: null,
+  needsInspection: false, currentTourId: null, currentTourName: null, currentTourState: null, isDispatchEnabled: false,
   ...overrides,
 })
 let physicalRobots: PhysicalRobotOption[] = [makePhysicalRobot()]
@@ -50,6 +50,7 @@ let routeCatalog: unknown[] = []
 let routeDetail: unknown = null
 let routeRefusal: { status: number; body: unknown } | null = null
 let releaseRefusals: Array<{ status: number; body: unknown }> = []
+let dispatchRefusals: Array<{ status: number; body: unknown }> = []
 const routeFixture = { routeId: 'route-1', revisionId: 'rev-1', revisionNumber: 2, name: 'Tuyến thư viện', mapKey: 'library-v1', stops: [{}, {}], dwellDurationSeconds: 60, verificationStatus: 'NOT_TESTED', isSubmitted: true, testRuns: [], effectiveTestRunId: null, revisionHistory: [] }
 let credentialStatus: RobotCredentialView = { robotCode: 'amr-01', status: 'NOT_ISSUED', issuedAt: null, issuedByUserId: null, issuedByName: null, hint: null, revokedAt: null, revokedByUserId: null, revokedByName: null, rowVersion: 'AAAAAAAAAAA=', history: [] }
 
@@ -82,6 +83,7 @@ describe('Technical Staff API integration', () => {
     routeDetail = null
     routeRefusal = null
     releaseRefusals = []
+    dispatchRefusals = []
     useToastStore.setState({ toasts: [] })
     useAuthStore.getState().setAuth('token', { userId: 'tech-1', username: 'tech', role: 'TechnicalStaff' })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -137,6 +139,13 @@ describe('Technical Staff API integration', () => {
         if (refusal) return new Response(JSON.stringify(refusal.body), { status: refusal.status, headers: { 'Content-Type': 'application/json' } })
         physicalRobots = physicalRobots.map(robot => ({ ...robot, needsInspection: false, currentTourId: null, currentTourName: null, currentTourState: null, rowVersion: 'AAAAAAAAAAM=' }))
         return response({ robotId: 'robot-1' })
+      }
+      if (url.pathname.endsWith('/dispatch') && init?.method === 'POST') {
+        const refusal = dispatchRefusals.shift()
+        if (refusal) return new Response(JSON.stringify(refusal.body), { status: refusal.status, headers: { 'Content-Type': 'application/json' } })
+        const enabled = Boolean(JSON.parse(String(init.body)).enabled)
+        physicalRobots = physicalRobots.map(robot => ({ ...robot, isDispatchEnabled: enabled, rowVersion: 'AAAAAAAAAAQ=' }))
+        return response({ robotId: 'robot-1', isDispatchEnabled: enabled })
       }
       if (url.pathname === '/api/technical/physical-robots') return failRobotLookup
         ? new Response(JSON.stringify({ success: false, message: 'Robot lookup unavailable.' }), { status: 503 })
@@ -468,6 +477,43 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByRole('button', { name: 'Thay đổi bản đồ' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Trả robot về sử dụng' })).not.toBeInTheDocument()
     expect(screen.queryByText('Chờ kiểm tra tại chỗ')).not.toBeInTheDocument()
+  })
+
+  it('allows dispatch with a session note, sends it as reason and evidence, and shows the new state', async () => {
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    const section = await screen.findByRole('region', { name: 'Điều phối Tour' })
+    expect(within(section).getByText(/Đang tắt/)).toBeInTheDocument()
+    fireEvent.click(within(section).getByRole('button', { name: 'Cho phép điều phối' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Cho phép điều phối amr-01?' })
+    expect(within(dialog).getByRole('button', { name: 'Cho phép' })).toBeDisabled()
+    fireEvent.change(within(dialog).getByLabelText(/Ghi chú buổi chạy thử/), { target: { value: 'Demo đồ án, khu vực trống, có người ở nút dừng.' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cho phép' }))
+    await waitFor(() => expect(requests.some(item => item.url.pathname === '/api/technical/physical-robots/robot-1/dispatch')).toBe(true))
+    const body = JSON.parse(String(requests.find(item => item.url.pathname.endsWith('/dispatch'))!.init?.body))
+    expect(body).toMatchObject({ enabled: true, expectedRowVersion: 'AAAAAAAAAAA=', reason: 'Demo đồ án, khu vực trống, có người ở nút dừng.', evidenceRef: 'Demo đồ án, khu vực trống, có người ở nút dừng.' })
+    expect(typeof body.requestId).toBe('string')
+    expect(await within(await screen.findByRole('region', { name: 'Điều phối Tour' })).findByText(/Đang cho phép/)).toBeInTheDocument()
+    expect(screen.getAllByText('Đã cho phép điều phối').length).toBeGreaterThan(0)
+  })
+
+  it('turns dispatch off without evidence and shows a server refusal in the dialog', async () => {
+    physicalRobots = [makePhysicalRobot({ isDispatchEnabled: true })]
+    dispatchRefusals = [{ status: 409, body: { success: false, message: 'Robot đã thay đổi. Tải lại rồi thử lại.', errors: { code: 'STALE_VERSION' } } }]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    fireEvent.click(await screen.findByRole('button', { name: 'Tắt điều phối' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Tắt điều phối amr-01?' })
+    fireEvent.change(within(dialog).getByLabelText(/Lý do tắt/), { target: { value: 'Xong buổi demo' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tắt điều phối' }))
+    expect(await within(dialog).findByText('Robot đã thay đổi. Tải lại rồi thử lại.')).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tắt điều phối' }))
+    await waitFor(() => expect(requests.filter(item => item.url.pathname.endsWith('/dispatch')).length).toBe(2))
+    const calls = requests.filter(item => item.url.pathname.endsWith('/dispatch')).map(item => JSON.parse(String(item.init?.body)))
+    expect(calls[1]).toMatchObject({ enabled: false, reason: 'Xong buổi demo' })
+    expect(calls[1].evidenceRef).toBeUndefined()
+    expect(calls[1].requestId).toBe(calls[0].requestId)                       // same note, same robot version: a replay
+    expect(await within(await screen.findByRole('region', { name: 'Điều phối Tour' })).findByText(/Đang tắt/)).toBeInTheDocument()
   })
 
   it('shows a robot in a running Tour as busy, not as awaiting inspection', async () => {
