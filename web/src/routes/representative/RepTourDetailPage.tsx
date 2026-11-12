@@ -6,6 +6,7 @@ import { formatDateTime, groupLabel, readRepError } from '../../features/represe
 import { repButton } from '../../features/representative/rep-classes'
 import { registrationClosesAt } from '../../features/representative/registration-deadline'
 import { tourCancelReasonText } from '../../features/representative/rep-format'
+import { tourImage } from '../../features/representative/tour-image'
 
 export default function RepTourDetailPage() {
   const { tourId = '' } = useParams()
@@ -17,10 +18,12 @@ export default function RepTourDetailPage() {
   const tour = query.data
   const existing = registrations.data?.data.find(registration => registration.tourId === tourId)
   const noRegistration = registrations.isSuccess && registrations.data.pagination.totalItems === 0
+  const cover = tourImage(tour)
 
   return <RepPage>
     <RepPageHeader back={{ to: '/dai-dien/buoi', label: 'Các buổi tham quan' }} title={tour.name}
       description={tour.description} badges={<TourStateBadge state={tour.state} />} />
+    <figure className="rep-tour-cover"><img src={cover.src} alt={cover.alt} decoding="async" /><figcaption>Ảnh minh họa</figcaption></figure>
     {tour.state === 'CANCELLED' && <Callout tone="warn" title="Buổi tham quan đã bị hủy" role="status">
       <p>{tourCancelReasonText(tour.cancelReason) || 'Nhà trường chưa cung cấp lý do hủy.'}</p>
     </Callout>}

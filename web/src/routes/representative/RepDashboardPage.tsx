@@ -3,6 +3,7 @@ import { CalendarDays, ClipboardList, Hourglass } from 'lucide-react'
 import { useRepRegistrations, useRepTours } from '../../features/representative/representative-hooks'
 import { RepPage, RepSection, ErrorState, EmptyState, PageSkeleton } from '../../features/representative/components/RepUi'
 import { TourCard } from '../../features/representative/components/TourCard'
+import { tourImages } from '../../features/representative/tour-image'
 import { RegistrationCard } from '../../features/representative/components/RegistrationCard'
 import { RepAttention, RepHero, RepOverviewHeader } from '../../features/representative/components/DashboardParts'
 import { isReviewExpired, readRepError } from '../../features/representative/rep-format'
@@ -19,6 +20,7 @@ export default function RepDashboardPage() {
   if (!tours.data || !registrations.data || !pending.data) return <PageSkeleton />
 
   const recent = registrations.data.data
+  const images = tourImages(tours.data.data)
   const next = upcoming.isSuccess ? nextUpcomingRegistration(upcoming.data) : null
   const needsFix = upcoming.data?.find(registration => registration.state === 'REJECTED' && registration.tourState === 'SCHEDULED' && !isReviewExpired(registration)) ?? null
 
@@ -37,7 +39,7 @@ export default function RepDashboardPage() {
           : <EmptyState title="Bạn chưa có đăng ký nào" description="Chọn một buổi tham quan để đăng ký." />}
       </RepSection>
       <RepSection className="rep-card" title="Buổi đang nhận đăng ký" action={<Link to="/dai-dien/buoi" className="rep-text-link">Xem tất cả buổi</Link>}>
-        {tours.data.data.length ? <div className="rep-tour-list">{tours.data.data.map(tour => <TourCard key={tour.id} tour={tour} compact />)}</div>
+        {tours.data.data.length ? <div className="rep-tour-list">{tours.data.data.map(tour => <TourCard key={tour.id} tour={tour} image={images.get(tour.id)} compact />)}</div>
           : <EmptyState title="Chưa có buổi nhận đăng ký" description="Quay lại khi trường có lịch tham quan mới." />}
       </RepSection>
     </div>
