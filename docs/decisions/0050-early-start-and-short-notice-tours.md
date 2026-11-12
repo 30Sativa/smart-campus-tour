@@ -3,7 +3,7 @@
 - **Status:** Accepted by the repository owner, 2026-11-09. No advisor approval is recorded.
 - **Amends:** ADR-0009 ("no button that skips the published time"), ADR-0035 decision 1 (72-hour lead time, for short-notice Tours only), ADR-0042 §7 and the lower bound of `withinStartWindow`, BR-05/ADR-0048 (T-24h, for short-notice Tours only).
 - **Schema:** v1.19, `Tours.IsShortNotice`.
-- **Superseded in part:** decisions 3 to 5 by ADR-0053 (quick Tours); decisions 1, 2 and the short-notice registration rules stay.
+- **Superseded in part:** decisions 3 to 5 by ADR-0053 (quick Tours); decisions 1, 2 and the short-notice registration rules stay. Decision 2 is amended by ADR-0057: `allViewersJoined` no longer blocks an early Start.
 
 ## Context
 

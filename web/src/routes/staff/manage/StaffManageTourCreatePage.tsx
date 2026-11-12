@@ -25,7 +25,7 @@ export default function StaffManageTourCreatePage() {
     if (attempt.current?.key !== key) attempt.current = { key, id: newRequestId() }
     create.mutate({ requestId: attempt.current.id, input }, { onSuccess: id => {
       celebrate({ title: `Đã tạo Tour “${input.name}”`, detail: input.shortNoticeReason
-        ? 'Robot đã được giữ. Chốt danh sách rồi Start khi mọi điểm xem đã vào phòng chờ.'
+        ? 'Robot đã được giữ. Chốt danh sách rồi Start; màn hình Start cho biết bao nhiêu điểm xem đã vào phòng chờ.'
         : 'Tour đang nhận đăng ký. Đại diện trường đã thấy Tour và có thể đăng ký đoàn.', action: { label: 'Lịch Tour', to: '/staff/schedule' } })
       navigate(`/staff/manage/tours/${id}`, { replace: true })
     } })

@@ -67,6 +67,24 @@ public sealed class TourHappyPathSqlTests
         var started = await db.TourEvents.AsNoTracking().SingleAsync(e => e.TourId == tour.Id && e.EventType == "TOUR_STARTED");
         Assert.Equal(StartTourCommandHandler.EarlyStartReason, started.ReasonCode);
         Assert.Contains("600 giây", started.ReasonNote);
+        Assert.Contains("1/1 điểm xem", started.ReasonNote);
+    }
+
+    [SchemaV11Fact]
+    public async Task EarlyStart_WithAViewerMissing_Starts_AndRecordsWhoWasInTheWaitingRoom()
+    {
+        await using var w = await World.Create(enabled: true);
+        await w.AddAcceptedViewer("absent");
+        w.Clock.Now = w.H.Start.AddMinutes(-5);
+        await w.Report();
+        await w.H.Send(new StartTourCommand(w.H.TourId, w.H.OperatorId,
+            new(Guid.NewGuid(), await w.H.Version(), new(true, true, true, true))));
+
+        await using var db = w.H.Context();
+        Assert.Equal("RUNNING", (await db.Tours.AsNoTracking().SingleAsync(t => t.Id == w.H.TourId)).State);
+        var started = await db.TourEvents.AsNoTracking().SingleAsync(e => e.TourId == w.H.TourId && e.EventType == "TOUR_STARTED");
+        Assert.Equal(StartTourCommandHandler.EarlyStartReason, started.ReasonCode);
+        Assert.Equal("Start sớm 300 giây trước giờ bắt đầu; 1/2 điểm xem đã vào phòng chờ.", started.ReasonNote);
     }
 
     [SchemaV11Fact]

@@ -96,6 +96,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0054](0054-ready-needs-an-accepted-row.md) | READY needs at least one accepted roster row (`NO_ACCEPTED_ROWS`), reported only once no decision is pending; Start rechecks it (`hasAcceptedRows`); amends ADR-0042 and ADR-0053 | accepted 2026-11-11 by the owner, implemented |
 | [0055](0055-token-gated-quest-stream.md) | Reading the public Quest relay needs a short-lived backend token (Student session on the relay's robot, or a Staff camera lease); MediaMTX `authMethod: http` keeps the NUC's publish password checked; a reaper on the relay host cuts viewers whose access ended; the relay URL leaves the web bundle | proposed 2026-11-11 after the 11/11 review, implemented; relay and NUC need a hardware test |
 | [0056](0056-quest-headset-status-via-backend.md) | The Quest headset's battery and adb connection ride on the camera poll; Staff read `GET /api/staff/manage/robots/{robotCode}/headset`; shown in the Robot panel; addendum: Staff wake/sleep button delivered with the camera poll | proposed 2026-11-12 (team member Thanh), implemented |
+| [0057](0057-early-start-without-every-viewer.md) | Early Start no longer waits for every viewer: `allViewersJoined` is shown as information and the `EARLY_START` note records X/Y in the waiting room; amends ADR-0050 decision 2 | accepted 2026-11-12 by the owner for the demo, implemented |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

@@ -109,18 +109,19 @@ describe('pre-start check on the real Tour API', () => {
     expect(screen.getByText('Bước 2 đã xong. Nút còn khóa vì bước 1: máy chủ chưa cho phép.')).toBeInTheDocument()
   })
 
-  it('names the viewers still missing for an early Start and opens at the time the server gives', async () => {
+  it('shows the viewers still missing for an early Start as a warning that does not lock Start (ADR-0057)', async () => {
     tour = detail('READY'); tour.tour.scheduledStartAt = new Date(Date.now() + 5 * 60_000).toISOString()
     const opensAt = new Date(Date.now() - 5 * 60_000).toISOString()
-    checks = { canStart: false, opensAt, blockedBy: ['allViewersJoined'], checks: [
-      check('withinStartWindow', true, 'Đang trong khung Start sớm; cần mọi điểm xem đã vào phòng chờ.'),
-      check('allViewersJoined', false, 'Mới có 1/2 điểm xem vào phòng chờ. Chờ đủ, hoặc bắt đầu từ giờ công bố.'),
+    checks = { canStart: true, opensAt, blockedBy: [], checks: [
+      check('withinStartWindow', true, 'Đang trong khung Start sớm.'),
+      check('allViewersJoined', true, 'Mới có 1/2 điểm xem vào phòng chờ (chỉ cảnh báo, không chặn Start sớm).'),
     ] }
     renderAt('/staff/tours/tour-1/start', '/staff/tours/:tourId/start', <StartCheckPage />)
-    expect(await screen.findByText('Chưa thể bắt đầu')).toBeInTheDocument()
-    expect(screen.getAllByText(/Mới có 1\/2 điểm xem/).length).toBeGreaterThan(0)
-    expect(screen.getByText(/Từ giờ công bố mục này tự đạt/)).toBeInTheDocument()
-    expect(screen.getAllByRole('checkbox')).toHaveLength(4)
+    const start = await screen.findByRole('button', { name: /Bắt đầu Tour/ })
+    expect((await screen.findByText(/^Điểm xem đã vào phòng chờ \(chỉ cảnh báo, không chặn\)/)).closest('li')).toHaveAttribute('data-verdict', 'info')
+    expect(screen.getByText(/Mới có 1\/2 điểm xem/)).toBeInTheDocument()
+    tickAll()
+    await waitFor(() => expect(start).toBeEnabled())
   })
 
   it('says when a Tour opened ahead of its day can start, and what the robot still has to report', async () => {

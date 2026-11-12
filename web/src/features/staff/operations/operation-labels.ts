@@ -28,7 +28,7 @@ const CHECKS: Record<string, { label: string; group: CheckGroup }> = {
   revisionStillSchedulable: { label: 'Tuyến vẫn còn kết quả chạy thử đạt', group: 'tour' },
   noPendingDecisions: { label: 'Không còn đăng ký chờ duyệt', group: 'tour' },
   hasAcceptedRows: { label: 'Có ít nhất một dòng đăng ký đã duyệt', group: 'tour' },
-  allViewersJoined: { label: 'Mọi điểm xem đã vào phòng chờ (khi bắt đầu sớm)', group: 'tour' },
+  allViewersJoined: { label: 'Điểm xem đã vào phòng chờ (chỉ cảnh báo, không chặn)', group: 'tour' },
   robotEligibleForRoute: { label: 'Robot dùng được cho tuyến', group: 'robot' },
   robotMapMatchesRoute: { label: 'Robot được gán đúng bản đồ của tuyến', group: 'robot' },
   robotNotNeedsInspection: { label: 'Robot không chờ kiểm tra tại chỗ', group: 'robot' },
@@ -54,8 +54,8 @@ export function checkInfo(id: string): { label: string; group: CheckGroup } {
   return CHECKS[id] ?? { label: CHECK_GROUP_LABEL.other, group: 'other' }
 }
 
-/** Informational rows always pass and never block (ADR-0042 D3). */
-export const INFO_CHECKS = new Set(['batteryInfo'])
+/** Informational rows always pass and never block (ADR-0042 D3, ADR-0057). */
+export const INFO_CHECKS = new Set(['batteryInfo', 'allViewersJoined'])
 
 /** A check the server did not run because a prerequisite failed is not a root cause. */
 export type CheckVerdict = 'passed' | 'failed' | 'notRun' | 'info'
@@ -100,7 +100,6 @@ export const CHECK_FIX: Record<string, string> = {
   revisionStillSchedulable: 'Tuyến cần một lần chạy thử đạt (Technical Staff).',
   noPendingDecisions: 'Duyệt hết các đăng ký còn chờ ở mục Đăng ký đoàn.',
   hasAcceptedRows: 'Không còn ai để chạy Tour cho. Mở lại rồi hủy Tour để nhả robot và ca.',
-  allViewersJoined: 'Chờ các điểm xem vào phòng chờ. Từ giờ công bố mục này tự đạt.',
   robotEligibleForRoute: 'Technical Staff kiểm tra robot với phiên bản tuyến.',
   robotMapMatchesRoute: 'Technical Staff gán đúng bản đồ của tuyến cho robot.',
   robotNotNeedsInspection: 'Kiểm tra robot tại chỗ rồi xác nhận ở Robot & thiết bị.',
