@@ -1,5 +1,6 @@
 import { CalendarDays, ClipboardList, LayoutDashboard } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
+import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
 /**
  * Representative navigation (flow review §4.1): the overview, the Tours a
@@ -9,7 +10,7 @@ import type { NavItem, NavSection } from '../../components/ui/nav-types'
  */
 export const REP_NAV_SECTIONS: NavSection[] = [
   {
-    label: null,
+    label: 'Tham quan',
     items: [
       { label: 'Tổng quan', path: '/dai-dien', icon: LayoutDashboard },
       { label: 'Buổi tham quan', path: '/dai-dien/buoi', icon: CalendarDays },
@@ -17,6 +18,9 @@ export const REP_NAV_SECTIONS: NavSection[] = [
     ],
   },
 ]
+
+/** The sidebar's entries, drawn by the same grouped sidebar as the Staff console. */
+export const REP_NAV_ENTRIES: GroupedNavEntry[] = sectionNav(REP_NAV_SECTIONS)
 
 export const REP_NAV: NavItem[] = REP_NAV_SECTIONS.flatMap((section) => section.items)
 
@@ -27,4 +31,17 @@ export function repActivePath(pathname: string): string | null {
   if (path.startsWith('/dai-dien/buoi')) return '/dai-dien/buoi'
   if (path.startsWith('/dai-dien/dang-ky')) return '/dai-dien/dang-ky'
   return null
+}
+
+/** The header's breadcrumb and page name for a Representative path. */
+export function repPageTitle(pathname: string): { section: string; parent: string | null; title: string } {
+  const path = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname
+  if (path.startsWith('/dai-dien/ho-so')) return { section: 'Tài khoản', parent: null, title: 'Hồ sơ của tôi' }
+  const section = REP_NAV_SECTIONS[0].label ?? 'Đại diện trường'
+  if (/^\/dai-dien\/buoi\/[^/]+\/dang-ky$/.test(path)) return { section, parent: 'Buổi tham quan', title: 'Đăng ký tham quan' }
+  if (/^\/dai-dien\/buoi\/[^/]+$/.test(path)) return { section, parent: 'Buổi tham quan', title: 'Chi tiết buổi' }
+  if (/^\/dai-dien\/dang-ky\/[^/]+\/sua$/.test(path)) return { section, parent: 'Đăng ký của tôi', title: 'Sửa đăng ký' }
+  if (/^\/dai-dien\/dang-ky\/[^/]+$/.test(path)) return { section, parent: 'Đăng ký của tôi', title: 'Chi tiết đăng ký' }
+  const current = repActivePath(path)
+  return { section, parent: null, title: REP_NAV.find((item) => item.path === current)?.label ?? 'Đại diện trường' }
 }

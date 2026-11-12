@@ -1,19 +1,21 @@
-/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · scope: app · v2.0.0 */
+/* Base of the Representative page area (the shell's <main>). The shell chrome is Tailwind,
+ * shared with the Staff console, so nothing here reaches the sidebar or the header. */
 html, body { overflow-x: clip; }
-.rep-app { min-height: 100dvh; display: flex; flex-direction: column; background: var(--rep-bg); color: var(--rep-ink); font-family: var(--rep-font); font-size: var(--rep-text-md); line-height: 1.5; font-synthesis: none; scrollbar-color: var(--rep-ink-3) var(--rep-sunk); }
+.rep-app { background: transparent; color: var(--rep-ink); font-family: var(--rep-font); font-size: var(--rep-text-sm); line-height: 1.5; font-synthesis: none; -webkit-font-smoothing: antialiased; scrollbar-color: #cbd5e1 transparent; }
 .rep-app *, .rep-app *::before, .rep-app *::after { box-sizing: border-box; }
-.rep-app ::selection { background: var(--rep-accent); color: var(--rep-accent-ink); }
+.rep-app ::selection { background: #dbeafe; color: var(--rep-ink); }
 .rep-app input, .rep-app textarea { caret-color: var(--rep-focus); }
 .rep-app h1, .rep-app h2, .rep-app h3 { font-family: var(--rep-font); color: var(--rep-ink); font-weight: 700; line-height: 1.25; overflow-wrap: break-word; min-width: 0; text-wrap: balance; margin: 0; }
-.rep-app h1 { font-size: 1.75rem; letter-spacing: -.01em; } .rep-app h2 { font-size: 1.125rem; } .rep-app h3 { font-size: var(--rep-text-md); }
+.rep-app h1 { font-size: 1.75rem; letter-spacing: -.025em; } .rep-app h2 { font-size: 1rem; letter-spacing: -.01em; } .rep-app h3 { font-size: .9375rem; }
 .rep-app p { margin: 0; text-wrap: pretty; }
 .rep-app a { color: inherit; text-underline-offset: .2em; }
 .rep-app button, .rep-app input, .rep-app textarea, .rep-app select { font: inherit; }
 .rep-app button { cursor: pointer; }
 .rep-app button:disabled, .rep-app input:disabled, .rep-app textarea:disabled, .rep-app select:disabled, .rep-app [aria-disabled='true'] { opacity: .55; cursor: not-allowed; }
 .rep-app button[aria-busy='true'] { cursor: progress; }
-.rep-app :focus-visible { outline: 3px solid var(--rep-focus); outline-offset: 3px; }
-.rep-app button:active, .rep-app .rep-btn:active { transform: translateY(1px); }
+/* The Staff console's focus ring: a 2px blue ring with a small white gap. */
+.rep-app :focus-visible { outline: 2px solid var(--rep-ring); outline-offset: 2px; }
+.rep-app button:active, .rep-app .rep-btn:active { transform: scale(.98); }
 .rep-app svg { flex-shrink: 0; }
 .rep-app img { max-width: 100%; height: auto; }
 .rep-app dl, .rep-app dd { margin: 0; }

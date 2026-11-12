@@ -1,18 +1,18 @@
-/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · scope: app · v2.0.0 */
+/* The Representative bell, drawn like the Staff console's (StaffBell): round button, small count pill, white popover. */
 .rep-bell { position: relative; }
 .rep-bell-btn { position: relative; }
-.rep-bell-btn[data-open] { background: var(--rep-sunk); color: var(--rep-ink); }
-.rep-bell-count { position: absolute; top: 2px; right: 0; display: grid; min-width: 18px; height: 18px; place-items: center; padding-inline: var(--rep-space-2xs); border-radius: var(--rep-radius); background: var(--rep-info-bg); color: var(--rep-info); font-size: var(--rep-text-xs); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
-.rep-bell-panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 100; display: flex; width: min(390px,calc(100dvw - 32px)); max-height: min(600px,calc(100dvh - 112px)); flex-direction: column; border: 1px solid var(--rep-line-2); border-radius: var(--rep-radius); background: var(--rep-surface); color: var(--rep-ink); }
-.rep-bell-head { display: flex; align-items: center; justify-content: space-between; gap: var(--rep-space-sm); border-bottom: 1px solid var(--rep-line); padding: var(--rep-space-sm) var(--rep-space-md); }
-.rep-bell-head p { display: flex; align-items: center; gap: var(--rep-space-xs); font-size: var(--rep-text-sm); font-weight: 600; }
-.rep-bell-head p span { font-size: var(--rep-text-xs); color: var(--rep-ink-2); }
-.rep-bell-head button { display: inline-flex; align-items: center; gap: var(--rep-space-xs); min-height: var(--rep-hit); padding: var(--rep-space-xs); border: 0; border-radius: var(--rep-radius); background: transparent; color: var(--rep-green); font-size: var(--rep-text-xs); }
-.rep-bell-head button:hover { background: var(--rep-sunk); }
-.rep-bell-list { display: grid; flex: 1; overflow-y: auto; padding: var(--rep-space-xs) !important; }
-.rep-bell-item { display: flex; min-width: 0; padding: var(--rep-space-sm); border-bottom: 1px solid var(--rep-line); color: inherit; text-decoration: none; }
+.rep-bell-btn[data-open] { background: #eceef1; color: #374151; }
+.rep-bell-count { position: absolute; top: 2px; right: 0; display: grid; min-width: 16px; height: 16px; place-items: center; padding-inline: var(--rep-space-2xs); border-radius: 999px; background: #2d719e; color: #fff; box-shadow: 0 0 0 2px #f6f7f9; font-size: 9.5px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.rep-bell-panel { position: absolute; top: calc(100% + 10px); right: 0; z-index: 100; display: flex; width: min(380px,calc(100dvw - 32px)); max-height: min(560px,calc(100dvh - 112px)); flex-direction: column; overflow: hidden; border: 1px solid #e5e7eb; border-radius: var(--rep-radius); background: var(--rep-surface); color: var(--rep-ink); font-family: var(--rep-font); box-shadow: 0 16px 40px -16px rgba(17,24,39,.3); }
+.rep-bell-head { display: flex; align-items: center; justify-content: space-between; gap: var(--rep-space-sm); border-bottom: 1px solid #f1f2f4; padding: var(--rep-space-sm) var(--rep-space-md); }
+.rep-bell-head p { display: flex; align-items: center; gap: var(--rep-space-xs); margin: 0; color: #111827; font-size: var(--rep-text-sm); font-weight: 700; }
+.rep-bell-head p span { padding: 2px 8px; border-radius: 999px; background: var(--rep-accent); color: var(--rep-accent-ink); font-size: 11px; font-weight: 700; }
+.rep-bell-head button { display: inline-flex; align-items: center; gap: var(--rep-space-xs); min-height: var(--rep-hit); padding: var(--rep-space-xs); border: 0; border-radius: var(--rep-radius-sm); background: transparent; color: var(--rep-green); font-size: var(--rep-text-xs); font-weight: 600; }
+.rep-bell-head button:hover { background: #f1f8fe; }
+.rep-bell-list { display: grid; flex: 1; overflow-y: auto; margin: 0; padding: var(--rep-space-xs) !important; list-style: none; }
+.rep-bell-item { display: flex; min-width: 0; padding: var(--rep-space-sm); border-radius: 10px; color: inherit; text-decoration: none; }
 .rep-bell-item:hover { background: var(--rep-sunk); }
-.rep-bell-item[data-unread] { background: var(--rep-sunk); }
+.rep-bell-item[data-unread] { background: #f1f8fe; }
 .rep-bell-copy { display: grid; min-width: 0; gap: var(--rep-space-2xs); }
 .rep-bell-copy strong { font-size: var(--rep-text-sm); font-weight: 600; line-height: 1.4; }
 .rep-bell-item:not([data-unread]) .rep-bell-copy strong { color: var(--rep-ink-2); font-weight: 400; }
@@ -24,4 +24,4 @@
 .rep-bell-foot { display: flex; align-items: center; justify-content: center; min-height: var(--rep-hit); border-top: 1px solid var(--rep-line); padding: var(--rep-space-sm); color: var(--rep-green) !important; font-size: var(--rep-text-sm); text-decoration: none; }
 .rep-bell-foot:hover { background: var(--rep-sunk); }
 .rep-bell-coverage { padding: var(--rep-space-sm); color: var(--rep-ink-2); font-size: var(--rep-text-xs); }
-@media (max-width: 959px) { .rep-bell-panel { position: fixed; top: 132px; right: var(--rep-space-md); left: var(--rep-space-md); width: auto; max-height: calc(100dvh - 156px); } }
+@media (max-width: 639px) { .rep-bell-panel { position: fixed; top: 84px; right: var(--rep-space-md); left: var(--rep-space-md); width: auto; max-height: calc(100dvh - 108px); } }
