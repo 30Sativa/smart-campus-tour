@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Html, Line, PerformanceMonitor } from '@react-three/drei'
+import { Html, Line, PerformanceMonitor, useProgress } from '@react-three/drei'
 import { AdditiveBlending, Fog, Group, Mesh, MeshBasicMaterial, Object3D, Vector3 } from 'three'
-import { Bot, Camera, Gauge, Hand, Moon, RotateCcw, Sparkles, Sun } from 'lucide-react'
+import { Bot, Camera, Eye, Gauge, Hand, MapPin, Maximize2, Minimize2, Moon, RotateCcw, Settings2, Sparkles, Sun } from 'lucide-react'
 import { followPath, inputFromKeys, nearestStop, stepDrive, type DrivePoint, type DriveState } from './drive'
+import { DriveLoader } from './DriveLoader'
 import { LidarSweep, LoadBar, RobotBody } from './RobotBody'
 import { ACCENT, WIDE, attachFog, freshDrive, isTyping, onFloor, setFog, slideFraming, type Framing, type RigState } from './stage'
 import { nextTurn } from './worlds/geometry'
@@ -262,7 +263,7 @@ function Keycap({ id, label, held, onHold, onPress, children, wide = false }: { 
   return (
     <button
       type="button"
-      className="lp3-td__key"
+      className="lp3-dv__key"
       data-wide={wide}
       aria-label={label}
       aria-pressed={id ? Boolean(held) : undefined}
@@ -285,6 +286,55 @@ const meters = (value: number) => Math.round(value).toLocaleString('vi-VN')
 const keyName = (key: string) => key.toLowerCase()
 const asInput = (name: string) => ({ arrowup: 'ArrowUp', arrowdown: 'ArrowDown', arrowleft: 'ArrowLeft', arrowright: 'ArrowRight' } as Record<string, string>)[name] ?? name
 
+/** Mounts once everything beside it inside the canvas has stopped loading: the robot and the map are up. */
+function SceneUp({ onUp }: { onUp: () => void }) {
+  useEffect(() => { onUp() }, [onUp])
+  return null
+}
+
+/** Longest the loading screen waits for the extras (real trees, people) once the map itself is up, ms. */
+const EXTRAS_PATIENCE = 12000
+
+/**
+ * The loading screen over the stage until the robot and the map are up and
+ * the files still downloading have arrived (or a while has passed: the simple
+ * trees and people stand in meanwhile), then a fade.
+ */
+function useLoading(sceneUp: boolean) {
+  const { active, progress } = useProgress()
+  const [patient, setPatient] = useState(false)
+  const [gone, setGone] = useState(false)
+  const ready = sceneUp && (!active || patient)
+  useEffect(() => {
+    if (!sceneUp) return
+    const id = window.setTimeout(() => setPatient(true), EXTRAS_PATIENCE)
+    return () => window.clearTimeout(id)
+  }, [sceneUp])
+  useEffect(() => {
+    if (!ready) return
+    const id = window.setTimeout(() => setGone(true), 700)
+    return () => window.clearTimeout(id)
+  }, [ready])
+  // Before anything starts downloading the share is unknown (a moving bar), not the last page's 100%.
+  return { ready, gone, progress: active ? progress : sceneUp ? 100 : null }
+}
+
+/** Fills the screen with the stage (and back), where the browser allows it. */
+function useFullscreen(target: MutableRefObject<HTMLElement | null>) {
+  const [full, setFull] = useState(false)
+  const allowed = typeof document !== 'undefined' && Boolean(document.fullscreenEnabled)
+  useEffect(() => {
+    const sync = () => setFull(document.fullscreenElement !== null && document.fullscreenElement === target.current)
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [target])
+  const toggle = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined)
+    else void target.current?.requestFullscreen().catch(() => undefined)
+  }, [target])
+  return { allowed, full, toggle }
+}
+
 type StageProps = {
   world: DriveWorld
   quality: Quality
@@ -296,7 +346,7 @@ type StageProps = {
   onNight: (night: boolean) => void
 }
 
-/** One drive on one map; switching maps starts a new one. */
+/** One drive on one map; switching maps starts a new one (and shows the loading screen again). */
 function DriveStage({ world, quality, onQuality, night, intro, onWorld, onNight }: StageProps) {
   const lite = quality === 'smooth'
   const driveRef = useRef<DriveState>(freshDrive(world))
@@ -327,9 +377,15 @@ function DriveStage({ world, quality, onQuality, night, intro, onWorld, onNight 
   const [toast, setToast] = useState<string | null>(null)
   const [started, setStarted] = useState(false)
   const [reset, setReset] = useState(0)
+  /** The look, map and day/night settings, folded into the panel's gear. */
+  const [settings, setSettings] = useState(false)
+  const [sceneUp, setSceneUp] = useState(false)
+  const onSceneUp = useCallback(() => setSceneUp(true), [])
+  const loading = useLoading(sceneUp)
+  const screen = useFullscreen(stageRef)
   const sky = world.sky(night)
-  // The robot sits right of the title (wide), or a little above the middle, clear of the bottom sheet (narrow).
-  const framing: Framing = wide ? { x: -0.06, y: 0.04 } : { x: 0, y: 0.2 }
+  // The robot a little left of the middle, clear of the panel in the bottom right (wide), or above the panel (narrow).
+  const framing: Framing = wide ? { x: 0.05, y: 0.03 } : { x: 0, y: 0.16 }
 
   useEffect(() => {
     if (!toast) return
@@ -486,22 +542,20 @@ function DriveStage({ world, quality, onQuality, night, intro, onWorld, onNight 
 
   return (
     <div
-      className="lp3-td"
+      className="lp3-dv"
       ref={stageRef}
       tabIndex={-1}
       role="application"
       aria-label={`Robot trên bản đồ ${world.label}. W A S D hoặc phím mũi tên để lái, Space phanh, P tự hành, C đổi máy quay${world.hasNight ? ', N ngày hoặc đêm' : ''}.`}
-      data-mode="drive"
-      data-view="drive"
       data-night={night && world.hasNight}
-      data-story="done"
+      data-ready={loading.ready}
       onBlur={event => {
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
         keysRef.current.clear()
         setHeld(new Set())
       }}
     >
-      <Canvas className="lp3-td__canvas" shadows dpr={dpr} camera={{ position: [4, 17, 12], fov: 46, near: 0.02, far: 600 }}>
+      <Canvas className="lp3-dv__canvas" shadows dpr={dpr} camera={{ position: [4, 17, 12], fov: 46, near: 0.02, far: 600 }}>
         <color attach="background" args={[sky.background]} />
         <PerformanceMonitor onDecline={declined} onIncline={inclined} />
         <SkyFog world={world} night={night} />
@@ -517,76 +571,80 @@ function DriveStage({ world, quality, onQuality, night, intro, onWorld, onNight 
         />
         <DriveLoop world={world} driveRef={driveRef} keysRef={keysRef} blockedRef={blockedRef} senseRef={senseRef} autopilot={autopilot} reset={reset} onArrive={onArrive} onHud={setHud} onAutopilotDone={onAutopilotDone} />
         <DriveCamera world={world} driveRef={driveRef} view={view} framing={framing} />
+        <SceneUp onUp={onSceneUp} />
       </Canvas>
-      <LoadBar label="Đang tải bản đồ" />
-      <div className="lp3-td__scrim" aria-hidden="true" />
+      {loading.gone && <LoadBar label="Đang tải mô hình" />}
 
-      <p className="lp3-td__where" aria-hidden="true"><i />{world.title}</p>
-      <div className="lp3-td__intro">{intro}</div>
-      {!started && <p className="lp3-td__hint" aria-hidden="true">Nhấn W hoặc ↑ để lái robot</p>}
-      {toast && <p className="lp3-td__toast" role="status">{toast}</p>}
+      <div className="lp3-dv__top">
+        {intro}
+        <p className="lp3-dv__where" aria-hidden="true"><i />{world.title}</p>
+      </div>
+      {screen.allowed && (
+        <button type="button" className="lp3-dv__full" onClick={screen.toggle} aria-label={screen.full ? 'Thoát toàn màn hình' : 'Toàn màn hình'} title={screen.full ? 'Thoát toàn màn hình (Esc)' : 'Toàn màn hình'}>
+          {screen.full ? <Minimize2 size={17} aria-hidden="true" /> : <Maximize2 size={17} aria-hidden="true" />}
+        </button>
+      )}
+      {loading.ready && !started && <p className="lp3-dv__hint" aria-hidden="true">Nhấn W hoặc ↑ để lái robot</p>}
+      {toast && <p className="lp3-dv__toast" role="status">{toast}</p>}
 
-      <aside className="lp3-td__panel" aria-label="Bảng điều khiển robot">
-        <div className="lp3-td__row lp3-td__row--head">
-          <span>Cách thức</span>
-          <b><i data-live="true" />{status}</b>
+      <aside className="lp3-dv__panel" aria-label="Bảng điều khiển robot">
+        <div className="lp3-dv__head">
+          <b className="lp3-dv__mode" data-auto={autopilot !== null}><i aria-hidden="true" />{status}</b>
+          <span className="lp3-dv__speed"><strong>{kmh(hud.speed)}</strong> km/h</span>
+          {world.sense
+            ? <span className="lp3-dv__count" title="Đối tượng robot đang theo dõi"><Eye size={13} aria-hidden="true" />{hud.tracked}<span className="sr-only"> đối tượng đang theo dõi</span></span>
+            : <span className="lp3-dv__count" title="Điểm dừng đã ghé"><MapPin size={13} aria-hidden="true" />{visited.size}/{world.stops.length}<span className="sr-only"> điểm dừng đã ghé</span></span>}
         </div>
-        <div className="lp3-td__row lp3-td__row--pick">
-          <span>Bản đồ</span>
-          <div className="lp3-td__seg" role="group" aria-label="Bản đồ">
-            {WORLDS.map(item => (
-              <button key={item.id} type="button" aria-pressed={item.id === world.id} onClick={() => onWorld(item.id)}>{item.label}</button>
-            ))}
-          </div>
+        <p className="lp3-dv__msg" data-alert={hud.blocked || hud.person}>{message}</p>
+        <p className="lp3-dv__sub">{world.sense ? `${visited.size}/${world.stops.length} điểm · ` : ''}{nearest}</p>
+        <div className="lp3-dv__keys" role="group" aria-label="Phím lái">
+          <Keycap id="up" label="Tiến (W)" held={held.has('up')} onHold={hold}>W</Keycap>
+          <Keycap id="left" label="Rẽ trái (A)" held={held.has('left')} onHold={hold}>A</Keycap>
+          <Keycap id="down" label="Lùi (S)" held={held.has('down')} onHold={hold}>S</Keycap>
+          <Keycap id="right" label="Rẽ phải (D)" held={held.has('right')} onHold={hold}>D</Keycap>
+          <Keycap id="brake" label="Phanh (Space)" held={held.has('brake')} onHold={hold} wide>Space</Keycap>
+          <Keycap label="Tự hành (P)" onPress={toggleAutopilot}>P</Keycap>
+          <Keycap label="Đổi máy quay (C)" onPress={nextCamera}>C</Keycap>
         </div>
-        <div className="lp3-td__row lp3-td__row--pick">
-          <span>Đồ họa</span>
-          <div className="lp3-td__seg" role="group" aria-label="Chất lượng đồ họa">
-            <button type="button" aria-pressed={!lite} onClick={() => onQuality('high')} title="Cây, người thật và bóng đổ"><Sparkles size={14} aria-hidden="true" />Đẹp</button>
-            <button type="button" aria-pressed={lite} onClick={() => onQuality('smooth')} title="Nhẹ hơn cho máy yếu"><Gauge size={14} aria-hidden="true" />Mượt</button>
-          </div>
-        </div>
-        {world.hasNight && (
-          <div className="lp3-td__row lp3-td__row--pick">
-            <span>Bối cảnh</span>
-            <div className="lp3-td__seg" role="group" aria-label="Ngày hoặc đêm">
-              <button type="button" aria-pressed={!night} onClick={() => onNight(false)}><Sun size={14} aria-hidden="true" />Ngày</button>
-              <button type="button" aria-pressed={night} onClick={() => onNight(true)}><Moon size={14} aria-hidden="true" />Đêm</button>
+        {settings && (
+          <div className="lp3-dv__settings" id="lp3-dv-settings">
+            <div className="lp3-dv__row">
+              <span>Bản đồ</span>
+              <div className="lp3-dv__seg" role="group" aria-label="Bản đồ">
+                {WORLDS.map(item => (
+                  <button key={item.id} type="button" aria-pressed={item.id === world.id} onClick={() => onWorld(item.id)}>{item.label}</button>
+                ))}
+              </div>
             </div>
+            <div className="lp3-dv__row">
+              <span>Đồ họa</span>
+              <div className="lp3-dv__seg" role="group" aria-label="Chất lượng đồ họa">
+                <button type="button" aria-pressed={!lite} onClick={() => onQuality('high')} title="Cây, người thật và bóng đổ"><Sparkles size={13} aria-hidden="true" />Đẹp</button>
+                <button type="button" aria-pressed={lite} onClick={() => onQuality('smooth')} title="Nhẹ hơn cho máy yếu"><Gauge size={13} aria-hidden="true" />Mượt</button>
+              </div>
+            </div>
+            {world.hasNight && (
+              <div className="lp3-dv__row">
+                <span>Bối cảnh</span>
+                <div className="lp3-dv__seg" role="group" aria-label="Ngày hoặc đêm">
+                  <button type="button" aria-pressed={!night} onClick={() => onNight(false)}><Sun size={13} aria-hidden="true" />Ngày</button>
+                  <button type="button" aria-pressed={night} onClick={() => onNight(true)}><Moon size={13} aria-hidden="true" />Đêm</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
-        <div className="lp3-td__stats">
-          <div><span>Tốc độ</span><strong>{kmh(hud.speed)}<small>km/h</small></strong></div>
-          {world.sense
-            ? <div><span>Theo dõi</span><strong>{hud.tracked}<small>đối tượng</small></strong></div>
-            : <div><span>Điểm dừng</span><strong>{visited.size}<small>/ {world.stops.length} đã ghé</small></strong></div>}
-        </div>
-        <div className="lp3-td__row lp3-td__row--status">
-          <span data-alert={hud.blocked || hud.person}>{message}</span>
-          <span>{world.sense ? `${visited.size}/${world.stops.length} điểm · ` : ''}{nearest}</span>
-        </div>
-        <div className="lp3-td__keys">
-          <div className="lp3-td__keyline">
-            <Keycap id="up" label="Tiến (W)" held={held.has('up')} onHold={hold}>W</Keycap>
-            <Keycap id="left" label="Rẽ trái (A)" held={held.has('left')} onHold={hold}>A</Keycap>
-            <Keycap id="down" label="Lùi (S)" held={held.has('down')} onHold={hold}>S</Keycap>
-            <Keycap id="right" label="Rẽ phải (D)" held={held.has('right')} onHold={hold}>D</Keycap>
-            <small>hoặc mũi tên · lái xe</small>
-          </div>
-          <div className="lp3-td__keyline">
-            <Keycap id="brake" label="Phanh (Space)" held={held.has('brake')} onHold={hold} wide>Space</Keycap><small>phanh</small>
-            <Keycap label="Tự hành (P)" onPress={toggleAutopilot}>P</Keycap><small>tự hành</small>
-            <Keycap label="Đổi máy quay (C)" onPress={nextCamera}>C</Keycap><small>máy quay</small>
-          </div>
-        </div>
-        <div className="lp3-td__actions">
-          <button type="button" className="lp3-td__btn" aria-pressed={autopilot !== null} onClick={toggleAutopilot}>
-            {autopilot ? <Hand size={15} aria-hidden="true" /> : <Bot size={15} aria-hidden="true" />}{autopilot ? 'Lái tay' : 'Tự hành'}
+        <div className="lp3-dv__actions">
+          <button type="button" className="lp3-dv__btn lp3-dv__btn--main" aria-pressed={autopilot !== null} onClick={toggleAutopilot}>
+            {autopilot ? <Hand size={14} aria-hidden="true" /> : <Bot size={14} aria-hidden="true" />}{autopilot ? 'Lái tay' : 'Tự hành'}
           </button>
-          <button type="button" className="lp3-td__btn" onClick={nextCamera} aria-label={`Máy quay: ${camLabel}. Bấm để đổi`}><Camera size={15} aria-hidden="true" />{camLabel}</button>
-          <button type="button" className="lp3-td__btn lp3-td__btn--icon" onClick={restart} aria-label="Đặt lại" title="Đặt lại (R)"><RotateCcw size={15} aria-hidden="true" /></button>
+          <button type="button" className="lp3-dv__btn" onClick={nextCamera} aria-label={`Máy quay: ${camLabel}. Bấm để đổi`}><Camera size={14} aria-hidden="true" />{camLabel}</button>
+          <button type="button" className="lp3-dv__btn lp3-dv__btn--icon" onClick={restart} aria-label="Đặt lại" title="Đặt lại (R)"><RotateCcw size={14} aria-hidden="true" /></button>
+          <button type="button" className="lp3-dv__btn lp3-dv__btn--icon" onClick={() => setSettings(value => !value)} aria-expanded={settings} aria-controls="lp3-dv-settings" aria-label="Cài đặt: bản đồ, đồ họa, ngày hoặc đêm" title="Cài đặt"><Settings2 size={14} aria-hidden="true" /></button>
         </div>
       </aside>
+
+      {!loading.gone && <DriveLoader progress={loading.progress} leaving={loading.ready} label={`Đang tải ${world.label}`} />}
     </div>
   )
 }
