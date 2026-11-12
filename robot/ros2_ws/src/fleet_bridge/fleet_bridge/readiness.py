@@ -52,7 +52,7 @@ def _localized(obs: Observations, limits: ReadinessLimits) -> bool | None:
     if obs.tf_age_sec is None or obs.tf_age_sec > limits.tf_max_age_sec:
         return False
     xx, yy, yaw = obs.amcl_covariance
-    return xx <= limits.max_xy_variance and yy <= limits.max_xy_variance and yaw <= limits.max_yaw_variance
+    return bool(xx <= limits.max_xy_variance and yy <= limits.max_xy_variance and yaw <= limits.max_yaw_variance)
 
 
 def _combine(conditions: list[bool | None]) -> bool | None:

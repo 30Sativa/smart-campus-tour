@@ -55,6 +55,18 @@ class LocalizedTests(unittest.TestCase):
         self.assertIs(True, evaluate(replace(READY, amcl_covariance=(0.25, 0.25, 0.07)), loose).localized)
 
 
+    def test_numpy_covariance_still_gives_a_json_bool(self):
+        # rclpy hands amcl_pose covariance over as numpy; a numpy.bool_ breaks json.dumps in Fleet Sync.
+        try:
+            import numpy
+        except ImportError:
+            self.skipTest('numpy not installed')
+        covariance = tuple(numpy.float64(value) for value in (0.05, 0.05, 0.02))
+        result = evaluate(replace(READY, amcl_covariance=covariance), LIMITS)
+        self.assertIs(result.localized, True)
+        json.dumps({'localized': result.localized, 'motionReady': result.motion_ready})
+
+
 class MotionReadyTests(unittest.TestCase):
     def test_true_when_every_condition_holds(self):
         result = run()
