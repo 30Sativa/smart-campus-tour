@@ -8,7 +8,7 @@ import { prefersReducedMotion } from '../landing-motion'
 import { ROBOT_DRIVE } from '../landing-content'
 
 // three.js and the robot model load only once section 04 comes near the screen; the maps live on the test-drive page.
-const RobotShowcase = lazy(() => import('../robot-explode/RobotShowcase'))
+const RobotPartsViewer = lazy(() => import('../robot-explode/RobotPartsViewer'))
 
 
 const DONE = STORY_CHAPTERS.length
@@ -115,7 +115,7 @@ export function TechDrive() {
         {mode === '3d' ? (
           <ViewerBoundary fallback={still('Không tải được mô hình 3D.', false)}>
             <Suspense fallback={still('Đang tải mô hình robot…', true)}>
-              <RobotShowcase visible={visible} intro={intro} storyRef={storyRef} chapter={chapter} driveTo={ROBOT_DRIVE.to} />
+              <RobotPartsViewer visible={visible} intro={intro} storyRef={storyRef} chapter={chapter} driveTo={ROBOT_DRIVE.to} />
             </Suspense>
           </ViewerBoundary>
         ) : still(mode === 'none' ? 'Trình duyệt này không hiển thị được mô hình 3D.' : 'Đang tải mô hình robot…', mode === 'waiting')}

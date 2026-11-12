@@ -7,7 +7,7 @@ import '../../features/landing/landing.css'
 import '../../features/landing/home-3d.css'
 
 // three.js, the robot and the maps load with this page only.
-const RobotDrive = lazy(() => import('../../features/landing/robot-explode/RobotDrive'))
+const RobotDriveViewer = lazy(() => import('../../features/landing/robot-explode/RobotDriveViewer'))
 
 const noScrollLock = () => {}
 
@@ -17,7 +17,7 @@ function Intro() {
     <>
       <span className="lp3-td__kicker"><i aria-hidden="true" />Lái thử · mô phỏng trực tiếp</span>
       <h1 className="lp3-td__title">Lái robot <em>quanh khuôn viên.</em></h1>
-      <p className="lp3-td__lead">W A S D hoặc phím mũi tên để lái, P để robot tự đi qua các điểm dừng, C đổi máy quay. Bấm vào robot để xem cấu tạo.</p>
+      <p className="lp3-td__lead">W A S D hoặc phím mũi tên để lái, Space phanh, P để robot tự đi qua các điểm dừng, C đổi máy quay.</p>
       <a href="/#cong-nghe" className="lp3-td__btn lp3-td__more"><ArrowLeft size={16} aria-hidden="true" />Về trang chủ</a>
     </>
   )
@@ -26,8 +26,9 @@ function Intro() {
 /**
  * "/lai-thu-robot": the test drive, the whole screen under the navigation.
  * The robot on the FPT University campus demo map (people and traffic, day or
- * night) or the operations Twin's floor; the home page's section 04 shows the
- * robot alone and links here. A web simulation only: nothing is sent to a robot.
+ * night) or the operations Twin's floor. Driving only: the robot's parts are
+ * in the home page's section 04, which links here. A web simulation only:
+ * nothing is sent to a robot.
  */
 export default function RobotDrivePage() {
   const [webgl] = useState(canUseWebGL)
@@ -56,7 +57,7 @@ export default function RobotDrivePage() {
             {webgl ? (
               <ViewerBoundary fallback={still('Không tải được bản đồ 3D.', false)}>
                 <Suspense fallback={still('Đang tải bản đồ…', true)}>
-                  <RobotDrive intro={<Intro />} />
+                  <RobotDriveViewer intro={<Intro />} />
                 </Suspense>
               </ViewerBoundary>
             ) : still('Trình duyệt này không hiển thị được bản đồ 3D.', false)}
