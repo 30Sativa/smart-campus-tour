@@ -44,7 +44,8 @@ export type FleetConnection = RealtimeConnectionState
 export const FLEET_HUB_PATH = '/hubs/operations'
 /** Sent by the hub after a Tour command commits; carries nothing (docs/architecture.md §3.1.2). */
 export const TOUR_UPDATED = 'TourUpdated'
-const fleetKey = ['staff', 'fleet-telemetry'] as const
+/** Cache key of the latest `FleetUpdated` snapshot; readers outside React subscribe to it here. */
+export const fleetKey = ['staff', 'fleet-telemetry'] as const
 const RESTART_MS = 5_000
 
 /** Connection state is client state, shared by the shell and the pages reading telemetry. */

@@ -13,7 +13,7 @@ describe('OperationalTwin default fleet', () => {
       endPoint: { name: 'Sảnh', position: { x: 0, y: 0 } }, livestream: { state: 'Live' }, startChecks: [], revision: 1,
       allowedActions: Object.fromEntries(['start', 'hold', 'next', 'endEarly', 'retryLeg', 'rerunPoi', 'retryFront', 'confirmComplete'].map(key => [key, { allowed: false }])) as TourOperation['allowedActions'],
     } satisfies TourOperation
-    render(<OperationalTwin tour={tour} robots={[
+    const { rerender } = render(<OperationalTwin tour={tour} mapKey="map2-v2" robots={[
       { id: 'gazebo', name: 'Preview', operationalState: 'Idle', connectionState: 'Live', sensorHealth: 'Healthy', source: 'Gazebo', pose: { x: 1, y: 2, yaw: 0 } },
       { id: 'missing', name: 'Missing', operationalState: 'Idle', connectionState: 'Disconnected', sensorHealth: 'Unknown' },
     ]} />)
@@ -21,6 +21,12 @@ describe('OperationalTwin default fleet', () => {
     expect(screen.getByText(/có dữ liệu Gazebo/)).toBeInTheDocument()
     expect(screen.getByText('1 robot không gửi vị trí')).toBeInTheDocument()
     expect(screen.queryByText('R1')).not.toBeInTheDocument()
+    // Without a map calibrated for the model, nothing is placed at a guess.
+    rerender(<OperationalTwin tour={tour} mapKey="campus_v1" robots={[
+      { id: 'gazebo', name: 'Preview', operationalState: 'Idle', connectionState: 'Live', sensorHealth: 'Healthy', source: 'Gazebo', pose: { x: 1, y: 2, yaw: 0 } },
+    ]} />)
+    expect(screen.getByTestId('scene')).toHaveTextContent('0 robots')
+    expect(screen.getByText(/Chưa hiệu chỉnh tọa độ robot/)).toBeInTheDocument()
   })
   it('starts six local robots without a demo switch and toggles points independently', async () => {
     render(<OperationalTwin robots={[]} />)

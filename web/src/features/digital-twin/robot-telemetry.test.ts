@@ -35,7 +35,7 @@ describe('prepared robot telemetry', () => {
     expect(observationView(sample, 'disconnected', now).stale).toBe(true)
   })
   it('does not place physical poses without matching measured calibration', () => {
-    expect(observationView(sample, 'connected', now).scenePose).toBeNull()
+    expect(observationView({ ...sample, mapKey: 'campus_v1' }, 'connected', now).scenePose).toBeNull()
     expect(observationView(sample, 'connected', now, { ...calibrated, mapKey: 'other' }).scenePose).toBeNull()
     expect(observationView(sample, 'connected', now, calibrated).scenePose?.position).toEqual([13, 0, -4])
     expect(observationView(null, 'connected', now).scenePose).toBeNull()

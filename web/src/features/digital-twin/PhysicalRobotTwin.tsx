@@ -20,7 +20,11 @@ function reduce(state: State, action: Action): State {
   return { ...state, sample, rejected: sample === state.sample }
 }
 
-/** Prepared read-only surface. No production transport is bound before ADR-0008 passes. */
+/**
+ * Read-only view of the physical robot. `source` is the Staff `/hubs/operations`
+ * projection (ADR-0019 robot telemetry, see `fleet-telemetry-source.ts`); the
+ * robot is drawn only on a model its map is calibrated for (`map-config.ts`).
+ */
 export function PhysicalRobotTwin({ source }: { source?: RobotTelemetrySource }) {
   const [state, dispatch] = useReducer(reduce, initial)
   const [overhead, setOverhead] = useState(false)
@@ -38,8 +42,9 @@ export function PhysicalRobotTwin({ source }: { source?: RobotTelemetrySource })
   const map = mapConfigFor(sample?.mapKey)
   const selectedMap = map && (map.scene.modelKey ?? 'legacy') === modelKey ? map : null
   const view = observationView(sample, connection, now, selectedMap)
-  const robots = sample && view.scenePose && map ? [{
-    id: sample.robotId, name: sample.robotId, pose: sample.pose, transform: map.scene.transform,
+  const robots = sample && view.scenePose && selectedMap ? [{
+    id: sample.robotId, name: sample.robotId, pose: sample.pose, transform: selectedMap.scene.transform,
+    scale: selectedMap.scene.robotScale, groundY: selectedMap.scene.groundY,
     color: view.stale ? '#8a98ac' : '#2f62b8', active: false, focused: true, stale: view.stale, headYaw: 0,
   }] : []
   return <section className={`${panelClass} mb-5 overflow-hidden`} aria-label="Digital Twin robot thật">

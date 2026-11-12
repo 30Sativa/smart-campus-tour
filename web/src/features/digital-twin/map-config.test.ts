@@ -9,13 +9,25 @@ const config = (student: MapConfig['student2d']): MapConfig => ({
 })
 
 describe('map-config', () => {
-  it.each(['map2-v1', 'map2-v2'])('retains raster geometry without claiming calibration for %s', mapKey => {
+  it.each(['map2-v1', 'map2-v2'])('retains raster geometry and is calibrated only for the NVH 3D model for %s', mapKey => {
     const map = occupancyMapFor(mapKey, 'map')!
     const presentation = mapConfigFor(mapKey)!
     expect(presentation.grid).toEqual({ resolution: map.resolution, originX: map.origin[0],
       originY: map.origin[1], widthPx: map.width, heightPx: map.height })
-    expect(presentation.scene.calibrated).toBe(false)
+    expect(presentation.scene).toMatchObject({ calibrated: true, modelKey: 'nvh-v3' })
     expect(presentation.student2d.calibrated).toBe(false)
+  })
+
+  it('places map2 START at the corridor stub by room 617 on the NVH model', () => {
+    // Inverse of the display fit in campus-model.ts: scene -> glTF plan metres.
+    const k = 20 / (2.14561939 + 97.7707138)
+    const scene = mapConfigFor('map2-v2')!.scene
+    const { position, rotation } = mapToScenePose({ x: -0.319, y: -0.535, yaw: 0.077 }, scene.transform)
+    expect(position[0] / k + 35.803092385).toBeCloseTo(15.04, 1)
+    expect(position[2] / k - 47.812547205).toBeCloseTo(-75.58, 1)
+    // The map's y axis is the model's -z, so a heading keeps its sign in the scene.
+    expect(rotation).toBeCloseTo(0.077, 2)
+    expect(scene.robotScale).toBeCloseTo(k, 6)
   })
 
   it('keeps the old map-to-scene convention with the identity transform', () => {

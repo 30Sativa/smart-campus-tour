@@ -18,6 +18,7 @@
  */
 
 import { occupancyMapFor } from '../administration/pois/map/catalog'
+import type { CampusModelKey } from './campus-model'
 
 /** out = [a b; c d] · [x y] + [tx ty] */
 export type Affine2D = { a: number; b: number; c: number; d: number; tx: number; ty: number }
@@ -29,7 +30,14 @@ export type MapConfig = {
   /** Raster metadata exists only for registered occupancy snapshots. */
   grid?: { resolution: number; originX: number; originY: number; widthPx: number; heightPx: number }
   /** map metres -> 3D scene ground (u, v); the scene position is (u, 0, -v), Y up. */
-  scene: { transform: Affine2D; calibrated: boolean; modelKey?: string }
+  scene: {
+    transform: Affine2D
+    calibrated: boolean
+    modelKey?: CampusModelKey
+    /** Robot size and floor height in this scene; a model shrunk for display shrinks the robot with it. */
+    robotScale?: number
+    groundY?: number
+  }
   /** map metres -> Student 2D map in percent of its drawing (0-100 across, 0-100 down). */
   student2d: { transform: Affine2D; calibrated: boolean }
 }
@@ -43,6 +51,37 @@ function snapshotGrid(mapKey: string): MapConfig['grid'] {
 }
 
 /**
+ * NVH tầng 6 V3 (`robot/Map3d/NVHSV_Tang6_V3.glb`; the `_modern_v2` skin the
+ * app loads has the same footprint). `prepareCampusModel` scales its 99.92 m
+ * depth to 20 scene units and centres it; glTF y = 0 is the floor.
+ */
+const NVH_V3 = { scale: 20 / (2.14561939 + 97.7707138), centerX: 35.803092385, centerZ: -47.812547205 }
+
+/**
+ * map2 (`robot/robot_maps/map2.yaml` with `map_fix.pgm`, used by map2-v1 and
+ * map2-v2) onto the NVH V3 plan: glTF x = s·(cos θ·x + sin θ·y) + x0,
+ * glTF z = s·(sin θ·x − cos θ·y) + z0. Fitted on 2026-11-11 by matching every
+ * occupied map cell to the model's walls at lidar height: 95% within 0.3 m,
+ * median 0.06 m. START (`robot/robot_maps/poi_start.yaml`) lands at the
+ * corridor stub by room 617, where the robot is placed to begin a test.
+ * Refit if either the map or the model geometry changes.
+ */
+const MAP2_ON_NVH_V3 = { theta: -0.000638546, scale: 0.998519616, x0: 15.353942146, z0: -76.112732345 }
+
+function nvhV3Scene(fit: typeof MAP2_ON_NVH_V3): MapConfig['scene'] {
+  const k = NVH_V3.scale * fit.scale
+  const cos = k * Math.cos(fit.theta), sin = k * Math.sin(fit.theta)
+  // Scene (u, v) draws at (u, 0, -v), so v = -(scaled glTF z).
+  return {
+    transform: { a: cos, b: sin, c: -sin, d: cos, tx: NVH_V3.scale * (fit.x0 - NVH_V3.centerX), ty: -NVH_V3.scale * (fit.z0 - NVH_V3.centerZ) },
+    calibrated: true,
+    modelKey: 'nvh-v3',
+    robotScale: NVH_V3.scale,
+    groundY: NVH_V3.scale,
+  }
+}
+
+/**
  * Legacy presentation map key, not an alias for the physical map2-v1 raster.
  * The scene transform is the
  * identity the twin already uses for Gazebo and the mocks (map metres drawn
@@ -51,17 +90,16 @@ function snapshotGrid(mapKey: string): MapConfig['grid'] {
  * it needs its own three-point fit before real poses appear on it.
  */
 export const MAP_CONFIGS: Record<string, MapConfig> = {
-  // Physical occupancy snapshots have no measured transform to the 3D model yet.
   'map2-v1': {
     mapKey: 'map2-v1',
     grid: snapshotGrid('map2-v1'),
-    scene: { transform: IDENTITY, calibrated: false },
+    scene: nvhV3Scene(MAP2_ON_NVH_V3),
     student2d: { transform: IDENTITY, calibrated: false },
   },
   'map2-v2': {
     mapKey: 'map2-v2',
     grid: snapshotGrid('map2-v2'),
-    scene: { transform: IDENTITY, calibrated: false },
+    scene: nvhV3Scene(MAP2_ON_NVH_V3),
     student2d: { transform: IDENTITY, calibrated: false },
   },
   campus_v1: {
