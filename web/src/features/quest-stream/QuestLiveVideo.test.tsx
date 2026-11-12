@@ -219,6 +219,48 @@ describe('QuestLiveVideo (WebRTC / WHEP)', () => {
     await waitFor(() => expect(screen.getByText('Đang bật camera trên robot.')).toBeInTheDocument())
   })
 
+  it('fills the screen with the whole frame on request, and shrinks back', async () => {
+    let element: Element | null = null
+    const enter = (target: Element) => {
+      element = target
+      document.dispatchEvent(new Event('fullscreenchange'))
+    }
+    // jsdom has no Fullscreen API: the browser's is stood in for on this document.
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, get: () => true })
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => element })
+    const request = vi.fn(async function (this: Element) { enter(this) })
+    const exit = vi.fn(async () => {
+      element = null
+      document.dispatchEvent(new Event('fullscreenchange'))
+    })
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value: request })
+    Object.defineProperty(document, 'exitFullscreen', { configurable: true, value: exit })
+
+    const { container } = render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} label="AMR-01" />)
+    await negotiated(0)
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Xem toàn màn hình' })) })
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(request.mock.contexts[0]).toBe(container.querySelector('figure'))
+    expect(container.querySelector('video')).toHaveClass('object-contain')
+    expect(screen.getByText('AMR-01')).toBeInTheDocument()
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Thoát toàn màn hình' })) })
+    expect(exit).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Xem toàn màn hình' })).toBeInTheDocument()
+    expect(container.querySelector('video')).toHaveClass('object-cover')
+
+    delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen
+    delete (document as { exitFullscreen?: unknown }).exitFullscreen
+    delete (document as { fullscreenEnabled?: unknown }).fullscreenEnabled
+    delete (document as { fullscreenElement?: unknown }).fullscreenElement
+  })
+
+  it('offers no fullscreen button when the browser cannot do it', async () => {
+    render(<QuestLiveVideo source={{ whepUrl: WHEP_URL }} />)
+    await negotiated(0)
+    expect(screen.queryByRole('button', { name: 'Xem toàn màn hình' })).not.toBeInTheDocument()
+  })
+
   it('backs off 2 s, 4 s, 8 s, then every 10 s', () => {
     expect([0, 1, 2, 3, 9].map(retryDelayMs)).toEqual([2000, 4000, 8000, 10000, 10000])
   })

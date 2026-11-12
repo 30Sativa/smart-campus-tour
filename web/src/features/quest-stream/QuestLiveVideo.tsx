@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { LoaderCircle, Pause, Play, RotateCcw, VideoOff } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { LoaderCircle, Maximize2, Minimize2, Pause, Play, RotateCcw, VideoOff } from 'lucide-react'
 import { DEV_QUEST_SOURCE, type QuestSource } from './stream-access'
 import { usePageVisible } from './use-page-visible'
 import { useWhepStream, type LiveStreamStatus } from './use-whep-stream'
@@ -29,6 +29,11 @@ type QuestLiveVideoProps = {
   className?: string
 }
 
+/** iOS Safari has no element fullscreen; its <video> can still go fullscreen on its own. */
+type WebkitVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void; webkitSupportsFullscreen?: boolean }
+
+const CONTROL = 'inline-flex size-8 items-center justify-center rounded-full bg-[#1c1c1c]/60 text-white backdrop-blur transition-colors hover:bg-[#1c1c1c]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-reduce:transition-none'
+
 const PAUSED_BADGE = { label: 'Tạm dừng', className: 'bg-white/85 text-[#475569]', dot: 'bg-[#94a3b8]' }
 
 /**
@@ -36,20 +41,47 @@ const PAUSED_BADGE = { label: 'Tạm dừng', className: 'bg-white/85 text-[#475
  * as if it were live: without a stream it says why and keeps reconnecting.
  * The viewer can pause it, and a hidden tab stops pulling it; either way the
  * WebRTC connection is closed, so no bandwidth is spent on a picture nobody sees.
+ * It can also fill the screen (button, double-click; Esc leaves), keeping the
+ * status badge and controls on top of the picture.
  */
 export function QuestLiveVideo({ source = DEV_QUEST_SOURCE, label, offlineHint, className = '' }: QuestLiveVideoProps) {
+  const frameRef = useRef<HTMLElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [paused, setPaused] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
   const visible = usePageVisible()
   const src = source?.whepUrl ?? null
   const { status, retry } = useWhepStream(videoRef, src, !paused && visible, source?.token)
   const badge = paused ? PAUSED_BADGE : BADGE[status]
+  const canFullscreen = typeof document !== 'undefined'
+    && (document.fullscreenEnabled || typeof (document.createElement('video') as WebkitVideo).webkitEnterFullscreen === 'function')
+
+  useEffect(() => {
+    const sync = () => setFullscreen(document.fullscreenElement === frameRef.current)
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [])
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.().catch(() => undefined)
+      return
+    }
+    const frame = frameRef.current
+    if (frame?.requestFullscreen && document.fullscreenEnabled) {
+      void frame.requestFullscreen().catch(() => undefined)
+      return
+    }
+    const video = videoRef.current as WebkitVideo | null
+    if (video?.webkitEnterFullscreen) video.webkitEnterFullscreen()
+  }
 
   return (
-    <figure className={`relative aspect-video w-full overflow-hidden rounded-2xl bg-[#1c1c1c] ${className}`}>
+    <figure ref={frameRef} className={`relative aspect-video w-full overflow-hidden bg-[#1c1c1c] ${fullscreen ? 'rounded-none' : 'rounded-2xl'} ${className}`}>
       <video
         ref={videoRef}
-        className={`size-full object-cover ${status === 'live' ? '' : 'invisible'}`}
+        className={`size-full ${fullscreen ? 'object-contain' : 'object-cover'} ${status === 'live' ? '' : 'invisible'}`}
+        onDoubleClick={canFullscreen ? toggleFullscreen : undefined}
         autoPlay
         muted
         playsInline
@@ -104,16 +136,31 @@ export function QuestLiveVideo({ source = DEV_QUEST_SOURCE, label, offlineHint, 
         {label && <span className="rounded-full bg-[#1c1c1c]/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">{label}</span>}
       </figcaption>
 
-      {src && !paused && (
-        <button
-          type="button"
-          onClick={() => setPaused(true)}
-          className="absolute right-3 bottom-3 inline-flex size-8 items-center justify-center rounded-full bg-[#1c1c1c]/60 text-white backdrop-blur transition-colors hover:bg-[#1c1c1c]/80 motion-reduce:transition-none"
-          title="Tạm dừng hình"
-          aria-label="Tạm dừng hình"
-        >
-          <Pause size={14} aria-hidden="true" />
-        </button>
+      {src && (
+        <div className="absolute right-3 bottom-3 flex items-center gap-2">
+          {!paused && (
+            <button
+              type="button"
+              onClick={() => setPaused(true)}
+              className={CONTROL}
+              title="Tạm dừng hình"
+              aria-label="Tạm dừng hình"
+            >
+              <Pause size={14} aria-hidden="true" />
+            </button>
+          )}
+          {canFullscreen && (
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className={CONTROL}
+              title={fullscreen ? 'Thu nhỏ (Esc)' : 'Xem toàn màn hình'}
+              aria-label={fullscreen ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'}
+            >
+              {fullscreen ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
+            </button>
+          )}
+        </div>
       )}
     </figure>
   )
