@@ -66,6 +66,21 @@ function PartsCamera({ driveRef, rigRef, focusRef, picked, zoom, framing }: {
   return null
 }
 
+/**
+ * Compiles the stage's shaders in the background once the robot is in, while
+ * it is still hidden (behind the intro video), so its first frame does not
+ * stall the page.
+ */
+function WarmUp({ ready }: { ready: boolean }) {
+  const gl = useThree(state => state.gl)
+  const scene = useThree(state => state.scene)
+  const camera = useThree(state => state.camera)
+  useEffect(() => {
+    if (ready) gl.compileAsync(scene, camera).catch(() => undefined)
+  }, [ready, gl, scene, camera])
+  return null
+}
+
 /** A fog that closes round the robot, so it stands alone on its floor whatever the camera's distance. */
 function StageFog({ focusRef }: { focusRef: MutableRefObject<number> }) {
   const scene = useThree(state => state.scene)
@@ -210,6 +225,7 @@ export default function RobotPartsViewer({ visible = true, intro, driveTo }: {
         <OrbitControls makeDefault target={[0, 0.62, 0]} enablePan={false} enableZoom={false} minPolarAngle={Math.PI * 0.12} maxPolarAngle={Math.PI * 0.48} autoRotate={!touched && !picked} autoRotateSpeed={0.45} onStart={() => setTouched(true)} />
         <PartsCamera driveRef={driveRef} rigRef={rigRef} focusRef={focusRef} picked={picked} zoom={zoom.level} framing={framing} />
         <CalloutTracker rigRef={rigRef} calloutsRef={calloutsRef} />
+        <WarmUp ready={model !== null} />
       </Canvas>
       <LoadBar label="Đang tải mô hình" />
       <div className="lp3-td__scrim" aria-hidden="true" />
