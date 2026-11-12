@@ -54,7 +54,11 @@ export type PhysicalRobotOption = PhysicalRobotRegistration & {
   currentTourId: string | null
   currentTourName: string | null
   currentTourState: string | null
+  /** Tours may send commands to this robot (ADR-0049 Decision 8). Allowing it does not move the robot by itself. */
+  isDispatchEnabled: boolean
 }
+export type SetRobotDispatchInput = { id: string; requestId: string; expectedRowVersion: string; enabled: boolean; reason: string; evidenceRef?: string }
+export type SetRobotDispatchResult = { robotId: string; isDispatchEnabled: boolean }
 export type ReleaseRobotInspectionInput = { id: string; requestId: string; expectedRowVersion: string; reason: string }
 export type RobotMapAssignment = Pick<PhysicalRobotOption,
   'id' | 'robotCode' | 'assignedMapVersionId' | 'assignedAreaName' | 'assignedVersionNumber' |
@@ -186,6 +190,9 @@ export const technicalApi = {
   // Picks the body fields explicitly, so a caller passing extra display fields never sends them.
   releaseRobotInspection: ({ id, requestId, expectedRowVersion, reason }: ReleaseRobotInspectionInput) =>
     apiClient<Envelope<{ robotId: string }>>(`/api/technical/physical-robots/${id}/release-inspection`, { method: 'POST', json: { requestId, expectedRowVersion, reason } }).then(response => response.data!),
+  // Picks the body fields explicitly, like releaseRobotInspection.
+  setRobotDispatch: ({ id, requestId, expectedRowVersion, enabled, reason, evidenceRef }: SetRobotDispatchInput) =>
+    apiClient<Envelope<SetRobotDispatchResult>>(`/api/technical/physical-robots/${id}/dispatch`, { method: 'POST', json: { requestId, expectedRowVersion, enabled, reason, evidenceRef } }).then(response => response.data!),
   assignRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string; mapVersionId: string }) =>
     apiClient<Envelope<RobotMapAssignment>>(`/api/technical/physical-robots/${id}/map-assignment`, { method: 'PUT', json: input }).then(response => response.data!),
   clearRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string }) =>

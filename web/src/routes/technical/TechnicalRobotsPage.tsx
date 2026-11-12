@@ -7,7 +7,7 @@ import { Modal } from '../../components/ui/Drawer'
 import { notify } from '../../components/ui/toast-store'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { Note, SetupSteps, TechnicalPage, ToneBadge, type SetupStep } from '../../features/technical/TechnicalUi'
-import { useActivateRobot, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useReleaseRobotInspection, useRobotAffectedTours, useRobotCredential } from '../../features/technical/technical-hooks'
+import { useActivateRobot, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useReleaseRobotInspection, useRobotAffectedTours, useRobotCredential, useSetRobotDispatch } from '../../features/technical/technical-hooks'
 import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour } from '../../features/technical/api/technical'
 import { connectionStatusLabel, errorText, releaseInspectionError, stamp } from '../../features/technical/technical-format'
 import { mapCheckLabel } from '../../features/technical/poi-labels'
@@ -76,7 +76,7 @@ export default function TechnicalRobotsPage() {
             <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Bản đồ được gán</th><th className={thClass}>Kiểm tra triển khai</th><th className={`${thClass} text-center`}>Thao tác</th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">
               {visibleRobots?.map(robot => <tr key={robot.id} className={rowClass}>
-                <td className={`${tdClass} min-w-52`}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p>{isHeld(robot) && <p className="mt-1"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}{isBusy(robot) && <p className="mt-1"><ToneBadge tone="info">{robot.currentTourName ? `Đang chạy Tour ${robot.currentTourName}` : 'Đang chạy Tour'}</ToneBadge></p>}</td>
+                <td className={`${tdClass} min-w-52`}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p>{isHeld(robot) && <p className="mt-1"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}{robot.isDispatchEnabled && <p className="mt-1"><ToneBadge tone="info">Đã cho phép điều phối</ToneBadge></p>}{isBusy(robot) && <p className="mt-1"><ToneBadge tone="info">{robot.currentTourName ? `Đang chạy Tour ${robot.currentTourName}` : 'Đang chạy Tour'}</ToneBadge></p>}</td>
                 <td className={tdClass}><ConnectionBadge robot={robot} /><p className="mt-0.5 text-[11.5px] text-[#64748b]">Dữ liệu gần nhất: {stamp(robot.lastSyncReceivedAt)}</p></td>
                 <td className={tdClass}>{robot.assignedMapKey ? <><span>{robot.assignedAreaName} · phiên bản {robot.assignedVersionNumber}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.assignedMapKey}</p></> : <span className="text-amber-800">Chưa gán bản đồ</span>}</td>
                 <td className={tdClass}>{robot.latestDeployedMapKey ? <><DeploymentBadge robot={robot} />{contextMismatch(robot) && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ được gán</p>}</> : <span className="text-[#64748b]">Chưa ghi nhận</span>}</td>
@@ -149,6 +149,7 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
           {contextMismatch(robot) && <div className="mt-2"><Note tone="warn">Robot được gán map {robot.assignedMapKey} · {robot.assignedFrameId} nhưng lần triển khai gần nhất là {robot.latestDeployedMapKey} · {robot.latestDeployedFrameId}. Kiểm tra cấu hình MiniPC và triển khai map đúng.</Note></div>}
         </DetailSection>
         <DetailSection title="Khóa kết nối MiniPC" action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onManageKey}><KeyRound size={13} aria-hidden="true" />Quản lý khóa</button>} />
+        {!robot.deactivatedAt && <RobotDispatchSection robot={robot} />}
         <RobotLifecycleSection robot={robot} />
       </div>
     </Modal>
@@ -204,6 +205,49 @@ function RobotLifecycleSection({ robot }: { robot: PhysicalRobotOption }) {
       onCancel={() => { setConfirming(false); deactivate.reset() }}>
       <AffectedTours title="Các Tour sau đang giữ robot này:" tours={tours} />
     </ConfirmationDialog>}
+  </>
+}
+
+/**
+ * Whether Tours started on the web may send commands to this robot (ADR-0049 Decision 8). Technical Staff switch it
+ * per test session; the server still checks key, map and deployment, and FleetCommands must be on in the backend.
+ * Turning it off always works and never stops a robot that is already moving.
+ */
+function RobotDispatchSection({ robot }: { robot: PhysicalRobotOption }) {
+  const setDispatch = useSetRobotDispatch()
+  const [confirming, setConfirming] = useState<'on' | 'off' | null>(null)
+  // A retry with the same note on the same robot version replays the first attempt instead of acting twice.
+  const [attempt, setAttempt] = useState<{ key: string; requestId: string } | null>(null)
+  const enabled = robot.isDispatchEnabled
+  const confirm = (note: string) => {
+    const on = confirming === 'on'
+    const key = `${robot.rowVersion}:${on}:${note}`
+    const requestId = attempt?.key === key ? attempt.requestId : crypto.randomUUID()
+    if (attempt?.key !== key) setAttempt({ key, requestId })
+    setDispatch.mutate({ id: robot.id, robotCode: robot.robotCode, requestId, expectedRowVersion: robot.rowVersion, enabled: on,
+      reason: note, evidenceRef: on ? note.slice(0, 500) : undefined },
+    { onSuccess: () => { setConfirming(null); setAttempt(null) } })
+  }
+  const close = () => { setConfirming(null); setDispatch.reset() }
+  return <>
+    <DetailSection title="Điều phối Tour" subject={enabled ? 'Đang cho phép' : 'Đang tắt'}
+      action={enabled
+        ? <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setConfirming('off')}>Tắt điều phối</button>
+        : <button type="button" className={buttonClass('primary', 'sm')} onClick={() => setConfirming('on')}>Cho phép điều phối</button>}>
+      <p className="text-[13px] text-[#475569]">{enabled
+        ? 'Tour bắt đầu trên web có thể gửi lệnh di chuyển cho robot này (khi backend bật FleetCommands và robot chạy fleet_bridge có lệnh).'
+        : 'Tour trên web chưa gửi được lệnh cho robot này. Bật khi chuẩn bị chạy thử, tắt khi xong.'}</p>
+    </DetailSection>
+    {confirming && <ConfirmationDialog open requireReason tone={confirming === 'on' ? 'default' : 'danger'}
+      reasonLabel={confirming === 'on' ? 'Ghi chú buổi chạy thử' : 'Lý do tắt'}
+      reasonPlaceholder={confirming === 'on' ? 'Ví dụ: demo đồ án 12/11, khu vực trống, có người đứng ở nút dừng khẩn.' : 'Ví dụ: xong buổi demo.'}
+      title={confirming === 'on' ? `Cho phép điều phối ${robot.robotCode}?` : `Tắt điều phối ${robot.robotCode}?`}
+      description={confirming === 'on'
+        ? 'Sau khi bật, bấm "Bắt đầu Tour" sẽ làm robot di chuyển. Luôn có người đứng cạnh robot, sẵn sàng bấm nút dừng khẩn trên robot.'
+        : 'Tour mới không gửi lệnh cho robot nữa. Lệnh đang chạy không bị dừng: nếu robot còn chạy, dùng nút dừng trên robot.'}
+      confirmLabel={confirming === 'on' ? 'Cho phép' : 'Tắt điều phối'} busy={setDispatch.isPending} busyLabel="Đang lưu…"
+      error={setDispatch.isError ? errorText(setDispatch.error) : undefined}
+      onConfirm={confirm} onCancel={close} />}
   </>
 }
 
