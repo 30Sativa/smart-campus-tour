@@ -146,21 +146,23 @@ def verdict(dirpath, verdict='PASS', yaw='3.1241', tf_ok='True'):
 
 
 @pytest.mark.parametrize('workflow', ['manual', 'map', 'nav'])
-def test_the_candidate_cannot_drive_without_evidence(world, workflow):
+def test_an_unverified_yaw_runs_with_a_warning_on_lidar_workflows(world, workflow):
     profile(world, LIDAR_YAW='3.1241')
     r = robot(world, workflow, '--dry-run')
-    assert r.returncode == 2 and 'calibration' in r.stderr
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout)['argv'][5 if workflow != 'nav' else 5] == 'lidar_yaw:=3.1241'
+    assert ('is unverified' in r.stderr) == (workflow != 'manual')
 
-
-def test_evidence_must_be_a_pass_for_that_value(world):
+def test_only_a_matching_pass_counts_as_validated(world):
     for v, yaw in (('FAIL', '3.1241'), ('INCONCLUSIVE', '3.1241'), ('PASS', '3.0000')):
         ev = verdict(world['tmp'] / f'ev_{v}_{yaw}', v, yaw)
         profile(world, LIDAR_YAW='3.1241', LIDAR_YAW_EVIDENCE=ev)
-        assert robot(world, 'map', '--dry-run').returncode == 2, (v, yaw)
+        r = robot(world, 'map', '--dry-run')
+        assert r.returncode == 0 and 'is unverified' in r.stderr, (v, yaw, r.stderr)
     ev = verdict(world['tmp'] / 'ev_ok')
     profile(world, LIDAR_YAW='-3.1590', LIDAR_YAW_EVIDENCE=ev)                    # same angle, other spelling
-    assert dry(world, 'map')['argv'][5] == 'lidar_yaw:=-3.1590'
-
+    r = robot(world, 'map', '--dry-run')
+    assert json.loads(r.stdout)['argv'][5] == 'lidar_yaw:=-3.1590' and 'WARNING' not in r.stderr
 
 def test_lidar_check_always_uses_the_candidate(world):
     r = robot(world, 'lidar-check', '--dry-run', '--', '--motor-power-off-confirmed', '--side', 'right')
@@ -283,11 +285,11 @@ def test_status_is_read_only(world):
     r = robot(world, 'status')
     assert r.returncode == 0, r.stderr
     assert 'domain 77' in r.stdout and 'legacy_baseline (ran as robot-baseline-20261102' in r.stdout
-    assert 'launcher allows: manual\n' in r.stdout
+    assert 'launcher allows: manual, map, nav\n' in r.stdout
     assert 'candidate    3.1241 rad (static check only' in r.stdout
     assert sorted(str(p) for p in world['tmp'].rglob('*')) == before
     profile(world, LIDAR_YAW='3.1241')
-    assert 'unverified' in robot(world, 'status').stdout and 'allows: nothing' in robot(world, 'status').stdout
+    assert 'unverified' in robot(world, 'status').stdout
 
 
 # ---- logs ---------------------------------------------------------------------------------
@@ -365,23 +367,19 @@ def test_nav_runs_beside_a_telemetry_only_fleet_bridge(world):
      '/robot_01/fleet_bridge:\n  ros__parameters:\n    commands_enabled: true\n'),   # a later file wins
     ('/**/fleet_bridge:\n  ros__parameters:\n    commands_enabled: false\n', None),   # unreadable later file
 ])
-def test_nav_is_refused_beside_a_commanding_or_unknown_fleet_bridge(world, files):
+def test_nav_warns_beside_a_commanding_or_unknown_fleet_bridge(world, files):
     validated(world)
     fleet_bridge(world, *files)
     r = robot(world, 'nav', '--dry-run')
-    assert r.returncode == 2 and 'two goal owners' in r.stderr, r.stderr
-    assert robot(world, 'manual', '--dry-run').returncode == 0          # manual has no Nav2 to command
+    assert r.returncode == 0 and 'do not also send goals' in r.stderr, r.stderr
 
-
-# ---- calibration states ------------------------------------------------------------------
-def test_legacy_baseline_allows_manual_only(world):
-    assert dry(world, 'manual')['argv'][-1] == 'lidar_yaw:=-3.0695'
+def test_legacy_baseline_runs_every_workflow_and_warns_on_lidar_ones(world):
+    r = robot(world, 'manual', '--dry-run')
+    assert json.loads(r.stdout)['argv'][-1] == 'lidar_yaw:=-3.0695' and 'WARNING' not in r.stderr
     for workflow in ('map', 'nav'):
         r = robot(world, workflow, '--dry-run')
-        assert r.returncode == 2 and 'it is legacy_baseline' in r.stderr and 'robot-baseline-2026-11-02.md' in r.stderr
+        assert r.returncode == 0 and 'is legacy_baseline' in r.stderr, r.stderr
 
-
-# ---- --dry-run never acts -----------------------------------------------------------------
 def snapshot(w):
     out = {}
     for path in sorted(w['tmp'].rglob('*')):
@@ -433,3 +431,115 @@ def test_a_reused_pid_does_not_keep_an_old_session_alive(world):
     assert 'LIVE' in robot(world, 'logs').stdout                     # same pid AND same start: still running
     robot(world, 'logs', 'prune', '--yes')
     assert (d2 / 'ros_log').exists()
+
+
+# ---- fleet sessions (ADR-0049: commands only with the motion permit) ------------------------
+def fleet_runtime(w, gate=True, permit_publisher=True):
+    nav = w['overlay'] / 'nav'
+    launch = nav / 'share' / 'robot_navigation' / 'launch'
+    launch.mkdir(parents=True, exist_ok=True)
+    (launch / 'navigation.launch.py').write_text("DeclareLaunchArgument('require_motion_permit')\n" if gate else '# old\n')
+    fb = fake_prefix(w['root'] / 'ros2_ws' / 'install' / 'fleet', ['fleet_bridge'])
+    (fb / 'share' / 'fleet_bridge' / 'config').mkdir(parents=True, exist_ok=True)
+    (fb / 'share' / 'fleet_bridge' / 'config' / 'fleet_bridge.yaml').write_text('/**:\n  ros__parameters: {}\n')
+    lib = fb / 'lib' / 'python3.10' / 'site-packages' / 'fleet_bridge'
+    lib.mkdir(parents=True, exist_ok=True)
+    if permit_publisher:
+        (lib / 'motion_permit_ros.py').write_text('')
+    base = w['root'] / 'ros2_ws' / 'install'
+    write_setup(base, f'{base / "base"}:{fb}')
+    cred = w['tmp'] / 'amr_01.credential'
+    cred.write_text('SECRET-CREDENTIAL')
+    env_file = w['tmp'] / 'fleet-sync.env'
+    env_file.write_text(f'export FLEET_SYNC_URL=https://example.test/api/fleet/v1/sync\nexport FLEET_ROBOT_CODE=amr_01\n'
+                        f'export FLEET_ROBOT_MAP_KEY=map2-key\nexport FLEET_ROBOT_FRAME_ID=map\n'
+                        f'export FLEET_ROBOT_CREDENTIAL_FILE={cred}\n')
+    return env_file
+
+
+def fleet_profile(w, **over):
+    ev = validated(w)
+    profile(w, LIDAR_YAW='3.1241', LIDAR_YAW_EVIDENCE=ev, FLEET_ENV_FILE=w['tmp'] / 'fleet-sync.env', **over)
+
+
+def test_nav_fleet_needs_a_runtime_with_the_motion_gate(world):
+    fleet_runtime(world, gate=False)
+    fleet_profile(world)
+    r = robot(world, 'nav', '--fleet', '--dry-run')
+    assert r.returncode == 2 and 'no motion gate' in r.stderr, r.stderr
+    fleet_runtime(world, gate=True)
+    argv = dry(world, 'nav', '--fleet')['argv']
+    assert argv[-1] == 'require_motion_permit:=true'
+    assert 'require_motion_permit:=true' not in dry(world, 'nav')['argv']
+
+
+def test_fleet_telemetry_runs_alone_and_keeps_the_credential_out_of_output(world):
+    fleet_runtime(world)
+    fleet_profile(world)
+    r = robot(world, 'fleet', '--dry-run')
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert out['argv'][:4] == ['ros2', 'run', 'fleet_bridge', 'fleet_bridge'] and '__ns:=/robot_01' in out['argv']
+    assert 'robot_code:=amr_01' in out['argv'] and 'commands_enabled:=true' not in out['argv']
+    assert 'SECRET-CREDENTIAL' not in r.stdout and 'amr_01.credential' not in r.stdout
+
+
+def test_fleet_commands_need_a_running_nav_and_note_a_missing_permit(world):
+    fleet_runtime(world)
+    fleet_profile(world)
+    r = robot(world, 'fleet', '--commands', '--dry-run')
+    assert r.returncode == 2 and 'running "robot nav" session' in r.stderr
+    fake = world['tmp'] / 'sleeper.sh'
+    fake.write_text('#!/bin/sh\nexec sleep 30\n')
+    fake.chmod(0o755)
+    for nav_args, gated in ((['nav'], False), (['nav', '--fleet'], True)):
+        holder = robot(world, *nav_args, extra_env={'SCT_ROBOT_TEST_EXEC': str(fake)}, popen=True)
+        try:
+            for _ in range(100):
+                if 'running' in robot(world, 'status').stdout:
+                    break
+                time.sleep(0.05)
+            r = robot(world, 'fleet', '--commands', '--dry-run')
+            out = json.loads(r.stdout)
+            assert r.returncode == 0 and out['argv'][-4:] == ['-p', 'commands_enabled:=true', '-p',
+                                                              'report_period_sec:=0.5'], r.stdout + r.stderr
+            assert ('no motion permit' in r.stderr) == (not gated), r.stderr
+            reset = robot(world, 'reset-latch', '--dry-run')
+            if gated:
+                assert json.loads(reset.stdout)['argv'][:4] == ['ros2', 'service', 'call', '/robot_01/motion_inhibit_reset']
+            else:
+                assert 'nothing to reset' in reset.stderr
+        finally:
+            holder.send_signal(signal.SIGTERM)
+            holder.wait(10)
+
+
+def test_fleet_commands_need_the_permit_publisher_in_fleet_bridge(world):
+    fleet_runtime(world, permit_publisher=False)
+    fleet_profile(world)
+    fake = world['tmp'] / 'sleeper.sh'
+    fake.write_text('#!/bin/sh\nexec sleep 30\n')
+    fake.chmod(0o755)
+    holder = robot(world, 'nav', '--fleet', extra_env={'SCT_ROBOT_TEST_EXEC': str(fake)}, popen=True)
+    try:
+        for _ in range(100):
+            if 'running' in robot(world, 'status').stdout:
+                break
+            time.sleep(0.05)
+        r = robot(world, 'fleet', '--commands', '--dry-run')
+        assert r.returncode == 2 and 'motion_permit_ros.py' in r.stderr, r.stderr
+    finally:
+        holder.send_signal(signal.SIGTERM)
+        holder.wait(10)
+
+
+def test_fleet_settings_and_a_second_bridge_are_checked(world):
+    env_file = fleet_runtime(world)
+    fleet_profile(world)
+    env_file.write_text(env_file.read_text().replace('export FLEET_ROBOT_MAP_KEY=map2-key\n', ''))
+    r = robot(world, 'fleet', '--dry-run')
+    assert r.returncode == 2 and 'FLEET_ROBOT_MAP_KEY' in r.stderr
+    fleet_runtime(world)
+    fake_process(world, 7100, '/usr/bin/python3 /x/install/fleet_bridge/lib/fleet_bridge/fleet_bridge --ros-args')
+    r = robot(world, 'fleet', '--dry-run')
+    assert r.returncode == 2 and 'already running' in r.stderr
