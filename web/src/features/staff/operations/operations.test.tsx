@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../api/client'
 import { useAuthStore } from '../../../stores/auth-store'
@@ -127,5 +127,45 @@ describe('attention queue', () => {
     const items = buildAttention([], [summary('t-ready', 'READY')], [ended('t-held', true), ended('t-closed', false)])
     expect(items.map(item => item.id)).toEqual(['reconcile-t-held', 'ready-t-ready'])
     expect(items[0]).toMatchObject({ tone: 'danger', headline: 'Tour đã kết thúc, còn lệnh chưa rõ kết quả cần đối soát', to: '/staff/live/t-held' })
+  })
+})
+
+describe('Quest headset wake/sleep (ADR-0056 addendum)', () => {
+  const headset = (screenState: string) => ({
+    success: true, message: null, errors: null,
+    data: { robotCode: 'amr_01', reported: true, connection: 'connected', batteryPercent: 18, charging: true, stream: 'paused',
+      reportedAt: '2026-11-12T09:00:00Z', stale: false, screen: screenState },
+  })
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('puts an awake headset to sleep through the robot route, and shows a refusal in the server\'s words', async () => {
+    useAuthStore.getState().setAuth('jwt-1', { userId: 'u', username: 'lan', role: 'Staff' })
+    const posts: unknown[] = []
+    let refuse = false
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/api/staff/manage/robots/amr_01/headset')) return Promise.resolve(json(200, headset('awake')))
+      if (url.endsWith('/api/staff/manage/robots/amr_01/headset/commands')) {
+        posts.push(JSON.parse(String(init?.body)))
+        return Promise.resolve(refuse
+          ? json(409, { success: false, message: 'Tour đang chạy trên robot này; cho kính ngủ sẽ tắt hình của người xem.' })
+          : json(200, { success: true, message: null, errors: null,
+            data: { robotCode: 'amr_01', commandId: 'c1', action: 'SLEEP', expiresAt: '2026-11-12T09:00:20Z' } }))
+      }
+      return Promise.resolve(json(404, {}))
+    }))
+    render(<QueryClientProvider client={new QueryClient()}><RobotTelemetryPanel robotCode="amr_01" /></QueryClientProvider>)
+
+    expect(await screen.findByText('Màn hình đang bật')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Đánh thức kính' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Cho kính ngủ' }))
+    expect(await screen.findByText('Đã gửi lệnh cho ngủ, chờ robot (vài giây)…')).toBeInTheDocument()
+    expect(posts).toEqual([{ action: 'SLEEP' }])
+
+    refuse = true
+    fireEvent.click(screen.getByRole('button', { name: 'Cho kính ngủ' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tour đang chạy trên robot này; cho kính ngủ sẽ tắt hình của người xem.')
   })
 })

@@ -12,8 +12,11 @@ public static class CameraDemandReasons
     public const string Idle = "IDLE";
 }
 
-/// <summary>Answer to the robot's poll: capture and publish while <see cref="Wanted"/>.</summary>
-public sealed record CameraDemand(bool Wanted, string Reason, int PollSeconds);
+/// <summary>
+/// Answer to the robot's poll: capture and publish while <see cref="Wanted"/>. <see cref="HeadsetCommand"/> (ADR-0056
+/// addendum) is a Staff wake/sleep press for the headset, handed out once, or null.
+/// </summary>
+public sealed record CameraDemand(bool Wanted, string Reason, int PollSeconds, HeadsetCommandOrder? HeadsetCommand = null);
 
 /// <summary>
 /// What a Staff page learns when it renews its lease. <see cref="Stream"/> is the relay URL and token (ADR-0055), null

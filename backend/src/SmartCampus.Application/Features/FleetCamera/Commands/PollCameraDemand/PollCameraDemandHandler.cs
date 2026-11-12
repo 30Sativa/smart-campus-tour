@@ -6,7 +6,7 @@ namespace SmartCampus.Application.Features.FleetCamera.Commands.PollCameraDemand
 
 /// <summary>
 /// ADR-0052 robot poll: records that the robot listens (and, ADR-0056, its headset) and tells it whether anyone needs
-/// its camera now.
+/// its camera now, with a Staff wake/sleep press for the headset if one is waiting (handed out once).
 /// </summary>
 public sealed class PollCameraDemandHandler(
     ICameraDemandStore store,
@@ -21,6 +21,8 @@ public sealed class PollCameraDemandHandler(
         if (request.Headset is { } headset) store.RecordHeadset(request.RobotCode, headset, now);
         var facts = await robots.GetAsync(request.RobotCode, ct);
         var (wanted, reason) = CameraDemandRules.Decide(facts?.HasRunningTour ?? false, store.GetLease(request.RobotCode), now);
-        return new CameraDemand(wanted, reason, settings.PollSeconds);
+        var press = store.TakeHeadsetCommand(request.RobotCode, now);
+        return new CameraDemand(wanted, reason, settings.PollSeconds,
+            press is null ? null : new HeadsetCommandOrder(press.Id, press.Action));
     }
 }

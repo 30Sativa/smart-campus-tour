@@ -6,6 +6,7 @@ using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Features.FleetCamera;
 using SmartCampus.Application.Features.FleetCamera.Commands.LeaseCamera;
+using SmartCampus.Application.Features.FleetCamera.Commands.SendHeadsetCommand;
 using SmartCampus.Application.Features.FleetCamera.Queries.GetRobotHeadset;
 
 namespace SmartCampus.Api.Controllers;
@@ -35,4 +36,19 @@ public sealed class StaffRobotCameraController(ISender sender) : ControllerBase
         Response.Headers.CacheControl = "no-store";
         return Ok(new BaseResponse<RobotHeadsetStatus> { Success = true, Message = "Headset status.", Data = status });
     }
+
+    /// <summary>ADR-0056 addendum: wake the headset or put it to sleep; the robot runs it with its next camera poll.</summary>
+    [HttpPost("{robotCode}/headset/commands")]
+    [RequestSizeLimit(1024)]
+    public async Task<ActionResult<BaseResponse<SendHeadsetCommandResult>>> HeadsetCommand(string robotCode,
+        [FromBody] StaffHeadsetCommandRequest request, CancellationToken ct)
+    {
+        var action = (request.Action ?? "").Trim().ToUpperInvariant();
+        var queued = await sender.Send(new SendHeadsetCommand(robotCode, action), ct);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new BaseResponse<SendHeadsetCommandResult> { Success = true, Message = "Headset command queued.", Data = queued });
+    }
 }
+
+/// <summary>Body of <c>POST /api/staff/manage/robots/{robotCode}/headset/commands</c>: <c>WAKE</c> or <c>SLEEP</c>.</summary>
+public sealed record StaffHeadsetCommandRequest(string? Action);

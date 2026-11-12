@@ -357,6 +357,18 @@ curl -s localhost:8080/status | python3 -m json.tool | grep -A5 '"camera"'   # e
 Trang Staff (Kiểm tra trước khi bắt đầu, Điều hành trực tiếp) hiện dòng "Kính Quest" trong panel Robot.
 Cần `QUEST_CONTROL_URL=auto`; muốn báo pin mà không tắt camera theo nhu cầu thì thêm `QUEST_CAMERA_ON_DEMAND=off`.
 
+**Đánh thức / cho kính ngủ từ web (phụ lục ADR-0056).** Dòng "Màn hình kính" trong panel Robot có nút **Đánh thức
+kính** hoặc **Cho kính ngủ**. Backend gửi lệnh kèm câu trả lời của lần hỏi tiếp theo (vài giây), NUC chạy qua adb:
+
+| Nút | Lệnh adb |
+|---|---|
+| Đánh thức | `input keyevent KEYCODE_WAKEUP`, rồi `am broadcast -a com.oculus.vrpowermanager.prox_close` (giữ sáng khi không ai đeo) |
+| Cho ngủ | `am broadcast -a com.oculus.vrpowermanager.automation_disable`, rồi `input keyevent KEYCODE_SLEEP` |
+
+Cho kính ngủ giữa các Tour để đỡ tụt pin khi cắm vào miniPC. Đang có Tour chạy thì backend không cho ngủ (người xem
+sẽ mất hình). Không có nút tắt nguồn: kính tắt nguồn hẳn thì mất adb, web không bật lại được. Kết quả lệnh gần nhất
+xem ở `curl -s localhost:8080/device` (`screen`, `lastCommand`); log có `HEADSET_COMMAND ...`.
+
 Phía người xem (web): nút tạm dừng trên khung hình, và tự ngắt khi tab bị ẩn; mở lại tab là nối lại.
 
 ## Phát ra Internet (trang deploy https://www.fptcampustour.cloud)

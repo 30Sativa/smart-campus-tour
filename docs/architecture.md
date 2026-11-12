@@ -1312,12 +1312,21 @@ lease has not expired:
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/api/staff/manage/robots/{robotCode}/camera-lease` | Staff role, no body. Extends the lease to now + `FleetCamera:LeaseSeconds` (120); 200 `{robotCode, wanted, reason, robotListening, lastPollAt, leaseUntil, stream}`; `stream` (ADR-0055) is `{whepUrl, token, expiresAt}` for this Staff user when the public relay carries this robot, else null; 404 unknown or deactivated robot; 400 invalid code. The pre-start check page renews it every 30 s while visible, which also renews the token. |
-| POST | `/api/fleet/camera/v1/poll` | Robot scheme, no body, `FleetSync` rate-limit policy. 200 `{wanted, reason: TOUR_RUNNING\|STAFF_WATCHING\|IDLE, pollSeconds}`. |
+| POST | `/api/fleet/camera/v1/poll` | Robot scheme, optional `{headset}` body (ADR-0056), `FleetSync` rate-limit policy. 200 `{wanted, reason: TOUR_RUNNING\|STAFF_WATCHING\|IDLE, pollSeconds, headsetCommand}`. |
 
 **Quest headset status (ADR-0056).** The camera poll may carry `{headset: {connection, batteryPercent,
 charging, stream}}` (normalised, never rejected). `GET /api/staff/manage/robots/{robotCode}/headset` (Staff) returns
-`{robotCode, reported, connection, batteryPercent, charging, stream, reportedAt, stale}` from memory; 404 unknown robot,
-400 invalid code.
+`{robotCode, reported, connection, batteryPercent, charging, stream, reportedAt, stale, screen}` from memory; 404 unknown
+robot, 400 invalid code.
+
+**Quest headset wake/sleep (ADR-0056 addendum).** The report also carries `screen` (`awake|asleep|unknown`).
+`POST /api/staff/manage/robots/{robotCode}/headset/commands` (Staff) with `{action: WAKE|SLEEP}` queues one press in
+memory (a later press replaces one not yet delivered; dropped after `FleetCamera:RobotListeningWithinSeconds`) and
+returns `{robotCode, commandId, action, expiresAt}`; 409 `HEADSET_ROBOT_NOT_LISTENING`, `HEADSET_NOT_REPORTED`,
+`HEADSET_NOT_CONNECTED`, `HEADSET_CONTROL_UNSUPPORTED` (no `screen` reported) or `HEADSET_TOUR_RUNNING` (SLEEP while a
+Tour runs). The next camera poll answer carries it once as `headsetCommand: {id, action}` (otherwise null);
+quest-stream runs it over adb. There is no power-off: a powered-off headset has no adb and cannot be turned on again
+from the web.
 
 Leases and last polls live only in API memory (single instance, ADR-0019); nothing is
 written to SQL. `robot/quest-stream` (`QUEST_CONTROL_URL=auto`) polls with the Fleet Sync

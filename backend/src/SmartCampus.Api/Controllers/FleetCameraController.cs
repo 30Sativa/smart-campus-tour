@@ -18,8 +18,8 @@ namespace SmartCampus.Api.Controllers;
 public sealed class FleetCameraController(ISender sender) : ControllerBase
 {
     /// <summary>
-    /// Optional body <c>{headset: {connection, batteryPercent, charging, stream}}</c> (ADR-0056); an older quest-stream
-    /// sends none. Polled every few seconds, so it shares the Fleet Sync per-IP budget.
+    /// Optional body <c>{headset: {connection, batteryPercent, charging, stream, screen}}</c> (ADR-0056); an older
+    /// quest-stream sends none. The answer may carry one Staff wake/sleep press for the headset (ADR-0056 addendum). Polled every few seconds, so it shares the Fleet Sync per-IP budget.
     /// </summary>
     [HttpPost("poll")]
     [RequestSizeLimit(1024)]
@@ -28,7 +28,7 @@ public sealed class FleetCameraController(ISender sender) : ControllerBase
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] FleetCameraPollRequest? request, CancellationToken ct)
     {
         var headset = request?.Headset is { } h
-            ? HeadsetReports.Normalise(h.Connection, h.BatteryPercent, h.Charging, h.Stream)
+            ? HeadsetReports.Normalise(h.Connection, h.BatteryPercent, h.Charging, h.Stream, h.Screen)
             : null;
         return Ok(new BaseResponse<CameraDemand>
         {
@@ -47,4 +47,5 @@ public sealed class FleetCameraController(ISender sender) : ControllerBase
 public sealed record FleetCameraPollRequest(FleetHeadsetReport? Headset);
 
 /// <summary>The headset as quest-stream read it; every field is optional and normalised by the backend.</summary>
-public sealed record FleetHeadsetReport(string? Connection, int? BatteryPercent, bool? Charging, string? Stream);
+public sealed record FleetHeadsetReport(string? Connection, int? BatteryPercent, bool? Charging, string? Stream,
+    string? Screen = null);

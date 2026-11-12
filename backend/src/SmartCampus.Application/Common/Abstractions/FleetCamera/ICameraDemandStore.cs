@@ -22,4 +22,10 @@ public interface ICameraDemandStore
     void RecordHeadset(string robotCode, HeadsetReport report, DateTimeOffset at);
 
     (HeadsetReport Report, DateTimeOffset At)? GetHeadset(string robotCode);
+
+    /// <summary>ADR-0056 addendum: a Staff wake/sleep press; a later press replaces one not yet delivered.</summary>
+    void QueueHeadsetCommand(string robotCode, HeadsetCommand command);
+
+    /// <summary>Removes and returns the waiting press, or null; a press past its expiry is dropped, never returned.</summary>
+    HeadsetCommand? TakeHeadsetCommand(string robotCode, DateTimeOffset now);
 }

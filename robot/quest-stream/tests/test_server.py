@@ -282,6 +282,18 @@ class DeviceMonitorWithFakeAdb(unittest.TestCase):
         self.assertTrue(snap["battery"]["charging"])
         self.assertIsNotNone(snap["checkedAt"])
 
+    def test_connected_reads_the_screen(self):
+        screen = Path(self.tmp.name) / "screen"
+        os.environ["FAKE_ADB_SCREEN_FILE"] = str(screen)
+        try:
+            screen.write_text("Asleep")
+            self.assertEqual(self.poll("device")["screen"], "asleep")
+            screen.write_text("Awake")
+            self.assertEqual(self.poll("device")["screen"], "awake")
+            self.assertEqual(self.poll("none")["screen"], "unknown")
+        finally:
+            os.environ.pop("FAKE_ADB_SCREEN_FILE", None)
+
     def test_unauthorized_has_no_battery(self):
         snap = self.poll("unauthorized")
         self.assertEqual(snap["connection"], "unauthorized")
@@ -688,12 +700,49 @@ class CameraDemandTests(unittest.TestCase):
     def test_headset_report_sends_battery_only_while_connected(self):
         device, status = server.DeviceStatus(), server.Status()
         status.set("live", "STREAM_STARTED")
-        device.update(connection="connected", battery={"level": 54, "charging": True, "plugged": "USB", "status": "charging"})
+        device.update(connection="connected", screen="awake",
+                      battery={"level": 54, "charging": True, "plugged": "USB", "status": "charging"})
         self.assertEqual(server.headset_report(device, status),
-                         {"headset": {"connection": "connected", "stream": "live", "batteryPercent": 54, "charging": True}})
+                         {"headset": {"connection": "connected", "stream": "live", "screen": "awake",
+                                      "batteryPercent": 54, "charging": True}})
         device.update(connection="offline", reason="cable")
         status.set("paused", "CAMERA_OFF: IDLE")
-        self.assertEqual(server.headset_report(device, status), {"headset": {"connection": "offline", "stream": "paused"}})
+        self.assertEqual(server.headset_report(device, status),
+                         {"headset": {"connection": "offline", "stream": "paused", "screen": "unknown"}})
+
+    def test_a_headset_command_in_the_answer_is_handed_over(self):
+        presses = []
+        c = cfg(control_url="https://api.example/api/fleet/camera/v1/poll", robot_code="amr_01",
+                robot_credential_file=str(self.credential))
+        d = server.CameraDemand(c, opener=self.opener, clock=lambda: self.now,
+                                on_headset_command=lambda i, a: presses.append((i, a)))
+        self.answer = {"success": True, "data": {"wanted": False, "reason": "IDLE", "pollSeconds": 5,
+                                                 "headsetCommand": {"id": "abc", "action": "WAKE"}}}
+        d.poll_once()
+        self.assertEqual(presses, [("abc", "WAKE")])
+        self.assertFalse(d.wanted())
+
+    def test_no_or_a_strange_headset_command_is_ignored_and_never_breaks_the_poll(self):
+        presses = []
+
+        def explode(i, a):
+            raise RuntimeError("boom")
+        c = cfg(control_url="https://api.example/api/fleet/camera/v1/poll", robot_code="amr_01",
+                robot_credential_file=str(self.credential))
+        for command in (None, {"id": "x", "action": "POWER_OFF"}, {"action": "WAKE"}, "WAKE"):
+            d = server.CameraDemand(c, opener=self.opener, clock=lambda: self.now,
+                                    on_headset_command=lambda i, a: presses.append((i, a)))
+            self.answer = {"success": True, "data": {"wanted": True, "reason": "STAFF_WATCHING", "pollSeconds": 5,
+                                                     "headsetCommand": command}}
+            d.poll_once()
+            self.assertTrue(d.wanted())
+        self.assertEqual(presses, [])
+        d = server.CameraDemand(c, opener=self.opener, clock=lambda: self.now, on_headset_command=explode)
+        self.answer = {"success": True, "data": {"wanted": True, "reason": "TOUR_RUNNING", "pollSeconds": 5,
+                                                 "headsetCommand": {"id": "y", "action": "SLEEP"}}}
+        d.poll_once()
+        self.assertTrue(d.wanted())
+        self.assertEqual(d.reason(), "TOUR_RUNNING")
 
     def test_paused_is_its_own_stream_state(self):
         self.assertEqual(server.stream_summary("paused"), "paused")
@@ -725,6 +774,86 @@ class CameraDemandTests(unittest.TestCase):
         finally:
             sup.stop()
             sup.join(timeout=5)
+
+
+class ScreenParsingTests(unittest.TestCase):
+    def test_wakefulness(self):
+        self.assertEqual(server.parse_screen("POWER MANAGER\n  mWakefulness=Awake\n"), "awake")
+        self.assertEqual(server.parse_screen("  mWakefulness=Asleep\n  mWakefulnessChanging=false"), "asleep")
+        self.assertEqual(server.parse_screen("  mWakefulness=Dozing"), "asleep")
+        self.assertEqual(server.parse_screen("  mWakefulness=Dreaming"), "awake")
+        self.assertEqual(server.parse_screen("  mWakefulness=Sideways"), "unknown")
+        self.assertEqual(server.parse_screen(""), "unknown")
+
+
+class HeadsetControlWithFakeAdb(unittest.TestCase):
+    """ADR-0056 addendum: Staff wake/sleep presses run over adb against tests/fake_adb.py."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        tmp = Path(self.tmp.name)
+        self.state, self.screen, self.log = tmp / "state", tmp / "screen", tmp / "adb.log"
+        self.env = {k: os.environ.get(k) for k in ("FAKE_ADB_STATE_FILE", "FAKE_ADB_SCREEN_FILE", "FAKE_ADB_LOG")}
+        os.environ.update(FAKE_ADB_STATE_FILE=str(self.state), FAKE_ADB_SCREEN_FILE=str(self.screen),
+                          FAKE_ADB_LOG=str(self.log))
+        self.state.write_text("device")
+        self.screen.write_text("Asleep")
+        self.cfg = cfg(adb=str(HERE / "fake_adb.py"))
+        self.device = server.DeviceStatus()
+        server.DeviceMonitor(self.cfg, self.device).poll_once()
+        self.control = server.HeadsetControl(self.cfg, self.device, settle=0)
+
+    def tearDown(self):
+        for key, value in self.env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        self.tmp.cleanup()
+
+    def shell_calls(self):
+        return [line for line in self.log.read_text().splitlines() if not line.startswith("dumpsys")]
+
+    def test_wake_turns_the_display_on_and_keeps_it_on(self):
+        self.assertEqual(self.device.snapshot()["screen"], "asleep")
+        self.assertTrue(self.control.execute("c1", "WAKE"))
+        snap = self.device.snapshot()
+        self.assertEqual(snap["screen"], "awake")
+        self.assertEqual(snap["lastCommand"]["action"], "WAKE")
+        self.assertTrue(snap["lastCommand"]["ok"])
+        self.assertEqual(self.shell_calls(), ["input keyevent KEYCODE_WAKEUP",
+                                              "am broadcast -a com.oculus.vrpowermanager.prox_close"])
+
+    def test_sleep_gives_the_proximity_sensor_back_and_turns_the_display_off(self):
+        self.screen.write_text("Awake")
+        self.assertTrue(self.control.execute("c2", "SLEEP"))
+        self.assertEqual(self.device.snapshot()["screen"], "asleep")
+        self.assertEqual(self.shell_calls(), ["am broadcast -a com.oculus.vrpowermanager.automation_disable",
+                                              "input keyevent KEYCODE_SLEEP"])
+
+    def test_a_disconnected_headset_is_not_touched(self):
+        self.state.write_text("none")
+        server.DeviceMonitor(self.cfg, self.device).poll_once()
+        self.log.write_text("")
+        self.assertFalse(self.control.execute("c3", "WAKE"))
+        self.assertEqual(self.shell_calls(), [])
+        self.assertIn("not connected", self.device.snapshot()["lastCommand"]["error"])
+
+    def test_the_same_press_runs_once(self):
+        self.control.submit("c4", "WAKE", wait=True)
+        self.screen.write_text("Asleep")
+        self.assertIsNone(self.control.submit("c4", "WAKE", wait=True))
+        self.assertEqual(self.screen.read_text(), "Asleep")
+
+    def test_an_adb_failure_is_reported(self):
+        def failing(cmd, **kw):
+            return subprocess.CompletedProcess(cmd, 1, "", "error: closed")
+        control = server.HeadsetControl(self.cfg, self.device, runner=failing, settle=0)
+        self.assertFalse(control.execute("c5", "WAKE"))
+        self.assertIn("error: closed", self.device.snapshot()["lastCommand"]["error"])
+
+    def test_unknown_action_is_refused(self):
+        self.assertFalse(self.control.execute("c6", "POWER_OFF"))
 
 
 if __name__ == "__main__":

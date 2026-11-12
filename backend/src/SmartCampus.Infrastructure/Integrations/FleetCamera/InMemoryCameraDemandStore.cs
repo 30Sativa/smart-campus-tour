@@ -10,6 +10,7 @@ public sealed class InMemoryCameraDemandStore : ICameraDemandStore
     private readonly ConcurrentDictionary<string, DateTimeOffset> polls = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTimeOffset> leases = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, (HeadsetReport Report, DateTimeOffset At)> headsets = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, HeadsetCommand> headsetCommands = new(StringComparer.OrdinalIgnoreCase);
 
     public void RecordPoll(string robotCode, DateTimeOffset at)
     {
@@ -38,4 +39,14 @@ public sealed class InMemoryCameraDemandStore : ICameraDemandStore
 
     public (HeadsetReport Report, DateTimeOffset At)? GetHeadset(string robotCode) =>
         headsets.TryGetValue(robotCode, out var entry) ? entry : null;
+
+    public void QueueHeadsetCommand(string robotCode, HeadsetCommand command)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(robotCode);
+        ArgumentNullException.ThrowIfNull(command);
+        headsetCommands[robotCode] = command;
+    }
+
+    public HeadsetCommand? TakeHeadsetCommand(string robotCode, DateTimeOffset now) =>
+        headsetCommands.TryRemove(robotCode, out var command) && command.ExpiresAt > now ? command : null;
 }
