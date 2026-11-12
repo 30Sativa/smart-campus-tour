@@ -1175,7 +1175,7 @@ while `FleetCommands:Enabled = false`, Start returns
 | Tour is READY | SRS §4 | DB | fail | `tourReady` |
 | Caller is `Tours.OperatorUserId` | SRS §7 (FR-36/46) | DB | POST: `403`, not a check; GET start-checks: a check telling the viewer | `callerIsOperator` |
 | `now` in `[ScheduledStartAt - StartEarlyLimitMinutes, ScheduledStartAt + StartLateLimitMinutes]`, defaults 10 and 15; the early limit is at most the 15-minute reservation buffer. A short-notice Tour opens when its robot hold opens (a quick Tour: at creation) | Lower bound ADR-0050, ADR-0053; upper bound Design (D2, ADR-0042 §7) | DB + CONFIG | fail | `withinStartWindow` |
-| Before `ScheduledStartAt`: every accepted active row holds a live browser session. From `ScheduledStartAt`: passes as not applicable | ADR-0050 | DB | no accepted row passes; before the window: not evaluated | `allViewersJoined` |
+| Information only (never blocks): before `ScheduledStartAt` how many accepted active rows hold a live browser session. From `ScheduledStartAt`: not applicable | ADR-0050, ADR-0057 | DB | before the window: not evaluated | `allViewersJoined` |
 | Active reservation for this Tour on the same robot | SRS §4, ADR-0034 | DB | fail | `reservationActive` |
 | Revision still schedulable: effective PASS run, POI evidence, map gate (the READY check, `TourTarget.RequireSchedulableRevisionAsync`); route deactivation not considered (ADR-0037) | ADR-0034 | DB | fail; detail carries the code, e.g. `ROUTE_TEST_PASS_REQUIRED` | `revisionStillSchedulable` |
 | Robot still passes the ADR-0039 rule | ADR-0039 | DB | fail | `robotEligibleForRoute` |
@@ -1772,13 +1772,13 @@ Audit actions `ROSTER_PENDING_EXPIRED`, `REGISTRATION_EXPIRED` and `ROSTER_EXPIR
 
 | Surface | Contract |
 |---|---|
-| `GET .../tours/{id}/start-checks`, `POST .../tours/{id}/start` | Check `allViewersJoined` (table in §3.2). The read adds `opensAt`, the first instant Start is accepted. An early Start records `ReasonCode = EARLY_START` on `TOUR_STARTED`. |
+| `GET .../tours/{id}/start-checks`, `POST .../tours/{id}/start` | Check `allViewersJoined` (table in §3.2; information only since ADR-0057). The read adds `opensAt`, the first instant Start is accepted. An early Start records `ReasonCode = EARLY_START` on `TOUR_STARTED`, with the waiting-room count in `ReasonNote`. |
 | `POST /api/staff/manage/tours` | A quick Tour (ADR-0053) is created through the same call: `configuration.shortNoticeReason` (at most 500 characters, not blank) with `scheduledStartAt` null. The server sets `scheduledStartAt` to the latest Start (now + `Tours:ShortNoticeMinLeadMinutes`, 30 when unset, next whole minute), holds the robot `[now, latest Start + expected + 15 min]` with no shift, and records `TOUR_CREATED_SHORT_NOTICE` with the reason. A reason with a start, or no reason and no start, is 400. 409 `SHIFT_BLOCKED` when the hold reaches a closed day or shift, `ROBOT_RESERVATION_CONFLICT` on any other hold. Always available. |
 | `GET .../tours/shifts`, `GET .../tours/slots` | Shifts read adds `quickTourWaitMinutes`. Slots are for Tours on a shift only: `shortNotice` and `shortNoticeMinLeadMinutes` are removed. |
 | Staff Tour reads | `tour.isShortNotice` (a quick Tour); `tour.registrationClosesAt` is its latest Start. |
 | Representative Tour and registration reads | Tour adds `registrationClosesAt`; registration summary adds `tourIsShortNotice` and `tourRegistrationClosesAt`. |
 
-A short-notice Tour replaces the 72-hour lead, the 48-hour close and the 24-hour review close. Its list closes with READY, the T-24h job skips it, and undecided rows still block READY and Start. Since ADR-0053 every new short-notice Tour is a quick Tour with no shift: Start, and `opensAt`, open when its robot hold opens (creation), `allViewersJoined` applies before its latest Start, and every other Start check is the same as for any other Tour. The late limit and automatic cancellation run from its latest Start.
+A short-notice Tour replaces the 72-hour lead, the 48-hour close and the 24-hour review close. Its list closes with READY, the T-24h job skips it, and undecided rows still block READY and Start. Since ADR-0053 every new short-notice Tour is a quick Tour with no shift: Start, and `opensAt`, open when its robot hold opens (creation), `allViewersJoined` is shown before its latest Start (information only, ADR-0057), and every other Start check is the same as for any other Tour. The late limit and automatic cancellation run from its latest Start.
 
 ### 3.3 State storage and realtime delivery
 

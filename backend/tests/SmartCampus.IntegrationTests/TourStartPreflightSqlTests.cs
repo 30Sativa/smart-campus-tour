@@ -150,7 +150,7 @@ public sealed class TourStartPreflightSqlTests
     }
 
     [SchemaV11Fact]
-    public async Task EarlyStart_OpensAtTheEarlyLimit_AndNeedsEveryAcceptedViewerInTheWaitingRoom()
+    public async Task EarlyStart_OpensAtTheEarlyLimit_AndOnlyWarnsAboutViewersNotInTheWaitingRoom()
     {
         await using var w = await World.Create();
         var joined = await w.AddAcceptedViewer("joined");
@@ -165,15 +165,19 @@ public sealed class TourStartPreflightSqlTests
             var read = await w.Checks();
             Assert.Equal(w.H.Start.AddMinutes(-10), read.OpensAt);
             Assert.True(Assert.Single(read.Checks, c => c.Id == "withinStartWindow").Passed);
-            Assert.Equal([TourStartPreflight.AllViewersJoinedCheck, Transport], read.BlockedBy);
-            Assert.Contains("2/3", Assert.Single(read.Checks, c => c.Id == TourStartPreflight.AllViewersJoinedCheck).Detail);
-            var refused = await w.StartRefused();
-            Assert.Equal("START_PRECONDITION_FAILED", refused.Code);
+            // ADR-0057: a missing viewer is shown, never a root cause.
+            Assert.Equal([Transport], read.BlockedBy);
+            var viewers = Assert.Single(read.Checks, c => c.Id == TourStartPreflight.AllViewersJoinedCheck);
+            Assert.True(viewers.Passed);
+            Assert.Contains("2/3", viewers.Detail);
+            Assert.Equal([Transport], (await w.StartRefused()).BlockedBy);
         }
 
         await w.Join(absent);
         await w.Report();
-        Assert.Equal([Transport], (await w.Checks()).BlockedBy);
+        var full = await w.Checks();
+        Assert.Equal([Transport], full.BlockedBy);
+        Assert.Contains("3/3", Assert.Single(full.Checks, c => c.Id == TourStartPreflight.AllViewersJoinedCheck).Detail);
 
         // Before the window only the window is a root cause.
         w.Clock.Now = w.H.Start.AddMinutes(-11);

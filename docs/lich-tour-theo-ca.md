@@ -409,8 +409,8 @@ mục trên giữ nguyên.
 - **Giữ robot:** từ lúc tạo đến hạn Start + thời lượng tuyến + 15 phút. Vẫn kiểm tra trùng khung giữ robot của mọi Tour khác
   (kể cả Tour theo ca), và bị từ chối nếu khung giữ chạm vào ngày hoặc ca Admin đã khoá. Tuyến không được dài hơn ca dài nhất.
 - **Luồng:** tạo → (đại diện trường đăng ký, Staff duyệt nếu có người xem) → chốt READY → **Start ngay**, không chờ tới giờ.
-  Trước hạn Start, Start cần mọi điểm xem đã duyệt đang ở phòng chờ; Tour không có điểm xem nào cũng Start được. Mọi kiểm tra
-  an toàn robot giữ nguyên.
+  Từ ADR-0057, Start không cần chờ đủ điểm xem vào phòng chờ: màn hình chỉ cảnh báo số điểm xem đã vào (X/Y), và sự kiện
+  `EARLY_START` ghi lại con số đó. Mọi kiểm tra an toàn robot giữ nguyên.
 - **Đăng ký:** như Tour ngắn hạn của ADR-0050: không có mốc 48 giờ và 24 giờ; đăng ký đóng khi Staff chốt READY, muộn nhất
   là hạn Start; job T−24h bỏ qua Tour này.
 - **Quá hạn:** chưa Start tới hạn Start + 15 phút thì hệ thống tự huỷ như mục 11 và trả robot.

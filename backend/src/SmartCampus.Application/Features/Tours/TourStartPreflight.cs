@@ -121,17 +121,11 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
             list.Add(HasAcceptedRowsCheck, "DB", accepted,
                 accepted ? "Tour có dòng đăng ký đã được duyệt." : TourReadiness.NoAcceptedRowsMessage);
 
-        // ADR-0050: Start before the published time leaves nobody behind. From the published time a missing viewer no longer holds the Tour.
+        // ADR-0057 (amends ADR-0050 decision 2): before the published time the waiting room is shown, never blocks.
         if (now >= tour.ScheduledStartAt)
-            list.Add(AllViewersJoinedCheck, "DB", true, "Không áp dụng: đã tới giờ bắt đầu.");
+            list.Info(AllViewersJoinedCheck, "DB", "Không áp dụng: đã tới giờ bắt đầu.");
         else if (now >= opensAt)
-        {
-            var viewers = await repository.GetViewerPresenceAsync(tour.Id, now, ct);
-            list.Add(AllViewersJoinedCheck, "DB", viewers.Joined == viewers.Accepted,
-                viewers.Accepted == 0 ? "Tour không có điểm xem nào được duyệt."
-                : viewers.Joined == viewers.Accepted ? $"Đủ {viewers.Accepted}/{viewers.Accepted} điểm xem đã vào phòng chờ."
-                : $"Mới có {viewers.Joined}/{viewers.Accepted} điểm xem vào phòng chờ. Chờ đủ, hoặc bắt đầu từ giờ công bố.");
-        }
+            list.Info(AllViewersJoinedCheck, "DB", ViewerPresenceDetail(await repository.GetViewerPresenceAsync(tour.Id, now, ct)));
         else
             list.Skip("withinStartWindow", "DB", [AllViewersJoinedCheck]);
 
@@ -188,6 +182,12 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         return list.Result();
     }
 
+    /// <summary>The waiting room before the published time, as the start checks and the early Start record show it.</summary>
+    public static string ViewerPresenceDetail(TourViewerPresence viewers) =>
+        viewers.Accepted == 0 ? "Tour không có điểm xem nào được duyệt."
+        : viewers.Joined == viewers.Accepted ? $"Đủ {viewers.Accepted}/{viewers.Accepted} điểm xem đã vào phòng chờ."
+        : $"Mới có {viewers.Joined}/{viewers.Accepted} điểm xem vào phòng chờ (chỉ cảnh báo, không chặn Start sớm).";
+
     // ADR-0042 open decision 3 (refined): no incident table, so a Tour holding the robot in NEEDS_ASSISTANCE stands
     // in for it. NeedsInspection is its own check (robotNotNeedsInspection) and is not reported twice.
     private static void AddIncident(Checklist list, bool incident) =>
@@ -230,7 +230,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
                     ? $"Chưa tới giờ được Start; Start mở từ {(start - earliest).TotalMinutes:0} phút trước giờ bắt đầu."
                     : "Chưa tới giờ bắt đầu của Tour."
             : now > latest ? $"Đã quá {settings.StartLateLimit.TotalMinutes:0} phút sau giờ bắt đầu của Tour."
-            : now < start ? "Đang trong khung Start sớm; cần mọi điểm xem đã vào phòng chờ."
+            : now < start ? "Đang trong khung Start sớm."
             : "Đang trong khung giờ được Start.";
         return now >= earliest && now <= latest;
     }

@@ -47,16 +47,17 @@ public sealed class StartTourCommandHandler(ITourManagementRepository repository
         var now = clock.GetUtcNow();
         if (!await repository.TryClaimRobotAsync(reservation.RobotId, tour.Id, now, ct))
             throw new ConflictException("Robot vừa đổi trạng thái nên không nhận được Tour. Tải lại và thử lại.", "ROBOT_CLAIM_FAILED");
-        // ADR-0050: an early Start is recorded with how early it was; the preflight required every viewer to be in the waiting room.
+        // ADR-0050: an early Start is recorded with how early it was and, since ADR-0057, who was in the waiting room.
         var early = tour.ScheduledStartAt - now;
+        var viewers = early > TimeSpan.Zero ? await repository.GetViewerPresenceAsync(tour.Id, now, ct) : null;
         tour.Start(reservation.RobotId, now);
         repository.AddEvent(new TourEvent
         {
             TourId = tour.Id, EventType = TourLifecycleEvents.Started, OccurredAt = now, RobotId = reservation.RobotId,
             RouteId = tour.ActiveRouteId, ActorUserId = command.Actor,
             ReasonCode = early > TimeSpan.Zero ? EarlyStartReason : null,
-            ReasonNote = early > TimeSpan.Zero
-                ? $"Start sớm {(int)Math.Ceiling(early.TotalSeconds)} giây trước giờ bắt đầu; mọi điểm xem đã vào phòng chờ." : null
+            ReasonNote = viewers is null ? null
+                : $"Start sớm {(int)Math.Ceiling(early.TotalSeconds)} giây trước giờ bắt đầu; {viewers.Joined}/{viewers.Accepted} điểm xem đã vào phòng chờ."
         });
         TourLegDispatch.Begin(repository, settings, tour, reservation.RobotId, map, TourLegTarget.To(first), command.Actor, now);
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
