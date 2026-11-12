@@ -101,7 +101,7 @@ khởi động motor ngoài lệnh launch mà người vận hành gõ.
 
 ## 4. Calibration LiDAR
 
-Đã từng chạy **không có nghĩa** là đã kiểm chứng. Launcher phân biệt ba trạng thái:
+Đã từng chạy **không có nghĩa** là đã kiểm chứng. Launcher phân biệt ba trạng thái. Từ 12/11 (demo đồ án) trạng thái chỉ được **cảnh báo**, không chặn workflow nào; bảng dưới là thiết kế ban đầu:
 
 | Trạng thái | Khi nào | manual | map | nav |
 |---|---|---|---|---|
@@ -175,3 +175,24 @@ Thêm một giá trị vào `LEGACY_BASELINE_LIDAR_YAWS` là thay đổi code, p
   `smoothws` giả, để chứng minh các biến này không lọt vào.
 - Thay cho `exec` thật, test dùng một chương trình giả qua `SCT_ROBOT_TEST_EXEC` (biến chỉ
   dành cho test). Không có test nào khởi động ROS.
+
+## 8. Tour từ web: `robot nav --fleet`, `robot fleet`, `robot reset-latch`
+
+Dành cho demo đồ án: bấm "Bắt đầu Tour" trên web, backend tạo lệnh, `fleet_bridge` nhận lệnh, Nav2 chạy.
+
+| Lệnh | Việc làm |
+|---|---|
+| `robot fleet` | Chạy `fleet_bridge` chỉ gửi telemetry (web hết báo "chưa gửi telemetry"). Cấu hình đọc từ `FLEET_ENV_FILE` (mặc định `~/.config/campustour/fleet-sync.env`); `--dry-run` không in giá trị |
+| `robot nav --fleet` | NAV2 kèm cổng `motion_permit` (ADR-0049): mất liên lạc với backend thì robot tự dừng. Cần runtime có cổng này (overlay build từ `main`); `smoothws` không có nên bị từ chối |
+| `robot fleet --commands` | `fleet_bridge` nhận Tour từ web (`commands_enabled`, `report_period_sec` 0.5). Cần một phiên `robot nav` đang chạy. Nếu phiên đó không có `--fleet`, launcher nhắc rằng khi mất mạng giữa chặng thì robot vẫn đi tiếp tới đích |
+| `robot reset-latch` | Mở cổng `motion_permit` sau khi người đứng tại robot thấy an toàn (chỉ có tác dụng với `nav --fleet`) |
+
+Vì đây là demo, các kiểm tra chỉ mang tính thủ tục đã thành cảnh báo:
+- `lidar_yaw` chưa kiểm chứng: `map` và `nav` vẫn chạy, kèm cảnh báo;
+- `fleet_bridge` đang bật lệnh khi khởi động `nav`: chỉ cảnh báo.
+
+Vẫn bị chặn: hai workflow cùng lúc, hai `fleet_bridge` cùng lúc, `fleet --commands` khi chưa có `nav`.
+
+Hai công tắc phía backend vẫn cần bật cho buổi test:
+- `FleetCommands__Enabled=true`: biến môi trường của backend, rồi restart;
+- "Cho phép điều phối" trong trang Robot của Technical Staff (`IsDispatchEnabled`).
