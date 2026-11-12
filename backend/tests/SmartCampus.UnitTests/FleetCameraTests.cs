@@ -4,6 +4,7 @@ using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.FleetCamera;
 using SmartCampus.Application.Features.FleetCamera.Commands.LeaseCamera;
 using SmartCampus.Application.Features.FleetCamera.Commands.PollCameraDemand;
+using SmartCampus.Application.Features.FleetCamera.Queries.GetRobotHeadset;
 
 namespace SmartCampus.UnitTests;
 
@@ -113,6 +114,75 @@ public sealed class FleetCameraTests
     public void Settings_RefuseNonsense(int lease, int poll, int listening) =>
         Assert.Throws<InvalidOperationException>(() => new FleetCameraSettings(lease, poll, listening));
 
+    // ---- ADR-0056: headset battery reported with the camera poll ----------------------------------------------------
+
+    [Fact]
+    public void HeadsetReport_IsNormalised_NeverRejected()
+    {
+        Assert.Equal(new HeadsetReport("connected", 54, true, "live"), HeadsetReports.Normalise(" Connected ", 54, true, "LIVE"));
+        Assert.Equal(new HeadsetReport("unknown", 100, null, null), HeadsetReports.Normalise("sleeping", 140, null, "streaming"));
+        Assert.Equal(new HeadsetReport("unknown", 0, false, "paused"), HeadsetReports.Normalise(null, -5, false, "paused"));
+    }
+
+    [Fact]
+    public async Task Poll_WithAHeadset_StoresIt_AndStaffReadIt()
+    {
+        var (store, clock) = (new FakeStore(), new Clock(Now));
+        var robots = new FakeRobots(new RobotCameraFacts(Robot, false));
+        await new PollCameraDemandHandler(store, robots, new FleetCameraSettings(), clock)
+            .Handle(new PollCameraDemand(Robot, new HeadsetReport("connected", 54, true, "live")), default);
+
+        var status = await new GetRobotHeadsetHandler(store, robots, new FleetCameraSettings(robotListeningWithinSeconds: 20), clock)
+            .Handle(new GetRobotHeadset(Robot), default);
+        Assert.Equal(new RobotHeadsetStatus(Robot, true, "connected", 54, true, "live", Now, false), status);
+    }
+
+    [Fact]
+    public async Task Poll_WithoutAHeadset_KeepsTheLastReport()
+    {
+        var (store, clock) = (new FakeStore(), new Clock(Now));
+        var robots = new FakeRobots(new RobotCameraFacts(Robot, false));
+        var poll = new PollCameraDemandHandler(store, robots, new FleetCameraSettings(), clock);
+        await poll.Handle(new PollCameraDemand(Robot, new HeadsetReport("connected", 80, false, "paused")), default);
+        clock.Now = Now.AddSeconds(5);
+        await poll.Handle(new PollCameraDemand(Robot), default);
+        Assert.Equal(Now, store.GetHeadset(Robot)!.Value.At);
+    }
+
+    [Fact]
+    public async Task Headset_NeverReported_OrTooOld_SaysSo()
+    {
+        var (store, clock) = (new FakeStore(), new Clock(Now));
+        var robots = new FakeRobots(new RobotCameraFacts(Robot, false));
+        var handler = new GetRobotHeadsetHandler(store, robots, new FleetCameraSettings(robotListeningWithinSeconds: 20), clock);
+
+        var never = await handler.Handle(new GetRobotHeadset(Robot), default);
+        Assert.False(never.Reported);
+        Assert.True(never.Stale);
+        Assert.Null(never.BatteryPercent);
+
+        store.RecordHeadset(Robot, new HeadsetReport("connected", 30, false, "live"), Now);
+        clock.Now = Now.AddSeconds(21);
+        var old = await handler.Handle(new GetRobotHeadset(Robot), default);
+        Assert.True(old.Reported);
+        Assert.True(old.Stale);
+        Assert.Equal(30, old.BatteryPercent);
+    }
+
+    [Fact]
+    public async Task Headset_OfAnUnknownRobot_IsNotFound()
+    {
+        var handler = new GetRobotHeadsetHandler(new FakeStore(), new FakeRobots(null), new FleetCameraSettings(), new Clock(Now));
+        await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(new GetRobotHeadset(Robot), default));
+    }
+
+    [Theory]
+    [InlineData("amr_01", true)]
+    [InlineData("amr/01", false)]
+    [InlineData("", false)]
+    public void HeadsetValidator_AcceptsOnlyRobotCodes(string code, bool valid) =>
+        Assert.Equal(valid, new GetRobotHeadsetValidator().Validate(new GetRobotHeadset(code)).IsValid);
+
     private static Task<CameraDemand> Poll(ICameraDemandStore store, TimeProvider clock, RobotCameraFacts? facts) =>
         new PollCameraDemandHandler(store, new FakeRobots(facts), new FleetCameraSettings(), clock)
             .Handle(new PollCameraDemand(Robot), default);
@@ -133,10 +203,14 @@ public sealed class FleetCameraTests
     {
         private readonly Dictionary<string, DateTimeOffset> polls = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DateTimeOffset> leases = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, (HeadsetReport, DateTimeOffset)> headsets = new(StringComparer.OrdinalIgnoreCase);
         public void RecordPoll(string robotCode, DateTimeOffset at) => polls[robotCode] = at;
         public DateTimeOffset? GetLastPoll(string robotCode) => polls.TryGetValue(robotCode, out var at) ? at : null;
         public DateTimeOffset ExtendLease(string robotCode, DateTimeOffset until) =>
             leases[robotCode] = leases.TryGetValue(robotCode, out var previous) && previous > until ? previous : until;
         public DateTimeOffset? GetLease(string robotCode) => leases.TryGetValue(robotCode, out var until) ? until : null;
+        public void RecordHeadset(string robotCode, HeadsetReport report, DateTimeOffset at) => headsets[robotCode] = (report, at);
+        public (HeadsetReport Report, DateTimeOffset At)? GetHeadset(string robotCode) =>
+            headsets.TryGetValue(robotCode, out var entry) ? entry : null;
     }
 }

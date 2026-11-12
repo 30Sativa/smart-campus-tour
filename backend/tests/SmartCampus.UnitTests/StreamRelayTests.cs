@@ -217,10 +217,14 @@ public sealed class StreamRelayTests
     private sealed class FakeStore : ICameraDemandStore
     {
         private readonly Dictionary<string, DateTimeOffset> leases = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, (HeadsetReport, DateTimeOffset)> headsets = new(StringComparer.OrdinalIgnoreCase);
         public void RecordPoll(string robotCode, DateTimeOffset at) { }
         public DateTimeOffset? GetLastPoll(string robotCode) => null;
         public DateTimeOffset ExtendLease(string robotCode, DateTimeOffset until) =>
             leases[robotCode] = leases.TryGetValue(robotCode, out var previous) && previous > until ? previous : until;
         public DateTimeOffset? GetLease(string robotCode) => leases.TryGetValue(robotCode, out var until) ? until : null;
+        public void RecordHeadset(string robotCode, HeadsetReport report, DateTimeOffset at) => headsets[robotCode] = (report, at);
+        public (HeadsetReport Report, DateTimeOffset At)? GetHeadset(string robotCode) =>
+            headsets.TryGetValue(robotCode, out var entry) ? entry : null;
     }
 }

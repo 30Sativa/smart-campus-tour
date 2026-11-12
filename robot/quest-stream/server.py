@@ -125,6 +125,9 @@ class Config:
     robot_credential_file: str = ""  # the Fleet robot credential (FLEET_ROBOT_CREDENTIAL_FILE)
     control_failsafe: bool = True  # capture when the backend has never answered / not for control_grace
     control_grace: float = 60.0  # keep the last answer this long while the backend cannot be reached
+    # ADR-0056: the same poll reports the headset (battery, adb, video) for the web. Off = keep polling and reporting,
+    # but capture whenever the Quest is plugged in, as without a control URL.
+    camera_on_demand: bool = True
 
     # Output: where FFmpeg publishes (MediaMTX RTSP) and how often a keyframe
     # is sent (a new WebRTC viewer starts on the next keyframe).
@@ -187,6 +190,7 @@ class Config:
         )
         cfg.control_failsafe = _env("QUEST_CONTROL_FAILSAFE", "on").lower() in ("1", "on", "true", "yes")
         cfg.control_grace = _env_float("QUEST_CONTROL_GRACE", 60.0)
+        cfg.camera_on_demand = _env("QUEST_CAMERA_ON_DEMAND", "on").lower() in ("1", "on", "true", "yes")
         cfg.validate()
         return cfg
 
@@ -666,10 +670,13 @@ class CameraDemand(threading.Thread):
     by default the camera keeps running, so a backend outage never blacks out a running Tour.
     """
 
-    def __init__(self, cfg: Config, opener=urlopen, clock=time.time):
+    def __init__(self, cfg: Config, opener=urlopen, clock=time.time, report=None):
         super().__init__(name="camera-demand", daemon=True)
         self.cfg = cfg
-        self.enabled = bool(cfg.control_url)
+        # Polling (and the headset report) runs with a control URL; deciding the camera also needs camera_on_demand.
+        self.polling = bool(cfg.control_url)
+        self.enabled = self.polling and cfg.camera_on_demand
+        self._report = report  # () -> dict sent as the poll body (ADR-0056), or None
         self.changed = threading.Event()
         self.stop_event = threading.Event()
         self._opener = opener
@@ -708,7 +715,7 @@ class CameraDemand(threading.Thread):
         before = self.wanted()
         try:
             credential = Path(self.cfg.robot_credential_file).read_text("utf-8").strip()
-            request = Request(self.cfg.control_url, data=b"", method="POST", headers={
+            request = Request(self.cfg.control_url, data=self._body(), method="POST", headers={
                 "Authorization": f"Bearer {credential}",
                 "X-Robot-Code": self.cfg.robot_code,
                 "Content-Type": "application/json",
@@ -735,6 +742,16 @@ class CameraDemand(threading.Thread):
         if self.wanted() != before:
             log.info("CAMERA_DEMAND %s (%s)", "on" if self.wanted() else "off", self.reason())
             self.changed.set()
+
+    def _body(self) -> bytes:
+        """The headset report as JSON; a failing report never stops the poll itself."""
+        if self._report is None:
+            return b""
+        try:
+            return json.dumps(self._report()).encode("utf-8")
+        except Exception as exc:  # noqa: BLE001 - the camera decision matters more than the report
+            log.debug("headset report skipped: %s", exc)
+            return b""
 
     def _fail(self, why: str) -> None:
         with self._lock:
@@ -866,6 +883,17 @@ class DeviceStatus:
                 "batteryError": self.battery_error or None,
                 "checkedAt": round(self.checked_at, 3) if self.checked_at else None,
             }
+
+
+def headset_report(device: "DeviceStatus", status: "Status") -> dict:
+    """ADR-0056 poll body: the headset as /device sees it, battery only while adb is connected (else it is stale)."""
+    snap = device.snapshot()
+    report = {"connection": snap["connection"], "stream": stream_summary(status.state)}
+    battery = snap["battery"] or {}
+    if snap["connection"] == "connected" and isinstance(battery.get("level"), int):
+        report["batteryPercent"] = battery["level"]
+        report["charging"] = bool(battery.get("charging"))
+    return {"headset": report}
 
 
 def stream_summary(state: str) -> str:
@@ -1380,10 +1408,10 @@ def main() -> int:
         return 2
 
     status = Status()
-    demand = CameraDemand(cfg)
-    supervisor = Supervisor(cfg, status, demand)
     device = DeviceStatus()
     monitor = DeviceMonitor(cfg, device)
+    demand = CameraDemand(cfg, report=lambda: headset_report(device, status))
+    supervisor = Supervisor(cfg, status, demand)
 
     try:
         httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status, device, demand))
@@ -1408,9 +1436,10 @@ def main() -> int:
         cfg.host, cfg.port, cfg.publish_url_safe, cfg.capture, cfg.eye, cfg.crop_keep,
         cfg.width, cfg.height, cfg.fps, cfg.encoder, cfg.bitrate,
     )
-    if demand.enabled:
-        log.info("CAMERA_DEMAND asking %s as %s (failsafe %s after %.0fs without an answer)",
-                 cfg.control_url, cfg.robot_code, "on" if cfg.control_failsafe else "off", cfg.control_grace)
+    if demand.polling:
+        log.info("CAMERA_DEMAND asking %s as %s (camera on demand %s; failsafe %s after %.0fs without an answer; "
+                 "headset reported with each poll)", cfg.control_url, cfg.robot_code,
+                 "on" if demand.enabled else "off", "on" if cfg.control_failsafe else "off", cfg.control_grace)
         demand.poll_once()  # decide before the first capture, so an idle robot never starts the Quest
         demand.start()
     supervisor.start()

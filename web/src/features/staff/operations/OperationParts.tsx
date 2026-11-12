@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { toneClass, type StatusTone } from '../../../components/ui/status-tone'
+import { dotClass, toneClass, type StatusTone } from '../../../components/ui/status-tone'
+import { headsetSummary, useRobotHeadset } from '../../quest-stream/robot-headset'
 import type { TourCommand, TourDetails, TourState, TourSummary } from '../../administration/tours/types'
 import { tourStateLabel } from '../../administration/tours/tour-messages'
 import { formatTime } from '../formatters'
@@ -91,6 +92,18 @@ const EXECUTION_STATUS: Record<string, string> = { IDLE: 'Đang rảnh', NAVIGAT
 const SOURCE: Record<string, string> = { Physical: 'Robot thật', Gazebo: 'Gazebo (mô phỏng)', Emulator: 'Emulator (mô phỏng)' }
 const yesNo = (value: boolean | null, yes: string, no: string) => (value === null ? 'Robot chưa báo' : value ? yes : no)
 
+/** ADR-0056: the Quest headset's battery and connection, as the robot's quest-stream reported it to the server. */
+function HeadsetRow({ robotCode }: { robotCode: string }) {
+  const headset = useRobotHeadset(robotCode)
+  const { text, tone } = headsetSummary(headset.data, headset.isError)
+  return <Row label="Kính Quest">
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`size-2 shrink-0 rounded-full ${dotClass[tone]}`} aria-hidden="true" />
+      <span className={tone === 'danger' ? 'text-[#9d3428]' : tone === 'warn' ? 'text-[#b45309]' : tone === 'muted' ? 'text-[#64748b]' : ''}>{text}</span>
+    </span>
+  </Row>
+}
+
 /**
  * The robot's own latest report, from the Operations hub. Ages keep counting
  * between broadcasts, and a lost hub connection is said, so an old value never
@@ -105,7 +118,8 @@ export function RobotTelemetryPanel({ robotCode }: { robotCode: string | null | 
   const link = connection === 'connected' ? null
     : connection === 'disconnected' ? 'Mất kết nối telemetry với máy chủ, đang thử kết nối lại. Số liệu dưới đây có thể đã cũ.'
     : 'Đang kết nối kênh telemetry.'
-  if (!robot) return <div className="space-y-2 text-[13px] text-[#64748b]">{link && <p>{link}</p>}<p>Robot <span className="font-mono">{robotCode}</span> chưa gửi telemetry tới máy chủ.</p></div>
+  if (!robot) return <div className="space-y-2 text-[13px] text-[#64748b]">{link && <p>{link}</p>}<p>Robot <span className="font-mono">{robotCode}</span> chưa gửi telemetry tới máy chủ.</p>
+    <dl><HeadsetRow robotCode={robotCode} /></dl></div>
   const age = telemetryAge(robot, receivedAt, now)
   return (
     <div className="space-y-2">
@@ -120,6 +134,7 @@ export function RobotTelemetryPanel({ robotCode }: { robotCode: string | null | 
         <Row label="Bản đồ">{mapAreaName(maps.data, { mapKey: robot.mapKey }) ?? (maps.isSuccess ? 'Bản đồ chưa có trong danh sách' : '-')}</Row>
         <Row label="Vị trí">{robot.pose ? <span className={robot.poseFresh ? '' : 'text-[#b45309]'}>x {robot.pose.x.toFixed(2)}, y {robot.pose.y.toFixed(2)} m{robot.poseFresh ? '' : ', đã cũ'}</span> : 'Robot chưa báo'}</Row>
         <Row label="Pin">{robot.batteryPercent == null ? 'Robot chưa báo' : `${robot.batteryPercent.toFixed(0)}%`}</Row>
+        <HeadsetRow robotCode={robotCode} />
         {robot.faultCode && <Row label="Lỗi robot báo"><span className="font-mono text-xs text-[#9d3428]">{robot.faultCode}</span></Row>}
         {robot.needsCheck && <Row label="Kiểm tra tại chỗ"><span className="text-[#9d3428]">Robot đang chờ kiểm tra</span></Row>}
       </dl>

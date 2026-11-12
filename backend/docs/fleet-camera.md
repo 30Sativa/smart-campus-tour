@@ -6,7 +6,8 @@ Staff lease has not expired.
 | Endpoint | Who |
 |---|---|
 | `POST /api/staff/manage/robots/{robotCode}/camera-lease` | Staff. Renewed every 30 s by the pre-start check page. |
-| `POST /api/fleet/camera/v1/poll` | The robot's `quest-stream` (Fleet Robot scheme), every `pollSeconds`. |
+| `POST /api/fleet/camera/v1/poll` | The robot's `quest-stream` (Fleet Robot scheme), every `pollSeconds`; optional body `{headset}` (ADR-0056). |
+| `GET /api/staff/manage/robots/{robotCode}/headset` | Staff: the last headset report (battery, adb connection, video), ADR-0056. |
 
 ## Code
 

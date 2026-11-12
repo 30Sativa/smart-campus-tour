@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using SmartCampus.Application.Common.Abstractions.FleetCamera;
+using SmartCampus.Application.Features.FleetCamera;
 
 namespace SmartCampus.Infrastructure.Integrations.FleetCamera;
 
@@ -8,6 +9,7 @@ public sealed class InMemoryCameraDemandStore : ICameraDemandStore
 {
     private readonly ConcurrentDictionary<string, DateTimeOffset> polls = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTimeOffset> leases = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, (HeadsetReport Report, DateTimeOffset At)> headsets = new(StringComparer.OrdinalIgnoreCase);
 
     public void RecordPoll(string robotCode, DateTimeOffset at)
     {
@@ -26,4 +28,14 @@ public sealed class InMemoryCameraDemandStore : ICameraDemandStore
 
     public DateTimeOffset? GetLease(string robotCode) =>
         leases.TryGetValue(robotCode, out var until) ? until : null;
+
+    public void RecordHeadset(string robotCode, HeadsetReport report, DateTimeOffset at)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(robotCode);
+        ArgumentNullException.ThrowIfNull(report);
+        headsets.AddOrUpdate(robotCode, (report, at), (_, previous) => at >= previous.At ? (report, at) : previous);
+    }
+
+    public (HeadsetReport Report, DateTimeOffset At)? GetHeadset(string robotCode) =>
+        headsets.TryGetValue(robotCode, out var entry) ? entry : null;
 }

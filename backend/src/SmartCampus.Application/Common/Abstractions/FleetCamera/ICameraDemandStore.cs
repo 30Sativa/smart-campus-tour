@@ -1,3 +1,5 @@
+using SmartCampus.Application.Features.FleetCamera;
+
 namespace SmartCampus.Application.Common.Abstractions.FleetCamera;
 
 /// <summary>
@@ -15,4 +17,9 @@ public interface ICameraDemandStore
     DateTimeOffset ExtendLease(string robotCode, DateTimeOffset until);
 
     DateTimeOffset? GetLease(string robotCode);
+
+    /// <summary>ADR-0056: the headset as the robot last reported it; a later report replaces an earlier one.</summary>
+    void RecordHeadset(string robotCode, HeadsetReport report, DateTimeOffset at);
+
+    (HeadsetReport Report, DateTimeOffset At)? GetHeadset(string robotCode);
 }

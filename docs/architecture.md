@@ -1314,6 +1314,11 @@ lease has not expired:
 | POST | `/api/staff/manage/robots/{robotCode}/camera-lease` | Staff role, no body. Extends the lease to now + `FleetCamera:LeaseSeconds` (120); 200 `{robotCode, wanted, reason, robotListening, lastPollAt, leaseUntil, stream}`; `stream` (ADR-0055) is `{whepUrl, token, expiresAt}` for this Staff user when the public relay carries this robot, else null; 404 unknown or deactivated robot; 400 invalid code. The pre-start check page renews it every 30 s while visible, which also renews the token. |
 | POST | `/api/fleet/camera/v1/poll` | Robot scheme, no body, `FleetSync` rate-limit policy. 200 `{wanted, reason: TOUR_RUNNING\|STAFF_WATCHING\|IDLE, pollSeconds}`. |
 
+**Quest headset status (ADR-0056).** The camera poll may carry `{headset: {connection, batteryPercent,
+charging, stream}}` (normalised, never rejected). `GET /api/staff/manage/robots/{robotCode}/headset` (Staff) returns
+`{robotCode, reported, connection, batteryPercent, charging, stream, reportedAt, stale}` from memory; 404 unknown robot,
+400 invalid code.
+
 Leases and last polls live only in API memory (single instance, ADR-0019); nothing is
 written to SQL. `robot/quest-stream` (`QUEST_CONTROL_URL=auto`) polls with the Fleet Sync
 identity, pauses capture when not wanted (`/status` state `paused`, `/device` stream
