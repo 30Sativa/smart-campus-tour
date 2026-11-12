@@ -218,6 +218,7 @@ public sealed class StreamRelayTests
     {
         private readonly Dictionary<string, DateTimeOffset> leases = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, (HeadsetReport, DateTimeOffset)> headsets = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, HeadsetCommand> headsetCommands = new(StringComparer.OrdinalIgnoreCase);
         public void RecordPoll(string robotCode, DateTimeOffset at) { }
         public DateTimeOffset? GetLastPoll(string robotCode) => null;
         public DateTimeOffset ExtendLease(string robotCode, DateTimeOffset until) =>
@@ -226,5 +227,8 @@ public sealed class StreamRelayTests
         public void RecordHeadset(string robotCode, HeadsetReport report, DateTimeOffset at) => headsets[robotCode] = (report, at);
         public (HeadsetReport Report, DateTimeOffset At)? GetHeadset(string robotCode) =>
             headsets.TryGetValue(robotCode, out var entry) ? entry : null;
+        public void QueueHeadsetCommand(string robotCode, HeadsetCommand command) => headsetCommands[robotCode] = command;
+        public HeadsetCommand? TakeHeadsetCommand(string robotCode, DateTimeOffset now) =>
+            headsetCommands.Remove(robotCode, out var command) && command.ExpiresAt > now ? command : null;
     }
 }

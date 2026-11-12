@@ -13,6 +13,11 @@ is a text file (``FAKE_ADB_STATE_FILE``, default /tmp/fake-adb-state):
 (level, default 76) and ``FAKE_ADB_CHARGING`` (``1`` = on USB power and
 charging).
 
+The display is ``FAKE_ADB_SCREEN_FILE`` (``Awake`` or ``Asleep``, default
+Awake): ``shell dumpsys power`` reports it as ``mWakefulness``, and ``shell
+input keyevent KEYCODE_WAKEUP`` / ``KEYCODE_SLEEP`` change it. Every ``shell``
+call is appended to ``FAKE_ADB_LOG`` when that is set.
+
 ``exec-out screenrecord`` emits a real side-by-side stereo H.264 stream: the
 left eye is a moving test pattern, the right eye solid red, each surrounded by
 a black "lens" border. It stops at --time-limit (like Android) or as soon as
@@ -37,6 +42,14 @@ def state() -> str:
             return f.read().strip() or "none"
     except FileNotFoundError:
         return "none"
+
+
+def screen() -> str:
+    try:
+        with open(os.environ.get("FAKE_ADB_SCREEN_FILE", ""), encoding="utf-8") as f:
+            return f.read().strip() or "Awake"
+    except (FileNotFoundError, OSError):
+        return "Awake"
 
 
 def main(argv):
@@ -72,6 +85,20 @@ def main(argv):
         print(f"error: device '{SERIAL}' not found", file=sys.stderr)
         return 1
 
+    if cmd == "shell" and os.environ.get("FAKE_ADB_LOG"):
+        with open(os.environ["FAKE_ADB_LOG"], "a", encoding="utf-8") as f:
+            f.write(" ".join(args[1:]) + "\n")
+    if cmd == "shell" and args[1:3] == ["dumpsys", "power"]:
+        print("POWER MANAGER (dumpsys power)")
+        print(f"  mWakefulness={screen()}")
+        print("  mWakefulnessChanging=false")
+        return 0
+    if cmd == "shell" and args[1:3] == ["input", "keyevent"] and len(args) > 3:
+        wanted = {"KEYCODE_WAKEUP": "Awake", "KEYCODE_SLEEP": "Asleep"}.get(args[3])
+        if wanted and os.environ.get("FAKE_ADB_SCREEN_FILE"):
+            with open(os.environ["FAKE_ADB_SCREEN_FILE"], "w", encoding="utf-8") as f:
+                f.write(wanted)
+        return 0
     if cmd == "shell" and args[1:3] == ["getprop", "ro.product.model"]:
         print("Quest 3")
         return 0

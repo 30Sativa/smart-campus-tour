@@ -27,3 +27,26 @@ quest-stream reads the headset over adb (`adb devices -l`, `dumpsys battery`) an
 
 - The battery appears only when quest-stream has `QUEST_CONTROL_URL` set (`auto`) and the Fleet identity.
 - Students do not see the headset battery. An API restart forgets the report until the next poll (≤ 5 s).
+
+## Addendum (12/11/2026): Staff wake the headset or put it to sleep
+
+Requested by team member Thanh: the Quest plugged into the NUC stays awake and loses charge (a NUC USB port gives
+less power than an awake, streaming Quest draws), so Staff need to put it to sleep between Tours.
+
+1. **Screen in the report.** quest-stream adds `screen` (`awake`, `asleep`, `unknown`) from `dumpsys power`
+   (`mWakefulness`). A report without `screen` comes from an older quest-stream, which cannot run presses.
+2. **One press, in memory.** `POST /api/staff/manage/robots/{robotCode}/headset/commands` `{action: WAKE|SLEEP}`
+   (Staff) keeps one press per robot (a later one replaces it) for `FleetCamera:RobotListeningWithinSeconds`. The
+   next camera poll answer carries it once as `headsetCommand: {id, action}`. No SQL, no audit row; an API restart
+   loses a press not yet delivered.
+3. **Refused when nobody would run it.** 409 when the robot has not polled recently, the headset is not reported,
+   adb is not `connected`, the quest-stream is too old, or SLEEP while a Tour runs on the robot (it would black out the
+   viewers). WAKE is always allowed.
+4. **On the headset.** WAKE: `input keyevent KEYCODE_WAKEUP`, then `com.oculus.vrpowermanager.prox_close` so the display
+   stays on while nobody wears it. SLEEP: `com.oculus.vrpowermanager.automation_disable` (the proximity sensor is back),
+   then `input keyevent KEYCODE_SLEEP`. The screen is read again right after, so the next report shows the result.
+5. **No power-off or power-on.** A powered-off Quest has no adb, so the web could never turn it on again; only the
+   button on the headset can.
+
+The Robot panel's "Kính Quest" row gets a "Màn hình kính" line: the screen and the one button that changes it, and
+what happened to the last press.

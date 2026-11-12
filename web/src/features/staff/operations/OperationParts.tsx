@@ -1,6 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import { dotClass, toneClass, type StatusTone } from '../../../components/ui/status-tone'
-import { headsetSummary, useRobotHeadset } from '../../quest-stream/robot-headset'
+import {
+  headsetCommandError, headsetControl, headsetSummary, useHeadsetCommand, useRobotHeadset,
+  type HeadsetAction, type HeadsetPress,
+} from '../../quest-stream/robot-headset'
+import { buttonClass } from '../../../components/ui/ui-classes'
 import type { TourCommand, TourDetails, TourState, TourSummary } from '../../administration/tours/types'
 import { tourStateLabel } from '../../administration/tours/tour-messages'
 import { formatTime } from '../formatters'
@@ -92,16 +96,44 @@ const EXECUTION_STATUS: Record<string, string> = { IDLE: 'Đang rảnh', NAVIGAT
 const SOURCE: Record<string, string> = { Physical: 'Robot thật', Gazebo: 'Gazebo (mô phỏng)', Emulator: 'Emulator (mô phỏng)' }
 const yesNo = (value: boolean | null, yes: string, no: string) => (value === null ? 'Robot chưa báo' : value ? yes : no)
 
-/** ADR-0056: the Quest headset's battery and connection, as the robot's quest-stream reported it to the server. */
+const toneText = (tone: StatusTone) =>
+  tone === 'danger' ? 'text-[#9d3428]' : tone === 'warn' ? 'text-[#b45309]' : tone === 'muted' ? 'text-[#64748b]' : ''
+const HEADSET_BUTTON: Record<HeadsetAction, string> = { WAKE: 'Đánh thức kính', SLEEP: 'Cho kính ngủ' }
+
+/**
+ * ADR-0056: the Quest headset's battery and connection, as the robot's quest-stream reported it to the server; with
+ * the addendum, a button wakes the headset or puts it to sleep (saves its battery between Tours).
+ */
 function HeadsetRow({ robotCode }: { robotCode: string }) {
   const headset = useRobotHeadset(robotCode)
+  const command = useHeadsetCommand(robotCode)
+  const [press, setPress] = useState<HeadsetPress | null>(null)
+  const now = useNow(1000)
   const { text, tone } = headsetSummary(headset.data, headset.isError)
-  return <Row label="Kính Quest">
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`size-2 shrink-0 rounded-full ${dotClass[tone]}`} aria-hidden="true" />
-      <span className={tone === 'danger' ? 'text-[#9d3428]' : tone === 'warn' ? 'text-[#b45309]' : tone === 'muted' ? 'text-[#64748b]' : ''}>{text}</span>
-    </span>
-  </Row>
+  const control = headsetControl(headset.data, press, now)
+  const send = (action: HeadsetAction) =>
+    command.mutate(action, { onSuccess: () => setPress({ action, at: Date.now() }), onError: () => setPress(null) })
+  return <>
+    <Row label="Kính Quest">
+      <span className="inline-flex items-center gap-1.5">
+        <span className={`size-2 shrink-0 rounded-full ${dotClass[tone]}`} aria-hidden="true" />
+        <span className={toneText(tone)}>{text}</span>
+      </span>
+    </Row>
+    {(control.screenText || control.actions.length > 0) && <Row label="Màn hình kính">
+      <span className="inline-flex flex-wrap items-center justify-end gap-2">
+        {control.screenText && <span>{control.screenText}</span>}
+        {control.actions.map(action => (
+          <button key={action} type="button" className={buttonClass('secondary', 'sm')}
+            disabled={command.isPending} onClick={() => send(action)}>
+            {command.isPending && command.variables === action ? 'Đang gửi…' : HEADSET_BUTTON[action]}
+          </button>
+        ))}
+      </span>
+      {command.isError && <span role="alert" className="mt-1 block text-xs text-[#9d3428]">{headsetCommandError(command.error)}</span>}
+      {!command.isError && control.pressText && <span role="status" className={`mt-1 block text-xs ${toneText(control.pressTone)}`}>{control.pressText}</span>}
+    </Row>}
+  </>
 }
 
 /**

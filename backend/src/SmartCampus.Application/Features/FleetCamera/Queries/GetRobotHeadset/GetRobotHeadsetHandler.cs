@@ -20,6 +20,6 @@ public sealed class GetRobotHeadsetHandler(
         bool stale = clock.GetUtcNow() - entry.At > settings.RobotListeningWithin;
         var report = entry.Report;
         return new RobotHeadsetStatus(facts.RobotCode, true, report.Connection, report.BatteryPercent, report.Charging,
-            report.Stream, entry.At, stale);
+            report.Stream, entry.At, stale, report.Screen);
     }
 }

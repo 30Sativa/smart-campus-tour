@@ -49,4 +49,21 @@ public sealed class CameraDemandStoreTests
         store.RecordHeadset("amr_01", new HeadsetReport("connected", 59, true, "live"), Now.AddSeconds(5));
         Assert.Equal((new HeadsetReport("connected", 59, true, "live"), Now.AddSeconds(5)), store.GetHeadset("amr_01")!.Value);
     }
+
+    [Fact]
+    public void HeadsetCommand_IsTakenOnce_TheLatestWins_AndAnExpiredOneIsDropped()
+    {
+        var store = new InMemoryCameraDemandStore();
+        Assert.Null(store.TakeHeadsetCommand("amr_01", Now));
+
+        store.QueueHeadsetCommand("amr_01", new HeadsetCommand(Guid.NewGuid(), HeadsetActions.Wake, Now, Now.AddSeconds(20)));
+        var sleep = new HeadsetCommand(Guid.NewGuid(), HeadsetActions.Sleep, Now, Now.AddSeconds(20));
+        store.QueueHeadsetCommand("AMR_01", sleep);
+        Assert.Equal(sleep, store.TakeHeadsetCommand("Amr_01", Now.AddSeconds(1)));
+        Assert.Null(store.TakeHeadsetCommand("amr_01", Now.AddSeconds(1)));
+
+        store.QueueHeadsetCommand("amr_01", new HeadsetCommand(Guid.NewGuid(), HeadsetActions.Wake, Now, Now.AddSeconds(20)));
+        Assert.Null(store.TakeHeadsetCommand("amr_01", Now.AddSeconds(20)));
+        Assert.Null(store.TakeHeadsetCommand("amr_01", Now));
+    }
 }

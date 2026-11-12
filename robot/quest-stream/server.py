@@ -670,13 +670,14 @@ class CameraDemand(threading.Thread):
     by default the camera keeps running, so a backend outage never blacks out a running Tour.
     """
 
-    def __init__(self, cfg: Config, opener=urlopen, clock=time.time, report=None):
+    def __init__(self, cfg: Config, opener=urlopen, clock=time.time, report=None, on_headset_command=None):
         super().__init__(name="camera-demand", daemon=True)
         self.cfg = cfg
         # Polling (and the headset report) runs with a control URL; deciding the camera also needs camera_on_demand.
         self.polling = bool(cfg.control_url)
         self.enabled = self.polling and cfg.camera_on_demand
         self._report = report  # () -> dict sent as the poll body (ADR-0056), or None
+        self._on_headset_command = on_headset_command  # (id, action) -> None: a Staff wake/sleep press, or None
         self.changed = threading.Event()
         self.stop_event = threading.Event()
         self._opener = opener
@@ -733,6 +734,7 @@ class CameraDemand(threading.Thread):
                 poll = data.get("pollSeconds")
                 if isinstance(poll, (int, float)) and 1 <= poll <= 60:
                     self._poll = float(poll)
+            self._headset_command(data.get("headsetCommand"))
         except HTTPError as exc:
             why = (f"HTTP {exc.code}: the robot credential was refused (check {self.cfg.robot_credential_file})"
                    if exc.code in (401, 403) else f"HTTP {exc.code}")
@@ -742,6 +744,19 @@ class CameraDemand(threading.Thread):
         if self.wanted() != before:
             log.info("CAMERA_DEMAND %s (%s)", "on" if self.wanted() else "off", self.reason())
             self.changed.set()
+
+    def _headset_command(self, order) -> None:
+        """ADR-0056 addendum: hand a {id, action} press to the headset control; anything else is ignored."""
+        if self._on_headset_command is None or not isinstance(order, dict):
+            return
+        command_id, action = order.get("id"), order.get("action")
+        if not isinstance(command_id, str) or action not in HEADSET_ACTIONS:
+            log.warning("HEADSET_COMMAND ignored: %r", order)
+            return
+        try:
+            self._on_headset_command(command_id, action)
+        except Exception as exc:  # noqa: BLE001 - a press never stops the camera poll
+            log.warning("HEADSET_COMMAND not started: %s", exc)
 
     def _body(self) -> bytes:
         """The headset report as JSON; a failing report never stops the poll itself."""
@@ -853,6 +868,31 @@ def read_battery(cfg: Config, serial: str, timeout: float = 5.0) -> Tuple[Option
     return (battery, "") if battery else (None, "no battery level in dumpsys output")
 
 
+#: ``dumpsys power`` mWakefulness -> the report's ``screen`` (ADR-0056 addendum). Dreaming keeps the display on.
+WAKEFULNESS_TO_SCREEN = {"awake": "awake", "dreaming": "awake", "asleep": "asleep", "dozing": "asleep"}
+
+
+def parse_screen(output: str) -> str:
+    """``adb shell dumpsys power`` -> ``awake``, ``asleep`` or ``unknown``."""
+    for line in output.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and key == "mWakefulness":
+            return WAKEFULNESS_TO_SCREEN.get(value.strip().lower(), "unknown")
+    return "unknown"
+
+
+def read_screen(cfg: Config, serial: str, timeout: float = 5.0) -> str:
+    """One ``dumpsys power`` call: is the headset's display on? ``unknown`` when adb cannot tell."""
+    try:
+        out = subprocess.run(
+            [cfg.adb, "-s", serial, "shell", "dumpsys", "power"],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return "unknown"
+    return parse_screen(out.stdout) if out.returncode == 0 else "unknown"
+
+
 @dataclass
 class DeviceStatus:
     """What /device reports about the headset itself (not the video)."""
@@ -863,6 +903,8 @@ class DeviceStatus:
     model: str = ""
     battery: Optional[dict] = None
     battery_error: str = ""
+    screen: str = "unknown"  # awake | asleep | unknown (ADR-0056 addendum)
+    last_command: Optional[dict] = None  # the last Staff wake/sleep press and how it went
     checked_at: float = 0.0
     lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
@@ -881,14 +923,19 @@ class DeviceStatus:
                 "model": self.model,
                 "battery": dict(self.battery) if self.battery else None,
                 "batteryError": self.battery_error or None,
+                "screen": self.screen,
+                "lastCommand": dict(self.last_command) if self.last_command else None,
                 "checkedAt": round(self.checked_at, 3) if self.checked_at else None,
             }
 
 
 def headset_report(device: "DeviceStatus", status: "Status") -> dict:
-    """ADR-0056 poll body: the headset as /device sees it, battery only while adb is connected (else it is stale)."""
+    """ADR-0056 poll body: the headset as /device sees it, battery and screen only while adb is connected."""
     snap = device.snapshot()
-    report = {"connection": snap["connection"], "stream": stream_summary(status.state)}
+    # screen is always sent (unknown while adb is not connected): it also tells the backend that this quest-stream
+    # runs Staff wake/sleep presses (ADR-0056 addendum).
+    report = {"connection": snap["connection"], "stream": stream_summary(status.state),
+              "screen": snap["screen"] if snap["connection"] == "connected" else "unknown"}
     battery = snap["battery"] or {}
     if snap["connection"] == "connected" and isinstance(battery.get("level"), int):
         report["batteryPercent"] = battery["level"]
@@ -924,13 +971,13 @@ class DeviceMonitor(threading.Thread):
         try:
             devices = list_devices(self.cfg)
         except AdbUnavailable as exc:
-            self.device.update(connection="adb_error", reason=str(exc), battery=None, battery_error="")
+            self.device.update(connection="adb_error", reason=str(exc), battery=None, battery_error="", screen="unknown")
             return
         if self.cfg.serial:
             devices = [d for d in devices if d[0] == self.cfg.serial]
         if not devices:
             self.device.update(connection="not_found", reason="no ADB device attached",
-                               serial="", model="", battery=None, battery_error="")
+                               serial="", model="", battery=None, battery_error="", screen="unknown")
             return
         ready = [d for d in devices if d[1] == "device"]
         quests = [d for d in ready if "quest" in d[2].get("model", "").lower()]
@@ -940,11 +987,12 @@ class DeviceMonitor(threading.Thread):
         if connection != "connected":
             hint = {"unauthorized": "accept 'Allow USB debugging' in the headset"}.get(state, f"adb state '{state}'")
             self.device.update(connection=connection, reason=hint, serial=serial, model=model,
-                               battery=None, battery_error="")
+                               battery=None, battery_error="", screen="unknown")
             return
         battery, error = read_battery(self.cfg, serial)
+        screen = read_screen(self.cfg, serial)
         self.device.update(connection="connected", reason="", serial=serial, model=model,
-                           battery=battery, battery_error=error)
+                           battery=battery, battery_error=error, screen=screen)
 
     def run(self) -> None:
         while not self.stop_event.is_set():
@@ -954,6 +1002,83 @@ class DeviceMonitor(threading.Thread):
                 log.warning("DEVICE_MONITOR_ERROR %s", exc)
                 self.device.update(connection="unknown", reason=f"monitor error: {exc}")
             self.stop_event.wait(self.cfg.device_poll)
+
+
+# --------------------------------------------------------------------------
+# Headset wake/sleep: Staff presses delivered with the camera poll
+# --------------------------------------------------------------------------
+
+#: ADR-0056 addendum. WAKE turns the display on and keeps it on while nobody wears the headset (the proximity
+#: sensor would otherwise put it back to sleep); SLEEP gives the proximity sensor back and turns the display off.
+HEADSET_ACTIONS = {
+    "WAKE": (["shell", "input", "keyevent", "KEYCODE_WAKEUP"],
+             ["shell", "am", "broadcast", "-a", "com.oculus.vrpowermanager.prox_close"]),
+    "SLEEP": (["shell", "am", "broadcast", "-a", "com.oculus.vrpowermanager.automation_disable"],
+              ["shell", "input", "keyevent", "KEYCODE_SLEEP"]),
+}
+
+
+class HeadsetControl:
+    """Runs a Staff wake/sleep press on the headset over adb, at most once per command id.
+
+    Each press runs on its own short thread, so a slow adb never delays the camera poll. Afterwards the screen is read
+    again, so the next poll already reports the result.
+    """
+
+    SETTLE_SECONDS = 1.0  # the display needs a moment before dumpsys power reports the new state
+
+    def __init__(self, cfg: Config, device: DeviceStatus, runner=subprocess.run, clock=time.time,
+                 settle: Optional[float] = None):
+        self.cfg = cfg
+        self.device = device
+        self._run = runner
+        self._clock = clock
+        self._settle = self.SETTLE_SECONDS if settle is None else settle
+        self._lock = threading.Lock()
+        self._seen: List[str] = []
+
+    def submit(self, command_id: str, action: str, wait: bool = False) -> Optional[threading.Thread]:
+        """Starts the press unless this id already ran; ``wait`` runs it inline (tests). Returns the thread."""
+        with self._lock:
+            if command_id in self._seen:
+                return None
+            self._seen = (self._seen + [command_id])[-20:]
+        if wait:
+            self.execute(command_id, action)
+            return None
+        thread = threading.Thread(target=self.execute, args=(command_id, action), name="headset-command", daemon=True)
+        thread.start()
+        return thread
+
+    def execute(self, command_id: str, action: str) -> bool:
+        snap = self.device.snapshot()
+        steps = HEADSET_ACTIONS.get(action)
+        if steps is None:
+            return self._done(command_id, action, False, f"unknown action {action!r}")
+        if snap["connection"] != "connected" or not snap["serial"]:
+            return self._done(command_id, action, False, f"headset not connected ({snap['connection']})")
+        serial = snap["serial"]
+        for step in steps:
+            try:
+                out = self._run([self.cfg.adb, "-s", serial, *step], capture_output=True, text=True, timeout=5)
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                return self._done(command_id, action, False, f"adb {' '.join(step[1:3])}: {exc}")
+            if out.returncode != 0:
+                error = (out.stderr or "").strip()[:200] or f"exit {out.returncode}"
+                return self._done(command_id, action, False, f"adb {' '.join(step[1:3])}: {error}")
+        if self._settle:
+            time.sleep(self._settle)
+        self.device.update(screen=read_screen(self.cfg, serial))
+        return self._done(command_id, action, True, "")
+
+    def _done(self, command_id: str, action: str, ok: bool, error: str) -> bool:
+        if ok:
+            log.info("HEADSET_COMMAND %s done (id %s, screen %s)", action, command_id, self.device.snapshot()["screen"])
+        else:
+            log.warning("HEADSET_COMMAND %s failed (id %s): %s", action, command_id, error)
+        self.device.update(last_command={"id": command_id, "action": action, "ok": ok, "error": error or None,
+                                         "at": round(self._clock(), 3)})
+        return ok
 
 
 # --------------------------------------------------------------------------
@@ -1410,7 +1535,8 @@ def main() -> int:
     status = Status()
     device = DeviceStatus()
     monitor = DeviceMonitor(cfg, device)
-    demand = CameraDemand(cfg, report=lambda: headset_report(device, status))
+    headset = HeadsetControl(cfg, device)
+    demand = CameraDemand(cfg, report=lambda: headset_report(device, status), on_headset_command=headset.submit)
     supervisor = Supervisor(cfg, status, demand)
 
     try:
@@ -1438,7 +1564,7 @@ def main() -> int:
     )
     if demand.polling:
         log.info("CAMERA_DEMAND asking %s as %s (camera on demand %s; failsafe %s after %.0fs without an answer; "
-                 "headset reported with each poll)", cfg.control_url, cfg.robot_code,
+                 "headset reported and wake/sleep presses run with each poll)", cfg.control_url, cfg.robot_code,
                  "on" if demand.enabled else "off", "on" if cfg.control_failsafe else "off", cfg.control_grace)
         demand.poll_once()  # decide before the first capture, so an idle robot never starts the Quest
         demand.start()
