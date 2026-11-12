@@ -7,6 +7,7 @@ FFmpeg RTSP listener standing in for MediaMTX; it needs ffmpeg with libx264
 and is skipped when ffmpeg is missing.
 """
 
+import importlib.util
 import json
 import os
 import shutil
@@ -664,6 +665,25 @@ class CameraDemandTests(unittest.TestCase):
         self.assertEqual(server.read_env_file(Path(self.tmp.name) / "missing.env"), {})
         with self.assertRaises(SystemExit):
             server.resolve_control_settings("auto", "", "", {})
+
+    def test_auto_reads_the_file_setup_fleet_sync_really_writes(self):
+        # setup_fleet_sync.py writes `export KEY='value'` lines; reading only bare KEY=VALUE made auto fail on every NUC.
+        spec = importlib.util.spec_from_file_location("setup_fleet_sync", HERE.parent.parent / "scripts" / "setup_fleet_sync.py")
+        setup = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(setup)
+        home = Path(self.tmp.name)
+        env_path, credential_path = setup.save_configuration(
+            home, "https://api.example/api/fleet/v1/sync", "amr_01", "campus-map2", "map", "secret")
+        self.assertIn("export FLEET_SYNC_URL=", env_path.read_text())
+        url, code, cred = server.resolve_control_settings("auto", "", "", server.read_env_file(env_path))
+        self.assertEqual(url, "https://api.example/api/fleet/camera/v1/poll")
+        self.assertEqual(code, "amr_01")
+        self.assertEqual(cred, str(credential_path))
+
+    def test_env_values_are_unquoted_like_the_shell(self):
+        env = Path(self.tmp.name) / "x.env"
+        env.write_text("export A='it'\"'\"'s'\n  export   B=\"two words\"\nC=plain\n# export D=no\nexport\n")
+        self.assertEqual(server.read_env_file(env), {"A": "it's", "B": "two words", "C": "plain"})
 
     def test_a_control_url_needs_the_robot_identity(self):
         with self.assertRaises(SystemExit):
