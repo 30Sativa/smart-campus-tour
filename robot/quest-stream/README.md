@@ -353,6 +353,10 @@ sudo systemctl restart quest-stream
 curl -s localhost:8080/status | python3 -m json.tool | grep -A5 '"camera"'   # enabled, wanted, reason
 ```
 
+**Pin kính trên web (ADR-0056).** Mỗi lần hỏi backend, NUC gửi kèm pin, trạng thái adb và hình của kính.
+Trang Staff (Kiểm tra trước khi bắt đầu, Điều hành trực tiếp) hiện dòng "Kính Quest" trong panel Robot.
+Cần `QUEST_CONTROL_URL=auto`; muốn báo pin mà không tắt camera theo nhu cầu thì thêm `QUEST_CAMERA_ON_DEMAND=off`.
+
 Phía người xem (web): nút tạm dừng trên khung hình, và tự ngắt khi tab bị ẩn; mở lại tab là nối lại.
 
 ## Phát ra Internet (trang deploy https://www.fptcampustour.cloud)

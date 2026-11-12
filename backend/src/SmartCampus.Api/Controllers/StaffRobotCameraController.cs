@@ -6,6 +6,7 @@ using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Features.FleetCamera;
 using SmartCampus.Application.Features.FleetCamera.Commands.LeaseCamera;
+using SmartCampus.Application.Features.FleetCamera.Queries.GetRobotHeadset;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -24,5 +25,14 @@ public sealed class StaffRobotCameraController(ISender sender) : ControllerBase
         var status = await sender.Send(new LeaseCamera(robotCode, User.GetRequiredUserId()), ct);
         Response.Headers.CacheControl = "no-store";
         return Ok(new BaseResponse<RobotCameraStatus> { Success = true, Message = "Camera lease renewed.", Data = status });
+    }
+
+    /// <summary>ADR-0056: the headset battery and connection the robot reported with its last camera poll.</summary>
+    [HttpGet("{robotCode}/headset")]
+    public async Task<ActionResult<BaseResponse<RobotHeadsetStatus>>> Headset(string robotCode, CancellationToken ct)
+    {
+        var status = await sender.Send(new GetRobotHeadset(robotCode), ct);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new BaseResponse<RobotHeadsetStatus> { Success = true, Message = "Headset status.", Data = status });
     }
 }

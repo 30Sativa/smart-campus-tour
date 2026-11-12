@@ -659,6 +659,42 @@ class CameraDemandTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             cfg(control_url="ftp://api.example/x", robot_code="amr_01", robot_credential_file="/x")
 
+    def test_the_poll_carries_the_headset(self):
+        c = cfg(control_url="https://api.example/api/fleet/camera/v1/poll", robot_code="amr_01",
+                robot_credential_file=str(self.credential))
+        d = server.CameraDemand(c, opener=self.opener, clock=lambda: self.now,
+                                report=lambda: {"headset": {"connection": "connected", "batteryPercent": 54}})
+        d.poll_once()
+        self.assertEqual(json.loads(self.requests[0].data), {"headset": {"connection": "connected", "batteryPercent": 54}})
+
+    def test_a_failing_report_still_polls(self):
+        def broken():
+            raise RuntimeError("adb gone")
+        c = cfg(control_url="https://api.example/api/fleet/camera/v1/poll", robot_code="amr_01",
+                robot_credential_file=str(self.credential))
+        d = server.CameraDemand(c, opener=self.opener, clock=lambda: self.now, report=broken)
+        d.poll_once()
+        self.assertEqual(self.requests[0].data, b"")
+        self.assertFalse(d.wanted())
+
+    def test_reporting_without_camera_on_demand_keeps_the_camera_on(self):
+        d = self.demand(camera_on_demand=False)
+        self.assertTrue(d.polling)
+        self.assertFalse(d.enabled)
+        d.poll_once()  # the backend says IDLE
+        self.assertTrue(d.wanted())
+        self.assertEqual(len(self.requests), 1)
+
+    def test_headset_report_sends_battery_only_while_connected(self):
+        device, status = server.DeviceStatus(), server.Status()
+        status.set("live", "STREAM_STARTED")
+        device.update(connection="connected", battery={"level": 54, "charging": True, "plugged": "USB", "status": "charging"})
+        self.assertEqual(server.headset_report(device, status),
+                         {"headset": {"connection": "connected", "stream": "live", "batteryPercent": 54, "charging": True}})
+        device.update(connection="offline", reason="cable")
+        status.set("paused", "CAMERA_OFF: IDLE")
+        self.assertEqual(server.headset_report(device, status), {"headset": {"connection": "offline", "stream": "paused"}})
+
     def test_paused_is_its_own_stream_state(self):
         self.assertEqual(server.stream_summary("paused"), "paused")
         self.assertEqual(server.stream_summary("offline"), "lost")

@@ -1,3 +1,4 @@
+using SmartCampus.Application.Features.FleetCamera;
 using SmartCampus.Infrastructure.Integrations.FleetCamera;
 
 namespace SmartCampus.IntegrationTests;
@@ -35,5 +36,17 @@ public sealed class CameraDemandStoreTests
         var store = new InMemoryCameraDemandStore();
         await Task.WhenAll(Enumerable.Range(1, 200).Select(i => Task.Run(() => store.ExtendLease("amr_01", Now.AddSeconds(i)))));
         Assert.Equal(Now.AddSeconds(200), store.GetLease("amr_01"));
+    }
+
+    [Fact]
+    public void Headset_TheLatestReportWins_AndCaseIsIgnored()
+    {
+        var store = new InMemoryCameraDemandStore();
+        Assert.Null(store.GetHeadset("amr_01"));
+        store.RecordHeadset("amr_01", new HeadsetReport("connected", 60, false, "live"), Now);
+        store.RecordHeadset("AMR_01", new HeadsetReport("offline", null, null, "lost"), Now.AddSeconds(-5));
+        Assert.Equal(60, store.GetHeadset("Amr_01")!.Value.Report.BatteryPercent);
+        store.RecordHeadset("amr_01", new HeadsetReport("connected", 59, true, "live"), Now.AddSeconds(5));
+        Assert.Equal((new HeadsetReport("connected", 59, true, "live"), Now.AddSeconds(5)), store.GetHeadset("amr_01")!.Value);
     }
 }
