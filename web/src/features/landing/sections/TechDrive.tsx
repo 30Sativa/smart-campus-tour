@@ -8,8 +8,8 @@ import { prefersReducedMotion } from '../landing-motion'
 import { ROBOT_DRIVE } from '../landing-content'
 import { IntroVideo } from './IntroVideo'
 
-// three.js and the robot model load once section 04 comes near the screen, while the intro video plays;
-// the maps live on the test-drive page.
+// three.js and the robot model load once section 04 comes near the screen and the intro video has enough to
+// play on (so the two do not share the bandwidth at its start); the maps live on the test-drive page.
 const RobotPartsViewer = lazy(() => import('../robot-explode/RobotPartsViewer'))
 
 const More = () => <Link to="/ben-trong-robot" className="lp3-td__btn lp3-td__more">Xem dữ liệu chạy bên trong robot <ArrowRight size={16} aria-hidden="true" /></Link>
@@ -73,6 +73,8 @@ export function TechDrive() {
   const [watched, setWatched] = useState(false)
   const [replay, setReplay] = useState(0)
   const [near, setNear] = useState(false)
+  /** The intro video has enough to play to its end: the 3D robot may download now without making it stall. */
+  const [flowing, setFlowing] = useState(false)
   const [inView, setInView] = useState(false)
   const [webgl, setWebgl] = useState<boolean | null>(null)
   const ref = useRef<HTMLElement>(null)
@@ -98,6 +100,7 @@ export function TechDrive() {
   }, [phase, introShown])
 
   const finish = useCallback(() => { setPhase('parts'); setWatched(true) }, [])
+  const onFlowing = useCallback(() => setFlowing(true), [])
   const watch = useCallback(() => { setIntroShown(true); setPhase('intro'); setReplay(value => value + 1) }, [])
 
   const intro = <Intro watched={watched} onWatch={watch} />
@@ -117,7 +120,7 @@ export function TechDrive() {
           <div className="lp3-techdrive__layer" aria-hidden={showingIntro || undefined} inert={showingIntro}>
             {webgl === false
               ? still('Trình duyệt này không hiển thị được mô hình 3D.', false)
-              : near && webgl
+              : near && webgl && (flowing || !showingIntro || !introShown)
                 ? (
                     <ViewerBoundary fallback={still('Không tải được mô hình 3D.', false)}>
                       <Suspense fallback={still('Đang tải mô hình robot…', true)}>
@@ -127,7 +130,7 @@ export function TechDrive() {
                   )
                 : still('Đang tải mô hình robot…', true)}
           </div>
-          {introShown && <IntroVideo active={inView && showingIntro} leaving={!showingIntro} replay={replay} chapter={renderChapter} onDone={finish} />}
+          {introShown && <IntroVideo active={inView && showingIntro} leaving={!showingIntro} replay={replay} chapter={renderChapter} onDone={finish} onFlowing={onFlowing} />}
         </div>
       </div>
     </section>

@@ -121,7 +121,7 @@ function RequireArea({ area, children }: { area: AreaId; children: ReactNode }) 
 function RepresentativeArea() {
   return (
     <RequireArea area="representative">
-      <Suspense fallback={<ShellFallback background="#f5f7f8" />}>
+      <Suspense fallback={<ShellFallback background="#eef2f8" />}>
         <RepresentativeShell />
       </Suspense>
     </RequireArea>

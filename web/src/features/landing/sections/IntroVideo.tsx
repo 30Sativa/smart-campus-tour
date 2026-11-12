@@ -4,21 +4,27 @@ import { STORY_CHAPTERS, chapterStart, introChapter } from '../robot-explode/sto
 
 const VIDEO = `${import.meta.env.BASE_URL}videos/robot-intro`
 
+/** Seconds played after which the video counts as flowing, even if the browser never said it could play through. */
+const FLOWING = 4
+
 /**
  * Section 04's intro: a short video of the robot (`web/public/videos/`), its
  * five chapters' text laid over it as it plays, the chapters down the right
  * side to jump to, a progress line and a way to skip. It plays while `active`
  * (in view, and still the intro) and calls `onDone` at its end, on a skip or
  * if the video cannot play at all; `leaving` fades it out. A browser that
- * refuses to start it on its own gets a play button.
+ * refuses to start it on its own gets a play button. `onFlowing` says once
+ * that enough of it has arrived to play to the end, so heavier downloads can
+ * start without making it stall.
  */
-export function IntroVideo({ active, leaving, replay, chapter: renderChapter, onDone }: {
+export function IntroVideo({ active, leaving, replay, chapter: renderChapter, onDone, onFlowing }: {
   active: boolean
   leaving: boolean
   /** Changes when the visitor asks to watch again: back to the start. */
   replay: number
   chapter: (index: number) => ReactNode
   onDone: () => void
+  onFlowing: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const barRef = useRef<HTMLSpanElement>(null)
@@ -77,7 +83,12 @@ export function IntroVideo({ active, leaving, replay, chapter: renderChapter, on
         preload="auto"
         poster={`${VIDEO}.jpg`}
         aria-hidden="true"
-        onTimeUpdate={event => setChapter(introChapter(event.currentTarget.currentTime))}
+        onTimeUpdate={event => {
+          const time = event.currentTarget.currentTime
+          setChapter(introChapter(time))
+          if (time > FLOWING) onFlowing()
+        }}
+        onCanPlayThrough={onFlowing}
         onEnded={onDone}
         onError={onDone}
       >

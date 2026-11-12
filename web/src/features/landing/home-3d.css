@@ -876,6 +876,10 @@ html[data-theme-wave]::view-transition-new(root) {
 .lp3-intro[data-leaving="true"] { opacity: 0; pointer-events: none; }
 .lp3-intro__video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 62% 50%; background: #0b1822; }
 .lp3-intro .lp3-story-steps { pointer-events: auto; }
+/* Over a playing video: no blur, live or behind (each would be redone for every video frame). */
+.lp3-intro .lp3-story { animation-name: lp3-intro-in; }
+@keyframes lp3-intro-in { from { opacity: 0; transform: translateY(14px); } }
+.lp3-intro .lp3-td__where, .lp3-intro .lp3-intro__skip { background: rgba(12, 20, 26, .78); backdrop-filter: none; -webkit-backdrop-filter: none; }
 .lp3-intro__steps button { padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
 .lp3-intro__steps button:hover { color: #fff; }
 .lp3-intro__steps button:focus-visible, .lp3-intro__skip:focus-visible, .lp3-intro__play:focus-visible, .lp3-td__replay:focus-visible { outline: 2px solid #8fe9ff; outline-offset: 3px; }
