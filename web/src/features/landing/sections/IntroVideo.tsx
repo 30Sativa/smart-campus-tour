@@ -92,8 +92,8 @@ export function IntroVideo({ active, leaving, replay, chapter: renderChapter, on
         onEnded={onDone}
         onError={onDone}
       >
-        <source src={`${VIDEO}-720.mp4`} type='video/mp4; codecs="avc1.64001f"' media="(max-width: 720px)" />
-        <source src={`${VIDEO}.mp4`} type='video/mp4; codecs="avc1.640028"' />
+        <source src={`${VIDEO}-720.mp4`} type='video/mp4; codecs="avc1.640020"' media="(max-width: 720px)" />
+        <source src={`${VIDEO}.mp4`} type='video/mp4; codecs="avc1.64002a"' />
         {/* For browsers without H.264 (some Linux builds). */}
         <source src={`${VIDEO}.webm`} type='video/webm; codecs="vp9"' />
       </video>
