@@ -253,6 +253,8 @@ export const platformPillars: PlatformPillar[] = [
 /** Nav order follows the order the sections appear on the page. */
 /** The robot's step-by-step signal page: its own route, listed after "Công nghệ". */
 export const ROBOT_INSIDE = { to: '/ben-trong-robot', label: 'Bên trong robot', after: '#cong-nghe' } as const
+/** The test drive: the robot on the campus maps, its own page (section 04 shows the robot alone). */
+export const ROBOT_DRIVE = { to: '/lai-thu-robot', label: 'Lái thử robot' } as const
 
 export const navLinks = [
   { href: '#quy-trinh', label: 'Hành trình' },

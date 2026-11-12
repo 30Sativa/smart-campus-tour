@@ -8,6 +8,7 @@ import { LiveDot } from '../StaffUi'
 import { POSE_STALE_SECONDS } from '../attention'
 import { PatrolDemo } from '../../digital-twin/PatrolDemo'
 import { twinIconButton } from '../../digital-twin/twin-classes'
+import { mapConfigFor } from '../../digital-twin/map-config'
 
 const TwinScene = lazy(() => import('../../digital-twin/TwinScene'))
 
@@ -30,10 +31,14 @@ const HEAD_YAW: Record<string, number> = { FRONT: 0, LEFT: Math.PI / 3, RIGHT: -
  *
  * A robot without a pose is absent, never parked at a guess. A stale pose is
  * greyed and labelled, and the marker stops where the last sample put it.
- * Non-physical sources carry their label on the overlay.
+ * Non-physical sources carry their label on the overlay. Robots and stops are
+ * drawn only when `mapKey` is calibrated for the NVH model (`map-config.ts`):
+ * ROS metres drawn as scene units would put them in the wrong place.
  */
-export function OperationalTwin({ robots, tour, selectedStopId, className = '', title = 'Operational Twin', onExpandedChange }: {
+export function OperationalTwin({ robots, mapKey, tour, selectedStopId, className = '', title = 'Operational Twin', onExpandedChange }: {
   robots: AmrStatus[]
+  /** The map the robots' poses are in. */
+  mapKey?: string | null
   /** What the toolbar calls the map ("Bản đồ vị trí hạm đội" on Robot & thiết bị). */
   title?: string
   /** Told when the map goes full screen, so the host can lift its own stacking (a sticky column). */
@@ -49,8 +54,10 @@ export function OperationalTwin({ robots, tour, selectedStopId, className = '', 
   useEffect(()=>{ if(!expanded)return; const close=(e:KeyboardEvent)=>{if(e.key==='Escape')setExpanded(false)}; window.addEventListener('keydown',close); return()=>window.removeEventListener('keydown',close) },[expanded])
   // Idle view has a default local fleet; active Tours retain reported observations.
   const demo = !tour
-  const placed = robots.filter((robot) => robot.pose)
-  const missing = robots.length - placed.length
+  const scene = mapConfigFor(mapKey)?.scene
+  const calibrated = Boolean(scene?.calibrated && scene.modelKey === 'nvh-v3')
+  const placed = calibrated ? robots.filter((robot) => robot.pose) : []
+  const missing = robots.filter((robot) => !robot.pose).length
   const focusId = tour?.robotId ?? null
   const twinRobots: TwinRobot[] = placed.map((robot) => {
     const stale = robot.connectionState !== 'Live' || (robot.poseAgeSeconds ?? 0) > POSE_STALE_SECONDS
@@ -59,6 +66,9 @@ export function OperationalTwin({ robots, tour, selectedStopId, className = '', 
       id: robot.id,
       name: robot.source && robot.source !== 'Physical' ? `${robot.name} (${robot.source})` : robot.name,
       pose: robot.pose as NonNullable<AmrStatus['pose']>,
+      transform: scene?.transform,
+      scale: scene?.robotScale,
+      groundY: scene?.groundY,
       color: TONE_COLOR[statusInfo(statusKey).tone],
       active: robot.executionState === 'Navigating',
       focused: robot.id === focusId,
@@ -67,8 +77,8 @@ export function OperationalTwin({ robots, tour, selectedStopId, className = '', 
     }
   })
   const progress = tour?.progress
-  const route: TwinRoute | null = tour
-    ? { stops: tour.stops, endPoint: tour.endPoint, targetIndex: progress?.stopIndex ?? null, heading: !progress ? 'none' : progress.step === 'ReturningToEnd' ? 'end' : progress.stopIndex != null ? 'poi' : 'none' }
+  const route: TwinRoute | null = tour && calibrated
+    ? { transform: scene?.transform, groundY: scene?.groundY, stops: tour.stops, endPoint: tour.endPoint, targetIndex: progress?.stopIndex ?? null, heading: !progress ? 'none' : progress.step === 'ReturningToEnd' ? 'end' : progress.stopIndex != null ? 'poi' : 'none' }
     : null
   const focusRobot = robots.find((robot) => robot.id === focusId)
   const sources = [...new Set(placed.map((robot) => robot.source).filter((source) => source && source !== 'Physical'))]
@@ -118,7 +128,7 @@ export function OperationalTwin({ robots, tour, selectedStopId, className = '', 
             </div>
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-2 p-3">
               <span className="rounded-lg bg-white/90 px-3 py-2 text-[11px] font-semibold text-[#516783] shadow-sm ring-1 ring-[#dce9fb] backdrop-blur">
-                NVH tầng 6 · V3{tour ? ' · Số = thứ tự POI · ⚑ điểm kết thúc · không vẽ đường Nav2' : ' · Chưa hiệu chỉnh tọa độ robot với model 3D'}
+                NVH tầng 6 · V3{!calibrated ? ' · Chưa hiệu chỉnh tọa độ robot với model 3D' : tour ? ' · Số = thứ tự POI · ⚑ điểm kết thúc · không vẽ đường Nav2' : ''}
               </span>
               {missing > 0 && <span className="rounded-lg bg-white/90 px-3 py-2 text-[11px] font-semibold text-[#8a5a06] shadow-sm ring-1 ring-[#dce9fb]">{missing} robot không gửi vị trí</span>}
             </div>

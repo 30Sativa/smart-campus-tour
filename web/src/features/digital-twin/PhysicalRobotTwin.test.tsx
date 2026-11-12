@@ -26,7 +26,7 @@ describe('physical robot twin preparation', () => {
     await screen.findByTestId('physical-scene')
     act(() => {
       connect('connected')
-      observe({ robotId: 'robot_01', mapKey: 'map2-v2', frameId: 'map', streamId: 'a', seq: 1, capturedAt: new Date().toISOString(), pose: { x: 3, y: 4, yaw: 0 } })
+      observe({ robotId: 'robot_01', mapKey: 'campus_v1', frameId: 'map', streamId: 'a', seq: 1, capturedAt: new Date().toISOString(), pose: { x: 3, y: 4, yaw: 0 } })
     })
     expect(screen.getByText('X 3.00 · Y 4.00 m')).toBeInTheDocument()
     expect(screen.getByTestId('physical-scene')).toHaveTextContent('0 robots')
@@ -35,6 +35,19 @@ describe('physical robot twin preparation', () => {
     expect(screen.getByText('X 3.00 · Y 4.00 m')).toBeInTheDocument()
     unmount()
     expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+  it('places a map2 robot on the NVH model it is calibrated for, and only there', async () => {
+    const source: RobotTelemetrySource = { subscribe: (observe, connect) => {
+      connect('connected')
+      observe({ robotId: 'robot_01', mapKey: 'map2-v2', frameId: 'map', streamId: 'a', seq: 1, capturedAt: new Date().toISOString(), pose: { x: -0.319, y: -0.535, yaw: 0.077 } })
+      return () => {}
+    } }
+    render(<PhysicalRobotTwin source={source} />)
+    expect(await screen.findByTestId('physical-scene')).toHaveTextContent('1 robots')
+    expect(screen.queryByText(/Chưa hiệu chỉnh/)).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Model 3D' }), { target: { value: 'legacy' } })
+    expect(screen.getByTestId('physical-scene')).toHaveTextContent('0 robots')
+    expect(screen.getByText(/Chưa hiệu chỉnh/)).toBeInTheDocument()
   })
   it('ages a pose without waiting for a new sample', async () => {
     vi.useFakeTimers()

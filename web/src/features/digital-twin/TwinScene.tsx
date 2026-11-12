@@ -45,6 +45,9 @@ export type TwinRoute = {
   /** Index of the POI being approached or visited; null when heading to the end point. */
   targetIndex: number | null
   heading: 'poi' | 'end' | 'none'
+  /** ROS map -> scene for the stops, from the map's calibration; identity when absent. */
+  transform?: Affine2D
+  groundY?: number
 }
 
 export type TwinSceneProps = {
@@ -77,14 +80,14 @@ const STOP_COLOR: Record<RouteStop['status'], string> = {
 // Match the authored garden frame in web/scripts/campus-garden.mjs.
 const CAMPUS_VIEW_YAW = 0.12327
 
-const ground = (pose: MapPose): [number, number, number] => {
-  const { position } = mapToScene({ x: pose.x, y: pose.y, yaw: 0 })
-  return [position[0], 0, position[2]]
+const ground = (pose: MapPose, transform?: Affine2D, groundY = 0): [number, number, number] => {
+  const { position } = transform ? mapToScenePose({ x: pose.x, y: pose.y, yaw: 0 }, transform) : mapToScene({ x: pose.x, y: pose.y, yaw: 0 })
+  return [position[0], groundY, position[2]]
 }
 
-function Marker({ position, color, label, number, emphasis, showLabel, fixedLabel = false }: { position: MapPose; color: string; label: string; number: string; emphasis: 'target' | 'selected' | null; showLabel: boolean; fixedLabel?: boolean }) {
+function Marker({ position, color, label, number, emphasis, showLabel, fixedLabel = false, transform, groundY }: { position: MapPose; color: string; label: string; number: string; emphasis: 'target' | 'selected' | null; showLabel: boolean; fixedLabel?: boolean; transform?: Affine2D; groundY?: number }) {
   return (
-    <group position={ground(position)}>
+    <group position={ground(position, transform, groundY)}>
       <mesh position={[0, 0.03, 0]} rotation={fixedLabel ? [-Math.PI / 2, 0, 0] : [0, 0, 0]}>
         {fixedLabel ? <ringGeometry args={[0.6 * PATROL_MODEL_SCALE, 0.7 * PATROL_MODEL_SCALE, 48]} /> : <cylinderGeometry args={[emphasis ? 0.34 : 0.26, emphasis ? 0.34 : 0.26, 0.06, 32]} />}
         {fixedLabel ? <meshBasicMaterial color="#7dc7e8" toneMapped={false} /> : <meshStandardMaterial color={color} />}
@@ -111,12 +114,13 @@ function Marker({ position, color, label, number, emphasis, showLabel, fixedLabe
  * through walls would pretend it is (scope §11.3).
  */
 function Route({ route, selectedStopId, showLabels }: { route: TwinRoute; selectedStopId?: string | null; showLabels: boolean }) {
+  const place = { transform: route.transform, groundY: route.groundY }
   return (
     <group>
       {route.stops.map((stop, index) => (
-        <Marker key={stop.id} position={stop.position} color={STOP_COLOR[stop.status]} label={stop.name} number={String(index + 1)} showLabel={showLabels} emphasis={stop.id === selectedStopId ? 'selected' : route.heading === 'poi' && route.targetIndex === index ? 'target' : null} />
+        <Marker key={stop.id} position={stop.position} color={STOP_COLOR[stop.status]} label={stop.name} number={String(index + 1)} showLabel={showLabels} {...place} emphasis={stop.id === selectedStopId ? 'selected' : route.heading === 'poi' && route.targetIndex === index ? 'target' : null} />
       ))}
-      <Marker position={route.endPoint.position} color="#1f314d" label={`Kết thúc · ${route.endPoint.name}`} number="⚑" showLabel={showLabels} emphasis={route.heading === 'end' ? 'target' : null} />
+      <Marker position={route.endPoint.position} color="#1f314d" label={`Kết thúc · ${route.endPoint.name}`} number="⚑" showLabel={showLabels} {...place} emphasis={route.heading === 'end' ? 'target' : null} />
     </group>
   )
 }
