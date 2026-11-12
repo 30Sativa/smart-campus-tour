@@ -54,6 +54,7 @@ PROFILE_KEYS = {
     'MAP': 'map2.yaml', 'NAV2_PARAMS': 'nav2_params_v2.yaml', 'MAP_MAX_WHEEL_SPEED_MM_S': '250.0',
     'TELEOP_SPEED': '0.1', 'TELEOP_TURN': '0.3',
     'FLEET_ENV_FILE': '~/.config/campustour/fleet-sync.env',
+    'FOXGLOVE_ENV': '~/.local/opt/foxglove-bridge-3.6.0/env.sh',
     'SCT_LOG_ROOT': '~/amr_logs/runs', 'LOG_KEEP_DAYS': '30', 'LOG_MAX_MB': '2000', 'MIN_FREE_GB': '5',
 }
 NODE_PATTERNS = {
@@ -66,7 +67,8 @@ NODE_PATTERNS = {
 COMMAND_SOURCES = {'teleop_keyboard': r'teleop_twist_keyboard', 'teleop_joy': r'/teleop_node( |$)'}
 OTHER = {'bag_record': r'ros2 bag record', 'stopkey': r'stopkey\.py', 'preflight': r'preflight\.py',
          # telemetry by default; with commands_enabled it is a second navigation-goal owner
-         'fleet_bridge': r'/fleet_bridge/fleet_bridge( |$)'}
+         'fleet_bridge': r'/fleet_bridge/fleet_bridge( |$)',
+         'viewer_bridge': r'foxglove_bridge|debug_bridge\.launch\.py'}
 
 
 class Refused(Exception):
@@ -385,6 +387,9 @@ def workflow_argv(p, workflow, fleet=False):
 
 FLEET_ENV_KEYS = ('FLEET_SYNC_URL', 'FLEET_ROBOT_CODE', 'FLEET_ROBOT_MAP_KEY', 'FLEET_ROBOT_FRAME_ID',
                   'FLEET_ROBOT_CREDENTIAL_FILE')
+# Optional: the MapVersion ZIP and its checksum (web: Quản lý bản đồ). Without them the robot
+# reports MAP_EVIDENCE_MISSING and never reports motionReady.
+FLEET_MAP_KEYS = ('FLEET_MAP_PACKAGE_PATH', 'FLEET_MAP_PACKAGE_SHA256')
 
 
 def share_file(env, pkg, *rel):
@@ -413,7 +418,7 @@ def read_fleet_env(p):
     values = {}
     for raw in open(path, encoding='utf-8'):
         m = re.fullmatch(r'\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)=(.*)', raw.rstrip('\n'))
-        if m and m.group(1) in FLEET_ENV_KEYS:
+        if m and m.group(1) in FLEET_ENV_KEYS + FLEET_MAP_KEYS:
             v = m.group(2).strip()
             if len(v) >= 2 and v[0] == v[-1] and v[0] in '"\'':
                 v = v[1:-1]
@@ -423,6 +428,14 @@ def read_fleet_env(p):
         raise Refused(f'{path} lacks {", ".join(missing)}')
     if not os.path.isfile(os.path.expanduser(values['FLEET_ROBOT_CREDENTIAL_FILE'])):
         raise Refused('FLEET_ROBOT_CREDENTIAL_FILE does not point to a file')
+    if bool(values.get('FLEET_MAP_PACKAGE_PATH')) != bool(values.get('FLEET_MAP_PACKAGE_SHA256')):
+        raise Refused(f'{path}: set both FLEET_MAP_PACKAGE_PATH and FLEET_MAP_PACKAGE_SHA256, or neither')
+    if values.get('FLEET_MAP_PACKAGE_PATH'):
+        values['FLEET_MAP_PACKAGE_PATH'] = os.path.expanduser(values['FLEET_MAP_PACKAGE_PATH'])
+        if not os.path.isfile(values['FLEET_MAP_PACKAGE_PATH']):
+            raise Refused('FLEET_MAP_PACKAGE_PATH does not point to a file')
+        if not re.fullmatch(r'[0-9a-fA-F]{64}', values['FLEET_MAP_PACKAGE_SHA256']):
+            raise Refused('FLEET_MAP_PACKAGE_SHA256 is not a 64-character hex checksum')
     return values
 
 
@@ -437,6 +450,9 @@ def fleet_argv(p, env, values, commands):
     if commands:
         # ADR-0049: commands only together with the motion permit; report period below 2 s.
         argv += ['-p', 'commands_enabled:=true', '-p', 'report_period_sec:=0.5']
+        if values.get('FLEET_MAP_PACKAGE_PATH'):
+            argv += ['-p', f'map_package_path:={values["FLEET_MAP_PACKAGE_PATH"]}',
+                     '-p', f'map_package_sha256:={values["FLEET_MAP_PACKAGE_SHA256"].lower()}']
     return argv
 
 
@@ -643,6 +659,7 @@ def main(argv=None):
     fl = sub.add_parser('fleet')
     fl.add_argument('--commands', action='store_true')
     sub.add_parser('reset-latch')
+    sub.add_parser('viewer', help='bridge for RViz on the laptop (amr-rviz --r3)')
     t = sub.add_parser('teleop')
     t.add_argument('--speed', type=float)
     t.add_argument('--turn', type=float)
@@ -749,6 +766,9 @@ def main(argv=None):
                           file=sys.stderr)
                 if held.get('fleet'):
                     check_fleet_runtime(env, commands=True)
+                if not values.get('FLEET_MAP_PACKAGE_PATH'):
+                    print(f'note: no FLEET_MAP_PACKAGE_PATH in {p["FLEET_ENV_FILE"]}: the web will show '
+                          'MAP_EVIDENCE_MISSING and the robot never reports ready to move', file=sys.stderr)
             argv = fleet_argv(p, env, values, a.commands)
             extra = dict(values, ROS_LOG_DIR=tool_log_dir(p, 'fleet', a.dry_run))
             if a.dry_run:          # FLEET_* values stay out of the printed environment
@@ -767,6 +787,22 @@ def main(argv=None):
                 print('Clearing the motion gate latch: only when the robot, the area and the attendant are ready.')
             return run(argv, env, a.dry_run, extra_env={'ROS_SUPER_CLIENT': 'TRUE',
                                                         'ROS_LOG_DIR': tool_log_dir(p, 'reset', a.dry_run)})
+        if a.cmd == 'viewer':
+            if (lock_info('workflow') or {}).get('workflow') not in ('nav', 'map') and not a.dry_run:
+                raise Refused('viewer needs a running "robot nav" or "robot map"')
+            if any(x['name'] == 'viewer_bridge' for x in procs):
+                raise Refused('a viewer bridge is already running')
+            bridge_launch = share_file(env, 'robot_navigation', 'launch', 'debug_bridge.launch.py')
+            if not bridge_launch or not os.path.isfile(bridge_launch):
+                raise Refused('this runtime has no debug_bridge.launch.py')
+            fox = os.path.expanduser(p['FOXGLOVE_ENV'])
+            if not os.path.isfile(fox):
+                raise Refused(f'FOXGLOVE_ENV not found: {fox}')
+            argv = ['bash', '-c', 'source "$1" && shift && exec "$@"', 'viewer', fox,
+                    'ros2', 'launch', 'robot_navigation', 'debug_bridge.launch.py', f'robot_id:={p["ROBOT_ID"]}']
+            if not a.dry_run:
+                print('Viewer bridge for the laptop: run "amr-rviz --r3" there. Ctrl+C here closes only the viewer.')
+            return run(argv, env, a.dry_run, extra_env={'ROS_LOG_DIR': tool_log_dir(p, 'viewer', a.dry_run)})
         if a.cmd == 'lidar-check':
             if not p['LIDAR_YAW_CANDIDATE']:
                 raise Refused('LIDAR_YAW_CANDIDATE is not set in the profile')
