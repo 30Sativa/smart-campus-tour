@@ -501,8 +501,9 @@ def test_fleet_commands_need_a_running_nav_and_note_a_missing_permit(world):
                 time.sleep(0.05)
             r = robot(world, 'fleet', '--commands', '--dry-run')
             out = json.loads(r.stdout)
-            assert r.returncode == 0 and out['argv'][-4:] == ['-p', 'commands_enabled:=true', '-p',
-                                                              'report_period_sec:=0.5'], r.stdout + r.stderr
+            assert r.returncode == 0 and out['argv'][-8:] == [
+                '-p', 'commands_enabled:=true', '-p', 'report_period_sec:=0.5',
+                '-p', 'localized_max_xy_variance:=0.3', '-p', 'localized_max_yaw_variance:=0.1'], r.stdout + r.stderr
             assert ('no motion permit' in r.stderr) == (not gated), r.stderr
             reset = robot(world, 'reset-latch', '--dry-run')
             if gated:
@@ -577,6 +578,10 @@ def test_fleet_commands_pass_the_map_package_or_note_it_is_missing(world):
         assert r.returncode == 0 and 'MAP_EVIDENCE_MISSING' not in r.stderr, r.stderr
         assert argv[-4:] == ['-p', f'map_package_path:={package}', '-p', f'map_package_sha256:={sha.lower()}']
         assert not any(x.startswith('map_package') for x in json.loads(robot(world, 'fleet', '--dry-run').stdout)['argv'])
+        fleet_profile(world, LOCALIZED_MAX_XY_VARIANCE='0.09', LOCALIZED_MAX_YAW_VARIANCE='0.05')
+        argv = json.loads(robot(world, 'fleet', '--commands', '--dry-run').stdout)['argv']
+        assert 'localized_max_xy_variance:=0.09' in argv and 'localized_max_yaw_variance:=0.05' in argv
+        assert not any(x.startswith('localized_max') for x in json.loads(robot(world, 'fleet', '--dry-run').stdout)['argv'])
         package.unlink()
         r = robot(world, 'fleet', '--commands', '--dry-run')
         assert r.returncode == 2 and 'does not point to a file' in r.stderr, r.stderr
