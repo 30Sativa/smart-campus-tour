@@ -89,7 +89,8 @@ class ReadinessMonitor:
 
     def _on_amcl(self, msg) -> None:
         covariance = msg.pose.covariance
-        self._amcl = (covariance[0], covariance[7], covariance[35])
+        # rclpy gives a numpy array; plain floats keep readiness values JSON-serializable.
+        self._amcl = (float(covariance[0]), float(covariance[7]), float(covariance[35]))
 
     def _on_estop(self, msg) -> None:
         self._estop = bool(msg.data)

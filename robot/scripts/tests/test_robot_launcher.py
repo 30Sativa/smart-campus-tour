@@ -543,3 +543,63 @@ def test_fleet_settings_and_a_second_bridge_are_checked(world):
     fake_process(world, 7100, '/usr/bin/python3 /x/install/fleet_bridge/lib/fleet_bridge/fleet_bridge --ros-args')
     r = robot(world, 'fleet', '--dry-run')
     assert r.returncode == 2 and 'already running' in r.stderr
+
+
+def nav_holder(world, *nav_args):
+    fake = world['tmp'] / 'sleeper.sh'
+    fake.write_text('#!/bin/sh\nexec sleep 30\n')
+    fake.chmod(0o755)
+    holder = robot(world, 'nav', *nav_args, extra_env={'SCT_ROBOT_TEST_EXEC': str(fake)}, popen=True)
+    for _ in range(100):
+        if 'running' in robot(world, 'status').stdout:
+            break
+        time.sleep(0.05)
+    return holder
+
+
+def test_fleet_commands_pass_the_map_package_or_note_it_is_missing(world):
+    env_file = fleet_runtime(world)
+    fleet_profile(world)
+    package = world['tmp'] / 'test123-v1.zip'
+    package.write_bytes(b'zip')
+    sha = 'AB' * 32
+    holder = nav_holder(world, '--fleet')
+    try:
+        r = robot(world, 'fleet', '--commands', '--dry-run')
+        assert r.returncode == 0 and 'MAP_EVIDENCE_MISSING' in r.stderr, r.stderr
+        assert not any(x.startswith('map_package') for x in json.loads(r.stdout)['argv'])
+        env_file.write_text(env_file.read_text() + f'export FLEET_MAP_PACKAGE_PATH={package}\n')
+        r = robot(world, 'fleet', '--commands', '--dry-run')
+        assert r.returncode == 2 and 'set both' in r.stderr, r.stderr
+        env_file.write_text(env_file.read_text() + f"export FLEET_MAP_PACKAGE_SHA256='{sha}'\n")
+        r = robot(world, 'fleet', '--commands', '--dry-run')
+        argv = json.loads(r.stdout)['argv']
+        assert r.returncode == 0 and 'MAP_EVIDENCE_MISSING' not in r.stderr, r.stderr
+        assert argv[-4:] == ['-p', f'map_package_path:={package}', '-p', f'map_package_sha256:={sha.lower()}']
+        assert not any(x.startswith('map_package') for x in json.loads(robot(world, 'fleet', '--dry-run').stdout)['argv'])
+        package.unlink()
+        r = robot(world, 'fleet', '--commands', '--dry-run')
+        assert r.returncode == 2 and 'does not point to a file' in r.stderr, r.stderr
+    finally:
+        holder.send_signal(signal.SIGTERM)
+        holder.wait(10)
+
+
+def test_viewer_runs_the_debug_bridge_with_the_foxglove_env(world):
+    fleet_runtime(world)
+    fox = world['tmp'] / 'fox.sh'
+    fleet_profile(world, FOXGLOVE_ENV=fox)
+    r = robot(world, 'viewer', '--dry-run')
+    assert r.returncode == 2 and 'no debug_bridge.launch.py' in r.stderr, r.stderr
+    (world['overlay'] / 'nav' / 'share' / 'robot_navigation' / 'launch' / 'debug_bridge.launch.py').write_text('')
+    r = robot(world, 'viewer', '--dry-run')
+    assert r.returncode == 2 and 'FOXGLOVE_ENV not found' in r.stderr, r.stderr
+    fox.write_text('')
+    argv = dry(world, 'viewer')['argv']
+    assert argv[:5] == ['bash', '-c', 'source "$1" && shift && exec "$@"', 'viewer', str(fox)]
+    assert argv[5:] == ['ros2', 'launch', 'robot_navigation', 'debug_bridge.launch.py', 'robot_id:=robot_01']
+    r = robot(world, 'viewer')
+    assert r.returncode == 2 and 'needs a running "robot nav"' in r.stderr, r.stderr
+    fake_process(world, 7200, '/usr/bin/python3 /opt/ros/humble/bin/ros2 launch robot_navigation debug_bridge.launch.py')
+    r = robot(world, 'viewer', '--dry-run')
+    assert r.returncode == 2 and 'already running' in r.stderr, r.stderr
