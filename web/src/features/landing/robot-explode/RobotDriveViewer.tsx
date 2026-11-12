@@ -563,12 +563,10 @@ function DriveStage({ world, quality, onQuality, night, intro, onWorld, onNight 
         <world.Map night={night} driveRef={driveRef} lite={lite} />
         <Stops world={world} visited={visited} target={autopilot?.target ?? null} />
         {world.sense && <TrackedTags world={world} senseRef={senseRef} />}
-        <RobotBody
-          world={world}
-          driveRef={driveRef}
-          rigRef={rigRef}
-          extras={<><LidarSweep blockedRef={blockedRef} /><RobotLights driveRef={driveRef} night={night && world.hasNight} scale={world.scale} /></>}
-        />
+        <RobotBody world={world} driveRef={driveRef} rigRef={rigRef}>
+          <LidarSweep blockedRef={blockedRef} />
+          <RobotLights driveRef={driveRef} night={night && world.hasNight} scale={world.scale} />
+        </RobotBody>
         <DriveLoop world={world} driveRef={driveRef} keysRef={keysRef} blockedRef={blockedRef} senseRef={senseRef} autopilot={autopilot} reset={reset} onArrive={onArrive} onHud={setHud} onAutopilotDone={onAutopilotDone} />
         <DriveCamera world={world} driveRef={driveRef} view={view} framing={framing} />
         <SceneUp onUp={onSceneUp} />

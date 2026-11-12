@@ -442,8 +442,7 @@ html[data-theme-wave]::view-transition-new(root) {
    side, a control panel on the right (a sheet along the bottom on narrow screens). */
 /* The section sits on the page background as one large rounded card, set off from the dark
    Digital Twin section above by a band of the page colour, a hairline and a soft shadow. */
-.lp3-techdrive { --td-pad: clamp(12px, 1.6vw, 24px); --td-top: 84px; position: relative; height: calc(var(--td-screens, 1) * 100svh); padding-top: calc(var(--td-pad) * 1.2); background: var(--lp-bg); color: #eef4f6; }
-.lp3-techdrive[data-story="off"] { height: auto; }
+.lp3-techdrive { --td-pad: clamp(12px, 1.6vw, 24px); --td-top: 84px; position: relative; padding-top: calc(var(--td-pad) * 1.2); background: var(--lp-bg); color: #eef4f6; }
 /* The card stays on screen while the story plays (the section is several screens tall). */
 .lp3-techdrive__pin { position: sticky; top: 0; height: 100svh; min-height: 640px; padding: var(--td-top) var(--td-pad) var(--td-pad); box-sizing: border-box; }
 .lp3-td {
@@ -615,7 +614,6 @@ html[data-theme-wave]::view-transition-new(root) {
   .lp3-td__title { font-size: clamp(2.2rem, 3.8vw, 3.6rem); }
 }
 /* The scroll story: chapter text bottom left, the chapters down the right side, the panel hidden until it is over. */
-.lp3-td[data-story="on"] .lp3-td__panel { opacity: 0; transform: translateY(18px); pointer-events: none; }
 .lp3-td__panel { transition: opacity .6s ease, transform .6s ease; }
 .lp3-td[data-story="on"] .lp3-td__scrim { opacity: 1; background: linear-gradient(90deg, rgba(3, 12, 18, .82) 0%, rgba(3, 12, 18, .45) 34%, rgba(3, 12, 18, 0) 60%), linear-gradient(0deg, rgba(3, 12, 18, .6), rgba(3, 12, 18, 0) 32%); }
 .lp3-story { display: grid; justify-items: start; gap: 16px; grid-column: 1 / -1; animation: lp3-story-in .7s cubic-bezier(.2, .8, .2, 1) both; }
@@ -633,9 +631,6 @@ html[data-theme-wave]::view-transition-new(root) {
 .lp3-story-steps li[data-state="done"] { color: rgba(143, 233, 255, .6); }
 .lp3-story-steps li[data-state="on"] { color: #fff; }
 .lp3-story-steps li[data-state="on"]::after { width: 40px; background: #8fe9ff; }
-.lp3-story-steps p { position: absolute; bottom: 26px; right: 0; margin: 0; color: rgba(238, 244, 246, .7); font: 700 .66rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .16em; text-transform: uppercase; }
-.lp3-story-steps p span { display: inline-block; margin-left: 6px; animation: lp3-story-nudge 1.6s ease-in-out infinite; }
-@keyframes lp3-story-nudge { 50% { transform: translateY(4px); } }
 @media (max-width: 899px) {
   .lp3-story__title { font-size: clamp(1.8rem, 8vw, 2.6rem); }
   .lp3-story__body { font-size: .9rem; }
@@ -645,10 +640,9 @@ html[data-theme-wave]::view-transition-new(root) {
   .lp3-story-steps ol { display: flex; gap: 6px; }
   .lp3-story-steps li { font-size: 0; gap: 0; }
   .lp3-story-steps li::after { width: 14px; }
-  .lp3-story-steps p { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .lp3-story, .lp3-story-steps p span { animation: none; }
+  .lp3-story { animation: none; }
 }
 
 /* 05 / Bên trong robot (sections/RobotFlowSection): steps scroll on the left while the
@@ -872,4 +866,29 @@ html[data-theme-wave]::view-transition-new(root) {
   .lp3-dl, .lp3-dl *, .lp3-dv__toast, .lp3-dv__settings { animation: none !important; transition: none !important; }
   .lp3-dl__ring, .lp3-dl__scan { display: none; }
   .lp3-dl__bar[data-indeterminate="true"] span { width: 100%; opacity: .5; }
+}
+
+/* Section 04's layers (sections/TechDrive): the robot's parts underneath, the intro video
+   (sections/IntroVideo) on top until it ends, then fading away. */
+.lp3-techdrive__stack { position: relative; height: 100%; }
+.lp3-techdrive__layer { position: absolute; inset: 0; }
+.lp3-intro { position: absolute; inset: 0; z-index: 3; transition: opacity .7s ease; }
+.lp3-intro[data-leaving="true"] { opacity: 0; pointer-events: none; }
+.lp3-intro__video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 62% 50%; background: #0b1822; }
+.lp3-intro .lp3-story-steps { pointer-events: auto; }
+.lp3-intro__steps button { padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.lp3-intro__steps button:hover { color: #fff; }
+.lp3-intro__steps button:focus-visible, .lp3-intro__skip:focus-visible, .lp3-intro__play:focus-visible, .lp3-td__replay:focus-visible { outline: 2px solid #8fe9ff; outline-offset: 3px; }
+.lp3-intro__skip { position: absolute; z-index: 5; right: clamp(20px, 3vw, 40px); bottom: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px 9px 16px; border: 1px solid var(--td-line); border-radius: 999px; background: var(--td-glass); color: var(--td-ink); font: inherit; font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: background-color .15s; }
+.lp3-intro__skip:hover { background: rgba(30, 44, 54, .92); }
+.lp3-intro__play { position: absolute; z-index: 5; top: 50%; left: 62%; display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border: 0; border-radius: 999px; background: var(--td-lime); color: #0b1519; font: inherit; font-size: .82rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; transform: translate(-50%, -50%); cursor: pointer; box-shadow: 0 18px 40px -20px rgba(0, 0, 0, .8); }
+.lp3-intro__progress { position: absolute; z-index: 5; right: 0; bottom: 0; left: 0; height: 3px; background: rgba(255, 255, 255, .08); }
+.lp3-intro__progress span { display: block; height: 100%; background: linear-gradient(90deg, #8fe9ff, #d6f18d); transform: scaleX(0); transform-origin: left; }
+.lp3-td__heading { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lp3-td__replay { display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; border: 1px solid var(--td-line); border-radius: 999px; background: transparent; color: var(--td-ink-2); font: inherit; font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; transition: color .15s, border-color .15s; }
+.lp3-td__replay:hover { border-color: rgba(238, 244, 246, .35); color: var(--td-ink); }
+@media (max-width: 899px) {
+  .lp3-intro__skip { top: 54px; right: 16px; bottom: auto; padding: 7px 10px 7px 13px; font-size: .64rem; }
+  .lp3-intro__play { left: 50%; }
+  .lp3-intro .lp3-td__where { display: none; }
 }

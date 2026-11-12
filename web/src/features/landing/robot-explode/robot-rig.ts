@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
-import { AdditiveBlending, Box3, Color, EdgesGeometry, LineBasicMaterial, LineSegments, Mesh, MeshStandardMaterial, Quaternion, Vector3, type Camera, type WebGLProgramParametersWithUniforms } from 'three'
+import { Box3, Color, Mesh, MeshStandardMaterial, Quaternion, Vector3, type Camera } from 'three'
 import { CASING, PART_GROUPS, explodeOffset, groupOfNode, openOffset, partGroup, type PartGroupId } from './parts'
 import { CALLOUTS, type CalloutPoint } from './callouts'
 
@@ -25,50 +25,14 @@ type Piece = {
 /** One unit's way out of the robot (a piece, or a board moving as one), for the callouts and the camera. */
 type Anchor = { home: Vector3; offset: Vector3; open: Vector3 }
 
-/** The scroll story's scan: a band of light on the robot's own surface, as a plane in world space. */
-type ScanUniforms = { uScanPoint: { value: Vector3 }; uScanNormal: { value: Vector3 }; uScanWidth: { value: number }; uScanAmount: { value: number }; uScanColor: { value: Color } }
-
-/**
- * Teaches a robot material the scan: a bright band where the plane cuts the
- * body, and behind it (where it has passed) a faint cyan with fine contour
- * lines, as if the surface had been read.
- */
-function addScan(material: MeshStandardMaterial, uniforms: ScanUniforms) {
-  material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-    Object.assign(shader.uniforms, uniforms)
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vScanWorld;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvScanWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;')
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vScanWorld;\nuniform vec3 uScanPoint;\nuniform vec3 uScanNormal;\nuniform float uScanWidth;\nuniform float uScanAmount;\nuniform vec3 uScanColor;')
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-if (uScanAmount > 0.0) {
-  // sd: how far past the scan plane, in band widths (negative: already scanned).
-  float sd = dot(vScanWorld - uScanPoint, uScanNormal) / uScanWidth;
-  float core = exp(-sd * sd * 4.0);
-  float band = exp(-sd * sd * 0.5);
-  float halo = exp(-sd * sd * 0.02);
-  float trail = sd < 0.0 ? exp(sd * 0.06) : 0.0;
-  float lines = smoothstep(0.8, 1.0, abs(fract(vScanWorld.y / (uScanWidth * 0.8)) - 0.5) * 2.0);
-  // The body dims a little and what has been read turns cool, so the light of the band shows on the white casing.
-  diffuseColor.rgb *= 1.0 - uScanAmount * (0.5 - 0.3 * trail) * (1.0 - band);
-  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.45, 0.85, 1.0), trail * uScanAmount);
-  totalEmissiveRadiance += uScanColor * uScanAmount * (core * 3.0 + band * 1.4 + halo * 0.25 + trail * (0.06 + lines * 0.6));
-}`)
-  }
-  material.customProgramCacheKey = () => 'robot-scan'
-}
-
 export function useRobotParts() {
   const { scene } = useGLTF(ROBOT_MODEL_URL, false, true)
   return useMemo(() => {
     const root = scene.clone(true)
     root.updateMatrixWorld(true)
     const materials = new Map<PartGroupId, MeshStandardMaterial>()
-    const scan: ScanUniforms = { uScanPoint: { value: new Vector3() }, uScanNormal: { value: new Vector3(0, 0, 1) }, uScanWidth: { value: 0.05 }, uScanAmount: { value: 0 }, uScanColor: { value: new Color(SCAN_COLOR) } }
     for (const group of PART_GROUPS) {
       const material = new MeshStandardMaterial({ color: group.color, metalness: group.metalness, roughness: group.roughness, emissive: GLOW.clone(), emissiveIntensity: 0 })
-      addScan(material, scan)
       materials.set(group.id, material)
     }
     const found: { mesh: Mesh; group: PartGroupId; box: Box3 }[] = []
@@ -126,9 +90,6 @@ export function useRobotParts() {
       track: xs.length > 1 ? Math.max(...xs) - Math.min(...xs) : 0.45,
       wheelRadius: wheels.length ? Math.max(0.03, new Box3().setFromObject(wheels[0].mesh).getSize(new Vector3()).y / 2) : 0.08,
       height: box.max.y,
-      /** Back and nose of the robot along its length (model +Z is the nose), for the scan. */
-      length: [box.min.z, box.max.z] as const,
-      scan,
     }
   }, [scene])
 }
@@ -195,7 +156,7 @@ export function partCentre(model: RobotParts, group: PartGroupId, apart: number,
  * Lights up the focused groups (with a slow pulse); while the robot is open the
  * casing turns see-through, and with a part in focus everything else fades.
  */
-export function styleRobot(model: RobotParts, highlight: ReadonlySet<PartGroupId>, hovered: PartGroupId | null, open: number, fade: boolean, time: number, xray = 0) {
+export function styleRobot(model: RobotParts, highlight: ReadonlySet<PartGroupId>, hovered: PartGroupId | null, open: number, fade: boolean, time: number) {
   const pulse = 0.42 + Math.sin(time * 3.2) * 0.14
   const see = ease(open)
   for (const [group, material] of model.materials) {
@@ -203,55 +164,11 @@ export function styleRobot(model: RobotParts, highlight: ReadonlySet<PartGroupId
     let opacity = 1
     if (!focused && CASING.has(group)) opacity = 1 - 0.9 * see
     else if (!focused && fade && highlight.size > 0) opacity = 0.3
-    // X-ray: the solid parts thin out to a ghost behind their glowing edges.
-    opacity *= 1 - 0.93 * xray
     const transparent = opacity < 0.999
     if (material.transparent !== transparent) { material.transparent = transparent; material.needsUpdate = true }
     material.opacity = opacity
     material.depthWrite = !transparent
-    material.emissive.copy(xray > 0 ? XRAY : GLOW)
-    material.emissiveIntensity = focused ? pulse : hovered === group ? 0.25 : xray * 0.6
-  }
-  setEdges(model, xray)
-}
-
-const XRAY = new Color('#5fe3ff')
-const SCAN_COLOR = '#6fe6ff'
-const scanAxis = new Vector3()
-
-/**
- * The scan over the robot's body: `progress` 0 (at its back) .. 1 (past its
- * nose), or null for none. Fades in and out at the ends of the pass.
- */
-export function scanRobot(model: RobotParts, progress: number | null) {
-  const uniforms = model.scan
-  if (progress === null) { uniforms.uScanAmount.value = 0; return }
-  const [back, nose] = model.length
-  const margin = 0.08
-  model.root.updateWorldMatrix(true, false)
-  const world = model.root.matrixWorld
-  uniforms.uScanPoint.value.set(0, 0, back - margin + (nose - back + 2 * margin) * progress).applyMatrix4(world)
-  uniforms.uScanNormal.value.copy(scanAxis.set(0, 0, 1)).transformDirection(world)
-  uniforms.uScanWidth.value = 0.035 * world.getMaxScaleOnAxis()
-  uniforms.uScanAmount.value = Math.min(1, progress / 0.08, (1 - progress) / 0.12 + 0.35)
-}
-const edgeMaterial = new LineBasicMaterial({ color: '#7fe9ff', transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, fog: false })
-const edged = new WeakSet<RobotParts>()
-
-/**
- * The robot's edges as glowing lines, for the x-ray look of the scroll story.
- * Worked out the first time they are needed (a moment's work), then kept on
- * each piece so they move with it.
- */
-function setEdges(model: RobotParts, amount: number) {
-  edgeMaterial.opacity = amount * 0.85
-  if (amount <= 0 || edged.has(model)) return
-  edged.add(model)
-  for (const piece of model.pieces) {
-    const lines = new LineSegments(new EdgesGeometry(piece.mesh.geometry, 28), edgeMaterial)
-    lines.raycast = () => {}
-    lines.renderOrder = 8
-    piece.mesh.add(lines)
+    material.emissiveIntensity = focused ? pulse : hovered === group ? 0.25 : 0
   }
 }
 
