@@ -47,7 +47,7 @@ function CreateAvailabilityReady({ tour, existing, hasExisting, onReload }: { to
   // Opening the form starts a draft. A create with an uncertain response may appear in polling;
   // keep the same intent available for retry until success or an explicit reload.
   const [availability] = useState({ existing, hasExisting })
-  if (availability.hasExisting) return <RepPage><RepPageHeader title="Bạn đã có đăng ký cho buổi này" description="Mỗi đại diện có một đăng ký cho mỗi buổi tham quan." /><Callout title="Tiếp tục với hồ sơ hiện tại" actions={<Link className={repButton('dark')} to={availability.existing ? `/dai-dien/dang-ky/${availability.existing.id}` : '/dai-dien/dang-ky'}>Mở đăng ký của tôi</Link>}>Bạn có thể xem hồ sơ và thực hiện các thao tác được nhà trường cho phép.</Callout></RepPage>
+  if (availability.hasExisting) return <RepPage><RepPageHeader title="Bạn đã có đăng ký cho buổi này" description="Mỗi đại diện có một đăng ký cho mỗi buổi tham quan." /><Callout title="Tiếp tục với hồ sơ hiện tại" actions={<Link className={repButton('dark')} to={availability.existing ? `/dai-dien/dang-ky/${availability.existing.id}` : '/dai-dien/dang-ky'}>Mở đăng ký của tôi</Link>}>Bạn có thể xem hồ sơ và thực hiện các thao tác được Đại học FPT cho phép.</Callout></RepPage>
   return <RegistrationForm tour={tour} onReload={onReload} />
 }
 
@@ -149,7 +149,6 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
             <Panel title="Danh sách lời mời"><RosterPreview rows={rows} variant="representative" />
               {diff && accepted && <p className="rep-hint">Giữ nguyên {diff.unchanged.length} dòng, cập nhật {diff.changed.length}, thêm {diff.added.length}, loại {diff.removed.length}. Dòng bị loại sẽ mất lời mời và phiên truy cập hiện tại khi lưu.</p>}
             </Panel>
-            <Callout title="Trạng thái từng lời mời được xử lý riêng">Hồ sơ và từng dòng lời mời được nhà trường xem xét riêng. Mỗi người nhận dùng lời mời cá nhân; không có mã dùng chung cho cả đoàn.</Callout>
             <Panel title="Mục đích sử dụng thông tin"><p className="rep-form-purpose">Thông tin trường, người liên hệ và danh sách lời mời chỉ dùng để tổ chức đăng ký, gửi lời mời và thống kê vận hành buổi tham quan. Không dùng để liên hệ tuyển sinh sau buổi.</p>
               <label className="rep-consent"><input type="checkbox" required checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Tôi xác nhận có quyền cung cấp thông tin đăng ký và email lời mời trong danh sách này.</label>
             </Panel></div>}
@@ -160,7 +159,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
       </form>
     </div><aside className="rep-summary-aside" aria-label="Buổi tham quan đang đăng ký"><h2>{base.tour.name}</h2>
       <InfoList columns={1} items={[{ label: 'Thời gian dự kiến', value: formatDateTime(base.tour.scheduledStartAt) }, { label: 'Hạn tạo đăng ký và thêm dòng', value: formatDateTime(registrationClosesAt(base.tour).toISOString()) }, { label: 'Tuyến tham quan', value: base.tour.routeName }, { label: 'Điểm dừng trong tuyến', value: base.tour.stops.length }]} />
-      <p className="rep-hint">Tối đa 10 điểm xem cho mỗi hồ sơ. Cập nhật và loại dòng hiện tại theo quyền do nhà trường cung cấp.</p>
+      <p className="rep-hint">Tối đa 10 điểm xem cho mỗi hồ sơ. Cập nhật và loại dòng hiện tại theo quyền do Đại học FPT cung cấp.</p>
     </aside></div>
   </RepPage>
 }

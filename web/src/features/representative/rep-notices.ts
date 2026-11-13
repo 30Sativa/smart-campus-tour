@@ -1,5 +1,6 @@
 import type { RegistrationSummary } from './api/types'
-import { REVIEW_EXPIRED_LABEL, REVIEW_EXPIRED_TEXT, formatShortDate, formatTime, groupLabel, isReviewExpired, isSystemNoStart, tourCancelReasonText } from './rep-format'
+import { campusDateKey, formatDate, formatTime } from '../../components/ui/date-time'
+import { REVIEW_EXPIRED_LABEL, REVIEW_EXPIRED_TEXT, groupLabel, isReviewExpired, isSystemNoStart, tourCancelReasonText } from './rep-format'
 
 export type RepNoticeTone = 'ok' | 'bad' | 'warn' | 'info' | 'mute'
 
@@ -24,8 +25,8 @@ const DAY = 24 * 60 * 60 * 1000
 function startLabel(iso: string, now: number) {
   const start = new Date(iso)
   const today = new Date(now)
-  const sameDay = (a: Date, b: Date) => formatShortDate(a.toISOString()) === formatShortDate(b.toISOString())
-  const when = sameDay(start, today) ? 'hôm nay' : sameDay(start, new Date(now + DAY)) ? 'ngày mai' : formatShortDate(iso)
+  const sameDay = (a: Date, b: Date) => campusDateKey(a) === campusDateKey(b)
+  const when = sameDay(start, today) ? 'hôm nay' : sameDay(start, new Date(now + DAY)) ? 'ngày mai' : formatDate(iso)
   return `${formatTime(iso)} ${when}`
 }
 
@@ -44,7 +45,7 @@ export function buildRepNotices(rows: readonly RegistrationSummary[], now: numbe
 
     if (r.tourState === 'CANCELLED') {
       notices.push({ id: `${r.id}:tour-cancelled`, tone: 'bad', title: 'Buổi tham quan đã bị hủy', subject,
-        detail: `${isSystemNoStart(r.tourCancelReason) ? tourCancelReasonText(r.tourCancelReason) : `Nhà trường đã hủy buổi này${r.tourCancelReason?.trim() ? `: ${r.tourCancelReason.trim()}` : ''}.`} Bạn có thể chọn một buổi khác để đăng ký lại.`, at: r.updatedAt, to: '/dai-dien/buoi', toLabel: 'Xem buổi khác' })
+        detail: `${isSystemNoStart(r.tourCancelReason) ? tourCancelReasonText(r.tourCancelReason) : `Đại học FPT đã hủy buổi này${r.tourCancelReason?.trim() ? `: ${r.tourCancelReason.trim()}` : ''}.`} Bạn có thể chọn một buổi khác để đăng ký lại.`, at: r.updatedAt, to: '/dai-dien/buoi', toLabel: 'Xem buổi khác' })
       continue
     }
     if (isReviewExpired(r)) {

@@ -36,6 +36,6 @@ export default function RepProfilePage() {
       <Panel title="Tài khoản"><InfoList items={[{ label: 'Tên đăng nhập', value: username || 'Chưa có thông tin' }, { label: 'Vai trò', value: 'Đại diện trường' }]} /><p className="rep-profile-note"><Info size={16} aria-hidden="true" /><span>Tài khoản do Admin cấp. Bạn tự đổi họ tên và mật khẩu bên dưới; đổi tên đăng nhập, liên hệ Admin.</span></p></Panel>
       <AccountSettings />
     </div><aside className="rep-aside rep-stack"><button type="button" className={repButton('danger')} onClick={() => void logout()}><LogOut size={16} aria-hidden="true" />Đăng xuất</button></aside></div>
-    <RepSection title="Đăng ký gần đây" action={<Link to="/dai-dien/dang-ky" className="rep-text-link">Đăng ký của tôi</Link>}>{items.length ? <div className="rep-reg-list">{items.map(r => <RegistrationCard key={r.id} registration={r} />)}</div> : <EmptyState title="Bạn chưa có đăng ký nào" description="Chọn buổi tham quan để tạo đăng ký đầu tiên." action={<Link to="/dai-dien/buoi" className={repButton('primary')}>Xem buổi tham quan</Link>} />}</RepSection>
+    <RepSection title="Đăng ký gần đây" action={<Link to="/dai-dien/dang-ky" className="rep-text-link">Đăng ký của tôi</Link>}>{items.length ? <div className="rep-reg-list">{items.map(r => <RegistrationCard key={r.id} registration={r} />)}</div> : <EmptyState variant="empty" title="Bạn chưa có đăng ký nào." action={<Link to="/dai-dien/buoi" className={repButton('primary')}>Xem buổi tham quan</Link>} />}</RepSection>
   </RepPage>
 }

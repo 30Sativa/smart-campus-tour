@@ -73,8 +73,8 @@ describe('Representative registration workspace HTTP behavior', () => {
     expect(await screen.findByRole('button', { name: 'Cấp và gửi lời mời' })).toBeInTheDocument()
     expect(screen.getByText(/10\/11\/2030/)).toBeInTheDocument()
     expect(screen.getByLabelText('Địa chỉ hiện tại')).toHaveTextContent('page=2&search=thuvien&selected=record')
-    fireEvent.click(screen.getByRole('link', { name: 'Danh sách đăng ký' }))
-    await waitFor(() => expect(screen.getByLabelText('Địa chỉ hiện tại')).toHaveTextContent('/dai-dien/dang-ky?'))
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn đăng ký khác' }))
+    await waitFor(() => expect(screen.getByLabelText('Địa chỉ hiện tại')).toHaveTextContent('chooser=1'))
     expect(screen.getByLabelText('Địa chỉ hiện tại')).toHaveTextContent('selected=record')
   })
   it('uses exact email-change fields and retries an uncertain attempt unchanged after newer registration data arrives', async () => {
