@@ -3,13 +3,14 @@ import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
 import { ADMIN_NAV_ENTRIES } from './admin-nav'
 
 /** The administration sidebar: the shared grouped sidebar with the admin pages. */
-export function AdminSidebar({ id, currentPath, onNavigate, onLogout, open, panelRef }: {
+export function AdminSidebar({ id, currentPath, onNavigate, onLogout, open, panelRef, closeRef }: {
   id: string
   currentPath: string | null
   onNavigate: () => void
   onLogout: () => void
   open: boolean
   panelRef: Ref<HTMLElement>
+  closeRef?: Ref<HTMLButtonElement>
 }) {
   return (
     <GroupedSidebar
@@ -24,6 +25,7 @@ export function AdminSidebar({ id, currentPath, onNavigate, onLogout, open, pane
       onLogout={onLogout}
       open={open}
       panelRef={panelRef}
+      closeRef={closeRef}
       look="soft"
     />
   )

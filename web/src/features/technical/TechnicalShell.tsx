@@ -1,58 +1,59 @@
-import { useCallback, useState } from 'react'
-import { Wrench } from 'lucide-react'
-import { Link, useLocation } from 'react-router'
+import { useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
 import { RouteView } from '../../components/ui/RouteView'
-import { useMobileNav } from '../../components/ui/use-mobile-nav'
-import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
+import { softConsoleGround, softConsoleMain } from '../../components/ui/ui-classes'
+import { useConsoleDrawer } from '../../components/ui/use-mobile-nav'
+import { useCurrentPageTitle } from '../../components/ui/use-page-title'
+import { MobileNavScrim } from '../../components/ui/ConsoleSidebar'
+import { ConsoleAccountMenu, ConsoleHeader } from '../../components/ui/ConsoleHeader'
+import { consoleCrumbs } from '../../components/ui/console-crumbs'
 import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
-import { TECHNICAL_NAV, TECHNICAL_NAV_ENTRIES, technicalActivePath } from './technical-nav'
+import { TECHNICAL_NAV, TECHNICAL_NAV_ENTRIES, TECHNICAL_NAV_SECTIONS, technicalActivePath } from './technical-nav'
+import { TechnicalBell } from './TechnicalBell'
 
-/** The Technical Staff shell: same console chrome as Staff and Admin. */
+/**
+ * The Technical Staff shell: the same sidebar and header as the other consoles.
+ * Its bell lists the work the Dashboard already reads; it has no live connection,
+ * so the header shows no connection status.
+ */
 export default function TechnicalShell() {
-  const [menuOpen, setMenuOpen] = useState(false)
+  const drawer = useConsoleDrawer()
   const location = useLocation()
   const user = useAuthStore((state) => state.user)
   const handleLogout = useLogout()
-  const closeMenu = useCallback(() => setMenuOpen(false), [])
-  const navRef = useMobileNav(menuOpen, closeMenu)
+  const pageTitle = useCurrentPageTitle()
   const current = technicalActivePath(location.pathname)
-  const title = location.pathname.startsWith('/technical/profile')
-    ? 'Hồ sơ của tôi'
-    : TECHNICAL_NAV.find(({ path }) => path === current)?.label ?? 'Kỹ thuật'
+  const onProfile = location.pathname.startsWith('/technical/profile')
+  const entry = onProfile ? null : TECHNICAL_NAV.find(({ path }) => path === current)?.label ?? null
+  const section = onProfile ? 'Tài khoản' : TECHNICAL_NAV_SECTIONS.find(({ items }) => items.some(({ path }) => path === current))?.label ?? 'Kỹ thuật'
+  const crumbs = consoleCrumbs({ section, entry, page: pageTitle ?? (onProfile ? 'Hồ sơ của tôi' : null) })
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f6f7f9] text-[#173b59]">
-      <MobileNavToggle open={menuOpen} controls="technical-navigation" label="Mở điều hướng kỹ thuật" closeLabel="Đóng điều hướng kỹ thuật" onOpen={() => setMenuOpen(true)} onClose={closeMenu} />
+    <div className={`flex h-[100dvh] overflow-hidden ${softConsoleGround}`}>
+      <MobileNavScrim open={drawer.open} label="Đóng điều hướng kỹ thuật" onClose={drawer.close} />
       <GroupedSidebar
         id="technical-navigation"
+        look="soft"
         label="Khu vực kỹ thuật"
         navLabel="Điều hướng kỹ thuật"
         homePath="/technical"
         subtitle="DT-AMR · Kỹ thuật"
         entries={TECHNICAL_NAV_ENTRIES}
         currentPath={current}
-        onNavigate={closeMenu}
+        onNavigate={drawer.close}
         onLogout={handleLogout}
-        open={menuOpen}
-        panelRef={navRef}
+        open={drawer.open}
+        panelRef={drawer.panelRef}
+        closeRef={drawer.closeButtonRef}
       />
-      <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
-          <div className="flex h-13 items-center justify-between gap-3 border-b border-[#e5e7eb]">
-            <p className="min-w-0 truncate text-[12.5px] font-medium text-[#9ca3af]">CampusTour <span className="mx-1.5 text-[#d1d5db]">/</span> <span className="text-[#6b7280]">{title}</span></p>
-            <Link to="/technical/profile" aria-label="Hồ sơ của tôi" title="Hồ sơ của tôi" className="ml-auto flex min-w-0 items-center gap-2.5 rounded-lg border-l border-[#e5e7eb] pl-3.5 hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]">
-              <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-[#173b59] text-white"><Wrench size={15} /></span>
-              <span className="hidden min-w-0 sm:block">
-                <span className="block max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{user?.username}</span>
-                <span className="block max-w-40 truncate text-[11px] leading-tight text-[#9ca3af]">{roleLabel(user?.role)}</span>
-              </span>
-            </Link>
-          </div>
-        </header>
-        <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><RouteView /></main>
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <ConsoleHeader crumbs={crumbs} menuOpen={drawer.open} menuControls="technical-navigation" menuLabel="Mở điều hướng kỹ thuật" onMenu={drawer.openDrawer} menuButtonRef={drawer.menuButtonRef}>
+          <TechnicalBell />
+          <ConsoleAccountMenu name={user?.username || 'Nhân viên kỹ thuật'} role={roleLabel(user?.role)} profilePath="/technical/profile" profileCurrent={onProfile} onLogout={handleLogout} onNavigate={drawer.close} />
+        </ConsoleHeader>
+        <main className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto ${softConsoleMain}`}><RouteView /></main>
       </div>
     </div>
   )

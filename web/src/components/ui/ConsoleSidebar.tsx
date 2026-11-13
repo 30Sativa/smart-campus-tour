@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from 'react'
-import { Bot, LogOut, Menu, X } from 'lucide-react'
+import { Bot, LogOut, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import type { NavSection } from './nav-types'
@@ -122,18 +122,13 @@ export function ConsoleSidebar({
   )
 }
 
-/** The floating button that opens the sidebar below `lg`, and the scrim behind it. */
-export function MobileNavToggle({ open, controls, label, closeLabel, onOpen, onClose, buttonRef }: {
-  open: boolean; controls: string; label: string; closeLabel: string; onOpen: () => void; onClose: () => void; buttonRef?: Ref<HTMLButtonElement>
-}) {
-  return (
-    <>
-      <button ref={buttonRef} type="button" onClick={onOpen} aria-expanded={open} aria-controls={controls} aria-label={label} className="fixed right-5 bottom-5 z-30 grid size-12 place-items-center rounded-full bg-[#2563eb] text-white shadow-[0_8px_24px_rgba(31,79,158,0.28)] transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] focus-visible:ring-offset-2 lg:hidden">
-        <Menu size={22} aria-hidden="true" />
-      </button>
-      {open && <button type="button" onClick={onClose} className="fixed inset-0 z-30 cursor-default bg-[#1e293b]/20 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 lg:hidden" aria-label={closeLabel} />}
-    </>
-  )
+/**
+ * The scrim behind the open drawer below `lg`; pressing it closes the drawer. The
+ * button that opens the drawer sits at the top left of the console header (ConsoleHeader).
+ */
+export function MobileNavScrim({ open, label, onClose }: { open: boolean; label: string; onClose: () => void }) {
+  if (!open) return null
+  return <button type="button" onClick={onClose} className="fixed inset-0 z-30 cursor-default bg-[#1e293b]/20 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 lg:hidden" aria-label={label} />
 }
 
 /** The development-only data badge under each shell's header. */

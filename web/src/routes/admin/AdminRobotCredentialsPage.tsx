@@ -56,7 +56,7 @@ export default function AdminRobotCredentialsPage() {
   const totalPages = Math.max(1, Math.ceil((audit.data?.totalItems ?? 0) / (audit.data?.pageSize ?? 50)))
 
   return <AdminPage>
-    <PageHeader eyebrow="Bảo mật robot" title="Lịch sử khóa robot" description="Xem lịch sử cấp, cấp lại và thu hồi khóa. Admin chỉ có quyền thu hồi khẩn cấp; không thể cấp hoặc xem bí mật khóa." />
+    <PageHeader eyebrow="Quản trị" title="Lịch sử khóa robot" description="Xem lịch sử cấp, cấp lại và thu hồi khóa. Admin chỉ có quyền thu hồi khẩn cấp; không thể cấp hoặc xem bí mật khóa." />
     <section className={`${panelClass} mb-5`} aria-label="Thu hồi khẩn cấp khóa robot">
       <div className="border-b border-[#eef1f4] px-4 py-3"><h2 className="font-semibold">Thu hồi khẩn cấp</h2><p className="mt-1 text-sm text-slate-600">MiniPC sẽ mất kết nối sau khi thu hồi. Technical Staff cần cấp khóa mới riêng.</p></div>
       <div className="flex flex-wrap items-end gap-3 p-4">

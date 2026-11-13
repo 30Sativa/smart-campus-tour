@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { Link, MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAuthStore } from '../../stores/auth-store'
+import { PageHeader } from '../../components/ui/ConsolePrimitives'
 import StaffShell from './StaffShell'
 import { REGISTRATIONS_NAV_PATH, STAFF_NAV, activeNavPath } from './staff-nav'
 import { useTourOriginStore } from './operations/tour-origin'
@@ -121,5 +122,18 @@ describe('StaffShell', () => {
     fireEvent.click(open)
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Điều hướng vận hành' })).getByRole('link', { name: 'Lịch Tour' }))
     expect(open).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('puts the menu button in the header and names the page in front, not the menu item', () => {
+    useAuthStore.getState().setAuth('test-token', { userId: 'test-user', username: 'staff', role: 'Staff' })
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={['/staff/manage/tours/new']}><Routes>
+      <Route path="/staff" element={<StaffShell />}><Route path="manage/tours/new" element={<PageHeader eyebrow="Tour & đăng ký" title="Tạo Tour mới" description="" />} /></Route>
+    </Routes></MemoryRouter></QueryClientProvider>)
+    const menu = screen.getByRole('button', { name: 'Mở điều hướng vận hành' })
+    expect(menu.closest('header')).toHaveClass('sticky')
+    expect(menu).not.toHaveClass('fixed')
+    const crumbs = within(screen.getByRole('navigation', { name: 'Vị trí trang' }))
+    expect(crumbs.getAllByRole('listitem').map((item) => item.textContent?.replace('/', '').trim())).toEqual(['Tour & đăng ký', 'Lịch Tour', 'Tạo Tour mới'])
+    expect(screen.getAllByText('Tạo Tour mới')).toHaveLength(2)
   })
 })
