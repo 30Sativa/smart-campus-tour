@@ -16,7 +16,7 @@ describe('registration deadline (48 hours before start)', () => {
     expect(applyRegistrationDeadline(open, start, closesAt - 1)).toBe(open)
     const closed = applyRegistrationDeadline(open, start, closesAt)
     expect(closed.allowed).toBe(false)
-    expect(closed.reason).toContain('Đã đóng đăng ký lúc 09:00')
+    expect(closed.reason).toContain('Đã đóng đăng ký lúc 08/11/2026 09:00')
     expect(closed.reason).toContain('48 giờ')
   })
 

@@ -32,7 +32,7 @@ export function RepHero({ next, loading = false, error, onRetry }: {
 export function RepAttention({ registration }: { registration: RegistrationSummary }) {
   return <Callout tone="warn" title={`${groupLabel(registration) ?? registration.schoolName} cần bạn xử lý`} role="status"
     actions={<Link to={`/dai-dien/dang-ky/${registration.id}`} className={repButton('secondary', 'sm')}>Xem lý do và sửa</Link>}>
-    <p>{registration.rejectionReason?.trim() || `Nhà trường đã từ chối đăng ký cho ${registration.tourName}. Mở hồ sơ để xem lý do và các thao tác hiện còn cho phép.`}</p>
+    <p>{registration.rejectionReason?.trim() || `Đại học FPT đã từ chối đăng ký cho ${registration.tourName}. Mở hồ sơ để xem lý do và các thao tác hiện còn cho phép.`}</p>
   </Callout>
 }
 
