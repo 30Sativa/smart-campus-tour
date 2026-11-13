@@ -28,12 +28,13 @@ const dataRows = () => screen.getAllByRole('row').slice(1)
 describe('MapVersionTable', () => {
   it('keeps each row to what decides the next step and hides the file facts', () => {
     show([version('tang-6', 'Tầng 6', 1, { ...passed, ...onRobot })])
-    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).toEqual(['Khu vực↕', 'Phiên bản↕', 'Tải lên lúc↕', 'Trạng thái↕', 'Robot kiểm tra đạt↕', 'Thao tác'])
+    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).toEqual(['Khu vực↕', 'Phiên bản↕', 'Tải lên lúc↕', 'Tệp bản đồ↕', 'Chạy thử trên robot↕', 'Thao tác'])
     const row = dataRows()[0]
     expect(row).toHaveTextContent('Tầng 6')
-    expect(row).toHaveTextContent('Đạt kiểm tra')
+    expect(row).toHaveTextContent('Hợp lệ')
     expect(row).toHaveTextContent('amr_01')
-    expect(within(row).getByText('tang-6')).toBeInTheDocument()
+    // A name no other area uses needs no key beside it.
+    expect(within(row).queryByText(/tang-6/)).not.toBeInTheDocument()
     expect(screen.queryByText('tang-6-v1.zip')).not.toBeInTheDocument()
   })
 
@@ -88,9 +89,10 @@ describe('MapVersionTable', () => {
     raster.state = { map: null, error: null, retry: vi.fn() }
   })
 
-  it('reads the file, the check and POI eligibility as one status', () => {
+  it('splits the file check from the run on a robot', () => {
     show([version('a', 'A', 3), version('b', 'B', 2, { technicalCheckStatus: 'FAILED' }), version('c', 'C', 1, { map: { ...version('c', 'C', 1).map, validationStatus: 'INVALID' } as MapVersionItem['map'] })])
-    expect(dataRows().map(row => within(row).getAllByRole('cell')[3].textContent)).toEqual(['Chờ kiểm tra', 'Kiểm tra chưa đạt', 'Tệp không hợp lệ'])
+    expect(dataRows().map(row => within(row).getAllByRole('cell')[3].textContent)).toEqual(['Hợp lệ', 'Hợp lệ', 'Không hợp lệ'])
+    expect(dataRows().map(row => within(row).getAllByRole('cell')[4].textContent)).toEqual(['Chưa có', 'Không đạt', 'Chưa có'])
   })
 
   it('finds an area by name or key', () => {
@@ -98,7 +100,9 @@ describe('MapVersionTable', () => {
     fireEvent.change(screen.getByLabelText('Tìm khu vực'), { target: { value: 'TANG-6' } })
     expect(dataRows()).toHaveLength(1)
     fireEvent.change(screen.getByLabelText('Tìm khu vực'), { target: { value: 'không có' } })
-    expect(screen.getByText('Không có khu vực nào phù hợp.')).toBeInTheDocument()
+    expect(screen.getByText('Không có khu vực nào phù hợp')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }))
+    expect(dataRows()).toHaveLength(2)
   })
 
   it('sorts by a column, flips on a second press, and leaves the API order until asked', () => {
@@ -113,11 +117,11 @@ describe('MapVersionTable', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Khu vực' }))
     expect(heading).toHaveAttribute('aria-sort', 'descending')
     expect(areas()).toEqual(['Tầng 10', 'Tầng 2', 'Áo'])
-    fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Trạng thái' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Chạy thử trên robot' }))
     expect(areas()[0]).toBe('Tầng 2')
     expect(heading).toHaveAttribute('aria-sort', 'none')
-    fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Robot kiểm tra đạt' }))
-    expect(areas()[0]).toBe('Áo')
+    fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Chạy thử trên robot' }))
+    expect(areas()[2]).toBe('Tầng 2')
     fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Phiên bản' }))
     expect(areas()[2]).toBe('Tầng 2')
   })
@@ -125,10 +129,10 @@ describe('MapVersionTable', () => {
   it('shows when a version was uploaded and sorts by it', () => {
     const at = (item: MapVersionItem, uploadedAt: string) => ({ ...item, map: { ...item.map, uploadedAt } })
     show([at(version('a', 'A', 1), '2026-10-28T03:00:00Z'), at(version('b', 'B', 1), '2026-10-29T03:00:00Z')])
-    expect(within(dataRows()[0]).getAllByRole('cell')[2]).toHaveTextContent(/\d{2}:\d{2} 28-10/)
+    expect(within(dataRows()[0]).getAllByRole('cell')[2]).toHaveTextContent('28/10/2026 10:00')
     fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Tải lên lúc' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Tải lên lúc' }))
-    expect(within(dataRows()[0]).getAllByRole('cell')[2]).toHaveTextContent(/29-10/)
+    expect(within(dataRows()[0]).getAllByRole('cell')[2]).toHaveTextContent('29/10/2026 10:00')
   })
 
   it('goes back to the first page when the sort changes', () => {
@@ -145,7 +149,10 @@ describe('MapVersionTable', () => {
     expect(dataRows()).toHaveLength(2)
     const [tang6, test123] = dataRows()
     expect(within(tang6).getAllByRole('cell')[1]).toHaveTextContent('32 bản cũ')
-    expect(within(tang6).getAllByRole('cell')[3]).toHaveTextContent('Chờ kiểm tra')
+    expect(within(tang6).getAllByRole('cell')[3]).toHaveTextContent('Hợp lệ')
+    // Two areas share the display name, so each shows its key.
+    expect(within(tang6).getAllByRole('cell')[0].querySelector('span')?.textContent).toBe('Tầng 6 · tang-6')
+    expect(within(test123).getAllByRole('cell')[0].querySelector('span')?.textContent).toBe('Tầng 6 · test123')
     expect(within(tang6).getAllByRole('cell')[4]).toHaveTextContent('amr_01 · đang ở phiên bản 1')
     expect(within(test123).getAllByRole('cell')[1]).toHaveTextContent(/^1$/)
     fireEvent.click(within(tang6).getByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · phiên bản 3' }))
@@ -157,5 +164,13 @@ describe('MapVersionTable', () => {
     show(Array.from({ length: 12 }, (_, index) => version(`area-${index}`, `Khu ${index}`, 1)))
     expect(dataRows()).toHaveLength(10)
     expect(screen.getByRole('navigation', { name: 'Phân trang danh sách bản đồ' })).toHaveTextContent('1-10 trên 12')
+  })
+
+  it('names the robot that ran the map, and says Chưa có when none has', () => {
+    const robot = { id: 'robot-1', robotCode: 'amr_01', displayName: 'AMR 01', assignedMapVersionId: null, assignedVersionNumber: null } as PhysicalRobotOption
+    show([version('a', 'A', 1, { ...passed, ...onRobot }), version('b', 'B', 1)], { data: [robot], isPending: false, isError: false })
+    const [ran, notYet] = dataRows()
+    expect(within(ran).getAllByRole('cell')[4]).toHaveTextContent(/^AMR 01$/)
+    expect(within(notYet).getAllByRole('cell')[4]).toHaveTextContent(/^Chưa có$/)
   })
 })

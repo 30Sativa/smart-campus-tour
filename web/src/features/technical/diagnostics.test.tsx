@@ -144,11 +144,11 @@ describe('Technical dashboard and Mini PC monitoring', () => {
   it('says no Mini PC report has arrived instead of showing empty readings', async () => {
     detail = detailFixture({ lastDiagnosticsReceivedAt: null, diagnosticsFresh: false, miniPc: null, ros2: null, sensors: null })
     renderAt(<TechnicalMonitoringPage />, '/technical/monitoring?robot=amr-01')
-    expect(await screen.findByText(/Backend chưa nhận báo cáo chẩn đoán nào từ Mini PC/)).toBeInTheDocument()
+    expect(await screen.findByText(/Kiểm tra bộ thu thập chẩn đoán trên Mini PC/)).toBeInTheDocument()
     for (const name of ['Tài nguyên Mini PC', 'Cảm biến', 'ROS 2']) {
       const panel = within(screen.getByRole('region', { name }))
-      expect(panel.getByText('Chưa có dữ liệu', { selector: 'span' })).toBeInTheDocument()
-      expect(panel.getByText('Chưa có dữ liệu.')).toBeInTheDocument()
+      // Said once per panel: no badge repeating the body text.
+      expect(panel.getAllByText(/Chưa có dữ liệu/)).toHaveLength(1)
     }
   })
 
@@ -163,5 +163,18 @@ describe('Technical dashboard and Mini PC monitoring', () => {
     renderAt(<TechnicalMonitoringPage />, '/technical/monitoring')
     expect(await screen.findByRole('region', { name: 'Tài nguyên Mini PC' })).toBeInTheDocument()
     expect(requested).toContain('/api/technical/robots/amr-01/diagnostics')
+  })
+
+  it('opens the robot with the most recent data when no robot is named', async () => {
+    dashboard = dashboardFixture([
+      robotSummary({ id: 'r-old', robotCode: 'amr-old', lastSeenAt: '2026-11-05T07:00:00Z' }),
+      robotSummary({ id: 'r-never', robotCode: 'amr-never', lastSeenAt: null }),
+      robotSummary({ id: 'r-new', robotCode: 'amr-new', lastSeenAt: '2026-11-05T08:30:00Z' }),
+    ])
+    renderAt(<TechnicalMonitoringPage />, '/technical/monitoring')
+    expect(await screen.findByRole('region', { name: 'Tài nguyên Mini PC' })).toBeInTheDocument()
+    expect(requested).toContain('/api/technical/robots/amr-new/diagnostics')
+    expect(requested).not.toContain('/api/technical/robots/amr-old/diagnostics')
+    expect(screen.getByLabelText('Robot')).toHaveValue('amr-new')
   })
 })

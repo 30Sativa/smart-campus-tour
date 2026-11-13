@@ -86,3 +86,9 @@ export function formatBytes(bytes: number | null | undefined): string {
   const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
   return `${parseFloat((bytes / 1024 ** index).toFixed(1))} ${units[index]}`
 }
+
+/** The robot heard from most recently, so the page opens on live numbers; robots never heard from come last. */
+export function mostRecentRobot<T extends { lastSeenAt: string | null }>(robots: T[]): T | undefined {
+  const seenAt = (robot: T) => (robot.lastSeenAt ? Date.parse(robot.lastSeenAt) : Number.NEGATIVE_INFINITY)
+  return robots.reduce<T | undefined>((best, robot) => (!best || seenAt(robot) > seenAt(best) ? robot : best), undefined)
+}

@@ -4,7 +4,8 @@ import { Copy, KeyRound, RotateCcw, ShieldAlert } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { Modal } from '../../components/ui/Drawer'
-import { errorText, stamp } from '../../features/technical/technical-format'
+import { errorText } from '../../features/technical/technical-format'
+import { formatDateTime } from '../../components/ui/date-time'
 import { technicalApi, type RobotCredentialSecret } from '../../features/technical/api/technical'
 import { useRobotCredential } from '../../features/technical/technical-hooks'
 
@@ -50,8 +51,8 @@ export function RobotCredentialPanel({ robotCode, onClose }: { robotCode: string
     {credential.isPending ? <p role="status" className="p-4">Đang tải trạng thái khóa…</p> : credential.isError ? <div role="alert" className="p-4 text-sm text-red-700">{errorText(credential.error)} <button className="underline" onClick={() => void credential.refetch()}>Thử lại</button></div> : credential.data && <div className="space-y-4">
       <section className="rounded-lg border border-slate-200 p-3 text-sm">
         <p><strong>Trạng thái:</strong> {credential.data.status === 'ACTIVE' ? `Đang hoạt động · …${credential.data.hint ?? '????'}` : credential.data.status === 'REVOKED' ? 'Đã thu hồi' : 'Chưa cấp'}</p>
-        {credential.data.issuedAt && <p className="mt-1">Cấp lúc {stamp(credential.data.issuedAt)} · {credential.data.issuedByName ?? 'cấp qua CLI'}</p>}
-        {credential.data.revokedAt && <p className="mt-1">Thu hồi lúc {stamp(credential.data.revokedAt)} · {credential.data.revokedByName ?? '—'}</p>}
+        {credential.data.issuedAt && <p className="mt-1">Cấp lúc {formatDateTime(credential.data.issuedAt)} · {credential.data.issuedByName ?? 'cấp qua CLI'}</p>}
+        {credential.data.revokedAt && <p className="mt-1">Thu hồi lúc {formatDateTime(credential.data.revokedAt)} · {credential.data.revokedByName ?? '-'}</p>}
       </section>
       {credential.data.status !== 'ACTIVE' ? <button type="button" disabled={pending} className={buttonClass('primary')} onClick={() => void change('issue')}><KeyRound size={15} aria-hidden="true" />Cấp khóa</button> : <div className="flex flex-wrap gap-2">
         <button type="button" disabled={pending} className={buttonClass('secondary')} onClick={() => setConfirming('rotate')}><RotateCcw size={15} aria-hidden="true" />Cấp lại</button>
