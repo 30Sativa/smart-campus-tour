@@ -92,7 +92,7 @@ describe('route table', () => {
 
     await settled(router, '/admin/accounts')
 
-    expect(await screen.findByRole('heading', { name: /Quản lý tài khoản/i, level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Tài khoản', level: 1 })).toBeInTheDocument()
 
     expect(useAuthStore.getState().user?.role).toBe('Admin')
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {

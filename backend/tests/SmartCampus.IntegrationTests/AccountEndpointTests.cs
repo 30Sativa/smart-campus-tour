@@ -97,7 +97,7 @@ public sealed class AccountEndpointTests
         {
             var names = item.EnumerateObject().Select(property => property.Name).Order().ToArray();
             Assert.Equal(
-                new[] { "createdAt", "fullName", "id", "isActive", "role", "updatedAt", "username" }.Order(),
+                new[] { "createdAt", "fullName", "id", "isActive", "role", "rowVersion", "updatedAt", "username" }.Order(),
                 names);
         }
 
@@ -717,6 +717,95 @@ public sealed class AccountEndpointTests
         Assert.Equal("Edited By Admin", staff.FullName);
         Assert.Equal("STAFF", Assert.Single(staff.UserRoles).Role);
         Assert.Equal(1, await context.AuditLogs.CountAsync(log => log.Action == "ACCOUNT_UPDATED" && log.ActorUserId == adminId));
+    }
+
+    [SchemaV11Fact]
+    public async Task AdminResetPassword_RevokesOldSessions_ChecksVersion_RefusesAdminTargets_AndAuditsWithoutPassword()
+    {
+        const string resetPassword = "admin-reset-password-123";
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        var adminId = (await database.InsertUserAsync(isActive: true, username: "reset.admin", roles: ["ADMIN"])).Id;
+        var staffId = (await database.InsertUserAsync(isActive: true, username: "reset.staff", roles: ["STAFF"])).Id;
+        await using var host = await ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var adminToken = await GetAccessTokenAsync(host.Client, "reset.admin");
+        var firstSession = await LoginAsync(host.Client, "reset.staff", Password);
+        var secondSession = await LoginAsync(host.Client, "reset.staff", Password);
+
+        async Task<string> VersionOf(string username)
+        {
+            using var list = await host.Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, "/api/admin/accounts?size=100", adminToken));
+            using var document = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+            return FindAccount(document.RootElement.GetProperty("data").EnumerateArray(), username).GetProperty("rowVersion").GetString()!;
+        }
+
+        async Task<HttpResponseMessage> ResetAsync(Guid id, object body, string token)
+        {
+            var request = CreateAuthenticatedRequest(HttpMethod.Post, $"/api/admin/accounts/{id:D}/reset-password", token);
+            request.Content = JsonContent.Create(body);
+            return await host.Client.SendAsync(request);
+        }
+
+        // A version read before another writer changed the row is stale: 409, nothing changes.
+        var openedVersion = await VersionOf("reset.staff");
+        var rename = CreateAuthenticatedRequest(HttpMethod.Put, $"/api/admin/accounts/{staffId}", adminToken);
+        rename.Content = JsonContent.Create(new { fullName = "Renamed Before Reset" });
+        using (var renamed = await host.Client.SendAsync(rename))
+            Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+        using (var stale = await ResetAsync(staffId, new { newPassword = resetPassword, expectedRowVersion = openedVersion }, adminToken))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+            using var document = JsonDocument.Parse(await stale.Content.ReadAsStringAsync());
+            Assert.Equal("STALE_VERSION", document.RootElement.GetProperty("errors").GetProperty("code").GetString());
+        }
+        using (var stillValid = await RefreshAsync(host.Client, firstSession.Cookie))
+            Assert.Equal(HttpStatusCode.OK, stillValid.StatusCode);
+
+        // Admin targets (including the caller), non-Admin callers, weak passwords and unknown fields are refused.
+        var adminVersion = await VersionOf("reset.admin");
+        using (var adminTarget = await ResetAsync(adminId, new { newPassword = resetPassword, expectedRowVersion = adminVersion }, adminToken))
+            Assert.Equal(HttpStatusCode.Forbidden, adminTarget.StatusCode);
+        var currentVersion = await VersionOf("reset.staff");
+        using (var byStaff = await ResetAsync(staffId, new { newPassword = resetPassword, expectedRowVersion = currentVersion }, firstSession.AccessToken))
+            Assert.Equal(HttpStatusCode.Forbidden, byStaff.StatusCode);
+        using (var weak = await ResetAsync(staffId, new { newPassword = "short", expectedRowVersion = currentVersion }, adminToken))
+            Assert.Equal(HttpStatusCode.BadRequest, weak.StatusCode);
+        using (var unknownField = await ResetAsync(staffId, new { newPassword = resetPassword, expectedRowVersion = currentVersion, role = "Admin" }, adminToken))
+            Assert.Equal(HttpStatusCode.BadRequest, unknownField.StatusCode);
+        using (var missing = await ResetAsync(Guid.NewGuid(), new { newPassword = resetPassword, expectedRowVersion = currentVersion }, adminToken))
+            Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+
+        // Success: every old refresh token is revoked, the old password stops working, the new one works.
+        using (var reset = await ResetAsync(staffId, new { newPassword = resetPassword, expectedRowVersion = currentVersion }, adminToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+            Assert.DoesNotContain(resetPassword, await reset.Content.ReadAsStringAsync());
+        }
+        using (var oldRefresh = await RefreshAsync(host.Client, firstSession.Cookie))
+            Assert.Equal(HttpStatusCode.Unauthorized, oldRefresh.StatusCode);
+        using (var otherRefresh = await RefreshAsync(host.Client, secondSession.Cookie))
+            Assert.Equal(HttpStatusCode.Unauthorized, otherRefresh.StatusCode);
+        using (var oldLogin = await host.Client.PostAsJsonAsync("/api/auth/login", new { username = "reset.staff", password = Password }))
+            Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+        _ = await LoginAsync(host.Client, "reset.staff", resetPassword);
+
+        // The version moved on, so replaying the same request is stale.
+        Assert.NotEqual(currentVersion, await VersionOf("reset.staff"));
+        using (var replay = await ResetAsync(staffId, new { newPassword = resetPassword, expectedRowVersion = currentVersion }, adminToken))
+            Assert.Equal(HttpStatusCode.Conflict, replay.StatusCode);
+
+        await using var context = CreateContext(database.ConnectionString);
+        var tokens = await context.RefreshTokens.AsNoTracking().Where(token => token.UserId == staffId).ToArrayAsync();
+        Assert.Equal(2, tokens.Count(token => token.RevokedAt is not null));
+        Assert.Equal(1, tokens.Count(token => token.RevokedAt is null)); // the login with the new password
+        var audit = Assert.Single(await context.AuditLogs.AsNoTracking().Where(log => log.Action == "PASSWORD_RESET_BY_ADMIN").ToArrayAsync());
+        Assert.Equal(adminId, audit.ActorUserId);
+        Assert.Equal(staffId.ToString("D"), audit.EntityId);
+        Assert.Null(audit.DataJson);
+        var auditText = string.Join('|', await context.AuditLogs.AsNoTracking()
+            .Select(log => log.Action + log.EntityType + log.EntityId + (log.ResultCode ?? "") + (log.DataJson ?? "")).ToArrayAsync());
+        Assert.DoesNotContain(resetPassword, auditText);
+        var stored = await context.Users.AsNoTracking().SingleAsync(user => user.Id == staffId);
+        Assert.DoesNotContain(resetPassword, stored.PasswordHash);
     }
 
     [SchemaV11Fact]

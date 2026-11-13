@@ -51,13 +51,14 @@ function RoleValue({ role }: { role: AccountListItem['role'] }) {
 }
 
 function AccountAction({ account, onAction, onEdit }: { account: AccountListItem; onAction: AccountTableProps['onLifecycleAction']; onEdit: AccountTableProps['onEdit'] }) {
-  if (account.role === 'Admin') return <span className="text-xs text-[#94a3b8]">cấu hình riêng</span>
-  if (account.role === null) return <span className="text-xs text-[#94a3b8]">-</span>
+  // cần làm sau: chuyển text-slate-600 sang class màu muted dùng chung của WS-0.
+  if (account.role === 'Admin') return <span className="text-xs text-slate-600">cấu hình riêng</span>
+  if (account.role === null) return <span className="text-xs text-slate-600">-</span>
   const action: AccountLifecycleAction = account.isActive ? 'deactivate' : 'reactivate'
   return (
     <span className="inline-flex items-center justify-center gap-1.5">
-      <button type="button" onClick={() => onEdit(account)} className={buttonClass('secondary', 'sm')} aria-label={`Sửa họ tên ${account.username}`}>
-        Sửa họ tên
+      <button type="button" onClick={() => onEdit(account)} className={buttonClass('secondary', 'sm')} aria-label={`Sửa tài khoản ${account.username}`}>
+        Sửa
       </button>
       <button
         type="button"
@@ -78,7 +79,7 @@ export function AccountTable({ accounts, sort, onSort, onLifecycleAction, onEdit
         <thead className="border-b border-[#e2e8f0] bg-[#f8fafc]">
           <tr>
             {SORT_COLUMNS.map((column) => <SortHeading key={column.field} {...column} sort={sort} onSort={onSort} />)}
-            <th scope="col" className={`${thClass} text-center`}>Thao tác</th>
+            <th scope="col" className={`${thClass} sticky right-0 bg-[#f8fafc] text-center shadow-[inset_1px_0_0_#e2e8f0]`}>Thao tác</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[#eef1f4]">
@@ -90,7 +91,7 @@ export function AccountTable({ accounts, sort, onSort, onLifecycleAction, onEdit
               <td className={tdClass}><AdminStatusBadge status={account.isActive ? 'account-active' : 'account-inactive'} /></td>
               <td className={`${tdClass} whitespace-nowrap text-xs text-[#64748b]`}>{formatStamp(account.createdAt)}</td>
               <td className={`${tdClass} whitespace-nowrap text-xs text-[#64748b]`}>{formatStamp(account.updatedAt)}</td>
-              <td className={`${tdClass} text-center`}><AccountAction account={account} onAction={onLifecycleAction} onEdit={onEdit} /></td>
+              <td className={`${tdClass} sticky right-0 bg-white text-center shadow-[inset_1px_0_0_#eef1f4]`}><AccountAction account={account} onAction={onLifecycleAction} onEdit={onEdit} /></td>
             </tr>
           ))}
         </tbody>

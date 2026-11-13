@@ -7,7 +7,7 @@ import { useCreateAccount } from '../hooks'
 import { accountFormError, type AccountFormErrors, type AccountFormField } from '../errors'
 import type { CreatableAccountRole, CreateAccountInput } from '../types'
 
-const ROLE_LABEL: Record<CreatableAccountRole, string> = { Staff: 'Staff', TechnicalStaff: 'Technical Staff', Representative: 'Đại diện trường' }
+const ROLE_LABEL: Record<CreatableAccountRole, string> = { Staff: 'Nhân viên vận hành', TechnicalStaff: 'Nhân viên kỹ thuật', Representative: 'Đại diện trường' }
 
 const INITIAL_FORM = { username: '', fullName: '', role: '' as CreatableAccountRole | '', initialPassword: '' }
 
@@ -64,7 +64,7 @@ export function CreateAccountDialog({ onClose, onCreated }: { onClose: () => voi
     <ConfirmationDialog
       open
       title="Tạo tài khoản"
-      description="Tạo tài khoản Staff, Technical Staff hoặc Đại diện trường. Admin được cấp riêng qua cấu hình ban đầu."
+      description="Tạo tài khoản Nhân viên vận hành, Nhân viên kỹ thuật hoặc Đại diện trường."
       confirmLabel="Tạo tài khoản"
       busyLabel="Đang tạo…"
       busy={create.isPending}
@@ -89,9 +89,7 @@ export function CreateAccountDialog({ onClose, onCreated }: { onClose: () => voi
           <label htmlFor="account-role" className={labelClass}>Vai trò</label>
           <select id="account-role" value={form.role} onChange={(event) => update('role', event.target.value as CreatableAccountRole | '')} required aria-invalid={Boolean(fieldError('role'))} aria-describedby={fieldError('role') ? 'account-role-error' : undefined} className={`${inputClass} mt-1.5`}>
             <option value="">Chọn vai trò</option>
-            <option value="Staff">Staff</option>
-            <option value="TechnicalStaff">Technical Staff</option>
-            <option value="Representative">Representative</option>
+            {(Object.keys(ROLE_LABEL) as CreatableAccountRole[]).map((role) => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}
           </select>
           {fieldError('role') && <p id="account-role-error" className="mt-1 text-xs text-[#b23e31]">{fieldError('role')}</p>}
         </div>

@@ -581,6 +581,7 @@ endpoint and is not introduced here. Persisted codes are not create-request valu
 | `POST /api/admin/accounts` | JSON `{ "username": "...", "fullName": "...", "role": "Staff", "initialPassword": "..." }`; HTTP 200 with the created account summary. | Invalid input or unsupported role: 400. Anonymous: 401. Non-Admin: 403. Duplicate normalized username: 409. |
 | `POST /api/admin/accounts/{id}/deactivate` | No body; HTTP 200 after a state change or idempotent no-op. | Anonymous: 401. Non-Admin or forbidden target: 403. Missing target: 404. |
 | `POST /api/admin/accounts/{id}/reactivate` | No body; HTTP 200 after a state change or idempotent no-op. | Anonymous: 401. Non-Admin or forbidden target: 403. Missing target: 404. |
+| `POST /api/admin/accounts/{id}/reset-password` | JSON `{ "newPassword": "...", "expectedRowVersion": "..." }` (ADR-0058); HTTP 200 with `data: null`. Revokes every refresh token of the account; audit `PASSWORD_RESET_BY_ADMIN` without password material. | Policy failure, malformed version or unknown field: 400. Anonymous: 401. Non-Admin or Admin target: 403. Missing target: 404. Version no longer current: 409 `STALE_VERSION`. |
 
 For example: `GET /api/admin/accounts?page=1&size=20`. The response pagination
 metadata calls this value `pageSize`.
@@ -599,8 +600,14 @@ still succeeds and returns `role: null` for that row. Lifecycle operations on
 such a row fail closed with 403. Admin accounts are provisioned only through
 `InitialAdminSeeder`; the API does not create or lifecycle-manage Admin
 accounts. The initial password is entered by Admin and handed off outside the
-system; password reset, forced change, forgot-password, and email provisioning
-are not provided.
+system. Admin password reset (ADR-0058) also hands the new password off outside
+the system; forced change at next sign-in (needs a new column), forgot-password,
+and email provisioning are not provided.
+
+Each list item also carries `rowVersion`, an opaque account version: base64 of
+the 8-byte big-endian UTC ticks of the stored `UpdatedAt ?? CreatedAt`. `dbo.Users`
+has no SQL rowversion column, so this token stands in for one; reset-password
+checks it under the User row lock and stores a strictly newer `UpdatedAt`.
 
 Deactivation blocks future login and refresh and revokes active refresh tokens.
 Authenticated requests do not query account state: an already-issued access
@@ -633,8 +640,8 @@ All responses use the `BaseResponse` envelope. The account row has only
   refresh token of the account**, and audits `PASSWORD_CHANGED` (no password
   material is logged). Access tokens already issued remain valid until expiry
   (about 15 minutes), the same accepted limitation as deactivation; the web client
-  signs out locally and sends the user to `/login`. Forgot/reset password is still
-  not provided and needs an email or admin-verified recovery design.
+  signs out locally and sends the user to `/login`. Self-service forgot-password is
+  still not provided; an Admin can reset a managed account (§3.0.1, ADR-0058).
 
 `GET /api/admin/infrastructure/health` (Admin) is read-only and never fabricates
 values: a metric the platform cannot provide is `null` (`host.memory` may be
