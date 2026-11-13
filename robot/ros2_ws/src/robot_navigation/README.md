@@ -416,7 +416,10 @@ Robot thật chờ initial pose trên:
 /robot_01/initialpose        (frame_id PHẢI là "map")
 ```
 
-gửi từ RViz **"2D Pose Estimate"**, hoặc từ một dock/homing routine sau này.
+gửi từ RViz **"2D Pose Estimate"**, hoặc từ `pose_bootstrap` (`auto_initial_pose:=true`,
+`robot nav --auto-pose`): node này chỉ gửi một pose sau khi scan LiDAR hiện tại khớp map ở đó
+tốt và duy nhất, bắt đầu từ pose lưu lần trước và các điểm đỗ của map. Không thì để đặt tay.
+Xem `robot/docs/auto-initial-pose.md`.
 
 **Đã gửi initialpose ≠ đã localize đúng.** Luôn verify runtime: scan có trùng
 tường trên map đã lưu không, `map -> odom` có ổn định khi chạy và khi xoay không.

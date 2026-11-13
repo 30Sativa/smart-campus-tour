@@ -100,6 +100,8 @@ def generate_launch_description():
     odom_linear_scale = LaunchConfiguration('odom_linear_scale')
     enable_camera = LaunchConfiguration('enable_camera')
     rviz = LaunchConfiguration('rviz')
+    auto_initial_pose = LaunchConfiguration('auto_initial_pose')
+    pose_bootstrap_config = LaunchConfiguration('pose_bootstrap_config')
 
     manual_launch = PathJoinSubstitution([
         FindPackageShare('robot_control'),
@@ -217,6 +219,15 @@ def generate_launch_description():
                               description='Feed the Astra point cloud into the '
                                           'local costmap. Enable only after the '
                                           'camera mount has been calibrated.'),
+        DeclareLaunchArgument(
+            'auto_initial_pose', default_value='false',
+            description='Run pose_bootstrap: set AMCL\'s initial pose from the LiDAR scan '
+                        '(saved pose / map homes, checked against the scan; nothing is published '
+                        'unless the match is good and unique). Manual 2D Pose Estimate still works. '
+                        'See robot/docs/auto-initial-pose.md.'),
+        DeclareLaunchArgument(
+            'pose_bootstrap_config', default_value='',
+            description='Per-map pose_bootstrap settings. Empty: <map without .yaml>.pose_bootstrap.yaml.'),
         DeclareLaunchArgument(
             'rviz', default_value='false',
             description='Open RViz with the navigation layout. Default false: '
@@ -416,6 +427,20 @@ def generate_launch_description():
                 }.items(),
             ),
         ]),
+
+        # 5) Optional: initial pose from the LiDAR instead of RViz (off by default).
+        Node(
+            package='robot_navigation',
+            executable='pose_bootstrap',
+            name='pose_bootstrap',
+            namespace=robot_id,
+            output='screen',
+            parameters=[
+                PathJoinSubstitution([FindPackageShare('robot_navigation'), 'config', 'pose_bootstrap.yaml']),
+                {'map_yaml': map_yaml, 'config_file': pose_bootstrap_config, 'use_sim_time': use_sim_time},
+            ],
+            condition=IfCondition(auto_initial_pose),
+        ),
 
         # Optional viewer. OFF by default so a headless robot does not try to
         # open a window and hang the launch. Run RViz on your dev machine, or

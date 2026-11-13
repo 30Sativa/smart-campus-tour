@@ -11,6 +11,12 @@
 
 `map2.yaml` trỏ tới `map_fix.pgm`, **không** trỏ tới `map2.pgm`. Đó là chủ ý, không phải lỗi.
 
+## Cấu hình tự khởi tạo pose
+
+| File | Map | Ghi chú |
+|---|---|---|
+| `map2.pose_bootstrap.yaml` | `map2.yaml` | Điểm đỗ START, POI_01 và vùng tìm cho `pose_bootstrap` (`robot/docs/auto-initial-pose.md`). Map mới cần file riêng cùng tên gốc |
+
 ## POI
 
 | File | Map | Ghi chú |
