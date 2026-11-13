@@ -18,6 +18,11 @@ describe('map-config', () => {
     expect(presentation.student2d.calibrated).toBe(false)
   })
 
+  it('draws the production upload of map2 (test123-v1) exactly like map2', () => {
+    expect(mapConfigFor('test123-v1')!.scene).toEqual(mapConfigFor('map2-v2')!.scene)
+    expect(mapConfigFor('test123-v1')!.student2d.calibrated).toBe(false)
+  })
+
   it('places map2 START at the corridor stub by room 617 on the NVH model', () => {
     // Inverse of the display fit in campus-model.ts: scene -> glTF plan metres.
     const k = 20 / (2.14561939 + 97.7707138)
