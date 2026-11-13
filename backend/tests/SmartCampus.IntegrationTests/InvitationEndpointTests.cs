@@ -470,7 +470,12 @@ public sealed class InvitationEndpointTests
         }
         var attempt = attempts[0].CorrelationId!.Value;
         var claims = await Task.WhenAll(Send(new ClaimEmailCommand(attempt, false)), Send(new ClaimEmailCommand(attempt, false)));
-        Assert.Single(claims, c => c is not null);
+        var claimed = Assert.Single(claims, c => c is not null)!;
+        // The greeting copy comes from the invited row and its registration profile.
+        var row = await db.RosterRows.AsNoTracking().Include(r => r.Registration).SingleAsync(r => r.Invitation!.Id == claimed.InvitationId);
+        Assert.Equal((row.DisplayName, row.Registration.GroupName, row.Registration.SchoolName, row.RowType == "SHARED_VIEWING"),
+            (claimed.RecipientName, claimed.GroupName, claimed.SchoolName, claimed.SharedViewing));
+        Assert.All(new[] { claimed.RecipientName, claimed.GroupName, claimed.SchoolName }, value => Assert.False(string.IsNullOrWhiteSpace(value)));
         Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.CorrelationId == attempt && a.Action == "EMAIL_SEND_STARTED"));
         await Send(new RecordEmailResultCommand(attempt, "FAILED", "PROVIDER_REJECTED"));
         await Send(new RecordEmailResultCommand(attempt, "FAILED", "PROVIDER_REJECTED"));

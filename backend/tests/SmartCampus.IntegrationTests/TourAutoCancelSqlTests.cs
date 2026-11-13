@@ -5,6 +5,7 @@ using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.AutoCancelOverdueTour;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
+using SmartCampus.Application.Features.Tours.Commands.DeliverCancelNotice;
 using SmartCampus.Application.Features.Tours.Commands.StartTour;
 
 namespace SmartCampus.IntegrationTests;
@@ -109,6 +110,11 @@ public sealed class TourAutoCancelSqlTests
         Assert.Null(request.ActorUserId);
         Assert.Equal([approved], TourCancelNoticeAudit.RegistrationIds(request));
         Assert.DoesNotContain(rejected, TourCancelNoticeAudit.RegistrationIds(request));
+
+        // The stored reason stays the system one; the representative reads the fixed sentence instead.
+        var email = Assert.Single(await w.H.Send(new ClaimTourCancelNoticeCommand(request.CorrelationId!.Value, false)));
+        Assert.Equal(TourAutoCancel.EmailReason, email.Reason);
+        Assert.Equal(TourAutoCancel.Reason, await db.Tours.AsNoTracking().Where(t => t.Id == w.H.TourId).Select(t => t.EndReason).SingleAsync());
     }
 
     [SchemaV11Fact]
