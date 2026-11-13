@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { capturePage } from './support/capture'
 import { mockApi } from './support/mock-api'
-import { CANCELLED_REGISTRATION_ID, OPEN_TOUR_ID, openTour, representativeHandlers, rosterXlsx } from './fixtures/representative'
+import { CANCELLED_REGISTRATION_ID, cancelledTour, OPEN_TOUR_ID, openTour, representativeHandlers, rosterXlsx } from './fixtures/representative'
 
 const signIn = (page: Page) => mockApi(page, 'Representative', representativeHandlers())
 
@@ -48,5 +48,5 @@ test('representative: cancelled-session profile', async ({ page }) => {
   await signIn(page)
   await page.goto(`/dai-dien/dang-ky/${CANCELLED_REGISTRATION_ID}`)
   await expect(page.getByText('Buổi tham quan đã bị huỷ')).toBeVisible()
-  await capturePage(page, 'rep', 'cancelled-profile', { title: 'Chi tiết đăng ký' })
+  await capturePage(page, 'rep', 'cancelled-profile', { title: cancelledTour.name })
 })

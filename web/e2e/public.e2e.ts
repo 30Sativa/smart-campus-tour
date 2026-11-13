@@ -44,17 +44,13 @@ test('student tour: RUNNING with video, map and AI', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Thư viện' }).first()).toBeVisible()
   await capturePage(page, 'student', 'live', { title: 'Tham quan Thư viện và Khu thực hành' })
 
-  // Bản đồ 2D: the invited page hides the map until a robot pose feed exists (showMap={false}).
-  const mapTab = page.getByRole('tab', { name: 'Bản đồ 2D' })
-  expect.soft(await mapTab.count(), 'student-live: "Bản đồ 2D" tab is present').toBeGreaterThan(0)
-  if (await mapTab.count()) {
-    await mapTab.click()
-    await capturePage(page, 'student', 'live-map', { title: 'Tham quan Thư viện và Khu thực hành' })
-  }
-
   await page.getByRole('tab', { name: 'Hỏi AI' }).click()
   await page.getByLabel('Câu hỏi cho Trợ lý AI').fill('Robot dùng cảm biến gì?')
   await page.getByRole('button', { name: 'Gửi câu hỏi' }).click()
   await expect(page.getByText('Robot dùng cảm biến LiDAR')).toBeVisible()
   await capturePage(page, 'student', 'live-ai', { title: 'Tham quan Thư viện và Khu thực hành' })
 })
+
+// Owner decision outside this batch: the invited Student page hides the 2D map tab (StudentInvitationPage passes
+// showMap={false}) until a robot pose feed exists. Kept as a visible fixme, not as a passing check, so the gap stays listed.
+test.fixme('student tour: RUNNING shows the "Bản đồ 2D" tab', () => {})
