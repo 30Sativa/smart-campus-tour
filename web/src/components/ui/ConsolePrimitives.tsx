@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { ChevronLeft, ChevronRight, LoaderCircle, Search, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { buttonClass, inputClass } from './ui-classes'
+import { usePageTitle } from './use-page-title'
 
 
 
@@ -16,6 +17,7 @@ export const panelClass =
  * The page's own heading, kept to a few lines so the work starts high on the
  * screen: a short context line, the title, one supporting sentence, and the
  * page's actions on the right. `scale` is kept for callers; both read the same.
+ * The title also names the browser tab and the shell header (`usePageTitle`).
  */
 export function PageHeader({
   eyebrow,
@@ -29,6 +31,7 @@ export function PageHeader({
   action?: ReactNode
   scale?: 'default' | 'console'
 }) {
+  usePageTitle(title)
   return (
     <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
       <div className="min-w-0">
