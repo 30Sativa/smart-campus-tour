@@ -63,6 +63,9 @@ PROFILE_KEYS = {
     # roaming drops the link for a few seconds while the robot drives; the backend sets
     # FleetCommands:MaxTelemetryAgeSeconds 10 to match.
     'MOTION_PERMIT_LINK_TIMEOUT_SEC': '20.0',
+    # nav: pose_bootstrap sets the initial pose from the LiDAR (robot/docs/auto-initial-pose.md).
+    # Off by default; "robot nav --auto-pose" / "--manual-pose" override it per run.
+    'AUTO_INITIAL_POSE': 'false',
     'SCT_LOG_ROOT': '~/amr_logs/runs', 'LOG_KEEP_DAYS': '30', 'LOG_MAX_MB': '2000', 'MIN_FREE_GB': '5',
 }
 NODE_PATTERNS = {
@@ -380,7 +383,7 @@ def env_diff(env):
     return {k: env[k] for k in shown if k in env}
 
 
-def workflow_argv(p, workflow, fleet=False):
+def workflow_argv(p, workflow, fleet=False, auto_pose=False):
     m, n = resolve_data(p)
     base = [f'robot_id:={p["ROBOT_ID"]}', f'lidar_yaw:={p["LIDAR_YAW"]}']
     if workflow == 'manual':
@@ -390,7 +393,26 @@ def workflow_argv(p, workflow, fleet=False):
                 f'max_wheel_speed_mm_s:={p["MAP_MAX_WHEEL_SPEED_MM_S"]}', 'rviz:=false']
     return ['ros2', 'launch', 'robot_navigation', 'navigation.launch.py', *base, f'map:={m}',
             'enable_camera:=false', 'rviz:=false', f'nav2_params_file:={n}'] + \
-        (['require_motion_permit:=true'] if fleet else [])
+        (['require_motion_permit:=true'] if fleet else []) + (['auto_initial_pose:=true'] if auto_pose else [])
+
+
+def auto_pose_wanted(p, a):
+    if getattr(a, 'auto_pose', False):
+        return True
+    if getattr(a, 'manual_pose', False):
+        return False
+    return p['AUTO_INITIAL_POSE'].strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def check_auto_pose_runtime(env, map_yaml):
+    nav_launch = share_file(env, 'robot_navigation', 'launch', 'navigation.launch.py')
+    if not nav_launch or 'auto_initial_pose' not in open(nav_launch).read():
+        raise Refused('this runtime has no pose_bootstrap (navigation.launch.py lacks auto_initial_pose): stage an '
+                      'overlay that has it, or run "robot nav --manual-pose"')
+    cfg = os.path.splitext(map_yaml)[0] + '.pose_bootstrap.yaml'
+    if not os.path.isfile(cfg):
+        raise Refused(f'no {os.path.basename(cfg)} next to the map: auto pose needs per-map settings '
+                      '(robot/docs/auto-initial-pose.md), or run "robot nav --manual-pose"')
 
 
 FLEET_ENV_KEYS = ('FLEET_SYNC_URL', 'FLEET_ROBOT_CODE', 'FLEET_ROBOT_MAP_KEY', 'FLEET_ROBOT_FRAME_ID',
@@ -667,9 +689,15 @@ def main(argv=None):
         if w == 'nav':
             wp.add_argument('--fleet', action='store_true',
                             help='start mode_manager with require_motion_permit for a fleet command session')
+            pose = wp.add_mutually_exclusive_group()
+            pose.add_argument('--auto-pose', action='store_true',
+                              help='set the initial pose from the LiDAR (overrides AUTO_INITIAL_POSE)')
+            pose.add_argument('--manual-pose', action='store_true',
+                              help='wait for a 2D Pose Estimate as before (overrides AUTO_INITIAL_POSE)')
     fl = sub.add_parser('fleet')
     fl.add_argument('--commands', action='store_true')
     sub.add_parser('reset-latch')
+    sub.add_parser('relocalize', help='redo the LiDAR initial pose (robot nav with auto pose, robot stationary)')
     sub.add_parser('viewer', help='bridge for RViz on the laptop (amr-rviz --r3)')
     t = sub.add_parser('teleop')
     t.add_argument('--speed', type=float)
@@ -723,12 +751,18 @@ def main(argv=None):
             check_workflow(p, env, a.cmd, procs)
             if fleet:
                 check_fleet_runtime(env, commands=False)
-            argv = workflow_argv(p, a.cmd, fleet)
+            auto_pose = a.cmd == 'nav' and auto_pose_wanted(p, a)
+            if auto_pose:
+                check_auto_pose_runtime(env, resolve_data(p)[0])
+            argv = workflow_argv(p, a.cmd, fleet, auto_pose)
             if a.dry_run:
                 return run(argv, env, True, lock=('workflow', a.cmd), session='(new session directory)')
             session = new_session(p, a.cmd)
-            return run(argv, env, False, lock=('workflow', dict(workflow=a.cmd, fleet=fleet, pid=os.getpid(),
-                                                                session=session)),
+            if auto_pose:
+                print('Initial pose from the LiDAR: keep the robot still for a few seconds after Nav2 is up. '
+                      'Result on /' + p['ROBOT_ID'] + '/pose_bootstrap/status; NEEDS_MANUAL_POSE = set it in RViz.')
+            return run(argv, env, False, lock=('workflow', dict(workflow=a.cmd, fleet=fleet, auto_pose=auto_pose,
+                                                                pid=os.getpid(), session=session)),
                        session=session, extra_env={'ROS_LOG_DIR': os.path.join(session, 'ros_log')})
         if a.cmd == 'teleop':
             speed = a.speed if a.speed is not None else float(p['TELEOP_SPEED'])
@@ -798,6 +832,15 @@ def main(argv=None):
                 print('Clearing the motion gate latch: only when the robot, the area and the attendant are ready.')
             return run(argv, env, a.dry_run, extra_env={'ROS_SUPER_CLIENT': 'TRUE',
                                                         'ROS_LOG_DIR': tool_log_dir(p, 'reset', a.dry_run)})
+        if a.cmd == 'relocalize':
+            held = lock_info('workflow') or {}
+            if held.get('workflow') != 'nav' or not held.get('auto_pose'):
+                raise Refused('relocalize needs "robot nav" started with the auto pose (--auto-pose or AUTO_INITIAL_POSE)')
+            argv = ['ros2', 'service', 'call', f'/{p["ROBOT_ID"]}/pose_bootstrap/relocalize', 'std_srvs/srv/Trigger', '{}']
+            if not a.dry_run:
+                print('Relocalizing from the LiDAR: the robot must be stationary with no goal running.')
+            return run(argv, env, a.dry_run, extra_env={'ROS_SUPER_CLIENT': 'TRUE',
+                                                        'ROS_LOG_DIR': tool_log_dir(p, 'relocalize', a.dry_run)})
         if a.cmd == 'viewer':
             if (lock_info('workflow') or {}).get('workflow') not in ('nav', 'map') and not a.dry_run:
                 raise Refused('viewer needs a running "robot nav" or "robot map"')
