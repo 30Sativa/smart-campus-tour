@@ -5,7 +5,6 @@ import { RouteMap } from '../../features/representative/components/RouteMap'
 import { formatDateTime, groupLabel, isNotOpenError, readRepError, tourCancelReasonText } from '../../features/representative/rep-format'
 import { repButton } from '../../features/representative/rep-classes'
 import { registrationClosesAt } from '../../features/representative/registration-deadline'
-import { tourCancelReasonText } from '../../features/representative/rep-format'
 import { tourImage } from '../../features/representative/tour-image'
 
 export default function RepTourDetailPage() {

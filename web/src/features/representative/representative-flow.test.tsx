@@ -105,13 +105,13 @@ afterEach(() => { clients.forEach(c => c.clear()); useAuthStore.getState().logou
 describe('Representative real HTTP contract', () => {
   it('opens navigation, closes it with Escape and restores the menu button focus', async () => {
     renderAt('/dai-dien')
-    const opener = screen.getByRole('button', { name: 'Mở menu' })
+    const opener = screen.getByRole('button', { name: 'Mở điều hướng đại diện' })
     opener.focus()
     fireEvent.click(opener)
     const navigation = screen.getByRole('navigation', { name: 'Điều hướng đại diện trường' })
     expect(opener).toHaveAttribute('aria-expanded', 'true')
     expect(within(navigation).getByRole('link', { name: 'Tổng quan' })).toHaveAttribute('aria-current', 'page')
-    expect(navigation).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Đóng menu' })).toHaveFocus()
     fireEvent.keyDown(navigation, { key: 'Escape' })
     expect(opener).toHaveAttribute('aria-expanded', 'false')
     expect(opener).toHaveFocus()
