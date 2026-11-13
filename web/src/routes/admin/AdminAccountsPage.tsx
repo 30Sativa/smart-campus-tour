@@ -35,8 +35,8 @@ export default function AdminAccountsPage() {
   return (
     <AdminPage>
       <PageHeader
-        eyebrow="Tài khoản"
-        title="Quản lý tài khoản"
+        eyebrow="Quản trị"
+        title="Tài khoản"
         description="Tạo tài khoản Nhân viên vận hành, Nhân viên kỹ thuật và Đại diện trường, sửa họ tên, đặt lại mật khẩu và bật tắt quyền truy cập."
         action={<button type="button" onClick={() => setCreateOpen(true)} className={buttonClass('primary')}><Plus size={15} aria-hidden="true" />Tạo tài khoản</button>}
       />

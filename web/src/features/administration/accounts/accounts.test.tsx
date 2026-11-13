@@ -73,7 +73,7 @@ describe('Admin Account Management', () => {
     const fetchMock = stubApi((url) => jsonResponse(paged([staff], Number(url.searchParams.get('page') ?? 1), Number(url.searchParams.get('size') ?? 20))))
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'Quản lý tài khoản' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Tài khoản' })).toBeInTheDocument()
     expect((await screen.findAllByText('staff.user')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('Nhân viên vận hành').length).toBeGreaterThan(0)
     expect(screen.queryByText('Staff', { selector: 'span' })).toBeNull()
