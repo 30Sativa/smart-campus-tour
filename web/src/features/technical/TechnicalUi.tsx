@@ -4,7 +4,7 @@ import { toneClass, type StatusTone } from '../../components/ui/status-tone'
 import { labelClass } from '../../components/ui/ui-classes'
 
 export function TechnicalPage({ children }: { children: ReactNode }) {
-  return <div className="min-h-full bg-[#f6f7f9] px-4 py-5 sm:px-6 lg:px-8 lg:py-6"><div className="mx-auto w-full max-w-[1360px]">{children}</div></div>
+  return <div className="min-h-full bg-transparent px-4 py-5 sm:px-6 lg:px-8 lg:py-6"><div className="mx-auto w-full max-w-[1360px]">{children}</div></div>
 }
 
 export function ToneBadge({ tone, children }: { tone: StatusTone; children: ReactNode }) {
@@ -32,8 +32,11 @@ const RESULT_CHOICES = [
   { value: 'FAIL' as const, label: 'Không đạt', icon: CircleX, selectedClass: 'border-[#b23e18] bg-[#fff1ef] text-[#b23e18]' },
 ]
 
-/** Đạt / Không đạt as two visible buttons, so recording a failure is as obvious as recording a pass. */
-export function ResultToggle({ id, value, onChange, hint }: { id: string; value: 'PASS' | 'FAIL'; onChange: (value: 'PASS' | 'FAIL') => void; hint?: ReactNode }) {
+/**
+ * Đạt / Không đạt as two visible buttons, so recording a failure is as obvious as recording a pass.
+ * `null` means not chosen yet: an evidence form never starts on a result the checker did not pick.
+ */
+export function ResultToggle({ id, value, onChange, hint }: { id: string; value: 'PASS' | 'FAIL' | null; onChange: (value: 'PASS' | 'FAIL') => void; hint?: ReactNode }) {
   return (
     <div>
       <p id={id} className={labelClass}>Kết quả</p>

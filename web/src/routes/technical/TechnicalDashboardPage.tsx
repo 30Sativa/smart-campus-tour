@@ -5,9 +5,11 @@ import { PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
 import { dotClass, type StatusTone } from '../../components/ui/status-tone'
 import { buttonClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
+import { EmptyState } from '../../components/ui/EmptyState'
 import type { TechnicalActionItem, TechnicalKpiSummary, TechnicalRobotSummary } from '../../features/technical/api/diagnostics-api'
 import { connectionStatusView, reading, sensorStatusView, sourceState, sourceStateView } from '../../features/technical/diagnostics-status'
-import { errorText, stamp } from '../../features/technical/technical-format'
+import { errorText } from '../../features/technical/technical-format'
+import { formatDateTime } from '../../components/ui/date-time'
 import { useTechnicalDashboard } from '../../features/technical/technical-hooks'
 
 const REFRESH_MS = 15_000
@@ -58,7 +60,7 @@ function FleetHealth({ kpis }: { kpis: TechnicalKpiSummary }) {
             <li key={part.status} className="flex items-center gap-2 text-[12.5px] text-[#475569]">
               <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${dotClass[part.tone]}`} />
               <span className="min-w-0 flex-1 truncate">{part.label}</span>
-              <b className={`font-semibold tabular-nums ${part.count > 0 ? 'text-[#0f172a]' : 'text-[#94a3b8]'}`}>{part.count}</b>
+              <b className={`font-semibold tabular-nums ${part.count > 0 ? 'text-[#0f172a]' : 'text-muted'}`}>{part.count}</b>
             </li>
           ))}
         </ul>
@@ -109,6 +111,14 @@ function BatteryCell({ robot }: { robot: TechnicalRobotSummary }) {
   return <span className={state === 'STALE' ? 'text-[#64748b]' : 'text-[#0f172a]'}>{robot.batteryPercent.toFixed(0)}%{state === 'STALE' && <span className="ml-1 text-[11px]">(cũ)</span>}</span>
 }
 
+
+function MapFacts({ robot }: { robot: TechnicalRobotSummary }) {
+  return <>
+    <span className="font-mono text-[12.5px] text-[#334155]">{robot.assignedMapKey ?? 'Chưa gán bản đồ'}</span>
+    {robot.contextMismatch && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ kiểm tra gần nhất</p>}
+    {robot.needsInspection && <p className="mt-0.5"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}
+  </>
+}
 export default function TechnicalDashboardPage() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const dashboard = useTechnicalDashboard(autoRefresh ? REFRESH_MS : false)
@@ -118,9 +128,9 @@ export default function TechnicalDashboardPage() {
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="Tổng quan" title="Bảng điều khiển kỹ thuật" description="Robot đang thế nào và việc kỹ thuật nào đang chờ."
+      <PageHeader eyebrow="Giám sát" title="Tổng quan" description="Xem tình trạng robot và xử lý việc kỹ thuật đang chờ."
         action={<>
-          {data && <span className="text-xs text-[#64748b]">Cập nhật lúc {stamp(data.collectedAt)}</span>}
+          {data && <span className="text-xs text-[#64748b]">Cập nhật lúc {formatDateTime(data.collectedAt)}</span>}
           <button type="button" aria-pressed={autoRefresh} onClick={() => setAutoRefresh(value => !value)}
             className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-[#475569] transition-colors hover:bg-[#eef1f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]">
             <span aria-hidden="true" className={`size-1.5 rounded-full ${autoRefresh ? dotClass.ok : dotClass.muted}`} />
@@ -141,7 +151,7 @@ export default function TechnicalDashboardPage() {
         </div>
       ) : !data || !kpis ? null : (
         <div className="space-y-4">
-          {dashboard.isError && <div role="alert"><Note tone="warn">Không cập nhật được số liệu mới. Các số bên dưới là lần tải thành công gần nhất lúc <strong>{stamp(data.collectedAt)}</strong>, không phải trạng thái hiện tại.</Note></div>}
+          {dashboard.isError && <div role="alert"><Note tone="warn">Không cập nhật được số liệu mới. Các số bên dưới là lần tải thành công gần nhất lúc <strong>{formatDateTime(data.collectedAt)}</strong>, không phải trạng thái hiện tại.</Note></div>}
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             <FleetHealth kpis={kpis} />
@@ -151,30 +161,28 @@ export default function TechnicalDashboardPage() {
                 {actionItems.length > 0 && <span className="rounded-full bg-[#f1f5f9] px-2 text-xs font-semibold text-[#475569] tabular-nums">{actionItems.length}</span>}
               </SectionTitle>
               {actionItems.length === 0
-                ? <p className="flex flex-1 items-center justify-center px-4 py-8 text-[13px] text-[#64748b]">Không có việc kỹ thuật nào đang chờ.</p>
+                ? <EmptyState variant="empty" title="Chưa có việc kỹ thuật cần xử lý" className="flex-1" />
                 : <ul className="mt-1.5 divide-y divide-[#eef1f4] pb-1.5">{actionItems.map((item, index) => <ActionItemRow key={`${item.type}-${item.targetId ?? index}`} item={item} />)}</ul>}
             </section>
           </div>
 
           <section className={panelClass} aria-label="Robot và Mini PC">
-            <SectionTitle title="Robot và Mini PC" note="Số liệu Mini PC chỉ hiện khi báo cáo còn mới (dưới 60 giây)." />
-            {data.robots.length === 0 ? <p className="px-4 py-6 text-[13px] text-[#64748b]">Chưa có robot đang sử dụng. <Link to="/technical/robots" className="font-semibold text-[#1d4ed8] underline">Đăng ký robot</Link></p> : (
-              <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[820px] text-left">
-                <thead className="border-y border-[#eef1f4]"><tr><th className={thClass}>Robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Pin</th><th className={thClass}>Mini PC</th><th className={thClass}>Bản đồ</th><th aria-label="Thao tác" className={thClass} /></tr></thead>
+            <SectionTitle title="Robot và Mini PC" />
+            {data.robots.length === 0 ? <EmptyState variant="empty" title="Chưa có robot đang sử dụng" action={<Link to="/technical/robots" className={buttonClass('secondary', 'sm')}>Đăng ký robot</Link>} /> : (
+              <div className="mt-3 overflow-x-auto">
+                {/* Battery sits under the connection and the map under the robot, so the table fits a narrow screen without scrolling. */}
+                <table className="w-full text-left">
+                <thead className="border-y border-[#eef1f4]"><tr><th className={thClass}>Robot và bản đồ</th><th className={thClass}>Kết nối và pin</th><th className={thClass}>Mini PC</th><th aria-label="Thao tác" className={thClass} /></tr></thead>
                 <tbody className="divide-y divide-[#eef1f4]">
                   {data.robots.map(robot => {
                     const connection = connectionStatusView(robot.connectionStatus)
                     return (
                       <tr key={robot.id} className={rowClass}>
-                        <td className={tdClass}><p className="font-semibold text-[#0f172a]">{robot.displayName ?? robot.robotCode}</p><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p></td>
-                        <td className={tdClass}><ToneBadge tone={connection.tone}>{connection.label}</ToneBadge>{robot.lastSeenAt && <p className="mt-0.5 text-[11.5px] text-[#64748b]">Lần nhận cuối: {stamp(robot.lastSeenAt)}</p>}</td>
-                        <td className={tdClass}><BatteryCell robot={robot} /></td>
+                        <td className={tdClass}><p className="font-semibold text-[#0f172a]">{robot.displayName ?? robot.robotCode}</p><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p>
+                          <div className="mt-1"><MapFacts robot={robot} /></div></td>
+                        <td className={tdClass}><ToneBadge tone={connection.tone}>{connection.label}</ToneBadge>{robot.lastSeenAt && <p className="mt-0.5 text-[11.5px] text-[#64748b]">Lần nhận cuối: {formatDateTime(robot.lastSeenAt)}</p>}
+                          <p className="mt-0.5 text-[12.5px]">Pin <BatteryCell robot={robot} /></p></td>
                         <td className={tdClass}><MiniPcCell robot={robot} /></td>
-                        <td className={tdClass}>
-                          <span className="font-mono text-[12.5px] text-[#334155]">{robot.assignedMapKey ?? '-'}</span>
-                          {robot.contextMismatch && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ kiểm tra gần nhất</p>}
-                          {robot.needsInspection && <p className="mt-0.5"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}
-                        </td>
                         <td className={`${tdClass} text-right`}><Link to={`/technical/monitoring?robot=${encodeURIComponent(robot.robotCode)}`} aria-label={`Giám sát ${robot.robotCode}`} className={quietLinkClass}>Giám sát<ChevronRight size={14} aria-hidden="true" /></Link></td>
                       </tr>
                     )
