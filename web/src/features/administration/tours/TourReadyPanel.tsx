@@ -59,7 +59,7 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-[15px] font-semibold text-[#0f172a]">Chốt Tour</h2>
-            <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Chốt khóa đăng ký và cấu hình để chuẩn bị bắt đầu. Chốt không nhận robot, không bắt đầu Tour và không gửi lệnh nào tới robot.</p>
+            <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Chốt khóa đăng ký và cấu hình để chuẩn bị bắt đầu.</p>
           </div>
           {supported && <button type="button" className={buttonClass('primary', 'sm')} disabled={!permissions.canMarkReady} onClick={() => { markReady.reset(); setDialog('ready') }}
             aria-describedby={`ready-state-${tour.id}`}><Lock size={15} aria-hidden="true" />Chốt Tour</button>}
@@ -79,7 +79,7 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
       </> : <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold text-[#0f172a]">Tour đã chốt</h2>
-          <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Đăng ký và cấu hình đang khóa; lời mời và truy cập của học sinh vẫn hoạt động. Người vận hành được giao kiểm tra điều kiện rồi bắt đầu Tour.</p>
+          <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Người vận hành được giao kiểm tra điều kiện rồi bắt đầu Tour.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link to={`/staff/tours/${tour.id}/start`} className={buttonClass('primary', 'sm')}><PlayCircle size={15} aria-hidden="true" />Kiểm tra trước khi bắt đầu</Link>

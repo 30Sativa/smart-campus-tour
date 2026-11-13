@@ -52,10 +52,10 @@ export function useRobotHeadset(robotCode: string | null | undefined) {
 }
 
 const CONNECTION_TEXT: Record<Exclude<RobotHeadsetStatus['connection'], 'connected' | null>, { text: string; tone: StatusTone }> = {
-  not_found: { text: 'Chưa cắm kính vào miniPC', tone: 'danger' },
+  not_found: { text: 'Chưa cắm kính vào máy tính của robot', tone: 'danger' },
   offline: { text: 'Kính mất kết nối USB', tone: 'danger' },
   unauthorized: { text: 'Kính chưa cho phép USB debugging (đeo kính, bấm Allow)', tone: 'warn' },
-  adb_error: { text: 'Lỗi adb trên miniPC', tone: 'danger' },
+  adb_error: { text: 'Máy tính của robot không đọc được kính, báo Kỹ thuật kiểm tra', tone: 'danger' },
   unknown: { text: 'Chưa rõ trạng thái kính', tone: 'muted' },
 }
 

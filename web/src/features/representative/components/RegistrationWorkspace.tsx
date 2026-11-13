@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { Search } from 'lucide-react'
 import { Pagination } from '../../../components/ui/ConsolePrimitives'
 import { useRepRegistrations } from '../representative-hooks'
-import { REGISTRATION_GROUPS, closedNote, formatDateTime, isClosedRegistration, readRepError } from '../rep-format'
+import { REGISTRATION_GROUPS, closedNote, formatDateTime, groupLine, isClosedRegistration, readRepError } from '../rep-format'
 import { repButton } from '../rep-classes'
 import { EmptyState, ErrorState, RegistrationStatusBadge, RepPage, RepPageHeader } from './RepUi'
 
@@ -34,6 +34,12 @@ export function RegistrationWorkspace({ registrationId, children }: { registrati
     next.set(key, value); next.set('page', '1')
     setParams(next)
   }
+  const filtered = Boolean(params.get('search') || params.get('tourId'))
+  function clearFilters() {
+    const next = new URLSearchParams(params)
+    next.delete('search'); next.delete('tourId'); next.set('page', '1')
+    setSearch(''); setParams(next)
+  }
   function showChooser() {
     const next = new URLSearchParams(params); next.set('chooser', '1'); setParams(next)
   }
@@ -47,17 +53,19 @@ export function RegistrationWorkspace({ registrationId, children }: { registrati
             <label className="rep-search"><Search size={16} aria-hidden="true" /><input aria-label="Tìm đăng ký" value={search} maxLength={200} onChange={event => setSearch(event.target.value)} placeholder="Tên đoàn hoặc buổi" /><button className={repButton('secondary', 'sm')}>Tìm</button></label>
           </form>
         </div>
-        {query.isPending ? <p aria-busy="true">Đang tải đăng ký…</p> : query.error ? <ErrorState title="Không tải được đăng ký" message={readRepError(query.error).message} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? <EmptyState title="Không có đăng ký phù hợp" description="Thử đổi nhóm hoặc từ khóa tìm kiếm." /> : <>
+        {query.isPending ? <p aria-busy="true">Đang tải đăng ký…</p> : query.error ? <ErrorState title="Không tải được đăng ký" message={readRepError(query.error).message} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? filtered
+          ? <EmptyState variant="noMatch" onClear={clearFilters} />
+          : <EmptyState variant="empty" title={group.group === 'closed' ? 'Chưa có đăng ký nào đã hủy.' : 'Bạn chưa có đăng ký nào.'} /> : <>
           <div className="rep-record-list">{query.data.data.map(item => <Link key={item.id} to={registrationUrl(item.id, params)} className={`rep-record ${item.id === selected ? 'rep-record--selected' : ''}`} aria-current={item.id === selected ? 'page' : undefined}>
-            <strong className="rep-record-title">{item.tourName}</strong><span>{item.groupName}</span><RegistrationStatusBadge state={item.state} rejectionReason={item.rejectionReason} />
-            <span className="rep-record-meta">{isClosedRegistration(item) ? closedNote(item).reason : formatDateTime(item.tourScheduledStartAt)}</span>
+            <strong className="rep-record-title">{item.tourName}</strong><span>{groupLine(item)}</span><span className="rep-record-meta">Giờ tham quan: <span className="num">{formatDateTime(item.tourScheduledStartAt)}</span></span><RegistrationStatusBadge state={item.state} rejectionReason={item.rejectionReason} tourState={item.tourState} />
+            {isClosedRegistration(item) && <span className="rep-record-meta">{closedNote(item).reason}</span>}
           </Link>)}</div>
           <Pagination page={page} pageCount={query.data.pagination.totalPages} total={query.data.pagination.totalItems} pageSize={query.data.pagination.pageSize} label="Trang đăng ký" onPage={value => { const next = new URLSearchParams(params); next.set('page', String(value)); setParams(next) }} />
         </>}
       </aside>
       <div className="rep-workspace-main">
         {selected && <button type="button" className={`${repButton('secondary')} rep-mobile-chooser`} onClick={showChooser}>Chọn đăng ký khác</button>}
-        {selected ? children(selected) : <EmptyState title="Chọn một đăng ký" description="Chi tiết và kết quả từng dòng sẽ hiện tại đây." />}
+        {selected ? children(selected) : query.data?.data.length ? <EmptyState variant="empty" title="Chọn một đăng ký trong danh sách." /> : null}
       </div>
     </div>
   </RepPage>

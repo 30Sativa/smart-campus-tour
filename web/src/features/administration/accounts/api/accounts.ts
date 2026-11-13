@@ -18,5 +18,8 @@ export const accountsApi = {
   /** Only the full name is editable; username and role are fixed after creation. */
   update: (id: string, fullName: string) => apiClient<ApiResponse<AccountListItem>>(`/api/admin/accounts/${id}`, { method: 'PUT', json: { fullName } }),
   deactivate: (id: string) => apiClient<ApiResponse<null>>(`/api/admin/accounts/${id}/deactivate`, { method: 'POST' }),
+  /** Admin reset of a managed account; the response never echoes the password. */
+  resetPassword: (id: string, newPassword: string, expectedRowVersion: string) =>
+    apiClient<ApiResponse<null>>(`/api/admin/accounts/${id}/reset-password`, { method: 'POST', json: { newPassword, expectedRowVersion } }),
   reactivate: (id: string) => apiClient<ApiResponse<null>>(`/api/admin/accounts/${id}/reactivate`, { method: 'POST' }),
 }

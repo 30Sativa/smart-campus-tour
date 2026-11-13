@@ -31,11 +31,12 @@ public sealed class ClaimTourCancelNoticeCommandHandler(IInvitationRepository re
         }
         if (started) return [];
         repository.AddAudit(TourCancelNoticeAudit.Create(tour.Id, request.ActorUserId, TourCancelNoticeAudit.Started, command.AttemptId, now, "PENDING"));
+        var reason = TourAutoCancel.NoticeReason(request.ActorUserId, tour.EndReason);
         // A representative with several groups under one contact address gets one email.
         return (await repository.LoadTourCancelRecipientsAsync(ids, ct))
             .DistinctBy(recipient => recipient.Email.Trim(), StringComparer.OrdinalIgnoreCase)
             .Select(recipient => new TourCancelEmail(tour.Id, command.AttemptId, recipient.RegistrationId, recipient.Email.Trim(),
-                tour.Name, tour.ScheduledStartAt, tour.EndReason ?? "")).ToArray();
+                tour.Name, tour.ScheduledStartAt, reason)).ToArray();
     }
 }
 

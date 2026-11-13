@@ -8,9 +8,14 @@ public interface IInvitationCodeService
     byte[] Hash(string code);
 }
 public sealed record InvitationSettings(bool Enabled, int ExpiryHoursAfterStart, int SessionIdleMinutes = 10);
-/// <summary>A committed delivery claim. Recipient and protected code are sensitive; never log this payload.</summary>
+/// <summary>
+/// A committed delivery claim. Recipient, recipient name and protected code are sensitive; never log this payload.
+/// RecipientName is the roster row display name; GroupName/SchoolName come from that row's registration;
+/// SharedViewing marks a shared projector-room row.
+/// </summary>
 public sealed record InvitationEmail(Guid TourId, Guid InvitationId, Guid AttemptId, string Recipient, string TourName,
-    DateTimeOffset ScheduledStartAt, DateTimeOffset ExpiresAt, int AccessVersion, byte[] ProtectedCode);
+    DateTimeOffset ScheduledStartAt, DateTimeOffset ExpiresAt, int AccessVersion, byte[] ProtectedCode,
+    string RecipientName, string GroupName, string SchoolName, bool SharedViewing);
 /// <summary>One recipient of a cancellation notice. Carries no code or link: the Tour no longer grants access.</summary>
 public sealed record TourCancelEmail(Guid TourId, Guid AttemptId, Guid RegistrationId, string Recipient, string TourName,
     DateTimeOffset ScheduledStartAt, string Reason);

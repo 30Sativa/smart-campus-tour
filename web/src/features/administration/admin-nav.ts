@@ -11,10 +11,15 @@ import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-na
  * small headings. There is no entry to `/staff`: an Admin account cannot open it.
  */
 export const ADMIN_NAV_SECTIONS: NavSection[] = [
-  { label: 'Tài khoản', items: [{ label: 'Tài khoản', path: '/admin/accounts', icon: UsersRound }] },
-  { label: 'Phân quyền', items: [{ label: 'Vai trò & quyền', path: '/admin/roles', icon: KeyRound }] },
-  { label: 'Cấu hình', items: [{ label: 'Lịch vận hành', path: '/admin/schedule-blocks', icon: CalendarOff }] },
-  { label: 'Bảo mật robot', items: [{ label: 'Lịch sử khóa robot', path: '/admin/robot-credentials', icon: ShieldAlert }] },
+  {
+    label: 'Quản trị',
+    items: [
+      { label: 'Tài khoản', path: '/admin/accounts', icon: UsersRound },
+      { label: 'Vai trò & quyền', path: '/admin/roles', icon: KeyRound },
+      { label: 'Lịch vận hành', path: '/admin/schedule-blocks', icon: CalendarOff },
+      { label: 'Lịch sử khóa robot', path: '/admin/robot-credentials', icon: ShieldAlert },
+    ],
+  },
   {
     label: 'Giám sát',
     items: [

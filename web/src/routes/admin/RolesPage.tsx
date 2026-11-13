@@ -62,17 +62,17 @@ export default function RolesPage() {
   return (
     <AdminPage>
         <PageHeader
-          eyebrow="Phân quyền"
+          eyebrow="Quản trị"
           title="Vai trò & quyền"
-          description="Vai trò nào vào được khu vực nào trên giao diện. Bảng đọc trực tiếp từ quy tắc route guard đang áp dụng. Quyền gọi từng API do máy chủ kiểm tra riêng và chi tiết hơn bảng này."
+          description="Xem vai trò nào được vào khu vực nào."
         />
 
         {/* The three figures this page is about, read off the same source the
             table below reads. Nothing here is a filter, so the tiles are plain
             readouts rather than controls. */}
         <section className="grid gap-3 sm:grid-cols-3" aria-label="Tổng quan phân quyền">
-          <SummaryTile icon={Users} label="Vai trò" value={rows.length} hint="Chuẩn hóa từ claim của access token" />
-          <SummaryTile icon={Layers} label="Khu vực" value={AREAS.length} hint="Mỗi khu vực có một route guard riêng" />
+          <SummaryTile icon={Users} label="Vai trò" value={rows.length} hint="Mỗi tài khoản có một vai trò" />
+          <SummaryTile icon={Layers} label="Khu vực" value={AREAS.length} hint="Mỗi khu vực chỉ mở cho vai trò được phép" />
           <SummaryTile
             icon={ShieldCheck}
             label="Cặp vai trò / khu vực được phép"
@@ -84,7 +84,7 @@ export default function RolesPage() {
         <section className={`${panelClass} mt-3`} aria-label="Ma trận quyền truy cập">
           <PanelHead
             title="Ma trận truy cập"
-            description="Chỉ đọc. Việc cấp hoặc thu hồi vai trò được thực hiện ở máy chủ, giao diện chưa có chức năng chỉnh sửa."
+            description="Chỉ đọc. Bảng cho biết vai trò nào được vào khu vực nào; quyền làm từng việc do máy chủ kiểm tra riêng."
           />
 
           {/* Desktop: a matrix, because the whole point is comparing rows against
@@ -108,7 +108,6 @@ export default function RolesPage() {
                         <CellIcon icon={ShieldCheck} />
                         <span className="min-w-0">
                           <span className="block font-semibold text-[#0f172a]">{row.label}</span>
-                          <code className="mt-0.5 block font-mono text-[11px] font-normal text-[#94a3b8]">{row.role}</code>
                         </span>
                       </div>
                     </th>
@@ -130,7 +129,6 @@ export default function RolesPage() {
                   <CellIcon icon={ShieldCheck} />
                   <span className="min-w-0">
                     <span className="block font-semibold text-[#0f172a]">{row.label}</span>
-                    <code className="mt-0.5 block font-mono text-[11px] text-[#94a3b8]">{row.role}</code>
                   </span>
                 </div>
                 <dl className="mt-3 space-y-2">
@@ -151,21 +149,17 @@ export default function RolesPage() {
         </section>
 
         <section className={`${panelClass} mt-3`} aria-label="Nội dung từng khu vực">
-          <PanelHead
-            title="Mỗi khu vực gồm những gì"
-            description="Danh sách lấy từ chính cấu hình điều hướng của từng khu vực."
-          />
+          <PanelHead title="Mỗi khu vực gồm những gì" />
           <div className="grid divide-y divide-[#f1f5f9] md:grid-cols-2 md:divide-x md:divide-[#f1f5f9] lg:grid-cols-3 lg:divide-y-0">
             {AREAS.map((area) => (
               <div key={area.id} className="px-3.5 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-[13px] font-semibold text-[#0f172a]">{area.label}</h3>
-                  <code className="rounded bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[11px] text-[#2563eb]">{area.path}</code>
                 </div>
                 <p className="mt-1.5 text-xs leading-5 text-[#64748b]">{area.purpose}</p>
                 <ul className="mt-2 space-y-1">
                   {(AREA_PAGES[area.id] ?? []).map((page) => (
-                    <li key={page} className="flex items-start gap-2 text-[13px] text-[#64748b]">
+                    <li key={page} className="flex items-start gap-2 text-[13px] text-[#475569]">
                       <span aria-hidden="true" className="mt-2 size-1 shrink-0 rounded-full bg-[#5b91ed]" />
                       {page}
                     </li>

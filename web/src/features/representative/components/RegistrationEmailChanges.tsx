@@ -62,13 +62,13 @@ export function RegistrationEmailChanges({ registration, selectedRow, selectRow,
   async function reload() { await refresh(); await query.refetch(); setDraftRevision(value => value + 1) }
   return <div className="rep-stack">
     <Panel title="Yêu cầu đổi email">
-      {query.isPending ? <p aria-busy="true">Đang tải yêu cầu đổi email…</p> : query.error ? <ErrorState title="Không tải được yêu cầu đổi email" message={readRepError(query.error).message} onRetry={() => void query.refetch()} /> : !row ? <EmptyState title="Chưa có dòng được chấp nhận" description="Yêu cầu đổi email chỉ áp dụng cho dòng được Staff chấp nhận." /> : <div className="rep-stack">
+      {query.isPending ? <p aria-busy="true">Đang tải yêu cầu đổi email…</p> : query.error ? <ErrorState title="Không tải được yêu cầu đổi email" message={readRepError(query.error).message} onRetry={() => void query.refetch()} /> : !row ? <EmptyState variant="empty" title="Chưa có dòng được chấp nhận" description="Yêu cầu đổi email chỉ áp dụng cho dòng được Staff chấp nhận." /> : <div className="rep-stack">
         <label className="rep-field"><span>Dòng cần đổi email</span><select className="rep-input" value={row.id} onChange={event => selectRow(event.target.value)}>{accepted.map(item => <option key={item.id} value={item.id}>{item.displayName}, {item.email}</option>)}</select></label>
         {pending ? <Callout tone="warn" title="Đã có yêu cầu chờ Staff duyệt">Email hiện tại: {row.email}. Không thể tạo thêm yêu cầu đang chờ cho cùng dòng.</Callout> : <EmailChangeForm key={`${row.id}:${draftRevision}`} registration={registration} row={row} refresh={reload} />}
       </div>}
     </Panel>
     {query.data && !query.error && <Panel title="Lịch sử yêu cầu">
-      {!query.data.length ? <p className="rep-hint">Chưa có yêu cầu đổi email.</p> : <div className="rep-history">{query.data.map(item => <article key={item.id} className="rep-list-row">
+      {!query.data.length ? <EmptyState variant="empty" title="Chưa có yêu cầu đổi email." /> : <div className="rep-history">{query.data.map(item => <article key={item.id} className="rep-list-row">
         <h3>Dòng {item.rowNumber}: {item.currentEmail}</h3><p>Email đề xuất: {item.proposedEmail}</p>
         <p className={`rep-badge rep-badge--${item.state === 'PENDING' ? 'warning' : item.state === 'ACCEPTED' ? 'success' : 'danger'}`}>{item.state === 'PENDING' ? 'Chờ Staff duyệt' : item.state === 'ACCEPTED' ? 'Đã chấp thuận' : item.state === 'EXPIRED' ? 'Đã hết hạn' : 'Bị từ chối'}</p>
         <p className="rep-hint">Yêu cầu lúc {formatDateTime(item.createdAt)}</p>{item.reviewedAt && <p className="rep-hint">Xét duyệt lúc {formatDateTime(item.reviewedAt)}</p>}{item.reviewReason && <p>Lý do: {item.reviewReason}</p>}

@@ -1,8 +1,8 @@
 import { Link, useParams } from 'react-router'
 import { useRepTour, useRepRegistrations } from '../../features/representative/representative-hooks'
-import { RepPage, RepPageHeader, Panel, InfoList, GatedAction, TourStateBadge, ErrorState, PageSkeleton, RegistrationStatusBadge, Callout } from '../../features/representative/components/RepUi'
+import { RepPage, RepPageHeader, Panel, InfoList, GatedAction, TourStateBadge, ErrorState, NotOpenState, PageSkeleton, RegistrationStatusBadge, Callout } from '../../features/representative/components/RepUi'
 import { RouteMap } from '../../features/representative/components/RouteMap'
-import { formatDateTime, groupLabel, readRepError } from '../../features/representative/rep-format'
+import { formatDateTime, groupLabel, isNotOpenError, readRepError, tourCancelReasonText } from '../../features/representative/rep-format'
 import { repButton } from '../../features/representative/rep-classes'
 import { registrationClosesAt } from '../../features/representative/registration-deadline'
 import { tourCancelReasonText } from '../../features/representative/rep-format'
@@ -13,6 +13,7 @@ export default function RepTourDetailPage() {
   const query = useRepTour(tourId)
   const registrations = useRepRegistrations({ tourId, size: 1 })
   if (query.isPending) return <PageSkeleton />
+  if (query.error && isNotOpenError(query.error)) return <RepPage><NotOpenState title="Buổi này không còn mở cho bạn" back={{ to: '/dai-dien/buoi', label: 'Xem danh sách buổi' }} /></RepPage>
   if (query.error || !query.data) return <RepPage><ErrorState title="Không xem được Tour" message={readRepError(query.error).message}
     onRetry={() => void query.refetch()} back={{ to: '/dai-dien/buoi', label: 'Danh sách buổi' }} /></RepPage>
   const tour = query.data
@@ -25,7 +26,7 @@ export default function RepTourDetailPage() {
       description={tour.description} badges={<TourStateBadge state={tour.state} />} />
     <figure className="rep-tour-cover"><img src={cover.src} alt={cover.alt} decoding="async" /><figcaption>Ảnh minh họa</figcaption></figure>
     {tour.state === 'CANCELLED' && <Callout tone="warn" title="Buổi tham quan đã bị hủy" role="status">
-      <p>{tourCancelReasonText(tour.cancelReason) || 'Nhà trường chưa cung cấp lý do hủy.'}</p>
+      <p>{tourCancelReasonText(tour.cancelReason) || 'Đại học FPT chưa cung cấp lý do hủy.'}</p>
     </Callout>}
     <div className="rep-detail">
       <div className="rep-stack">
@@ -45,7 +46,7 @@ export default function RepTourDetailPage() {
           : registrations.error ? <ErrorState title="Không kiểm tra được đăng ký" message={readRepError(registrations.error).message} onRetry={() => void registrations.refetch()} />
             : existing ? <div className="rep-stack">
               <h3>{groupLabel(existing) ?? existing.schoolName}</h3>
-              <RegistrationStatusBadge state={existing.state} rejectionReason={existing.rejectionReason} />
+              <RegistrationStatusBadge state={existing.state} rejectionReason={existing.rejectionReason} tourState={existing.tourState} />
               <p className="rep-hint">Bạn đã có đăng ký cho buổi tham quan này. Mở hồ sơ để xem thông tin và các thao tác hiện còn cho phép.</p>
               <Link to={`/dai-dien/dang-ky/${existing.id}`} className={repButton('primary')}>Xem đăng ký</Link>
             </div>

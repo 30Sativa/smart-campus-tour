@@ -72,4 +72,42 @@ describe('system audit log', () => {
     fireEvent.click(screen.getByRole('button', { name: /Thử lại|Tải lại/ }))
     expect(await screen.findByRole('cell', { name: 'Hủy Tour' })).toBeInTheDocument()
   })
+  it('names a student invitation step instead of the system', async () => {
+    rows = [{ ...entry, action: 'INVITATION_ENTERED', entityType: 'Invitation', actorUserId: null, actorName: null, resultCode: 'OK' }]
+    show()
+    expect(await screen.findByRole('cell', { name: 'Học sinh vào Tour lần đầu' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Học sinh (lời mời)' })).toBeInTheDocument()
+    expect(screen.queryByText('Hệ thống')).not.toBeInTheDocument()
+  })
+
+  it('groups the action filter with one optgroup per group and no unknown label', async () => {
+    show()
+    await screen.findByRole('cell', { name: 'Hủy Tour' })
+    const select = screen.getByLabelText('Thao tác')
+    const groups = [...select.querySelectorAll('optgroup')].map(group => group.label)
+    expect(groups).toEqual(expect.arrayContaining(['Tài khoản', 'Tour', 'Vận hành Tour', 'Lời mời', 'Email', 'Lịch vận hành']))
+    expect(select.querySelector('optgroup[label="Tài khoản"] option[value="PASSWORD_RESET_BY_ADMIN"]')).not.toBeNull()
+    expect(select.querySelector('optgroup[label="Vận hành Tour"] option[value="ROBOT_DISPATCH_CHANGED"]')).not.toBeNull()
+    expect(select.textContent).not.toContain('Thao tác khác')
+  })
+
+  it('filters by campus day typed as dd/mm/yyyy, both ends inclusive', async () => {
+    show()
+    await screen.findByRole('cell', { name: 'Hủy Tour' })
+    fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '01/11/2026' } })
+    fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '13/11/2026' } })
+    await waitFor(() => expect(urls.at(-1)?.searchParams.get('to')).toBe('2026-11-13T16:59:59.999Z'))
+    expect(urls.at(-1)?.searchParams.get('from')).toBe('2026-10-31T17:00:00.000Z')
+    expect(await screen.findByText('30/10/2026 15:00')).toBeInTheDocument()
+  })
+
+  it('says there is nothing yet, and offers to clear filters only while filtering', async () => {
+    rows = []
+    show()
+    expect(await screen.findByText('Chưa có nhật ký')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Thao tác'), { target: { value: 'TOUR_CANCELLED' } })
+    expect(await screen.findByText('Không có kết quả phù hợp')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }))
+    expect(await screen.findByText('Chưa có nhật ký')).toBeInTheDocument()
+  })
 })

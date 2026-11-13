@@ -8,8 +8,9 @@ import { usePagination } from '../../components/ui/use-pagination'
 import { useMapRaster } from '../administration/pois/map/use-map-raster'
 import { DetailFact, ToneBadge, ViewDetailButton } from './TechnicalUi'
 import type { MapAreaOption, MapVersionItem, PhysicalRobotOption } from './api/technical'
-import { mapVersionLabel } from './poi-labels'
-import { stamp } from './technical-format'
+import { areaLabel, duplicateAreaNames, mapVersionLabel } from './poi-labels'
+import { formatDateTime } from '../../components/ui/date-time'
+import { EmptyState } from '../../components/ui/EmptyState'
 
 type Actions = { onUpload: (area: MapAreaOption) => void; onCheck: (item: MapVersionItem) => void }
 /** Registered robots, only to say which one holds an area; the assignment itself is edited on the robot page. */
@@ -18,7 +19,7 @@ type RobotList = { data?: PhysicalRobotOption[]; isPending: boolean; isError: bo
 /** One area: its newest version leads the row; older versions stay reachable from the detail. */
 type AreaRow = { latest: MapVersionItem; versions: MapVersionItem[]; robots: { robotCode: string; versionNumber: number }[] }
 
-type SortField = 'area' | 'version' | 'uploaded' | 'status' | 'robot'
+type SortField = 'area' | 'version' | 'uploaded' | 'file' | 'run'
 
 const PAGE_SIZE = 10
 const TONE_RANK: Partial<Record<StatusTone, number>> = { danger: 0, warn: 1, ok: 2 }
@@ -30,6 +31,23 @@ function versionStatus(item: MapVersionItem): { tone: StatusTone; label: string;
   if (item.technicalCheckStatus === 'PENDING') return { tone: 'warn', label: 'Chờ kiểm tra', detail: item.preparationBlockReason }
   if (item.technicalCheckStatus === 'FAILED') return { tone: 'danger', label: 'Kiểm tra chưa đạt', detail: item.preparationBlockReason }
   return { tone: 'ok', label: 'Đạt kiểm tra', detail: item.canUseForPoiPreparation ? 'Dùng được để tạo POI' : item.preparationBlockReason }
+}
+
+/** The "Tệp bản đồ" column: did the uploaded package pass the server's file checks. */
+function fileStatus(item: MapVersionItem): { tone: StatusTone; label: string } {
+  return item.map.validationStatus === 'VALID' ? { tone: 'ok', label: 'Hợp lệ' } : { tone: 'danger', label: 'Không hợp lệ' }
+}
+
+/**
+ * The "Chạy thử trên robot" column, from what the list already returns: robots whose latest deployment check passed
+ * on a version of this area, else the newest version's own check (a failure or an earlier pass), else nothing yet.
+ */
+function runState(area: AreaRow): { tone: StatusTone; robots: AreaRow['robots']; failedOn: string | null; passedOn: string | null } {
+  const { latest, robots } = area
+  if (robots.length) return { tone: robots.some(robot => robot.versionNumber === latest.map.versionNumber) ? 'ok' : 'warn', robots, failedOn: null, passedOn: null }
+  if (latest.technicalCheckStatus === 'FAILED') return { tone: 'danger', robots, failedOn: latest.latestDeployment?.robotCode ?? null, passedOn: null }
+  if (latest.technicalCheckStatus === 'PASSED' && latest.preparationEvidence) return { tone: 'ok', robots, failedOn: null, passedOn: latest.preparationEvidence.robotCode }
+  return { tone: 'warn', robots, failedOn: null, passedOn: null }
 }
 
 /** Groups versions by area in the order the API first lists each area. */
@@ -48,14 +66,14 @@ const COMPARE: Record<SortField, (a: AreaRow, b: AreaRow) => number> = {
   area: (a, b) => byName.compare(a.latest.map.areaName, b.latest.map.areaName) || byName.compare(a.latest.map.areaKey, b.latest.map.areaKey),
   version: (a, b) => a.latest.map.versionNumber - b.latest.map.versionNumber,
   uploaded: (a, b) => a.latest.map.uploadedAt.localeCompare(b.latest.map.uploadedAt),
-  status: (a, b) => (TONE_RANK[versionStatus(a.latest).tone] ?? 3) - (TONE_RANK[versionStatus(b.latest).tone] ?? 3),
-  robot: (a, b) => byName.compare(a.robots[0]?.robotCode ?? '￿', b.robots[0]?.robotCode ?? '￿'),
+  file: (a, b) => (TONE_RANK[fileStatus(a.latest).tone] ?? 3) - (TONE_RANK[fileStatus(b.latest).tone] ?? 3),
+  run: (a, b) => (TONE_RANK[runState(a).tone] ?? 3) - (TONE_RANK[runState(b).tone] ?? 3) || byName.compare(a.robots[0]?.robotCode ?? '￿', b.robots[0]?.robotCode ?? '￿'),
 }
 
-function SortHeading({ field, label, sort, onSort }: { field: SortField; label: string; sort: { field: SortField; descending: boolean } | null; onSort: (field: SortField) => void }) {
+function SortHeading({ field, label, sort, onSort, className = '' }: { field: SortField; label: string; sort: { field: SortField; descending: boolean } | null; onSort: (field: SortField) => void; className?: string }) {
   const direction = sort?.field !== field ? 'none' : sort.descending ? 'descending' : 'ascending'
   return (
-    <th scope="col" aria-sort={direction} className={thClass}>
+    <th scope="col" aria-sort={direction} className={`${thClass} ${className}`}>
       <button type="button" aria-label={`Sắp xếp theo ${label}`} onClick={() => onSort(field)} className="inline-flex items-center gap-1.5 rounded-md text-left hover:text-[#0f172a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]">
         {label}<span className="text-[#94a3b8]" aria-hidden="true">{direction === 'ascending' ? '↑' : direction === 'descending' ? '↓' : '↕'}</span>
       </button>
@@ -91,7 +109,7 @@ function MapVersionDetail({ area, itemId, robotList, onSelect, onClose, onUpload
       <MapPreview mapVersionId={map.id} label={mapVersionLabel(map)} />
       <dl className="mt-3 divide-y divide-[#f1f5f9]">
         <DetailFact label="Trạng thái"><ToneBadge tone={status.tone}>{status.label}</ToneBadge>{status.detail && <span className="mt-1 block text-xs text-[#64748b]">{status.detail}</span>}</DetailFact>
-        <DetailFact label="Kiểm tra gần nhất">{evidence ? stamp(evidence.checkedAt) : 'Chưa có'}</DetailFact>
+        <DetailFact label="Kiểm tra gần nhất">{evidence ? formatDateTime(evidence.checkedAt) : 'Chưa có'}</DetailFact>
         <DetailFact label="Robot được gán">
           {robotList.isPending ? 'Đang tải…' : robotList.isError ? 'Không tải được danh sách robot' : assigned.length
             ? <span className="flex flex-wrap gap-x-3 gap-y-1">{assigned.map(robot => <Link key={robot.id} to={`/technical/robots?robot=${robot.id}`} className="font-semibold text-[#1d4ed8] underline">{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode} · phiên bản {robot.assignedVersionNumber}</Link>)}</span>
@@ -113,7 +131,7 @@ function MapVersionDetail({ area, itemId, robotList, onSelect, onClose, onUpload
             return (
               <li key={version.map.id} className={`flex items-center gap-3 px-3 py-2 text-[13px] ${current ? 'bg-[#eff6ff]' : ''}`}>
                 <span className="w-24 font-semibold text-[#0f172a]">Phiên bản {version.map.versionNumber}</span>
-                <span className="text-[#64748b]">{stamp(version.map.uploadedAt)}</span>
+                <span className="text-[#64748b]">{formatDateTime(version.map.uploadedAt)}</span>
                 <ToneBadge tone={versionState.tone}>{versionState.label}</ToneBadge>
                 {version.currentlyDeployedOn.length > 0 && <span className="text-xs text-[#1f7a55]">{version.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}
                 <span className="ml-auto">{current
@@ -140,31 +158,40 @@ export function MapVersionTable({ items, robots, onUpload, onCheck }: { items: M
   const paged = usePagination(sorted, PAGE_SIZE, `${term}|${sort?.field}|${sort?.descending}`)
   const toggleSort = (field: SortField) => setSort(sort?.field === field ? { field, descending: !sort.descending } : { field, descending: false })
   const viewedArea = viewing && areas.find(area => area.latest.map.areaKey === viewing.areaKey)
+  const duplicates = duplicateAreaNames(areas.map(area => ({ areaKey: area.latest.map.areaKey, name: area.latest.map.areaName })))
+  // People know robots by name; the code stays the fallback while the robot list loads.
+  const robotName = (code: string) => robots.data?.find(robot => robot.robotCode === code)?.displayName || code
 
   return (
     <section className={panelClass} aria-label="Danh sách bản đồ theo khu vực">
       <div className="flex flex-col gap-3 border-b border-[#f1f5f9] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div><h2 className="text-[15px] font-semibold text-[#0f172a]">Danh sách bản đồ</h2><p className="text-xs text-[#64748b]">Mỗi khu vực một dòng, hiện phiên bản mới nhất. Phiên bản cũ xem trong chi tiết.</p></div>
+        <h2 className="text-[15px] font-semibold text-[#0f172a]">Danh sách bản đồ</h2>
         <SearchField value={search} onChange={setSearch} label="Tìm khu vực" placeholder="Tìm theo khu vực" className="sm:w-64" />
       </div>
-      {rows.length === 0 ? <p className="px-4 py-8 text-center text-[13px] text-[#64748b]">Không có khu vực nào phù hợp.</p> : <>
+      {rows.length === 0 ? <EmptyState variant="noMatch" title="Không có khu vực nào phù hợp" onClear={() => setSearch('')} /> : <>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left">
-            <thead className="border-b border-[#e2e8f0]"><tr><SortHeading field="area" label="Khu vực" sort={sort} onSort={toggleSort} /><SortHeading field="version" label="Phiên bản" sort={sort} onSort={toggleSort} /><SortHeading field="uploaded" label="Tải lên lúc" sort={sort} onSort={toggleSort} /><SortHeading field="status" label="Trạng thái" sort={sort} onSort={toggleSort} /><SortHeading field="robot" label="Robot kiểm tra đạt" sort={sort} onSort={toggleSort} /><th scope="col" className={`${thClass} text-center`}>Thao tác</th></tr></thead>
+          {/* Below xl the version and upload time fold under the area name, so the table fits a narrow screen without scrolling. */}
+          <table className="w-full text-left">
+            <thead className="border-b border-[#e2e8f0]"><tr><SortHeading field="area" label="Khu vực" sort={sort} onSort={toggleSort} /><SortHeading field="version" label="Phiên bản" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" /><SortHeading field="uploaded" label="Tải lên lúc" sort={sort} onSort={toggleSort} className="hidden xl:table-cell" /><SortHeading field="file" label="Tệp bản đồ" sort={sort} onSort={toggleSort} /><SortHeading field="run" label="Chạy thử trên robot" sort={sort} onSort={toggleSort} /><th scope="col" className={`${thClass} text-center`}>Thao tác</th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">
               {paged.rows.map(area => {
-                const { latest, versions, robots } = area
+                const { latest, versions } = area
                 const { map } = latest
-                const status = versionStatus(latest)
+                const file = fileStatus(latest)
+                const run = runState(area)
                 return (
                   <tr key={map.areaKey} className={rowClass}>
-                    <td className={tdClass}><span className="font-semibold text-[#0f172a]">{map.areaName}</span><p className="font-mono text-[11.5px] text-[#64748b]">{map.areaKey}</p></td>
-                    <td className={tdClass}><span className="font-semibold">{map.versionNumber}</span>{versions.length > 1 && <p className="text-[11.5px] text-[#64748b]">{versions.length - 1} bản cũ</p>}</td>
-                    <td className={`${tdClass} whitespace-nowrap text-[13px] text-[#64748b]`}>{stamp(map.uploadedAt)}</td>
-                    <td className={tdClass}><ToneBadge tone={status.tone}>{status.label}</ToneBadge></td>
-                    <td className={tdClass}>{robots.length ? <span className="flex flex-wrap gap-1">{robots.map(robot => robot.versionNumber === map.versionNumber
-                      ? <ToneBadge key={robot.robotCode} tone="ok">{robot.robotCode}</ToneBadge>
-                      : <ToneBadge key={robot.robotCode} tone="warn">{robot.robotCode} · đang ở phiên bản {robot.versionNumber}</ToneBadge>)}</span> : <span className="text-[#94a3b8]">-</span>}</td>
+                    <td className={tdClass}><span className="font-semibold text-[#0f172a]">{areaLabel(map.areaName, map.areaKey, duplicates)}</span>
+                      <p className="text-[11.5px] text-[#64748b] xl:hidden">Phiên bản {map.versionNumber}{versions.length > 1 ? ` (${versions.length - 1} bản cũ)` : ''} · {formatDateTime(map.uploadedAt)}</p></td>
+                    <td className={`${tdClass} hidden xl:table-cell`}><span className="font-semibold">{map.versionNumber}</span>{versions.length > 1 && <p className="text-[11.5px] text-[#64748b]">{versions.length - 1} bản cũ</p>}</td>
+                    <td className={`${tdClass} hidden whitespace-nowrap text-[13px] text-[#64748b] xl:table-cell`}>{formatDateTime(map.uploadedAt)}</td>
+                    <td className={tdClass}><ToneBadge tone={file.tone}>{file.label}</ToneBadge></td>
+                    <td className={tdClass}>{run.robots.length ? <span className="flex flex-wrap gap-1">{run.robots.map(robot => robot.versionNumber === map.versionNumber
+                      ? <ToneBadge key={robot.robotCode} tone="ok">{robotName(robot.robotCode)}</ToneBadge>
+                      : <ToneBadge key={robot.robotCode} tone="warn">{robotName(robot.robotCode)} · đang ở phiên bản {robot.versionNumber}</ToneBadge>)}</span>
+                      : run.tone === 'danger' ? <ToneBadge tone="danger">{run.failedOn ? `Không đạt · ${robotName(run.failedOn)}` : 'Không đạt'}</ToneBadge>
+                        : run.passedOn ? <ToneBadge tone="ok">{robotName(run.passedOn)}</ToneBadge>
+                          : <span className="text-[13px] text-muted">Chưa có</span>}</td>
                     <td className={tdClass}><div className="flex items-center justify-center gap-2">
                       <button type="button" className={buttonClass(latest.technicalCheckStatus === 'PENDING' ? 'primary' : 'secondary', 'sm')} onClick={() => onCheck(latest)}>Ghi kết quả kiểm tra</button>
                       <ViewDetailButton label={`Xem chi tiết ${mapVersionLabel(map)}`} onClick={() => setViewing({ areaKey: map.areaKey, itemId: map.id })} />

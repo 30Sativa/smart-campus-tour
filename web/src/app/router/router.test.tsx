@@ -92,7 +92,7 @@ describe('route table', () => {
 
     await settled(router, '/admin/accounts')
 
-    expect(await screen.findByRole('heading', { name: /Quản lý tài khoản/i, level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Tài khoản', level: 1 })).toBeInTheDocument()
 
     expect(useAuthStore.getState().user?.role).toBe('Admin')
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {
@@ -126,7 +126,7 @@ describe('route table', () => {
     it('loads physical robot registration inside the Technical Staff protected area', async () => {
       signIn('TechnicalStaff')
       renderAt('/technical/robots')
-      expect(await screen.findByRole('heading', { name: 'Robot vật lý', level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Robot', level: 1 })).toBeInTheDocument()
     })
 
     it('sends a signed-out visitor from /staff to sign in', async () => {
@@ -143,7 +143,7 @@ describe('route table', () => {
       signIn('TechnicalStaff')
       const router = renderAt('/technical')
       await settled(router, '/technical/dashboard')
-      expect(await screen.findByRole('heading', { name: 'Bảng điều khiển kỹ thuật', level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Tổng quan', level: 1 })).toBeInTheDocument()
     })
 
     it('opens Robot and Mini PC monitoring for Technical Staff only', async () => {
@@ -223,7 +223,7 @@ describe('route table', () => {
       await settled(router, '/admin/roles')
       expect(await screen.findByRole('heading', { name: /Vai trò & quyền/i, level: 1 })).toBeInTheDocument()
       // The matrix covers UI areas only; it must not claim to describe API permissions.
-      expect(screen.getByText(/Quyền gọi từng API do máy chủ kiểm tra riêng/)).toBeInTheDocument()
+      expect(screen.getByText(/quyền làm từng việc do máy chủ kiểm tra riêng/)).toBeInTheDocument()
       expect(screen.queryByText(/luôn khớp với hành vi thật/)).not.toBeInTheDocument()
     })
 
@@ -269,9 +269,12 @@ describe('route table', () => {
     }, 30_000)
 
     it.each([
-      ['/staff/manage/tours/new', /Tạo Tour mới/],
+      ['/staff/manage/tours/new', /^Tạo Tour$/],
       ['/staff/manage/registrations/pending', /Đăng ký chờ duyệt/],
       ['/staff/manage/registrations', /Tất cả đăng ký/],
+      ['/staff/manage/tours/new', /Tạo Tour mới/],
+      ['/staff/manage/registrations/pending', /Đăng ký đoàn/],
+      ['/staff/manage/registrations', /Đăng ký đoàn/],
       ['/staff/manage/routes', /Danh mục tuyến/],
     ])('serves %s to Staff', async (path, heading) => {
       signIn('Staff')

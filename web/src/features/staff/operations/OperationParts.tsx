@@ -7,13 +7,13 @@ import {
 import { buttonClass } from '../../../components/ui/ui-classes'
 import type { TourCommand, TourDetails, TourState, TourSummary } from '../../administration/tours/types'
 import { tourStateLabel } from '../../administration/tours/tour-messages'
-import { formatTime } from '../formatters'
+import { formatRelative, formatTime } from '../../../components/ui/date-time'
 import { useNow } from '../use-now'
 import { telemetryAge, useFleetConnection, useFleetRobot } from './fleet-telemetry'
 import { mapAreaName } from '../../administration/map-labels'
 import { useMapVersions } from '../../technical/technical-hooks'
 import {
-  COMMAND_KIND_LABEL, LEG_LABEL, OPERATIONAL_LABEL, STEP_LABEL, commandStateInfo, robotReasonText,
+  COMMAND_KIND_LABEL, LEG_LABEL, OPERATIONAL_LABEL, STEP_LABEL, commandStateInfo, robotFaultText, robotReasonText,
 } from './operation-labels'
 
 export function ToneBadge({ tone, children }: { tone: StatusTone; children: ReactNode }) {
@@ -45,7 +45,7 @@ export function CommandCard({ command, legId, robotCode }: { command: TourComman
       <p className="mt-1.5 text-xs leading-5 text-[#475569]">{state.meaning}</p>
       {reason && <p className="mt-1 text-xs font-semibold text-[#9d3428]">Lý do: {reason}</p>}
       {robotCode && legId && <RobotLegReport robotCode={robotCode} legId={legId} />}
-      <p className="mt-1.5 font-mono text-[11px] text-[#94a3b8]" title="Mã lệnh">{command.id}</p>
+      <p className="mt-1.5 font-mono text-[11px] text-muted" title="Mã lệnh">{command.id}</p>
     </div>
   )
 }
@@ -61,7 +61,7 @@ function RobotLegReport({ robotCode, legId }: { robotCode: string; legId: string
   const same = robot.legId?.toLowerCase() === legId.toLowerCase()
   const text = !robot.legId ? 'không thực hiện chặng nào' : same ? 'đang thực hiện chặng này' : 'đang thực hiện một chặng khác'
   return <p className="mt-1.5 text-xs leading-5 text-[#475569]">
-    <span className="font-semibold">Robot tự báo:</span> {text}{robot.syncFresh ? '' : ' (báo cáo đã cũ)'}. Đây là telemetry, không phải kết quả lệnh.
+    <span className="font-semibold">Robot tự báo:</span> {text}{robot.syncFresh ? '' : ' (báo cáo đã cũ)'}. Đây là robot tự báo, không phải kết quả lệnh.
   </p>
 }
 
@@ -95,6 +95,9 @@ export function ExecutionPanel({ detail, now }: { detail: TourDetails; now: numb
 const EXECUTION_STATUS: Record<string, string> = { IDLE: 'Đang rảnh', NAVIGATING: 'Đang di chuyển' }
 const SOURCE: Record<string, string> = { Physical: 'Robot thật', Gazebo: 'Gazebo (mô phỏng)', Emulator: 'Emulator (mô phỏng)' }
 const yesNo = (value: boolean | null, yes: string, no: string) => (value === null ? 'Robot chưa báo' : value ? yes : no)
+/** "12 giây trước" while it is recent, then "16 giờ trước": never thousands of seconds. */
+const reportAge = (seconds: number, now: number) =>
+  seconds < 1 ? 'dưới 1 giây trước' : seconds < 60 ? `${seconds.toFixed(0)} giây trước` : formatRelative(now - seconds * 1000, now)
 
 const toneText = (tone: StatusTone) =>
   tone === 'danger' ? 'text-[#9d3428]' : tone === 'warn' ? 'text-[#b45309]' : tone === 'muted' ? 'text-[#64748b]' : ''
@@ -148,9 +151,9 @@ export function RobotTelemetryPanel({ robotCode }: { robotCode: string | null | 
   const now = useNow(1000)
   if (!robotCode) return <p className="text-[13px] text-[#64748b]">Tour chưa giữ robot nào.</p>
   const link = connection === 'connected' ? null
-    : connection === 'disconnected' ? 'Mất kết nối telemetry với máy chủ, đang thử kết nối lại. Số liệu dưới đây có thể đã cũ.'
-    : 'Đang kết nối kênh telemetry.'
-  if (!robot) return <div className="space-y-2 text-[13px] text-[#64748b]">{link && <p>{link}</p>}<p>Robot <span className="font-mono">{robotCode}</span> chưa gửi telemetry tới máy chủ.</p>
+    : connection === 'disconnected' ? 'Mất kết nối với máy chủ, đang thử kết nối lại. Số liệu dưới đây có thể đã cũ.'
+    : 'Đang kết nối tới máy chủ.'
+  if (!robot) return <div className="space-y-2 text-[13px] text-[#64748b]">{link && <p>{link}</p>}<p>Robot <span className="font-mono">{robotCode}</span> chưa gửi báo cáo nào tới máy chủ.</p>
     <dl><HeadsetRow robotCode={robotCode} /></dl></div>
   const age = telemetryAge(robot, receivedAt, now)
   return (
@@ -159,18 +162,17 @@ export function RobotTelemetryPanel({ robotCode }: { robotCode: string | null | 
       <dl className="divide-y divide-[#f1f5f9]">
         <Row label="Robot">{robot.name} <span className="font-mono text-xs text-[#64748b]">{robot.id}</span></Row>
         <Row label="Nguồn">{SOURCE[robot.source] ?? 'Nguồn khác'}</Row>
-        <Row label="Báo cáo gần nhất"><span className={robot.syncFresh ? '' : 'text-[#b45309]'}>{age < 1 ? 'dưới 1 giây' : `${age.toFixed(0)} giây`} trước{robot.syncFresh ? '' : ', đã cũ'}</span></Row>
-        <Row label="Trạng thái thực thi">{EXECUTION_STATUS[robot.executionStatus] ?? `Khác (${robot.executionStatus})`}</Row>
+        <Row label="Báo cáo gần nhất"><span className={robot.syncFresh ? '' : 'text-[#b45309]'}>{reportAge(age, now)}{robot.syncFresh ? '' : ', đã cũ'}</span></Row>
+        <Row label="Trạng thái thực thi">{EXECUTION_STATUS[robot.executionStatus] ?? 'Trạng thái khác'}</Row>
         <Row label="Định vị">{yesNo(robot.localized, 'Đã định vị', 'Chưa định vị')}</Row>
         <Row label="Sẵn sàng di chuyển">{yesNo(robot.motionReady, 'Sẵn sàng', 'Chưa sẵn sàng')}</Row>
         <Row label="Bản đồ">{mapAreaName(maps.data, { mapKey: robot.mapKey }) ?? (maps.isSuccess ? 'Bản đồ chưa có trong danh sách' : '-')}</Row>
         <Row label="Vị trí">{robot.pose ? <span className={robot.poseFresh ? '' : 'text-[#b45309]'}>x {robot.pose.x.toFixed(2)}, y {robot.pose.y.toFixed(2)} m{robot.poseFresh ? '' : ', đã cũ'}</span> : 'Robot chưa báo'}</Row>
         <Row label="Pin">{robot.batteryPercent == null ? 'Robot chưa báo' : `${robot.batteryPercent.toFixed(0)}%`}</Row>
         <HeadsetRow robotCode={robotCode} />
-        {robot.faultCode && <Row label="Lỗi robot báo"><span className="font-mono text-xs text-[#9d3428]">{robot.faultCode}</span></Row>}
+        {robot.faultCode && <Row label="Lỗi robot báo"><span className="text-[#9d3428]">{robotFaultText(robot.faultCode)}</span></Row>}
         {robot.needsCheck && <Row label="Kiểm tra tại chỗ"><span className="text-[#9d3428]">Robot đang chờ kiểm tra</span></Row>}
       </dl>
-      <p className="text-[11.5px] leading-5 text-[#94a3b8]">Đây là số liệu robot tự báo qua Fleet Sync, không phải xác nhận một lệnh đã chạy.</p>
     </div>
   )
 }
@@ -219,7 +221,7 @@ export function RouteStopList({ detail }: { detail: TourDetails }) {
           {returning && <ToneBadge tone="info">Robot đang tới</ToneBadge>}
         </li>
       </ol>
-      {marked && <p className="mt-2 text-[11.5px] leading-5 text-[#94a3b8]">Đánh dấu theo trạng thái Tour trên máy chủ, không phải vị trí robot tự báo.</p>}
+      {marked && <p className="mt-2 text-[11.5px] leading-5 text-muted">Đánh dấu theo trạng thái Tour trên máy chủ, không phải vị trí robot tự báo.</p>}
     </div>
   )
 }

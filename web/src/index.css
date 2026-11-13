@@ -13,11 +13,21 @@
 :root {
   --bg-primary: #ffffff;
   --text-primary: #0f172a;
+  /* Secondary text that still carries meaning. 4.5:1 or better on white and on
+     every light grey ground the consoles use (#f8fafc, #f6f7f9, #f4f7fb,
+     #f1f5f9, #eef1f4); checked by web/src/muted-text.test.ts. Use the
+     `text-muted` class, never #94a3b8, for words a reader needs. */
+  --text-muted: #5b6b7f;
 }
 
 html.dark {
   --bg-primary: #071014;
   --text-primary: #f8fafc;
+  --text-muted: #94a3b8;
+}
+
+@utility text-muted {
+  color: var(--text-muted);
 }
 
 *, *::before, *::after { box-sizing: border-box; }

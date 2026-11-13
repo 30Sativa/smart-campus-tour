@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
  * The keyboard half of the shells' mobile navigation drawer.
  *
  * Both shells render the same drawer: an off-canvas panel over a scrim, opened
- * by a floating button. Visually it worked; by keyboard it did not. Opening it
+ * by the menu button at the top left of the header. Visually it worked; by keyboard it did not. Opening it
  * left focus on the button behind the scrim, Escape did nothing, and closing it
  * dropped focus on `<body>`, so the next Tab restarted at the top of the page.
  *
@@ -38,4 +38,25 @@ export function useMobileNav(open: boolean, close: () => void) {
   }, [open, close])
 
   return panelRef
+}
+
+/**
+ * The whole drawer state a console shell needs: open/close, the panel ref, and
+ * focus that moves to the drawer's close button on open and back to the header's
+ * menu button on close. One hook, so the four shells cannot drift apart.
+ */
+export function useConsoleDrawer() {
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  const openDrawer = useCallback(() => setOpen(true), [])
+  const panelRef = useMobileNav(open, close)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const menuButton = menuButtonRef.current
+    closeButtonRef.current?.focus()
+    return () => menuButton?.focus()
+  }, [open])
+  return { open, openDrawer, close, panelRef, menuButtonRef, closeButtonRef }
 }

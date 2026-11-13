@@ -38,6 +38,8 @@ describe('StaffBell', () => {
     const panel = screen.getByRole('region', { name: 'Bảng thông báo' })
     expect(within(panel).getByRole('link', { name: /POI "Thư viện" \(bản 1\) đã được duyệt/ })).toHaveAttribute('href', '/staff/manage/pois/p-1')
     expect(within(panel).getByRole('link', { name: /Tuyến "Tuyến A" \(bản 2\) chạy thử không đạt/ })).toHaveAttribute('href', '/staff/manage/routes/r-1')
+    expect(within(panel).getByRole('heading', { name: 'Từ Kỹ thuật' })).toBeInTheDocument()
+    expect(within(panel).queryByText(/Technical Staff/)).not.toBeInTheDocument()
     expect(await within(panel).findByText('Không có việc cần chú ý.')).toBeInTheDocument()
   })
 

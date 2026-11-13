@@ -29,7 +29,7 @@ export default function StaffManageRouteCatalogPage() {
   })
   const pickFilter = (next: boolean) => { setActive(next); setPage(1); setOutcome('') }
   return <AdminPage>
-    <PageHeader eyebrow="Chuẩn bị Tour · Tuyến" title="Danh mục tuyến" description="Xem lộ trình, các điểm tham quan và trạng thái kiểm chứng của từng tuyến."
+    <PageHeader eyebrow="Nội dung tham quan" title="Danh mục tuyến" description="Xem lộ trình, các điểm tham quan và trạng thái kiểm chứng của từng tuyến."
       action={<Link to="/staff/manage/routes/new" className={buttonClass('primary')}><Plus size={15} aria-hidden="true" />Tạo tuyến</Link>} />
     <p className="mb-3 text-[13px] text-[#64748b]">Chỉ tuyến đã chạy thử đạt mới tạo được Tour.</p>
     {outcome && <div className="mb-3"><Notice tone="success">{outcome}</Notice></div>}

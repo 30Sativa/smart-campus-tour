@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { AlertCircle, ArrowLeft, CheckCircle2, CircleAlert, Info, Lock, RotateCcw, TriangleAlert, X } from 'lucide-react'
+import { EmptyState as SharedEmptyState } from '../../../components/ui/EmptyState'
 import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import type { ActionGate, RegistrationState, TourState } from '../api/types'
 import type { StatusTone } from '../../../components/ui/status-tone'
 import { REGISTRATION_STATE_LABEL } from '../../registrations/registration-state'
-import { REVIEW_EXPIRED_LABEL, TOUR_LABEL, isReviewExpired } from '../rep-format'
+import { REVIEW_EXPIRED_LABEL, TOUR_CANCELLED_LABEL, TOUR_LABEL, isReviewExpired } from '../rep-format'
 import { repButton } from '../rep-classes'
 
 export function RepPage({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
@@ -43,7 +44,9 @@ export function InfoList({ items, columns = 2 }: { items: Array<{ label: string;
 function SoftBadge({ label, tone, size = 'sm' }: { label: string; tone: StatusTone; size?: 'sm' | 'md' }) {
   return <span className={`rep-badge rep-badge--${tone}${size === 'md' ? ' rep-badge--md' : ''}`}>{label}</span>
 }
-export function RegistrationStatusBadge({ state, rejectionReason, size }: { state: RegistrationState; rejectionReason?: string | null; size?: 'sm' | 'md' }) {
+/** A registration of a cancelled Tour carries one neutral "Buổi đã huỷ", never an approval colour. */
+export function RegistrationStatusBadge({ state, rejectionReason, tourState, size }: { state: RegistrationState; rejectionReason?: string | null; tourState?: TourState; size?: 'sm' | 'md' }) {
+  if (tourState === 'CANCELLED' && state !== 'CANCELLED') return <SoftBadge label={TOUR_CANCELLED_LABEL} tone="muted" size={size} />
   if (isReviewExpired({ state, rejectionReason })) return <SoftBadge label={REVIEW_EXPIRED_LABEL} tone="muted" size={size} />
   return <SoftBadge {...REGISTRATION_STATE_LABEL[state]} label={state === 'APPROVED' ? 'Có dòng đã duyệt' : REGISTRATION_STATE_LABEL[state].label} size={size} />
 }
@@ -58,8 +61,13 @@ export function Callout({ tone = 'info', title, children, actions, icon, role }:
   const Icon = icon ?? CALLOUT_ICON[tone]
   return <div className={`rep-callout rep-callout--${tone}`} role={role}><Icon size={20} aria-hidden="true" /><div className="rep-callout-content"><p className="rep-callout-title">{title}</p>{children && <div className="rep-callout-body">{children}</div>}{actions && <div className="rep-callout-actions">{actions}</div>}</div></div>
 }
-export function EmptyState({ title, description, action, icon: Icon = Info }: { title: string; description?: string; action?: ReactNode; icon?: LucideIcon }) {
-  return <div className="rep-state"><Icon className="rep-state-icon" size={26} aria-hidden="true" /><p className="rep-state-title">{title}</p>{description && <p className="rep-state-text">{description}</p>}{action && <div className="rep-state-actions">{action}</div>}</div>
+/** The shared empty message (components/ui/EmptyState) in the representative card frame. */
+export function EmptyState(props: Parameters<typeof SharedEmptyState>[0]) {
+  return <div className="rep-empty"><SharedEmptyState {...props} /></div>
+}
+/** A record the server refuses (403) or no longer finds (404): retrying cannot help, so only a way back is offered. */
+export function NotOpenState({ title, back }: { title: string; back: { to: string; label: string } }) {
+  return <div className="rep-state rep-state--error" role="alert"><Lock className="rep-state-icon" size={26} aria-hidden="true" /><p className="rep-state-title">{title}</p><div className="rep-state-actions"><Link to={back.to} className={repButton('secondary')}>{back.label}</Link></div></div>
 }
 export function ErrorState({ title, message, onRetry, back }: { title: string; message: string; onRetry?: () => void; back?: { to: string; label: string } }) {
   return <div className="rep-state rep-state--error" role="alert"><AlertCircle className="rep-state-icon" size={26} aria-hidden="true" /><p className="rep-state-title">{title}</p><p className="rep-state-text">{message}</p><div className="rep-state-actions">{onRetry && <button type="button" onClick={onRetry} className={repButton('secondary')}><RotateCcw size={16} aria-hidden="true" />Thử lại</button>}{back && <Link to={back.to} className={repButton('secondary')}>{back.label}</Link>}</div></div>

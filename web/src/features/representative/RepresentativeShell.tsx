@@ -1,9 +1,13 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, LogOut, Menu, UserRound, X } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router'
+
+import { Suspense, useCallback, useEffect } from 'react'
+import { Outlet, useLocation } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { repQueryKeys } from './representative-hooks'
 import { useLogout } from '../../auth/use-logout'
+import { roleLabel } from '../../auth/roles'
 import { useAuthStore } from '../../stores/auth-store'
 import { useDismiss } from '../../components/ui/use-dismiss'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
@@ -11,6 +15,17 @@ import { softConsoleGround, softConsoleHeader } from '../../components/ui/ui-cla
 import { PageSkeleton } from './components/RepUi'
 import { RepBell } from './RepBell'
 import { REP_NAV, repActivePath } from './rep-nav'
+
+import { useConsoleDrawer } from '../../components/ui/use-mobile-nav'
+import { useCurrentPageTitle } from '../../components/ui/use-page-title'
+import { MobileNavScrim } from '../../components/ui/ConsoleSidebar'
+import { ConsoleAccountMenu, ConsoleHeader } from '../../components/ui/ConsoleHeader'
+import { consoleCrumbs } from '../../components/ui/console-crumbs'
+import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
+import { softConsoleGround } from '../../components/ui/ui-classes'
+import { PageSkeleton } from './components/RepUi'
+import { RepBell } from './RepBell'
+import { REP_NAV, REP_NAV_ENTRIES, repActivePath, repPageTitle } from './rep-nav'
 import './representative.css'
 
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]'
@@ -27,10 +42,20 @@ export default function RepresentativeShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenu = useCallback(() => setMenuOpen(false), [])
   const navRef = useMobileNav(menuOpen, closeMenu)
+
+ * The Representative shell, in the shared console chrome: the soft grouped
+ * sidebar (logo, pages, fold to a rail, sign-out) and the shared console header
+ * with the breadcrumb, the bell and the account. The pages inside keep their own
+ * Representative layout (`rep-*` classes), on the console palette: a primary
+ * `rep-btn--primary` is the same console blue as `buttonClass('primary')`.
+ */
+export default function RepresentativeShell() {
+  const drawer = useConsoleDrawer()
   const location = useLocation()
   const user = useAuthStore(state => state.user)
   const logout = useLogout()
   const handleLogout = useCallback(() => { void logout() }, [logout])
+  const pageTitle = useCurrentPageTitle()
   const queryClient = useQueryClient()
   useEffect(() => {
     function clearOwner(owner: string | undefined) {
@@ -86,6 +111,37 @@ export default function RepresentativeShell() {
             })}
           </nav>
 
+  const { section, parent, title } = repPageTitle(location.pathname)
+  const entry = parent ?? REP_NAV.find((item) => item.path === current)?.label ?? null
+  const crumbs = consoleCrumbs({ section, entry, page: pageTitle ?? title })
+
+  return (
+    <div className={`flex h-[100dvh] overflow-hidden ${softConsoleGround}`}>
+      <a href="#rep-main" className="sr-only z-[80] rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#0f172a] shadow-lg focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">Đến nội dung chính</a>
+      <MobileNavScrim open={drawer.open} label="Đóng điều hướng đại diện" onClose={drawer.close} />
+
+      <GroupedSidebar
+        id="rep-navigation"
+        look="soft"
+        label="Khu vực đại diện trường"
+        navLabel="Điều hướng đại diện trường"
+        homePath="/dai-dien"
+        subtitle="DT-AMR · Đại diện trường"
+        entries={REP_NAV_ENTRIES}
+        currentPath={current}
+        onNavigate={drawer.close}
+        onLogout={handleLogout}
+        open={drawer.open}
+        panelRef={drawer.panelRef}
+        closeRef={drawer.closeButtonRef}
+      />
+
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <ConsoleHeader crumbs={crumbs} menuOpen={drawer.open} menuControls="rep-navigation" menuLabel="Mở điều hướng đại diện" onMenu={drawer.openDrawer} menuButtonRef={drawer.menuButtonRef}>
+          <RepBell />
+          <ConsoleAccountMenu name={user?.username || 'Đại diện'} role={roleLabel(user?.role ?? 'Representative')} profilePath="/dai-dien/ho-so" profileCurrent={location.pathname.startsWith('/dai-dien/ho-so')} onLogout={handleLogout} onNavigate={drawer.close} />
+        </ConsoleHeader>
+
           <div className="ml-auto flex min-w-0 items-center gap-1.5">
             <RepBell />
             <AccountMenu username={user?.username} onLogout={handleLogout} onNavigate={closeMenu} profileCurrent={location.pathname.startsWith('/dai-dien/ho-so')} />
@@ -103,64 +159,8 @@ export default function RepresentativeShell() {
           <Suspense fallback={<PageSkeleton />}><Outlet /></Suspense>
         </div>
       </main>
-    </div>
-  )
-}
-
-/** Initials for an account avatar, from a username like "daidien" or "nguyen.anh". */
-function initialsOf(name: string) {
-  const parts = name.split(/[\s._-]+/).filter(Boolean)
-  return (parts.length > 1 ? parts.slice(-2).map((part) => part[0]).join('') : name.slice(0, 2)).toUpperCase()
-}
-
-/** The signed-in account, top right, drawn exactly like the Staff console's: its profile and sign-out. */
-function AccountMenu({ username, onLogout, onNavigate, profileCurrent }: { username?: string; onLogout: () => void; onNavigate: () => void; profileCurrent: boolean }) {
-  const [open, setOpen] = useState(false)
-  const buttonRef = useRef<HTMLButtonElement>(null)
-  const close = useCallback(() => setOpen(false), [])
-  const ref = useDismiss<HTMLDivElement>(open, close)
-  useEffect(() => { if (open) ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus() }, [open, ref])
-  const name = username || 'Đại diện'
-  const item = 'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]'
-  return (
-    <div ref={ref} role="group" aria-label="Tài khoản đang đăng nhập" className="relative ml-1 border-l border-[#e2e8f0] pl-2">
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`Tài khoản ${name}`}
-        onClick={() => setOpen((value) => !value)}
-        className={`flex min-w-0 items-center gap-2.5 rounded-xl py-1 pr-2 pl-1.5 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${open ? 'bg-white' : ''}`}
-      >
-        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#edf3fb] text-[11.5px] font-extrabold text-[#4a6fa5]">{initialsOf(name)}</span>
-        <span className="hidden min-w-0 text-left sm:block">
-          <span className="block max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{name}</span>
-          <span className="block max-w-40 truncate text-[11px] leading-tight text-[#9ca3af]">Đại diện trường</span>
-        </span>
-        <ChevronDown size={14} aria-hidden="true" className={`hidden shrink-0 text-[#9ca3af] transition-transform duration-200 sm:block ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div role="menu" aria-label="Tài khoản" onKeyDown={(event) => {
-          if (event.key === 'Escape') { event.preventDefault(); close(); buttonRef.current?.focus(); return }
-          const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
-          const index = items.indexOf(document.activeElement as HTMLElement)
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus() }
-        }} className="absolute top-[calc(100%+8px)] right-0 z-40 w-60 rounded-xl border border-[#e5e7eb] bg-white p-1.5 shadow-[0_18px_40px_-20px_rgba(15,23,42,0.35)] transition-[opacity,translate] duration-150 starting:-translate-y-1 starting:opacity-0 motion-reduce:transition-none">
-          <div className="mb-1 border-b border-[#f1f5f9] px-2.5 pt-1.5 pb-2.5">
-            <p className="truncate text-[13.5px] font-bold text-[#0f172a]">{name}</p>
-            <p className="truncate text-xs text-[#64748b]">Đại diện trường</p>
-          </div>
-          <Link role="menuitem" to="/dai-dien/ho-so" aria-current={profileCurrent ? 'page' : undefined} onClick={() => { close(); onNavigate() }} className={`${item} text-[#0f172a] hover:bg-[#f1f5f9]`}>
-            <UserRound size={16} aria-hidden="true" className="text-[#64748b]" />
-            Hồ sơ của tôi
-          </Link>
-          <button role="menuitem" type="button" onClick={() => { close(); onLogout() }} className={`${item} mt-1 border-t border-[#f1f5f9] text-[#dc2626] hover:bg-[#fef2f2]`}>
-            <LogOut size={16} aria-hidden="true" />
-            Đăng xuất
-          </button>
-        </div>
-      )}
+        </main>
+      </div>
     </div>
   )
 }

@@ -55,7 +55,7 @@ describe('fleet telemetry from /hubs/operations', () => {
     useAuthStore.getState().setAuth('jwt-1', { userId: 'u', username: 'lan', role: 'Staff' })
     const view = render(<QueryClientProvider client={new QueryClient()}><Probe /></QueryClientProvider>)
     expect(hub.tokenFactory?.()).toBe('jwt-1')
-    expect(await screen.findByText(/chưa gửi telemetry/)).toBeInTheDocument()
+    expect(await screen.findByText(/chưa gửi báo cáo nào/)).toBeInTheDocument()
     act(() => hub.handlers.get('FleetUpdated')?.([ROBOT]))
     expect(await screen.findByText('Đã định vị')).toBeInTheDocument()
     expect(screen.getByText('x 1.23, y -2.50 m')).toBeInTheDocument()
@@ -83,7 +83,7 @@ describe('a hub that cannot be created', () => {
     hub.failCreate = true
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     render(<QueryClientProvider client={new QueryClient()}><Probe /></QueryClientProvider>)
-    expect(await screen.findByText(/Mất kết nối telemetry/)).toBeInTheDocument()
+    expect(await screen.findByText(/Mất kết nối với máy chủ/)).toBeInTheDocument()
     expect(useFleetConnection.getState().state).toBe('disconnected')
   })
 })

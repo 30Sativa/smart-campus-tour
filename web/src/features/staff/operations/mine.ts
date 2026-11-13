@@ -26,3 +26,6 @@ export function operatorLabel(tour: Pick<TourSummary, 'operator'>, isMine: boole
   if (!tour.operator) return null
   return isMine ? 'Bạn vận hành' : `Vận hành: ${tour.operator.fullName || tour.operator.username}`
 }
+
+/** The one line the Staff home prints when there is no Tour today, in the words of the "only my Tours" filter. */
+export const noTourToday = (mine: boolean) => mine ? 'Hôm nay bạn không vận hành Tour nào.' : 'Hôm nay không có Tour nào.'

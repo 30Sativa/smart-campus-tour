@@ -1,4 +1,5 @@
 import { ApiError } from '../../../api/client'
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from './password'
 
 export type AccountFormField = 'username' | 'fullName' | 'role' | 'initialPassword'
 export type AccountFormErrors = Partial<Record<AccountFormField, string>>
@@ -71,4 +72,19 @@ export function accountRequestError(error: unknown, fallback: string): string {
   if (error.status === 403) return 'Tài khoản hiện tại không có quyền thực hiện thao tác này.'
   const message = responseMessage(readResponseError(error))
   return error.status < 500 && message ? message : fallback
+}
+
+/** Vietnamese message for a refused password reset; never the raw server text. */
+export function resetPasswordError(error: unknown): string {
+  const fallback = 'Không đặt lại được mật khẩu. Vui lòng thử lại.'
+  if (!(error instanceof ApiError)) return fallback
+  if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.'
+  if (error.status === 403) return 'Không thể đặt lại mật khẩu cho tài khoản này.'
+  if (error.status === 404) return 'Không tìm thấy tài khoản này nữa. Hãy tải lại danh sách.'
+  if (error.status === 409) {
+    const code = (readResponseError(error)?.errors as { code?: unknown } | undefined)?.code
+    if (code === 'STALE_VERSION') return 'Tài khoản vừa được thay đổi. Hãy đóng hộp thoại, mở lại tài khoản rồi thử lại.'
+  }
+  if (error.status === 400) return `Mật khẩu mới cần từ ${PASSWORD_MIN_LENGTH} đến ${PASSWORD_MAX_LENGTH} ký tự.`
+  return fallback
 }

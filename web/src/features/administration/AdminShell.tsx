@@ -1,63 +1,57 @@
-import { useCallback, useState } from 'react'
-import { ShieldCheck } from 'lucide-react'
 import { useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
 import { RouteView } from '../../components/ui/RouteView'
-import { softConsoleGround, softConsoleHeader, softConsoleMain } from '../../components/ui/ui-classes'
-import { useMobileNav } from '../../components/ui/use-mobile-nav'
-import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
-import { ADMIN_NAV, adminActivePath } from './admin-nav'
-import { AdminHeaderActions } from './AdminHeaderActions'
+import { softConsoleGround, softConsoleMain } from '../../components/ui/ui-classes'
+import { useConsoleDrawer } from '../../components/ui/use-mobile-nav'
+import { useCurrentPageTitle } from '../../components/ui/use-page-title'
+import { MobileNavScrim } from '../../components/ui/ConsoleSidebar'
+import { ConsoleAccountMenu, ConsoleHeader } from '../../components/ui/ConsoleHeader'
+import { consoleCrumbs } from '../../components/ui/console-crumbs'
+import { ADMIN_NAV, ADMIN_NAV_SECTIONS, adminActivePath } from './admin-nav'
 import { AdminSidebar } from './AdminSidebar'
 
 /**
- * The administration shell: preparing Tours before they run.
+ * The administration shell: accounts, roles, configuration and audit.
  *
- * Its own sidebar (logo, folding groups) and a quiet header with the bell and
- * the account at the top right. The bell and the "Chờ duyệt" badge are where
- * Admin learns of waiting work; the dashboard no longer repeats a task list.
+ * The shared grouped sidebar and the shared console header. Administration has
+ * no live connection and no notices of its own, so its header shows neither a
+ * connection status nor a bell: only the breadcrumb and the account.
  */
 export default function AdminShell() {
-  const [menuOpen, setMenuOpen] = useState(false)
+  const drawer = useConsoleDrawer()
   const location = useLocation()
   const user = useAuthStore((state) => state.user)
   const handleLogout = useLogout()
-  const closeMenu = useCallback(() => setMenuOpen(false), [])
-  const navRef = useMobileNav(menuOpen, closeMenu)
+  const pageTitle = useCurrentPageTitle()
 
   const current = adminActivePath(location.pathname)
-  const title = location.pathname.startsWith('/admin/profile')
-    ? 'Hồ sơ của tôi'
-    : ADMIN_NAV.find(({ path }) => path === current)?.label ?? 'Quản trị hệ thống'
+  const onProfile = location.pathname.startsWith('/admin/profile')
+  const entry = onProfile ? null : ADMIN_NAV.find(({ path }) => path === current)?.label ?? null
+  const section = onProfile ? 'Tài khoản' : ADMIN_NAV_SECTIONS.find(({ items }) => items.some(({ path }) => path === current))?.label ?? 'Quản trị'
+  const crumbs = consoleCrumbs({ section, entry, page: pageTitle ?? (onProfile ? 'Hồ sơ của tôi' : null) })
 
   return (
     <div className={`flex h-[100dvh] overflow-hidden ${softConsoleGround}`}>
-      <MobileNavToggle open={menuOpen} controls="admin-navigation" label="Mở điều hướng quản trị" closeLabel="Đóng điều hướng quản trị" onOpen={() => setMenuOpen(true)} onClose={closeMenu} />
+      <MobileNavScrim open={drawer.open} label="Đóng điều hướng quản trị" onClose={drawer.close} />
 
       <AdminSidebar
         id="admin-navigation"
         currentPath={current}
-        onNavigate={closeMenu}
+        onNavigate={drawer.close}
         onLogout={handleLogout}
-        open={menuOpen}
-        panelRef={navRef}
+        open={drawer.open}
+        panelRef={drawer.panelRef}
+        closeRef={drawer.closeButtonRef}
       />
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* The same frosted header card as the Staff console: breadcrumb above the page name. */}
-        <header className="sticky top-0 z-20 shrink-0 px-4 pt-3 sm:px-6 lg:px-8">
-          <div className={softConsoleHeader}>
-            <div className="min-w-0">
-              <p className="truncate text-[12px] text-[#a0aec0]">Quản trị <span className="mx-1">/</span> <span className="text-[#2d3748]">{title}</span></p>
-              <p className="truncate text-sm font-bold text-[#2d3748]">{title}</p>
-            </div>
-            <AdminHeaderActions name={user?.username || 'Quản trị viên'} role={roleLabel(user?.role)} icon={ShieldCheck} />
-          </div>
-        </header>
+        <ConsoleHeader crumbs={crumbs} menuOpen={drawer.open} menuControls="admin-navigation" menuLabel="Mở điều hướng quản trị" onMenu={drawer.openDrawer} menuButtonRef={drawer.menuButtonRef}>
+          <ConsoleAccountMenu name={user?.username || 'Quản trị viên'} role={roleLabel(user?.role)} profilePath="/admin/profile" profileCurrent={onProfile} onLogout={handleLogout} onNavigate={drawer.close} />
+        </ConsoleHeader>
 
-        <main className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0 ${softConsoleMain}`}><RouteView /></main>
+        <main className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto ${softConsoleMain}`}><RouteView /></main>
       </div>
     </div>
   )

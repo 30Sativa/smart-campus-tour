@@ -136,7 +136,7 @@ describe('pre-start check on the real Tour API', () => {
     expect(within(screen.getByRole('list', { name: 'Tour và người vận hành' })).getByText(/tự đạt khi tới giờ/)).toBeInTheDocument()
     const robot = screen.getByRole('list', { name: 'Robot' })
     expect(within(robot).getByText('Robot tự báo')).toBeInTheDocument()
-    expect(within(robot).getByText(/Bật robot và cầu nối telemetry/)).toBeInTheDocument()
+    expect(within(robot).getByText(/Bật robot và kiểm tra mạng của robot/)).toBeInTheDocument()
     // Opened straight from a link, back goes to the calendar; the steps say where the Tour is.
     expect(screen.getByRole('link', { name: /Lịch Tour/ })).toHaveAttribute('href', '/staff/schedule')
     expect(within(screen.getByRole('navigation', { name: 'Các bước của Tour' })).getByText('Kiểm tra & bắt đầu').closest('li')).toHaveAttribute('aria-current', 'step')
@@ -321,7 +321,7 @@ describe('live console on the real Tour API', () => {
       { retryLeg: refuse('Chưa đủ điều kiện để robot di chuyển.', 'telemetryFresh') })
     renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
     expect(await screen.findByRole('button', { name: /Thử lại chặng/ })).toBeDisabled()
-    expect(screen.getByText(/Chưa thực hiện được: Chưa đủ điều kiện để robot di chuyển\. · Telemetry robot còn mới/)).toBeInTheDocument()
+    expect(screen.getByText(/Chưa thực hiện được: Chưa đủ điều kiện để robot di chuyển\. · Robot vừa báo trạng thái/)).toBeInTheDocument()
   })
 
   it('offers Retry after a leg the robot never took, when the server allows it', async () => {
@@ -429,7 +429,7 @@ describe('live console on the real Tour API', () => {
     tour = running({ currentStep: 'OBSERVING', command: { id: 'cmd-1', kind: 'GoTo', state: 'ARRIVED', outcome: 'ARRIVED', reasonCode: null } },
       { next: refuse('Chưa đủ điều kiện để robot di chuyển.', 'operatorConsoleConnected') })
     await act(() => client.refetchQueries())
-    expect(await within(dialog()).findByText(/không còn được phép: .*Console của người vận hành đang kết nối/)).toBeInTheDocument()
+    expect(await within(dialog()).findByText(/không còn được phép: .*Trang của người vận hành đang mở/)).toBeInTheDocument()
     expect(within(dialog()).getByRole('button', { name: 'Đi tiếp' })).toBeDisabled()
     expect(writes).toHaveLength(0)
   })

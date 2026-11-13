@@ -2,13 +2,15 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { CircleCheck, CircleX, Clock3, LoaderCircle } from 'lucide-react'
 import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
+import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { revisionTone } from '../../features/administration/routes/route-messages'
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
 import { CheckRow, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { errorText, robotNotReadyReason, routeTestErrors, stamp } from '../../features/technical/technical-format'
+import { errorText, robotNotReadyReason, routeTestErrors } from '../../features/technical/technical-format'
+import { formatDateTime } from '../../components/ui/date-time'
 import { usePhysicalRobots, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 
 type RouteFilter = 'pending' | 'passed' | 'failed'
@@ -17,9 +19,9 @@ type RouteRow = { route: VersionedRoute; filter: RouteFilter }
 type Dialog = { view: 'record' | 'result'; route: VersionedRoute }
 
 const filterText: Record<RouteFilter, { title: string; empty: string }> = {
-  pending: { title: 'Tuyến chờ chạy thử', empty: 'Không có tuyến nào đang chờ chạy thử.' },
-  passed: { title: 'Tuyến đã đạt', empty: 'Chưa có tuyến nào chạy thử đạt.' },
-  failed: { title: 'Tuyến không đạt', empty: 'Không có tuyến nào chạy thử không đạt.' },
+  pending: { title: 'Tuyến chờ chạy thử', empty: 'Chưa có tuyến chờ chạy thử' },
+  passed: { title: 'Tuyến đã đạt', empty: 'Chưa có tuyến chạy thử đạt' },
+  failed: { title: 'Tuyến không đạt', empty: 'Chưa có tuyến chạy thử không đạt' },
 }
 
 function toRows(queue: VersionedRoute[], routes: VersionedRoute[]): RouteRow[] {
@@ -48,7 +50,7 @@ export default function TechnicalConfirmationsPage() {
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="Tuyến" title="Xác nhận toàn tuyến" description="Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Đây là bằng chứng người kiểm tra nhập, không chứng minh robot đã chạy thật và không tự cho phép tạo Tour." />
+      <PageHeader eyebrow="Tuyến" title="Xác nhận chạy thử" description="Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Đây là bằng chứng người kiểm tra nhập, không chứng minh robot đã chạy thật và không tự cho phép tạo Tour." />
 
       {!queue.isPending && !queue.error && (
         <div className="mb-3">
@@ -63,7 +65,7 @@ export default function TechnicalConfirmationsPage() {
       <RouteRerunSection onRecord={route => setDialog({ view: 'record', route })} />
 
       <section className={panelClass} aria-label="Danh sách kiểm chứng tuyến">
-        <PanelHead title={filterText[filter].title} description="Mỗi lần chạy gắn với đúng một phiên bản tuyến và bản đồ." />
+        <PanelHead title={filterText[filter].title} />
         {filter !== 'pending' && routes.isError && <div role="alert" className="space-y-2 border-b border-[#eef1f4] p-4 text-[13px] text-[#b23e31]"><p>{errorText(routes.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void routes.refetch()}>Tải lại danh sách tuyến</button></div>}
         {queue.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p> : queue.error ? <div role="alert" className="space-y-2 p-4 text-[13px] text-[#b23e31]"><p>{errorText(queue.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void queue.refetch()}>Tải lại danh sách chờ</button></div> : (
           <div className="relative overflow-x-auto">
@@ -79,7 +81,7 @@ export default function TechnicalConfirmationsPage() {
                     ? <button type="button" className={buttonClass('primary', 'sm')} aria-label={`Ghi kết quả ${route.name}`} onClick={() => setDialog({ view: 'record', route })}>Ghi kết quả</button>
                     : <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Xem kết quả ${route.name}`} onClick={() => setDialog({ view: 'result', route })}>Xem kết quả</button>}</td>
                 </tr>)}
-                {!visible.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={5}>{filterText[filter].empty}</td></tr>}
+                {!visible.length && <tr><td colSpan={5}><EmptyState variant="empty" title={filterText[filter].empty} /></td></tr>}
               </tbody>
             </table>
           </div>
@@ -103,7 +105,8 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const participants = useRouteTestParticipants()
   const [robotCode, setRobotCode] = useState('')
   const [staffUserId, setStaffUserId] = useState('')
-  const [resultCode, setResultCode] = useState<'PASS' | 'FAIL'>('PASS')
+  // No result is chosen up front; the checker picks one after the run.
+  const [resultCode, setResultCode] = useState<'PASS' | 'FAIL' | null>(null)
   const [allStopsReached, setAllStopsReached] = useState(false)
   const [safelyStopped, setSafelyStopped] = useState(false)
   const [localizationPassed, setLocalizationPassed] = useState(false)
@@ -116,7 +119,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const checks = [
     { label: 'Robot đi đủ các điểm dừng', checked: allStopsReached, set: setAllStopsReached },
     { label: 'Robot dừng an toàn', checked: safelyStopped, set: setSafelyStopped },
-    { label: 'Localization đạt', checked: localizationPassed, set: setLocalizationPassed },
+    { label: 'Định vị đạt', checked: localizationPassed, set: setLocalizationPassed },
   ]
   const missing = checks.filter(check => !check.checked).map(check => check.label)
   const passBlocked = resultCode === 'PASS' && missing.length > 0
@@ -129,6 +132,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const errors = record.error ? routeTestErrors(record.error) : {}
   const changed = () => { record.reset(); setRequestId(crypto.randomUUID()) }
   const missingToSave = [
+    !resultCode && 'chọn kết quả',
     !robotCode && 'chọn robot',
     robotNotReady && `robot ${robotNotReady}`,
     !staffUserId && 'chọn Staff đi cùng',
@@ -142,7 +146,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!ready || record.isPending) return
+    if (!ready || !resultCode || record.isPending) return
     record.mutate({ routeName: route.name, run: {
       routeId: route.routeId, revisionId: route.revisionId, requestId, robotCode, participatingStaffUserId: staffUserId, resultCode,
       allStopsReached, safelyStopped, localizationPassed, measuredDurationSeconds: seconds,
@@ -157,11 +161,11 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
         <div>
           <RobotPicker id="route-test-robot" label="Robot vật lý" mapKey={route.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} requireReady emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
-          {robotNotReady && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">{selectedRobot?.connectionStatus === 'UNCONFIRMED' ? 'Robot này chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại' : `Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên ${route.mapKey}. Ghi kiểm tra triển khai đạt ở trang Quản lý bản đồ`} rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
+          {robotNotReady && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">{selectedRobot?.connectionStatus === 'UNCONFIRMED' ? 'Robot này chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại' : `Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên ${route.mapKey}. Ghi kiểm tra triển khai đạt ở trang Bản đồ`} rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
         <div>
           <label className={labelClass} htmlFor="route-test-staff">Staff đi cùng</label>
-          <select title="" id="route-test-staff" className={`${inputClass} mt-1`} required value={staffUserId} disabled={participants.isPending || participants.isError || !participants.data?.length} onChange={event => { setStaffUserId(event.target.value); changed() }}><option value="">— Chọn Staff —</option>{participants.data?.map(person => <option key={person.userId} value={person.userId}>{person.fullName} · {person.username}</option>)}</select>
+          <select title="" id="route-test-staff" className={`${inputClass} mt-1`} required value={staffUserId} disabled={participants.isPending || participants.isError || !participants.data?.length} onChange={event => { setStaffUserId(event.target.value); changed() }}><option value="">Chọn Staff</option>{participants.data?.map(person => <option key={person.userId} value={person.userId}>{person.fullName} · {person.username}</option>)}</select>
           {participants.isPending && <p role="status" className="mt-1 text-sm text-[#64748b]">Đang tải danh sách Staff…</p>}
           {participants.isError && <div role="alert" className="mt-1 text-sm text-[#b23e18]"><p>{errorText(participants.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void participants.refetch()}>Tải lại danh sách Staff</button></div>}
           {participants.data?.length === 0 && <p role="status" className="mt-1 text-sm text-[#b23e18]">Chưa có tài khoản Staff đang hoạt động. Cần một Staff đi cùng để ghi kết quả.</p>}
@@ -196,10 +200,10 @@ function RouteResultModal({ route, onRecord, onClose }: { route: VersionedRoute;
       <div className="space-y-3">
         {detail.isPending && <p role="status" className="text-sm text-[#64748b]">Đang tải kết quả…</p>}
         {detail.isError && <div role="alert" className="space-y-2 text-sm text-[#b23e31]"><p>{errorText(detail.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void detail.refetch()}>Tải lại kết quả</button></div>}
-        {runs.map(run => <section key={run.id} aria-label={`Lần chạy ${stamp(run.checkedAt)}`} className="rounded-lg border border-[#e2e8f0] p-3 text-[13px] text-[#334155]">
-          <div className="flex flex-wrap items-center gap-2"><ToneBadge tone={run.resultCode === 'PASS' ? 'ok' : 'danger'}>{run.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'}</ToneBadge><span className="text-xs text-[#64748b]">{stamp(run.checkedAt)}</span>{run.id === detail.data?.effectiveTestRunId && <ToneBadge tone="info">Đang áp dụng</ToneBadge>}</div>
+        {runs.map(run => <section key={run.id} aria-label={`Lần chạy ${formatDateTime(run.checkedAt)}`} className="rounded-lg border border-[#e2e8f0] p-3 text-[13px] text-[#334155]">
+          <div className="flex flex-wrap items-center gap-2"><ToneBadge tone={run.resultCode === 'PASS' ? 'ok' : 'danger'}>{run.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'}</ToneBadge><span className="text-xs text-[#64748b]">{formatDateTime(run.checkedAt)}</span>{run.id === detail.data?.effectiveTestRunId && <ToneBadge tone="info">Đang áp dụng</ToneBadge>}</div>
           <p className="mt-1.5 text-xs text-[#64748b]">Robot <span className="font-mono">{run.robotCode}</span> · Staff đi cùng: {staffName(run.participatingStaffUserId)} · đo được {run.measuredDurationSeconds} giây{run.measurementBasis ? '' : ' (đo theo định nghĩa cũ, cần chạy thử lại trước khi tạo Tour)'}</p>
-          <ul className="mt-2 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-3">{[['Đi đủ các điểm dừng', run.allStopsReached], ['Dừng an toàn', run.safelyStopped], ['Localization', run.localizationPassed]].map(([label, passed]) => <li key={String(label)}>{passed ? 'Đạt' : 'Chưa đạt'}: {label}</li>)}</ul>
+          <ul className="mt-2 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-3">{[['Đi đủ các điểm dừng', run.allStopsReached], ['Dừng an toàn', run.safelyStopped], ['Định vị', run.localizationPassed]].map(([label, passed]) => <li key={String(label)}>{passed ? 'Đạt' : 'Chưa đạt'}: {label}</li>)}</ul>
           {run.failureReason && <p className="mt-2"><span className="font-medium">Lý do:</span> {run.failureReason}</p>}
           <p className="mt-2 whitespace-pre-wrap"><span className="font-medium">Bằng chứng:</span> {run.evidenceNote}</p>
         </section>)}

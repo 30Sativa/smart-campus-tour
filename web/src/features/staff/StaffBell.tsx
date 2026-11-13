@@ -3,7 +3,7 @@ import { Bell, CheckCheck, ChevronRight } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { campusDay } from '../administration/tours/tour-calendar'
-import { formatElapsed } from './formatters'
+import { formatRelative } from '../../components/ui/date-time'
 import { useNow } from './use-now'
 import { useDayTours, useRunningTours, useToursNeedingReconcile } from './operations/hooks'
 import { buildAttention, type AttentionItem } from './operations/attention'
@@ -17,7 +17,7 @@ const LINK: Record<AttentionItem['tone'] | StaffNotice['tone'], string> = { dang
 /**
  * The bell at the top right of operations, in two parts: what needs a person
  * now, from real Tours (a Tour that needs assistance first), and what Technical
- * Staff decided on Staff's POIs, Routes, maps and held robots. The count is the
+ * Staff ("Kỹ thuật" on screen, by full name) decided on Staff's POIs, Routes, maps and held robots. The count is the
  * open work plus the notices this account has not seen; opening the bell sees them.
  */
 export function StaffBell() {
@@ -114,7 +114,7 @@ export function StaffBell() {
 
             <section aria-labelledby={`${panelId}-notices`} className="border-t border-[#e5e7eb]">
               <div className="flex items-center justify-between gap-3 border-b border-[#f1f2f4] px-4 py-3">
-                <h2 id={`${panelId}-notices`} className="text-sm font-bold text-[#111827]">Từ Technical Staff</h2>
+                <h2 id={`${panelId}-notices`} className="text-sm font-bold text-[#111827]">Từ Kỹ thuật</h2>
                 {unread.length > 0 && (
                   <button type="button" onClick={() => markRead(unread.map((notice) => notice.id))}
                     className="rounded-lg px-1.5 py-0.5 text-xs font-semibold text-[#2d719e] hover:bg-[#f1f8fe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">
@@ -135,7 +135,7 @@ export function StaffBell() {
                           </span>
                           <span className="mt-0.5 line-clamp-2 block text-xs text-[#6b7280]">{notice.detail}</span>
                           <span className="mt-1 flex items-center gap-2 text-xs">
-                            <span className="text-[#9ca3af]">{formatElapsed(notice.occurredAt, now) ?? ''}</span>
+                            <span className="text-muted">{formatRelative(notice.occurredAt, now)}</span>
                             {notice.to && <span className={`inline-flex items-center gap-0.5 font-bold group-hover:underline ${LINK[notice.tone]}`}>{notice.toLabel}<ChevronRight size={13} aria-hidden="true" /></span>}
                           </span>
                         </span>
@@ -158,7 +158,7 @@ export function StaffBell() {
               ) : notifications.isPending ? (
                 <p className="px-4 py-4 text-sm text-[#6b7280]">Đang tải...</p>
               ) : (
-                <p className="px-4 py-4 text-sm text-[#6b7280]">Chưa có kết quả duyệt nào từ Technical Staff.</p>
+                <p className="px-4 py-4 text-sm text-[#6b7280]">Chưa có kết quả duyệt nào từ Kỹ thuật.</p>
               )}
             </section>
           </div>

@@ -44,6 +44,6 @@ export function cameraLeaseHint(status: RobotCameraStatus | undefined, failed: b
   if (failed) return 'Không gửi được yêu cầu bật camera tới máy chủ. Đang thử lại…'
   if (!status) return undefined
   if (!status.robotListening)
-    return 'Robot chưa hỏi máy chủ: quest-stream trên miniPC chưa bật chế độ bật camera theo nhu cầu (QUEST_CONTROL_URL), hoặc miniPC mất mạng.'
+    return 'Robot chưa nhận yêu cầu bật camera. Kiểm tra robot đang bật và có mạng, còn lỗi thì báo Kỹ thuật kiểm tra.'
   return 'Đang bật camera trên robot. Hình sẽ lên sau khoảng 30 giây.'
 }

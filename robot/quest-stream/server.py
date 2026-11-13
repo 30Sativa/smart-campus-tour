@@ -29,6 +29,7 @@ import logging.handlers
 import os
 import random
 import re
+import shlex
 import shutil
 import socket
 import signal
@@ -633,7 +634,8 @@ CAMERA_POLL_PATH = "/api/fleet/camera/v1/poll"
 
 
 def read_env_file(path: Path) -> Dict[str, str]:
-    """KEY=VALUE lines (as written by robot/scripts/setup_fleet_sync.py); missing file = {}."""
+    """``[export ]KEY=VALUE`` lines, as robot/scripts/setup_fleet_sync.py writes them (``export KEY='value'``) or
+    by hand; values are unquoted the way the shell would. Missing file = {}."""
     values: Dict[str, str] = {}
     try:
         text = path.read_text("utf-8")
@@ -641,10 +643,16 @@ def read_env_file(path: Path) -> Dict[str, str]:
         return values
     for line in text.splitlines():
         line = line.strip()
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")
-        values[key.strip()] = value.strip().strip("'\"")
+        try:
+            words = shlex.split(value)
+        except ValueError:
+            words = []
+        values[key.strip()] = words[0] if len(words) == 1 else value.strip().strip("'\"")
     return values
 
 

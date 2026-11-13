@@ -3,10 +3,11 @@ import { ApiError } from '../../api/client'
 import { Activity, CircleCheck, CircleX, FileArchive, Layers, LoaderCircle, Upload } from 'lucide-react'
 import { PageHeader, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
+import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
 import { MapVersionTable } from '../../features/technical/MapVersionTable'
 import { RobotPicker } from '../../features/technical/RobotPicker'
-import { CheckRow, TechnicalPage } from '../../features/technical/TechnicalUi'
+import { CheckRow, ResultToggle, SaveBlockedHint, TechnicalPage } from '../../features/technical/TechnicalUi'
 import { mapVersionLabel } from '../../features/technical/poi-labels'
 import { useMapAreas, useMapVersions, usePhysicalRobots, useRecordDeployment, useUploadMap } from '../../features/technical/technical-hooks'
 import { errorText, mapUploadFieldErrors } from '../../features/technical/technical-format'
@@ -32,9 +33,9 @@ export default function TechnicalMapsPage() {
   return (
     <TechnicalPage>
       <PageHeader
-        eyebrow="Bản đồ"
-        title="Quản lý bản đồ"
-        description="Theo dõi bản đồ đã tải lên và kết quả kiểm tra của kỹ thuật."
+        eyebrow="Bản đồ & POI"
+        title="Bản đồ"
+        description="Tải bản đồ lên, nạp lên robot rồi ghi kết quả kiểm tra."
         action={<button type="button" className={buttonClass('primary')} onClick={() => setUploading(true)}><Upload size={15} aria-hidden="true" />Tải lên bản đồ mới</button>}
       />
 
@@ -52,7 +53,7 @@ export default function TechnicalMapsPage() {
       {maps.isPending ? <section className={panelClass}><p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p></section>
         : maps.error ? <section className={panelClass}><p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(maps.error)}</p></section>
         : items.length ? <MapVersionTable items={items} robots={robots} onUpload={area => { setUploadArea(area); setUploading(true) }} onCheck={setChecking} />
-        : <section className={panelClass}><p className="px-4 py-8 text-center text-[13px] text-[#64748b]">Chưa có phiên bản bản đồ. Tải package đầu tiên lên để bắt đầu.</p></section>}
+        : <section className={panelClass}><EmptyState variant="empty" title="Chưa có bản đồ" description="Tải tệp bản đồ đầu tiên lên để bắt đầu." /></section>}
 
       <UploadModal key={uploadArea?.areaKey ?? 'new-area'} open={uploading} initialArea={uploadArea} onClose={() => { setUploading(false); setUploadArea(null) }} />
       <DeploymentModal key={checking?.map.id ?? 'closed'} item={checking} onClose={() => setChecking(null)} />
@@ -112,7 +113,7 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
         {mode === 'existing' ? <div>
           <label className={labelClass} htmlFor="map-existing-area">Chọn khu vực</label>
           <select title="" id="map-existing-area" className={`${inputClass} mt-1`} required value={areaKey} disabled={areas.isPending || areas.isError || !areas.data?.length} onChange={event => { const selected = areas.data?.find(area => area.areaKey === event.target.value); setAreaKey(selected?.areaKey ?? ''); setAreaName(selected?.displayName ?? ''); fieldChanged() }}>
-            <option value="">— Chọn khu vực —</option>{areas.data?.map(area => <option key={area.areaKey} value={area.areaKey}>{area.displayName} · {area.areaKey}</option>)}
+            <option value="">Chọn khu vực</option>{areas.data?.map(area => <option key={area.areaKey} value={area.areaKey}>{area.displayName} · {area.areaKey}</option>)}
           </select>{areaKey && <p className="mt-1 text-xs text-[#64748b]">Bản đồ sẽ được lưu thành phiên bản mới của khu vực này.</p>}
         </div> : <div className="grid gap-3 sm:grid-cols-[1.4fr_1fr]">
           <div><label className={labelClass} htmlFor="map-area-name">Tên khu vực</label><input id="map-area-name" aria-invalid={Boolean(uploadErrors.areaName)} className={`${inputClass} mt-1`} required maxLength={150} value={areaName} onChange={event => { const value = event.target.value; setAreaName(value); if (!keyEdited) setAreaKey(areaKeyFrom(value)); fieldChanged() }} placeholder="Thư viện tầng 1" />{uploadErrors.areaName && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{uploadErrors.areaName}</p>}</div>
@@ -142,18 +143,28 @@ function DeploymentModal({ item, onClose }: { item: MapVersionItem | null; onClo
   const robots = usePhysicalRobots(Boolean(item))
   const [robotCode, setRobotCode] = useState('')
   const [note, setNote] = useState('')
+  // Nothing is chosen or ticked up front. The server derives the result from the two ticks, so the chosen
+  // result only has to agree with them: Đạt needs both, Không đạt needs at least one left unticked.
+  const [resultCode, setResultCode] = useState<'PASS' | 'FAIL' | null>(null)
   const [localizationPassed, setLocalizationPassed] = useState(false)
   const [displayPassed, setDisplayPassed] = useState(false)
   const [requestId, setRequestId] = useState(() => crypto.randomUUID())
   const map = item?.map
   const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
   const connectionUnconfirmed = selectedRobot?.connectionStatus === 'UNCONFIRMED'
-  const attemptedPass = localizationPassed && displayPassed
-  const passBlocked = attemptedPass && connectionUnconfirmed
+  const allTicked = localizationPassed && displayPassed
+  const passBlocked = resultCode === 'PASS' && allTicked && connectionUnconfirmed
+  const missingToSave = [
+    !resultCode && 'chọn kết quả',
+    !robotCode && 'chọn robot',
+    resultCode === 'PASS' && !allTicked && 'tick đủ hai mục để ghi Đạt',
+    resultCode === 'FAIL' && allTicked && 'bỏ tick mục không đạt',
+    !note.trim() && (resultCode === 'FAIL' ? 'ghi lý do không đạt vào bằng chứng' : 'nhập bằng chứng kiểm tra'),
+  ].filter((value): value is string => Boolean(value))
   const changed = () => { deployment.reset(); setRequestId(crypto.randomUUID()) }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!map || !robotCode || !note.trim()) return
+    if (!map || missingToSave.length || passBlocked) return
     deployment.mutate({ mapVersionId: map.id, requestId, robotCode, packageSha256: map.packageSha256, localizationPassed, displayPassed, evidenceNote: note }, {
       onSuccess: onClose,
       onError: cause => { if (cause instanceof ApiError && cause.status === 404) void robots.refetch() },
@@ -162,10 +173,11 @@ function DeploymentModal({ item, onClose }: { item: MapVersionItem | null; onClo
   if (!map) return null
   return (
     <Modal open title={`Ghi kết quả kiểm tra · ${mapVersionLabel(map)}`} description={`Chỉ ghi khi robot đã nạp đúng tệp này (checksum ${shortSha(map.packageSha256)}).`} onClose={onClose}
-      footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Hủy</button><button type="submit" form="map-check-form" className={buttonClass('primary')} disabled={deployment.isPending || robots.isPending || robots.isError || !robots.data?.length || !robotCode || !note.trim() || passBlocked}>Lưu kết quả kiểm tra</button></div>}>
+      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="map-check-missing" missing={missingToSave} tone="neutral" /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Hủy</button><button type="submit" form="map-check-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'map-check-missing' : undefined} disabled={deployment.isPending || robots.isPending || robots.isError || !robots.data?.length || missingToSave.length > 0 || passBlocked}>Lưu kết quả kiểm tra</button></div>}>
       <form id="map-check-form" className="space-y-3.5" onSubmit={submit}>
-        <div><RobotPicker id="map-check-robot" label="Robot kiểm tra" value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần hoàn tất cấu hình robot trước khi ghi kết quả kiểm tra." />{passBlocked && <p role="status" className="mt-1 text-sm text-[#b23e18]">Robot chưa xác nhận kết nối. Hãy bật kết nối trên robot rồi bấm Cập nhật trạng thái để lưu kết quả đạt. Nếu kiểm tra thực tế không đạt, bỏ chọn mục chưa đạt là lưu được ngay.</p>}</div>
-        <div className="space-y-2"><CheckRow checked={localizationPassed} onChange={value => { setLocalizationPassed(value); changed() }}>Localization đạt</CheckRow><CheckRow checked={displayPassed} onChange={value => { setDisplayPassed(value); changed() }}>Map hiển thị đúng</CheckRow></div>
+        <div><RobotPicker id="map-check-robot" label="Robot kiểm tra" value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần hoàn tất cấu hình robot trước khi ghi kết quả kiểm tra." />{passBlocked && <p role="status" className="mt-1 text-sm text-[#b23e18]">Robot chưa xác nhận kết nối. Hãy bật kết nối trên robot rồi bấm Cập nhật trạng thái để lưu kết quả đạt. Nếu kiểm tra thực tế không đạt, chọn Không đạt và bỏ tick mục chưa đạt.</p>}</div>
+        <ResultToggle id="map-check-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do vào bằng chứng." />
+        <div className="space-y-2"><CheckRow checked={localizationPassed} onChange={value => { setLocalizationPassed(value); changed() }}>Định vị đạt</CheckRow><CheckRow checked={displayPassed} onChange={value => { setDisplayPassed(value); changed() }}>Map hiển thị đúng</CheckRow></div>
         <div><label className={labelClass} htmlFor="map-check-note">Bằng chứng kiểm tra</label><textarea id="map-check-note" rows={4} className={`${inputClass} mt-1`} required maxLength={2000} value={note} onChange={event => { setNote(event.target.value); changed() }} placeholder="Ghi nhận quan sát thực tế, sai lệch, ảnh chụp màn hình đã lưu ở đâu…" /></div>
         {deployment.error && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errorText(deployment.error)}</p>}
       </form>

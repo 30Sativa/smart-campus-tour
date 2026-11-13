@@ -10,6 +10,8 @@ export type AccountListItem = {
   isActive: boolean
   createdAt: string
   updatedAt: string | null
+  /** Opaque account version the reset-password request sends back (ADR-0058). */
+  rowVersion: string
 }
 
 export type CreateAccountInput = {

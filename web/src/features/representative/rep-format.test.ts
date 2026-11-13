@@ -4,10 +4,10 @@ import { buildRepNotices } from './rep-notices'
 import type { RegistrationSummary } from './api/types'
 
 describe('Representative Tour time', () => {
-  it('uses Vietnam time across UTC midnight and includes the published timezone', () => {
+  it('uses Vietnam time across UTC midnight through the shared campus format', () => {
     expect(formatTime('2026-10-05T18:30:00Z')).toBe('01:30')
     expect(dayMonth('2026-10-05T18:30:00Z').day).toBe('06')
-    expect(formatDateTime('2026-10-05T18:30:00Z')).toContain('06/10/2026 (UTC+7)')
+    expect(formatDateTime('2026-10-05T18:30:00Z')).toBe('06/10/2026 01:30')
   })
 })
 
@@ -25,7 +25,7 @@ describe('Đăng ký của tôi groups', () => {
   it('words the system auto-cancel for a Representative and never dates a cancelled Tour by the registration update', () => {
     // The exact text of TourAutoCancel.Reason in the backend.
     const note = closedNote({ ...base, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: 'Không bắt đầu trong khung giờ, hệ thống tự huỷ.' })
-    expect(note.reason).toBe('Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Nhà trường sẽ liên hệ nếu sắp xếp lại.')
+    expect(note.reason).toBe('Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại.')
     expect(note.at).toBeNull()
   })
   it('says who ended it and why', () => {
@@ -33,7 +33,7 @@ describe('Đăng ký của tôi groups', () => {
     expect(closedNote({ ...base, state: 'APPROVED', tourState: 'CANCELLED' }).reason).toBe('Buổi tham quan đã bị hủy.')
     expect(closedNote({ ...base, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: ' Robot cần bảo trì ' }).reason).toBe('Robot cần bảo trì')
     expect(closedNote({ ...base, state: 'REJECTED', tourState: 'READY', rejectionReason: ' Thiếu lớp ' }).reason).toBe('Thiếu lớp')
-    expect(closedNote({ ...base, state: 'REJECTED', tourState: 'READY' }).reason).toBe('Nhà trường không ghi lý do.')
+    expect(closedNote({ ...base, state: 'REJECTED', tourState: 'READY' }).reason).toBe('Đại học FPT không ghi lý do.')
   })
 
   // The exact text the backend's T-24h expiry stores (ADR-0048).
