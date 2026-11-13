@@ -20,7 +20,7 @@ describe('headsetSummary (ADR-0056)', () => {
     expect(headsetSummary(status({ stale: true, batteryPercent: 12 }), false)).toEqual({ text: 'Pin 12% (số liệu cũ)', tone: 'muted' })
   })
   it('says why there is no battery', () => {
-    expect(headsetSummary(status({ connection: 'not_found', batteryPercent: null }), false).text).toBe('Chưa cắm kính vào miniPC')
+    expect(headsetSummary(status({ connection: 'not_found', batteryPercent: null }), false).text).toBe('Chưa cắm kính vào máy tính của robot')
     expect(headsetSummary(status({ connection: 'unauthorized' }), false).tone).toBe('warn')
     expect(headsetSummary(status({ batteryPercent: null }), false).text).toBe('Đã kết nối, chưa đọc được pin')
     expect(headsetSummary(status({ reported: false, connection: null, batteryPercent: null }), false).text).toBe('Robot chưa báo tình trạng kính')
