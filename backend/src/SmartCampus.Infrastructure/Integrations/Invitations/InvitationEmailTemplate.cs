@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using SmartCampus.Application.Common.Abstractions.Invitations;
 
@@ -6,22 +5,50 @@ namespace SmartCampus.Infrastructure.Integrations.Invitations;
 
 internal static class InvitationEmailTemplate
 {
+    /// <summary>
+    /// Must equal the Student entry button label on the web. Its source of truth is the exported label constant in the web
+    /// Student invitation entry feature (web/src/features/, the /tour/:id code-entry screen); C# cannot import it, so keep
+    /// both in step by hand.
+    /// </summary>
+    internal const string EntryButtonLabel = "Vào Tour";
+    internal const string SharedViewingNote = "Đây là điểm xem chung, hãy mở trên máy nối màn chiếu.";
+    internal static readonly string[] Preparation =
+    [
+        "Mở link trước giờ bắt đầu 10 phút.",
+        "Dùng Chrome hoặc Edge bản mới.",
+        "Nên có tai nghe."
+    ];
+
+    internal static string Subject(InvitationEmail email) =>
+        $"Lời mời tham quan: {email.TourName}, {EmailCopy.VietnamTime(email.ScheduledStartAt, "dd/MM HH:mm")}";
+
+    internal static string Invite(InvitationEmail email) =>
+        $"Trường Đại học FPT TP.HCM mời bạn tham quan campus từ xa cùng đoàn {email.GroupName} ({email.SchoolName}).";
+
     internal static (string Html, string Text) Render(InvitationEmail email, string code, string link, string supportEmail)
     {
-        var scheduled = email.ScheduledStartAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-        var expires = email.ExpiresAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+        var scheduled = EmailCopy.VietnamTime(email.ScheduledStartAt, "dd/MM/yyyy HH:mm");
+        var expires = EmailCopy.VietnamTime(email.ExpiresAt, "dd/MM/yyyy HH:mm");
         var tourName = WebUtility.HtmlEncode(email.TourName);
         var tourLink = WebUtility.HtmlEncode(link);
         var accessCode = WebUtility.HtmlEncode(code);
         var support = WebUtility.HtmlEncode(supportEmail);
         var supportLink = WebUtility.HtmlEncode("mailto:" + supportEmail);
+        var greeting = WebUtility.HtmlEncode($"Xin chào {email.RecipientName},");
+        var invite = WebUtility.HtmlEncode(Invite(email));
+        var sharedNote = email.SharedViewing
+            ? $"<p style=\"margin:0 0 24px;padding:12px 16px;background-color:#f0f8f9;border-left:4px solid #0a6d80;color:#0b1519;font-size:14px;line-height:22px;font-weight:bold;\">{SharedViewingNote}</p>"
+            : "";
+        var preparationItems = string.Concat(Preparation.Select(item => $"<li style=\"margin:0 0 4px;\">{item}</li>"));
         var text = $"CAMPUS TOUR · DT-AMR\n\nLời mời tham quan campus\n\n" +
-            $"Bạn được mời tham gia {email.TourName}.\nGiờ dự kiến: {scheduled} (UTC+7).\n\n" +
+            $"Xin chào {email.RecipientName},\n{Invite(email)}\n" + (email.SharedViewing ? SharedViewingNote + "\n" : "") + "\n" +
+            $"Buổi tham quan: {email.TourName}\nGiờ dự kiến: {scheduled} (UTC+7).\n\n" +
             $"Mã truy cập: {code}\nHết hạn: {expires} (UTC+7).\n\n" +
-            $"1. Mở trang Tour: {link}\n2. Sao chép/dán mã truy cập rồi bấm Tham gia.\n\n" +
+            $"1. Mở trang Tour: {link}\n2. Sao chép/dán mã truy cập rồi bấm {EntryButtonLabel}.\n\n" +
+            "Chuẩn bị:\n" + string.Concat(Preparation.Select(item => $"- {item}\n")) + "\n" +
             "Không chia sẻ mã. Mã dùng lại trong hạn lời mời; gửi lại email giữ nguyên mã.\n" +
             "Thông tin đăng ký được dùng để gửi lời mời và hỗ trợ quyền truy cập Tour.\n\n" +
-            $"Đây là email tự động, vui lòng không trả lời. Cần hỗ trợ? Liên hệ {supportEmail}.";
+            $"Đây là email tự động, vui lòng không trả lời. Cần hỗ trợ? Liên hệ {supportEmail}.\n{EmailCopy.Footer}";
         var html = $$"""
             <!doctype html>
             <html lang="vi">
@@ -56,10 +83,12 @@ internal static class InvitationEmailTemplate
                     <tr><td class="content" style="padding:36px 36px 32px;">
                       <p style="margin:0 0 12px;color:#0a6d80;font-size:11px;line-height:18px;font-weight:bold;letter-spacing:2px;">KHÁM PHÁ CAMPUS TỪ XA</p>
                       <h1 class="title" style="margin:0 0 16px;font-size:32px;line-height:1.2;letter-spacing:-1px;font-weight:bold;">Lời mời tham quan<br>campus của bạn</h1>
-                      <p style="margin:0 0 24px;color:#45585f;font-size:15px;line-height:24px;">Khám phá không gian học tập cùng CampusTour. Dưới đây là lịch tham quan và mã truy cập dành cho lời mời của bạn.</p>
+                      <p style="margin:0 0 8px;color:#0b1519;font-size:15px;line-height:24px;font-weight:bold;overflow-wrap:anywhere;word-break:break-word;">{{greeting}}</p>
+                      <p style="margin:0 0 24px;color:#45585f;font-size:15px;line-height:24px;overflow-wrap:anywhere;word-break:break-word;">{{invite}}</p>
+                      {{sharedNote}}
                       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f5f7f8;border-radius:10px;">
                         <tr><td style="padding:20px;">
-                          <p style="margin:0 0 8px;color:#596c73;font-size:11px;font-weight:bold;letter-spacing:1px;">CHUYẾN THAM QUAN</p>
+                          <p style="margin:0 0 8px;color:#596c73;font-size:11px;font-weight:bold;letter-spacing:1px;">BUỔI THAM QUAN</p>
                           <p style="margin:0 0 16px;font-size:17px;line-height:25px;font-weight:bold;overflow-wrap:anywhere;word-break:break-word;">{{tourName}}</p>
                           <p style="margin:0;color:#45585f;font-size:13px;line-height:22px;">Giờ dự kiến <strong style="color:#0b1519;">{{scheduled}}</strong><br><span style="color:#596c73;font-size:12px;">Giờ Việt Nam · UTC+7</span></p>
                         </td></tr>
@@ -71,13 +100,19 @@ internal static class InvitationEmailTemplate
                           <p style="margin:12px 0 0;color:#45585f;font-size:12px;line-height:20px;">Hết hạn: <strong>{{expires}}</strong> (UTC+7)</p>
                         </td></tr>
                       </table>
-                      <p style="margin:24px 0 18px;color:#45585f;font-size:14px;line-height:23px;">Mở trang Tour, sao chép/dán <strong style="color:#0b1519;">Mã truy cập</strong> ở trên rồi bấm <strong style="color:#0b1519;">Tham gia</strong>.</p>
+                      <p style="margin:24px 0 18px;color:#45585f;font-size:14px;line-height:23px;">Mở trang Tour, sao chép/dán <strong style="color:#0b1519;">Mã truy cập</strong> ở trên rồi bấm <strong style="color:#0b1519;">{{EntryButtonLabel}}</strong>.</p>
                       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                         <tr><td align="center" bgcolor="#0a6d80" style="border-radius:8px;mso-padding-alt:16px 24px;">
                           <a href="{{tourLink}}" style="display:block;padding:16px 24px;color:#ffffff;font-size:15px;line-height:20px;font-weight:bold;text-align:center;text-decoration:none;border-radius:8px;">Mở trang Tour &rarr;</a>
                         </td></tr>
                       </table>
                       <p style="margin:16px 0 0;color:#596c73;font-size:12px;line-height:20px;">Nếu nút không hoạt động, mở đường dẫn sau:<br><a href="{{tourLink}}" style="color:#0a6d80;text-decoration:underline;overflow-wrap:anywhere;word-break:break-all;">{{tourLink}}</a></p>
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:24px;background-color:#f5f7f8;border-radius:10px;">
+                        <tr><td style="padding:18px 20px;">
+                          <p style="margin:0 0 8px;color:#0b1519;font-size:14px;line-height:22px;font-weight:bold;">Chuẩn bị</p>
+                          <ul style="margin:0;padding-left:20px;color:#45585f;font-size:13px;line-height:22px;">{{preparationItems}}</ul>
+                        </td></tr>
+                      </table>
                       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:24px;border-top:1px solid #e1e7ea;">
                         <tr><td style="padding-top:20px;">
                           <p style="margin:0 0 6px;color:#45585f;font-size:12px;line-height:20px;"><strong style="color:#0b1519;">Giữ mã truy cập riêng tư.</strong> Không chia sẻ mã. Mã dùng lại trong hạn lời mời; gửi lại email giữ nguyên mã.</p>
@@ -87,7 +122,7 @@ internal static class InvitationEmailTemplate
                     </td></tr>
                     <tr><td style="padding:22px 24px;background-color:#f5f7f8;border-top:1px solid #e1e7ea;border-radius:0 0 16px 16px;text-align:center;">
                       <p style="margin:0 0 6px;color:#45585f;font-size:12px;line-height:20px;">Cần hỗ trợ? <a href="{{supportLink}}" style="color:#0a6d80;text-decoration:underline;overflow-wrap:anywhere;">{{support}}</a></p>
-                      <p style="margin:0;color:#596c73;font-size:11px;line-height:18px;">Đây là email tự động, vui lòng không trả lời.<br>CampusTour · Trải nghiệm campus cùng DT-AMR</p>
+                      <p style="margin:0;color:#596c73;font-size:11px;line-height:18px;">Đây là email tự động, vui lòng không trả lời.<br>{{EmailCopy.Footer}}</p>
                     </td></tr>
                   </table>
                   <!--[if mso]></td></tr></table><![endif]-->

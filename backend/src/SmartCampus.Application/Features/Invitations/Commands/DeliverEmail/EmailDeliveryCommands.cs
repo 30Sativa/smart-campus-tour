@@ -41,8 +41,10 @@ public sealed class ClaimEmailCommandHandler(IInvitationRepository repository, I
         }
         repository.AddAudit(InvitationAudit.Create(tour.Id, request.ActorUserId, InvitationAudit.Started,
             request.EntityId, request.CorrelationId!.Value, now, "PENDING"));
-        return new(tour.Id, invitation.Id, request.CorrelationId.Value, invitation.RosterRow.Email, tour.Name, tour.ScheduledStartAt,
-            invitation.ExpiresAt, invitation.AccessVersion, invitation.AccessCodeProtected);
+        var row = invitation.RosterRow;
+        return new(tour.Id, invitation.Id, request.CorrelationId.Value, row.Email, tour.Name, tour.ScheduledStartAt,
+            invitation.ExpiresAt, invitation.AccessVersion, invitation.AccessCodeProtected,
+            row.DisplayName, row.Registration.GroupName, row.Registration.SchoolName, row.RowType == "SHARED_VIEWING");
     }
 }
 public sealed class RecordEmailResultCommandHandler(IInvitationRepository repository, IRegistrationRepository registrations, TimeProvider clock)

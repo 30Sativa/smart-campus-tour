@@ -14,21 +14,21 @@ public sealed class ResendInvitationEmailSender(HttpClient client, InvitationCon
         var code = codes.Reveal(email.InvitationId, email.AccessVersion, email.ProtectedCode);
         var link = configuration.PublicBaseUrl + "/tour/" + email.TourId;
         var (html, text) = InvitationEmailTemplate.Render(email, code, link, configuration.SupportEmail);
-        return await PostAsync("campus-tour/" + email.AttemptId.ToString("D"), email.Recipient, "Lời mời tham gia CampusTour", html, text, ct);
+        return await PostAsync("campus-tour/" + email.AttemptId.ToString("D"), email.Recipient, InvitationEmailTemplate.Subject(email), html, text, ct);
     }
 
     public async Task<EmailSendResult> SendTourCancelledAsync(TourCancelEmail email, CancellationToken ct)
     {
         var (html, text) = TourCancelEmailTemplate.Render(email, configuration.SupportEmail);
         return await PostAsync($"campus-tour/tour-cancel/{email.AttemptId:D}/{email.RegistrationId:D}", email.Recipient,
-            "Thông báo hủy buổi tham quan CampusTour", html, text, ct);
+            TourCancelEmailTemplate.Subject(email), html, text, ct);
     }
 
     public async Task<EmailSendResult> SendRosterExpiredAsync(RosterExpiredEmail email, CancellationToken ct)
     {
         var (html, text) = RosterExpiredEmailTemplate.Render(email, configuration.SupportEmail);
         return await PostAsync($"campus-tour/roster-expiry/{email.AttemptId:D}/{email.RegistrationId:D}", email.Recipient,
-            RosterExpiredEmailTemplate.Subject, html, text, ct);
+            RosterExpiredEmailTemplate.Subject(email), html, text, ct);
     }
 
     private async Task<EmailSendResult> PostAsync(string idempotencyKey, string recipient, string subject, string html, string text, CancellationToken ct)

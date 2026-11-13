@@ -68,7 +68,7 @@ public sealed class InvitationPrimitiveTests
         using var http = new HttpClient(handler);
         var sender = new ResendInvitationEmailSender(http, config, codec);
         var result = await sender.SendAsync(new(tour, id, attempt, "viewer@example.test", "<script>Tour</script>",
-            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1), 1, code.Protected), default);
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1), 1, code.Protected, "Nguyễn Văn A", "Lớp 12A1", "THPT Thử", false), default);
         Assert.Equal(expected, result.Status);
         Assert.Equal("https://api.resend.com/emails", handler.Url);
         Assert.Equal("Bearer", handler.AuthorizationScheme);
@@ -110,6 +110,118 @@ public sealed class InvitationPrimitiveTests
         }
     }
 
+    private const string RiskyTour = "Khoa <CNTT> & \"AI\"";
+    private const string Footer = "Gửi từ CampusTour, Trường Đại học FPT TP.HCM";
+
+    [Fact]
+    public async Task InvitationEmail_GreetsByRowAndProfile_UsesWebButtonLabel_AndPlainTextMatchesHtml()
+    {
+        var (subject, html, text) = await SendInvitation("Nguyễn <Văn> A", "12A1 & 12A2", "THPT <Lê Lợi>", sharedViewing: false,
+            start: new DateTimeOffset(2026, 10, 9, 18, 30, 0, TimeSpan.Zero));
+        Assert.Equal($"Lời mời tham quan: {RiskyTour}, 10/10 01:30", subject);
+        Assert.Contains("Khoa &lt;CNTT&gt; &amp; &quot;AI&quot;", html);
+        foreach (var raw in new[] { "<CNTT>", "<Văn>", "<Lê Lợi>" }) Assert.DoesNotContain(raw, html);
+        string[] shared =
+        [
+            "Xin chào Nguyễn <Văn> A",
+            "Trường Đại học FPT TP.HCM mời bạn tham quan campus từ xa cùng đoàn 12A1 & 12A2 (THPT <Lê Lợi>).",
+            RiskyTour, "Vào Tour", "Chuẩn bị", "Mở link trước giờ bắt đầu 10 phút.", "Dùng Chrome hoặc Edge bản mới.",
+            "Nên có tai nghe.", "10/10/2026 01:30", "Không chia sẻ mã", Footer
+        ];
+        AssertBothBodies(html, text, shared);
+        foreach (var body in new[] { Visible(html), text })
+        {
+            Assert.DoesNotContain("bấm Tham gia", body);
+            Assert.DoesNotContain("Đây là điểm xem chung", body);
+        }
+        Assert.Contains("rồi bấm Vào Tour.", text);
+        AssertNoLongDash(subject, html, text);
+    }
+
+    [Fact]
+    public async Task SharedViewingInvitation_TellsTheRoomToUseTheProjectorMachine_InHtmlAndPlainText()
+    {
+        var (_, html, text) = await SendInvitation("Phòng chiếu A", "Lớp 11", "THPT Thử", sharedViewing: true,
+            start: new DateTimeOffset(2026, 10, 9, 2, 0, 0, TimeSpan.Zero));
+        AssertBothBodies(html, text, ["Xin chào Phòng chiếu A", "Đây là điểm xem chung, hãy mở trên máy nối màn chiếu.", Footer]);
+    }
+
+    [Fact]
+    public async Task CancelEmail_SubjectUsesVietnamDate_FooterAndPlainTextMatchHtml()
+    {
+        var handler = new CaptureHandler(200, "{\"id\":\"preview\"}");
+        using var http = new HttpClient(handler);
+        var config = Configuration();
+        // 18:00 UTC on 20/11 is already 21/11 in Asia/Ho_Chi_Minh.
+        await new ResendInvitationEmailSender(http, config, new InvitationCodeService(config)).SendTourCancelledAsync(new(Guid.NewGuid(),
+            Guid.NewGuid(), Guid.NewGuid(), "rep@example.test", RiskyTour, new DateTimeOffset(2026, 11, 20, 18, 0, 0, TimeSpan.Zero),
+            "Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại."), default);
+        var (subject, html, text) = Payload(handler);
+        Assert.Equal($"Buổi tham quan đã bị huỷ: {RiskyTour}, 21/11", subject);
+        Assert.Contains("Khoa &lt;CNTT&gt; &amp; &quot;AI&quot;", html); Assert.DoesNotContain("<CNTT>", html);
+        AssertBothBodies(html, text, ["Buổi tham quan đã bị huỷ", RiskyTour, "21/11/2026 01:00",
+            "Lý do: Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại.",
+            "Các lời mời của buổi này không còn dùng được.", Footer]);
+        AssertNoLongDash(subject, html, text);
+    }
+
+    [Fact]
+    public async Task RosterExpiredEmail_SubjectNamesTheTour_FooterAndPlainTextMatchHtml()
+    {
+        var handler = new CaptureHandler(200, "{\"id\":\"preview\"}");
+        using var http = new HttpClient(handler);
+        var config = Configuration();
+        await new ResendInvitationEmailSender(http, config, new InvitationCodeService(config)).SendRosterExpiredAsync(new(Guid.NewGuid(),
+            Guid.NewGuid(), Guid.NewGuid(), "rep@example.test", RiskyTour, new DateTimeOffset(2026, 11, 20, 2, 0, 0, TimeSpan.Zero), 2, 1), default);
+        var (subject, html, text) = Payload(handler);
+        Assert.Equal($"Một số dòng đăng ký đã hết hạn: {RiskyTour}", subject);
+        Assert.Contains("Khoa &lt;CNTT&gt; &amp; &quot;AI&quot;", html); Assert.DoesNotContain("<CNTT>", html);
+        AssertBothBodies(html, text, ["Một số dòng đăng ký đã hết hạn", RiskyTour, "20/11/2026 09:00", "2 dòng đăng ký chờ duyệt",
+            "1 yêu cầu đổi email", "Vui lòng xem chi tiết trong trang Đại diện trường.", Footer]);
+        AssertNoLongDash(subject, html, text);
+    }
+
+    private static async Task<(string Subject, string Html, string Text)> SendInvitation(string recipientName, string group, string school,
+        bool sharedViewing, DateTimeOffset start)
+    {
+        var config = Configuration(); var codec = new InvitationCodeService(config);
+        var id = Guid.NewGuid(); var code = codec.Create(id, 1);
+        var handler = new CaptureHandler(200, "{\"id\":\"preview\"}");
+        using var http = new HttpClient(handler);
+        await new ResendInvitationEmailSender(http, config, codec).SendAsync(new(Guid.NewGuid(), id, Guid.NewGuid(), "viewer@example.test",
+            RiskyTour, start, start.AddDays(1), 1, code.Protected, recipientName, group, school, sharedViewing), default);
+        return Payload(handler);
+    }
+
+    private static (string Subject, string Html, string Text) Payload(CaptureHandler handler)
+    {
+        using var json = JsonDocument.Parse(handler.Body!);
+        var root = json.RootElement;
+        return (root.GetProperty("subject").GetString()!, root.GetProperty("html").GetString()!, root.GetProperty("text").GetString()!);
+    }
+
+    /// <summary>The words a reader sees in the HTML: no head, preheader or tags, entities decoded, whitespace collapsed.</summary>
+    private static string Visible(string html)
+    {
+        var body = System.Text.RegularExpressions.Regex.Replace(html, "<head>.*?</head>", " ", System.Text.RegularExpressions.RegexOptions.Singleline);
+        body = System.Text.RegularExpressions.Regex.Replace(body, "<div style=\"display:none[^>]*>.*?</div>", " ", System.Text.RegularExpressions.RegexOptions.Singleline);
+        body = WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(body, "<[^>]+>", " "));
+        return System.Text.RegularExpressions.Regex.Replace(body, "\\s+", " ");
+    }
+
+    private static void AssertBothBodies(string html, string text, IEnumerable<string> phrases)
+    {
+        var visible = Visible(html);
+        foreach (var phrase in phrases)
+        {
+            Assert.Contains(phrase, visible);
+            Assert.Contains(phrase, text);
+        }
+    }
+
+    private static void AssertNoLongDash(params string[] values) =>
+        Assert.All(values, value => { Assert.DoesNotContain("—", value); Assert.DoesNotContain("–", value); });
+
     [Fact]
     public async Task InvitationEmail_PreservesAccessInstructions_InHtmlAndPlainText_WithVietnamTimes()
     {
@@ -121,7 +233,7 @@ public sealed class InvitationPrimitiveTests
         await new ResendInvitationEmailSender(http, config, codec).SendAsync(new(tour, id, Guid.NewGuid(),
             "viewer@example.test", "Campus <img src=x onerror=alert(1)> & science",
             new DateTimeOffset(2026, 10, 9, 18, 30, 0, TimeSpan.Zero),
-            new DateTimeOffset(2026, 10, 10, 18, 30, 0, TimeSpan.Zero), 1, code.Protected), default);
+            new DateTimeOffset(2026, 10, 10, 18, 30, 0, TimeSpan.Zero), 1, code.Protected, "Nguyễn Văn A", "Lớp 12A1", "THPT Thử", false), default);
 
         using var json = JsonDocument.Parse(handler.Body!);
         var payload = json.RootElement;
@@ -158,7 +270,7 @@ public sealed class InvitationPrimitiveTests
         using var http = new HttpClient(new ThrowingHandler());
         var codec = new InvitationCodeService(Configuration()); var id = Guid.NewGuid();
         var result = await new ResendInvitationEmailSender(http, Configuration(), codec).SendAsync(new(Guid.NewGuid(), id, Guid.NewGuid(),
-            "viewer@example.test", "Tour", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1), 1, codec.Create(id, 1).Protected), default);
+            "viewer@example.test", "Tour", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1), 1, codec.Create(id, 1).Protected, "Nguyễn Văn A", "Lớp 12A1", "THPT Thử", false), default);
         Assert.Equal("UNKNOWN", result.Status);
     }
     private sealed class CaptureHandler(int status, string body) : HttpMessageHandler
