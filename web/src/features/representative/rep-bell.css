@@ -24,4 +24,4 @@
 .rep-bell-foot { display: flex; align-items: center; justify-content: center; min-height: var(--rep-hit); border-top: 1px solid var(--rep-line); padding: var(--rep-space-sm); color: var(--rep-green) !important; font-size: var(--rep-text-sm); text-decoration: none; }
 .rep-bell-foot:hover { background: var(--rep-sunk); }
 .rep-bell-coverage { padding: var(--rep-space-sm); color: var(--rep-ink-2); font-size: var(--rep-text-xs); }
-@media (max-width: 639px) { .rep-bell-panel { position: fixed; top: 84px; right: var(--rep-space-md); left: var(--rep-space-md); width: auto; max-height: calc(100dvh - 108px); } }
+@media (max-width: 639px) { .rep-bell-panel { position: fixed; top: 86px; right: var(--rep-space-md); left: var(--rep-space-md); width: auto; max-height: calc(100dvh - 108px); } }

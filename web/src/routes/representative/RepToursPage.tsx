@@ -3,10 +3,12 @@ import { useSearchParams } from 'react-router'
 import { Search } from 'lucide-react'
 import { useRepTours } from '../../features/representative/representative-hooks'
 import { RepPage, RepPageHeader, ErrorState, PageSkeleton, EmptyState } from '../../features/representative/components/RepUi'
-import { TourCard } from '../../features/representative/components/TourCard'
+import { TourTile } from '../../features/representative/components/TourTile'
+import { tourImages } from '../../features/representative/tour-image'
 import { readRepError } from '../../features/representative/rep-format'
 import { repButton } from '../../features/representative/rep-classes'
 import { Pagination } from '../../components/ui/ConsolePrimitives'
+import type { RepresentativeTour } from '../../features/representative/api/types'
 
 export default function RepToursPage() {
   const [params, setParams] = useSearchParams()
@@ -25,10 +27,15 @@ export default function RepToursPage() {
     </form>
     {tours.isPending ? <PageSkeleton /> : tours.error ? <ErrorState title="Không tải được Tour" message={readRepError(tours.error).message} onRetry={() => void tours.refetch()} /> :
       tours.data?.data.length ? <><p className="rep-count"><span className="num">{tours.data.pagination.totalItems}</span> buổi nhận đăng ký</p>
-        <div className="rep-card rep-card--flush"><div className="rep-tour-list">{tours.data.data.map(tour => <TourCard key={tour.id} tour={tour} />)}</div></div>
+        <TourGrid tours={tours.data.data} />
         <Pagination page={page} pageCount={tours.data.pagination.totalPages} total={tours.data.pagination.totalItems} pageSize={tours.data.pagination.pageSize}
           label="Trang buổi tham quan" onPage={p => { const next = new URLSearchParams(params); next.set('page', String(p)); setParams(next) }} /></>
         : params.get('search') ? <EmptyState variant="noMatch" onClear={() => { setSearch(''); setParams({}) }} />
           : <EmptyState variant="empty" title="Hiện chưa có buổi nhận đăng ký." />}
   </RepPage>
+}
+
+function TourGrid({ tours }: { tours: RepresentativeTour[] }) {
+  const images = tourImages(tours)
+  return <div className="rep-tile-grid">{tours.map(tour => <TourTile key={tour.id} tour={tour} image={images.get(tour.id)} />)}</div>
 }

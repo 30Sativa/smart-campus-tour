@@ -4,6 +4,27 @@ User approved the complete standalone reference on 2026-11-05. Implement the rea
 
 ## Locked visual system
 
+**Console sync (user request, 2026-11-12) — supersedes the palette, nav and footer below.**
+The Representative area uses the Staff console's visual language while keeping its
+navigation across the top (user revision, same day: no left sidebar). The shell is one
+floating frosted header card (`softConsoleHeader`): CampusTour logo tile, the three page
+links with a 30px icon tile (active page on a tinted row, like the Staff sidebar's soft
+look), the bell, and the account menu (profile, sign-out). Below `lg` the links fold into
+a menu under the header, opened from a round menu button. Soft console ground, no footer.
+
+**Tour sample images (user choice, 2026-11-12).** The Tour catalog (`/dai-dien/buoi`) is a grid of
+`TourTile` cards: 16:9 image on top with the state badge on it, name, Route and stop count,
+time and deadline on a tinted strip, one full-width "Xem chi tiết buổi" button. The overview's
+open-Tours rows carry a small thumbnail (`TourCard`), and the Tour page a cover marked "Ảnh minh họa".
+The Tour API has no image: `tour-image.ts` picks an illustrative photo from `public/images/tours/`
+(library/lab/gate by keyword, otherwise a campus photo by Tour id; neighbours never repeat). Tokens in `tokens.css` follow
+`components/ui/ui-classes.ts`: blue accent (#2d719e), slate ink (#0f172a / #64748b),
+borderless 15px cards with a soft lift, 12px buttons/inputs (`buttonClass`, `inputClass`),
+tone pills with borders (`toneClass`), Be Vietnam Pro at a 14px base. Light only, like Staff.
+Page layouts (overview grid, catalog, registration workspace, forms) are unchanged.
+The base styles are scoped to `<main class="rep-app">` so they never reach the Tailwind chrome.
+
+
 Latest user revision (2026-11-05): restore the compact top navigation and
 original card style. Balance the overview with three equal summary cards, a
 full-width next-visit card and two equal-width content cards sharing the same

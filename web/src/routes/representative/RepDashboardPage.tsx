@@ -3,6 +3,7 @@ import { CalendarDays, ClipboardList, Hourglass } from 'lucide-react'
 import { useRepRegistrations, useRepTours } from '../../features/representative/representative-hooks'
 import { RepPage, RepSection, ErrorState, EmptyState, PageSkeleton } from '../../features/representative/components/RepUi'
 import { TourCard } from '../../features/representative/components/TourCard'
+import { tourImages } from '../../features/representative/tour-image'
 import { RegistrationCard } from '../../features/representative/components/RegistrationCard'
 import { RepAttention, RepHero, RepOverviewHeader } from '../../features/representative/components/DashboardParts'
 import { isReviewExpired, readRepError } from '../../features/representative/rep-format'
@@ -18,6 +19,9 @@ export default function RepDashboardPage() {
   if (error) return <RepPage><ErrorState title="Không tải được tổng quan" message={readRepError(error).message}
     onRetry={() => { void tours.refetch(); void registrations.refetch(); void pending.refetch() }} /></RepPage>
   if (!tours.data || !registrations.data || !pending.data) return <PageSkeleton />
+
+  const recent = registrations.data.data
+  const images = tourImages(tours.data.data)
 
   const recent = groupRecentActivity(registrations.data.data)
   const next = upcoming.isSuccess ? nextUpcomingRegistration(upcoming.data) : null
@@ -40,6 +44,8 @@ export default function RepDashboardPage() {
           : <EmptyState variant="empty" title="Bạn chưa có đăng ký nào." />}
       </RepSection>
       <RepSection className="rep-card" title="Buổi đang nhận đăng ký" action={<Link to="/dai-dien/buoi" className="rep-text-link">Xem tất cả buổi</Link>}>
+        {tours.data.data.length ? <div className="rep-tour-list">{tours.data.data.map(tour => <TourCard key={tour.id} tour={tour} image={images.get(tour.id)} compact />)}</div>
+          : <EmptyState title="Chưa có buổi nhận đăng ký" description="Quay lại khi trường có lịch tham quan mới." />}
         {tours.data.data.length ? <div className="rep-tour-list">{tours.data.data.map(tour => <TourCard key={tour.id} tour={tour} compact />)}</div>
           : <EmptyState variant="empty" title="Hiện chưa có buổi nhận đăng ký." />}
       </RepSection>
