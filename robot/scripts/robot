@@ -59,8 +59,10 @@ PROFILE_KEYS = {
     # fleet_bridge's own defaults (0.09 / 0.05) need the robot driven a little after the pose.
     'LOCALIZED_MAX_XY_VARIANCE': '0.3', 'LOCALIZED_MAX_YAW_VARIANCE': '0.1',
     # One HTTPS request to the backend takes about 1 s from the lab; a leg start posts its result and
-    # then polls, so the fleet_bridge default of 1.5 s cut legs as link loss (13/11/2026).
-    'MOTION_PERMIT_LINK_TIMEOUT_SEC': '5.0',
+    # then polls, so the fleet_bridge default of 1.5 s cut legs as link loss (13/11/2026). Campus Wi-Fi
+    # roaming drops the link for a few seconds while the robot drives; the backend sets
+    # FleetCommands:MaxTelemetryAgeSeconds 10 to match.
+    'MOTION_PERMIT_LINK_TIMEOUT_SEC': '20.0',
     'SCT_LOG_ROOT': '~/amr_logs/runs', 'LOG_KEEP_DAYS': '30', 'LOG_MAX_MB': '2000', 'MIN_FREE_GB': '5',
 }
 NODE_PATTERNS = {

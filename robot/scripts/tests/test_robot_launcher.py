@@ -504,7 +504,7 @@ def test_fleet_commands_need_a_running_nav_and_note_a_missing_permit(world):
             assert r.returncode == 0 and out['argv'][-10:] == [
                 '-p', 'commands_enabled:=true', '-p', 'report_period_sec:=0.5',
                 '-p', 'localized_max_xy_variance:=0.3', '-p', 'localized_max_yaw_variance:=0.1',
-                '-p', 'motion_permit_link_timeout_sec:=5.0'], r.stdout + r.stderr
+                '-p', 'motion_permit_link_timeout_sec:=20.0'], r.stdout + r.stderr
             assert ('no motion permit' in r.stderr) == (not gated), r.stderr
             reset = robot(world, 'reset-latch', '--dry-run')
             if gated:
