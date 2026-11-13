@@ -316,6 +316,16 @@ html.dark .auth-brand__mark {
   line-height: 1.6;
 }
 
+/* Who to ask when signing in is not the right way in. */
+.auth .auth-help {
+  margin-top: 24px;
+  display: grid;
+  gap: 6px;
+  color: var(--lp-ink-2);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
 /* ── Form ────────────────────────────────────────────────────────────────── */
 
 .auth-form {

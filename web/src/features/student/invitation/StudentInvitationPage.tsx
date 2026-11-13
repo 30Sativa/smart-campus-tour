@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { hashKey, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bot, Captions, KeyRound, LifeBuoy, Mail, MessageSquare } from 'lucide-react'
 import { apiClient, ApiError } from '../../../api/client'
 import type { ApiResponse } from '../../../api/contracts/shared'
@@ -10,6 +10,8 @@ import { StudentEndScreen } from '../components/StudentEndScreen'
 import { LiveStudentAiAssistant } from '../components/LiveStudentAiAssistant'
 import { FALLBACK_BADGE } from '../components/StudentVideoPlayer'
 import { useStudentStreamAccess } from '../../quest-stream/stream-access'
+import { formatDateTime } from '../../../components/ui/date-time'
+import { ENTER_TOUR_LABEL } from './invitation-labels'
 import { buildLiveSnapshot, getStudentTourView, isVideoFile, type StudentTourInfo } from './student-tour-view'
 import '../student.css'
 import '../student-expedition.css'
@@ -32,7 +34,10 @@ function accessError(error: unknown) {
   return 'Không kết nối được hệ thống. Vui lòng thử lại.'
 }
 export const SESSION_CHECK_RUNNING_MS = 5000
-const date = (stamp: string) => new Date(stamp).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+/** The page never waits silently longer than this for the first session check. */
+export const SESSION_CHECK_WATCHDOG_MS = 8000
+/** Cancelled, offline or server-side failures say nothing about the invitation itself. */
+const uncheckedError = (error: unknown) => !(error instanceof ApiError) || error.status >= 500
 
 function FallbackVideoLink({ url }: { url: string | null }) {
   if (!url) return null
@@ -57,18 +62,49 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const leave = useMutation({ mutationFn: () => access(tourId, 'leave'),
     onMutate: () => client.cancelQueries({ queryKey: key }),
     onSuccess: () => { setLeft(true); client.setQueryData(key, null); join.reset() } })
+  const sessionEnabled = !left && !join.isPending && !leave.isPending
   // A heartbeat begun before join/leave must not overwrite the mutation's committed state.
   const session = useQuery({ queryKey: key, queryFn: ({ signal }) => access(tourId, 'session', undefined, signal),
-    retry: false, enabled: !left && !join.isPending && !leave.isPending, refetchIntervalInBackground: true,
+    retry: false, enabled: sessionEnabled, refetchIntervalInBackground: true,
     // SRS v1.9: a revoked or reissued invitation must stop playback within 10 s,
     // so a running Tour re-checks the session every 5 s.
     refetchInterval: query => query.state.data?.tourState === 'RUNNING' ? SESSION_CHECK_RUNNING_MS : 30000 })
+  const sessionHash = hashKey(key)
+  const [slow, setSlow] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const checkPending = session.isPending && !left
+  // Never leave the Student on a silent loading card: after 8 s the code form is shown with a retry.
+  useEffect(() => {
+    if (!checkPending) return
+    const timer = setTimeout(() => setSlow(true), SESSION_CHECK_WATCHDOG_MS)
+    return () => clearTimeout(timer)
+  }, [checkPending, attempt])
+  const recheck = useRef<() => void>(() => {})
+  useEffect(() => {
+    const refetch = session.refetch
+    recheck.current = sessionEnabled ? () => void refetch() : () => {}
+    return () => { recheck.current = () => {} }
+  }, [sessionEnabled, session.refetch])
+  // Root cause of the stuck check: app/providers/query-provider.tsx clears the whole query cache when the account
+  // session revision changes, and on a first visit AuthBootstrap's cookie refresh is refused (401 -> logout ->
+  // new revision) while this check is in flight. The removed query is cancelled silently and its observer is never
+  // told, so the page waited for the 30 s interval. Re-run the check on a fresh query as soon as it is removed.
+  useEffect(() => client.getQueryCache().subscribe(event => {
+    if (event.type === 'removed' && event.query.queryHash === sessionHash) setTimeout(() => recheck.current(), 0)
+  }), [client, sessionHash])
+  const retryCheck = () => {
+    setSlow(false)
+    setAttempt(value => value + 1)
+    // A request that is still hanging is dropped first, so Thử lại always sends a new one.
+    void client.cancelQueries({ queryKey: key }).then(() => recheck.current())
+  }
   const accessDenied = session.isError && session.error instanceof ApiError && [401, 403, 409].includes(session.error.status)
   const info = left || accessDenied ? null : session.data
   // Route and progress; a failure only hides the stops, the session above stays the access authority.
   const view = useQuery({ queryKey: ['student-tour-view', tourId], queryFn: ({ signal }) => getStudentTourView(tourId, signal),
     retry: false, enabled: !!info && !leave.isPending, refetchInterval: info?.tourState === 'RUNNING' ? 5000 : 30000 })
 
+  const unchecked = !left && !info && ((session.isPending && slow) || (session.isError && uncheckedError(session.error)))
   const shared = info?.rowType === 'SHARED_VIEWING'
   const sessionLabel = shared ? 'Màn hình xem chung' : 'Phiên lời mời cá nhân'
   const snapshot = info ? buildLiveSnapshot(info, view.data) : null
@@ -78,14 +114,35 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const status = <>
     {leave.isError && <p role="alert" className="st-session-error">{accessError(leave.error)}</p>}
     {info && session.isError && <p role="alert" className="st-session-error">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên có thể hết hạn trong thời gian mất kết nối; kết nối lại để kiểm tra.</p>}
-    {session.isError && !left && <button type="button" className="st-session-retry" disabled={session.isFetching || join.isPending || leave.isPending} onClick={() => void session.refetch()}>Kiểm tra lại phiên</button>}
+    {session.isError && !left && !unchecked && <button type="button" className="st-session-retry" disabled={session.isFetching || join.isPending || leave.isPending} onClick={() => void session.refetch()}>Kiểm tra lại phiên</button>}
   </>
 
   let body
-  if (session.isPending && !left) {
+  if (session.isPending && !left && !slow) {
     body = <section className="st-invitation-card"><p aria-busy="true">Đang kiểm tra phiên…</p><div className="st-loading-lines" aria-hidden="true"><span /><span /><span /></div></section>
   } else if (!info || !snapshot) {
     body = <div className="st-ctn st-entry-layout">
+      {/* Code entry comes first in the DOM, so a phone shows it before the photo; wide screens place it right. */}
+      <section className="st-invitation-card st-entry-form" aria-labelledby="student-access-title">
+        {unchecked && <div className="st-session-unchecked" role="status">
+          <p>Chưa kiểm tra được phiên</p>
+          <button type="button" className="st-session-retry" disabled={join.isPending || leave.isPending} onClick={retryCheck}>Thử lại</button>
+        </div>}
+        <form onSubmit={event => { event.preventDefault(); join.mutate() }}>
+          <div className="st-entry-form-heading"><Mail size={24} aria-hidden="true" /><h2 id="student-access-title">Nhập mã truy cập</h2></div>
+          <p>Sao chép mã trong email lời mời. Mỗi lời mời dùng trên một browser; không cần tài khoản học sinh.</p>
+          <label htmlFor="invitation-code">Mã truy cập</label>
+          <div className="st-entry-code-field"><KeyRound size={18} aria-hidden="true" />
+          <input id="invitation-code" autoComplete="off" maxLength={64} value={code} disabled={join.isPending} onChange={event => setCode(event.target.value)}
+            aria-invalid={join.isError} aria-describedby={join.isError ? 'invitation-code-error' : undefined} required />
+          </div>
+          {join.isError && <p id="invitation-code-error" role="alert" className="st-session-error">{accessError(join.error)}</p>}
+          {session.isError && !unchecked && !(session.error instanceof ApiError && session.error.status === 401) && <p role="alert" className="st-session-error">{accessError(session.error)}</p>}
+          <button className="st-btn st-invitation-submit" aria-busy={join.isPending} disabled={join.isPending || !code.trim()}>{ENTER_TOUR_LABEL}</button>
+          <p className="st-invitation-note"><LifeBuoy size={18} aria-hidden="true" /><span>Mất email hoặc mã đang bị dùng? Liên hệ đại diện đoàn để gửi lại hoặc cấp mã mới.</span></p>
+        </form>
+        {status}
+      </section>
       <section className="st-entry-story" aria-labelledby="student-discover-title">
         <div className="st-entry-intro">
           <h2 id="student-discover-title">Khám phá campus{' '}<br />cùng robot.</h2>
@@ -100,22 +157,6 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
           <li><Captions size={19} aria-hidden="true" /><span>Nghe thuyết minh</span></li>
           <li><MessageSquare size={19} aria-hidden="true" /><span>Hỏi Trợ lý AI</span></li>
         </ul>
-      </section>
-      <section className="st-invitation-card st-entry-form" aria-labelledby="student-access-title">
-        <form onSubmit={event => { event.preventDefault(); join.mutate() }}>
-          <div className="st-entry-form-heading"><Mail size={24} aria-hidden="true" /><h2 id="student-access-title">Nhập mã truy cập</h2></div>
-          <p>Sao chép mã trong email lời mời. Mỗi lời mời dùng trên một browser; không cần tài khoản học sinh.</p>
-          <label htmlFor="invitation-code">Mã truy cập</label>
-          <div className="st-entry-code-field"><KeyRound size={18} aria-hidden="true" />
-          <input id="invitation-code" autoComplete="off" maxLength={64} value={code} disabled={join.isPending} onChange={event => setCode(event.target.value)}
-            aria-invalid={join.isError} aria-describedby={join.isError ? 'invitation-code-error' : undefined} required />
-          </div>
-          {join.isError && <p id="invitation-code-error" role="alert" className="st-session-error">{accessError(join.error)}</p>}
-          {session.isError && !(session.error instanceof ApiError && session.error.status === 401) && <p role="alert" className="st-session-error">{accessError(session.error)}</p>}
-          <button className="st-btn st-invitation-submit" aria-busy={join.isPending} disabled={join.isPending || !code.trim()}>Vào Tour</button>
-          <p className="st-invitation-note"><LifeBuoy size={18} aria-hidden="true" /><span>Mất email hoặc mã đang bị dùng? Liên hệ đại diện đoàn để gửi lại hoặc cấp mã mới.</span></p>
-        </form>
-        {status}
       </section>
     </div>
   } else if (snapshot.tourState === 'Running') {
@@ -139,7 +180,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
     </>
   } else if (snapshot.tourState === 'Completed' || snapshot.tourState === 'Cancelled') {
     body = <>
-      <StudentEndScreen snapshot={snapshot} name="bạn" meta={`${info.tourName}, ${date(info.scheduledStartAt)}`}
+      <StudentEndScreen snapshot={snapshot} name="bạn" meta={`${info.tourName}, ${formatDateTime(info.scheduledStartAt)}`}
         onLeave={leave.isPending ? undefined : () => leave.mutate()} />
       <div className="st-ctn st-invitation-status">{status}</div>
     </>
@@ -148,8 +189,8 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
       <StudentWaitingRoom
         snapshot={snapshot}
         heading="Bạn đã vào phòng chờ"
-        intro={`${sessionLabel}. Khi nhân viên vận hành bắt đầu buổi tham quan, trang này sẽ tự chuyển sang buổi tham quan trực tiếp. Mã còn hạn tới ${date(info.invitationExpiresAt)}.`}
-        meta={`${info.tourName}, Giờ dự kiến ${date(info.scheduledStartAt)}`}
+        intro={`${sessionLabel}. Khi nhân viên vận hành bắt đầu buổi tham quan, trang này sẽ tự chuyển sang buổi tham quan trực tiếp. Mã còn hạn tới ${formatDateTime(info.invitationExpiresAt)}.`}
+        meta={`${info.tourName}, Giờ dự kiến ${formatDateTime(info.scheduledStartAt)}`}
         showMicCheck={false}
       />
       <div className="st-ctn st-invitation-status">{status}</div>

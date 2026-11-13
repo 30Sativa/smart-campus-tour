@@ -6,9 +6,8 @@ namespace SmartCampus.Infrastructure.Integrations.Invitations;
 internal static class InvitationEmailTemplate
 {
     /// <summary>
-    /// Must equal the Student entry button label on the web. Its source of truth is the exported label constant in the web
-    /// Student invitation entry feature (web/src/features/, the /tour/:id code-entry screen); C# cannot import it, so keep
-    /// both in step by hand.
+    /// Must equal the Student entry button label on the web: `ENTER_TOUR_LABEL` in
+    /// web/src/features/student/invitation/invitation-labels.ts. C# cannot import it, so keep both in step by hand.
     /// </summary>
     internal const string EntryButtonLabel = "Vào Tour";
     internal const string SharedViewingNote = "Đây là điểm xem chung, hãy mở trên máy nối màn chiếu.";

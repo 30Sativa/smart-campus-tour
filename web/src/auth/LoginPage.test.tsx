@@ -45,6 +45,13 @@ describe('LoginPage', () => {
     expect(screen.getByRole('button', { name: 'Ẩn mật khẩu' })).toBeInTheDocument()
   })
 
+  it('says who resets a password and that Students enter from their invitation email instead', () => {
+    renderPage()
+
+    expect(screen.getByText('Quên mật khẩu? Liên hệ quản trị viên của trường.')).toBeInTheDocument()
+    expect(screen.getByText('Học sinh không cần tài khoản: mở link trong email lời mời.')).toBeInTheDocument()
+  })
+
   it('labels every field, so no input relies on its placeholder', () => {
     renderPage()
 
