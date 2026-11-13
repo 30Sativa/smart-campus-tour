@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ADMIN_NAV, adminActivePath } from './admin-nav'
+import { ADMIN_NAV, ADMIN_NAV_SECTIONS, adminActivePath } from './admin-nav'
 
 describe('administration navigation', () => {
   it('lists account/security administration without adding Tour preparation or control', () => {
@@ -21,5 +21,14 @@ describe('administration navigation', () => {
     ['/admin', null],
   ])('lights the right entry for %s', (path, expected) => {
     expect(adminActivePath(path)).toBe(expected)
+  })
+})
+
+describe('administration navigation groups', () => {
+  it('has two groups: Quản trị and Giám sát', () => {
+    expect(ADMIN_NAV_SECTIONS.map((section) => [section.label, section.items.map((item) => item.label)])).toEqual([
+      ['Quản trị', ['Tài khoản', 'Vai trò & quyền', 'Lịch vận hành', 'Lịch sử khóa robot']],
+      ['Giám sát', ['Hạ tầng máy chủ', 'Nhật ký hệ thống']],
+    ])
   })
 })

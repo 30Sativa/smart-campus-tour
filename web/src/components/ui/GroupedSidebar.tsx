@@ -102,7 +102,7 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-bold tracking-[-0.03em] text-[#0f172a]">CampusTour</span>
-            <span className="block truncate text-[10.5px] font-semibold tracking-[0.04em] text-[#9ca3af]">{subtitle}</span>
+            <span className="block truncate text-[10.5px] font-semibold tracking-[0.04em] text-muted">{subtitle}</span>
           </span>
         </Link>
         {/* The fold arrow: a bare chevron in the corner; on the rail it slides to the centre and turns round. */}

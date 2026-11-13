@@ -12,7 +12,7 @@ export type StaffNotice = {
 }
 
 const revision = (n: StaffNotification) => (n.revisionNumber != null ? ` (bản ${n.revisionNumber})` : '')
-const by = (n: StaffNotification) => (n.actorName ? `${n.actorName}` : 'Technical Staff')
+const by = (n: StaffNotification) => (n.actorName ? n.actorName : 'Kỹ thuật')
 const onRobot = (n: StaffNotification) => (n.robotCode ? ` trên robot ${n.robotCode}` : '')
 
 /**
