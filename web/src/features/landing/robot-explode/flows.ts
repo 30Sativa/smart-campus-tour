@@ -55,7 +55,7 @@ export const FLOW_NODES: readonly FlowNode[] = [
   { id: 'driver', label: 'Driver HBS86H ×2', detail: 'STEP / DIR', column: 'out', part: 'driver' },
   { id: 'motor', label: 'Động cơ 57HS22 ×2', detail: '2,2 N·m', column: 'out', part: 'motor' },
   { id: 'drv', label: 'Driver pan/tilt ×2', detail: 'STEP · nEN', column: 'out', part: 'drv' },
-  { id: 'pantilt', label: 'Đầu pan–tilt', detail: 'Pan 0,6° · tilt 1,8°/bước', column: 'out', part: 'pantilt' },
+  { id: 'pantilt', label: 'Đầu pan-tilt', detail: 'Pan 0,6° · tilt 1,8°/bước', column: 'out', part: 'pantilt' },
   { id: 'contactor', label: 'Contactor', detail: 'MOSFET · PA10', column: 'out', part: 'pcb' },
   { id: 'cloud', label: 'Trang tour', detail: 'WebRTC · học sinh', column: 'out', part: null },
 ]
@@ -164,7 +164,7 @@ export const FLOWS: readonly Flow[] = [
   {
     id: 'head',
     label: 'Quay đầu camera',
-    summary: 'Từ máy tính tới đầu pan–tilt',
+    summary: 'Từ máy tính tới đầu pan-tilt',
     steps: [
       {
         title: 'Máy tính chọn góc nhìn',
@@ -182,7 +182,7 @@ export const FLOWS: readonly Flow[] = [
       },
       {
         title: 'Đầu quay theo',
-        body: 'Motor trong [[cụm pan–tilt|command]] quay đầu tới góc đặt; [[kính Quest 3|command]] trên đầu quay theo nên góc nhìn của học sinh đổi theo.',
+        body: 'Motor trong [[cụm pan-tilt|command]] quay đầu tới góc đặt; [[kính Quest 3|command]] trên đầu quay theo nên góc nhìn của học sinh đổi theo.',
         signal: 'Mỗi bước: pan 0,6° (hộp số 3:1), tilt 1,8°. Giới hạn mềm pan ±170°, tilt ±18°.',
         links: [{ from: 'drv', to: 'pantilt', kind: 'command', label: 'Động cơ bước' }],
         parts: ['head', 'quest'],

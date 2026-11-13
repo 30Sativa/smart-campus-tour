@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../../components/ui/use-page-title'
 import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { AlertCircle, ArrowLeft, CheckCircle2, CircleAlert, Info, Lock, RotateCcw, TriangleAlert, X } from 'lucide-react'
@@ -14,9 +15,10 @@ export function RepPage({ children, narrow = false }: { children: ReactNode; nar
   return <div className="rep-page"><div className={`rep-wrap rep-view${narrow ? ' rep-wrap--narrow' : ''}`}>{children}</div></div>
 }
 
-export function RepPageHeader({ back, title, description, badges, action }: {
-  back?: { to: string; label: string }; kicker?: ReactNode; title: ReactNode; description?: ReactNode; badges?: ReactNode; action?: ReactNode
+export function RepPageHeader({ back, title, pageTitle, description, badges, action }: {
+  back?: { to: string; label: string }; kicker?: ReactNode; title: ReactNode; pageTitle?: string; description?: ReactNode; badges?: ReactNode; action?: ReactNode
 }) {
+  usePageTitle(pageTitle ?? (typeof title === 'string' ? title : ''))
   return <>
     {back && <Link to={back.to} className="rep-back"><ArrowLeft size={16} aria-hidden="true" />{back.label}</Link>}
     <header className="rep-header"><div className="rep-header-copy"><h1 className="rep-title">{title}</h1>{description && <p className="rep-lead">{description}</p>}{badges && <div className="rep-badges">{badges}</div>}</div>{action && <div className="rep-header-actions">{action}</div>}</header>

@@ -66,7 +66,7 @@ export const PART_GROUPS: readonly PartGroup[] = [
   { id: 'battery', label: 'Pin', body: 'Khối pin cấp điện cho động cơ, máy tính và các mạch trên robot.', color: '#2c4f7c', metalness: 0.2, roughness: 0.5, explode: { kind: 'up', distance: 0.22, spread: 0.8 }, rigid: true },
   { id: 'lidar', label: 'Cảm biến LiDAR', body: 'LiDAR trên nắp xe quét quanh robot để định vị, tránh vật cản và bám theo tuyến tham quan.', color: '#2b3138', metalness: 0.35, roughness: 0.4, explode: { kind: 'up', distance: 0.7 } },
   { id: 'column', label: 'Thân trụ', body: 'Trụ đứng nâng đầu camera lên ngang tầm mắt người.', color: '#eef2f4', metalness: 0.08, roughness: 0.55, explode: { kind: 'up', distance: 0.82 } },
-  { id: 'pantilt', label: 'Cụm đầu pan–tilt', body: 'Đế xoay, khung và hai trục pan/tilt cho phép xoay và gật đầu camera.', color: '#eef2f4', metalness: 0.08, roughness: 0.55, explode: { kind: 'stack', distance: 0.98, from: 0.85, gain: 1.6 } },
+  { id: 'pantilt', label: 'Cụm đầu pan-tilt', body: 'Đế xoay, khung và hai trục pan/tilt cho phép xoay và gật đầu camera.', color: '#eef2f4', metalness: 0.08, roughness: 0.55, explode: { kind: 'stack', distance: 0.98, from: 0.85, gain: 1.6 } },
   { id: 'head', label: 'Mô hình đầu', body: 'Giá đỡ hình đầu người, giữ kính Meta Quest 3 đúng tư thế đeo.', color: '#f5f7f9', metalness: 0.05, roughness: 0.6, explode: { kind: 'stack', distance: 0.98, from: 0.85, gain: 1.6 } },
   { id: 'quest', label: 'Kính Meta Quest 3', body: 'Kính đeo trên mô hình đầu truyền góc nhìn của chuyến đi tới học sinh.', color: '#e9ecef', metalness: 0.15, roughness: 0.45, explode: { kind: 'stack', distance: 1.12, from: 0.85, gain: 1.6 } },
 ]

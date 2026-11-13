@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../components/ui/use-page-title'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import Lenis from '@studio-freight/lenis'
 import { ArrowRight, Bot, MapPin, MessageCircle, Radio, Route, Video } from 'lucide-react'
@@ -33,6 +34,7 @@ const twinStatus = {
 } as const
 
 export default function PublicHomePage() {
+  usePageTitle('Trang chủ')
   const rootRef = useRef<HTMLDivElement>(null)
   const lenisRef = useRef<Lenis | null>(null)
   const handleLockScroll = useCallback((locked: boolean) => {

@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../components/ui/use-page-title'
 import { Link, useParams } from 'react-router'
 import { StudentHeader } from '../../features/student/components/StudentHeader'
 import { StudentInvitationPage } from '../../features/student/invitation/StudentInvitationPage'
@@ -14,10 +15,17 @@ export default function StudentTourPage() {
   return <div className="lp st st-x st--entry">
     <a className="st-skip" href="#student-main">Đến nội dung chính</a>
     <StudentHeader session={null} />
+    <EntryMessageTitle />
     <main id="student-main" tabIndex={-1} className="st-main st-entry-message st-ctn">
       <h1>Mở link trong email lời mời để vào buổi tham quan</h1>
       <p>Không thấy email? Hỏi thầy cô hoặc đại diện trường để gửi lại.</p>
       <p><Link className="st-entry-home" to="/">Về trang chủ</Link></p>
     </main>
   </div>
+}
+
+/** Names the tab for /tour without a Tour. Mounted after StudentHeader so its title is the one in front; on /tour/:id the header names the tab. */
+function EntryMessageTitle() {
+  usePageTitle('Vào buổi tham quan')
+  return null
 }

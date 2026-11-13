@@ -7,7 +7,7 @@ import type { PartGroupId } from './parts'
  */
 export const CALLOUTS: readonly { group: PartGroupId; label: string; key?: boolean }[] = [
   { group: 'quest', label: 'Kính Meta Quest 3', key: true },
-  { group: 'pantilt', label: 'Đầu pan–tilt' },
+  { group: 'pantilt', label: 'Đầu pan-tilt' },
   { group: 'lidar', label: 'Cảm biến LiDAR', key: true },
   { group: 'camera', label: 'Camera phía trước' },
   { group: 'pc', label: 'Mini PC Beelink', key: true },
