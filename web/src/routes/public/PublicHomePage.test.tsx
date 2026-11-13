@@ -85,6 +85,32 @@ describe('PublicHomePage', () => {
     expect(screen.getByText(/Mô hình hành trình minh họa/i)).toBeInTheDocument()
   })
 
+  it('tells students they join from the email invitation with a personal code, never a group code', () => {
+    renderPage()
+    expect(screen.getByText('Học sinh mở link trong email lời mời và nhập mã truy cập cá nhân. Không cần tài khoản.')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/mã đoàn/i)
+  })
+
+  it('serves the pictures as WebP at two widths, the hero eager and the rest lazy', () => {
+    const { container } = renderPage()
+    const pictures = Array.from(container.querySelectorAll<HTMLImageElement>('img[src^="/images/home-3d/"]'))
+    expect(pictures.map((img) => img.getAttribute('src'))).toEqual([
+      '/images/home-3d/hero-smartbus-1600.webp',
+      '/images/home-3d/journey-smartbus-1600.webp',
+      '/images/home-3d/student-1200.webp',
+      '/images/home-3d/twin-smartbus-1600.webp',
+      '/images/home-3d/closing-smartbus-1600.webp',
+    ])
+    for (const img of pictures) {
+      expect(img.getAttribute('srcset')?.split(',')).toHaveLength(2)
+      expect(img.getAttribute('sizes')).toBeTruthy()
+    }
+    const [hero, ...below] = pictures
+    expect(hero).not.toHaveAttribute('loading')
+    expect(hero).toHaveAttribute('fetchpriority', 'high')
+    below.forEach((img) => expect(img).toHaveAttribute('loading', 'lazy'))
+  })
+
   it('reveals the new theme from the theme button when view transitions are available', async () => {
     let finish: (() => void) | undefined
     const startViewTransition = vi.fn((update: () => void) => {

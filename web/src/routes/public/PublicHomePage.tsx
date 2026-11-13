@@ -7,17 +7,18 @@ import { CtaBand } from '../../features/landing/sections/CtaBand'
 import { SiteFooter } from '../../features/landing/sections/SiteFooter'
 import { AiPreview, CyclingStatus, JourneyRouteOverlay } from '../../features/landing/sections/JourneyParts'
 import { TechDrive } from '../../features/landing/sections/TechDrive'
+import { FULL_BLEED_SIZES, homeImage } from '../../features/landing/landing-images'
 import { EASE, ScrollTrigger, gsap, prefersReducedMotion, revealOnScroll } from '../../features/landing/landing-motion'
 import '../../features/landing/landing.css'
 import '../../features/landing/home-3d.css'
 
 const steps = [
   { number: '01', title: 'Đại diện đăng ký đoàn', body: 'Chọn buổi tham quan đã công bố và gửi danh sách học sinh để được duyệt.' },
-  { number: '02', title: 'Học sinh vào phòng chờ', body: 'Mở link được chia sẻ, nhập mã đoàn và đối chiếu họ tên, lớp.' },
+  { number: '02', title: 'Học sinh vào phòng chờ', body: 'Học sinh mở link trong email lời mời và nhập mã truy cập cá nhân. Không cần tài khoản.' },
   { number: '03', title: 'Cả lớp xem tour trực tiếp', body: 'Một robot đi qua các điểm dừng; mỗi học sinh theo dõi trên trình duyệt của mình.' },
 ]
 
-/** Labelled buildings on `twin-smartbus.png`, in percent of the picture. */
+/** Labelled buildings on `twin-smartbus-*.webp`, in percent of the picture. */
 const twinPins = [
   { label: 'Ký túc xá', x: 55, y: 18 },
   { label: 'Nhà ăn', x: 44.5, y: 61 },
@@ -234,7 +235,7 @@ export default function PublicHomePage() {
             </div>
             <div className="lp3-journey-grid">
               <div className="lp3-journey-art" data-reveal data-reveal-media>
-                <img src="/images/home-3d/journey-smartbus.png" alt="Mô hình 3D minh họa robot SmartBus đi qua ba điểm dừng trong khuôn viên" loading="lazy" decoding="async" />
+                <img {...homeImage('journey-smartbus')} sizes="(max-width: 1100px) 100vw, 66vw" alt="Mô hình 3D minh họa robot SmartBus đi qua ba điểm dừng trong khuôn viên" loading="lazy" decoding="async" />
                 <JourneyRouteOverlay />
                 <span className="lp3-art-note">Mô hình hành trình minh họa</span>
               </div>
@@ -258,7 +259,7 @@ export default function PublicHomePage() {
             <div className="lp3-browser" data-reveal data-reveal-media aria-label="Bố cục minh họa giao diện học sinh">
               <div className="lp3-browser-bar"><span className="lp3-browser-dots"><i /><i /><i /></span><span>CampusTour · Buổi tham quan</span><span className="lp3-browser-live">MINH HỌA</span></div>
               <div className="lp3-browser-content">
-                <div className="lp3-video"><img src="/images/home-3d/student.png" alt="Góc nhìn minh họa từ camera robot trong thư viện" loading="lazy" decoding="async" /><span>GÓC NHÌN MINH HỌA</span><b>Thư viện · Không gian học tập</b></div>
+                <div className="lp3-video"><img {...homeImage('student')} sizes="(max-width: 1100px) 100vw, 40vw" alt="Góc nhìn minh họa từ camera robot trong thư viện" loading="lazy" decoding="async" /><span>GÓC NHÌN MINH HỌA</span><b>Thư viện · Không gian học tập</b></div>
                 <div className="lp3-browser-side">
                   <div className="lp3-mini-map"><div className="lp3-panel-title"><MapPin size={16} /> Bản đồ campus (2D)</div><div className="lp3-map-art"><span className="lp3-map-route" /><i className="lp3-map-point lp3-map-point--one" /><i className="lp3-map-point lp3-map-point--two" /><i className="lp3-map-point lp3-map-point--three" /><b className="lp3-map-robot"><Bot size={17} /></b></div></div>
                   <AiPreview />
@@ -271,7 +272,7 @@ export default function PublicHomePage() {
         <section className="lp3-twin" id="gioi-thieu">
           <div className="lp3-twin-media" aria-hidden="true">
             <div className="lp3-twin-stage">
-              <img className="lp3-twin-image" src="/images/home-3d/twin-smartbus.png" alt="" loading="lazy" decoding="async" />
+              <img className="lp3-twin-image" {...homeImage('twin-smartbus')} sizes={FULL_BLEED_SIZES} alt="" loading="lazy" decoding="async" />
               {twinPins.map((pin) => (
                 <span className="lp3-pin" key={pin.label} style={{ left: `${pin.x}%`, top: `${pin.y}%` }}>
                   <span className="lp3-pin__card">{pin.label}</span>
