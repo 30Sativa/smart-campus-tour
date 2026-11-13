@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../api/client'
 import { useAuthStore } from '../../../stores/auth-store'
@@ -9,7 +9,7 @@ import type { RunningTour } from './hooks'
 import { useFleetConnection, useFleetTelemetrySync, type FleetRobot } from './fleet-telemetry'
 import { operationRefusal } from './operation-errors'
 import { checkVerdict } from './operation-labels'
-import { RobotTelemetryPanel } from './OperationParts'
+import { RobotStatusCard, RobotTelemetryPanel } from './OperationParts'
 
 type Handler = (...args: unknown[]) => void
 const hub = vi.hoisted(() => ({
@@ -167,5 +167,29 @@ describe('Quest headset wake/sleep (ADR-0056 addendum)', () => {
     refuse = true
     fireEvent.click(screen.getByRole('button', { name: 'Cho kính ngủ' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Tour đang chạy trên robot này; cho kính ngủ sẽ tắt hình của người xem.')
+  })
+})
+
+describe('compact robot card on the pre-start check', () => {
+  function CardProbe() {
+    useFleetTelemetrySync()
+    return <RobotStatusCard robotCode="amr_01" />
+  }
+
+  it('shows the readings as tiles, the fault up front and folds the source and position', async () => {
+    useAuthStore.getState().setAuth('jwt-1', { userId: 'u', username: 'lan', role: 'Staff' })
+    render(<QueryClientProvider client={new QueryClient()}><CardProbe /></QueryClientProvider>)
+    expect(await screen.findByText(/chưa gửi báo cáo nào/)).toBeInTheDocument()
+    act(() => hub.handlers.get('FleetUpdated')?.([{ ...ROBOT, localized: false, batteryPercent: 15, faultCode: 'MOTOR_LINK_LOST', syncFresh: false }]))
+
+    const tile = (label: string) => screen.getByText(label, { selector: 'dt' }).closest('div')!
+    expect(await screen.findByText('Chưa định vị')).toBeInTheDocument()
+    expect(within(tile('Thực thi')).getByText('Đang rảnh')).toBeInTheDocument()
+    expect(within(tile('Pin')).getByText('15%')).toBeInTheDocument()
+    expect(within(tile('Sẵn sàng di chuyển')).getByText('Chưa báo')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getAllByText(/^Báo cáo .*trước$/)[0]).toBeInTheDocument()
+    // Source and exact report age stay folded under "Xem chi tiết".
+    expect(screen.getByText('Báo cáo gần nhất').closest('details')).not.toHaveAttribute('open')
   })
 })
