@@ -11,6 +11,7 @@ import { REGISTRATION_CLOSED_LABEL, TOUR_STATE_FILTER_LABEL, TOUR_STATE_LABEL, i
 import { overdueStartLabel } from '../../features/administration/tours/overdue-start'
 import type { TourReservation, TourShift, TourState, TourSummary } from '../../features/administration/tours/types'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
+import { usePageTitle } from '../../components/ui/use-page-title'
 
 const dayKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -97,6 +98,7 @@ function useNarrowScreen() {
  * chosen Tour (`?tour=`) opens in a dialog in the middle of the screen.
  */
 export default function SchedulePage() {
+  usePageTitle('Lịch Tour')
   const [params, setParams] = useSearchParams()
   const today = campusDateKey(new Date())
   const day = params.get('date') ?? today
@@ -149,7 +151,7 @@ export default function SchedulePage() {
 
   const header = <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
     <div className="min-w-0">
-      <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch tour</h1>
+      <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch Tour</h1>
     </div>
     <Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>
   </header>

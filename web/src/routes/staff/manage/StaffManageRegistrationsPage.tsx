@@ -45,7 +45,7 @@ export default function StaffManageRegistrationsPage({ mode }: { mode: 'pending'
   for (const key of ['page', 'state', 'review']) sharedParams.delete(key)
   const sharedSearch = sharedParams.size ? `?${sharedParams}` : ''
   return <AdminPage>
-    <PageHeader eyebrow="Chuẩn bị Tour · Đăng ký đoàn" title={mode === 'pending' ? 'Đăng ký chờ duyệt' : 'Tất cả đăng ký'}
+    <PageHeader eyebrow="Tour & đăng ký" title="Đăng ký đoàn"
       description="Mở một đăng ký để xét duyệt từng dòng lời mời." />
     <nav aria-label="Chế độ xem đăng ký" className="mb-5 flex gap-1 rounded-xl border border-[#e2e8f0] bg-white p-1 sm:w-fit">
       <Link to={`/staff/manage/registrations/pending${sharedSearch}`} aria-current={mode === 'pending' ? 'page' : undefined} className={buttonClass(mode === 'pending' ? 'primary' : 'ghost')}>Chờ duyệt</Link>

@@ -26,7 +26,7 @@ export default function RobotPage() {
 
   return (
     <StaffPage>
-      <PageHeader eyebrow="Điều hành" title="Robot & Thiết bị" description="Robot chưa kết nối thì báo Kỹ thuật kiểm tra."
+      <PageHeader eyebrow="Vận hành" title="Robot & thiết bị" description="Robot chưa kết nối thì báo Kỹ thuật kiểm tra."
         action={<Link to="/staff/digital-twin" className={buttonClass('secondary', 'md')}><Cpu size={15} aria-hidden="true" />Mô phỏng 3D Digital Twin</Link>} />
       <section className={panelClass} aria-label="Danh sách robot">
         {robots.isPending ? <div className="p-4"><LoadingPanel /></div>

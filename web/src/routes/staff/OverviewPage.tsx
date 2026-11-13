@@ -88,7 +88,7 @@ export default function OverviewPage() {
 
   return (
     <StaffPage>
-      <PageHeader eyebrow="Staff" title="Tổng quan" description={`Ngày ${formatDate(`${today}T05:00:00Z`)}.`}
+      <PageHeader eyebrow="Vận hành" title="Tổng quan" description={`Ngày ${formatDate(`${today}T05:00:00Z`)}.`}
         action={<>
           <button type="button" aria-pressed={mine} onClick={() => setMine(!mine)} className={buttonClass(mine ? 'primary' : 'ghost')}>
             <UserRound size={15} aria-hidden="true" />Chỉ Tour tôi vận hành
