@@ -42,7 +42,8 @@ schema or grants. The manual Backend Database Schema Upgrade workflow remains
 for running the step on its own. A new schema version still needs its patch
 and upgrade branch added to `upgrade-db.sh` before it can be applied.
 
-Backend Verify uses a path classifier. Web/robot/digital-twin/AI-only commits do
+Backend Verify uses a path classifier (on main it diffs against the last deployed
+release, see Section 5). Web/robot/digital-twin/AI-only commits do
 not start backend verification, image builds or deployment. Backend verification
 and candidate API image build/smoke run independently in parallel. The DB tool
 image is rebuilt only when its SQL, bootstrap, Compose or Dockerfile inputs
@@ -319,8 +320,15 @@ including a pending manual dispatch. When a deploy starts it skips its release
 unless that SHA is still the head of main, so an older run finishing late can
 never roll the API back. If the newer head then fails CI, nothing newer is
 deployed; dispatch the last good SHA manually if needed. Backend Verify detects
-backend-owned paths: a web-only or unrelated push does not build/publish a backend
-release, and deploy preflight skips before entering the production environment
+backend-owned paths: on a PR it diffs against the base, and on main against the
+release last deployed (the `backend-deployed` marker Backend Deploy uploads after
+the SSH step), not against the push's parent. A web-only push therefore builds no
+backend release only while main has no undeployed backend change; one whose own
+run was cancelled by a newer push or skipped as superseded (PRs #283, #292 and
+#299 on 12–13/11/2026, which left EC2 on `803c9740`) is released by the next
+main push. With no usable marker it rebuilds everything. After a failed deploy or
+a manual rollback, the next main push redeploys main; revert on main to keep a
+rollback. Deploy preflight skips before entering the production environment
 when there is no verified release artifact. An actual backend release still has
 a brief API restart plus a pre-deploy backup; avoid releasing during a live tour. After the
 SSH step, the workflow polls `vars.BACKEND_HEALTH_URL` (default
