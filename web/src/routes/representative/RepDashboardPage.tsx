@@ -20,7 +20,6 @@ export default function RepDashboardPage() {
     onRetry={() => { void tours.refetch(); void registrations.refetch(); void pending.refetch() }} /></RepPage>
   if (!tours.data || !registrations.data || !pending.data) return <PageSkeleton />
 
-  const recent = registrations.data.data
   const images = tourImages(tours.data.data)
 
   const recent = groupRecentActivity(registrations.data.data)
@@ -45,8 +44,6 @@ export default function RepDashboardPage() {
       </RepSection>
       <RepSection className="rep-card" title="Buổi đang nhận đăng ký" action={<Link to="/dai-dien/buoi" className="rep-text-link">Xem tất cả buổi</Link>}>
         {tours.data.data.length ? <div className="rep-tour-list">{tours.data.data.map(tour => <TourCard key={tour.id} tour={tour} image={images.get(tour.id)} compact />)}</div>
-          : <EmptyState title="Chưa có buổi nhận đăng ký" description="Quay lại khi trường có lịch tham quan mới." />}
-        {tours.data.data.length ? <div className="rep-tour-list">{tours.data.data.map(tour => <TourCard key={tour.id} tour={tour} compact />)}</div>
           : <EmptyState variant="empty" title="Hiện chưa có buổi nhận đăng ký." />}
       </RepSection>
     </div>
