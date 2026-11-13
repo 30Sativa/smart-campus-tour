@@ -352,7 +352,12 @@ backend binding; never use them as fallback after a failed HTTP request.
     `StatTile`, `SearchField`, `Pagination`, `SummaryTile`, `CellIcon`,
     `LoadingPanel`, `PageSkeleton`, `Field`, `FilterChips`), `ui-classes.ts`,
     `use-pagination.ts`, `ConsoleSidebar.tsx`, `use-mobile-nav.ts`, and
-    `ConfirmationDialog.tsx`. `AdminPage`, `StaffPage`, Representative wrappers,
+    `ConfirmationDialog.tsx`. Also `date-time.ts` (every printed date/time, in
+    Asia/Ho_Chi_Minh), `DateInput.tsx` (dd/mm/yyyy field, native `yyyy-mm-dd`
+    value), `EmptyState.tsx` (`empty`/`noMatch`), `use-page-title.ts` (tab
+    title, and `useCurrentPageTitle()` for a shell's header line; `PageHeader`
+    calls it) and the `text-muted` class in `index.css` (4.5:1 on the console
+    grounds; not #94a3b8 for meaningful text). `AdminPage`, `StaffPage`, Representative wrappers,
     `ErrorPanel`, `EmptyPanel`, operational `StatusBadge`, and business status
     mappings stay feature-owned. `components/ui/status-tone.ts` owns only the
     neutral tone type and presentation classes; `features/staff/status.ts`
