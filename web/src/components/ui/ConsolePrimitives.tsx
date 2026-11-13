@@ -100,7 +100,7 @@ export function FilterChips<T extends string>({
           {option.count != null && (
             <span
               className={`text-[11px] font-semibold tabular-nums ${
-                value === option.value ? 'text-[#4a6fa5]/75' : 'text-[#94a3b8]'
+                value === option.value ? 'text-[#4a6fa5]/75' : 'text-muted'
               }`}
             >
               {option.count}
@@ -142,7 +142,7 @@ export function SummaryTile({
           {value}
         </span>
         <span className="block truncate text-[11.5px] text-[#64748b]">{label}</span>
-        {hint && <span className="block text-[11px] leading-4 text-[#94a3b8]">{hint}</span>}
+        {hint && <span className="block text-[11px] leading-4 text-muted">{hint}</span>}
       </span>
     </>
   )
@@ -240,7 +240,7 @@ export function StatTile({ to, onClick, pressed, icon: Icon, label, value, hint,
     <>
       <span className={`flex items-center gap-1.5 text-[11.5px] ${active ? STAT_TONE[tone] : 'text-[#64748b]'}`}><Icon size={13} aria-hidden="true" />{label}</span>
       <span className={`block text-xl leading-tight font-bold tracking-[-0.01em] tabular-nums transition-colors duration-300 ${active ? STAT_TONE[tone] : 'text-[#0f172a]'}`}>{value}</span>
-      {hint && <span className="block truncate text-[11.5px] text-[#94a3b8]">{hint}</span>}
+      {hint && <span className="block truncate text-[11.5px] text-muted">{hint}</span>}
     </>
   )
   const shape = 'block min-w-0 bg-white px-3.5 py-2.5'
@@ -264,7 +264,7 @@ export function SectionHeading({ title, note, action }: { title: string; note?: 
     <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
       <div className="flex min-w-0 items-baseline gap-2.5">
         <h2 className="text-sm font-semibold tracking-[-0.01em] text-[#0f172a]">{title}</h2>
-        {note && <p className="truncate text-xs text-[#94a3b8]">{note}</p>}
+        {note && <p className="truncate text-xs text-muted">{note}</p>}
       </div>
       {action}
     </div>
