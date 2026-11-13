@@ -89,7 +89,7 @@ export async function mockApi(page: Page, role: AccountRole | null, handlers: Ha
       return route.fulfill({ status: 404, headers: cors(request.headers().origin), contentType: 'application/json',
         body: JSON.stringify({ success: false, message: 'Not mocked', data: null, errors: null }) })
     }
-    let body: unknown = null
+    let body: unknown
     try { body = request.postDataJSON() } catch { body = request.postData() }
     const reply = typeof handler.reply === 'function' ? await handler.reply(route, url, body) : handler.reply
     if (reply.hang) return // never answered: the page has to give up on its own

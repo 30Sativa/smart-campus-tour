@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { E2E_API_ORIGIN, E2E_PORT as PORT } from './e2e/support/constants'
 
 /**
  * Screenshot smoke run (UX/UI batch 13/11/2026, WS-K).
@@ -8,10 +9,11 @@ import { defineConfig, devices } from '@playwright/test'
  * answered by `page.route` from `e2e/fixtures`, so no run ever reaches a real
  * backend. Screenshots and the HTML report land in `e2e-results/` (ignored by Git).
  */
-import { E2E_API_ORIGIN, E2E_PORT as PORT } from './e2e/support/constants'
 
 export default defineConfig({
   testDir: './e2e',
+  // Not *.spec.ts / *.test.ts: Vitest would collect those as unit tests.
+  testMatch: '**/*.e2e.ts',
   outputDir: './e2e-results/test-output',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
