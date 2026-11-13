@@ -3,6 +3,7 @@ import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { RepPageHeader } from '../../features/representative/components/RepUi'
 import { StudentHeader } from '../../features/student/components/StudentHeader'
+import StudentTourPage from '../../routes/student/StudentTourPage'
 
 // Pages outside the console PageHeader still name the browser tab (E2E found them all as "CampusTour").
 describe('page titles outside PageHeader', () => {
@@ -21,5 +22,10 @@ describe('page titles outside PageHeader', () => {
   it('StudentHeader names the tab after the Tour', () => {
     render(<MemoryRouter><StudentHeader session={null} tourName="Tham quan Thư viện" /></MemoryRouter>)
     expect(document.title).toBe('Tham quan Thư viện · CampusTour')
+  })
+
+  it('/tour without a Tour names the tab for the email-link message', () => {
+    render(<MemoryRouter><StudentTourPage /></MemoryRouter>)
+    expect(document.title).toBe('Vào buổi tham quan · CampusTour')
   })
 })
