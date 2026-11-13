@@ -1,7 +1,7 @@
 # ADR-0046: Admin resets a managed account's password
 
-- **Status:** Proposed 06/11/2026. Pending the repository owner's acceptance. **Not implemented**: no endpoint, schema
-  or web screen exists for it.
+- **Status:** Proposed 06/11/2026. **Superseded by ADR-0058** (13/11/2026), which implements the reset with a
+  different route, audit code and an account version check. This proposal was never implemented as written.
 - **Related:** `docs/architecture.md` §3.0.1 (account create, deactivate, reactivate) and §3.0.1a (account update,
   self-service password change, `AccountPasswordPolicy`); ADR-0020 (roles).
 

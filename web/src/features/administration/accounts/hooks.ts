@@ -26,6 +26,17 @@ export function useUpdateAccount() {
   return useMutation({ mutationFn: ({ id, fullName }: { id: string; fullName: string }) => accountsApi.update(id, fullName), onSuccess: invalidate })
 }
 
+/** onSettled: a stale version (409) also refreshes the list, so reopening the account gets the new version. */
+export function useResetAccountPassword() {
+  const invalidate = useInvalidateAccounts()
+  return useMutation({
+    mutationFn: ({ id, newPassword, expectedRowVersion }: { id: string; newPassword: string; expectedRowVersion: string }) =>
+      accountsApi.resetPassword(id, newPassword, expectedRowVersion),
+    onSettled: invalidate,
+    gcTime: 0,
+  })
+}
+
 export function useDeactivateAccount() {
   const invalidate = useInvalidateAccounts()
   return useMutation({ mutationFn: (id: string) => accountsApi.deactivate(id), onSuccess: invalidate })

@@ -34,7 +34,8 @@ public sealed class GetAccountsQueryHandler(IAccountRepository accountRepository
                 ResolveListRole(account.RoleCode, account.RoleCount),
                 account.IsActive,
                 account.CreatedAt,
-                account.UpdatedAt);
+                account.UpdatedAt,
+                AccountVersion.Encode(account.CreatedAt, account.UpdatedAt));
         }).ToArray();
 
         return new PagedResult<AccountListItemResponse>(items, page.Page, page.PageSize, page.TotalItems);

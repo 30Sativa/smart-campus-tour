@@ -1,11 +1,14 @@
 import { useRef, useState, type FormEvent } from 'react'
+import { KeyRound } from 'lucide-react'
+import { roleLabel } from '../../../../auth/roles'
 import { ConfirmationDialog } from '../../../../components/ui/ConfirmationDialog'
-import { inputClass, labelClass } from '../../../../components/ui/ui-classes'
+import { buttonClass, inputClass, labelClass } from '../../../../components/ui/ui-classes'
 import { notify } from '../../../../components/ui/toast-store'
 import { Notice } from '../../AdminUi'
 import { useUpdateAccount } from '../hooks'
 import { accountRequestError } from '../errors'
 import type { AccountListItem } from '../types'
+import { ResetPasswordDialog } from './ResetPasswordDialog'
 
 function LockedField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
@@ -23,12 +26,13 @@ function LockedField({ label, value, mono = false }: { label: string; value: str
   )
 }
 
-/** Edits the full name only. Username (login identity) and role are shown read-only on purpose. */
+/** Edits the full name and offers an Admin password reset. Username (login identity) and role are shown read-only on purpose. */
 export function EditAccountDialog({ account, onClose, onSaved }: { account: AccountListItem; onClose: () => void; onSaved: () => void }) {
   const formRef = useRef<HTMLFormElement>(null)
   const update = useUpdateAccount()
   const [fullName, setFullName] = useState(account.fullName)
   const [localError, setLocalError] = useState<string>()
+  const [resetting, setResetting] = useState(false)
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -44,10 +48,12 @@ export function EditAccountDialog({ account, onClose, onSaved }: { account: Acco
     })
   }
 
+  if (resetting) return <ResetPasswordDialog account={account} onClose={() => setResetting(false)} onDone={onSaved} />
+
   return (
     <ConfirmationDialog
       open
-      title="Sửa họ tên"
+      title="Sửa tài khoản"
       description="Tên đăng nhập là định danh đăng nhập, còn vai trò gắn với dữ liệu của tài khoản, nên cả hai được khóa sau khi tạo."
       confirmLabel="Lưu"
       busyLabel="Đang lưu…"
@@ -61,7 +67,7 @@ export function EditAccountDialog({ account, onClose, onSaved }: { account: Acco
         {update.isError && <Notice tone="danger">{accountRequestError(update.error, 'Không thể cập nhật tài khoản. Vui lòng thử lại.')}</Notice>}
         <dl className="grid grid-cols-2 gap-3 text-[13px]">
           <LockedField label="Tên đăng nhập" value={account.username} mono />
-          <LockedField label="Vai trò" value={account.role === 'TechnicalStaff' ? 'Technical Staff' : account.role ?? '-'} />
+          <LockedField label="Vai trò" value={account.role ? roleLabel(account.role) : '-'} />
         </dl>
         <p className="text-xs leading-5 text-[#64748b]">Tạo nhầm tên đăng nhập hoặc vai trò? Vô hiệu hóa tài khoản này rồi tạo tài khoản mới.</p>
         <div>
@@ -76,6 +82,12 @@ export function EditAccountDialog({ account, onClose, onSaved }: { account: Acco
             className={`${inputClass} mt-1.5`}
           />
           {localError && <p id="edit-account-full-name-error" role="alert" className="mt-1 text-xs text-[#b23e31]">{localError}</p>}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#f1f5f9] pt-4">
+          <p className="text-xs leading-5 text-[#475569]">Người dùng quên mật khẩu?</p>
+          <button type="button" onClick={() => setResetting(true)} className={buttonClass('secondary', 'sm')}>
+            <KeyRound size={14} aria-hidden="true" />Đặt lại mật khẩu
+          </button>
         </div>
       </form>
     </ConfirmationDialog>

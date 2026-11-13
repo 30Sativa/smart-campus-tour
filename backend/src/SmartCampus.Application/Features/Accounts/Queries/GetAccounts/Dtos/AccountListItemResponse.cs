@@ -7,4 +7,5 @@ public sealed record AccountListItemResponse(
     string? Role,
     bool IsActive,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? UpdatedAt);
+    DateTimeOffset? UpdatedAt,
+    string RowVersion);
