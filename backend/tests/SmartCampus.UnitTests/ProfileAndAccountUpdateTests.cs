@@ -4,6 +4,8 @@ using SmartCampus.Application.Common.Abstractions.Authentication;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Common.Models;
+using SmartCampus.Application.Features.Accounts;
+using SmartCampus.Application.Features.Accounts.Commands.ResetAccountPassword;
 using SmartCampus.Application.Features.Accounts.Commands.UpdateAccount;
 using SmartCampus.Application.Features.Accounts.Queries.GetAccounts;
 using SmartCampus.Application.Features.Accounts.Queries.GetAccounts.Dtos;
@@ -233,6 +235,129 @@ public sealed class ProfileAndAccountUpdateTests
     {
         await Assert.ThrowsAsync<NotFoundException>(() => new UpdateAccountCommandHandler(accounts, clock).Handle(
             new UpdateAccountCommand(Guid.NewGuid(), Guid.NewGuid(), new UpdateAccountRequest("x")), CancellationToken.None));
+    }
+
+    private ResetAccountPasswordCommandHandler ResetHandler() => new(accounts, hasher, clock);
+
+    private static ResetAccountPasswordCommand Reset(User target, Guid actor, string password, string? version = null) =>
+        new(target.Id, actor, new ResetAccountPasswordRequest(password, version ?? AccountVersion.Encode(target.CreatedAt, target.UpdatedAt)));
+
+    [Theory]
+    [InlineData("STAFF")]
+    [InlineData("TECHNICAL_STAFF")]
+    [InlineData("SCHOOL_REPRESENTATIVE")]
+    public async Task AdminReset_ManagedAccount_StoresNewHashRevokesEveryTokenAndAuditsWithoutPassword(string code)
+    {
+        var admin = AddUser("ADMIN");
+        var target = AddUser(code);
+        var before = AccountVersion.Encode(target.CreatedAt, target.UpdatedAt);
+
+        await ResetHandler().Handle(Reset(target, admin.Id, NewPassword), CancellationToken.None);
+
+        Assert.True(hasher.Verify(NewPassword, target.PasswordHash));
+        Assert.False(hasher.Verify(OldPassword, target.PasswordHash));
+        Assert.All(target.RefreshTokens, token => Assert.Equal(Now, token.RevokedAt));
+        Assert.Equal(Now, target.UpdatedAt);
+        Assert.NotEqual(before, AccountVersion.Encode(target.CreatedAt, target.UpdatedAt));
+        var audit = Assert.Single(accounts.Audits);
+        Assert.Equal("PASSWORD_RESET_BY_ADMIN", audit.Action);
+        Assert.Equal(admin.Id, audit.ActorUserId);
+        Assert.Equal("User", audit.EntityType);
+        Assert.Equal(target.Id.ToString("D"), audit.EntityId);
+        Assert.Null(audit.DataJson);
+        Assert.Null(audit.ResultCode);
+        Assert.DoesNotContain(NewPassword, string.Join('|', audit.Action, audit.EntityType, audit.EntityId));
+    }
+
+    [Fact]
+    public async Task AdminReset_StaleVersion_IsConflictAndChangesNothing()
+    {
+        var admin = AddUser("ADMIN");
+        var target = AddUser("STAFF");
+        var opened = AccountVersion.Encode(target.CreatedAt, target.UpdatedAt);
+        target.UpdatedAt = Now.AddMinutes(-1); // another writer changed the row after the list was loaded
+        var hash = target.PasswordHash;
+
+        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
+            ResetHandler().Handle(Reset(target, admin.Id, NewPassword, opened), CancellationToken.None));
+
+        Assert.Equal("STALE_VERSION", ex.Code);
+        Assert.Equal(hash, target.PasswordHash);
+        Assert.All(target.RefreshTokens, token => Assert.Null(token.RevokedAt));
+        Assert.Empty(accounts.Audits);
+    }
+
+    [Fact]
+    public async Task AdminReset_AdminTarget_IsForbidden_IncludingTheActorItself()
+    {
+        var admin = AddUser("ADMIN");
+        var otherAdmin = AddUser("ADMIN");
+        var hash = otherAdmin.PasswordHash;
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            ResetHandler().Handle(Reset(otherAdmin, admin.Id, NewPassword), CancellationToken.None));
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            ResetHandler().Handle(Reset(admin, admin.Id, NewPassword), CancellationToken.None));
+        Assert.Equal(hash, otherAdmin.PasswordHash);
+        Assert.All(otherAdmin.RefreshTokens, token => Assert.Null(token.RevokedAt));
+        Assert.Empty(accounts.Audits);
+    }
+
+    [Fact]
+    public async Task AdminReset_UnknownAccount_IsNotFound()
+    {
+        await Assert.ThrowsAsync<NotFoundException>(() => ResetHandler().Handle(
+            new ResetAccountPasswordCommand(Guid.NewGuid(), Guid.NewGuid(),
+                new ResetAccountPasswordRequest(NewPassword, AccountVersion.Encode(Now, null))), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AdminReset_InactiveAccount_IsResetButStaysInactive()
+    {
+        var admin = AddUser("ADMIN");
+        var target = AddUser("STAFF", active: false);
+
+        await ResetHandler().Handle(Reset(target, admin.Id, NewPassword), CancellationToken.None);
+
+        Assert.True(hasher.Verify(NewPassword, target.PasswordHash));
+        Assert.False(target.IsActive);
+    }
+
+    [Theory]
+    [InlineData("short", true)]
+    [InlineData("            ", true)]
+    [InlineData("a valid long password", false)]
+    public void AdminReset_Validator_AppliesThePasswordPolicyAndVersionShape(string password, bool weakPassword)
+    {
+        var version = weakPassword ? AccountVersion.Encode(Now, null) : "not-a-version";
+        var result = new ResetAccountPasswordCommandValidator().Validate(new ResetAccountPasswordCommand(
+            Guid.NewGuid(), Guid.NewGuid(), new ResetAccountPasswordRequest(password, version)));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == (weakPassword ? "NewPassword" : "ExpectedRowVersion"));
+        Assert.True(new ResetAccountPasswordCommandValidator().Validate(new ResetAccountPasswordCommand(
+            Guid.NewGuid(), Guid.NewGuid(), new ResetAccountPasswordRequest(NewPassword, AccountVersion.Encode(Now, null)))).IsValid);
+    }
+
+    [Fact]
+    public void AdminReset_Request_RejectsUnknownFields()
+    {
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ResetAccountPasswordRequest>(
+            """{"newPassword":"a valid long password","expectedRowVersion":"AAAAAAAAAAA=","role":"Admin"}""",
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    }
+
+    [Fact]
+    public void AccountVersion_NextStamp_IsMillisecondExactAndAlwaysNewer()
+    {
+        var created = new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero);
+        var previous = new DateTimeOffset(2026, 11, 5, 8, 0, 0, 500, TimeSpan.Zero);
+
+        Assert.Equal(previous.AddMilliseconds(1), AccountVersion.NextStamp(previous.AddTicks(30), created, previous));
+        Assert.Equal(previous.AddMilliseconds(1), AccountVersion.NextStamp(previous.AddSeconds(-5), created, previous));
+        Assert.Equal(previous.AddSeconds(1), AccountVersion.NextStamp(previous.AddSeconds(1).AddTicks(4321), created, previous));
+        Assert.Equal(AccountVersion.Encode(created, previous), AccountVersion.Encode(created, previous.AddTicks(9999)));
+        Assert.NotEqual(AccountVersion.Encode(created, previous), AccountVersion.Encode(created, null));
     }
 
     private sealed class Clock(DateTimeOffset now) : TimeProvider

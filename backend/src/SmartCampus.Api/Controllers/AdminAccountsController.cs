@@ -11,6 +11,7 @@ using SmartCampus.Application.Features.Accounts.Commands.CreateAccount;
 using SmartCampus.Application.Features.Accounts.Commands.CreateAccount.Dtos;
 using SmartCampus.Application.Features.Accounts.Commands.DeactivateAccount;
 using SmartCampus.Application.Features.Accounts.Commands.ReactivateAccount;
+using SmartCampus.Application.Features.Accounts.Commands.ResetAccountPassword;
 using SmartCampus.Application.Features.Accounts.Commands.UpdateAccount;
 using SmartCampus.Application.Features.Profile;
 using SmartCampus.Application.Features.Accounts.Queries.GetAccounts;
@@ -117,6 +118,21 @@ public sealed class AdminAccountsController(
         {
             Success = true,
             Message = "Account reactivated.",
+            Data = null
+        });
+    }
+
+    [HttpPost("{id:guid}/reset-password")]
+    public async Task<IActionResult> ResetPassword(
+        Guid id,
+        [FromBody] ResetAccountPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        await sender.Send(new ResetAccountPasswordCommand(id, User.GetRequiredUserId(), request), cancellationToken);
+        return Ok(new BaseResponse<object?>
+        {
+            Success = true,
+            Message = "Account password reset.",
             Data = null
         });
     }
