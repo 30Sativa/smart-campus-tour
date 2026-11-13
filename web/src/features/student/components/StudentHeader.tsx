@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../../components/ui/use-page-title'
 import { LogOut, Moon, Sun } from 'lucide-react'
 import { useThemeStore } from '../../../stores/theme-store'
 import type { StudentSession } from '../student-types'
@@ -31,6 +32,7 @@ export function StudentHeader({
   liveLabel = 'Trực tiếp',
   portalLabel = 'Cổng tham quan học sinh',
 }: StudentHeaderProps) {
+  usePageTitle(tourName)
   const theme = useThemeStore((state) => state.theme)
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
   const themeButton = (

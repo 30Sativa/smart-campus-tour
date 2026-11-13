@@ -96,7 +96,7 @@ export default function StartCheckPage() {
   const { tour: summary, reservation, operator } = detail
   const header = <>
     <TourStepper detail={detail} page="start" />
-    <PageHeader eyebrow="Kiểm tra trước khi bắt đầu" title={summary.name}
+    <PageHeader eyebrow={summary.name} title="Kiểm tra trước khi bắt đầu"
       description={`${slotText(summary.scheduledStartAt)} · ${detail.routeRevision?.name ?? summary.routeName} · robot ${reservation?.robotCode ?? 'chưa giữ'} · người vận hành ${operator?.fullName ?? 'chưa giao'}`}
       action={<TourStateBadge tour={summary} />} />
   </>

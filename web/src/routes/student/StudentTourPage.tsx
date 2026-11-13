@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../components/ui/use-page-title'
 import { Link, useParams } from 'react-router'
 import { StudentHeader } from '../../features/student/components/StudentHeader'
 import { StudentInvitationPage } from '../../features/student/invitation/StudentInvitationPage'
@@ -9,6 +10,7 @@ const TOUR_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** A Tour opens only from the link in an invitation email; the URL itself grants nothing. */
 export default function StudentTourPage() {
+  usePageTitle('Vào buổi tham quan')
   const { tourId } = useParams<{ tourId?: string }>()
   if (tourId && TOUR_ID.test(tourId)) return <StudentInvitationPage key={tourId.toLowerCase()} tourId={tourId.toLowerCase()} />
   return <div className="lp st st-x st--entry">
