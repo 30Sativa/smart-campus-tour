@@ -44,7 +44,7 @@ function RunningPicker() {
   const next = [...(today.data?.data ?? []), ...(upcoming.data?.data ?? [])].find(tour => tour.state === 'READY')
   const schedule = <Link to="/staff/schedule" className={buttonClass('secondary', 'sm')}><CalendarDays size={14} aria-hidden="true" />Xem lịch</Link>
   return <StaffPage>
-    <PageHeader eyebrow="Điều hành" title="Điều hành trực tiếp" description="Không có Tour nào đang chạy." />
+    <PageHeader eyebrow="Vận hành" title="Điều hành trực tiếp" description="Không có Tour nào đang chạy." />
     <section className={panelClass} aria-label="Tour đã chốt kế tiếp">
       {next ? <>
         <PanelHead title="Tour đã chốt kế tiếp" />
