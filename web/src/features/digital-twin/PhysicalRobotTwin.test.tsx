@@ -4,7 +4,7 @@ import type { RealtimeConnectionState } from '../../api/contracts/staff-realtime
 import { PhysicalRobotTwin } from './PhysicalRobotTwin'
 import type { RobotTelemetrySource } from './robot-telemetry'
 
-vi.mock('./TwinScene', () => ({ default: ({ robots, modelKey }: { robots: { stale: boolean }[]; modelKey: string }) => <div data-testid="physical-scene">{robots.length} robots {robots[0]?.stale ? 'stale' : ''} {modelKey}</div> }))
+vi.mock('./TwinScene', () => ({ default: ({ robots, modelKey, focus }: { robots: { stale: boolean }[]; modelKey: string; focus?: { position: number[] } | null }) => <div data-testid="physical-scene">{robots.length} robots {robots[0]?.stale ? 'stale' : ''} {modelKey} focus:{focus ? focus.position.map(n => n.toFixed(2)).join(',') : 'none'}</div> }))
 afterEach(() => vi.useRealTimers())
 
 describe('physical robot twin preparation', () => {
@@ -45,9 +45,14 @@ describe('physical robot twin preparation', () => {
     render(<PhysicalRobotTwin source={source} />)
     expect(await screen.findByTestId('physical-scene')).toHaveTextContent('1 robots')
     expect(screen.queryByText(/Chưa hiệu chỉnh/)).not.toBeInTheDocument()
+    expect(screen.getByTestId('physical-scene')).toHaveTextContent('focus:none')
+    // START, on the NVH floor: the camera is sent to the robot, not to a guess.
+    fireEvent.click(screen.getByRole('button', { name: 'Tìm robot' }))
+    expect(screen.getByTestId('physical-scene')).toHaveTextContent('focus:-4.16,0.20,-5.56')
     fireEvent.change(screen.getByRole('combobox', { name: 'Model 3D' }), { target: { value: 'legacy' } })
     expect(screen.getByTestId('physical-scene')).toHaveTextContent('0 robots')
     expect(screen.getByText(/Chưa hiệu chỉnh/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tìm robot' })).toBeDisabled()
   })
   it('ages a pose without waiting for a new sample', async () => {
     vi.useFakeTimers()

@@ -5,6 +5,7 @@ import { useNow } from '../staff/use-now'
 import { mapConfigFor } from './map-config'
 import { acceptObservation, observationView, type RobotObservation, type RobotTelemetrySource } from './robot-telemetry'
 import type { CampusModelKey } from './campus-model'
+import type { TwinFocus } from './TwinScene'
 
 const TwinScene = lazy(() => import('./TwinScene'))
 const connectionLabels: Record<RealtimeConnectionState, string> = {
@@ -29,6 +30,7 @@ export function PhysicalRobotTwin({ source }: { source?: RobotTelemetrySource })
   const [state, dispatch] = useReducer(reduce, initial)
   const [overhead, setOverhead] = useState(false)
   const [modelKey, setModelKey] = useState<CampusModelKey>('nvh-v3')
+  const [focus, setFocus] = useState<TwinFocus | null>(null)
   const now = useNow()
   useEffect(() => {
     dispatch({ type: 'reset' })
@@ -47,17 +49,20 @@ export function PhysicalRobotTwin({ source }: { source?: RobotTelemetrySource })
     scale: selectedMap.scene.robotScale, groundY: selectedMap.scene.groundY,
     color: view.stale ? '#8a98ac' : '#2f62b8', active: false, focused: true, stale: view.stale, headYaw: 0,
   }] : []
+  const robotPoint: [number, number, number] | null = robots.length && view.scenePose
+    ? [view.scenePose.position[0], selectedMap?.scene.groundY ?? 0, view.scenePose.position[2]] : null
   return <section className={`${panelClass} mb-5 overflow-hidden`} aria-label="Digital Twin robot thật">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#edf2fa] px-5 py-4">
       <div><h2 className="font-bold text-[#1f314d]">Robot thật</h2><p className="mt-1 text-sm text-[#71819a]">{connectionLabels[connection]} · {sample ? view.stale ? 'Dữ liệu vị trí cũ' : 'Đang nhận vị trí' : 'Chưa có vị trí robot'}</p></div>
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm text-[#40546f]">Model 3D <select className="rounded-lg border border-[#dce9fb] bg-white px-3 py-2" value={modelKey} onChange={(event) => setModelKey(event.target.value as CampusModelKey)}><option value="nvh-v3">NVH tầng 6 · V3</option><option value="legacy">Model OBJ trước</option></select></label>
-        <button type="button" className="rounded-lg border border-[#dce9fb] px-3 py-2 text-sm font-semibold text-[#40546f]" onClick={() => setOverhead((value) => !value)}>{overhead ? 'Góc nhìn 3D' : 'Nhìn từ trên'}</button>
+        <button type="button" className="rounded-lg border border-[#2f62b8] bg-[#2f62b8] px-3 py-2 text-sm font-semibold text-white disabled:border-[#dce9fb] disabled:bg-white disabled:text-[#9aa8bd]" disabled={!robotPoint} title={robotPoint ? 'Đưa camera tới robot' : 'Robot chưa có trên bản đồ 3D'} onClick={() => robotPoint && setFocus(previous => ({ id: (previous?.id ?? 0) + 1, position: robotPoint }))}>Tìm robot</button>
+        <button type="button" className="rounded-lg border border-[#dce9fb] px-3 py-2 text-sm font-semibold text-[#40546f]" onClick={() => { setFocus(null); setOverhead((value) => !value) }}>{overhead ? 'Góc nhìn 3D' : 'Nhìn từ trên'}</button>
       </div>
     </div>
     <div className="grid lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="h-[clamp(340px,55vh,600px)]" role="img" aria-label={robots.length ? 'Bản đồ 3D với vị trí robot thật' : 'Bản đồ 3D chưa đặt robot thật'}>
-        <Suspense fallback={<p className="p-8 text-sm text-[#71819a]">Đang tải bản đồ 3D…</p>}><TwinScene robots={robots} modelKey={modelKey} overhead={overhead} showLabels={false} /></Suspense>
+        <Suspense fallback={<p className="p-8 text-sm text-[#71819a]">Đang tải bản đồ 3D…</p>}><TwinScene robots={robots} modelKey={modelKey} overhead={overhead} showLabels={false} focus={focus} /></Suspense>
       </div>
       <aside className="border-t border-[#dce9fb] bg-[#f8fbff] p-5 lg:border-t-0 lg:border-l">
         <p className="text-sm font-semibold text-[#1f314d]">{sample?.robotId ?? 'Chờ robot kết nối'}</p>
