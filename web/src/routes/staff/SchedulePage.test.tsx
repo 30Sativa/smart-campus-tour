@@ -341,4 +341,19 @@ describe('Staff Tour calendar', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Thử lại/ }))
     expect(screen.queryByText('Tour sáng thật')).not.toBeInTheDocument()
   })
+
+  it('hides cancelled Tours by default and keeps "Hiện cả đã huỷ" on the address', async () => {
+    tourRows = [session, { ...evening, state: 'CANCELLED', name: 'Tour đã huỷ cũ' }]
+    show('/staff/schedule?date=2099-01-06&view=day')
+    await screen.findAllByRole('article')
+    expect(screen.queryByText('Tour đã huỷ cũ')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hiện cả đã huỷ' }))
+    expect(await screen.findByText('Tour đã huỷ cũ')).toBeInTheDocument()
+    expect(screen.getByTestId('location').textContent).toContain('huy=1')
+    expect(screen.getByTestId('location').textContent).toContain('view=day')
+    cleanup()
+    show('/staff/schedule?date=2099-01-06&view=day&huy=1')
+    expect(await screen.findByText('Tour đã huỷ cũ')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Hiện cả đã huỷ' })).toBeChecked()
+  })
 })

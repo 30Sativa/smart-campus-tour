@@ -1,13 +1,14 @@
 import { Link, useSearchParams } from 'react-router'
 import { FilterChips, LoadingPanel, PanelHead, panelClass } from '../../../components/ui/ConsolePrimitives'
+import { campusDateKey, formatDate, formatTime } from '../../../components/ui/date-time'
+import { EmptyState } from '../../../components/ui/EmptyState'
 import { buttonClass, rowClass, tdClass, thClass } from '../../../components/ui/ui-classes'
-import { campusDate, campusDay, campusTime } from '../../administration/tours/tour-calendar'
 import { tourError } from '../../administration/tours/tour-messages'
 import type { TourState, TourSummary } from '../../administration/tours/types'
-import { EmptyPanel, ErrorPanel } from '../StaffUi'
+import { ErrorPanel } from '../StaffUi'
 import { useFleetTelemetry, type FleetSnapshot } from './fleet-telemetry'
 import { useDayTours, useUpcomingTours } from './hooks'
-import { operatorLabel, useMineFilter } from './mine'
+import { noTourToday, operatorLabel, useMineFilter } from './mine'
 import { ToneBadge, TourStateBadge } from './OperationParts'
 import { nextStep } from './next-step'
 
@@ -22,42 +23,43 @@ const matches = (tour: TourSummary, view: View) => view === 'all' || (view === '
 /** Today's Tours, filtered by state (`?view=`), each with its robot's own report and its one next step. */
 export function TodayTours() {
   const [params, setParams] = useSearchParams()
-  const today = campusDay(new Date())
+  const today = campusDateKey(new Date())
   const tours = useDayTours(today)
-  const upcoming = useUpcomingTours(today)
   const { keep, mine } = useMineFilter()
   const asked = params.get('view') as View | null
   const view: View = asked && VIEWS.some(item => item.value === asked) ? asked : 'all'
   const all = (tours.data?.data ?? []).filter(keep)
   const rows = all.filter(tour => matches(tour, view))
-  const ahead = (upcoming.data?.data ?? []).filter(tour => !ENDED.includes(tour.state) && keep(tour))
-  const none = mine ? 'Hôm nay bạn không vận hành Tour nào.' : 'Hôm nay không có Tour nào.'
   const options = VIEWS.map(item => tours.isSuccess ? { ...item, label: `${item.label} (${all.filter(tour => matches(tour, item.value)).length})` } : item)
+  const setView = (value: View) => setParams(current => { const next = new URLSearchParams(current); if (value === 'all') next.delete('view'); else next.set('view', value); return next }, { replace: true })
+
+  // No Tour today: one line, no empty frame and no row of "(0)" filters.
+  if (tours.isSuccess && all.length === 0) return <p role="status" aria-label="Tour hôm nay" className="rounded-xl border border-[#e2e8f0] bg-white px-4 py-3 text-[13px] text-[#475569]">{noTourToday(mine)}</p>
 
   return <section className={panelClass} aria-label="Tour hôm nay">
-    <PanelHead title={`Hôm nay, ${campusDate(`${today}T05:00:00Z`)}`} description="Mỗi Tour có một bước tiếp theo theo trạng thái của nó." />
+    <PanelHead title={`Hôm nay, ${formatDate(`${today}T05:00:00Z`)}`} />
     <div className="border-b border-[#f1f5f9] px-3.5 py-3">
       <FilterChips label="Lọc theo trạng thái" value={view} options={options}
-        onChange={value => setParams(current => { const next = new URLSearchParams(current); if (value === 'all') next.delete('view'); else next.set('view', value); return next }, { replace: true })} />
+        onChange={setView} />
     </div>
     {tours.isPending ? <div className="p-4"><LoadingPanel /></div>
       : tours.isError ? <div className="p-4"><ErrorPanel error={new Error(tourError(tours.error))} onRetry={() => void tours.refetch()} /></div>
-      : rows.length === 0 ? <div className="p-4"><EmptyPanel>{all.length ? 'Không có Tour nào ở trạng thái này hôm nay.' : ahead.length ? `${none} Các Tour sắp tới ở bên dưới.` : none}</EmptyPanel></div>
+      : rows.length === 0 ? <EmptyState variant="noMatch" title="Không có Tour nào ở trạng thái này hôm nay." onClear={() => setView('all')} />
       : <TourTable label="Tour hôm nay" tours={rows} />}
   </section>
 }
 
 /** The not-ended Tours of the next week, so a Tour on a later day is still one click away. */
 export function UpcomingTours() {
-  const upcoming = useUpcomingTours(campusDay(new Date()))
+  const upcoming = useUpcomingTours(campusDateKey(new Date()))
   const { keep } = useMineFilter()
   const ahead = (upcoming.data?.data ?? []).filter(tour => !ENDED.includes(tour.state) && keep(tour))
   return <section className={`${panelClass} mt-4`} aria-label="Tour sắp tới">
-    <PanelHead title="Sắp tới" description="Tour chưa kết thúc trong 7 ngày tới. Kiểm tra trước khi bắt đầu mở được từ đây, nhưng chỉ bắt đầu được khi tới giờ."
+    <PanelHead title="Sắp tới" description="Tour chưa kết thúc trong 7 ngày tới."
       action={<Link to="/staff/schedule" className={buttonClass('ghost', 'sm')}>Xem lịch</Link>} />
     {upcoming.isPending ? <div className="p-4"><LoadingPanel /></div>
       : upcoming.isError ? <div className="p-4"><ErrorPanel error={new Error(tourError(upcoming.error))} onRetry={() => void upcoming.refetch()} /></div>
-      : ahead.length === 0 ? <div className="p-4"><EmptyPanel>Không có Tour nào trong 7 ngày tới.</EmptyPanel></div>
+      : ahead.length === 0 ? <EmptyState variant="empty" title="Chưa có Tour nào trong 7 ngày tới." />
       : <TourTable label="Tour sắp tới" tours={ahead} dated />}
   </section>
 }
@@ -84,8 +86,8 @@ function TourTable({ label, tours, dated = false }: { label: string; tours: Tour
       const step = nextStep(tour)
       const robotCode = tour.reservation?.robotCode
       return <tr key={tour.id} className={rowClass}>
-        <td className={`${tdClass} font-semibold tabular-nums whitespace-nowrap`}>{dated && `${campusDate(tour.scheduledStartAt).slice(0, 5)} · `}{campusTime(tour.scheduledStartAt)}</td>
-        <td className={tdClass}><span className="block font-semibold text-[#0f172a]">{tour.name}</span><span className="block text-xs text-[#64748b]">{[tour.routeName, operatorLabel(tour, isMine(tour))].filter(Boolean).join(' · ')}</span></td>
+        <td className={`${tdClass} font-semibold tabular-nums whitespace-nowrap`}>{dated && `${formatDate(tour.scheduledStartAt).slice(0, 5)} · `}{formatTime(tour.scheduledStartAt)}</td>
+        <td className={tdClass}><Link to={`/staff/manage/tours/${tour.id}`} className="block font-semibold text-[#0f172a] underline-offset-2 hover:text-[#2d719e] hover:underline focus-visible:outline-2 focus-visible:outline-[#2d719e]">{tour.name}</Link><span className="block text-xs text-[#64748b]">{[tour.routeName, operatorLabel(tour, isMine(tour))].filter(Boolean).join(' · ')}</span></td>
         <td className={tdClass}>{robotCode ? <span className="flex flex-col items-start gap-1"><span className="font-mono text-xs">{robotCode}</span>{!dated && !ENDED.includes(tour.state) && <RobotReport robotCode={robotCode} snapshot={snapshot} />}</span> : '-'}</td>
         <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>
         <td className={tdClass}><TourStateBadge tour={tour} /></td>

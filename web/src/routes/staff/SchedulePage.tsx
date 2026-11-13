@@ -6,11 +6,12 @@ import { Drawer } from '../../components/ui/Drawer'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { useTour, useTourCalendar, useTourShifts } from '../../features/administration/tours/hooks'
 import { TourListPanel } from '../../features/administration/tours/TourListPanel'
-import { campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
+import { campusDateKey, formatDate, formatTime } from '../../components/ui/date-time'
 import { REGISTRATION_CLOSED_LABEL, TOUR_STATE_FILTER_LABEL, TOUR_STATE_LABEL, isRegistrationClosed, openSeatsLabel, tourError, tourStateLabel } from '../../features/administration/tours/tour-messages'
 import { overdueStartLabel } from '../../features/administration/tours/overdue-start'
 import type { TourReservation, TourShift, TourState, TourSummary } from '../../features/administration/tours/types'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
+import { usePageTitle } from '../../components/ui/use-page-title'
 
 const dayKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -57,7 +58,7 @@ const durationOf = (hold: TourReservation | null | undefined) => (hold?.expected
 /** Start and end when the length is known, otherwise the start alone. */
 const span = (tour: TourSummary, hold = tour.reservation) => {
   const seconds = durationOf(hold)
-  return seconds ? `${campusTime(tour.scheduledStartAt)} - ${campusTime(new Date(new Date(tour.scheduledStartAt).getTime() + seconds * 1000).toISOString())}` : campusTime(tour.scheduledStartAt)
+  return seconds ? `${formatTime(tour.scheduledStartAt)} - ${formatTime(new Date(new Date(tour.scheduledStartAt).getTime() + seconds * 1000).toISOString())}` : formatTime(tour.scheduledStartAt)
 }
 
 const LEAD_TIME_MS = 72 * 3600_000
@@ -69,7 +70,7 @@ const openShift = (shift: TourShift, tours: TourSummary[], now: number) =>
     // No hold means no known length, so the Tour takes only the shift it starts in.
     : startsIn(tour, shift)))
 const createHref = (day: string, shift: TourShift) => `/staff/manage/tours/new?kind=normal&date=${day}&shift=${encodeURIComponent(shift.code)}`
-const shiftSpan = (shift: TourShift) => `${campusTime(shift.startsAt)}-${campusTime(shift.endsAt)}`
+const shiftSpan = (shift: TourShift) => `${formatTime(shift.startsAt)}-${formatTime(shift.endsAt)}`
 /** `2099-01-05` as people read it: 05/01/2099. */
 const readableDay = (day: string) => day.split('-').reverse().join('/')
 const createLabel = (day: string, shift: TourShift) => `Tạo Tour ${shift.name} ngày ${readableDay(day)}`
@@ -97,13 +98,16 @@ function useNarrowScreen() {
  * chosen Tour (`?tour=`) opens in a dialog in the middle of the screen.
  */
 export default function SchedulePage() {
+  usePageTitle('Lịch Tour')
   const [params, setParams] = useSearchParams()
-  const today = campusDay(new Date())
+  const today = campusDateKey(new Date())
   const day = params.get('date') ?? today
   const view = params.get('view') === 'day' || params.get('view') === 'list' ? params.get('view')! : 'week'
   const robotFilter = params.get('robot') ?? ''
   const stateFilter = (STATES as string[]).includes(params.get('state') ?? '') ? params.get('state') as TourState : ''
   const query = params.get('q') ?? ''
+  // Cancelled Tours stay out of the week and day unless asked for (`?huy=1`) or picked by the state filter.
+  const showCancelled = params.get('huy') === '1'
   const monday = weekStart(day)
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
   const tours = useTourCalendar(week[0], week[6], view !== 'list')
@@ -111,7 +115,7 @@ export default function SchedulePage() {
   const narrow = useNarrowScreen()
   // On a narrow screen the three filters fold behind one button, so the week starts higher up.
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const activeFilters = [robotFilter, stateFilter, query.trim()].filter(Boolean).length
+  const activeFilters = [robotFilter, stateFilter, query.trim(), showCancelled].filter(Boolean).length
   const shiftsOf = (key: string) => [...(shifts.data?.days.find(item => item.date === key)?.shifts ?? [])].sort((a, b) => a.time.localeCompare(b.time))
   // Read once per mount: whether a shift is past the 72-hour mark does not need to tick.
   const [now] = useState(() => Date.now())
@@ -121,10 +125,11 @@ export default function SchedulePage() {
   const filtered = all.filter(tour =>
     (!robotFilter || tour.reservation?.robotCode === robotFilter) &&
     (!stateFilter || tour.state === stateFilter) &&
+    (showCancelled || stateFilter === 'CANCELLED' || tour.state !== 'CANCELLED') &&
     (!query.trim() || `${tour.name} ${tour.routeName}`.toLowerCase().includes(query.trim().toLowerCase())))
-  const inDay = (key: string) => filtered.filter(tour => campusDay(tour.scheduledStartAt) === key)
+  const inDay = (key: string) => filtered.filter(tour => campusDateKey(tour.scheduledStartAt) === key)
   // Whether a shift is free does not depend on the filters, so it reads every Tour of the day.
-  const isOpen = (key: string, item: TourShift) => openShift(item, all.filter(tour => campusDay(tour.scheduledStartAt) === key), now)
+  const isOpen = (key: string, item: TourShift) => openShift(item, all.filter(tour => campusDateKey(tour.scheduledStartAt) === key), now)
   const shown = inDay(day)
   const selected = all.find(tour => tour.id === params.get('tour'))
 
@@ -139,15 +144,14 @@ export default function SchedulePage() {
 
   const heading = view === 'week'
     ? `${dayMonth(week[0]).slice(0, 2)} - ${dayMonth(week[6])}/${week[6].slice(0, 4)}`
-    : new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${day}T12:00:00`))
+    : formatDate(`${day}T05:00:00Z`, { weekday: 'long' })
   const step = view === 'week' ? 7 : 1
   const robotCount = new Set(filtered.map(tour => tour.reservation?.robotCode).filter(Boolean)).size
   const failed = tours.isError ? tours.error : shifts.isError ? shifts.error : null
 
   const header = <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
     <div className="min-w-0">
-      <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch tour</h1>
-      <p className="mt-1 text-sm text-[#718096]">{view === 'list' ? 'Mọi Tour theo thời gian: sắp diễn ra, đang chạy, đã kết thúc.' : 'Tour đã lên lịch và thời gian giữ robot.'}</p>
+      <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch Tour</h1>
     </div>
     <Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>
   </header>
@@ -203,6 +207,10 @@ export default function SchedulePage() {
           <label className={`${control} flex min-w-48 flex-1 items-center gap-2 focus-within:ring-2 focus-within:ring-[#5b9dc9]`}>
             <Search size={16} aria-hidden="true" className="shrink-0 text-[#a0aec0]" />
             <input type="search" aria-label="Tìm Tour" value={query} onChange={event => set({ q: event.target.value || null })} placeholder="Tìm Tour…" className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#a0aec0]" />
+          </label>
+          <label className="flex min-h-10 items-center gap-2 px-1 text-sm text-[#2d3748]">
+            <input type="checkbox" checked={showCancelled} onChange={event => set({ huy: event.target.checked ? '1' : null })} className="size-4 accent-[#2563eb]" />
+            Hiện cả đã huỷ
           </label>
         </div>}
 
@@ -307,7 +315,7 @@ function TourCard({ tour, outside = false, showRobot, onSelect }: { tour: TourSu
   return <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" title={tour.name}
     aria-label={`${outside ? 'Ngoài ca: ' : ''}${tour.isShortNotice ? 'Tour nhanh: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}${robot ? `, robot ${robot}` : ''}`}
     className={`block w-full rounded-lg border px-1.5 py-1 text-left transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${chipOf(tour, now)} ${focus}`}>
-    <span className="flex flex-wrap items-center gap-x-1.5 text-[11px] tabular-nums opacity-80">{tour.isShortNotice && <QuickMark />}{campusTime(tour.scheduledStartAt)}{robot && <span className="font-mono whitespace-nowrap">{robot}</span>}</span>
+    <span className="flex flex-wrap items-center gap-x-1.5 text-[11px] tabular-nums opacity-80">{tour.isShortNotice && <QuickMark />}{formatTime(tour.scheduledStartAt)}{robot && <span className="font-mono whitespace-nowrap">{robot}</span>}</span>
     <span className={`line-clamp-2 text-xs font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
     <span className="mt-1 inline-block rounded bg-white/70 px-1 text-[10.5px] font-semibold">{tourStateLabel(tour, now)}</span>
     {overdue && <span className="mt-1 block text-[10.5px] font-semibold text-[#9d3428]">{overdue}</span>}
@@ -360,7 +368,7 @@ function TourRows({ tours, outside = false, onSelect }: { tours: TourSummary[]; 
       className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-left text-sm transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${chipOf(tour, now)} ${focus}`}>
       <span className="flex items-center gap-1.5 font-semibold tabular-nums">{tour.isShortNotice && <QuickMark />}{span(tour)}</span>
       <span className="min-w-0 flex-1 basis-48"><span className={`block font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
-        <span className="block text-xs break-words opacity-80">{tour.routeName} · {tour.reservation ? `robot ${tour.reservation.robotCode} · giữ ${campusTime(tour.reservation.startsAt)} - ${campusTime(tour.reservation.endsAt)}` : 'không giữ robot'}</span></span>
+        <span className="block text-xs break-words opacity-80">{tour.routeName} · {tour.reservation ? `robot ${tour.reservation.robotCode} · giữ ${formatTime(tour.reservation.startsAt)} - ${formatTime(tour.reservation.endsAt)}` : 'không giữ robot'}</span></span>
       <span className="rounded bg-white/70 px-1.5 text-[11px] font-semibold whitespace-nowrap">{tourStateLabel(tour, now)}</span>
     </button>
   </li>)}</ul>
@@ -382,11 +390,11 @@ function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void 
   const loading = ended && detail.isPending
   const endReason = ended ? detail.data?.endReason : null
   const rows: Array<[typeof Clock, string, ReactNode]> = [
-    [CalendarDays, 'Ngày tổ chức', new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(tour.scheduledStartAt))],
+    [CalendarDays, 'Ngày tổ chức', formatDate(tour.scheduledStartAt, { weekday: 'long' })],
     ...(tour.isShortNotice ? [[Zap, 'Loại Tour', 'Tour nhanh, hạn Start là giờ ghi trên lịch'] as [typeof Clock, string, ReactNode]] : []),
     [Clock, 'Thời gian Tour', span(tour, hold)],
     [Bot, 'Robot', hold?.robotCode ?? (loading ? 'Đang tải…' : '-')],
-    [CalendarDays, hold?.releasedAt ? 'Khung giữ đã trả' : 'Giữ chỗ robot', hold ? `${campusTime(hold.startsAt)} - ${campusTime(hold.endsAt)}` : loading ? 'Đang tải…' : 'Không giữ robot'],
+    [CalendarDays, hold?.releasedAt ? 'Khung giữ đã trả' : 'Giữ chỗ robot', hold ? `${formatTime(hold.startsAt)} - ${formatTime(hold.endsAt)}` : loading ? 'Đang tải…' : 'Không giữ robot'],
     ...(seconds ? [[Timer, 'Thời lượng dự kiến', `${Math.round(seconds / 60)} phút`] as [typeof Clock, string, ReactNode]] : []),
     [MapIcon, 'Tuyến', tour.routeName],
     [Users, 'Đăng ký', `${tour.registrationCount} đoàn`],

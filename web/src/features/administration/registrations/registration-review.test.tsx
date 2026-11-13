@@ -94,6 +94,45 @@ beforeEach(() => {
 })
 afterEach(() => { expect(unexpectedMutations).toEqual([]); clients.forEach(c => c.clear()); useAuthStore.getState().logout(); vi.unstubAllGlobals(); focusManager.setFocused(undefined) })
 
+describe('Staff registration list', () => {
+  const emptyList = () => vi.mocked(fetch).mockImplementation(async (input: string | URL | Request) => {
+    const url = new URL(String(input), 'https://api.example.test'); requests.push(url)
+    return response([], 200, { pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } })
+  })
+
+  it('says there is nothing yet when no filter is on, and offers to clear only while filtering', async () => {
+    emptyList()
+    renderAt('/staff/manage/registrations/pending')
+    expect(await screen.findByText('Chưa có đăng ký nào chờ duyệt.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Xóa bộ lọc' })).not.toBeInTheDocument()
+  })
+
+  it('says nothing matches while a search is on, and clears it', async () => {
+    emptyList()
+    renderAt('/staff/manage/registrations?q=abc', 'all')
+    expect(await screen.findByText('Không có kết quả phù hợp')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }))
+    expect(await screen.findByText('Chưa có đăng ký nào.')).toBeInTheDocument()
+  })
+
+  it('names the zone once above the table, tags a registration whose Tour is over, and joins no stages with arrows', async () => {
+    registration.summary.tourState = 'CANCELLED'
+    renderAt('/staff/manage/registrations', 'all')
+    const table = await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })
+    expect(within(table).getByText('Tour đã huỷ')).toBeInTheDocument()
+    expect(table).not.toHaveTextContent('UTC+7')
+    expect(screen.getAllByText(/UTC\+7/)).toHaveLength(1)
+    const chips = screen.getByRole('group', { name: 'Lọc trạng thái đăng ký' })
+    expect(chips.querySelector('svg')).toBeNull()
+  })
+
+  it('tags a registration of a finished Tour', async () => {
+    registration.summary.tourState = 'COMPLETED'
+    renderAt('/staff/manage/registrations', 'all')
+    expect(within(await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })).getByText('Tour đã kết thúc')).toBeInTheDocument()
+  })
+})
+
 describe('Staff registration review boundary', () => {
   it('loads the Staff API and does not expose the legacy Admin-only direct email correction', async () => {
     renderAt('/staff/manage/registrations?review=registration', 'all')
@@ -111,7 +150,7 @@ describe('Staff registration review boundary', () => {
     await waitFor(() => expect(requests.some(u => u.searchParams.get('state') === 'APPROVED' && u.searchParams.get('page') === '1')).toBe(true))
     expect(screen.queryByRole('button', { name: 'Gửi thông tin' })).not.toBeInTheDocument()
     expect(screen.queryByText('Đã gửi thông tin')).not.toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Tour từ ngày (UTC+7)'), { target: { value: '2026-10-08' } })
+    fireEvent.change(screen.getByLabelText('Tour từ ngày'), { target: { value: '08/10/2026' } })
     await waitFor(() => expect(requests.some(u => u.searchParams.get('from') === '2026-10-07T17:00:00.000Z')).toBe(true))
   })
 
@@ -290,7 +329,7 @@ describe('Staff registration review boundary', () => {
     expect(await screen.findByText('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.')).toBeInTheDocument()
     expect(requests.some(u => u.pathname === '/api/staff/manage/registrations')).toBe(false)
     expect(screen.queryByText('Không thể tải danh sách đăng ký.')).not.toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Tour đến ngày (UTC+7)'), { target: { value: '2026-10-10' } })
+    fireEvent.change(screen.getByLabelText('Tour đến ngày'), { target: { value: '10/10/2026' } })
     await waitFor(() => expect(requests.some(u => u.searchParams.get('to') === '2026-10-10T17:00:00.000Z')).toBe(true))
   })
 

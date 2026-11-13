@@ -119,4 +119,33 @@ describe('Staff home', () => {
     expect(within(today).getByText('Chưa báo cáo')).toBeInTheDocument()
     expect(within(today).queryByText(/sẵn sàng/i)).not.toBeInTheDocument()
   })
+
+  it('with no Tour today, says so on the one status line and goes straight to the coming days, with no "(0)" filters', async () => {
+    today = []
+    show()
+    const line = await screen.findByText(/^Không có Tour nào đang chạy\. Hôm nay không có Tour nào\. Dữ liệu Tour đọc lúc \d{2}:\d{2}, tự cập nhật\./)
+    expect(line).toHaveAttribute('role', 'status')
+    expect(screen.queryByRole('region', { name: 'Tour hôm nay' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/\(0\)/)).not.toBeInTheDocument()
+    expect(screen.getAllByText(/Hôm nay không có Tour nào/)).toHaveLength(1)
+    expect(screen.getByRole('region', { name: 'Tour sắp tới' })).toBeInTheDocument()
+  })
+
+  it('links each Tour name to its Tour page', async () => {
+    show()
+    const table = await screen.findByRole('table', { name: 'Tour hôm nay' })
+    expect(within(table).getByRole('link', { name: 'Tour chiều' })).toHaveAttribute('href', '/staff/manage/tours/tour-ready')
+  })
+
+  it('folds a queue with nothing in it to one line', async () => {
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost')
+      if (url.searchParams.get('from') && url.searchParams.get('size') === '100') return page(today)
+      return page([])
+    })
+    show()
+    const queue = screen.getByRole('region', { name: 'Hàng chờ chuẩn bị' })
+    expect(await within(queue).findByText('Không có việc chờ.')).toBeInTheDocument()
+    expect(within(queue).queryByRole('group')).not.toBeInTheDocument()
+  })
 })
