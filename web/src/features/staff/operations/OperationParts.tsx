@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react'
+import { Bot, ChevronDown, TriangleAlert } from 'lucide-react'
+import { PanelHead } from '../../../components/ui/ConsolePrimitives'
 import { dotClass, toneClass, type StatusTone } from '../../../components/ui/status-tone'
 import {
   headsetCommandError, headsetControl, headsetSummary, useHeadsetCommand, useRobotHeadset,
@@ -107,7 +109,7 @@ const HEADSET_BUTTON: Record<HeadsetAction, string> = { WAKE: 'Đánh thức kí
  * ADR-0056: the Quest headset's battery and connection, as the robot's quest-stream reported it to the server; with
  * the addendum, a button wakes the headset or puts it to sleep (saves its battery between Tours).
  */
-function HeadsetRow({ robotCode }: { robotCode: string }) {
+function HeadsetRow({ robotCode, controlsOnly = false }: { robotCode: string; controlsOnly?: boolean }) {
   const headset = useRobotHeadset(robotCode)
   const command = useHeadsetCommand(robotCode)
   const [press, setPress] = useState<HeadsetPress | null>(null)
@@ -117,12 +119,12 @@ function HeadsetRow({ robotCode }: { robotCode: string }) {
   const send = (action: HeadsetAction) =>
     command.mutate(action, { onSuccess: () => setPress({ action, at: Date.now() }), onError: () => setPress(null) })
   return <>
-    <Row label="Kính Quest">
+    {!controlsOnly && <Row label="Kính Quest">
       <span className="inline-flex items-center gap-1.5">
         <span className={`size-2 shrink-0 rounded-full ${dotClass[tone]}`} aria-hidden="true" />
         <span className={toneText(tone)}>{text}</span>
       </span>
-    </Row>
+    </Row>}
     {(control.screenText || control.actions.length > 0) && <Row label="Màn hình kính">
       <span className="inline-flex flex-wrap items-center justify-end gap-2">
         {control.screenText && <span>{control.screenText}</span>}
@@ -175,6 +177,99 @@ export function RobotTelemetryPanel({ robotCode }: { robotCode: string | null | 
       </dl>
     </div>
   )
+}
+
+const TILE_TONE: Partial<Record<StatusTone, string>> = {
+  warn: 'border-[#f6e7c2] bg-[#fffcf3]',
+  danger: 'border-[#f8d9d4] bg-[#fff7f6]',
+}
+/** One reading of the compact robot card: its label, a tone dot and the value. */
+function StatusTile({ label, value, tone }: { label: string; value: ReactNode; tone?: StatusTone }) {
+  return <div className={`min-w-0 rounded-xl border px-2.5 py-2 ${(tone && TILE_TONE[tone]) ?? 'border-[#edf2f7] bg-[#f8fafc]'}`}>
+    <dt className="text-[11.5px] text-[#64748b]">{label}</dt>
+    <dd className="mt-0.5 flex items-start gap-1.5 text-[13px] leading-[1.3] font-semibold text-[#0f172a]">
+      {tone && <span className={`mt-[5px] size-2 shrink-0 rounded-full ${dotClass[tone]}`} aria-hidden="true" />}
+      <span className="min-w-0 break-words">{value}</span>
+    </dd>
+  </div>
+}
+/** A tile's label already names the reading, so an unreported one is just "Chưa báo". */
+const tileFlag = (value: boolean | null, yes: string, no: string) => (value === null ? 'Chưa báo' : value ? yes : no)
+const flagTone = (value: boolean | null): StatusTone => (value === null ? 'muted' : value ? 'ok' : 'warn')
+const batteryTone = (percent: number | null | undefined): StatusTone =>
+  percent == null ? 'muted' : percent < 20 ? 'danger' : percent < 40 ? 'warn' : 'ok'
+
+/**
+ * The robot's latest report as a compact card for the pre-start check: its own
+ * header with how old the report is, the robot, any fault or on-site check it
+ * reports, then six readings as tiles toned by what needs attention. Source,
+ * exact age and position fold under "Xem chi tiết"; the headset's wake/sleep
+ * buttons stay in view because the camera needs the headset awake.
+ */
+export function RobotStatusCard({ robotCode }: { robotCode: string | null | undefined }) {
+  const connection = useFleetConnection(store => store.state)
+  const { robot, receivedAt } = useFleetRobot(robotCode)
+  const maps = useMapVersions()
+  const headset = useRobotHeadset(robotCode)
+  const now = useNow(1000)
+  const link = connection === 'connected' ? null
+    : connection === 'disconnected' ? 'Mất kết nối với máy chủ, đang thử kết nối lại. Số liệu dưới đây có thể đã cũ.'
+    : 'Đang kết nối tới máy chủ.'
+  const age = robot ? telemetryAge(robot, receivedAt, now) : null
+  const chip = robot && age !== null
+    ? <ToneBadge tone={robot.syncFresh ? 'ok' : 'warn'}>Báo cáo {reportAge(age, now)}</ToneBadge>
+    : undefined
+  const quest = headsetSummary(headset.data, headset.isError)
+  return <>
+    <PanelHead title="Robot" action={chip} />
+    <div className="space-y-3 p-4">
+      {link && <p role="status" className="rounded-lg bg-[#fffaf0] px-3 py-2 text-xs font-semibold text-[#7d5310]">{link}</p>}
+      {!robotCode ? <p className="text-[13px] text-[#64748b]">Tour chưa giữ robot nào.</p>
+        : !robot ? <>
+          <p className="text-[13px] text-[#64748b]">Robot <span className="font-mono">{robotCode}</span> chưa gửi báo cáo nào tới máy chủ.</p>
+          <dl><StatusTile label="Kính Quest" value={quest.text} tone={quest.tone} /></dl>
+          <dl><HeadsetRow robotCode={robotCode} controlsOnly /></dl>
+        </>
+        : <>
+          <div className="flex items-start gap-3">
+            <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#edf3fb] text-[#4a6fa5]"><Bot size={19} /></span>
+            <div className="min-w-0">
+              <p className="text-[14px] font-bold text-[#0f172a]">{robot.name} <span className="font-mono text-[11.5px] font-medium text-[#64748b]">{robot.id}</span></p>
+              <p className="text-xs text-[#64748b]">{SOURCE[robot.source] ?? 'Nguồn khác'}{robot.pose ? <> · <span className={robot.poseFresh ? '' : 'text-[#b45309]'}>x {robot.pose.x.toFixed(2)}, y {robot.pose.y.toFixed(2)} m{robot.poseFresh ? '' : ', đã cũ'}</span></> : ''}</p>
+            </div>
+          </div>
+          {(robot.faultCode || robot.needsCheck) && <div role="alert" className="flex items-start gap-2.5 rounded-xl border border-[#f5c8c2] bg-[#fff1ef] px-3 py-2.5 text-[12.5px] leading-[1.45] text-[#9d3428]">
+            <TriangleAlert size={16} className="mt-px shrink-0" aria-hidden="true" />
+            <div className="min-w-0">
+              {robot.faultCode && <p className="font-semibold">{robotFaultText(robot.faultCode)}</p>}
+              {robot.needsCheck && <p className={robot.faultCode ? 'mt-0.5' : 'font-semibold'}>Robot đang chờ kiểm tra tại chỗ.</p>}
+            </div>
+          </div>}
+          <dl className="grid grid-cols-2 gap-2">
+            <StatusTile label="Thực thi" value={EXECUTION_STATUS[robot.executionStatus] ?? 'Trạng thái khác'}
+              tone={robot.executionStatus === 'IDLE' ? 'ok' : robot.executionStatus === 'NAVIGATING' ? 'info' : 'muted'} />
+            <StatusTile label="Định vị" value={tileFlag(robot.localized, 'Đã định vị', 'Chưa định vị')} tone={flagTone(robot.localized)} />
+            <StatusTile label="Sẵn sàng di chuyển" value={tileFlag(robot.motionReady, 'Sẵn sàng', 'Chưa sẵn sàng')} tone={flagTone(robot.motionReady)} />
+            <StatusTile label="Pin" value={robot.batteryPercent == null ? 'Chưa báo' : `${robot.batteryPercent.toFixed(0)}%`} tone={batteryTone(robot.batteryPercent)} />
+            <StatusTile label="Bản đồ" value={mapAreaName(maps.data, { mapKey: robot.mapKey }) ?? (maps.isSuccess ? 'Chưa có trong danh sách' : '-')} />
+            <StatusTile label="Kính Quest" value={quest.text} tone={quest.tone} />
+          </dl>
+          <dl><HeadsetRow robotCode={robotCode} controlsOnly /></dl>
+          <details className="group/robot">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] [&::-webkit-details-marker]:hidden">
+              <span className="text-[#64748b]">Nguồn, vị trí và thời điểm báo</span>
+              <span className="inline-flex items-center gap-1 font-semibold text-[#2d719e]">Xem chi tiết<ChevronDown size={14} aria-hidden="true" className="transition-transform duration-150 group-open/robot:rotate-180 motion-reduce:transition-none" /></span>
+            </summary>
+            <dl className="mt-2 divide-y divide-[#f1f5f9] border-t border-[#f1f5f9]">
+              <Row label="Mã robot"><span className="font-mono text-xs">{robot.id}</span></Row>
+              <Row label="Nguồn">{SOURCE[robot.source] ?? 'Nguồn khác'}</Row>
+              <Row label="Báo cáo gần nhất"><span className={robot.syncFresh ? '' : 'text-[#b45309]'}>{reportAge(age ?? 0, now)}{robot.syncFresh ? '' : ', đã cũ'}</span></Row>
+              <Row label="Vị trí">{robot.pose ? <span className={robot.poseFresh ? '' : 'text-[#b45309]'}>x {robot.pose.x.toFixed(2)}, y {robot.pose.y.toFixed(2)} m{robot.poseFresh ? '' : ', đã cũ'}</span> : 'Robot chưa báo'}</Row>
+            </dl>
+          </details>
+        </>}
+    </div>
+  </>
 }
 
 type StopMark = { label: string; tone: StatusTone }

@@ -16,7 +16,7 @@ import { isTourStale, useOperationTour, useStartChecks, useStartTour } from '../
 import { useNow } from '../../features/staff/use-now'
 import { blockerOwner, checkCountText, checkCounts, checkVerdict, opensAtText } from '../../features/staff/operations/operation-labels'
 import { operationRefusal } from '../../features/staff/operations/operation-errors'
-import { RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
+import { RobotStatusCard, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { BlockerList, CheckGroups } from '../../features/staff/operations/StartCheckList'
 import { TourStepper } from '../../features/staff/operations/TourStepper'
 
@@ -171,6 +171,15 @@ export default function StartCheckPage() {
         </div>
 
         <aside className="space-y-4 xl:sticky xl:top-4">
+          {/* The camera comes first: the operator watches it before ticking "Đã xem hình camera" and pressing Start. */}
+          <section className={panelClass} aria-label="Hình camera">
+            <PanelHead title="Hình camera" />
+            <div className="p-3">{cameraSource ? <QuestLiveVideo source={cameraSource} label={reservation?.robotCode}
+              offlineHint={cameraLeaseHint(cameraLease.data, cameraLease.isError)} />
+              : <p className="text-[13px] leading-5 text-muted">{cameraLease.isPending && ready
+                ? 'Đang xin quyền xem camera…'
+                : 'Máy chủ chưa cấp luồng camera cho robot này. Xem hình trên thiết bị trước khi xác nhận.'}</p>}</div>
+          </section>
           <section className={panelClass} aria-label="Bắt đầu Tour">
             <PanelHead title="Bắt đầu Tour" description="Nút chỉ mở khi đạt cả 2 bước dưới đây." />
             <div className="p-4">
@@ -194,18 +203,7 @@ export default function StartCheckPage() {
               {reason && <p id="start-reason" className="mt-2 text-xs leading-5 text-[#7d5310]">{reason}</p>}
             </div>
           </section>
-          <section className={panelClass} aria-label="Robot">
-            <PanelHead title="Robot" />
-            <div className="p-4"><RobotTelemetryPanel robotCode={reservation?.robotCode} /></div>
-          </section>
-          <section className={panelClass} aria-label="Hình camera">
-            <PanelHead title="Hình camera" />
-            <div className="p-3">{cameraSource ? <QuestLiveVideo source={cameraSource} label={reservation?.robotCode}
-              offlineHint={cameraLeaseHint(cameraLease.data, cameraLease.isError)} />
-              : <p className="text-[13px] leading-5 text-muted">{cameraLease.isPending && ready
-                ? 'Đang xin quyền xem camera…'
-                : 'Máy chủ chưa cấp luồng camera cho robot này. Xem hình trên thiết bị trước khi xác nhận.'}</p>}</div>
-          </section>
+          <section className={panelClass} aria-label="Robot"><RobotStatusCard robotCode={reservation?.robotCode} /></section>
           <section className={panelClass} aria-label="Tuyến của Tour">
             <PanelHead title="Tuyến" description={`${summary.registrationCount} đoàn đăng ký · ${summary.invitationCount} lời mời`} />
             <div className="px-4 py-2"><RouteStopList detail={detail} /></div>
