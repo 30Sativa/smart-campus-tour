@@ -1,0 +1,21 @@
+# systemd USER unit: fleet_bridge for the whole uptime of the MiniPC (robot/docs/fleet-service.md).
+# Installed by robot/scripts/install-fleet-service into ~/.config/systemd/user/. Starts at boot only
+# with lingering enabled (sudo loginctl enable-linger <user>), otherwise at the first login.
+# "robot fleet --service" supervises one fleet_bridge: telemetry always, commands only while
+# "robot nav --fleet" runs; it waits for NTP, restarts the bridge with backoff, and refuses to
+# run beside another bridge. The bridge itself retries the backend through network outages.
+[Unit]
+Description=Smart Campus Tour fleet_bridge (telemetry; commands while robot nav --fleet runs)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/robot fleet --service
+Restart=always
+RestartSec=10
+# The supervisor stops its fleet_bridge on SIGTERM; systemd kills what is left after 20 s.
+KillMode=mixed
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

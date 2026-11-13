@@ -196,3 +196,11 @@ Vẫn bị chặn: hai workflow cùng lúc, hai `fleet_bridge` cùng lúc, `flee
 Hai công tắc phía backend vẫn cần bật cho buổi test:
 - `FleetCommands__Enabled=true`: biến môi trường của backend, rồi restart;
 - "Cho phép điều phối" trong trang Robot của Technical Staff (`IsDispatchEnabled`).
+
+## 10. Fleet chạy từ lúc bật máy: `robot fleet status|start|stop|restart|logs`
+
+User unit `sct-fleet.service` chạy `robot fleet --service` từ lúc boot (`robot/docs/fleet-service.md`):
+một `fleet_bridge` duy nhất, gửi telemetry suốt; tự chuyển sang nhận lệnh khi `robot nav --fleet`
+chạy và về telemetry khi phiên đó kết thúc. Khi dịch vụ chạy, `robot fleet [--commands]` tay bị
+từ chối (không có hai bridge). `FLEET_SERVICE_COMMANDS=off` giữ chỉ telemetry. Cài:
+`robot/scripts/install-fleet-service`, rồi một lần `sudo loginctl enable-linger $USER`.

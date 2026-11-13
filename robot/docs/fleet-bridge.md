@@ -193,6 +193,11 @@ credential file must be private; the probe reads its path from
 environment value or argv. Use a disposable/local provisioned identity for a
 mock Backend, or run it against EC2 only after all deployment gates above pass.
 
+## Running from boot
+
+`robot/docs/fleet-service.md`: the launcher supervises one bridge from a systemd user unit
+(NTP gate before each start, restart with backoff, commands only while `robot nav --fleet` runs).
+
 ## Build and launch (for a later authorized stationary test)
 
 This is a future operator procedure, not authorization to run it in the
