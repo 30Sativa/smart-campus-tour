@@ -167,8 +167,8 @@ describe('route table', () => {
     // SRS LI-09–14: viewers have no accounts, so the old visitor app is gone.
     it('no longer serves the removed /visit area', async () => {
       signIn('Staff')
-      const router = renderAt('/visit/book')
-      await settled(router, '/')
+      renderAt('/visit/book')
+      expect(await screen.findByRole('heading', { name: 'Không tìm thấy trang' })).toBeInTheDocument()
     })
 
     it('sends an operator who types /admin back to their own console', async () => {
@@ -361,13 +361,14 @@ describe('route table', () => {
     })
   })
 
-  it('sends an unknown path back to the public page', async () => {
+  it('shows the 404 page for an unknown path', async () => {
     const router = renderAt('/khong-ton-tai')
-    await settled(router, '/')
+    expect(await screen.findByRole('heading', { name: 'Không tìm thấy trang' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/khong-ton-tai')
   })
 
   it('does not expose the removed public self-registration route', async () => {
-    const router = renderAt('/register')
-    await settled(router, '/')
+    renderAt('/register')
+    expect(await screen.findByRole('heading', { name: 'Không tìm thấy trang' })).toBeInTheDocument()
   })
 })

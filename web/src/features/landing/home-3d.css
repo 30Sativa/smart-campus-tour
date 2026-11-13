@@ -193,6 +193,18 @@ html.dark .lp3-student { background: #103337; }
 @media (max-width: 767px) {
   .lp3 .lp-nav__inner { height: 62px; }
   .lp3 .lp-hero { margin-top: 62px; min-height: min(740px, 83svh); }
+  /* On phones the hero starts below the bar, so the bar sits on the page, not on the picture:
+     give it the solid frosted surface and the page's own ink from the first paint. */
+  .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] { --lp-ink: inherit; --lp-ink-2: inherit; --lp-line-strong: inherit; background: var(--lp-nav-bg); border-bottom-color: var(--lp-line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+  .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-brand { color: var(--lp-ink); }
+  .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-navlink,
+  .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-themebtn { color: var(--lp-ink-2); }
+  .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-brand,
+  .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-navlink,
+  .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-themebtn { text-shadow: none; -webkit-text-stroke: 0; }
+  .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-brand__mark { filter: none; }
+  html.dark .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-brand__mark { filter: brightness(0) invert(1); }
+  .lp3:not(.lp3-page) .lp-nav[data-stuck="false"] .lp-btn--ghost { color: var(--lp-ink); border-color: var(--lp-line-strong); background: transparent; box-shadow: none; text-shadow: none; }
   .lp3 .lp-hero__media img { object-position: 58% center; }
   .lp3 .lp-hero__scrim { background: linear-gradient(0deg, rgba(3,30,28,.9) 0%, rgba(3,30,28,.68) 46%, rgba(3,30,28,.08) 100%); }
   .lp3 .lp-hero__body { padding-bottom: 40px; }

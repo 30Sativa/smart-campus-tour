@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { useAuthStore } from '../../../stores/auth-store'
 import { isStaffRole } from '../../../auth/roles'
 import { EXPERIENCE_HREF, OPERATIONS_DEMO_HREF } from '../landing-content'
+import { FULL_BLEED_SIZES, homeImage } from '../landing-images'
 
 /** The closing scene keeps account entry for representatives and staff. */
 export function CtaBand() {
@@ -13,7 +14,7 @@ export function CtaBand() {
   return (
     <section className="lp-cta" id="dat-tour">
       <div className="lp-cta__media" aria-hidden="true">
-        <img src="/images/home-3d/closing-smartbus.png" alt="" loading="lazy" decoding="async" />
+        <img {...homeImage('closing-smartbus')} sizes={FULL_BLEED_SIZES} alt="" loading="lazy" decoding="async" />
       </div>
 
       <div className="lp-ctn">

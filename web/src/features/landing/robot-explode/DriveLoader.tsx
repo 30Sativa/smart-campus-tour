@@ -1,12 +1,5 @@
 import { useEffect, useState } from 'react'
-
-const TIPS = [
-  'W A S D hoặc phím mũi tên để lái, Space để phanh.',
-  'Nhấn P để robot tự đi qua từng điểm dừng.',
-  'Nhấn C để đổi máy quay: Chase, Điện ảnh, Trên cao.',
-  'Nhấn N để chuyển ngày và đêm trên bản đồ khuôn viên.',
-  'Máy chạy chậm? Chọn đồ họa Mượt trong phần cài đặt.',
-]
+import { driveTips, useTouchOnly } from './touch'
 
 /**
  * The test drive's loading screen: the robot scanning round itself, how much
@@ -16,9 +9,10 @@ const TIPS = [
  * downloads.
  */
 export function DriveLoader({ progress = null, leaving = false, label = 'Đang chuẩn bị khuôn viên' }: { progress?: number | null; leaving?: boolean; label?: string }) {
+  const tips = driveTips(useTouchOnly())
   const [tip, setTip] = useState(0)
   useEffect(() => {
-    const id = window.setInterval(() => setTip(value => (value + 1) % TIPS.length), 3200)
+    const id = window.setInterval(() => setTip(value => value + 1), 3200)
     return () => window.clearInterval(id)
   }, [])
   const percent = progress === null ? null : Math.max(0, Math.min(100, Math.round(progress)))
@@ -47,7 +41,7 @@ export function DriveLoader({ progress = null, leaving = false, label = 'Đang c
       <div className="lp3-dl__bar" data-indeterminate={percent === null}>
         <span style={percent === null ? undefined : { width: `${percent}%` }} />
       </div>
-      <p className="lp3-dl__tip" key={tip}>{TIPS[tip]}</p>
+      <p className="lp3-dl__tip" key={tip}>{tips[tip % tips.length]}</p>
     </div>
   )
 }

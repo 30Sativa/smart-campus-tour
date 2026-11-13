@@ -2,8 +2,9 @@ import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
 import { useAuthStore } from '../../../stores/auth-store'
 import { homePathForRole, isAdminRole, isStaffRole } from '../../../auth/roles'
+import { FULL_BLEED_SIZES, homeImage } from '../landing-images'
 
-/** Labelled buildings on `hero-smartbus.png`, in percent of the picture. */
+/** Labelled buildings on `hero-smartbus-*.webp`, in percent of the picture. */
 const HERO_PINS = [
   { label: 'Giảng đường', x: 31, y: 21 },
   { label: 'Thư viện', x: 57, y: 22 },
@@ -23,7 +24,7 @@ export function Hero() {
     <section className="lp-hero" id="hero">
       <div className="lp-hero__media" id="hero-media">
         <div className="lp3-hero-stage">
-          <img src="/images/home-3d/hero-smartbus.png" alt="Robot SmartBus di chuyển trong khuôn viên đại học, minh họa 3D" fetchPriority="high" />
+          <img {...homeImage('hero-smartbus')} sizes={FULL_BLEED_SIZES} alt="Robot SmartBus di chuyển trong khuôn viên đại học, minh họa 3D" fetchPriority="high" />
           {HERO_PINS.map((pin) => (
             <span className="lp3-pin" key={pin.label} style={{ left: `${pin.x}%`, top: `${pin.y}%` }} aria-hidden="true">
               <span className="lp3-pin__card">{pin.label}</span>

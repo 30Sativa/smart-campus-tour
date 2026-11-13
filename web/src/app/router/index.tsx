@@ -32,6 +32,7 @@ const PublicHomePage = lazy(() => import('../../routes/public/PublicHomePage'))
 const QuestAudioPage = lazy(() => import('../../routes/public/QuestAudioPage'))
 const RobotInsidePage = lazy(() => import('../../routes/public/RobotInsidePage'))
 const RobotDrivePage = lazy(() => import('../../routes/public/RobotDrivePage'))
+const NotFoundPage = lazy(() => import('../../routes/public/NotFoundPage'))
 
 
 // SQL GUID Tours use personal access-code/cookie entry; non-GUID IDs retain the legacy fixture flow.
@@ -330,7 +331,8 @@ export const routes = [
   { path: '/admin/alerts', element: <Navigate to="/staff" replace /> },
   { path: '/admin/digital-twin', element: <Navigate to="/staff/digital-twin" replace /> },
   { path: '/admin/reports', element: <Navigate to="/staff/history" replace /> },
-  { path: '*', element: <Navigate to="/" replace /> },
+  // Any other address: a 404 page with a way home (and into the account's own area).
+  { path: '*', element: <Suspense fallback={<ShellFallback background="#f5f7f8" />}><NotFoundPage /></Suspense> },
 ]
 
 export const router = createBrowserRouter(routes)
