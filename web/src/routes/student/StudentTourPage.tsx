@@ -1,4 +1,4 @@
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { StudentHeader } from '../../features/student/components/StudentHeader'
 import { StudentInvitationPage } from '../../features/student/invitation/StudentInvitationPage'
 import '../../features/student/student.css'
@@ -15,8 +15,9 @@ export default function StudentTourPage() {
     <a className="st-skip" href="#student-main">Đến nội dung chính</a>
     <StudentHeader session={null} />
     <main id="student-main" tabIndex={-1} className="st-main st-entry-message st-ctn">
-      <h1>Không tìm thấy buổi tham quan</h1>
-      <p>Hãy mở đường link trong email lời mời và nhập mã truy cập của bạn.</p>
+      <h1>Mở link trong email lời mời để vào buổi tham quan</h1>
+      <p>Không thấy email? Hỏi thầy cô hoặc đại diện trường để gửi lại.</p>
+      <p><Link className="st-entry-home" to="/">Về trang chủ</Link></p>
     </main>
   </div>
 }

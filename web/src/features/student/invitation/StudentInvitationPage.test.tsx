@@ -2,7 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Link, MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { StudentInvitationPage } from './StudentInvitationPage'
+import { SESSION_CHECK_WATCHDOG_MS, StudentInvitationPage } from './StudentInvitationPage'
+import { ENTER_TOUR_LABEL } from './invitation-labels'
+import { QueryProvider } from '../../../app/providers/query-provider'
 import StudentTourPage from '../../../routes/student/StudentTourPage'
 import { useAuthStore } from '../../../stores/auth-store'
 
@@ -269,4 +271,84 @@ it('offers no fallback video in the waiting room (fallback is a running-Tour deg
   mount()
   expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
   expect(screen.queryByRole('link', { name: /video dự phòng/i })).toBeNull()
+})
+
+it('shows the code form first so a phone sees it before the photo and introduction', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => response(null, 401)))
+  mount()
+  const form = (await screen.findByRole('heading', { name: 'Nhập mã truy cập' })).closest('section')!
+  const story = screen.getByRole('heading', { name: /Khám phá campus/ }).closest('section')!
+  expect(form).toHaveClass('st-entry-form')
+  expect(story).toHaveClass('st-entry-story')
+  expect(form.compareDocumentPosition(story) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(form.contains(screen.getByRole('img'))).toBe(false)
+})
+
+it('labels the code button with the shared constant the invitation email names', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => response(null, 401)))
+  mount()
+  expect(ENTER_TOUR_LABEL).toBe('Vào Tour')
+  expect(await screen.findByRole('button', { name: ENTER_TOUR_LABEL })).toBeInTheDocument()
+})
+
+it('re-checks the session when an account sign-out clears the query cache mid-check', async () => {
+  // Root cause: a first visit's cookie refresh is refused, auth logout bumps the session revision and the app
+  // QueryProvider clears every query, silently cancelling this check and leaving its observer waiting.
+  const first = deferredResponse()
+  let sessions = 0
+  const fetch = vi.fn(async (url: string) => {
+    if (url.endsWith('/view')) return response(view)
+    return ++sessions === 1 ? first.promise : response()
+  })
+  vi.stubGlobal('fetch', fetch)
+  render(<QueryProvider><StudentInvitationPage tourId={tourId} /></QueryProvider>)
+  await waitFor(() => expect(sessions).toBe(1))
+  expect(screen.getByText('Đang kiểm tra phiên…')).toBeInTheDocument()
+  act(() => { useAuthStore.getState().logout() })
+  expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
+  expect(sessions).toBe(2)
+  first.resolve(response())
+})
+
+it('offers the code form and a retry after 8 s without a session answer', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
+  try {
+    const hanging = deferredResponse()
+    let sessions = 0
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.endsWith('/view')) return response(view)
+      return ++sessions === 1 ? hanging.promise : response()
+    }))
+    mount()
+    expect(screen.getByText('Đang kiểm tra phiên…')).toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(SESSION_CHECK_WATCHDOG_MS - 100) })
+    expect(screen.queryByLabelText('Mã truy cập')).not.toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(200) })
+    expect(screen.getByRole('status')).toHaveTextContent('Chưa kiểm tra được phiên')
+    expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
+    expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
+    expect(sessions).toBe(2)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it.each([
+  ['offline', () => { throw new TypeError('offline') }],
+  ['cancelled', () => { throw new DOMException('The user aborted a request.', 'AbortError') }],
+  ['server error', () => response(null, 503)],
+])('shows the code form with "Chưa kiểm tra được phiên" when the check fails (%s)', async (_name, fail) => {
+  let sessions = 0
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    if (url.endsWith('/view')) return response(view)
+    return ++sessions === 1 ? fail() : response()
+  }))
+  mount()
+  expect(await screen.findByRole('status')).toHaveTextContent('Chưa kiểm tra được phiên')
+  expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Kiểm tra lại phiên' })).not.toBeInTheDocument()
+  expect(screen.queryByText(/Không kết nối được hệ thống/)).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
+  expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
 })
