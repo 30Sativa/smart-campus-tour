@@ -1,5 +1,11 @@
-const timeFormat = new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-export const reviewTime = (value: string) => `${timeFormat.format(new Date(value))} (UTC+7)`
+import { formatDateTime } from '../../../components/ui/date-time'
+
+/** Campus time, "13/11/2026 14:30". A list names the zone once at its top, not on every row. */
+export const reviewTime = (value: string) => formatDateTime(value)
+
+/** The tag a registration carries once its Tour is over, so a decision there reads as history; null while the Tour is live. */
+export const endedTourLabel = (tourState: string | null | undefined) =>
+  tourState === 'CANCELLED' ? 'Tour đã huỷ' : tourState === 'COMPLETED' ? 'Tour đã kết thúc' : null
 
 /** T-24h (BR-05): an undecided row expires here. Display only; the server decides. */
 export const pendingExpiresAt = (tourStart: string) => new Date(new Date(tourStart).getTime() - 24 * 3600_000).toISOString()
