@@ -58,8 +58,8 @@ function snapshotGrid(mapKey: string): MapConfig['grid'] {
 const NVH_V3 = { scale: 20 / (2.14561939 + 97.7707138), centerX: 35.803092385, centerZ: -47.812547205 }
 
 /**
- * map2 (`robot/robot_maps/map2.yaml` with `map_fix.pgm`, used by map2-v1 and
- * map2-v2) onto the NVH V3 plan: glTF x = s·(cos θ·x + sin θ·y) + x0,
+ * map2 (`robot/robot_maps/map2.yaml` with `map_fix.pgm`, used by map2-v1,
+ * map2-v2 and the production upload test123-v1) onto the NVH V3 plan: glTF x = s·(cos θ·x + sin θ·y) + x0,
  * glTF z = s·(sin θ·x − cos θ·y) + z0. Fitted on 2026-11-11 by matching every
  * occupied map cell to the model's walls at lidar height: 95% within 0.3 m,
  * median 0.06 m. START (`robot/robot_maps/poi_start.yaml`) lands at the
@@ -99,6 +99,14 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   'map2-v2': {
     mapKey: 'map2-v2',
     grid: snapshotGrid('map2-v2'),
+    scene: nvhV3Scene(MAP2_ON_NVH_V3),
+    student2d: { transform: IDENTITY, calibrated: false },
+  },
+  // Production upload of the same map2 the robot runs (Tầng 6 · test123, 1419×1949 at 0.05 m,
+  // package SHA-256 aca93eb8…c0c2d61); amr_01 is assigned to it. A re-upload under another
+  // area key gets a new MapKey and needs its own entry once checked to be this map.
+  'test123-v1': {
+    mapKey: 'test123-v1',
     scene: nvhV3Scene(MAP2_ON_NVH_V3),
     student2d: { transform: IDENTITY, calibrated: false },
   },
