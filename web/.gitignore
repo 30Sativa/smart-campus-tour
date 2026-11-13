@@ -30,3 +30,7 @@ dist-ssr
 # AI agent skills cài từ repo ngoài (taste-skill, ui-ux-pro-max).
 # Chỉ dùng cục bộ, KHÔNG commit — xem web/.claude/skills/SOURCES.md để cài lại.
 .claude/
+
+# Playwright screenshot run (e2e/), regenerated on every run.
+e2e-results/
+playwright-report/
