@@ -77,7 +77,7 @@ export default function StaffManagePoisPage() {
   return <AdminPage>
     <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Điểm tham quan (POI)</h1>
+        <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Quản lý POI</h1>
         <p className="mt-1 text-sm text-[#718096]">Chọn điểm trên bản đồ hoặc trong danh sách. Chỉ điểm đã đạt mới dùng được khi tạo tuyến.</p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">

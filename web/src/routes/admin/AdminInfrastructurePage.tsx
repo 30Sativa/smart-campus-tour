@@ -56,7 +56,7 @@ export default function AdminInfrastructurePage() {
     <AdminPage>
       <PageHeader
         eyebrow="Giám sát"
-        title="Hạ tầng máy chủ backend"
+        title="Hạ tầng máy chủ"
         description="Theo dõi tài nguyên phần cứng máy chủ AWS EC2, tiến trình API ASP.NET Core, cơ sở dữ liệu SQL Server và hệ thống Docker."
         action={
           <div className="flex flex-wrap items-center gap-2">

@@ -59,7 +59,7 @@ export const AREAS: Area[] = [
     id: 'technical',
     label: 'Kỹ thuật',
     path: TECHNICAL_HOME,
-    purpose: 'Quản lý version map, import POI bằng YAML, kiểm tra thực tế và xác nhận kỹ thuật cho đúng version map–POI–route.',
+    purpose: 'Quản lý phiên bản bản đồ, nhập POI từ file, kiểm tra tại chỗ và xác nhận chạy thử cho đúng phiên bản bản đồ, POI và tuyến.',
     allows: isTechnicalRole,
   },
 ]

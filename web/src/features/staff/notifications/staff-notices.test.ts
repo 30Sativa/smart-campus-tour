@@ -48,3 +48,12 @@ describe('Technical Staff notices for Staff', () => {
     expect(toStaffNotices([row({ action: 'SOMETHING_NEW' }), row({ id: 2 })]).map(notice => notice.id)).toEqual(['tech-2'])
   })
 })
+
+describe('who decided, for Staff', () => {
+  it('names the person by full name, or "Kỹ thuật" when the account is gone', () => {
+    expect(toStaffNotice(row({ actorName: 'Nguyễn Văn A' }))?.detail).toMatch(/^Nguyễn Văn A xác nhận đạt/)
+    const unnamed = toStaffNotice(row({ actorName: null }))?.detail
+    expect(unnamed).toMatch(/^Kỹ thuật xác nhận đạt/)
+    expect(unnamed).not.toMatch(/Technical Staff/)
+  })
+})
