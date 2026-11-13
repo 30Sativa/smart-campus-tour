@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 import { ViewerBoundary } from '../../features/landing/robot-explode/ViewerBoundary'
 import { DriveLoader } from '../../features/landing/robot-explode/DriveLoader'
 import { canUseWebGL } from '../../features/landing/robot-explode/webgl'
+import { usePageTitle } from '../../components/ui/use-page-title'
 import '../../features/landing/landing.css'
 import '../../features/landing/home-3d.css'
 
@@ -43,12 +44,10 @@ function Unavailable({ text }: { text: string }) {
  */
 export default function RobotDrivePage() {
   const [webgl] = useState(canUseWebGL)
+  usePageTitle('Lái thử robot')
 
   useEffect(() => {
-    const previous = document.title
-    document.title = 'Lái thử robot · CampusTour'
     window.scrollTo(0, 0)
-    return () => { document.title = previous }
   }, [])
 
   return (

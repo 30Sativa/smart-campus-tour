@@ -4,6 +4,7 @@ import { SiteFooter } from '../../features/landing/sections/SiteFooter'
 import { RobotFlowSection } from '../../features/landing/sections/RobotFlowSection'
 import '../../features/landing/landing.css'
 import '../../features/landing/home-3d.css'
+import { usePageTitle } from '../../components/ui/use-page-title'
 
 const noScrollLock = () => {}
 
@@ -13,11 +14,10 @@ const noScrollLock = () => {}
  * navigation and from section 04 of the home page.
  */
 export default function RobotInsidePage() {
+  usePageTitle('Bên trong robot')
+
   useEffect(() => {
-    const previous = document.title
-    document.title = 'Bên trong robot · CampusTour'
     window.scrollTo(0, 0)
-    return () => { document.title = previous }
   }, [])
 
   return (

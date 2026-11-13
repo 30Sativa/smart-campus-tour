@@ -5,6 +5,7 @@ import { AdditiveBlending, Fog, Group, Mesh, MeshBasicMaterial, Object3D, Vector
 import { Bot, Camera, Eye, Gauge, Hand, MapPin, Maximize2, Minimize2, Moon, RotateCcw, Settings2, Sparkles, Sun } from 'lucide-react'
 import { followPath, inputFromKeys, nearestStop, stepDrive, type DrivePoint, type DriveState } from './drive'
 import { DriveLoader } from './DriveLoader'
+import { driveStartHint, useTouchOnly } from './touch'
 import { LidarSweep, LoadBar, RobotBody } from './RobotBody'
 import { ACCENT, WIDE, attachFog, freshDrive, isTyping, onFloor, setFog, slideFraming, type Framing, type RigState } from './stage'
 import { nextTurn } from './worlds/geometry'
@@ -349,6 +350,7 @@ type StageProps = {
 /** One drive on one map; switching maps starts a new one (and shows the loading screen again). */
 function DriveStage({ world, quality, onQuality, night, intro, onWorld, onNight }: StageProps) {
   const lite = quality === 'smooth'
+  const touch = useTouchOnly()
   const driveRef = useRef<DriveState>(freshDrive(world))
   const keysRef = useRef(new Set<string>())
   const blockedRef = useRef(false)
@@ -582,7 +584,7 @@ function DriveStage({ world, quality, onQuality, night, intro, onWorld, onNight 
           {screen.full ? <Minimize2 size={17} aria-hidden="true" /> : <Maximize2 size={17} aria-hidden="true" />}
         </button>
       )}
-      {loading.ready && !started && <p className="lp3-dv__hint" aria-hidden="true">Nhấn W hoặc ↑ để lái robot</p>}
+      {loading.ready && !started && <p className="lp3-dv__hint" aria-hidden="true">{driveStartHint(touch)}</p>}
       {toast && <p className="lp3-dv__toast" role="status">{toast}</p>}
 
       <aside className="lp3-dv__panel" aria-label="Bảng điều khiển robot">
