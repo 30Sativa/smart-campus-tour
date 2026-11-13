@@ -270,8 +270,8 @@ describe('route table', () => {
 
     it.each([
       ['/staff/manage/tours/new', /Tạo Tour mới/],
-      ['/staff/manage/registrations/pending', /Đăng ký chờ duyệt/],
-      ['/staff/manage/registrations', /Tất cả đăng ký/],
+      ['/staff/manage/registrations/pending', /Đăng ký đoàn/],
+      ['/staff/manage/registrations', /Đăng ký đoàn/],
       ['/staff/manage/routes', /Danh mục tuyến/],
     ])('serves %s to Staff', async (path, heading) => {
       signIn('Staff')
