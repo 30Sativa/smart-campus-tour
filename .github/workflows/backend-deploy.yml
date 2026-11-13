@@ -125,6 +125,22 @@ jobs:
           unset SSH_PRIVATE_KEY SSH_KNOWN_HOSTS
           bash backend/deploy/ssh-deploy.sh "$RUNNER_TEMP/backend-bundle" application
 
+      # Backend Verify diffs each main push against this marker, so a backend change whose
+      # own run was cancelled or skipped as superseded is still released by the next push.
+      # It is written only after the host accepted the release.
+      - name: Record the release now running on the host
+        if: steps.freshness.outputs.deploy == 'true'
+        run: printf '%s\n' "$RELEASE_SHA" > "$RUNNER_TEMP/release_sha"
+
+      - name: Save deployed release marker
+        if: steps.freshness.outputs.deploy == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-deployed
+          path: ${{ runner.temp }}/release_sha
+          if-no-files-found: error
+          retention-days: 90
+
       # The host already passed its loopback HTTPS probe; this one goes through public DNS,
       # the security group and the real certificate. A failure here does not roll back.
       - name: Check public HTTPS readiness

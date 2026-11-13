@@ -16,6 +16,7 @@ jobs:
     name: Detect backend changes
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: read
       packages: read
     outputs:
@@ -29,11 +30,45 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # On main, diff against the release Backend Deploy last put on the host, not against
+      # this push's parent. A later web-only push cancels this run (cancel-in-progress) or
+      # makes Backend Deploy skip it as superseded; that later push must still see the
+      # backend change and release it. Only markers from Backend Deploy runs on main that
+      # were dispatched or chained from Backend Verify count. No usable marker: rebuild all.
+      - name: Find the backend release last deployed from main
+        id: deployed
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployed=''
+          while read -r artifact_id run_id; do
+            [[ "$artifact_id" =~ ^[0-9]+$ && "$run_id" =~ ^[0-9]+$ ]] || continue
+            run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" \
+              --jq '[.path, .event, .head_branch, .head_repository.full_name] | @tsv') || continue
+            IFS=$'\t' read -r path event branch repo <<< "$run" || continue
+            [[ "${path%%@*}" == .github/workflows/backend-deploy.yml && "$branch" == main && "$repo" == "$GITHUB_REPOSITORY" ]] || continue
+            [[ "$event" == workflow_run || "$event" == workflow_dispatch ]] || continue
+            dir="$RUNNER_TEMP/backend-deployed-$artifact_id"
+            gh run download "$run_id" -R "$GITHUB_REPOSITORY" -n backend-deployed -D "$dir" || break
+            deployed=$(tr -d '[:space:]' < "$dir/release_sha") || deployed=''
+            break
+          done < <(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=backend-deployed&per_page=100" \
+            --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[] | "\(.id) \(.workflow_run.id)"')
+          if [[ "$deployed" =~ ^[0-9a-f]{40}$ ]] && git merge-base --is-ancestor "$deployed" "$GITHUB_SHA"; then
+            echo "Comparing main against last deployed backend release $deployed." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::No deployed backend release marker usable for main; treating every backend input as changed."
+            deployed=$(printf '%040d' 0)
+          fi
+          echo "base_sha=$deployed" >> "$GITHUB_OUTPUT"
       - name: Classify backend change scope
         id: detect
         shell: bash
         env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || steps.deployed.outputs.base_sha || github.event.before }}
           HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
