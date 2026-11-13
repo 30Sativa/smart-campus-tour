@@ -269,6 +269,9 @@ describe('route table', () => {
     }, 30_000)
 
     it.each([
+      ['/staff/manage/tours/new', /^Tạo Tour$/],
+      ['/staff/manage/registrations/pending', /Đăng ký chờ duyệt/],
+      ['/staff/manage/registrations', /Tất cả đăng ký/],
       ['/staff/manage/tours/new', /Tạo Tour mới/],
       ['/staff/manage/registrations/pending', /Đăng ký đoàn/],
       ['/staff/manage/registrations', /Đăng ký đoàn/],
