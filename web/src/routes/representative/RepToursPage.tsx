@@ -28,6 +28,7 @@ export default function RepToursPage() {
         <div className="rep-card rep-card--flush"><div className="rep-tour-list">{tours.data.data.map(tour => <TourCard key={tour.id} tour={tour} />)}</div></div>
         <Pagination page={page} pageCount={tours.data.pagination.totalPages} total={tours.data.pagination.totalItems} pageSize={tours.data.pagination.pageSize}
           label="Trang buổi tham quan" onPage={p => { const next = new URLSearchParams(params); next.set('page', String(p)); setParams(next) }} /></>
-        : <EmptyState title="Không có buổi phù hợp" description="Thử từ khóa khác hoặc quay lại khi có lịch mới." />}
+        : params.get('search') ? <EmptyState variant="noMatch" onClear={() => { setSearch(''); setParams({}) }} />
+          : <EmptyState variant="empty" title="Hiện chưa có buổi nhận đăng ký." />}
   </RepPage>
 }

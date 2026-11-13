@@ -129,7 +129,7 @@ describe('Representative real HTTP contract', () => {
     expect(within(closed).getByText('Danh sách thiếu lớp.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Đã hủy', pressed: true })).toBeInTheDocument()
     fireEvent.click(closed)
-    expect(await screen.findByRole('heading', { name: 'Đoàn đã chốt' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Buổi đã chốt' })).toBeInTheDocument()
     expect(screen.getByText('Đăng ký bị từ chối')).toBeInTheDocument()
     expect(screen.getAllByText('Danh sách thiếu lớp.').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Sửa và gửi lại' })).toBeDisabled()
@@ -165,7 +165,7 @@ describe('Representative real HTTP contract', () => {
   it('dates a cancelled Tour only when the server says when', async () => {
     registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: 'Robot bảo trì', tourEndedAt: '2026-10-19T02:30:00Z' }
     renderAt('/dai-dien/dang-ky/registration')
-    expect(await screen.findByText(/^Huỷ lúc 09:30, .*19\/10\/2026 \(UTC\+7\)$/)).toBeInTheDocument()
+    expect(await screen.findByText('Huỷ lúc 19/10/2026 09:30')).toBeInTheDocument()
   })
 
   it('prints no cancel time when the server sent none', async () => {
@@ -176,7 +176,7 @@ describe('Representative real HTTP contract', () => {
   })
 
   const systemCancel = 'Không bắt đầu trong khung giờ, hệ thống tự huỷ.'
-  const friendlyCancel = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Nhà trường sẽ liên hệ nếu sắp xếp lại.'
+  const friendlyCancel = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại.'
 
   it('shows a cancelled Tour as cancelled, with no actions, deadline or lock message', async () => {
     registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: systemCancel }
@@ -244,7 +244,7 @@ describe('Representative real HTTP contract', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gửi đăng ký' }))
     expect(await screen.findByText('Lần gửi trước chưa được xác nhận')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Thử gửi lại' }))
-    expect(await screen.findByRole('heading', { name: 'Đoàn B' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Buổi chưa đăng ký' })).toBeInTheDocument()
     expect(submitAttempts).toHaveLength(2)
     expect(submitAttempts[1]).toEqual(submitAttempts[0])
     expect(submitAttempts[0].input.roster.map(r => r.rowType)).toEqual(['INDIVIDUAL', 'SHARED_VIEWING'])
