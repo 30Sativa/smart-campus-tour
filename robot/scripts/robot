@@ -66,6 +66,9 @@ PROFILE_KEYS = {
     # nav: pose_bootstrap sets the initial pose from the LiDAR (robot/docs/auto-initial-pose.md).
     # Off by default; "robot nav --auto-pose" / "--manual-pose" override it per run.
     'AUTO_INITIAL_POSE': 'false',
+    # fleet service (robot/docs/fleet-service.md): auto = commands exactly while "robot nav --fleet" runs
+    # (the ADR-0049 motion gate is up), telemetry otherwise; off = telemetry only, always.
+    'FLEET_SERVICE_COMMANDS': 'auto',
     'SCT_LOG_ROOT': '~/amr_logs/runs', 'LOG_KEEP_DAYS': '30', 'LOG_MAX_MB': '2000', 'MIN_FREE_GB': '5',
 }
 NODE_PATTERNS = {
@@ -259,26 +262,30 @@ def scan_processes(proc=PROC):
 
 
 def fleet_bridge_commands(entry):
-    """commands_enabled of a running fleet_bridge from its --params-file files (True, False
-    or None when it cannot be told). Later files override earlier ones, as in ROS."""
+    """commands_enabled of a running fleet_bridge from its --params-file files and -p overrides
+    (True, False or None when it cannot be told), applied in command-line order as ROS does."""
     try:
         import yaml
     except ImportError:
         return None
     args = entry.get('args', [])
-    files = [args[i + 1] for i, x in enumerate(args[:-1]) if x == '--params-file']
-    if not files:
+    value, known = False, False                        # the node's declared default
+    for i, x in enumerate(args[:-1]):
+        if x == '--params-file':
+            try:
+                data = yaml.safe_load(open(args[i + 1])) or {}
+            except (OSError, yaml.YAMLError):
+                return None                            # a file we cannot read may set it
+            known = True
+            for node in data.values() if isinstance(data, dict) else []:
+                params = (node or {}).get('ros__parameters', {}) if isinstance(node, dict) else {}
+                if 'commands_enabled' in params:
+                    value = params['commands_enabled']
+        elif x == '-p' and args[i + 1].startswith('commands_enabled:='):
+            known = True
+            value = {'true': True, 'false': False}.get(args[i + 1].split(':=', 1)[1].strip().lower(), None)
+    if not known:
         return None
-    value = False                                     # the node's declared default
-    for path in files:
-        try:
-            data = yaml.safe_load(open(path)) or {}
-        except (OSError, yaml.YAMLError):
-            return None                                # a file we cannot read may set it
-        for node in data.values() if isinstance(data, dict) else []:
-            params = (node or {}).get('ros__parameters', {}) if isinstance(node, dict) else {}
-            if 'commands_enabled' in params:
-                value = params['commands_enabled']
     return value if isinstance(value, bool) else None
 
 
@@ -541,6 +548,254 @@ def check_teleop(p, env, procs):
         raise Refused('another teleop is already running: ' + ', '.join(f'{x["name"]}[{x["pid"]}]' for x in other))
 
 
+
+# ---- fleet service ----------------------------------------------------------------------
+# One supervised fleet_bridge for the whole uptime of the MiniPC (robot/docs/fleet-service.md).
+# systemd (user unit sct-fleet.service) starts "robot fleet --service" at boot and restarts it;
+# this loop owns the bridge: telemetry always (the backend sees the robot online without Nav2),
+# commands only while "robot nav --fleet" holds the workflow lock (the ADR-0049 motion gate is up).
+# The bridge already retries the backend on its own; this loop only restarts it when it exits or
+# when the wanted mode changes.
+FLEET_UNIT = 'sct-fleet.service'
+FLEET_STATUS = 'fleet-service.json'
+SYNC_LINES = (('Fleet Sync acknowledged', 'connected'), ('Fleet Sync retry/recovery', 'retrying'),
+              ('Fleet Sync paused', 'waiting_clock'), ('Fleet Sync stopped', 'fatal'),
+              ('configuration error', 'config_error'))
+
+
+def fleet_wanted_commands(p):
+    """(commands?, why) from the profile and the running workflow."""
+    if p['FLEET_SERVICE_COMMANDS'].strip().lower() == 'off':
+        return False, 'FLEET_SERVICE_COMMANDS=off'
+    held = lock_info('workflow') or {}
+    if held.get('workflow') == 'nav' and held.get('fleet'):
+        return True, f'robot nav --fleet running (pid {held.get("pid")})'
+    return False, 'no "robot nav --fleet" session'
+
+
+def write_status(path, data):
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f, indent=1)
+    os.replace(tmp, path)
+
+
+def fleet_service(p, env):
+    """Foreground supervisor, run by systemd. Returns only on SIGTERM/SIGINT."""
+    import signal
+    import threading
+    fd = take_lock('fleet', dict(service=True, pid=os.getpid()))
+    session = new_session(p, 'fleet_service')
+    status_path = os.path.join(STATE_DIR, FLEET_STATUS)
+    bmin = float(os.environ.get('SCT_FLEET_BACKOFF_MIN', '5'))
+    bmax = float(os.environ.get('SCT_FLEET_BACKOFF_MAX', '300'))
+    poll = float(os.environ.get('SCT_FLEET_POLL', '1'))
+    st = dict(pid=os.getpid(), started=dt.datetime.now().isoformat(timespec='seconds'), session=session,
+              mode=None, why='', child_pid=None, child_started=None, restarts=0, last_exit=None,
+              last_exit_at=None, next_start_in=0, sync=dict(state='not_started', line='', at=None))
+    lock = threading.Lock()
+    stop = threading.Event()
+    child = None
+    backoff, next_start = bmin, 0.0
+
+    def note(msg):
+        print(f'[fleet-service] {msg}', flush=True)
+
+    def save():
+        with lock:
+            try:
+                write_status(status_path, st)
+            except OSError:
+                pass
+
+    def pump(proc):
+        for raw in iter(proc.stdout.readline, b''):
+            line = raw.decode(errors='replace').rstrip()
+            print(line, flush=True)
+            for key, state in SYNC_LINES:
+                if key in line:
+                    with lock:
+                        st['sync'] = dict(state=state, line=line[-200:], at=dt.datetime.now().isoformat(timespec='seconds'))
+                    save()
+
+    def stop_child(proc, why):
+        note(f'stopping fleet_bridge pid {proc.pid}: {why}')
+        try:
+            os.killpg(proc.pid, signal.SIGINT)
+            proc.wait(10)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait(5)
+        except ProcessLookupError:
+            pass
+
+    def time_ok():
+        # docs/fleet-bridge.md: never start the bridge on an unsynchronized clock (boot before NTP).
+        gate = os.environ.get('SCT_FLEET_TIME_GATE') or f'{sys.executable} {os.path.join(ROBOT_DIR, "scripts", "check_fleet_time_sync.py")}'
+        try:
+            r = subprocess.run(gate.split(), capture_output=True, text=True, timeout=20)
+            ok, msg = r.returncode == 0, (r.stdout + r.stderr).strip().splitlines()[-1:] or ['']
+        except (OSError, subprocess.SubprocessError) as exc:
+            ok, msg = False, [str(exc)]
+        if not ok:
+            with lock:
+                st.update(mode=None, why=f'waiting for NTP: {msg[0][:160]}')
+        return ok
+
+    def on_signal(signum, _frame):
+        stop.set()
+    signal.signal(signal.SIGTERM, on_signal)
+    signal.signal(signal.SIGINT, on_signal)
+    note(f'started (pid {os.getpid()}, logs {session}); commands policy {p["FLEET_SERVICE_COMMANDS"]}')
+    save()
+    try:
+        while not stop.is_set():
+            want, why = fleet_wanted_commands(p)
+            if want:
+                try:
+                    check_fleet_runtime(env, commands=True)
+                except Refused as exc:
+                    want, why = False, f'commands refused: {exc}'
+            mode = 'commands' if want else 'telemetry'
+            if child is not None and child.poll() is None and mode != st['mode']:
+                stop_child(child, f'mode {st["mode"]} -> {mode} ({why})')
+                child.wait()
+                child, next_start, backoff = None, 0.0, bmin
+            if child is not None and child.poll() is not None:
+                code = child.returncode
+                ran = time.monotonic() - child_t0
+                backoff = bmin if ran > 60 else min(bmax, backoff * 2 if st['restarts'] else bmin)
+                if code == 2:
+                    backoff = bmax           # configuration error: retrying fast cannot fix it
+                next_start = time.monotonic() + backoff
+                with lock:
+                    st.update(last_exit=code, last_exit_at=dt.datetime.now().isoformat(timespec='seconds'),
+                              child_pid=None, restarts=st['restarts'] + 1)
+                note(f'fleet_bridge exited with {code} after {ran:.0f} s; restart in {backoff:.0f} s')
+                child = None
+                save()
+            if child is None and time.monotonic() >= next_start:
+                others = [x for x in scan_processes() if x['name'] == 'fleet_bridge']
+                for x in [x for x in others if service_child(x['pid'])]:
+                    # We hold the fleet lock, so no other supervisor lives: a bridge marked as a service
+                    # child is left over from one that died (SIGKILL outside systemd). Stop it.
+                    note(f'stopping leftover service fleet_bridge pid {x["pid"]}')
+                    stop_pid(x['pid'])
+                    others.remove(x)
+                if others:
+                    with lock:
+                        st['why'] = f'another fleet_bridge runs (pid {others[0]["pid"]}); waiting'
+                    next_start = time.monotonic() + 10
+                    save()
+                elif not time_ok():
+                    next_start = time.monotonic() + 15
+                    save()
+                else:
+                    try:
+                        values = read_fleet_env(p)
+                        argv = fleet_argv(p, env, values, want)
+                    except Refused as exc:
+                        note(f'cannot start fleet_bridge: {exc}')
+                        with lock:
+                            st.update(why=f'cannot start: {exc}', mode=None)
+                        next_start = time.monotonic() + bmax
+                        save()
+                        stop.wait(poll)
+                        continue
+                    test_exec = os.environ.get('SCT_ROBOT_TEST_EXEC')   # offline tests only
+                    # The bridge executable itself, not "ros2 run": its pid is then the bridge's pid.
+                    exe = os.path.join(package_prefix(env, 'fleet_bridge') or '', 'lib', 'fleet_bridge', 'fleet_bridge')
+                    cmd = [test_exec, *argv] if test_exec else ([exe, *argv[4:]] if os.path.isfile(exe) else argv)
+                    cenv = dict(env, **values, ROS_LOG_DIR=os.path.join(session, 'ros_log'), PYTHONUNBUFFERED='1',
+                                RCUTILS_LOGGING_BUFFERED_STREAM='0', SCT_FLEET_SERVICE='1')
+                    child = subprocess.Popen(cmd, env=cenv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                             start_new_session=True)
+                    child_t0 = time.monotonic()
+                    threading.Thread(target=pump, args=(child,), daemon=True).start()
+                    with lock:
+                        st.update(mode=mode, why=why, child_pid=child.pid,
+                                  child_started=dt.datetime.now().isoformat(timespec='seconds'),
+                                  sync=dict(state='starting', line='', at=None))
+                    note(f'fleet_bridge pid {child.pid} started in {mode} mode ({why})')
+                    save()
+            with lock:
+                st['next_start_in'] = max(0, round(next_start - time.monotonic())) if child is None else 0
+            stop.wait(poll)
+    finally:
+        if child is not None and child.poll() is None:
+            stop_child(child, 'service stopping')
+        with lock:
+            st.update(child_pid=None, mode=None, why='stopped', stopped=dt.datetime.now().isoformat(timespec='seconds'))
+        save()
+        os.close(fd)
+    return 0
+
+
+def service_child(pid):
+    """True when the process carries the SCT_FLEET_SERVICE mark the supervisor sets on its bridge."""
+    try:
+        return b'SCT_FLEET_SERVICE=1' in open(os.path.join(PROC, str(pid), 'environ'), 'rb').read().split(b'\0')
+    except OSError:
+        return False
+
+
+def stop_pid(pid, wait=10.0):
+    import signal
+    for sig, limit in ((signal.SIGINT, wait), (signal.SIGKILL, 5.0)):
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            return
+        end = time.monotonic() + limit
+        while time.monotonic() < end:
+            if not os.path.exists(f'/proc/{pid}'):
+                return
+            time.sleep(0.2)
+
+
+def systemctl_user(*args):
+    return subprocess.run(['systemctl', '--user', *args], capture_output=True, text=True, timeout=20)
+
+
+def cmd_fleet_status(p):
+    try:
+        active = systemctl_user('is-active', FLEET_UNIT).stdout.strip() or 'unknown'
+        enabled = systemctl_user('is-enabled', FLEET_UNIT).stdout.strip() or 'not installed'
+    except (OSError, subprocess.SubprocessError):
+        active, enabled = 'unknown', 'unknown'
+    try:
+        linger = subprocess.run(['loginctl', 'show-user', os.environ.get('USER', ''), '-p', 'Linger', '--value'],
+                                capture_output=True, text=True, timeout=10).stdout.strip() or '?'
+    except (OSError, subprocess.SubprocessError):
+        linger = '?'
+    print(f'service      {FLEET_UNIT}: {active}, {enabled}; linger {linger}'
+          + ('' if linger == 'yes' else ' (needed to start at boot without a login: sudo loginctl enable-linger $USER)'))
+    held = lock_info('fleet')
+    path = os.path.join(STATE_DIR, FLEET_STATUS)
+    st = None
+    if os.path.isfile(path):
+        try:
+            st = json.load(open(path))
+        except (OSError, ValueError):
+            st = None
+    if held and held.get('service') and st and st.get('pid') == held.get('pid'):
+        sync = st.get('sync') or {}
+        print(f'supervisor   pid {st["pid"]} since {st["started"]}; bridge mode {st.get("mode") or "-"} '
+              f'({st.get("why")}); restarts {st.get("restarts")}, last exit {st.get("last_exit")}')
+        print(f'backend      {sync.get("state")} at {sync.get("at")}: {sync.get("line", "")[-120:]}')
+        print(f'logs         {st.get("session")}')
+    elif held:
+        print(f'fleet        foreground "robot fleet" running: {json.dumps(held)}')
+    else:
+        print('fleet        not running')
+    want, why = fleet_wanted_commands(p)
+    print(f'commands     policy {p["FLEET_SERVICE_COMMANDS"]}: {"on" if want else "off"} now ({why}). '
+          'Online is not ready: the web still needs localized, motion ready and dispatch enabled')
+    for x in scan_processes():
+        if x['name'] == 'fleet_bridge':
+            print(f'  fleet_bridge pid {x["pid"]} commands_enabled={fleet_bridge_commands(x)}')
+    return 0
+
 def run(argv, env, dry_run, lock=None, session=None, extra_env=None):
     env = dict(env, **(extra_env or {}))
     if dry_run:
@@ -609,6 +864,9 @@ def cmd_status(p):
         print(f'  {x["name"]:18s} pid {x["pid"]:<7d} domain {x["domain"]} ns {x["namespace"]}{extra}')
     if not procs:
         print('  no robot, teleop, recorder or stop-key process')
+    fl = lock_info('fleet')
+    print(f'fleet        {("service " if fl.get("service") else "foreground ") + json.dumps(fl) if fl else "not running"}'
+          ' (details: robot fleet status)')
     ss = sessions(p)
     total = sum(s['size'] for s in ss) / 1e6
     print(f'logs         {len(ss)} launcher sessions under {log_root(p)}, ros_log {total:.0f} MB '
@@ -694,8 +952,11 @@ def main(argv=None):
                               help='set the initial pose from the LiDAR (overrides AUTO_INITIAL_POSE)')
             pose.add_argument('--manual-pose', action='store_true',
                               help='wait for a 2D Pose Estimate as before (overrides AUTO_INITIAL_POSE)')
-    fl = sub.add_parser('fleet')
+    fl = sub.add_parser('fleet', help='fleet_bridge: foreground, or the boot service (status/start/stop/restart/logs)')
+    fl.add_argument('action', nargs='?', choices=('status', 'start', 'stop', 'restart', 'logs'))
     fl.add_argument('--commands', action='store_true')
+    fl.add_argument('--service', action='store_true', help=argparse.SUPPRESS)   # run by sct-fleet.service
+    fl.add_argument('-f', '--follow', action='store_true', help='with logs: follow')
     sub.add_parser('reset-latch')
     sub.add_parser('relocalize', help='redo the LiDAR initial pose (robot nav with auto pose, robot stationary)')
     sub.add_parser('viewer', help='bridge for RViz on the laptop (amr-rviz --r3)')
@@ -733,6 +994,15 @@ def main(argv=None):
             return cmd_logs(p, a.action == 'prune', a.yes and not a.dry_run)
         if a.cmd == 'calibration':
             return cmd_accept(p, a.dir, a.yes and not a.dry_run)
+        if a.cmd == 'fleet' and a.action == 'status':
+            return cmd_fleet_status(p)
+        if a.cmd == 'fleet' and a.action in ('start', 'stop', 'restart', 'logs'):
+            argv = (['journalctl', '--user', '-u', FLEET_UNIT, '-n', '200', '--no-pager'] + (['-f'] if a.follow else [])
+                    if a.action == 'logs' else ['systemctl', '--user', a.action, FLEET_UNIT])
+            if a.dry_run:
+                print(json.dumps(dict(argv=argv), indent=1))
+                return 0
+            os.execvp(argv[0], argv)
         env = build_env(p)
         if a.cmd == 'env':
             for k, v in sorted(env.items()):
@@ -761,6 +1031,15 @@ def main(argv=None):
             if auto_pose:
                 print('Initial pose from the LiDAR: keep the robot still for a few seconds after Nav2 is up. '
                       'Result on /' + p['ROBOT_ID'] + '/pose_bootstrap/status; NEEDS_MANUAL_POSE = set it in RViz.')
+            if fleet:
+                svc = lock_info('fleet') or {}
+                if svc.get('service') and p['FLEET_SERVICE_COMMANDS'].strip().lower() != 'off':
+                    print('fleet service: switches fleet_bridge to commands a few seconds after Nav2 starts, and back '
+                          'to telemetry when this session ends (robot fleet status).')
+                elif svc.get('service'):
+                    print('fleet service runs telemetry only (FLEET_SERVICE_COMMANDS=off): no Tour from the web.')
+                else:
+                    print('no fleet service: run "robot fleet --commands" in another terminal for Tours from the web.')
             return run(argv, env, False, lock=('workflow', dict(workflow=a.cmd, fleet=fleet, auto_pose=auto_pose,
                                                                 pid=os.getpid(), session=session)),
                        session=session, extra_env={'ROS_LOG_DIR': os.path.join(session, 'ros_log')})
@@ -793,8 +1072,20 @@ def main(argv=None):
                 raise Refused('no session directory: give one, or start a workflow with robot first')
             argv = ['bash', os.path.join(tools, 'ops', 'record_session.sh'), a.action, d]
             return run(argv, env, a.dry_run, extra_env={'ROBOT_NS': '/' + p['ROBOT_ID']})
+        if a.cmd == 'fleet' and a.service:
+            if lock_info('fleet'):
+                raise Refused(f'fleet lock held: {json.dumps(lock_info("fleet"))}')
+            if a.dry_run:
+                want, why = fleet_wanted_commands(p)
+                values = read_fleet_env(p)
+                return run(fleet_argv(p, env, values, want), env, True, lock=('fleet', dict(service=True)))
+            return fleet_service(p, env)
         if a.cmd == 'fleet':
-            if any(x['name'] == 'fleet_bridge' for x in procs) or lock_info('fleet'):
+            held_fleet = lock_info('fleet') or {}
+            if held_fleet.get('service'):
+                raise Refused('the fleet service owns the bridge (robot fleet status). It switches to commands by '
+                              'itself while "robot nav --fleet" runs; to run one by hand: robot fleet stop')
+            if any(x['name'] == 'fleet_bridge' for x in procs) or held_fleet:
                 raise Refused('a fleet_bridge is already running')
             values = read_fleet_env(p)
             if a.commands:
