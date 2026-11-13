@@ -1,12 +1,13 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Lock, LockOpen } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
+import { formatDate, formatTime } from '../../components/ui/date-time'
 import { notify } from '../../components/ui/toast-store'
 import { buttonClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, SkeletonRows } from '../../features/administration/AdminUi'
 import { scheduleBlockError, useCreateScheduleBlock, useRemoveScheduleBlock, useScheduleBlocks } from '../../features/administration/schedule/schedule-blocks'
-import { campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
+import { campusDay } from '../../features/administration/tours/tour-calendar'
 import type { TourShift, TourShiftBlock } from '../../features/administration/tours/types'
 
 const addDays = (day: string, delta: number) => {
@@ -15,8 +16,9 @@ const addDays = (day: string, delta: number) => {
   return date.toISOString().slice(0, 10)
 }
 const mondayOf = (day: string) => addDays(day, -((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7))
-const dayLabel = (day: string) => new Intl.DateTimeFormat('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`))
-const span = (shift: TourShift) => `${campusTime(shift.startsAt)} - ${campusTime(shift.endsAt)}`
+// Noon on the campus day, so the printed date never slips across midnight.
+const dayLabel = (day: string) => formatDate(`${day}T12:00:00+07:00`, { weekday: 'short' })
+const span = (shift: TourShift) => `${formatTime(shift.startsAt)} - ${formatTime(shift.endsAt)}`
 
 type Target =
   | { kind: 'close'; date: string; shift: TourShift | null }
@@ -56,18 +58,18 @@ export default function AdminSchedulePage() {
   const today = campusDay(now)
 
   return <AdminPage>
-    <PageHeader eyebrow="Cấu hình" title="Lịch vận hành" description="Khoá cả ngày hoặc một ca khi nghỉ lễ, bảo trì. Staff không tạo được Tour vào ca bị khoá và thấy lý do trên Lịch Tour." />
+    <PageHeader eyebrow="Quản trị" title="Lịch vận hành" description="Khoá cả ngày hoặc một ca khi nghỉ lễ, bảo trì." />
     <section className={panelClass} aria-label="Các ca trong tuần">
       <div className="flex flex-wrap items-center gap-2 border-b border-[#f1f5f9] p-3">
         <button type="button" className={`${buttonClass('secondary', 'sm')} size-9 px-0`} aria-label="Tuần trước" onClick={() => setMonday(addDays(monday, -7))}><ChevronLeft size={16} aria-hidden="true" /></button>
         <h2 className="px-1 text-[15px] font-semibold text-[#0f172a] tabular-nums">{dayLabel(monday)} đến {dayLabel(sunday)}</h2>
         <button type="button" className={`${buttonClass('secondary', 'sm')} size-9 px-0`} aria-label="Tuần sau" onClick={() => setMonday(addDays(monday, 7))}><ChevronRight size={16} aria-hidden="true" /></button>
         <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setMonday(mondayOf(campusDay(new Date())))}>Tuần này</button>
-        <span className="ml-auto text-xs text-[#64748b]">Giờ Việt Nam. Danh sách ca sửa trong cấu hình máy chủ.</span>
+        <span className="ml-auto text-xs text-[#64748b]">Giờ Việt Nam</span>
       </div>
       {shifts.isPending ? <SkeletonRows rows={7} />
         : shifts.isError ? <AdminErrorPanel title={scheduleBlockError(shifts.error).message} onRetry={() => void shifts.refetch()} />
-        : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm" aria-label="Lịch vận hành">
+        : <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-sm" aria-label="Lịch vận hành">
           <thead><tr>
             <th className={thClass}>Ngày</th>
             {columns.map(shift => <th key={shift.code} className={thClass}>{shift.name}<span className="block font-normal text-[#64748b] tabular-nums">{span(shift)}</span></th>)}
@@ -78,16 +80,19 @@ export default function AdminSchedulePage() {
             const past = day.date < today
             return <tr key={day.date} className="border-t border-[#f1f5f9] align-top">
               <td className={`${tdClass} font-medium whitespace-nowrap first-letter:uppercase`}>{dayLabel(day.date)}</td>
-              {day.shifts.map(shift => <td key={shift.code} className={tdClass}>
+              {day.shifts.map(shift => <td key={shift.code} className={`${tdClass} relative`}>
                 {dayBlock ? <span className="text-xs text-[#64748b]">Khoá theo ngày</span>
                   : shift.block ? <Closed reason={shift.block.reason} label={`Gỡ khoá ${shift.name} ${day.date}`} onRemove={() => open({ kind: 'remove', date: day.date, shift, block: shift.block! })} />
                   : past || new Date(shift.endsAt) <= now ? <PastDay />
-                  : <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Khoá ${shift.name} ${day.date}`} onClick={() => open({ kind: 'close', date: day.date, shift })}><Lock size={13} aria-hidden="true" />Khoá ca</button>}
+                  : <LockCell label={`Khoá ${shift.name} ${day.date}`} items={[
+                    { label: `Khoá ${shift.name}`, onSelect: () => open({ kind: 'close', date: day.date, shift }) },
+                    { label: 'Khoá cả ngày', onSelect: () => open({ kind: 'close', date: day.date, shift: null }) },
+                  ]} />}
               </td>)}
-              <td className={tdClass}>
+              <td className={`${tdClass} relative`}>
                 {dayBlock ? <Closed reason={dayBlock.reason} label={`Gỡ khoá cả ngày ${day.date}`} onRemove={() => open({ kind: 'remove', date: day.date, shift: null, block: dayBlock })} />
                   : past ? <PastDay />
-                  : <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Khoá cả ngày ${day.date}`} onClick={() => open({ kind: 'close', date: day.date, shift: null })}><Lock size={13} aria-hidden="true" />Khoá ngày</button>}
+                  : <LockCell label={`Khoá cả ngày ${day.date}`} items={[{ label: 'Khoá cả ngày', onSelect: () => open({ kind: 'close', date: day.date, shift: null }) }]} />}
               </td>
             </tr>
           })}</tbody>
@@ -107,6 +112,37 @@ export default function AdminSchedulePage() {
       </div>}
     </ConfirmationDialog>}
   </AdminPage>
+}
+
+const touchOnly = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(hover: none)').matches
+
+type LockItem = { label: string; onSelect: () => void }
+
+/**
+ * An open cell: the whole cell is the lock control, its lock icon shows only on hover or keyboard focus.
+ * With a pointer the click opens the confirmation; on a touch screen (no hover) a tap opens a menu first.
+ */
+function LockCell({ label, items }: { label: string; items: LockItem[] }) {
+  const [menu, setMenu] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!menu) return
+    const away = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setMenu(false) }
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [menu])
+  const choose = (item: LockItem) => { setMenu(false); item.onSelect() }
+  return <div ref={root} className="group min-h-9">
+    <button type="button" aria-label={label} aria-haspopup={touchOnly() ? 'menu' : undefined} aria-expanded={touchOnly() ? menu : undefined}
+      className="absolute inset-0 flex items-center justify-center rounded-lg text-[#475569] outline-none hover:bg-[#f8fafc] focus-visible:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-[#2563eb]/40 focus-visible:ring-inset"
+      onClick={() => touchOnly() ? setMenu(value => !value) : items[0].onSelect()}>
+      <Lock size={15} aria-hidden="true" data-lock-icon className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none" />
+    </button>
+    {menu && <div role="menu" aria-label={label} className="absolute top-full left-1/2 z-30 mt-1 w-44 -translate-x-1/2 rounded-xl border border-[#e5e7eb] bg-white p-1.5 shadow-[0_18px_40px_-20px_rgba(15,23,42,0.35)]"
+      onKeyDown={event => { if (event.key === 'Escape') setMenu(false) }}>
+      {items.map(item => <button key={item.label} type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[#0f172a] hover:bg-[#f1f5f9]" onClick={() => choose(item)}><Lock size={13} aria-hidden="true" />{item.label}</button>)}
+    </div>}
+  </div>
 }
 
 const PastDay = () => <span className="text-xs text-[#64748b]">Đã qua</span>
