@@ -1,5 +1,6 @@
 import { Grid, Html, OrbitControls } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useRef } from 'react'
 import type { MapPose, RouteStop } from '../../api/contracts/staff'
 import { CampusModel } from './CampusModel'
 import { mapToScene } from './demo-motion'
@@ -13,7 +14,7 @@ import { nodePoint } from './patrol-routing'
 import { PointCameras } from './PointCameras'
 import { mergeFleetRoutes } from './fleet-paths'
 import { CampusLighting } from './CampusLighting'
-import { MOUSE, PCFShadowMap, TOUCH } from 'three'
+import { MOUSE, PCFShadowMap, TOUCH, Vector3 } from 'three'
 import type { TwinTool } from './TwinTools'
 import { SceneRuler } from './SceneRuler'
 import { PATROL_MODEL_SCALE } from './patrol-demo'
@@ -38,6 +39,9 @@ export type TwinRobot = {
   exactPose?: boolean
   traffic?: 'hold' | 'yield' | 'clear'
 }
+
+/** A request to fly the camera to a scene point; a new `id` repeats the flight to the same point. */
+export type TwinFocus = { id: number; position: [number, number, number] }
 
 export type TwinRoute = {
   stops: RouteStop[]
@@ -68,6 +72,7 @@ export type TwinSceneProps = {
   cameraPoint?: number
   onSelectCamera?: (point: number) => void
   tool?: TwinTool
+  focus?: TwinFocus | null
 }
 
 const STOP_COLOR: Record<RouteStop['status'], string> = {
@@ -79,6 +84,37 @@ const STOP_COLOR: Record<RouteStop['status'], string> = {
 
 // Match the authored garden frame in web/scripts/campus-garden.mjs.
 const CAMPUS_VIEW_YAW = 0.12327
+
+const FOCUS_DISTANCE = 3
+const FOCUS_SECONDS = 0.9
+
+/**
+ * Flies the orbit camera to `focus`, keeping the current viewing direction, so
+ * a robot drawn to scale (a few pixels on the whole floor) fills a useful part
+ * of the view. The user can orbit and zoom away again as usual.
+ */
+function FocusCamera({ focus }: { focus?: TwinFocus | null }) {
+  const camera = useThree(state => state.camera)
+  const controls = useThree(state => state.controls) as unknown as { target: Vector3; update: () => void } | null
+  const flight = useRef<{ fromPosition: Vector3; fromTarget: Vector3; toPosition: Vector3; toTarget: Vector3; t: number } | null>(null)
+  useEffect(() => {
+    if (!focus || !controls) return
+    const toTarget = new Vector3(...focus.position)
+    const direction = camera.position.clone().sub(controls.target).normalize()
+    flight.current = { fromPosition: camera.position.clone(), fromTarget: controls.target.clone(), toPosition: toTarget.clone().addScaledVector(direction, FOCUS_DISTANCE), toTarget, t: 0 }
+  }, [focus, controls, camera])
+  useFrame((_, delta) => {
+    const current = flight.current
+    if (!current || !controls) return
+    current.t = Math.min(1, current.t + delta / FOCUS_SECONDS)
+    const eased = 1 - (1 - current.t) ** 3
+    camera.position.lerpVectors(current.fromPosition, current.toPosition, eased)
+    controls.target.lerpVectors(current.fromTarget, current.toTarget, eased)
+    controls.update()
+    if (current.t === 1) flight.current = null
+  })
+  return null
+}
 
 const ground = (pose: MapPose, transform?: Affine2D, groundY = 0): [number, number, number] => {
   const { position } = transform ? mapToScenePose({ x: pose.x, y: pose.y, yaw: 0 }, transform) : mapToScene({ x: pose.x, y: pose.y, yaw: 0 })
@@ -129,7 +165,7 @@ function Route({ route, selectedStopId, showLabels }: { route: TwinRoute; select
  * The WebGL half of the operational twin. Kept apart from the DOM wrapper so
  * tests can replace it: jsdom has no WebGL (web/AGENTS.md §5).
  */
-export default function TwinScene({ robots, route, selectedStopId, overhead, showLabels, modelKey, syntheticPatrol = false, patrolPaths = [], seconds = 0, onSelectRobot, heat = {}, viewMode = 'scene', sensors = false, showCameras = false, cameraPoint = 0, onSelectCamera, tool = 'select' }: TwinSceneProps) {
+export default function TwinScene({ robots, route, selectedStopId, overhead, showLabels, modelKey, syntheticPatrol = false, patrolPaths = [], seconds = 0, onSelectRobot, heat = {}, viewMode = 'scene', sensors = false, showCameras = false, cameraPoint = 0, onSelectCamera, tool = 'select', focus }: TwinSceneProps) {
   const campusView = modelKey === 'nvh-v3'
   const viewX = (overhead ? -0.01 : -14) * Math.cos(CAMPUS_VIEW_YAW)
   const viewZ = (overhead ? 0.01 : 14) * Math.sin(CAMPUS_VIEW_YAW)
@@ -176,14 +212,26 @@ export default function TwinScene({ robots, route, selectedStopId, overhead, sho
         <RobotModel key={robot.id} cad={syntheticPatrol} onSelect={onSelectRobot ? () => onSelectRobot(robot.id) : undefined} pose={{ x: robot.pose.x, y: robot.pose.y, yaw: robot.pose.yaw ?? 0 }} transform={robot.transform} accent={robot.color} pulse={robot.active && !robot.stale} dimmed={robot.stale || (!robot.focused && Boolean(route))} stale={robot.stale} headYaw={robot.headYaw} scale={robot.scale} groundY={robot.groundY} exactPose={robot.exactPose} showDirection={!syntheticPatrol}>
           {syntheticPatrol && viewMode === 'traffic' && <mesh position={[0,0.025,0]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[0.72,0.85,40]}/><meshBasicMaterial color={robot.traffic==='hold'?'#dc2626':robot.traffic==='yield'?'#f59e0b':'#16a34a'} transparent opacity={0.75}/></mesh>}
           {syntheticPatrol && sensors && <mesh position={[0,0.02,0]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[0.2,4,48,1,-Math.PI*0.75,Math.PI*1.5]}/><meshBasicMaterial color={robot.color} transparent opacity={0.06} depthWrite={false}/></mesh>}
-          <Html position={[0, 1.1, 0]} center distanceFactor={syntheticPatrol ? undefined : 14} zIndexRange={[20, 10]}>
-            <span style={syntheticPatrol ? { backgroundColor: robot.color } : undefined} className={`pointer-events-none rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold whitespace-nowrap shadow-sm ${syntheticPatrol ? 'inline-block -translate-y-5 text-white' : robot.stale ? 'bg-[#fff8e6] text-[#8a5a06]' : robot.focused ? 'bg-[#1f314d] text-white' : 'bg-white/90 text-[#40546f]'}`}>
-              {robot.name}{robot.stale ? ' · dữ liệu cũ' : ''}
-            </span>
+          {/* A robot drawn to scale is a few pixels across on the whole floor, often behind a corridor
+              wall: a halo drawn through walls finds it. Stale uses the label's amber; grey vanishes on the floor. */}
+          {!syntheticPatrol && <mesh name="robot-locator" position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
+            <ringGeometry args={[1.5, 1.9, 48]} />
+            <meshBasicMaterial color={robot.stale ? '#d69412' : robot.color} transparent opacity={0.9} depthTest={false} depthWrite={false} toneMapped={false} />
+          </mesh>}
+          {/* Fixed pixel size, lifted above the robot: a label that grows with zoom covers the robot it names. */}
+          <Html position={[0, 1.1, 0]} center zIndexRange={[20, 10]}>
+            {syntheticPatrol ? <span style={{ backgroundColor: robot.color }} className="pointer-events-none inline-block -translate-y-5 rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold whitespace-nowrap text-white shadow-sm">{robot.name}</span>
+              : <span className="pointer-events-none flex -translate-y-6 flex-col items-center">
+                <span className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold whitespace-nowrap shadow-sm ${robot.stale ? 'bg-[#fff8e6] text-[#8a5a06]' : robot.focused ? 'bg-[#1f314d] text-white' : 'bg-white/90 text-[#40546f]'}`}>
+                  {robot.name}{robot.stale ? ' · dữ liệu cũ' : ''}
+                </span>
+                <span aria-hidden="true" className={`h-0 w-0 border-x-[5px] border-t-[7px] border-x-transparent ${robot.stale ? 'border-t-[#fff8e6]' : robot.focused ? 'border-t-[#1f314d]' : 'border-t-white/90'}`} />
+              </span>}
           </Html>
         </RobotModel>
       ))}
-      <OrbitControls makeDefault enabled={tool !== 'measure'} mouseButtons={{ LEFT: tool === 'pan' ? MOUSE.PAN : MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }} touches={{ ONE: tool === 'pan' ? TOUCH.PAN : TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }} target={modelKey === 'nvh-v3' ? [0, 0.6, 0] : [0, 0, 0]} minDistance={6} maxDistance={modelKey === 'nvh-v3' ? 80 : 32} maxPolarAngle={Math.PI / 2.1} />
+      <OrbitControls makeDefault enabled={tool !== 'measure'} mouseButtons={{ LEFT: tool === 'pan' ? MOUSE.PAN : MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }} touches={{ ONE: tool === 'pan' ? TOUCH.PAN : TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }} target={modelKey === 'nvh-v3' ? [0, 0.6, 0] : [0, 0, 0]} minDistance={modelKey === 'nvh-v3' ? 1.5 : 6} maxDistance={modelKey === 'nvh-v3' ? 80 : 32} maxPolarAngle={Math.PI / 2.1} />
+      <FocusCamera focus={focus} />
     </Canvas>
   )
 }
