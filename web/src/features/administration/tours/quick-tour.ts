@@ -39,3 +39,12 @@ export const QUICK_TOUR_RULES = {
 
 /** Where a Representative opens a Tour to register a group (`/dai-dien/buoi/:tourId` in app/router). */
 export const representativeTourPath = (tourId: string) => `/dai-dien/buoi/${encodeURIComponent(tourId)}`
+
+/** "28:41" until the deadline; null once it has passed. */
+export function countdownText(deadline: string, now: number): string | null {
+  const left = Math.floor((new Date(deadline).getTime() - now) / 1000)
+  if (!Number.isFinite(left) || left <= 0) return null
+  const minutes = Math.floor(left / 60)
+  const seconds = String(left % 60).padStart(2, '0')
+  return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`
+}

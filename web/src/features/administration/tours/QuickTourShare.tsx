@@ -5,17 +5,8 @@ import { panelClass } from '../../../components/ui/ConsolePrimitives'
 import { formatTime } from '../../../components/ui/date-time'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { useNow } from '../../staff/use-now'
-import { representativeTourPath } from './quick-tour'
+import { countdownText, representativeTourPath } from './quick-tour'
 import type { TourSummary } from './types'
-
-/** "28:41" until the deadline; null once it has passed. */
-export function countdownText(deadline: string, now: number): string | null {
-  const left = Math.floor((new Date(deadline).getTime() - now) / 1000)
-  if (!Number.isFinite(left) || left <= 0) return null
-  const minutes = Math.floor(left / 60)
-  const seconds = String(left % 60).padStart(2, '0')
-  return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`
-}
 
 type CopyState = 'idle' | 'copied' | 'manual'
 

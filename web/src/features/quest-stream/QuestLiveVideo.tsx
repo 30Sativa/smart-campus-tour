@@ -7,7 +7,7 @@ import { useWhepStream, type LiveStreamStatus } from './use-whep-stream'
 const COPY: Record<Exclude<LiveStreamStatus, 'live'>, { title: string; hint: string }> = {
   idle: { title: 'Chưa có quyền xem hình Quest', hint: 'Máy chủ chưa cấp nguồn hình cho trang này.' },
   connecting: { title: 'Đang kết nối nguồn hình…', hint: 'Hình ảnh sẽ xuất hiện khi kính bắt đầu phát.' },
-  offline: { title: 'Không có tín hiệu từ kính Quest', hint: 'Kiểm tra cáp USB, kính đang bật, dịch vụ quest-stream và mediamtx trên miniPC. Đang tự thử lại…' },
+  offline: { title: 'Không có tín hiệu từ kính Quest', hint: 'Chưa nhận được hình từ camera của robot. Kiểm tra kính đang bật, còn lỗi thì báo Kỹ thuật kiểm tra. Đang tự thử lại…' },
   error: { title: 'Trình duyệt không phát được hình trực tiếp (WebRTC)', hint: 'Hãy dùng Chrome, Edge, Firefox hoặc Safari bản mới.' },
 }
 

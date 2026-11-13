@@ -1,9 +1,8 @@
 import { ArrowRight, Check, ChevronDown, Info, Minus, ShieldAlert, X } from 'lucide-react'
-import { formatDate, formatDuration, formatTime } from '../../../components/ui/date-time'
 import type { TourStartCheck } from '../../administration/tours/types'
 import {
   CHECK_FIX, CHECK_GROUP_LABEL, CHECK_SOURCE_LABEL, blockerOwner, checkCountText, checkCounts, checkDetail, checkInfo, checkVerdict,
-  groupVerdict, type BlockerOwner, type CheckGroup, type CheckVerdict,
+  groupVerdict, opensAtText, type BlockerOwner, type CheckGroup, type CheckVerdict,
 } from './operation-labels'
 
 const ORDER: CheckGroup[] = ['tour', 'robot', 'telemetry', 'system', 'onsite', 'other']
@@ -95,11 +94,6 @@ function windowFix(opensAt: string | undefined, now: number | undefined): string
   if (!opensAt || now === undefined) return undefined
   if (new Date(opensAt).getTime() <= now) return 'Đã quá giờ bắt đầu: mở lại Tour để dời lịch.'
   return `Mở lúc ${opensAtText(opensAt, now)}. Không cần làm gì, mục này tự đạt khi tới giờ.`
-}
-
-/** "14:30 T6 13/11/2026 (còn 2 ngày 1 giờ)": when Start opens, and how far away that is. */
-export function opensAtText(opensAt: string, now: number): string {
-  return `${formatTime(opensAt)} ${formatDate(opensAt, { weekday: 'short' })} (còn ${formatDuration(Math.ceil((new Date(opensAt).getTime() - now) / 60_000) * 60)})`
 }
 
 /** Every check the server returned, one folded line per group with its count. */

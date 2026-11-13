@@ -1,5 +1,5 @@
 import type { StatusTone } from '../../../components/ui/status-tone'
-import { formatRelative } from '../../../components/ui/date-time'
+import { formatDate, formatDuration, formatRelative, formatTime } from '../../../components/ui/date-time'
 import type { RobotCommandState, TourLegKind, TourOperationalStatus, TourStep } from '../../administration/tours/types'
 
 /**
@@ -143,6 +143,11 @@ const DETAIL: Record<string, DetailText> = {
     : /Chưa có nguồn/.test(detail) ? 'Máy chủ chưa theo dõi được kết nối này.'
     : 'Người vận hành chưa mở trang Staff, hoặc trang đã mất kết nối.',
   commandTransportEnabled: passed => passed ? 'Kênh lệnh robot đang bật.' : 'Máy chủ đang tắt kênh lệnh robot, nên chưa tạo được lệnh cho robot.',
+}
+
+/** "14:30 T6 13/11/2026 (còn 2 ngày 1 giờ)": when Start opens, and how far away that is. */
+export function opensAtText(opensAt: string, now: number): string {
+  return `${formatTime(opensAt)} ${formatDate(opensAt, { weekday: 'short' })} (còn ${formatDuration(Math.ceil((new Date(opensAt).getTime() - now) / 60_000) * 60)})`
 }
 
 /**

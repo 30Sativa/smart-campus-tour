@@ -10,14 +10,14 @@ import { useRequestId } from '../../features/administration/tours/hooks'
 import type { StartConfirmation, TourStartChecks } from '../../features/administration/tours/types'
 import { QuestLiveVideo } from '../../features/quest-stream/QuestLiveVideo'
 import { DEV_QUEST_SOURCE, toQuestSource } from '../../features/quest-stream/stream-access'
-import { useCameraLease, type RobotCameraStatus } from '../../features/quest-stream/camera-lease'
+import { cameraLeaseHint, useCameraLease } from '../../features/quest-stream/camera-lease'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { isTourStale, useOperationTour, useStartChecks, useStartTour } from '../../features/staff/operations/hooks'
 import { useNow } from '../../features/staff/use-now'
-import { blockerOwner, checkCountText, checkCounts, checkVerdict } from '../../features/staff/operations/operation-labels'
+import { blockerOwner, checkCountText, checkCounts, checkVerdict, opensAtText } from '../../features/staff/operations/operation-labels'
 import { operationRefusal } from '../../features/staff/operations/operation-errors'
 import { RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
-import { BlockerList, CheckGroups, opensAtText } from '../../features/staff/operations/StartCheckList'
+import { BlockerList, CheckGroups } from '../../features/staff/operations/StartCheckList'
 import { TourStepper } from '../../features/staff/operations/TourStepper'
 
 /** The four on-site confirmations the Start request carries (SRS §7); the server records them. */
@@ -29,14 +29,6 @@ const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: 
 ]
 const NONE: StartConfirmation = { robotPlaced: false, areaClear: false, attendantPresent: false, previewChecked: false }
 
-const CAMERA_OFFLINE = 'Chưa có hình từ kính trên robot. Kiểm tra kính đang bật, còn lỗi thì báo Kỹ thuật kiểm tra. Đang tự thử lại…'
-/** What the camera panel says while it has no picture, from the last lease answer (ADR-0052), in an operator's words. */
-function startCameraHint(status: RobotCameraStatus | undefined, failed: boolean): string {
-  if (failed) return 'Không gửi được yêu cầu bật camera tới máy chủ. Đang thử lại…'
-  if (!status) return CAMERA_OFFLINE
-  if (!status.robotListening) return 'Robot chưa nhận yêu cầu bật camera. Kiểm tra robot đang bật và có mạng, còn lỗi thì báo Kỹ thuật kiểm tra.'
-  return 'Đang bật camera trên robot. Hình sẽ lên sau khoảng 30 giây.'
-}
 const slotText = (value: string) => `${formatDate(value, { weekday: 'short' })} ${formatTime(value)}`
 
 type Verdict = { tone: 'ok' | 'info' | 'warn'; title: string; note: string }
@@ -209,7 +201,7 @@ export default function StartCheckPage() {
           <section className={panelClass} aria-label="Hình camera">
             <PanelHead title="Hình camera" />
             <div className="p-3">{cameraSource ? <QuestLiveVideo source={cameraSource} label={reservation?.robotCode}
-              offlineHint={startCameraHint(cameraLease.data, cameraLease.isError)} />
+              offlineHint={cameraLeaseHint(cameraLease.data, cameraLease.isError)} />
               : <p className="text-[13px] leading-5 text-muted">{cameraLease.isPending && ready
                 ? 'Đang xin quyền xem camera…'
                 : 'Máy chủ chưa cấp luồng camera cho robot này. Xem hình trên thiết bị trước khi xác nhận.'}</p>}</div>

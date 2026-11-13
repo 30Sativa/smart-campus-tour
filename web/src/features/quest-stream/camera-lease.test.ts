@@ -11,7 +11,7 @@ describe('cameraLeaseHint (ADR-0052)', () => {
     expect(cameraLeaseHint(status(), false)).toContain('Đang bật camera trên robot')
   })
   it('says the robot cannot be reached when it never asked the backend', () => {
-    expect(cameraLeaseHint(status({ robotListening: false, lastPollAt: null }), false)).toContain('QUEST_CONTROL_URL')
+    expect(cameraLeaseHint(status({ robotListening: false, lastPollAt: null }), false)).toContain('Robot chưa nhận yêu cầu bật camera')
   })
   it('says the request failed', () => {
     expect(cameraLeaseHint(undefined, true)).toContain('Không gửi được')
