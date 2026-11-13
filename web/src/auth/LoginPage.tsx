@@ -133,6 +133,10 @@ export default function LoginPage() {
         </button>
       </form>
 
+      <div className="auth-help">
+        <p>Quên mật khẩu? Liên hệ quản trị viên của trường.</p>
+        <p>Học sinh không cần tài khoản: mở link trong email lời mời.</p>
+      </div>
     </>
   )
 }
