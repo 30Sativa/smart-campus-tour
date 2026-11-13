@@ -58,6 +58,9 @@ PROFILE_KEYS = {
     # Project demo: a 2D Pose Estimate alone counts as localized (RViz sets 0.25 m^2 / 0.0685 rad^2).
     # fleet_bridge's own defaults (0.09 / 0.05) need the robot driven a little after the pose.
     'LOCALIZED_MAX_XY_VARIANCE': '0.3', 'LOCALIZED_MAX_YAW_VARIANCE': '0.1',
+    # One HTTPS request to the backend takes about 1 s from the lab; a leg start posts its result and
+    # then polls, so the fleet_bridge default of 1.5 s cut legs as link loss (13/11/2026).
+    'MOTION_PERMIT_LINK_TIMEOUT_SEC': '5.0',
     'SCT_LOG_ROOT': '~/amr_logs/runs', 'LOG_KEEP_DAYS': '30', 'LOG_MAX_MB': '2000', 'MIN_FREE_GB': '5',
 }
 NODE_PATTERNS = {
@@ -454,7 +457,8 @@ def fleet_argv(p, env, values, commands):
         # ADR-0049: commands only together with the motion permit; report period below 2 s.
         argv += ['-p', 'commands_enabled:=true', '-p', 'report_period_sec:=0.5',
                  '-p', f'localized_max_xy_variance:={float(p["LOCALIZED_MAX_XY_VARIANCE"])}',
-                 '-p', f'localized_max_yaw_variance:={float(p["LOCALIZED_MAX_YAW_VARIANCE"])}']
+                 '-p', f'localized_max_yaw_variance:={float(p["LOCALIZED_MAX_YAW_VARIANCE"])}',
+                 '-p', f'motion_permit_link_timeout_sec:={float(p["MOTION_PERMIT_LINK_TIMEOUT_SEC"])}']
         if values.get('FLEET_MAP_PACKAGE_PATH'):
             argv += ['-p', f'map_package_path:={values["FLEET_MAP_PACKAGE_PATH"]}',
                      '-p', f'map_package_sha256:={values["FLEET_MAP_PACKAGE_SHA256"].lower()}']
