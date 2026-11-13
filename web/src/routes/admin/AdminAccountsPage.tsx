@@ -37,7 +37,7 @@ export default function AdminAccountsPage() {
       <PageHeader
         eyebrow="Tài khoản"
         title="Quản lý tài khoản"
-        description="Tạo tài khoản Staff, Technical Staff và Đại diện trường, tìm kiếm và bật tắt quyền truy cập. Admin được cấp riêng qua cấu hình ban đầu."
+        description="Tạo tài khoản Nhân viên vận hành, Nhân viên kỹ thuật và Đại diện trường, sửa họ tên, đặt lại mật khẩu và bật tắt quyền truy cập."
         action={<button type="button" onClick={() => setCreateOpen(true)} className={buttonClass('primary')}><Plus size={15} aria-hidden="true" />Tạo tài khoản</button>}
       />
 
@@ -64,7 +64,7 @@ export default function AdminAccountsPage() {
         ) : pageData?.data.length === 0 ? (
           <EmptyState
             title={debouncedSearch ? 'Không có tài khoản nào khớp tìm kiếm' : 'Chưa có tài khoản nào'}
-            description={debouncedSearch ? 'Thử tên đăng nhập hoặc họ tên khác.' : 'Tạo tài khoản Staff hoặc Đại diện trường để bắt đầu.'}
+            description={debouncedSearch ? 'Thử tên đăng nhập hoặc họ tên khác.' : 'Tạo tài khoản Nhân viên vận hành, Nhân viên kỹ thuật hoặc Đại diện trường để bắt đầu.'}
             action={!debouncedSearch ? <button type="button" onClick={() => setCreateOpen(true)} className={buttonClass('primary', 'sm')}><Plus size={15} aria-hidden="true" />Tạo tài khoản</button> : undefined}
           />
         ) : pageData ? (

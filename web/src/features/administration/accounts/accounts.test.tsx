@@ -9,11 +9,11 @@ import type { AccountListItem } from './types'
 
 const staff: AccountListItem = {
   id: 'staff-id', username: 'staff.user', fullName: 'Staff User', role: 'Staff', isActive: true,
-  createdAt: '2026-09-30T10:00:00Z', updatedAt: null,
+  createdAt: '2026-09-30T10:00:00Z', updatedAt: null, rowVersion: 'AAAAAAAAAAE=',
 }
 const representative: AccountListItem = {
   id: 'rep-id', username: 'rep.user', fullName: 'Representative User', role: 'Representative', isActive: false,
-  createdAt: '2026-09-29T10:00:00Z', updatedAt: '2026-09-30T11:00:00Z',
+  createdAt: '2026-09-29T10:00:00Z', updatedAt: '2026-09-30T11:00:00Z', rowVersion: 'AAAAAAAAAAI=',
 }
 const admin: AccountListItem = {
   ...staff, id: 'admin-id', username: 'admin.user', fullName: 'Admin User', role: 'Admin',
@@ -116,7 +116,7 @@ describe('Admin Account Management', () => {
     fireEvent.change(within(dialog).getByLabelText('Tên đăng nhập'), { target: { value: 'new.staff' } })
     fireEvent.change(within(dialog).getByLabelText('Họ tên'), { target: { value: 'New Staff' } })
     fireEvent.change(within(dialog).getByLabelText('Vai trò'), { target: { value: role } })
-    expect(within(dialog).getAllByRole('option').map((option) => option.textContent)).toEqual(['Chọn vai trò', 'Staff', 'Technical Staff', 'Representative'])
+    expect(within(dialog).getAllByRole('option').map((option) => option.textContent)).toEqual(['Chọn vai trò', 'Nhân viên vận hành', 'Nhân viên kỹ thuật', 'Đại diện trường'])
     fireEvent.change(within(dialog).getByLabelText('Mật khẩu ban đầu'), { target: { value: 'one-time-secret' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo tài khoản' }))
 
@@ -183,8 +183,8 @@ describe('Admin Account Management', () => {
     })
     renderPage()
 
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Sửa họ tên staff.user' }))[0])
-    const dialog = await screen.findByRole('dialog', { name: 'Sửa họ tên' })
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Sửa tài khoản staff.user' }))[0])
+    const dialog = await screen.findByRole('dialog', { name: 'Sửa tài khoản' })
     expect(within(dialog).getByText('staff.user')).toBeInTheDocument()
     expect(within(dialog).getAllByText('(không thể sửa)')).toHaveLength(2)
     expect(within(dialog).queryByRole('textbox', { name: /Tên đăng nhập/ })).toBeNull()
@@ -227,5 +227,86 @@ describe('Admin Account Management', () => {
     expect(within(dialog).getByText(/phiên cũ không được khôi phục/)).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Kích hoạt lại' }))
     await waitFor(() => expect(requestExists(fetchMock, (url, init) => url.pathname === '/api/admin/accounts/rep-id/reactivate' && init?.method === 'POST')).toBe(true))
+  })
+
+  it('resets a password from the edit dialog, sends the row version and shows the password once with copy', async () => {
+    let resetPayload: unknown
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const fetchMock = stubApi((url, init) => {
+      if (url.pathname === '/api/admin/accounts/staff-id/reset-password' && init?.method === 'POST') {
+        resetPayload = JSON.parse(String(init.body)) as unknown
+        return jsonResponse({ success: true, message: 'Account password reset.', data: null, errors: null })
+      }
+      return jsonResponse(paged([staff]))
+    })
+    renderPage()
+
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Sửa tài khoản staff.user' }))[0])
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Sửa tài khoản' })).getByRole('button', { name: 'Đặt lại mật khẩu' }))
+    const confirm = await screen.findByRole('dialog', { name: 'Đặt lại mật khẩu?' })
+    const field = within(confirm).getByLabelText<HTMLInputElement>('Mật khẩu mới')
+    expect(field.value).toMatch(/^[A-HJ-NP-Za-km-z2-9]{16}$/)
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Tạo mật khẩu khác' }))
+    expect(field.value).toHaveLength(16)
+    fireEvent.change(field, { target: { value: 'chosen-by-admin-42' } })
+    expect(requestExists(fetchMock, (url) => url.pathname.endsWith('/reset-password'))).toBe(false)
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Đặt lại mật khẩu' }))
+
+    const done = await screen.findByRole('dialog', { name: 'Đã đặt lại mật khẩu' })
+    expect(resetPayload).toEqual({ newPassword: 'chosen-by-admin-42', expectedRowVersion: 'AAAAAAAAAAE=' })
+    expect(within(done).getByLabelText<HTMLInputElement>('Mật khẩu mới của staff.user').value).toBe('chosen-by-admin-42')
+    expect(within(done).getByText(/chỉ hiện một lần/)).toBeInTheDocument()
+    fireEvent.click(within(done).getByRole('button', { name: 'Sao chép' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('chosen-by-admin-42'))
+    expect(await within(done).findByRole('button', { name: 'Đã sao chép' })).toBeInTheDocument()
+
+    fireEvent.click(within(done).getByRole('button', { name: 'Xong' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.queryByDisplayValue('chosen-by-admin-42')).toBeNull()
+  })
+
+  it('keeps reset refusals inside the dialog: weak password locally, stale version from the API', async () => {
+    let resetCalls = 0
+    stubApi((url, init) => {
+      if (url.pathname === '/api/admin/accounts/staff-id/reset-password' && init?.method === 'POST') {
+        resetCalls += 1
+        return jsonResponse({ success: false, message: 'Dữ liệu đã thay đổi. Tải lại trước khi tiếp tục.', data: null, errors: { code: 'STALE_VERSION' } }, 409)
+      }
+      return jsonResponse(paged([staff]))
+    })
+    renderPage()
+
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Sửa tài khoản staff.user' }))[0])
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Sửa tài khoản' })).getByRole('button', { name: 'Đặt lại mật khẩu' }))
+    const confirm = await screen.findByRole('dialog', { name: 'Đặt lại mật khẩu?' })
+    const field = within(confirm).getByLabelText('Mật khẩu mới')
+
+    fireEvent.change(field, { target: { value: 'short' } })
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Đặt lại mật khẩu' }))
+    expect(within(confirm).getByRole('alert')).toHaveTextContent('Mật khẩu mới cần từ 12 đến 128 ký tự.')
+    expect(field).toHaveAttribute('aria-invalid', 'true')
+    expect(resetCalls).toBe(0)
+
+    fireEvent.change(field, { target: { value: 'long-enough-password' } })
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Đặt lại mật khẩu' }))
+    expect(await within(confirm).findByRole('alert')).toHaveTextContent('Tài khoản vừa được thay đổi')
+    expect(resetCalls).toBe(1)
+    expect(screen.queryByRole('dialog', { name: 'Đã đặt lại mật khẩu' })).toBeNull()
+
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Quay lại' }))
+    expect(await screen.findByRole('dialog', { name: 'Sửa tài khoản' })).toBeInTheDocument()
+  })
+
+  it('keeps the action column fixed and the Admin note in a readable colour', async () => {
+    stubApi(() => jsonResponse(paged([admin, staff])))
+    const { container } = renderPage()
+    await screen.findAllByText('staff.user')
+
+    expect(screen.getByRole('columnheader', { name: 'Thao tác' }).className).toMatch(/sticky right-0/)
+    const note = within(container.querySelector('tr[data-account-id="admin-id"]') as HTMLElement).getByText('cấu hình riêng')
+    expect(note.className).toContain('text-slate-600')
+    expect(note.className).not.toContain('#94a3b8')
+    expect(screen.queryByText(/Technical Staff/)).toBeNull()
   })
 })
