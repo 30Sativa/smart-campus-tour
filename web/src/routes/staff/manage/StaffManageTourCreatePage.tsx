@@ -5,7 +5,7 @@ import { AdminPage } from '../../../features/administration/AdminUi'
 import { newRequestId, useCreateTour } from '../../../features/administration/tours/hooks'
 import { tourError } from '../../../features/administration/tours/tour-messages'
 import { CreateTourForm } from '../../../features/administration/tours/CreateTourForm'
-import { tourKindOf } from '../../../features/administration/tours/quick-tour'
+import { QUICK_TOUR_RULES, tourKindOf } from '../../../features/administration/tours/quick-tour'
 import type { CreateTourInput } from '../../../features/administration/tours/types'
 import { celebrate } from '../../../components/ui/toast-store'
 
@@ -25,7 +25,7 @@ export default function StaffManageTourCreatePage() {
     if (attempt.current?.key !== key) attempt.current = { key, id: newRequestId() }
     create.mutate({ requestId: attempt.current.id, input }, { onSuccess: id => {
       celebrate({ title: `Đã tạo Tour “${input.name}”`, detail: input.shortNoticeReason
-        ? 'Robot đã được giữ. Chốt danh sách rồi Start; màn hình Start cho biết bao nhiêu điểm xem đã vào phòng chờ.'
+        ? QUICK_TOUR_RULES.created
         : 'Tour đang nhận đăng ký. Đại diện trường đã thấy Tour và có thể đăng ký đoàn.', action: { label: 'Lịch Tour', to: '/staff/schedule' } })
       navigate(`/staff/manage/tours/${id}`, { replace: true })
     } })
@@ -33,7 +33,7 @@ export default function StaffManageTourCreatePage() {
   return <AdminPage>
     <Link to="/staff/schedule" className="mb-4 inline-block text-sm text-[#2d719e]">← Lịch Tour</Link>
     <PageHeader eyebrow="Chuẩn bị Tour" title="Tạo Tour mới" description={quick
-      ? 'Tour nhanh giữ robot ngay từ lúc tạo và không chờ tới giờ: chốt danh sách, đủ người là Start được.'
+      ? QUICK_TOUR_RULES.pageDescription
       : 'Tour mới ở trạng thái Đang nhận đăng ký: giữ chỗ robot nhưng không tự chạy khi tới giờ. Sau khi tạo, đại diện trường thấy Tour và có thể đăng ký đoàn.'} />
     <CreateTourForm busy={create.isPending} error={create.isError ? tourError(create.error) : null} onSubmit={submit} />
   </AdminPage>

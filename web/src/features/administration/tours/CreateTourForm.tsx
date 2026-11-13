@@ -3,14 +3,17 @@ import { ArrowRight, CalendarDays, Check, Zap, type LucideIcon } from 'lucide-re
 import { Link, useSearchParams } from 'react-router'
 import { panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
+import { DateInput } from '../../../components/ui/DateInput'
+import { formatDate, formatDateTime, formatDuration, formatTime } from '../../../components/ui/date-time'
+import { useAuthStore } from '../../../stores/auth-store'
 import { Notice } from '../AdminUi'
 import { passedAt, scheduleFitLabel } from '../routes/route-messages'
 import { useMapVersions } from '../../technical/technical-hooks'
 import { useTestedRoutes, useTourOperators, useTourRobots, useTourShifts, useTourSlots } from './hooks'
-import { campusDay, campusShortDate, campusStamp, campusTime, formatDuration } from './tour-calendar'
+import { campusDay } from './tour-calendar'
 import { tourError } from './tour-messages'
 import type { VersionedRoute } from '../routes/versioned-api'
-import { tourKindOf, type TourKind } from './quick-tour'
+import { QUICK_TOUR_RULES, tourKindOf, type TourKind } from './quick-tour'
 import type { CreateTourInput, TourSlot } from './types'
 
 const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/
@@ -18,7 +21,7 @@ const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/
 const tourEnd = (slot: TourSlot) => new Date(new Date(slot.startsAt).getTime() + slot.maxDurationSeconds * 1000).toISOString()
 /** "Ca sáng · 08:15-09:45 · Giữ robot 08:00-10:00" */
 const shiftLabel = (slot: TourSlot) =>
-  `${slot.shiftName} · ${slot.time}-${campusTime(tourEnd(slot))} · Giữ robot ${campusTime(slot.reservationStartsAt!)}-${campusTime(slot.reservationEndsAt!)}`
+  `${slot.shiftName} · ${slot.time}-${formatTime(tourEnd(slot))} · Giữ robot ${formatTime(slot.reservationStartsAt)}-${formatTime(slot.reservationEndsAt)}`
 
 const RERUN_REASON = 'Cần chạy thử lại'
 /** Why this route cannot be chosen (docs/lich-tour-theo-ca.md §4); null when it can. UNKNOWN is a PASS measured the old way, which cannot size a shift. */
@@ -46,7 +49,9 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   // Null until Staff picks: until then the route comes from `?route=`, once the list says it can be chosen.
   const [pickedRouteId, setPickedRouteId] = useState<string | null>(null)
   const [robotCode, setRobotCode] = useState('')
-  const [operatorUserId, setOperatorUserId] = useState('')
+  // Null until Staff picks: until then the signed-in user, when the list offers them as an Operator.
+  const [pickedOperatorId, setPickedOperatorId] = useState<string | null>(null)
+  const signedIn = useAuthStore(state => state.user?.userId)
   const [date, setDate] = useState(() => DATE_PARAM.test(params.get('date') ?? '') ? params.get('date')! : '')
   const [shiftCode, setShiftCode] = useState(() => params.get('shift') ?? '')
   const [video, setVideo] = useState('')
@@ -61,6 +66,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const noRouteUsable = Boolean(routes.data?.length) && routes.data!.every(route => routeBlockReason(route) !== null)
   const robots = useTourRobots(routeRevisionId)
   const operators = useTourOperators()
+  const operatorUserId = pickedOperatorId ?? (signedIn && operators.data?.some(person => person.userId === signedIn) ? signedIn : '')
   const slots = useTourSlots(routeRevisionId, robotCode, date, !quick)
   const today = campusDay(new Date())
   // Only for the wait shown to Staff; the server sets the quick Tour's latest Start when it creates it.
@@ -95,11 +101,11 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
       {(clientError || error) && <Notice tone="danger">{clientError || error}</Notice>}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#f1f5f9] pb-3 text-[13px]">
         <KindPill short={quick} />
-        <span className="text-[#64748b]">{quick ? 'Không chọn ngày, ca. Start được ngay khi Tour sẵn sàng.' : 'Trước giờ bắt đầu ít nhất 72 giờ'}</span>
+        <span className="text-muted">{quick ? QUICK_TOUR_RULES.summary : 'Trước giờ bắt đầu ít nhất 72 giờ'}</span>
         <button type="button" className="ml-auto rounded-lg px-2 py-1 font-semibold text-[#2563eb] hover:bg-[#eff6ff] hover:text-[#1d4ed8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]" onClick={() => chooseKind(null)}>Đổi loại</button>
       </div>
-      {quick && <label className="block text-sm">Lý do tạo gấp<textarea required maxLength={500} rows={2} className={inputClass} value={quickReason} onChange={e => setQuickReason(e.target.value)} placeholder="Ví dụ: Buổi trình diễn với đoàn khách của nhà trường." /></label>}
       <label className="block text-sm">Tên Tour<input required maxLength={150} className={inputClass} value={name} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Tham quan từ xa · Sáng thứ Bảy" /></label>
+      {quick && <label className="block text-sm">Lý do tạo gấp<textarea required maxLength={500} rows={2} className={inputClass} value={quickReason} onChange={e => setQuickReason(e.target.value)} placeholder="Ví dụ: Buổi trình diễn với đoàn khách của nhà trường." /></label>}
       <label className="block text-sm">Mô tả<textarea maxLength={1000} rows={3} className={inputClass} value={description} onChange={e => setDescription(e.target.value)} placeholder="Nội dung ngắn đại diện trường sẽ thấy khi đăng ký." /></label>
       <label className="block text-sm">Tuyến đã kiểm chứng<select title="" required aria-label="Tuyến đã kiểm chứng" className={inputClass} value={routeRevisionId} disabled={routes.isPending} onChange={e => { setPickedRouteId(e.target.value); setRobotCode('') }}>
         <option value="">— Chọn tuyến —</option>
@@ -127,14 +133,14 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
         {robots.isError ? <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh sách robot.</span>
           : !routeRevisionId ? <span className="mt-1 block text-xs text-[#64748b]">Chọn tuyến trước để biết robot nào chạy được.</span>
           : robots.data && !robots.data.some(robot => robot.usable) && <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có robot nào sẵn sàng cho tuyến này.</span>}</label>
-      <label className="block text-sm">Người vận hành<select title="" required aria-label="Người vận hành" className={inputClass} value={operatorUserId} disabled={operators.isPending} onChange={e => setOperatorUserId(e.target.value)}>
+      <label className="block text-sm">Người vận hành<select title="" required aria-label="Người vận hành" className={inputClass} value={operatorUserId} disabled={operators.isPending} onChange={e => setPickedOperatorId(e.target.value)}>
         <option value="">— Chọn Staff —</option>
         {operators.data?.map(person => <option key={person.userId} value={person.userId}>{person.fullName} · {person.username}</option>)}
       </select>
         {operators.isError && <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh sách Staff.</span>}</label>
       {quick ? null : <>
-      <label className="block text-sm">Ngày tổ chức<input required type="date" className={inputClass} min={campusDay(new Date())} value={date} onChange={e => setDate(e.target.value)} />
-        <span className="mt-1 block text-xs text-[#64748b]">Giờ Việt Nam. Tới giờ robot không tự chạy; Staff bắt đầu thủ công.</span></label>
+      <label className="block text-sm">Ngày tổ chức<DateInput required min={campusDay(new Date())} value={date} onChange={setDate} />
+        <span className="mt-1 block text-xs text-muted">Giờ Việt Nam. Tới giờ robot không tự chạy; Staff bắt đầu thủ công.</span></label>
       <div role="group" aria-label="Ca">
         <p className="text-sm">Ca</p>
         {!routeRevisionId || !robotCode ? <p className="mt-1 text-xs text-[#64748b]">Chọn tuyến và robot để xem ca nào còn trống.</p>
@@ -159,10 +165,10 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
       {quick && <section className={`${panelClass} p-4`} aria-label="Tour nhanh chạy thế nào">
         <h2 className="text-[15px] font-semibold">Tour nhanh chạy thế nào</h2>
         <dl className="mt-3 space-y-2 text-sm">
-          <Review label="Giữ robot">Từ lúc bấm Tạo Tour<span className="block text-xs text-[#64748b]">Robot đang bận cho Tour khác thì không tạo được.</span></Review>
-          <Review label="Mở Start">Ngay khi Tour sẵn sàng<span className="block text-xs text-[#64748b]">Đã chốt danh sách và mọi điểm xem đã vào phòng chờ.</span></Review>
-          <Review label="Hạn Start">{waitMinutes != null ? `${waitMinutes} phút sau khi tạo` : 'Theo cấu hình server'}<span className="block text-xs text-[#64748b]">Chưa Start thì hệ thống tự huỷ và trả robot.</span></Review>
-          <Review label="Đóng đăng ký">Khi Staff chốt Tour</Review>
+          <Review label="Giữ robot">{QUICK_TOUR_RULES.hold.value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.hold.note}</span></Review>
+          <Review label="Bắt đầu">{QUICK_TOUR_RULES.start.value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.start.note}</span></Review>
+          <Review label="Hạn bắt đầu">{QUICK_TOUR_RULES.deadline(waitMinutes).value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.deadline(waitMinutes).note}</span></Review>
+          <Review label="Đóng đăng ký">{QUICK_TOUR_RULES.registration}</Review>
           <Review label="Sức chứa">{capacity} chỗ</Review>
         </dl>
       </section>}
@@ -170,24 +176,24 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
         <h2 className="text-[15px] font-semibold">Xem lại trước khi tạo</h2>
         <dl className="mt-3 space-y-2 text-sm">
           <Review label="Ca">{usable.shiftName}</Review>
-          <Review label="Bắt đầu">{campusStamp(usable.startsAt)}</Review>
+          <Review label="Bắt đầu">{formatDateTime(usable.startsAt)}</Review>
           <Review label="Thời lượng dự kiến">{formatDuration(expected!)}
-            {expected !== slots.data.measuredDurationSeconds && <span className="block text-xs text-[#64748b]">Chạy thử đo {formatDuration(slots.data.measuredDurationSeconds!)}, cộng thêm thời gian dừng đã tăng.</span>}
-            <span className="block text-xs text-[#64748b]">Ca này chứa tối đa {formatDuration(usable.maxDurationSeconds)}.</span></Review>
-          <Review label="Giữ robot">{campusTime(usable.reservationStartsAt!)} - {campusTime(usable.reservationEndsAt!)}</Review>
-          <Review label="Đóng đăng ký">{campusStamp(usable.registrationClosesAt)}</Review>
+            {expected !== slots.data.measuredDurationSeconds && <span className="block text-xs text-muted">Chạy thử đo {formatDuration(slots.data.measuredDurationSeconds)}, cộng thêm thời gian dừng đã tăng.</span>}
+            <span className="block text-xs text-muted">Ca này chứa tối đa {formatDuration(usable.maxDurationSeconds)}.</span></Review>
+          <Review label="Giữ robot">{formatTime(usable.reservationStartsAt)} - {formatTime(usable.reservationEndsAt)}</Review>
+          <Review label="Đóng đăng ký">{formatDateTime(usable.registrationClosesAt)}</Review>
           <Review label="Sức chứa">{capacity} chỗ</Review>
         </dl>
         {overRecommended && <div className="mt-3"><Notice tone="warn">Tuyến dài {formatDuration(expected!)}, hơn mức khuyến nghị {formatDuration(slots.data.recommendedMaxSeconds)}. Vẫn tạo được, nhưng nên cân nhắc tuyến ngắn hơn.</Notice></div>}
       </section>}
       <section className={`${panelClass} p-4`} aria-label="Xem trước tuyến">
         <h2 className="text-[15px] font-semibold">Xem trước tuyến</h2>
-        {!selected ? <p className="py-10 text-center text-sm text-[#94a3b8]">Chọn một tuyến để xem các điểm dừng.</p>
+        {!selected ? <p className="py-10 text-center text-sm text-muted">Chọn một tuyến để xem các điểm dừng.</p>
           : <div className="mt-3 space-y-3">
-            <p className="text-sm text-[#64748b]">{selectedArea && `${selectedArea} · `}đã chạy thử đạt{selectedPassedAt && ` ngày ${campusShortDate(selectedPassedAt)}`}</p>
+            <p className="text-sm text-muted">{selectedArea && `${selectedArea} · `}đã chạy thử đạt{selectedPassedAt && ` ngày ${formatDate(selectedPassedAt)}`}</p>
             <ol className="divide-y divide-[#e2e8f0]">{selected.stops.map(stop => <li key={stop.poiRevisionId} className="py-2.5 text-sm">
               <span className="font-medium">{stop.stopOrder}. {stop.name}</span>
-              <span className="block text-xs text-[#64748b]">Dừng {stop.dwellSeconds}s</span>
+              <span className="block text-xs text-muted">Dừng {formatDuration(stop.dwellSeconds)}</span>
             </li>)}</ol>
           </div>}
       </section>
@@ -200,8 +206,7 @@ const kinds = (waitMinutes: number | null | undefined): KindOption[] => [
   { value: 'normal', icon: CalendarDays, title: 'Tour theo ca', summary: 'Lên lịch trước, trường có thời gian đăng ký và Staff duyệt.',
     facts: ['Tạo trước giờ bắt đầu ít nhất 72 giờ', 'Đăng ký đóng trước 48 giờ', 'Staff duyệt đơn trước 24 giờ'] },
   { value: 'quick', icon: Zap, title: 'Tour nhanh', summary: 'Chạy ngay cho buổi trình diễn hoặc đoàn khách đột xuất.',
-    facts: ['Không chọn ngày, ca: robot được giữ từ lúc tạo', 'Start ngay khi chốt danh sách và đủ người',
-      waitMinutes != null ? `Chưa Start sau ${waitMinutes} phút thì tự huỷ` : 'Tự huỷ nếu không Start kịp', 'Cần ghi lý do'] },
+    facts: QUICK_TOUR_RULES.facts(waitMinutes) },
 ]
 
 function KindPill({ short }: { short: boolean }) {

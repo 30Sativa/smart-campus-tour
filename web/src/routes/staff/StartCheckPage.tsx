@@ -1,25 +1,24 @@
 import { useState } from 'react'
-import { CircleCheck, Play, TriangleAlert, WifiOff } from 'lucide-react'
+import { ChevronDown, CircleCheck, Play, TriangleAlert, WifiOff } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { notify } from '../../components/ui/toast-store'
 import { buttonClass } from '../../components/ui/ui-classes'
-import { formatSlot } from '../../features/administration/admin-format'
+import { formatDate, formatTime } from '../../components/ui/date-time'
 import { useRequestId } from '../../features/administration/tours/hooks'
 import type { StartConfirmation, TourStartChecks } from '../../features/administration/tours/types'
 import { QuestLiveVideo } from '../../features/quest-stream/QuestLiveVideo'
 import { DEV_QUEST_SOURCE, toQuestSource } from '../../features/quest-stream/stream-access'
-import { cameraLeaseHint, useCameraLease } from '../../features/quest-stream/camera-lease'
+import { useCameraLease, type RobotCameraStatus } from '../../features/quest-stream/camera-lease'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { isTourStale, useOperationTour, useStartChecks, useStartTour } from '../../features/staff/operations/hooks'
 import { useNow } from '../../features/staff/use-now'
-import { blockerOwner, checkVerdict } from '../../features/staff/operations/operation-labels'
+import { blockerOwner, checkCountText, checkCounts, checkVerdict } from '../../features/staff/operations/operation-labels'
 import { operationRefusal } from '../../features/staff/operations/operation-errors'
 import { RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
-import { BlockerList, CheckGroups } from '../../features/staff/operations/StartCheckList'
+import { BlockerList, CheckGroups, opensAtText } from '../../features/staff/operations/StartCheckList'
 import { TourStepper } from '../../features/staff/operations/TourStepper'
-import { untilText } from '../../features/staff/formatters'
 
 /** The four on-site confirmations the Start request carries (SRS §7); the server records them. */
 const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: string }> = [
@@ -30,6 +29,16 @@ const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: 
 ]
 const NONE: StartConfirmation = { robotPlaced: false, areaClear: false, attendantPresent: false, previewChecked: false }
 
+const CAMERA_OFFLINE = 'Chưa có hình từ kính trên robot. Kiểm tra kính đang bật, còn lỗi thì báo Kỹ thuật kiểm tra. Đang tự thử lại…'
+/** What the camera panel says while it has no picture, from the last lease answer (ADR-0052), in an operator's words. */
+function startCameraHint(status: RobotCameraStatus | undefined, failed: boolean): string {
+  if (failed) return 'Không gửi được yêu cầu bật camera tới máy chủ. Đang thử lại…'
+  if (!status) return CAMERA_OFFLINE
+  if (!status.robotListening) return 'Robot chưa nhận yêu cầu bật camera. Kiểm tra robot đang bật và có mạng, còn lỗi thì báo Kỹ thuật kiểm tra.'
+  return 'Đang bật camera trên robot. Hình sẽ lên sau khoảng 30 giây.'
+}
+const slotText = (value: string) => `${formatDate(value, { weekday: 'short' })} ${formatTime(value)}`
+
 type Verdict = { tone: 'ok' | 'info' | 'warn'; title: string; note: string }
 function verdictOf(result: TourStartChecks, confirmed: boolean, opensAt: string, now: number): Verdict {
   const causes = result.checks.filter(check => checkVerdict(check, result.blockedBy) === 'failed')
@@ -39,13 +48,13 @@ function verdictOf(result: TourStartChecks, confirmed: boolean, opensAt: string,
   const rest = [work && `${work} việc cần xử lý`, system && `${system} giới hạn hệ thống chưa mở`].filter(Boolean).join(' và ')
   // Too early is the usual reason a Tour opened days ahead cannot start; say when, not just "not yet".
   if (!result.canStart && early)
-    return { tone: 'warn', title: 'Chưa tới giờ bắt đầu', note: `Mở lúc ${formatSlot(opensAt)} (${untilText(opensAt, now)}). ${rest ? `Ngoài giờ, còn ${rest}.` : 'Các điều kiện khác đều đạt.'} Danh sách tự cập nhật vài giây một lần.` }
-  if (!result.canStart) return { tone: 'warn', title: 'Chưa thể bắt đầu', note: `Còn ${rest}, xem bên dưới. Danh sách tự cập nhật vài giây một lần.` }
+    return { tone: 'warn', title: 'Chưa tới giờ bắt đầu', note: `Mở lúc ${opensAtText(opensAt, now)}. ${rest ? `Ngoài giờ, còn ${rest}.` : 'Các điều kiện khác đều đạt.'}` }
+  if (!result.canStart) return { tone: 'warn', title: 'Chưa thể bắt đầu', note: rest ? `Còn ${rest}, xem bên dưới.` : 'Máy chủ chưa kiểm tra xong, chờ cập nhật.' }
   if (!confirmed) return { tone: 'info', title: 'Máy chủ cho phép bắt đầu', note: 'Đánh dấu đủ 4 xác nhận tại chỗ rồi bấm Bắt đầu.' }
   return { tone: 'ok', title: 'Sẵn sàng bắt đầu', note: 'Máy chủ sẽ kiểm tra lại mọi điều kiện khi bắt đầu.' }
 }
 /** One numbered step of the Start panel, so the server's part and the operator's part never read as one checklist. */
-function StartStep({ number, done, title, status, note }: { number: number; done: boolean; title: string; status: string; note: string }) {
+function StartStep({ number, done, title, status, note }: { number: number; done: boolean; title: string; status: string; note?: string }) {
   return <div className="mb-2.5 flex items-start gap-2.5" aria-label={`Bước ${number}: ${title}`} role="group">
     <span className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold ${done ? 'bg-[#ecfdf3] text-[#15803d]' : 'bg-[#f1f5f9] text-[#475569]'}`}>
       {done ? <CircleCheck size={15} aria-hidden="true" /> : number}
@@ -55,7 +64,7 @@ function StartStep({ number, done, title, status, note }: { number: number; done
         <span className="text-[13px] font-semibold text-[#0f172a]">Bước {number}. {title}</span>
         <span className={`shrink-0 rounded-full px-2 py-px text-[11px] font-bold tabular-nums ${done ? 'bg-[#ecfdf3] text-[#15803d]' : 'bg-[#fffaf0] text-[#8a5a06]'}`}>{status}</span>
       </span>
-      <span className="mt-0.5 block text-[11.5px] leading-[1.45] text-[#64748b]">{note}</span>
+      {note && <span className="mt-0.5 block text-[11.5px] leading-[1.45] text-muted">{note}</span>}
     </span>
   </div>
 }
@@ -96,7 +105,7 @@ export default function StartCheckPage() {
   const header = <>
     <TourStepper detail={detail} page="start" />
     <PageHeader eyebrow="Kiểm tra trước khi bắt đầu" title={summary.name}
-      description={`${formatSlot(summary.scheduledStartAt)} · ${detail.routeRevision?.name ?? summary.routeName} · robot ${reservation?.robotCode ?? 'chưa giữ'} · người vận hành ${operator?.fullName ?? 'chưa giao'}`}
+      description={`${slotText(summary.scheduledStartAt)} · ${detail.routeRevision?.name ?? summary.routeName} · robot ${reservation?.robotCode ?? 'chưa giữ'} · người vận hành ${operator?.fullName ?? 'chưa giao'}`}
       action={<TourStateBadge tour={summary} />} />
   </>
 
@@ -112,8 +121,7 @@ export default function StartCheckPage() {
 
   const result = checks.data
   const blockedBy = result?.blockedBy ?? []
-  const counted = result?.checks.filter(check => checkVerdict(check, blockedBy) !== 'info') ?? []
-  const passed = counted.filter(check => check.passed).length
+  const counts = checkCounts(result?.checks ?? [], blockedBy)
   const confirmed = CONFIRMATIONS.every(({ key }) => confirmation[key])
   // Start is decided on what the screen shows, so it waits while the checks or the Tour are out of date.
   const stale = Boolean(result) && (isTourStale(checks, now) || isTourStale(tour, now))
@@ -123,7 +131,6 @@ export default function StartCheckPage() {
   const opensAt = result?.opensAt ?? summary.scheduledStartAt
   const verdict = result ? verdictOf(result, confirmed, opensAt, now) : null
   const refusal = start.isError ? operationRefusal(start.error, { operator: true }) : null
-  const blocking = result?.checks.filter(check => checkVerdict(check, blockedBy) === 'failed').length ?? 0
   const ticked = CONFIRMATIONS.filter(({ key }) => confirmation[key]).length
   const reason = !result ? null
     : stale ? 'Điều kiện chưa cập nhật được từ máy chủ. Chờ cập nhật lại rồi bắt đầu.'
@@ -151,18 +158,23 @@ export default function StartCheckPage() {
                       <p className="text-[15px] font-bold">{verdict.title}</p>
                       <p className="text-[13px] leading-5">{verdict.note}</p>
                     </div>
-                    <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-bold tabular-nums">{passed}/{counted.length} đạt</span>
+                    <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-bold tabular-nums">{counts.passed}/{counts.counted} đạt</span>
                   </div>
                 })()}
                 {!result.canStart && <div className="border-t border-[#f1f5f9] px-4 pt-3 pb-4">
-                  <h2 className="mb-2 text-xs font-semibold text-[#64748b]">Cần xử lý</h2>
+                  <h2 className="mb-2 text-xs font-semibold text-muted">Cần xử lý</h2>
                   <BlockerList checks={result.checks} blockedBy={blockedBy} opensAt={opensAt} now={now} />
                 </div>}
               </section>
-              <section className={panelClass} aria-label="Toàn bộ điều kiện">
-                <PanelHead title="Toàn bộ điều kiện" description="Đọc từ dữ liệu thật, cập nhật vài giây một lần. Mở từng nhóm để xem chi tiết." />
-                <div className="px-3 py-1.5"><CheckGroups checks={result.checks} blockedBy={blockedBy} /></div>
-              </section>
+              {/* Folded by default: the verdict and "Cần xử lý" answer the question; the full list is for looking closer. */}
+              <details className={`${panelClass} group/all`} aria-label="Toàn bộ điều kiện">
+                <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] [&::-webkit-details-marker]:hidden">
+                  <span className="flex-1 text-[14px] font-semibold text-[#0f172a]">Toàn bộ điều kiện</span>
+                  <span className="text-xs font-semibold tabular-nums text-muted">{checkCountText(counts)}</span>
+                  <ChevronDown size={16} aria-hidden="true" className="text-muted transition-transform duration-150 group-open/all:rotate-180 motion-reduce:transition-none" />
+                </summary>
+                <div className="border-t border-[#f1f5f9] px-3 py-1.5"><CheckGroups checks={result.checks} blockedBy={blockedBy} now={now} /></div>
+              </details>
             </>}
         </div>
 
@@ -171,16 +183,16 @@ export default function StartCheckPage() {
             <PanelHead title="Bắt đầu Tour" description="Nút chỉ mở khi đạt cả 2 bước dưới đây." />
             <div className="p-4">
               <StartStep number={1} done={Boolean(result?.canStart)} title="Máy chủ cho phép"
-                status={!result ? '…' : result.canStart ? 'Đạt' : `Còn ${blocking} mục chặn`}
-                note="Máy chủ tự kiểm tra vài giây một lần, bạn không tick ở đây. Các mục còn chặn nằm ở phần Cần xử lý." />
+                status={!result ? '…' : result.canStart ? 'Đạt' : counts.failed ? `Còn ${counts.failed} mục chặn` : `${counts.notRun} mục chưa kiểm tra`}
+                note={result && !result.canStart ? 'Các mục còn chặn nằm ở phần Cần xử lý.' : undefined} />
               {!notOperator && <StartStep number={2} done={confirmed} title="Xác nhận tại chỗ" status={`${ticked}/4`}
-                note="Bạn tự đánh dấu khi đang đứng cạnh robot. Đây chỉ là phần của bạn, không thay được bước 1." />}
+                note="Bạn tự đánh dấu khi đang đứng cạnh robot." />}
               {!notOperator && <fieldset className="mb-3 ml-8 space-y-1.5">
                 <legend className="sr-only">Xác nhận tại chỗ</legend>
                 {CONFIRMATIONS.map(({ key, label, hint }) => (
                   <label key={key} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors duration-150 motion-reduce:transition-none ${confirmation[key] ? 'border-[#bfdbfe] bg-[#eff6ff]' : 'border-[#e2e8f0] hover:border-[#bfdbfe]'}`}>
                     <input type="checkbox" checked={confirmation[key]} onChange={event => setConfirmation(value => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#2563eb]" />
-                    <span className="min-w-0"><span className="block text-[13px] font-semibold text-[#0f172a]">{label}</span><span className="block text-[11.5px] text-[#64748b]">{hint}</span></span>
+                    <span className="min-w-0"><span className="block text-[13px] font-semibold text-[#0f172a]">{label}</span><span className="block text-[11.5px] text-muted">{hint}</span></span>
                   </label>
                 ))}
               </fieldset>}
@@ -190,15 +202,15 @@ export default function StartCheckPage() {
               {reason && <p id="start-reason" className="mt-2 text-xs leading-5 text-[#7d5310]">{reason}</p>}
             </div>
           </section>
-          <section className={panelClass} aria-label="Telemetry robot">
-            <PanelHead title="Robot" description="Robot tự báo qua kênh telemetry." />
+          <section className={panelClass} aria-label="Robot">
+            <PanelHead title="Robot" />
             <div className="p-4"><RobotTelemetryPanel robotCode={reservation?.robotCode} /></div>
           </section>
           <section className={panelClass} aria-label="Hình camera">
             <PanelHead title="Hình camera" />
             <div className="p-3">{cameraSource ? <QuestLiveVideo source={cameraSource} label={reservation?.robotCode}
-              offlineHint={cameraLeaseHint(cameraLease.data, cameraLease.isError)} />
-              : <p className="text-[13px] leading-5 text-[#64748b]">{cameraLease.isPending && ready
+              offlineHint={startCameraHint(cameraLease.data, cameraLease.isError)} />
+              : <p className="text-[13px] leading-5 text-muted">{cameraLease.isPending && ready
                 ? 'Đang xin quyền xem camera…'
                 : 'Máy chủ chưa cấp luồng camera cho robot này. Xem hình trên thiết bị trước khi xác nhận.'}</p>}</div>
           </section>

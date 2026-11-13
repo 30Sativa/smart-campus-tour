@@ -49,7 +49,7 @@ const chooseTarget = async () => {
   await screen.findByRole('option', { name: 'Lan Staff · lan' })
   fireEvent.change(screen.getByLabelText('Người vận hành'), { target: { value: 'staff-1' } })
 }
-const pickDate = () => fireEvent.change(screen.getByLabelText(/Ngày tổ chức/), { target: { value: '2099-01-03' } })
+const pickDate = () => fireEvent.change(screen.getByLabelText(/Ngày tổ chức/), { target: { value: '03/01/2099' } })
 // docs/lich-tour-theo-ca.md §3: the morning shift holds the robot 08:00-10:00 and the Tour starts at 08:15.
 const freeSlot = { time: '08:15', startsAt: '2099-01-03T01:15:00Z', available: true, reasonCode: null, reason: null,
   reservationStartsAt: '2099-01-03T01:00:00Z', reservationEndsAt: '2099-01-03T03:00:00Z', registrationClosesAt: '2099-01-01T01:15:00Z',
@@ -265,7 +265,7 @@ describe('live Tour management', () => {
     const review = screen.getByRole('region', { name: 'Xem lại trước khi tạo' })
     expect(within(review).getByText('22 phút')).toBeInTheDocument()
     expect(within(review).getByText('08:00 - 10:00')).toBeInTheDocument()
-    expect(within(review).getByText('08:15 01/01/2099')).toBeInTheDocument()
+    expect(within(review).getByText('01/01/2099 08:15')).toBeInTheDocument()
     expect(within(review).queryByText(/mức khuyến nghị/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
     await screen.findByRole('heading', { name: 'Tour sáng thứ Bảy' })
@@ -281,7 +281,7 @@ describe('live Tour management', () => {
     api()
     renderAt('/staff/manage/tours/new?route=revision-2')
     expect(screen.queryByLabelText('Tên Tour')).not.toBeInTheDocument()
-    expect(await screen.findByText('Chưa Start sau 60 phút thì tự huỷ')).toBeInTheDocument()
+    expect(await screen.findByText('Chưa bắt đầu sau 60 phút thì tự huỷ')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Tour nhanh/ }))
     expect(await screen.findByLabelText(/Lý do tạo gấp/)).toBeInTheDocument()
     // A quick Tour has no date or shift (ADR-0053).
@@ -308,7 +308,7 @@ describe('live Tour management', () => {
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour trình diễn' } })
     await chooseTarget()
     const how = within(await screen.findByRole('region', { name: 'Tour nhanh chạy thế nào' }))
-    expect(how.getByText('Ngay khi Tour sẵn sàng')).toBeInTheDocument()
+    expect(how.getByText('Ngay khi Tour đã chốt')).toBeInTheDocument()
     expect(await how.findByText('60 phút sau khi tạo')).toBeInTheDocument()
     expect(screen.queryByLabelText(/Ngày tổ chức/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
@@ -327,11 +327,11 @@ describe('live Tour management', () => {
     const writes = api()
     renderAt('/staff/manage/tours/new?kind=normal&date=2099-01-03&shift=S1')
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour từ lịch' } })
-    expect(screen.getByLabelText(/Ngày tổ chức/)).toHaveValue('2099-01-03')
+    expect(screen.getByLabelText(/Ngày tổ chức/)).toHaveValue('03/01/2099')
     await chooseTarget()
     expect(await screen.findByRole('button', { name: /Ca sáng/ })).toHaveAttribute('aria-pressed', 'true')
     const review = screen.getByRole('region', { name: 'Xem lại trước khi tạo' })
-    expect(within(review).getByText("Tuyến dài 66 phút 40 giây, hơn mức khuyến nghị 60 phút. Vẫn tạo được, nhưng nên cân nhắc tuyến ngắn hơn.")).toBeInTheDocument()
+    expect(within(review).getByText("Tuyến dài 1 giờ 6 phút, hơn mức khuyến nghị 1 giờ. Vẫn tạo được, nhưng nên cân nhắc tuyến ngắn hơn.")).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
     await waitFor(() => expect(writes).toHaveLength(1))
     expect(writes[0].body).toMatchObject({ configuration: { scheduledStartAt: '2099-01-03T01:15:00Z' } })
