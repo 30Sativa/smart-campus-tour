@@ -43,10 +43,19 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
   // `canReview`: a request left PENDING on a Tour that has moved on is no longer anyone's work. Nearest deadline first.
   const reviewableEmails = emailChanges.isSuccess ? emailChanges.data.filter(item => item.canReview).sort((a, b) => a.expiresAt.localeCompare(b.expiresAt)) : null
   const figure = (value: number | null) => value ?? '-'
+  // Every section read and empty: one line, not four "0" headings.
+  const nothing = [pending, notReady, poiWork, reviewableEmails?.length ?? null].every(value => value === 0)
+
+  if (nothing) return (
+    <section className={panelClass} aria-label="Hàng chờ chuẩn bị">
+      <PanelHead title="Hàng chờ chuẩn bị" />
+      <p role="status" className="px-3.5 py-3 text-[13px] text-[#475569]">Không có việc chờ.</p>
+    </section>
+  )
 
   return (
     <section className={panelClass} aria-label="Hàng chờ chuẩn bị">
-      <PanelHead title="Hàng chờ chuẩn bị" description="Việc cần Staff xử lý trước khi Tour diễn ra."
+      <PanelHead title="Hàng chờ chuẩn bị"
         action={<button type="button" aria-expanded={open} onClick={() => setToggled(!open)} className={buttonClass('ghost', 'sm')}>
           {open ? 'Thu gọn' : 'Mở'}<ChevronDown size={14} aria-hidden="true" className={`transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`} />
         </button>} />

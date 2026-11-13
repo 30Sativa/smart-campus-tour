@@ -54,4 +54,23 @@ describe('Staff pages backed by live APIs', () => {
     expect(await screen.findByRole('button', { name: /Thử lại/ })).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
+
+  it('prints robot rows as plain text in campus time, without tiles that repeat the table', async () => {
+    show(<RobotPage />)
+    const row = (await screen.findByRole('cell', { name: 'AMR 01' })).closest('tr')!
+    expect(row.className).not.toMatch(/hover:|cursor-pointer/)
+    expect(screen.getByRole('cell', { name: '30/10/2026 09:00' })).toBeInTheDocument()
+    expect(screen.queryByText('Robot đã đăng ký')).not.toBeInTheDocument()
+    expect(screen.queryByText('Đang kết nối')).not.toBeInTheDocument()
+  })
+
+  it('says nothing matches while a history search is on, and clears it', async () => {
+    show(<TourHistoryPage />)
+    await screen.findByRole('link', { name: 'Tour đã xong' })
+    vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({ success: true, data: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }), { status: 200 }))
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'không có' } })
+    expect(await screen.findByText('Không tìm thấy Tour nào phù hợp với từ khóa.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }))
+    expect(await screen.findByText('Chưa có tour nào trong lịch sử.')).toBeInTheDocument()
+  })
 })
