@@ -126,7 +126,7 @@ describe('route table', () => {
     it('loads physical robot registration inside the Technical Staff protected area', async () => {
       signIn('TechnicalStaff')
       renderAt('/technical/robots')
-      expect(await screen.findByRole('heading', { name: 'Robot vật lý', level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Robot', level: 1 })).toBeInTheDocument()
     })
 
     it('sends a signed-out visitor from /staff to sign in', async () => {
@@ -143,7 +143,7 @@ describe('route table', () => {
       signIn('TechnicalStaff')
       const router = renderAt('/technical')
       await settled(router, '/technical/dashboard')
-      expect(await screen.findByRole('heading', { name: 'Bảng điều khiển kỹ thuật', level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Tổng quan', level: 1 })).toBeInTheDocument()
     })
 
     it('opens Robot and Mini PC monitoring for Technical Staff only', async () => {

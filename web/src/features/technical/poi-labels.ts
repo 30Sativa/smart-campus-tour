@@ -1,4 +1,5 @@
 import type { StatusTone } from '../../components/ui/status-tone'
+import { headPresetLabel } from './head-camera-preset'
 
 /**
  * Staff-facing wording for a POI revision's lifecycle. The API speaks in
@@ -21,3 +22,29 @@ export const NARRATION_NEEDED = 'Cần bổ sung nội dung thuyết minh'
 export const mapVersionLabel = (map: { areaName: string; areaKey: string; versionNumber: number }) => `${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`
 
 export const mapCheckLabel = (status: string) => status === 'PASSED' ? 'Đạt kiểm tra' : status === 'FAILED' ? 'Kiểm tra không đạt' : 'Chờ kỹ thuật kiểm tra'
+
+/**
+ * The four on-site observations of a manual POI check, in the order the API stores them
+ * (reached, stopped, localization, camera head). The last one names what the head should do at this POI,
+ * so the checker confirms that action rather than a generic "camera".
+ */
+export const poiObservationLabels = (cameraPreset: string): [string, string, string, string] => [
+  'Robot tới đúng POI',
+  'Robot dừng đúng vị trí',
+  'Định vị đạt',
+  `Đầu camera làm đúng: ${headPresetLabel(cameraPreset)}`,
+]
+
+/** Display names used by more than one area key. Only those need the key beside the name to be told apart. */
+export function duplicateAreaNames(areas: Array<{ areaKey: string; name: string }>): Set<string> {
+  const keysByName = new Map<string, Set<string>>()
+  for (const { areaKey, name } of areas) {
+    const normalized = name.trim().toLocaleLowerCase('vi')
+    keysByName.set(normalized, (keysByName.get(normalized) ?? new Set()).add(areaKey))
+  }
+  return new Set([...keysByName].filter(([, keys]) => keys.size > 1).map(([name]) => name))
+}
+
+/** "Tầng 6", or "Tầng 6 · tang-6" when another area shares the name. */
+export const areaLabel = (name: string, areaKey: string, duplicates: Set<string>) =>
+  duplicates.has(name.trim().toLocaleLowerCase('vi')) ? `${name} · ${areaKey}` : name

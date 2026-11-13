@@ -58,7 +58,7 @@ export default function TechnicalPoiFileImportPage() {
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="POI" title="Nhập POI từ file" description="Nhập tệp pose đã ghi trên robot. Đây là bằng chứng ghi pose, không thay cho chạy thử toàn tuyến. Staff bổ sung tên và thuyết minh sau." />
+      <PageHeader eyebrow="Bản đồ & POI" title="Nhập POI từ file" description="Nhập tệp pose đã ghi trên robot. Đây là bằng chứng ghi pose, không thay cho chạy thử toàn tuyến. Staff bổ sung tên và thuyết minh sau." />
 
       <section className={`${panelClass} space-y-4 p-4`} aria-label="Chọn tệp nhập">
         <div className="grid gap-4 md:grid-cols-2">
