@@ -11,6 +11,9 @@ from dataclasses import dataclass
 MAP_CONTENT_MISMATCH = 'MAP_CONTENT_MISMATCH'
 MAP_EVIDENCE_MISSING = 'MAP_EVIDENCE_MISSING'
 ALLOWED_MODE = 'explore'
+# Latches a new leg may clear (ADR-0049 addendum): one exists only because nobody has asked for motion since boot or
+# since a link loss. The Operator's next leg is that request. Any other latch (ESTOP) still needs a local reset.
+RESETTABLE_LATCHES = frozenset({'LATCHED:BOOT', 'LATCHED:PERMIT_LOST'})
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,8 @@ class Readiness:
     unowned_goal: str | None = None
     permit_allowed: bool = False
     goto_refusal: str | None = 'NOT_MOTION_READY'
+    # The gate holds a latch that the next GoTo clears just before its goal is sent.
+    latch_resettable: bool = False
 
 
 def _localized(obs: Observations, limits: ReadinessLimits) -> bool | None:
@@ -76,7 +81,7 @@ def _fault(obs: Observations, gate: str | None, odom_fresh: bool, tf_fresh: bool
         return 'NAV2_UNAVAILABLE'
     if not tf_fresh:
         return 'TF_STALE'
-    if gate is not None and gate.startswith('LATCHED'):
+    if gate is not None and gate.startswith('LATCHED') and gate not in RESETTABLE_LATCHES:
         return 'MOTION_GATE_LATCHED'
     return None
 
@@ -89,7 +94,7 @@ def evaluate(obs: Observations, limits: ReadinessLimits) -> Readiness:
     motion_ready = _combine([
         None if obs.emergency_stop is None else not obs.emergency_stop,
         None if obs.mode is None else obs.mode == ALLOWED_MODE,
-        None if gate is None else gate == 'OPEN',
+        None if gate is None else gate == 'OPEN' or gate in RESETTABLE_LATCHES,
         True if odom_fresh else None,
         obs.nav2_ready,
         obs.unowned_goal is None,
@@ -106,4 +111,5 @@ def evaluate(obs: Observations, limits: ReadinessLimits) -> Readiness:
         refusal = None
     # Missing map evidence refuses new goals above. It must not stop a robot already moving (ADR-0049, Decision 1).
     permit_allowed = odom_fresh and obs.unowned_goal is None and obs.map_fault != MAP_CONTENT_MISMATCH
-    return Readiness(localized, motion_ready, fault, obs.unowned_goal, permit_allowed, refusal)
+    return Readiness(localized, motion_ready, fault, obs.unowned_goal, permit_allowed, refusal,
+                     latch_resettable=gate in RESETTABLE_LATCHES)

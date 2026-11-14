@@ -149,7 +149,8 @@ class FleetBridgeNode(Node):
 
         def create_navigator():
             from .nav2 import Nav2Navigator  # Nav2 types are needed only on this path.
-            return Nav2Navigator(self, on_goal_id=self._readiness.goals.mark_own)
+            return Nav2Navigator(self, on_goal_id=self._readiness.goals.mark_own,
+                                 prepare=self._create_gate_reset().prepare)
 
         def goto_guard():
             return self._readiness.view().goto_refusal
@@ -258,6 +259,24 @@ class FleetBridgeNode(Node):
             map_server_name=str(self.get_parameter('map_server_name').value).strip(),
         )
         return ReadinessMonitor(self, limits, sources)
+
+    def _create_gate_reset(self):
+        """A new leg clears a BOOT or PERMIT_LOST latch through mode_manager's own reset (ADR-0049 addendum)."""
+        from std_srvs.srv import Trigger  # Imported only on the command path.
+
+        from .motion_gate_reset import MotionGateReset
+
+        def one_shot(period_sec, callback):
+            timer = None
+
+            def fire():
+                self.destroy_timer(timer)
+                callback()
+            timer = self.create_timer(period_sec, fire)
+            return _TimerHandle(lambda: self.destroy_timer(timer))
+
+        return MotionGateReset(self.create_client(Trigger, 'motion_inhibit_reset'), Trigger.Request, one_shot,
+                               lambda: self._readiness.view().latch_resettable, on_log=self.get_logger().warning)
 
     def _create_diagnostics_worker(self, backend_url, robot_code, credential, request_timeout_sec,
                                    retry_max_sec):
@@ -390,6 +409,11 @@ class FleetBridgeNode(Node):
                 f'Fleet Sync paused until the system clock catches up ({reason}).')
         else:
             self.get_logger().error(f'Fleet Sync stopped ({reason}); operator review is required.')
+
+
+class _TimerHandle:
+    def __init__(self, cancel):
+        self.cancel = cancel
 
 
 def main(args=None):
