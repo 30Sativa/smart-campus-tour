@@ -48,9 +48,9 @@ class SearchConfig:
     regions: tuple = ()
     # final refinement
     fine_xy: float = 0.15
-    fine_xy_step: float = 0.025
+    fine_xy_step: float = 0.05          # AMCL refines further with no-motion updates
     fine_yaw: float = math.radians(4)
-    fine_yaw_step: float = math.radians(0.5)
+    fine_yaw_step: float = math.radians(1.0)
 
 
 @dataclass
@@ -231,8 +231,10 @@ def decide(scored: list, cfg: SearchConfig, tried) -> Result:
 
 def locate(field_, scans, candidates: list[tuple[str, Pose2D]], cfg: SearchConfig,
            use_global: bool) -> Result:
-    """candidates: [(name, pose)] looked at first (saved pose, homes). Global search only if no
-    candidate verifies and use_global. Every refined pose competes in the uniqueness check."""
+    """candidates: [(name, pose)] (saved pose, homes) refined first. With use_global the regions are
+    ALWAYS searched too, and every refined pose competes in the uniqueness check: a candidate that
+    matches a look-alike place next to it must not win while the true pose was never scored
+    (robot pushed 1.5-3 m while off; virtual sweep on map2, 13/11/2026)."""
     scans = [sc for sc in scans if len(sc[0]) >= cfg.min_beams]
     if not scans:
         return Result('NO_MATCH', None, 0.0, 0.0, '', f'no scan with {cfg.min_beams}+ valid beams', [])
@@ -240,15 +242,22 @@ def locate(field_, scans, candidates: list[tuple[str, Pose2D]], cfg: SearchConfi
     for name, c in candidates:
         p, s, flat = refine(field_, scans, c, cfg)
         scored.append((p, s, name, flat)); tried.append((name, round(s, 3)))
-    res = decide(scored, cfg, tried)
-    if res.status == 'VERIFIED' or not use_global:
-        if res.status != 'VERIFIED' and not use_global:
+    if not use_global:
+        res = decide(scored, cfg, tried)
+        if res.status != 'VERIFIED':
             res.detail += '; global search disabled'
         return res
-    # Candidates failed (robot probably moved): search everywhere, then refine the best few.
     found = global_candidates(field_, scans, cfg)[:12]
     for p, _ in found:
         rp, s, flat = refine(field_, scans, p, cfg, coarse=False)
         scored.append((rp, s, 'global', flat))
     tried.append(('global', round(max([e[1] for e in scored if e[2] == 'global'], default=0.0), 3)))
-    return decide(scored, cfg, tried)
+    res = decide(scored, cfg, tried)
+    # The same place found from a candidate and by the search: credit the candidate.
+    if res.status == 'VERIFIED' and res.source == 'global':
+        for p, s, name, _ in scored:
+            if name != 'global' and p.dist(res.pose) <= cfg.flat_xy and p.dyaw(res.pose) <= cfg.flat_yaw \
+                    and res.score - s < 0.02:
+                res.source = name
+                break
+    return res

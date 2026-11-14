@@ -281,3 +281,27 @@ def test_node_parameter_file_parses():
 
 if __name__ == '__main__':
     sys.exit(launch_probe(sys.argv[1]))
+
+
+def lookalike_room():
+    """Two identical pillars 3 m apart; the walls around them differ (a door gap on one side)."""
+    g = np.zeros((int(10 / RES), int(14 / RES)), dtype=np.int16)
+    g[0, :] = g[-1, :] = g[:, 0] = g[:, -1] = 100
+    g[0, 40:70] = 0                                   # door gap near the left pillar only
+    for x in (4.0, 7.0):
+        i = int(x / RES); g[90:110, i:i + 6] = 100
+    g[150:154, 200:260] = 100                         # one far feature
+    return g
+
+
+def test_a_saved_pose_next_to_a_look_alike_does_not_win_over_the_true_pose():
+    """Robot pushed 3 m while off: around the saved pose the scan fits a look-alike pillar; the true
+    pose must still be found and win (virtual sweep on map2 found this, 13/11/2026)."""
+    g = lookalike_room()
+    cfg = SearchConfig(global_xy_step=0.3, regions=((0.5, 0.5, 13.5, 9.5),))
+    f = LikelihoodField(g, RES, 0.0, 0.0, cfg)
+    truth = Pose2D(4.6, 5.0, 0.4)
+    saved = Pose2D(7.6, 5.0, 0.4)                    # beside the other pillar
+    res = locate(f, [scan_points(g, truth, noise=0.01)], [('saved', saved)], cfg, use_global=True)
+    assert not (res.status == 'VERIFIED' and not close(res.pose, truth, xy=0.3, yaw_deg=5)), res
+    assert res.status == 'VERIFIED' and close(res.pose, truth, xy=0.15, yaw_deg=3), res
