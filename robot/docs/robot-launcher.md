@@ -197,6 +197,20 @@ Hai công tắc phía backend vẫn cần bật cho buổi test:
 - `FleetCommands__Enabled=true`: biến môi trường của backend, rồi restart;
 - "Cho phép điều phối" trong trang Robot của Technical Staff (`IsDispatchEnabled`).
 
+## 9. Tự khởi tạo pose: `robot nav --auto-pose`, `robot relocalize`
+
+`pose_bootstrap` đặt initial pose cho AMCL từ LiDAR thay cho 2D Pose trên RViz
+(`robot/docs/auto-initial-pose.md`). Mặc định tắt.
+
+| Lệnh / khóa profile | Việc làm |
+|---|---|
+| `AUTO_INITIAL_POSE=true` | `robot nav` bật `pose_bootstrap` (truyền `auto_initial_pose:=true`) |
+| `robot nav --auto-pose` / `--manual-pose` | Bật / tắt cho một lần chạy, bỏ qua giá trị profile |
+| `robot relocalize` | Làm lại khi robot đứng yên (`/<robot>/pose_bootstrap/relocalize`). Chỉ khi `nav` đang chạy với auto pose |
+
+Launcher từ chối `--auto-pose` khi runtime chưa có `pose_bootstrap` hoặc map không có
+`<map>.pose_bootstrap.yaml` bên cạnh. Kết quả nằm ở `/<robot>/pose_bootstrap/status`;
+`NEEDS_MANUAL_POSE` nghĩa là đặt 2D Pose tay như trước.
 ## 10. Fleet chạy từ lúc bật máy: `robot fleet status|start|stop|restart|logs`
 
 User unit `sct-fleet.service` chạy `robot fleet --service` từ lúc boot (`robot/docs/fleet-service.md`):

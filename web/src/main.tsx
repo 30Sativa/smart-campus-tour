@@ -7,6 +7,9 @@ import './index.css'
 
 import { ThemeProvider } from './app/providers/theme-provider'
 import { AuthBootstrap } from './auth/AuthBootstrap'
+import { installChunkReloadHandler } from './app/chunk-reload'
+
+installChunkReloadHandler()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -31,6 +31,9 @@ permission to execute it.
 - [Launcher `robot`](robot-launcher.md) — per-process environment from one machine
   profile, one workflow at a time, teleop and stop separate, candidate LiDAR yaw only
   for the static check, session logs and retention. Not installed yet.
+- [Auto initial pose](auto-initial-pose.md) — `pose_bootstrap`: AMCL initial pose from the
+  LiDAR (saved pose / map homes checked against the scan, never published unverified),
+  per-map settings, statuses, offline evidence and the hardware test list. Off by default.
 - [Fleet service](fleet-service.md) — `fleet_bridge` from boot as a systemd user unit supervised
   by the launcher (`robot fleet --service`): telemetry always, commands only while
   `robot nav --fleet` runs; NTP gate, restart policy, offline end-to-end evidence, install steps.

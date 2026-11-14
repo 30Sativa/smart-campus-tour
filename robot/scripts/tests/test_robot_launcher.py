@@ -615,6 +615,67 @@ def test_viewer_runs_the_debug_bridge_with_the_foxglove_env(world):
     assert r.returncode == 2 and 'already running' in r.stderr, r.stderr
 
 
+# ---- initial pose from the LiDAR (pose_bootstrap) -------------------------------------------
+def pose_runtime(w, has_bootstrap=True, map_config=True):
+    launch = w['overlay'] / 'nav' / 'share' / 'robot_navigation' / 'launch'
+    launch.mkdir(parents=True, exist_ok=True)
+    (launch / 'navigation.launch.py').write_text("DeclareLaunchArgument('auto_initial_pose')\n" if has_bootstrap else '# old\n')
+    cfg = w['root'] / 'robot_maps' / 'map2.pose_bootstrap.yaml'
+    if map_config:
+        cfg.write_text('map_yaml: map2.yaml\n')
+    elif cfg.exists():
+        cfg.unlink()
+
+
+def test_auto_pose_is_opt_in_and_needs_a_runtime_and_map_settings(world):
+    profile(world)
+    pose_runtime(world)
+    assert not any(x.startswith('auto_initial_pose') for x in dry(world, 'nav')['argv'])
+    assert dry(world, 'nav', '--auto-pose')['argv'][-1] == 'auto_initial_pose:=true'
+    pose_runtime(world, has_bootstrap=False)
+    r = robot(world, 'nav', '--auto-pose', '--dry-run')
+    assert r.returncode == 2 and 'no pose_bootstrap' in r.stderr, r.stderr
+    pose_runtime(world, map_config=False)
+    r = robot(world, 'nav', '--auto-pose', '--dry-run')
+    assert r.returncode == 2 and 'map2.pose_bootstrap.yaml' in r.stderr, r.stderr
+
+
+def test_profile_turns_auto_pose_on_and_manual_pose_overrides_it(world):
+    profile(world, AUTO_INITIAL_POSE='true')
+    pose_runtime(world)
+    assert dry(world, 'nav')['argv'][-1] == 'auto_initial_pose:=true'
+    assert not any(x.startswith('auto_initial_pose') for x in dry(world, 'nav', '--manual-pose')['argv'])
+    r = robot(world, 'nav', '--auto-pose', '--manual-pose', '--dry-run')
+    assert r.returncode == 2                                       # mutually exclusive
+    assert not any(x.startswith('auto_initial_pose') for x in dry(world, 'map')['argv'])   # nav only
+
+
+def test_relocalize_needs_an_auto_pose_nav_session(world):
+    profile(world)
+    pose_runtime(world)
+    r = robot(world, 'relocalize', '--dry-run')
+    assert r.returncode == 2 and 'needs "robot nav"' in r.stderr
+    fake = world['tmp'] / 'sleeper.sh'
+    fake.write_text('#!/bin/sh\nexec sleep 30\n')
+    fake.chmod(0o755)
+    for nav_args, ok in ((['nav'], False), (['nav', '--auto-pose'], True)):
+        holder = robot(world, *nav_args, extra_env={'SCT_ROBOT_TEST_EXEC': str(fake)}, popen=True)
+        try:
+            for _ in range(100):
+                if 'running' in robot(world, 'status').stdout:
+                    break
+                time.sleep(0.05)
+            r = robot(world, 'relocalize', '--dry-run')
+            if ok:
+                assert json.loads(r.stdout)['argv'] == ['ros2', 'service', 'call', '/robot_01/pose_bootstrap/relocalize',
+                                                        'std_srvs/srv/Trigger', '{}'], r.stdout + r.stderr
+            else:
+                assert r.returncode == 2 and 'auto pose' in r.stderr, r.stderr
+        finally:
+            holder.send_signal(signal.SIGTERM)
+            holder.wait(10)
+            time.sleep(1.1)                # session directories are named to the second
+
 # ---- fleet service (robot fleet --service, run by sct-fleet.service) -----------------------
 # The supervisor gives the bridge a clean ROS environment, so the fake reads its knobs from files.
 FAKE_BRIDGE = '''#!/bin/sh

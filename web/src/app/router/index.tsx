@@ -6,6 +6,7 @@ import { AuthLayout } from '../../auth/AuthLayout'
 import { useAuthStore } from '../../stores/auth-store'
 import { areaById, type AreaId } from '../../auth/access'
 import { homePathForRole } from '../../auth/roles'
+import RouteErrorPage from './RouteErrorPage'
 
 /**
  * Areas and audiences:
@@ -335,4 +336,5 @@ export const routes = [
   { path: '*', element: <Suspense fallback={<ShellFallback background="#f5f7f8" />}><NotFoundPage /></Suspense> },
 ]
 
-export const router = createBrowserRouter(routes)
+// One pathless parent so every route shares the error screen (stale chunks after a deploy reload by themselves).
+export const router = createBrowserRouter([{ errorElement: <RouteErrorPage />, children: routes }])
