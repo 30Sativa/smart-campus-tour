@@ -12,7 +12,7 @@ Trạng thái: **code và test offline xong, chưa chạy với ROS thật và r
 |---|---|---|---|
 | action | `head/set` | `bus_interfaces/action/SetHead` | `mode=1` HOME (tìm vật cản rồi về 0°, khoảng 13 s); `mode=0` tới góc `pan_deg`/`tilt_deg`. Thành công chỉ khi FB báo `head_seq` = seq lệnh **và** `head_state=1` |
 | topic (sub) | `head/jog` | `bus_interfaces/msg/HeadJog` | Giữ nút: `pan`/`tilt` ∈ {-1,0,1}. Publish đều ≥ 5 Hz (nên 10 Hz) khi giữ; nhả: publish `0,0` |
-| topic (sub) | `head/step` | `bus_interfaces/msg/HeadStep` | Nhấn nút: số bước đủ (PAN 0,6°, TILT 1,8° mỗi bước) |
+| topic (sub) | `head/step` | `bus_interfaces/msg/HeadStep` | Nhấn nút: số bước đủ (PAN 0,6°, TILT 0,36° mỗi bước) |
 | topic (pub) | `head/state` | `bus_interfaces/msg/HeadState` | Trạng thái, góc, `referenced`, `last_head_seq`. 10 Hz và mỗi khi đổi trạng thái |
 | service | `head/stop` | `std_srvs/srv/Trigger` | Giảm tốc dừng; đang HOME thì hủy HOME (mất mốc) |
 | service | `head/off` | `std_srvs/srv/Trigger` | Tắt driver, mất mốc (TILT có thể đổ theo trọng lực) |
@@ -23,7 +23,7 @@ Trạng thái: **code và test offline xong, chưa chạy với ROS thật và r
 
 Quy ước góc: PAN dương = quay trái, 0° = phía trước, giới hạn ±170° (vật cản
 phía sau, cạnh ở 174°). TILT dương = ngửa lên, giới hạn ±18° (vật cản cúi
-20°). Góc làm tròn tới bước: PAN 0,6°, TILT 1,8° (driver bước đủ).
+20°). Góc làm tròn tới vi bước: PAN 0,15°, TILT 0,09° (DRV8825 vi bước 1/4, TILT hộp số 5:1).
 
 ## Xoay tự động ở POI (`head/sweep`)
 

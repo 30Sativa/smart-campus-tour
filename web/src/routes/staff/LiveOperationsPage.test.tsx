@@ -111,7 +111,7 @@ describe('live console camera head (ADR-0045)', () => {
     await waitFor(() => expect(headCommands()).toHaveLength(4))
     expect(headCommands().map(item => item.body)).toEqual([
       { kind: 'STEP', panSteps: 15, tiltSteps: 0 },
-      { kind: 'STEP', panSteps: 0, tiltSteps: 3 },
+      { kind: 'STEP', panSteps: 0, tiltSteps: 15 },
       { kind: 'ANGLE', panDeg: 0, tiltDeg: 0 },
       { kind: 'SWEEP' },
     ])

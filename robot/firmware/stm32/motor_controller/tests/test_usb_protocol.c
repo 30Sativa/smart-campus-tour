@@ -15,6 +15,7 @@
 #include "head/head_core.h"
 #include "contactor/contactor.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -236,7 +237,7 @@ static void test_head_flow(void)
     CHECK(fb_field(19) == 22 && fb_field(22) == 2, "angle command -> head_seq 22, state MOVING");
     run_ms(3000);
     CHECK(fb_field(22) == 1 && fb_field(20) == 9000, "after the move: IDLE, pan 9000 cdeg");
-    CHECK(labs(fb_field(21) + 1500) <= 91, "tilt -1500 cdeg (within half a 1.8 deg step)");
+    CHECK(labs(fb_field(21) + 1500) <= 91, "tilt -1500 cdeg (within half a full step)");
 
     g_n_err = 0;
     rx("HEAD,23,18001,0\r\n"); run_ms(25);
@@ -280,7 +281,10 @@ static void test_head_home_step_jog(void)
     CHECK(fb_field(22) == 1 && fb_field(20) == 0 && fb_field(21) == 0, "HOME completes despite STOP at 20 Hz: IDLE at 0/0");
 
     rx("HEAD,43,STEP,1,-1\r\n"); run_ms(500);
-    CHECK(fb_field(19) == 43 && fb_field(20) == 60 && fb_field(21) == -180, "STEP,1,-1 -> PAN +0.60 deg, TILT -1.80 deg");
+    /* 1 buoc du tai truc ra = 36000 / (200 * hop so) centi-do: PAN 60 (3:1), TILT 36 (5:1). */
+    CHECK(fb_field(19) == 43 && fb_field(20) == lroundf(36000.0f / (HEAD_MOTOR_STEPS_PER_REV * HEAD_PAN_GEAR_RATIO)) &&
+          fb_field(21) == -lroundf(36000.0f / (HEAD_MOTOR_STEPS_PER_REV * HEAD_TILT_GEAR_RATIO)),
+          "STEP,1,-1 -> PAN +1 full step, TILT -1 full step at the output shaft");
 
     for (int i = 0; i < 10; i++) { char l[40]; snprintf(l, sizeof l, "HEAD,%d,JOG,-1,0\r\n", 50 + i); rx(l); run_ms(100); }
     CHECK(fb_field(22) == 2 && fb_field(20) < 0, "JOG held 1 s: moving left->right (negative)");

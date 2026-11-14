@@ -62,6 +62,12 @@ class FleetBridgeNode(Node):
         self.declare_parameter('head_enabled', False)
         self.declare_parameter('head_base_url', '')
         self.declare_parameter('head_wait_ms', 1500)
+        # POI head: the robot turns its head itself from the Nav2 goal result (front on a new goal, the POI's camera
+        # preset on arrival). Needs head_enabled; the backend decides autoMotion. See poi_head.py.
+        self.declare_parameter('head_poi_auto', True)
+        self.declare_parameter('head_poi_radius_m', 0.6)
+        self.declare_parameter('head_poi_refresh_sec', 5.0)
+        self.declare_parameter('head_poi_nav_action', 'navigate_to_pose')
         # Mini PC diagnostics report (POST /api/fleet/v1/diagnostics): observation only, own HTTPS thread.
         self.declare_parameter('diagnostics_enabled', True)
         self.declare_parameter('diagnostics_url', '')
@@ -176,6 +182,7 @@ class FleetBridgeNode(Node):
                 permit_period_sec)
 
         self._head_worker = None
+        self._poi_worker = None
         if bool(self.get_parameter('head_enabled').value):
             # Imported only here: the telemetry-only bridge needs no bus_interfaces.
             from .head_ros import create_ros_head
@@ -184,11 +191,22 @@ class FleetBridgeNode(Node):
             wait_ms = int(self.get_parameter('head_wait_ms').value)
             if not 0 <= wait_ms <= 10_000 or request_timeout_sec * 1000 <= wait_ms:
                 raise RuntimeError('head_wait_ms must be 0..10000 and below request_timeout_sec.')
-            applier, head_state = create_ros_head(self, self.get_logger().warning)
+            applier, head_state, head_actuator = create_ros_head(self, self.get_logger().warning)
+            head_client = FleetHeadHttpClient(head_base, robot_code, credential, request_timeout_sec)
             self._head_worker = FleetHeadWorker(
                 HeadWorkerConfig(wait_ms=wait_ms, retry_max_sec=min(retry_max_sec, 10.0)), applier,
-                FleetHeadHttpClient(head_base, robot_code, credential, request_timeout_sec),
-                head_state.latest, self.get_logger().warning)
+                head_client, head_state.latest, self.get_logger().warning)
+            if bool(self.get_parameter('head_poi_auto').value):
+                from .head_ros import subscribe_poi_head
+                from .head_worker import PoiListWorker
+                from .poi_head import PoiHeadDirector
+                director = PoiHeadDirector(head_actuator, float(self.get_parameter('head_poi_radius_m').value),
+                                           self.get_logger().info)
+                subscribe_poi_head(self, director, str(self.get_parameter('head_poi_nav_action').value),
+                                   self._fresh_xy)
+                self._poi_worker = PoiListWorker(
+                    head_client, director, float(self.get_parameter('head_poi_refresh_sec').value),
+                    self.get_logger().warning)
 
         self._diagnostics_worker = None
         if bool(self.get_parameter('diagnostics_enabled').value):
@@ -207,10 +225,13 @@ class FleetBridgeNode(Node):
         if self._head_worker is not None:
             self._head_worker.start()
             self.get_logger().info('Fleet Head enabled: Operator head buttons reach stm32_bridge head/*.')
+            if self._poi_worker is not None:
+                self._poi_worker.start()
+                self.get_logger().info('POI head enabled: the head turns to each POI\'s camera preset on arrival.')
         else:
-            # Off by default: say so, otherwise "the head never sweeps at a POI" looks like a bug.
+            # Off by default: say so, otherwise "the head never turns at a POI" looks like a bug.
             self.get_logger().info('Fleet Head disabled (head_enabled: false): Operator head buttons and the '
-                                   'automatic POI sweep do not reach this robot.')
+                                   'POI camera presets do not reach this robot.')
         if self._diagnostics_worker is not None:
             self._diagnostics_worker.start()
             self.get_logger().info('Mini PC diagnostics report enabled.')
@@ -284,6 +305,9 @@ class FleetBridgeNode(Node):
         diagnostics_worker = getattr(self, '_diagnostics_worker', None)
         if diagnostics_worker is not None:
             diagnostics_worker.stop(join_timeout_sec=self._request_timeout_sec + 1.0)
+        poi_worker = getattr(self, '_poi_worker', None)
+        if poi_worker is not None:
+            poi_worker.stop(join_timeout_sec=self._request_timeout_sec + 1.0)
         head_worker = getattr(self, '_head_worker', None)
         if head_worker is not None:
             head_worker.stop(join_timeout_sec=self._request_timeout_sec + 1.0)
@@ -332,6 +356,13 @@ class FleetBridgeNode(Node):
             else:
                 self.get_logger().info('Fleet pose TF is fresh.')
             self._last_logged_pose_reason = observation.reason
+
+    def _fresh_xy(self) -> tuple[float, float] | None:
+        """Map-frame position for the POI head, only while the TF pose is fresh."""
+        with self._observation_lock:
+            if self._pose is None or self._pose_stale:
+                return None
+            return float(self._pose['x']), float(self._pose['y'])
 
     def _snapshot(self) -> dict[str, object]:
         with self._observation_lock:

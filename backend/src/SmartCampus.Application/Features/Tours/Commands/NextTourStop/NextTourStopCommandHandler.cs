@@ -1,7 +1,6 @@
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
-using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Routes;
@@ -11,11 +10,11 @@ namespace SmartCampus.Application.Features.Tours.Commands.NextTourStop;
 
 /// <summary>
 /// The Operator leaves the current POI (ADR-0043 D12): closes the visit once, then sends the next leg, or completes the Tour
-/// when the route ends at its last POI. Movement checks apply only when a new command is created. In AUTO head mode a new
-/// leg also brings the head back to the front (ADR-0045 addendum).
+/// when the route ends at its last POI. Movement checks apply only when a new command is created. The robot itself turns
+/// the head to the front when the new leg starts (ADR-0045 addendum 14/11/2026).
 /// </summary>
 public sealed class NextTourStopCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, HeadAutoMotion headMotion,
+    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings,
     TimeProvider clock)
     : IRequestHandler<NextTourStopCommand, TourMutationResult>
 {
@@ -64,8 +63,6 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
         else
         {
             TourLegDispatch.Begin(repository, settings, tour, robotId, map, target, command.Actor, now);
-            // Queued before the commit, like the arrival sweep: a failed commit at worst turns the head to the front.
-            headMotion.QueueDeparture(tour.Id, robot!.RobotCode);
         }
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Next, fingerprint, now, "state");

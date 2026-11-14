@@ -52,11 +52,26 @@ polls and `bus_interfaces` is not imported. Independent of `commands_enabled`; t
 | `STOP` | release a jog, call `head/stop` |
 | `ANGLE` | release a jog, send `head/set` (mode angle), fire and forget |
 | `SWEEP` | release a jog, call `head/sweep` (`HeadSweep`, `amplitude_deg` = `sweepDeg` or 0 for the default); stm32_bridge runs the whole left -> right -> back sweep |
+| `HOME` | release a jog, send `head/set` (mode home): find the stops, back to 0/0 (Staff "Tự canh chỉnh đầu camera", also before Start) |
 
 Each `seq` runs once, in order; a new backend `epoch` restarts the count. A failed ROS call is logged and the next
 command still runs. The latest `head/state` (fresh within 2 s) rides on the next poll. `head_wait_ms` (1500) must stay
 below `request_timeout_sec`. Code: `head.py` (pure logic, `test/test_head.py`), `head_worker.py` (HTTPS thread),
 `head_ros.py` (the only module allowed publishers, and only `head/step`/`head/jog`).
+
+**POI head (`head_poi_auto: true`, with `head_enabled`).** The robot turns the head at POIs by itself, from any Nav2
+goal sender (RViz, bus_manager, Fleet Commands):
+
+1. Every `head_poi_refresh_sec` (5 s) a background thread reads `GET /api/fleet/head/v1/pois`: the running Tour's
+   stops, or the verified POIs on the robot's map, each with the camera preset Staff set, plus `autoMotion`.
+   A failed refresh keeps the last good list.
+2. `head_ros.subscribe_poi_head` listens to `<head_poi_nav_action>/_action/status` (default `navigate_to_pose`).
+   The first, latched message is history and is ignored.
+3. A goal that starts `EXECUTING` -> `head/set` 0/0 (front). A goal that `SUCCEEDED` while the TF pose
+   `map -> base_footprint` is fresh and within `head_poi_radius_m` (0.6 m) of a POI -> that POI's preset
+   (`head/set` angle, or `head/sweep`); `NONE` does nothing. Nothing happens while `autoMotion` is false.
+
+Code: `poi_head.py` (pure logic, `test/test_poi_head.py`), `head_worker.PoiListWorker`.
 
 ## Command receiver (off by default)
 

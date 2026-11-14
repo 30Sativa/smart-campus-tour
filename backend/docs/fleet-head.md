@@ -35,19 +35,37 @@ Each press costs one unlocked `Tours`/`Robots` read.
 
 Environment form: `FleetHead__Enabled=true`.
 
-## Head behaviour at POIs (ADR-0045 addenda)
+## HOME before Start
+
+`HOME` ("Tự canh chỉnh đầu camera" on the Staff start-check page and the live head panel) re-aligns the head against its
+stops. `SendHeadCommandHandler` accepts it for a `READY` Tour, queued to `TourHeadControlView.ReservedRobotCode` (the
+active `TourRobotReservations` row), as well as for a `RUNNING` Tour; every other kind still needs `RUNNING`.
+`GetTourHeadStatus` reports the held robot while `READY` so the page can show connection and `HOMING`.
+
+## Head behaviour at POIs (ADR-0045 addendum 14/11/2026: the robot decides)
 
 Everything the VR camera head does at a POI is set on the POI, in Staff "Camera & tư liệu", as its camera preset
 (`PoiCameraPresets`: `FRONT`, `LEFT`, `RIGHT`, `NONE`, `SWEEP[:deg]`, `ANGLE:pan,tilt`). The route revision stop keeps
-a copy. `ReportCommandResultCommandHandler` calls `HeadAutoMotion.QueueArrival` with the stop's preset when the current
-leg's GoTo to a POI is recorded `ARRIVED`. In `AUTO` mode, with head control on and the robot polling, it queues
-`ANGLE` (FRONT 0/0, LEFT 90/0, RIGHT −90/0, ANGLE p/t) or `SWEEP` (with `sweepDeg`), and nothing for `NONE` or an
-older unknown value. `NextTourStopCommandHandler` calls `HeadAutoMotion.QueueDeparture` when it starts the next leg: in `AUTO` mode it
-queues `ANGLE 0/0`, which also stops a sweep still running, so the robot never drives with the head turned. Both run
-inside the handler, before the commit, and never fail it. An `AUTO` Tour while `FleetHead:Enabled` is false logs
-`... skipped ... Fleet Head is disabled` at each arrival and departure, so a head that never moves is explained. Code: `Features/FleetHead/HeadAutoMotion.cs`, `Features/MapPoi/Common/PoiCameraPresets.cs`,
-`Commands/SetTourHeadMode/`, `Common/Abstractions/FleetHead/ITourHeadModeStore.cs`,
-`Integrations/FleetHead/InMemoryTourHeadModeStore.cs`.
+a copy.
+
+The backend no longer queues a head command at arrival or departure. The robot (`fleet_bridge`, `head_poi_auto`)
+reads `GET /api/fleet/head/v1/pois` every few seconds and watches the Nav2 `navigate_to_pose` goal status itself: a
+goal that starts executing turns the head to the front, a goal that succeeds within `head_poi_radius_m` of a POI does
+that POI's preset. This works for any goal sender, so it does not wait for Fleet Commands dispatch (off until M2.3).
+
+`GetRobotHeadPoisQuery` answers, for the robot's code:
+
+| `source` | `pois` |
+|---|---|
+| `TOUR` | The stops of its `RUNNING` Tour's route revision, in order, with their frozen presets. |
+| `MAP` | No running Tour: the latest PASS revision of every non-discarded POI on `Robots.AssignedMapVersionId`. |
+| `NONE` | Unknown or deactivated robot, or no map assigned: empty. |
+
+`autoMotion` is `FleetHead:Enabled && mode == AUTO`, where `mode` is the running Tour's head mode, or
+`FleetHead:DefaultMode` without one. MANUAL therefore still switches the POI presets off within one refresh. An older
+unknown preset is sent as `NONE`. Code: `Queries/GetRobotHeadPois/`, `Common/Abstractions/Persistence/IRobotHeadPoiReader.cs`,
+`Persistence/Repositories/EfRobotHeadPoiReader.cs`, `Features/MapPoi/Common/PoiCameraPresets.cs`,
+`Commands/SetTourHeadMode/`, `Integrations/FleetHead/InMemoryTourHeadModeStore.cs`.
 
 ## Limits
 
