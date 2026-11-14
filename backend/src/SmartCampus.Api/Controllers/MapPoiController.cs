@@ -179,9 +179,9 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
     [HttpGet("maps/versions")]
     [Authorize(Roles = StaffAndTechnical)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<MapVersionListItem>>>> ListMaps(
-        [FromQuery] string? areaKey, [FromQuery] int take = 50, CancellationToken ct = default) =>
+        [FromQuery] string? areaKey, [FromQuery] int take = 50, [FromQuery] bool includeRetired = false, CancellationToken ct = default) =>
         Ok(new BaseResponse<IReadOnlyList<MapVersionListItem>> { Success = true, Message = "Map versions retrieved.",
-            Data = await sender.Send(new ListMapVersionsQuery(areaKey, take), ct) });
+            Data = await sender.Send(new ListMapVersionsQuery(areaKey, take, includeRetired), ct) });
 
     [HttpGet("maps/versions/{id:guid}")]
     [Authorize(Roles = StaffAndTechnical)]
@@ -203,6 +203,26 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         Guid id, [FromBody] RecordMapDeploymentRequest request, CancellationToken ct) =>
         Ok(new BaseResponse<MapDeploymentCheckView> { Success = true, Message = "Deployment check recorded.",
             Data = await sender.Send(new RecordMapDeploymentCommand(User.GetRequiredUserId(), id, request), ct) });
+
+    [HttpGet("technical/map-versions/{id:guid}/retirement-impact")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<MapRetirementImpact>>> GetMapRetirementImpact(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<MapRetirementImpact> { Success = true, Message = "Map retirement impact retrieved.",
+            Data = await sender.Send(new GetMapRetirementImpactQuery(id), ct) });
+
+    [HttpPost("technical/map-versions/{id:guid}/retire")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<MapVersionView>>> RetireMapVersion(
+        Guid id, [FromBody] RetireMapVersionRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<MapVersionView> { Success = true, Message = "Map version retired; its history is kept.",
+            Data = await sender.Send(new RetireMapVersionCommand(User.GetRequiredUserId(), id, request), ct) });
+
+    [HttpPost("technical/map-versions/{id:guid}/reopen")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<MapVersionView>>> ReopenMapVersion(
+        Guid id, [FromBody] ReopenMapVersionRequest? request, CancellationToken ct) =>
+        Ok(new BaseResponse<MapVersionView> { Success = true, Message = "Map version reopened.",
+            Data = await sender.Send(new ReopenMapVersionCommand(User.GetRequiredUserId(), id, request ?? new(null)), ct) });
 
     [HttpGet("technical/map-versions/{id:guid}/deployment-checks")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]

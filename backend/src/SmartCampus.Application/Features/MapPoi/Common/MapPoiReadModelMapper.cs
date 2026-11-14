@@ -9,7 +9,9 @@ internal static class MapPoiReadModelMapper
         Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), map.ImageFileName,
         map.ImageWidth, map.ImageHeight, map.Resolution, map.OriginX, map.OriginY, map.OriginYaw,
         map.Negate, map.OccupiedThreshold, map.FreeThreshold, map.FrameId,
-        map.ValidationStatus, map.UploadedByUserId, map.UploadedAt);
+        map.ValidationStatus, map.UploadedByUserId, map.UploadedAt,
+        MapRetirement.StatusOf(map), map.RetiredAt, map.RetiredByUserId, map.RetiredByUser?.FullName, map.RetirementReason,
+        MapRetirement.RowVersionOf(map.RetiredAt));
 
     public static MapDeploymentCheckView ToDeploymentView(MapDeploymentCheck check) => new(
         check.Id, check.MapVersionId, check.Robot.RobotCode,

@@ -35,7 +35,9 @@ public partial class User
 
     public virtual ICollection<MapDeploymentCheck> MapDeploymentChecks { get; set; } = new List<MapDeploymentCheck>();
 
-    public virtual ICollection<MapVersion> MapVersions { get; set; } = new List<MapVersion>();
+    public virtual ICollection<MapVersion> MapVersionRetiredByUsers { get; set; } = new List<MapVersion>();
+
+    public virtual ICollection<MapVersion> MapVersionUploadedByUsers { get; set; } = new List<MapVersion>();
 
     public virtual ICollection<Robot> MapAssignedRobots { get; set; } = new List<Robot>();
 

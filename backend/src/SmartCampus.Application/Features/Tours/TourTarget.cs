@@ -19,7 +19,11 @@ internal static class TourTarget
         var route = await (lockTarget ? revisions.LockRouteAsync(revision.RouteId, ct) : revisions.FindRouteAsync(revision.RouteId, ct));
         if (route is not { IsOpenForNewTours: true })
             throw new ConflictException("Tuyến đã ngừng sử dụng nên không dùng được cho Tour mới.", "ROUTE_UNAVAILABLE");
-        return (revision, await RequireSchedulableRevisionAsync(revisions, maps, revision, lockTarget, ct));
+        var run = await RequireSchedulableRevisionAsync(revisions, maps, revision, lockTarget, ct);
+        // Only new Tours: READY repeats the schedulable check, and retiring is refused while SCHEDULED or READY Tours use the
+        // version (ADR-0041). Create holds the map lock taken above, so a retirement cannot slip in before commit.
+        await MapRetirement.EnsureActiveAsync(maps, revision.MapVersionId, ct);
+        return (revision, run);
     }
 
     /// <summary>

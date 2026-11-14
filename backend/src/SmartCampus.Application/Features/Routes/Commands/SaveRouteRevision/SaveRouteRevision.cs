@@ -92,6 +92,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
 
         var map = await repo.GetMapAsync(i.MapVersionId, ct) ?? throw new NotFoundException("Map version", i.MapVersionId);
         await mapRepository.LockMapPreparationStateAsync(map.Id, ct);
+        await MapRetirement.EnsureActiveAsync(mapRepository, map.Id, ct);
         (await MapPreparationEligibility.LoadAsync(mapRepository, map, ct)).EnsureCanUse();
         var poiIds = i.Stops.Select(s => s.PoiRevisionId).ToArray();
         var evidence = await repo.GetPoiEvidenceAsync(poiIds, ct);

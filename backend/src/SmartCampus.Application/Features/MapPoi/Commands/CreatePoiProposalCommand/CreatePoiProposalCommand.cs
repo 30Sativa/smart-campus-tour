@@ -50,6 +50,7 @@ public sealed class CreatePoiProposalCommandHandler(
         var map = await mapRepository.FindMapVersionAsync(draft.MapVersionId, includePackage: true, cancellationToken)
             ?? throw new NotFoundException("Map version", draft.MapVersionId);
         await mapRepository.LockMapPreparationStateAsync(map.Id, cancellationToken);
+        await MapRetirement.EnsureActiveAsync(mapRepository, map.Id, cancellationToken);
         (await MapPreparationEligibility.LoadAsync(mapRepository, map, cancellationToken)).EnsureCanUse();
         PoiProposalRules.ValidateWrittenPosition(map, draft, settings);
         var now = timeProvider.GetUtcNow();

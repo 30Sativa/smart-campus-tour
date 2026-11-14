@@ -9,7 +9,9 @@ import { MapVersionTable } from '../../features/technical/MapVersionTable'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { CheckRow, ResultToggle, SaveBlockedHint, TechnicalPage } from '../../features/technical/TechnicalUi'
 import { mapVersionLabel } from '../../features/technical/poi-labels'
-import { useMapAreas, useMapVersions, usePhysicalRobots, useRecordDeployment, useUploadMap } from '../../features/technical/technical-hooks'
+import { RetireMapDialog } from '../../features/technical/RetireMapDialog'
+import { formatDateTime } from '../../components/ui/date-time'
+import { useAllMapVersions, useMapAreas, usePhysicalRobots, useRecordDeployment, useReopenMap, useUploadMap } from '../../features/technical/technical-hooks'
 import { errorText, mapUploadFieldErrors } from '../../features/technical/technical-format'
 import type { MapAreaOption, MapVersionItem } from '../../features/technical/api/technical'
 
@@ -20,12 +22,16 @@ const shortSha = (sha: string) => (sha.length > 16 ? `${sha.slice(0, 8)}…${sha
  * package, record an on-robot check) so the table stays the page.
  */
 export default function TechnicalMapsPage() {
-  const maps = useMapVersions()
+  const maps = useAllMapVersions()
   const robots = usePhysicalRobots()
   const [uploading, setUploading] = useState(false)
   const [uploadArea, setUploadArea] = useState<MapAreaOption | null>(null)
   const [checking, setChecking] = useState<MapVersionItem | null>(null)
-  const items = maps.data ?? []
+  const [retiring, setRetiring] = useState<MapVersionItem | null>(null)
+  const [tab, setTab] = useState<'active' | 'retired'>('active')
+  // An area's row shows its newest version still in use, so retiring the newest one falls back to the one before (ADR-0041).
+  const items = (maps.data ?? []).filter(item => !isRetired(item))
+  const retired = (maps.data ?? []).filter(isRetired)
   const passed = items.filter((item) => item.canUseForPoiPreparation).length
   const failed = items.filter((item) => item.technicalCheckStatus === 'FAILED').length
   const unchecked = items.filter((item) => item.technicalCheckStatus === 'PENDING').length
@@ -50,14 +56,45 @@ export default function TechnicalMapsPage() {
         </div>
       )}
 
+      <div role="group" aria-label="Lọc theo tình trạng sử dụng" className="mb-3 inline-flex gap-0.5 rounded-[10px] bg-[#eef2f6] p-[3px]">
+        {([['active', 'Đang dùng'], ['retired', 'Ngừng sử dụng']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={tab === value} onClick={() => setTab(value)}
+          className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${tab === value ? 'bg-white text-[#173b59] shadow-[0_1px_2px_rgba(15,23,42,0.08)]' : 'text-[#475569]'}`}>{label}{value === 'retired' && retired.length > 0 ? ` (${retired.length})` : ''}</button>)}
+      </div>
+
       {maps.isPending ? <section className={panelClass}><p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p></section>
         : maps.error ? <section className={panelClass}><p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(maps.error)}</p></section>
-        : items.length ? <MapVersionTable items={items} robots={robots} onUpload={area => { setUploadArea(area); setUploading(true) }} onCheck={setChecking} />
-        : <section className={panelClass}><EmptyState variant="empty" title="Chưa có bản đồ" description="Tải tệp bản đồ đầu tiên lên để bắt đầu." /></section>}
+        : tab === 'retired' ? <RetiredMapList items={retired} />
+        : items.length ? <MapVersionTable items={items} robots={robots} onUpload={area => { setUploadArea(area); setUploading(true) }} onCheck={setChecking} onRetire={setRetiring} />
+        : <section className={panelClass}><EmptyState variant="empty" title={retired.length ? 'Không có bản đồ đang dùng' : 'Chưa có bản đồ'} description={retired.length ? 'Mọi phiên bản đã ngừng sử dụng. Mở lại ở tab Ngừng sử dụng hoặc tải phiên bản mới.' : 'Tải tệp bản đồ đầu tiên lên để bắt đầu.'} /></section>}
 
       <UploadModal key={uploadArea?.areaKey ?? 'new-area'} open={uploading} initialArea={uploadArea} onClose={() => { setUploading(false); setUploadArea(null) }} />
       <DeploymentModal key={checking?.map.id ?? 'closed'} item={checking} onClose={() => setChecking(null)} />
+      {retiring && <RetireMapDialog key={retiring.map.id} map={retiring.map} onClose={() => setRetiring(null)} />}
     </TechnicalPage>
+  )
+}
+
+const isRetired = (item: MapVersionItem) => item.map.status === 'RETIRED'
+
+/** One row per retired version, newest retirement first; history stays readable and "Mở lại" lifts only the stop. */
+function RetiredMapList({ items }: { items: MapVersionItem[] }) {
+  const reopen = useReopenMap()
+  const sorted = [...items].sort((a, b) => (b.map.retiredAt ?? '').localeCompare(a.map.retiredAt ?? ''))
+  if (!sorted.length) return <section className={panelClass}><EmptyState variant="empty" title="Không có phiên bản ngừng sử dụng" description="Phiên bản bị ngừng sẽ hiện ở đây, kèm lý do và người ngừng." /></section>
+  return (
+    <section className={panelClass} aria-label="Phiên bản bản đồ ngừng sử dụng">
+      {reopen.error && <p role="alert" className="m-3 rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errorText(reopen.error)}</p>}
+      <ul className="divide-y divide-[#eef1f4]">
+        {sorted.map(({ map }) => <li key={map.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px]"><span className="font-semibold text-[#0f172a]">{map.areaName}</span> <span className="font-mono text-[11.5px] text-[#64748b]">{map.areaKey}</span> <span className="text-[#334155]">· phiên bản {map.versionNumber}</span></p>
+            <p className="text-[12.5px] text-[#64748b]">Ngừng {map.retiredAt ? formatDateTime(map.retiredAt) : ''}{map.retiredByName ? ` · ${map.retiredByName}` : ''}</p>
+            {map.retirementReason && <p className="mt-0.5 break-words text-[13px] text-[#334155]">Lý do: {map.retirementReason}</p>}
+          </div>
+          <button type="button" className={`${buttonClass('secondary', 'sm')} self-start sm:self-auto`} aria-label={`Mở lại ${mapVersionLabel(map)}`} disabled={reopen.isPending} onClick={() => { reopen.reset(); reopen.mutate(map) }}>Mở lại</button>
+        </li>)}
+      </ul>
+    </section>
   )
 }
 

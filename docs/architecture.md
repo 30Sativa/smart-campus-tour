@@ -680,6 +680,22 @@ Staff list and verification queue but no row is deleted. Proposal views add
 `canDiscard` and `discardedAt`; later writes to it return 409
 `POI_PROPOSAL_DISCARDED`.
 
+Under ADR-0041 (schema v1.21), TechnicalStaff retire a map version instead of
+deleting it: `POST /api/technical/map-versions/{id}/retire` with
+`{ reason, expectedRowVersion }` and `POST /api/technical/map-versions/{id}/reopen`
+with optional `{ expectedRowVersion }`; `GET /api/technical/map-versions/{id}/retirement-impact`
+lists the routes, assigned robots, waiting POI/route reviews and SCHEDULED/READY
+Tours on it. Retire is refused with 409 `MAP_VERSION_ROBOT_ASSIGNED`,
+`MAP_VERSION_HAS_PENDING_REVIEWS` or `MAP_VERSION_HAS_UPCOMING_TOURS` (each with
+`errors.blockers`) and `MAP_VERSION_STALE` for a stale version, all checked under
+the per-version map-preparation lock and a row lock. A retired version is left out
+of `GET /api/maps/versions` unless `includeRetired=true`; map views add `status`
+(`ACTIVE`/`RETIRED`), `retiredAt`, `retiredByUserId`, `retiredByName`,
+`retirementReason` and an opaque `rowVersion`. Robot map assignment, deployment
+checks, POI proposal/revision/submission/import (and preview), route revision/
+submission and Tour create/slots on it return 409 `MAP_VERSION_RETIRED`; existing
+data stays readable. Audit actions: `MAP_VERSION_RETIRED`, `MAP_VERSION_REOPENED`.
+
 Under ADR-0028, a valid uploaded package alone is not selectable for new POI
 work. Map list/detail return backend-calculated `technicalCheckStatus`,
 `canUseForPoiPreparation`, a block reason code/text, and the evidence record

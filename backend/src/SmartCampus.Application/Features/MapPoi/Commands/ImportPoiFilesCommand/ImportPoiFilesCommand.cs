@@ -78,6 +78,7 @@ public sealed class ImportPoiFilesCommandHandler(
             locked[proposal.Id] = await proposalRepository.LockProposalAsync(proposal.Id, cancellationToken)
                 ?? throw new NotFoundException("POI proposal", proposal.Id);
         await mapRepository.LockMapPreparationStateAsync(map.Id, cancellationToken);
+        await MapRetirement.EnsureActiveAsync(mapRepository, map.Id, cancellationToken);
         await mapRepository.LockRobotDeploymentStateAsync(robot.Id, cancellationToken);
         RobotLifecycleRules.EnsureActive(robot);
 

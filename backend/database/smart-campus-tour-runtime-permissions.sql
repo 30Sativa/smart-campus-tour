@@ -21,6 +21,8 @@ GRANT SELECT, INSERT ON OBJECT::dbo.TourScheduleBlocks TO campus_tour_app;
 GRANT UPDATE (RemovedAt, RemovedByUserId) ON OBJECT::dbo.TourScheduleBlocks TO campus_tour_app;
 -- v1.20 (ADR-0051): Staff discard a never-passed POI proposal by stamping DiscardedAt/DiscardedByUserId; never deleted.
 GRANT UPDATE (DiscardedAt, DiscardedByUserId) ON OBJECT::dbo.PoiProposals TO campus_tour_app;
+-- v1.21 (ADR-0041): Technical Staff retire or reopen a map version by stamping or clearing three columns; never deleted.
+GRANT UPDATE (RetiredAt, RetiredByUserId, RetirementReason) ON OBJECT::dbo.MapVersions TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.PoiImportReceipts TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.RouteVariants TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.Robots TO campus_tour_app;

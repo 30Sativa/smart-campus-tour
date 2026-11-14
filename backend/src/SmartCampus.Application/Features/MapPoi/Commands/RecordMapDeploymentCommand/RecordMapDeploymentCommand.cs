@@ -58,6 +58,7 @@ public sealed class RecordMapDeploymentCommandHandler(
         var robot = await repository.FindPhysicalRobotAsync(request.RobotCode.Trim(), cancellationToken)
             ?? throw new NotFoundException("Physical robot", request.RobotCode.Trim());
         await repository.LockMapPreparationStateAsync(map.Id, cancellationToken);
+        await MapRetirement.EnsureActiveAsync(repository, map.Id, cancellationToken);
         await repository.LockRobotDeploymentStateAsync(robot.Id, cancellationToken);
         RobotLifecycleRules.EnsureActive(robot);
         var connectionConfirmed = await repository.LockAndReadConnectionConfirmationAsync(robot.Id, cancellationToken);

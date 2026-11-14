@@ -7,7 +7,9 @@ public sealed record MapVersionView(
     string PackageFileName, string PackageSha256, string ImageFileName, int ImageWidth, int ImageHeight,
     decimal Resolution, decimal OriginX, decimal OriginY, decimal OriginYaw, bool Negate,
     decimal OccupiedThreshold, decimal FreeThreshold, string FrameId, string ValidationStatus,
-    Guid UploadedByUserId, DateTimeOffset UploadedAt);
+    Guid UploadedByUserId, DateTimeOffset UploadedAt,
+    string Status, DateTimeOffset? RetiredAt, Guid? RetiredByUserId, string? RetiredByName, string? RetirementReason,
+    string RowVersion);
 
 public sealed record MapVersionListItem(MapVersionView Map, MapDeploymentCheckView? LatestDeployment,
     string TechnicalCheckStatus, bool CanUseForPoiPreparation, string? PreparationBlockReasonCode,
@@ -51,3 +53,18 @@ public sealed record PoiVerificationQueueItem(Guid ProposalId, int CurrentRevisi
     public string NavigationStatus => Revision.NavigationStatus;
     public Guid? VerificationSourceRevisionId => Revision.VerificationSourceRevisionId;
 }
+
+/// <summary>What retiring a map version would affect or be blocked by (ADR-0041). Nothing listed is changed.</summary>
+public sealed record MapRetirementImpact(
+    Guid MapVersionId,
+    IReadOnlyList<MapRetirementRoute> Routes,
+    IReadOnlyList<MapRetirementRobot> AssignedRobots,
+    IReadOnlyList<MapRetirementPendingPoi> PendingPois,
+    IReadOnlyList<MapRetirementPendingRoute> PendingRoutes,
+    IReadOnlyList<MapRetirementTour> UpcomingTours);
+
+public sealed record MapRetirementRoute(Guid RouteId, string Name, bool IsActive);
+public sealed record MapRetirementRobot(Guid RobotId, string RobotCode);
+public sealed record MapRetirementPendingPoi(Guid ProposalId, string Name, int RevisionNumber);
+public sealed record MapRetirementPendingRoute(Guid RouteId, Guid RevisionId, string Name, int RevisionNumber);
+public sealed record MapRetirementTour(Guid TourId, string Name, DateTimeOffset ScheduledStartAt, string State);

@@ -102,6 +102,7 @@ public sealed class RouteMapEligibilityTests
             nameof(IMapVersionRepository.FindMapVersionAsync) => Task.FromResult<MapVersion?>(Map),
             nameof(IMapVersionRepository.ListDeploymentChecksForMapAsync) => Task.FromResult(checks),
             nameof(IMapVersionRepository.LockMapPreparationStateAsync) => Task.CompletedTask,
+            nameof(IMapVersionRepository.IsMapVersionRetiredAsync) => Task.FromResult(false),
             _ => throw new NotImplementedException(method.Name)
         };
     });
