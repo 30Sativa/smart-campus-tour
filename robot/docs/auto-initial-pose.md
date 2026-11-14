@@ -58,6 +58,7 @@ map YAML + ảnh, nên pose của map khác không bao giờ được dùng. Ghi
 | `SKIPPED` | Đã có pose đặt tay, hoặc AMCL đã localized | Không cần làm gì; `robot relocalize` để làm lại |
 | `ABORTED` | Có pose đặt tay trong lúc đang tìm | Pose đặt tay được giữ |
 | `DISABLED` / `ERROR` | Thiếu file cấu hình map, map sai, không có TF/scan | Đọc chi tiết trong dòng trạng thái |
+| `ERROR: AMCL is not active 30 s after start ...` | Nav2 không bật được phần định vị (`Aborting bringup` sau lỗi gọi `map_server/get_state`; gặp 2/9 lần khởi động 13–14/11, có từ trước pose_bootstrap). AMCL không active nên đặt tay cũng không được | Ctrl+C rồi chạy lại `robot nav` |
 
 Làm lại khi robot đứng yên: `robot relocalize` (gọi `/<robot>/pose_bootstrap/relocalize`,
 `std_srvs/srv/Trigger`; bỏ qua quy tắc `SKIPPED`).
