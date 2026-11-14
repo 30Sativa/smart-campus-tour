@@ -41,6 +41,8 @@ st = lambda h: h.stamp.sec + h.stamp.nanosec * 1e-9
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('bag'); ap.add_argument('map_yaml')
     ap.add_argument('--seconds', type=float, default=25.0); ap.add_argument('--shift', type=float, default=None)
+    ap.add_argument('--activate-delay', type=float, default=0.0,
+                    help='keep AMCL configured but inactive this long after the replay starts (slow robot start)')
     a = ap.parse_args()
     con = sqlite3.connect(a.bag); top = {r[1]: (r[0], r[2]) for r in con.execute('select id,name,type from topics')}
 
@@ -91,13 +93,19 @@ def main():
     for t in static.transforms: t.header.stamp = now()
     grid.header.stamp = now(); pub_static.publish(static); pub_map.publish(grid)
     cli = node.create_client(ChangeState, '/amcl/change_state'); cli.wait_for_service(timeout_sec=20)
-    for tid in (Transition.TRANSITION_CONFIGURE, Transition.TRANSITION_ACTIVATE):
+    def transition(tid):
         f = cli.call_async(ChangeState.Request(transition=Transition(id=tid))); rclpy.spin_until_future_complete(node, f, timeout_sec=10)
+    transition(Transition.TRANSITION_CONFIGURE)
+    if a.activate_delay <= 0:
+        transition(Transition.TRANSITION_ACTIVATE)
+    activated = a.activate_delay <= 0
     t_wall = time.monotonic()
     shift_ns = None
     for ts, kind, msg in ev:
         while time.monotonic() - t_wall < ts - t_first:
             rclpy.spin_once(node, timeout_sec=0.002)
+        if not activated and time.monotonic() - t_wall >= a.activate_delay:
+            transition(Transition.TRANSITION_ACTIVATE); activated = True
         # re-stamp to the wall clock, keeping the recorded spacing (both nodes use wall time)
         stamp_now = node.get_clock().now()
         if shift_ns is None:

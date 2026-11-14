@@ -32,6 +32,8 @@ import rclpy.duration
 import rclpy.time
 from action_msgs.msg import GoalStatusArray
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from lifecycle_msgs.msg import State
+from lifecycle_msgs.srv import GetState
 from nav_msgs.msg import OccupancyGrid, Odometry
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -73,6 +75,7 @@ class PoseBootstrap(Node):
         self.initial_cov_yaw = p('initial_cov_yaw', 0.02).value
         self.save_period = p('save_period', 5.0).value
         self.save_min_move = p('save_min_move', 0.2).value
+        self.amcl_node = p('amcl_node', 'amcl').value
 
         self.lock = threading.Lock()
         self.attempt_lock = threading.Lock()
@@ -119,6 +122,9 @@ class PoseBootstrap(Node):
             self.create_subscription(GoalStatusArray, f'{action}/_action/status',
                                      lambda m, a=action: self.on_goals(a, m), latched, callback_group=cb)
         self.nomotion = self.create_client(Empty, 'request_nomotion_update', callback_group=cb)
+        # AMCL (Humble) drops an initial pose that arrives before it is active, and its services
+        # exist from "configured" on: wait for the lifecycle state itself.
+        self.amcl_state = self.create_client(GetState, f'{self.amcl_node}/get_state', callback_group=cb)
         self.create_service(Trigger, '~/relocalize', self.on_relocalize, callback_group=cb)
         self.create_timer(self.save_period, self.save_pose, callback_group=cb)
         homes = ', '.join(n for n, _ in self.homes) or 'none'
@@ -202,7 +208,23 @@ class PoseBootstrap(Node):
             self.status('ERROR', 'no map or scan within 60 s'); return
         if not self.nomotion.wait_for_service(timeout_sec=60.0):
             self.status('ERROR', 'AMCL (request_nomotion_update) not available within 60 s'); return
+        if not self.wait_for(self.amcl_active, 30.0):
+            # Seen 2 of 9 nav starts (13-14/11): lifecycle_manager_localization "Aborting bringup" after a
+            # failed map_server/get_state call, so AMCL never activates and no pose (manual either) works.
+            self.status('ERROR', 'AMCL is not active 30 s after start: Nav2 localization did not come up '
+                                 '(look for "Aborting bringup" in the robot nav output). Ctrl+C and start robot nav again')
+            return
         self.attempt(force=False)
+
+    def amcl_active(self):
+        if not self.amcl_state.wait_for_service(timeout_sec=1.0):
+            return False
+        done = threading.Event()
+        fut = self.amcl_state.call_async(GetState.Request())
+        fut.add_done_callback(lambda _f: done.set())
+        if not done.wait(2.0) or fut.result() is None:
+            return False
+        return fut.result().current_state.id == State.PRIMARY_STATE_ACTIVE
 
     def on_relocalize(self, _req, resp):
         state, detail = self.attempt(force=True)
@@ -274,6 +296,8 @@ class PoseBootstrap(Node):
             return self.status('ABORTED', 'a manual initial pose arrived meanwhile; keeping it')
         if why:
             return self.status('NEEDS_MANUAL_POSE', f'found a pose but {why} now; not published')
+        if not self.amcl_active():
+            return self.status('NEEDS_MANUAL_POSE', 'found a pose but AMCL is not active; not published')
         pose = res.pose
         # AMCL answers each no-motion update with an amcl_pose; count every answer after the
         # pose went out (a stationary robot produces no further updates on its own).
