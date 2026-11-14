@@ -37,6 +37,9 @@ permission to execute it.
 - [Fleet service](fleet-service.md) — `fleet_bridge` from boot as a systemd user unit supervised
   by the launcher (`robot fleet --service`): telemetry always, commands only while
   `robot nav --fleet` runs; NTP gate, restart policy, offline end-to-end evidence, install steps.
+- [Depth camera](depth-camera.md) — Astra Pro depth in the local costmap beside the LiDAR
+  (`robot nav --camera`, off by default): CAD mount, lean driver, measured cost, offline costmap
+  check, why it does not stop the robot for a low obstacle ahead, hardware test plan.
 - [Runtime deploy and rollback](runtime-deploy.md) — how the MiniPC runtime
   differs from source today, staging an immutable overlay from one commit, and
   rolling back by sourcing the previous overlay.

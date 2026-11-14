@@ -39,6 +39,7 @@ ROBOT_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))   # rob
 PROFILE = os.environ.get('SCT_ROBOT_PROFILE', os.path.expanduser('~/.config/sct-robot/runtime.env'))
 STATE_DIR = os.environ.get('SCT_ROBOT_STATE', os.path.expanduser('~/.local/state/sct-robot'))
 PROC = os.environ.get('SCT_PROC_ROOT', '/proc')
+USB = os.environ.get('SCT_USB_ROOT', '/sys/bus/usb/devices')
 ROS_SETUP = '/opt/ros/humble'
 WORKFLOWS = ('manual', 'map', 'nav')
 # LiDAR yaw values that ran on the robot as a recorded baseline. Having run is not
@@ -66,6 +67,9 @@ PROFILE_KEYS = {
     # nav: pose_bootstrap sets the initial pose from the LiDAR (robot/docs/auto-initial-pose.md).
     # Off by default; "robot nav --auto-pose" / "--manual-pose" override it per run.
     'AUTO_INITIAL_POSE': 'false',
+    # nav: Astra Pro depth into the LOCAL costmap only, beside the LiDAR (robot/docs/depth-camera.md).
+    # Off by default; "robot nav --camera" / "--no-camera" override it per run.
+    'ENABLE_CAMERA': 'false',
     # fleet service (robot/docs/fleet-service.md): auto = commands exactly while "robot nav --fleet" runs
     # (the ADR-0049 motion gate is up), telemetry otherwise; off = telemetry only, always.
     'FLEET_SERVICE_COMMANDS': 'auto',
@@ -390,7 +394,7 @@ def env_diff(env):
     return {k: env[k] for k in shown if k in env}
 
 
-def workflow_argv(p, workflow, fleet=False, auto_pose=False):
+def workflow_argv(p, workflow, fleet=False, auto_pose=False, camera=False):
     m, n = resolve_data(p)
     base = [f'robot_id:={p["ROBOT_ID"]}', f'lidar_yaw:={p["LIDAR_YAW"]}']
     if workflow == 'manual':
@@ -399,7 +403,7 @@ def workflow_argv(p, workflow, fleet=False, auto_pose=False):
         return ['ros2', 'launch', 'robot_control', 'manual_mapping.launch.py', *base,
                 f'max_wheel_speed_mm_s:={p["MAP_MAX_WHEEL_SPEED_MM_S"]}', 'rviz:=false']
     return ['ros2', 'launch', 'robot_navigation', 'navigation.launch.py', *base, f'map:={m}',
-            'enable_camera:=false', 'rviz:=false', f'nav2_params_file:={n}'] + \
+            f'enable_camera:={str(camera).lower()}', 'rviz:=false', f'nav2_params_file:={n}'] + \
         (['require_motion_permit:=true'] if fleet else []) + (['auto_initial_pose:=true'] if auto_pose else [])
 
 
@@ -409,6 +413,36 @@ def auto_pose_wanted(p, a):
     if getattr(a, 'manual_pose', False):
         return False
     return p['AUTO_INITIAL_POSE'].strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def camera_wanted(p, a):
+    if getattr(a, 'camera', False):
+        return True
+    if getattr(a, 'no_camera', False):
+        return False
+    return p['ENABLE_CAMERA'].strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+ASTRA_DEPTH_USB = ('2bc5', '0403')       # Orbbec Astra Pro depth (OpenNI); the RGB half is 2bc5:0501
+
+
+def camera_problem(env):
+    """Why the depth camera cannot join this nav session, or None. The camera is supplementary
+    (ADR-0001): the caller falls back to LiDAR-only instead of refusing nav."""
+    if not package_prefix(env, 'astra_camera'):
+        return 'astra_camera (the Astra driver) is not installed in this ROS environment'
+    lean = share_file(env, 'orbbec_bringup', 'launch', 'astra_pro.launch.py')
+    if not lean or 'use_uvc_camera' not in open(lean).read():
+        return ('this runtime predates the 14/11 camera settings (CAD mount, depth-only driver): '
+                'stage a newer overlay')
+    for dev in (os.listdir(USB) if os.path.isdir(USB) else []):
+        try:
+            ids = tuple(open(os.path.join(USB, dev, f)).read().strip() for f in ('idVendor', 'idProduct'))
+        except OSError:
+            continue
+        if ids == ASTRA_DEPTH_USB:
+            return None
+    return f'no Astra depth device ({":".join(ASTRA_DEPTH_USB)}) on USB: plug it in, or check lsusb'
 
 
 def check_auto_pose_runtime(env, map_yaml):
@@ -952,6 +986,11 @@ def main(argv=None):
                               help='set the initial pose from the LiDAR (overrides AUTO_INITIAL_POSE)')
             pose.add_argument('--manual-pose', action='store_true',
                               help='wait for a 2D Pose Estimate as before (overrides AUTO_INITIAL_POSE)')
+            cam = wp.add_mutually_exclusive_group()
+            cam.add_argument('--camera', action='store_true',
+                             help='add the Astra depth camera to the local costmap (overrides ENABLE_CAMERA)')
+            cam.add_argument('--no-camera', action='store_true',
+                             help='LiDAR-only local costmap, the baseline (overrides ENABLE_CAMERA)')
     fl = sub.add_parser('fleet', help='fleet_bridge: foreground, or the boot service (status/start/stop/restart/logs)')
     fl.add_argument('action', nargs='?', choices=('status', 'start', 'stop', 'restart', 'logs'))
     fl.add_argument('--commands', action='store_true')
@@ -1024,7 +1063,13 @@ def main(argv=None):
             auto_pose = a.cmd == 'nav' and auto_pose_wanted(p, a)
             if auto_pose:
                 check_auto_pose_runtime(env, resolve_data(p)[0])
-            argv = workflow_argv(p, a.cmd, fleet, auto_pose)
+            camera = a.cmd == 'nav' and camera_wanted(p, a)
+            if camera:
+                why = camera_problem(env)
+                if why:
+                    camera = False
+                    print(f'WARNING depth camera off for this session, LiDAR-only: {why}', file=sys.stderr)
+            argv = workflow_argv(p, a.cmd, fleet, auto_pose, camera)
             if a.dry_run:
                 return run(argv, env, True, lock=('workflow', a.cmd), session='(new session directory)')
             session = new_session(p, a.cmd)
@@ -1043,6 +1088,7 @@ def main(argv=None):
             return run(argv, env, False, lock=('workflow', dict(workflow=a.cmd, fleet=fleet, pid=os.getpid(),
                                                                 session=session)),
             return run(argv, env, False, lock=('workflow', dict(workflow=a.cmd, fleet=fleet, auto_pose=auto_pose,
+                                                                camera=camera,
                                                                 pid=os.getpid(), session=session)),
                        session=session, extra_env={'ROS_LOG_DIR': os.path.join(session, 'ros_log')})
         if a.cmd == 'teleop':
