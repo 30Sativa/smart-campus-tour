@@ -114,6 +114,17 @@ lại bằng vùng tìm; vùng tìm được tôn trọng; **hành lang trơn ra
 bắt được: bản đầu xác nhận một pose trượt 0.75 m dọc hành lang); scan rỗng; lỗi cấu hình; pose
 lưu không vượt map; launch mặc định tắt.
 
+### Phép thử ảo "robot bị nhấc đi" (14/11/2026)
+
+`robot/tools/localization/pose_bootstrap_kidnap_sim.py`: đặt robot ảo ở vị trí ngẫu nhiên trong vùng tìm của
+map2 (biết vị trí thật), dò tia scan 360° có nhiễu 2 cm, 10 % tia mất và tới 5 người che; pose lưu đặt cách
+chỗ thật 1.5–3 m. Bản đầu nhận **sai 4/100** (lệch 0.85–2.86 m): một chỗ trông giống cạnh pose lưu được xác
+nhận trong khi vùng tìm không chạy nên vị trí thật không được so. Sửa: khi bật vùng tìm thì luôn tìm và mọi
+kết quả cùng qua bước kiểm duy nhất (`test_a_saved_pose_next_to_a_look_alike_does_not_win_over_the_true_pose`,
+hỏng trên bản cũ). Sau sửa: 150 vị trí, **0 sai**, 96 % đúng, 4 % `AMBIGUOUS`; 1.6 s/lần (1 scan). Đầu-cuối
+với AMCL thật trên MiniPC: `LOCALIZED` sau 4.6 s (3 scan, gồm quét vùng). Bản đồ ở đây khớp hoàn hảo với
+thế giới, nên đây là cận trên của độ đúng, nhưng chỉ ra được chỗ nào trên bản đồ có hình dạng giống nhau.
+
 ## 5. Cần xác nhận trên robot thật
 
 Chạy theo `robot/docs/test-readiness-2026-11-10.md`, có người giữ E-stop. Robot **không cần chạy**
