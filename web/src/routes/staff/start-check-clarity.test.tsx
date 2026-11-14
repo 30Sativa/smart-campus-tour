@@ -112,4 +112,16 @@ describe('head alignment before Start (ADR-0045 HOME)', () => {
     await waitFor(() => expect(sent).toEqual([{ path: '/api/staff/manage/tours/tour-1/head-commands', body: { kind: 'HOME' } }]))
     expect(await screen.findByRole('button', { name: 'Đang canh chỉnh…' }, { timeout: 4000 })).toBeDisabled()
   })
+
+  // Regression: the merge of PR #321 with main kept both the old Start panel and the new opening, which did not compile.
+  it('keeps the head re-home under the camera of the opening page, next to Mở Tour, with no leftover Start panel', async () => {
+    renderPage()
+    const camera = await screen.findByRole('region', { name: 'Hình camera' })
+    expect(within(camera).getByRole('button', { name: 'Tự canh chỉnh đầu camera' })).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Mở Tour' })).getByRole('button', { name: /Mở Tour/ })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Bắt đầu Tour' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Bắt đầu Tour/ })).not.toBeInTheDocument()
+    // The on-site confirmations belong to Khởi hành on the console, not to opening.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+  })
 })

@@ -58,9 +58,7 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
             cancel.CloseCancel(now);
             pauseRequested = true;
         }
-        if (current) await ApplyToTourAsync(tour, command, result.RobotCode, pauseRequested, now, ct);
-
-        if (current) await ApplyToTourAsync(tour, command, now, ct);
+        if (current) await ApplyToTourAsync(tour, command, pauseRequested, now, ct);
         return new(true, false, command.State);
     }
 
@@ -85,9 +83,7 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
         }
     }
 
-    private async Task ApplyToTourAsync(Tour tour, RobotCommand command, string robotCode, bool pauseRequested, DateTimeOffset now,
-        CancellationToken ct)
-    private async Task ApplyToTourAsync(Tour tour, RobotCommand command, DateTimeOffset now, CancellationToken ct)
+    private async Task ApplyToTourAsync(Tour tour, RobotCommand command, bool pauseRequested, DateTimeOffset now, CancellationToken ct)
     {
         // The leg ended without arriving while the Operator asked it to stop: the robot is stopped on purpose.
         if (pauseRequested && command.State is RobotCommandStates.Cancelled or RobotCommandStates.Failed or RobotCommandStates.Rejected)

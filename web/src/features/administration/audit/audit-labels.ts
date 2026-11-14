@@ -29,6 +29,7 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
   } },
   { label: 'Vận hành Tour', actions: {
     TOUR_STARTED: 'Bắt đầu Tour', TOUR_NEXT: 'Sang điểm dừng tiếp theo', TOUR_LEG_RETRIED: 'Thử lại chặng di chuyển',
+    TOUR_PAUSE: 'Tạm dừng chặng di chuyển', TOUR_SKIP: 'Bỏ qua điểm dừng',
     COMMAND_RECONCILED: 'Đóng lệnh robot chưa rõ kết quả', TOUR_ENDED_EARLY: 'Kết thúc Tour sớm', TOUR_COMPLETED: 'Hoàn thành Tour',
     ROBOT_DISPATCH_CHANGED: 'Cho phép hoặc dừng điều phối robot', ROBOT_INSPECTION_RELEASED: 'Xác nhận robot an toàn sau kiểm tra',
   } },

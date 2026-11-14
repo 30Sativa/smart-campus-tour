@@ -253,7 +253,9 @@ public sealed class FleetHeadTests
     public async Task Status_OfAReadyTour_ShowsTheRobotItHolds()
     {
         var ready = Running() with { State = "READY", AssignedRobotId = null, RobotCode = null, ReservedRobotCode = "amr_02" };
-        var status = await new GetTourHeadStatusQueryHandler(new FakeReader(ready), new FakeChannel { Connected = true }, new FakeModes(), Settings())
+        // The status comes from the channel's report of that robot (GetStatus), as for a running Tour.
+        var channel = new FakeChannel { Connected = true, Status = new HeadRobotStatus(true, null, null, null) };
+        var status = await new GetTourHeadStatusQueryHandler(new FakeReader(ready), channel, new FakeModes(), Settings())
             .Handle(new GetTourHeadStatusQuery(TourId), default);
         Assert.Equal(("amr_02", true), (status.RobotCode, status.Connected));
     }

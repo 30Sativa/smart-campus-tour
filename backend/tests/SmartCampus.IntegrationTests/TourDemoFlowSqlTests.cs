@@ -64,6 +64,44 @@ public sealed class TourDemoFlowSqlTests
         Assert.Single(await db.TourEvents.AsNoTracking().Where(e => e.EventType == TourLifecycleEvents.Departed).ToArrayAsync());
     }
 
+    /// <summary>
+    /// Regression for the merge of PR #321 with main: Next ran the shared advance and then its own old close-and-dispatch
+    /// again, and the result handler applied an arrival twice. Every leg of an opened Tour is exactly one command.
+    /// </summary>
+    [SchemaV11Fact]
+    public async Task AWholeOpenedTour_DepartsOnce_SendsOneCommandPerLeg_AndClosesEachVisitOnce()
+    {
+        await using var w = await World.Create(enabled: true, twoStopsToEndPose: true);
+        await Open(w);
+        await Depart(w, Confirmed);
+        foreach (var stop in new[] { 0, 1 })
+        {
+            await using (var db = w.H.Context())
+                Assert.Equal((stop + 1, 1), (await db.RobotCommands.CountAsync(), await db.RobotCommands.CountAsync(c => c.IsOpen)));
+            var leg = await Delivered(w);
+            await Result(w, leg, "ACCEPTED");
+            await Result(w, leg, "TERMINAL", "ARRIVED");
+            var arrived = await w.H.Detail();
+            Assert.Equal(("NORMAL", TourRuntime.Observing, arrived.RouteRevision!.Stops[stop].Id),
+                (arrived.Execution!.OperationalStatus, arrived.Execution.CurrentStep, arrived.Execution.LastArrivedRevisionStopId!.Value));
+            await w.Report();
+            await w.H.Send(new NextTourStopCommand(w.H.TourId, w.H.OperatorId, new(Guid.NewGuid(), await w.H.Version())));
+        }
+        var end = await Delivered(w);
+        Assert.Equal(RobotLegKinds.ToEnd, end.LegKind);
+        await Result(w, end, "ACCEPTED");
+        await Result(w, end, "TERMINAL", "ARRIVED");
+
+        await using var after = w.H.Context();
+        Assert.Equal("COMPLETED", (await after.Tours.AsNoTracking().SingleAsync(t => t.Id == w.H.TourId)).State);
+        Assert.Null((await after.Robots.AsNoTracking().SingleAsync()).CurrentTourId);
+        Assert.Equal((3, 0), (await after.RobotCommands.CountAsync(), await after.RobotCommands.CountAsync(c => c.IsOpen)));
+        Assert.Equal(["TOUR_READY", "TOUR_STARTED", "TOUR_DEPARTED", "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL", "VISIT_CLOSED",
+                "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL", "VISIT_CLOSED", "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL",
+                "TOUR_COMPLETED"],
+            await after.TourEvents.AsNoTracking().Where(e => e.TourId == w.H.TourId).OrderBy(e => e.Id).Select(e => e.EventType).ToArrayAsync());
+    }
+
     [SchemaV11Fact]
     public async Task PauseOfADeliveredLeg_SendsACancel_PausesWhenTheRobotStops_AndResumeIsANewLegToTheSameStop()
     {
