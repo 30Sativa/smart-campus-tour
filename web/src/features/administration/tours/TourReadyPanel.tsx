@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Lock, LockOpen, MonitorPlay, PlayCircle, X } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { panelClass } from '../../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { notify } from '../../../components/ui/toast-store'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { operationRefusal } from '../../staff/operations/operation-errors'
+import { checkInfo } from '../../staff/operations/operation-labels'
+import { useOpenTour } from '../../staff/operations/hooks'
 import { useMarkTourReady, useReopenTour, useRequestId } from './hooks'
 import type { TourDetails } from './types'
 
@@ -27,6 +29,17 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
   const [dialog, setDialog] = useState<'ready' | 'reopen' | null>(null)
   const readyRequest = useRequestId(`ready:${tour.id}:${tour.rowVersion}`)
   const reopenRequest = useRequestId(`reopen:${tour.id}:${tour.rowVersion}`)
+  const openRequest = useRequestId(`open:${tour.id}:${tour.rowVersion}`)
+  const open = useOpenTour()
+  const navigate = useNavigate()
+  const openGate = detail.allowedActions?.open
+  const openTour = () => {
+    open.reset()
+    open.mutateAsync({ id: tour.id, requestId: openRequest, rowVersion: tour.rowVersion }).then(() => {
+      notify({ title: `Đã mở Tour “${tour.name}”`, detail: 'Robot chưa di chuyển. Kiểm tra camera và robot rồi bấm Khởi hành.' })
+      navigate(`/staff/live/${tour.id}`)
+    }, () => undefined)
+  }
   const blockers = permissions.readyBlockers ?? []
   const supported = permissions.canMarkReady !== undefined
 
@@ -34,7 +47,7 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
     try {
       await markReady.mutateAsync({ id: tour.id, requestId: readyRequest, rowVersion: tour.rowVersion })
       setDialog(null)
-      notify({ title: `Đã chốt Tour “${tour.name}”`, detail: 'Đăng ký và cấu hình đã khóa. Người vận hành kiểm tra điều kiện rồi bắt đầu đúng giờ.' })
+      notify({ title: `Đã chốt Tour “${tour.name}”`, detail: 'Đăng ký và cấu hình đã khóa. Người vận hành mở Tour khi tới giờ.' })
     } catch { /* The dialog shows the refusal. */ }
   }
   const confirmReopen = async (reason: string) => {
@@ -79,10 +92,13 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
       </> : <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold text-[#0f172a]">Tour đã chốt</h2>
-          <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Người vận hành được giao kiểm tra điều kiện rồi bắt đầu Tour.</p>
+          <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Mở Tour để khách vào xem và camera hoạt động. Robot chỉ chạy khi người vận hành bấm Khởi hành ở màn hình điều hành.</p>
+          {openGate && !openGate.allowed && <p className="mt-1.5 max-w-2xl text-[13px] leading-5 text-[#7d5310]">Chưa mở được: {[openGate.reason, ...openGate.blockedBy.map(id => checkInfo(id)).filter(info => info.group !== 'other').map(info => info.label)].filter(Boolean).join(' · ')}</p>}
+          {open.isError && <p role="alert" className="mt-1.5 text-[13px] font-semibold text-[#9d3428]">{refusalText(open.error)}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to={`/staff/tours/${tour.id}/start`} className={buttonClass('primary', 'sm')}><PlayCircle size={15} aria-hidden="true" />Kiểm tra trước khi bắt đầu</Link>
+          {openGate?.allowed && <button type="button" className={buttonClass('primary', 'sm')} disabled={open.isPending} onClick={openTour}><PlayCircle size={15} aria-hidden="true" />{open.isPending ? 'Đang mở…' : 'Mở Tour'}</button>}
+          <Link to={`/staff/tours/${tour.id}/start`} className={buttonClass(openGate?.allowed ? 'secondary' : 'primary', 'sm')}>Xem điều kiện mở Tour</Link>
           {permissions.canReopen && <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => { reopen.reset(); setDialog('reopen') }}><LockOpen size={15} aria-hidden="true" />Mở lại</button>}
         </div>
       </div>}

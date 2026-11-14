@@ -47,7 +47,7 @@ export function QuickTourShare({ tour }: { tour: Pick<TourSummary, 'id' | 'sched
       <li>Gửi link này cho đại diện trường.</li>
       <li>Đại diện mở link, đăng ký đoàn và gửi lời mời cho học sinh.</li>
       <li>Duyệt đăng ký ở <Link to={`/staff/manage/registrations?tourId=${tour.id}`} className="font-semibold text-[#2563eb] underline-offset-2 hover:underline">danh sách đăng ký của Tour</Link>.</li>
-      <li>Chốt Tour, rồi mở Kiểm tra trước khi bắt đầu và bắt đầu trước hạn.</li>
+      <li>Chốt Tour, rồi Mở Tour trước hạn và bấm Khởi hành khi robot sẵn sàng.</li>
     </ol>
   </section>
 }

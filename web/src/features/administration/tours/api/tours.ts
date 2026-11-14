@@ -39,11 +39,21 @@ export const toursApi = {
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/capacity`, { method: 'POST', json: body }).then(() => id),
   changeOperator: (id: string, body: { requestId: string; expectedRowVersion: string; operatorUserId: string }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/operator`, { method: 'POST', json: body }).then(() => id),
-  startChecks: (id: string) => apiClient<ApiResponse<TourStartChecks>>(`/api/staff/manage/tours/${id}/start-checks`).then(r => r.data!),
-  start: (id: string, body: { requestId: string; expectedRowVersion: string; confirmation: StartConfirmation }) =>
+  /** `holdAtStart`: the checks for opening the Tour without its first leg. */
+  startChecks: (id: string, holdAtStart = false) =>
+    apiClient<ApiResponse<TourStartChecks>>(`/api/staff/manage/tours/${id}/start-checks${holdAtStart ? '?holdAtStart=true' : ''}`).then(r => r.data!),
+  /** `holdAtStart: true` opens the Tour with no command: the robot waits until the Operator departs with `next`. */
+  start: (id: string, body: { requestId: string; expectedRowVersion: string; confirmation?: StartConfirmation | null; holdAtStart?: boolean }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/start`, { method: 'POST', json: body }).then(() => id),
-  next: (id: string, body: { requestId: string; expectedRowVersion: string }) =>
+  /** From the start of an opened Tour this is the departure, which carries the on-site confirmations. */
+  next: (id: string, body: { requestId: string; expectedRowVersion: string; confirmation?: StartConfirmation | null }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/next`, { method: 'POST', json: body }).then(() => id),
+  pause: (id: string, body: { requestId: string; expectedRowVersion: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/pause`, { method: 'POST', json: body }).then(() => id),
+  skip: (id: string, body: { requestId: string; expectedRowVersion: string; confirmation?: StartConfirmation | null }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/skip`, { method: 'POST', json: body }).then(() => id),
+  setAutoAdvance: (id: string, enabled: boolean) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/auto-advance`, { method: 'PUT', json: { enabled } }).then(() => id),
   endEarly: (id: string, body: { requestId: string; expectedRowVersion: string; reason: string }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/end-early`, { method: 'POST', json: body }).then(() => id),
   retryLeg: (id: string, body: { requestId: string; expectedRowVersion: string }) =>

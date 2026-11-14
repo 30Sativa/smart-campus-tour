@@ -10,6 +10,9 @@ namespace SmartCampus.Application.Features.Tours.Commands.NextTourStop;
 
 /// <summary>
 /// The Operator leaves the current POI (ADR-0043 D12): closes the visit once, then sends the next leg, or completes the Tour
+/// when the route ends at its last POI. From the start of a Tour opened with HoldAtStart it is the departure: the first
+/// leg, which also needs the four on-site confirmations. Movement checks apply only when a new command is created. In AUTO
+/// head mode a new leg also brings the head back to the front (ADR-0045 addendum).
 /// when the route ends at its last POI. Movement checks apply only when a new command is created. The robot itself turns
 /// the head to the front when the new leg starts (ADR-0045 addendum 14/11/2026).
 /// </summary>
@@ -20,7 +23,7 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
 {
     public async Task<TourMutationResult> Handle(NextTourStopCommand command, CancellationToken ct)
     {
-        var fingerprint = TourRequestReceipt.Fingerprint(TourLifecycleEvents.Next, command.Id);
+        var fingerprint = TourRequestReceipt.Fingerprint(TourLifecycleEvents.Next, command.Id, command.Request.Confirmation);
         var replay = await TourRequestReceipt.ReplayAsync(repository, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Next, command.Id, fingerprint, ct);
         if (replay.HasValue) return new(replay.Value);
@@ -38,6 +41,7 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
         var revision = await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct)
             ?? throw new NotFoundException("Không tìm thấy phiên bản tuyến.");
         var target = TourLegDispatch.NextTarget(tour, revision, await revisions.GetStopsAsync(revision.Id, ct));
+        var departing = tour.CurrentStep == TourRuntime.Initializing;
 
         var map = await revisions.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");
         Robot? robot = null;
@@ -45,13 +49,21 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
         {
             robot = await TourTarget.FindReservedRobotAsync(revisions, robotId, ct)
                 ?? throw new NotFoundException("Không tìm thấy robot của Tour.");
-            var checks = await preflight.EvaluateMovementAsync(tour, robot, map, ct);
+            var checks = await preflight.EvaluateMovementAsync(tour, robot, map, ct, command.Request.Confirmation,
+                includeConfirmation: departing);
             if (checks.BlockedBy.Count > 0)
                 throw new ConflictException("Chưa đủ điều kiện để robot di chuyển.", TourStartPreflight.MovementFailedCode,
                     checks: checks.Checks, blockedBy: checks.BlockedBy);
         }
 
         var now = clock.GetUtcNow();
+        if (departing)
+            repository.AddEvent(new TourEvent
+            {
+                TourId = tour.Id, EventType = TourLifecycleEvents.Departed, OccurredAt = now, RobotId = robotId,
+                RouteId = tour.ActiveRouteId, ActorUserId = command.Actor
+            });
+        await TourAdvance.GoAsync(repository, settings, headMotion, tour, robot, map, target, command.Actor, now, ct);
         tour.CloseVisit(now);
         repository.AddEvent(new TourEvent
         {

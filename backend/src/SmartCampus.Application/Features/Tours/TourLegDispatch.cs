@@ -18,7 +18,7 @@ internal sealed record TourLegTarget(RouteRevisionStop? Stop, decimal X, decimal
 internal static class TourLegDispatch
 {
     public static void Begin(ITourManagementRepository repository, FleetCommandSettings settings, Tour tour, Guid robotId, MapVersion map,
-        TourLegTarget target, Guid actor, DateTimeOffset now)
+        TourLegTarget target, Guid? actor, DateTimeOffset now)
     {
         var legId = Guid.NewGuid();
         var legKind = target.Stop is null ? RobotLegKinds.ToEnd : RobotLegKinds.ToPoi;
@@ -36,10 +36,14 @@ internal static class TourLegDispatch
     }
 
     /// <summary>Null when the Tour ends at its last POI; otherwise the stop after the current one, or the end pose.</summary>
-    public static TourLegTarget? NextTarget(Tour tour, RouteRevision revision, IReadOnlyList<RouteRevisionStop> stops)
+    public static TourLegTarget? NextTarget(Tour tour, RouteRevision revision, IReadOnlyList<RouteRevisionStop> stops) =>
+        After(tour.CurrentStep == TourRuntime.Initializing ? 0
+            : stops.Single(stop => stop.Id == tour.CurrentRevisionStopId).StopOrder, revision, stops);
+
+    /// <summary>The first stop after <paramref name="order"/>, else the end pose, else null (the route ends at its last POI).</summary>
+    public static TourLegTarget? After(int order, RouteRevision revision, IReadOnlyList<RouteRevisionStop> stops)
     {
-        var currentOrder = stops.Single(stop => stop.Id == tour.CurrentRevisionStopId).StopOrder;
-        var next = stops.Where(stop => stop.StopOrder > currentOrder).MinBy(stop => stop.StopOrder);
+        var next = stops.Where(stop => stop.StopOrder > order).MinBy(stop => stop.StopOrder);
         return next is not null ? TourLegTarget.To(next) : revision.EndMode == "POSE" ? TourLegTarget.End(revision) : null;
     }
 

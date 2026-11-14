@@ -1236,6 +1236,16 @@ A real Start stores its `requestId` receipt (`TourRequestReceipt`) against repea
 Start, SRS §4 (ADR-0042 §5 step 1). A refused Start commits nothing, so it leaves no
 receipt.
 
+**Demo Tour flow (ADR-0059, proposed 14/11/2026).** `POST …/start` with `holdAtStart: true` opens the Tour at
+`CurrentStep = INITIALIZING` with no command (`robotLocalized`/`motionReady` shown, not required; `GET …/start-checks?holdAtStart=true`);
+`POST …/next` from `INITIALIZING` is the departure and takes the four on-site confirmations. `POST …/pause` withdraws an
+undelivered GoTo or queues a Cancel; the leg's CANCELLED/FAILED/REJECTED end then sets `OperationalStatus = PAUSED` (ARRIVED
+still opens the POI), and `POST …/retry-leg` resumes it as a new leg. `POST …/skip` passes over the POI the robot would go to
+next while it stands still (`STOP_SKIPPED`). `PUT …/auto-advance {enabled}` (Operator, in memory, off by default) lets a worker
+make one attempt per visit to leave a POI whose dwell ended, with every movement check. End Early with no open GoTo releases
+the robot. A quick Tour needs no accepted row for READY or Start. GET Tour adds `allowedActions.open/pause/skip`,
+`execution.command.cancelRequested` and `execution.autoAdvance {enabled, blockedReason}`.
+
 **Tour runtime (M2.2-b, ADR-0043).** `ReportCommandResultCommand` is the Application
 use case the robot results endpoint will call; it locks the Tour, then the command.
 A result is valid only from `DeliveredStreamId` with the command's `legId` and an

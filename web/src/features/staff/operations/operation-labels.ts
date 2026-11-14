@@ -200,6 +200,7 @@ export const CHECK_FIX: Record<string, string> = {
 }
 
 export const STEP_LABEL: Record<TourStep, string> = {
+  INITIALIZING: 'Chuẩn bị khởi hành',
   NAVIGATING: 'Đang di chuyển tới POI',
   OBSERVING: 'Đang dừng tại POI',
   RETURNING_TO_END: 'Đang về điểm kết thúc',
@@ -210,6 +211,7 @@ export const LEG_LABEL: Record<TourLegKind, string> = { TO_POI: 'Chặng tới P
 export const OPERATIONAL_LABEL: Record<TourOperationalStatus, { label: string; tone: StatusTone }> = {
   NORMAL: { label: 'Bình thường', tone: 'ok' },
   NEEDS_ASSISTANCE: { label: 'Cần hỗ trợ', tone: 'danger' },
+  PAUSED: { label: 'Tạm dừng', tone: 'warn' },
 }
 
 const ASSISTANCE: Record<string, { label: string; hint: string }> = {
@@ -262,6 +264,7 @@ const ROBOT_REASON: Record<string, string> = {
   NOT_LOCALIZED: 'Robot chưa định vị',
   NOT_MOTION_READY: 'Robot chưa sẵn sàng di chuyển',
   LOCAL_LINK_LOSS: 'Robot mất kết nối với máy chủ nên tự dừng chặng',
+  CANCELLED_BEFORE_START: 'Chặng được dừng trước khi robot bắt đầu đi',
 }
 
 /** What to say for a robot code nobody mapped: never the raw code. */
@@ -281,7 +284,7 @@ const ROBOT_FAULT: Record<string, string> = {
   STM32_LINK_STALE: 'Robot mất kết nối với bo mạch điều khiển động cơ, báo Kỹ thuật kiểm tra',
   NAV2_UNAVAILABLE: 'Bộ điều hướng của robot chưa chạy, báo Kỹ thuật kiểm tra',
   TF_STALE: 'Robot không cập nhật được vị trí của mình, báo Kỹ thuật kiểm tra',
-  MOTION_GATE_LATCHED: 'Robot đã tự khóa di chuyển sau một lỗi, cần mở khóa tại chỗ',
+  MOTION_GATE_LATCHED: 'Robot bị khóa di chuyển sau khi dừng khẩn cấp, cần mở khóa tại chỗ (robot reset-latch)',
 }
 export function robotFaultText(code: string | null | undefined): string | null {
   if (!code) return null
