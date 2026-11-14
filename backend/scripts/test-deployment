@@ -235,7 +235,10 @@ sql_as_sa -Q "DECLARE @data sysname=(SELECT TOP(1) name FROM SmartCampusTourV11.
 "${dc[@]}" stop --timeout 10 sqlserver >/dev/null
 live_status=$(curl --silent --show-error --insecure --max-time 5 --output /dev/null \
   --write-out '%{http_code}' "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/health/live")
-ready_status=$(curl --silent --show-error --insecure --max-time 5 --output /dev/null \
+# With SQL Server down the 503 arrives only when SqlClient gives up the connect: the 3 s probe cancellation does not
+# interrupt it, so the API's `Connect Timeout=5` bounds it. A 5 s curl sat on that edge (exit 28 on main 1832b7fe);
+# allow twice the connect timeout, as the candidate check above allows 8 s for the same 503.
+ready_status=$(curl --silent --show-error --insecure --max-time 10 --output /dev/null \
   --write-out '%{http_code}' "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/health/ready")
 test "$live_status" = 204
 test "$ready_status" = 503
