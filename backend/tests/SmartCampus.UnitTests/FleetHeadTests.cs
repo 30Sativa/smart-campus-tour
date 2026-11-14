@@ -281,13 +281,13 @@ public sealed class FleetHeadTests
 
     private static readonly Guid MapId = Guid.NewGuid();
 
-    private static RobotHeadPoiView Poi(string name, string preset) => new(Guid.NewGuid(), name, 1.25m, -2.5m, 0.5m, preset);
+    private static RobotHeadPoiView HeadPoi(string name, string preset) => new(Guid.NewGuid(), name, 1.25m, -2.5m, 0.5m, preset);
 
     [Fact]
     public async Task Pois_OfARunningTour_CarryEachStopsPreset_AndTheToursMode()
     {
         var reader = new FakePoiReader(new RobotHeadPoiSet("TOUR", TourId, MapId,
-            [Poi("Thư viện", "ANGLE:45,10"), Poi("Sân bóng", "right"), Poi("Sảnh", "SWEEP:135")]));
+            [HeadPoi("Thư viện", "ANGLE:45,10"), HeadPoi("Sân bóng", "right"), HeadPoi("Sảnh", "SWEEP:135")]));
         var result = await new GetRobotHeadPoisQueryHandler(reader, new FakeModes(), Settings()).Handle(new(Robot), default);
 
         Assert.Equal(("TOUR", (Guid?)TourId, (Guid?)MapId, "AUTO", true), (result.Source, result.TourId, result.MapVersionId, result.Mode, result.AutoMotion));
@@ -299,7 +299,7 @@ public sealed class FleetHeadTests
     [Fact]
     public async Task Pois_AManualTour_OrHeadControlOff_TurnsAutomaticMotionOff()
     {
-        var reader = new FakePoiReader(new RobotHeadPoiSet("TOUR", TourId, MapId, [Poi("Thư viện", "FRONT")]));
+        var reader = new FakePoiReader(new RobotHeadPoiSet("TOUR", TourId, MapId, [HeadPoi("Thư viện", "FRONT")]));
         var manual = new FakeModes();
         manual.SetMode(TourId, "MANUAL");
         var manualResult = await new GetRobotHeadPoisQueryHandler(reader, manual, Settings()).Handle(new(Robot), default);
@@ -313,7 +313,7 @@ public sealed class FleetHeadTests
     [Fact]
     public async Task Pois_WithoutATour_UseTheMapsVerifiedPois_AndTheDefaultMode()
     {
-        var reader = new FakePoiReader(new RobotHeadPoiSet("MAP", null, MapId, [Poi("Thư viện", "LEFT"), Poi("Cũ", "HEAD_LEFT")]));
+        var reader = new FakePoiReader(new RobotHeadPoiSet("MAP", null, MapId, [HeadPoi("Thư viện", "LEFT"), HeadPoi("Cũ", "HEAD_LEFT")]));
         var result = await new GetRobotHeadPoisQueryHandler(reader, new FakeModes(), new FleetHeadSettings(true, defaultMode: "MANUAL"))
             .Handle(new(Robot), default);
 
