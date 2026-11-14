@@ -11,8 +11,9 @@ namespace SmartCampus.Application.Features.Tours.Commands.NextTourStop;
 
 /// <summary>
 /// The Operator leaves the current POI (ADR-0043 D12): closes the visit once, then sends the next leg, or completes the Tour
-/// when the route ends at its last POI. Movement checks apply only when a new command is created. In AUTO head mode a new
-/// leg also brings the head back to the front (ADR-0045 addendum).
+/// when the route ends at its last POI. From the start of a Tour opened with HoldAtStart it is the departure: the first
+/// leg, which also needs the four on-site confirmations. Movement checks apply only when a new command is created. In AUTO
+/// head mode a new leg also brings the head back to the front (ADR-0045 addendum).
 /// </summary>
 public sealed class NextTourStopCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
     IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, HeadAutoMotion headMotion,
@@ -21,7 +22,7 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
 {
     public async Task<TourMutationResult> Handle(NextTourStopCommand command, CancellationToken ct)
     {
-        var fingerprint = TourRequestReceipt.Fingerprint(TourLifecycleEvents.Next, command.Id);
+        var fingerprint = TourRequestReceipt.Fingerprint(TourLifecycleEvents.Next, command.Id, command.Request.Confirmation);
         var replay = await TourRequestReceipt.ReplayAsync(repository, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Next, command.Id, fingerprint, ct);
         if (replay.HasValue) return new(replay.Value);
@@ -39,6 +40,7 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
         var revision = await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct)
             ?? throw new NotFoundException("Không tìm thấy phiên bản tuyến.");
         var target = TourLegDispatch.NextTarget(tour, revision, await revisions.GetStopsAsync(revision.Id, ct));
+        var departing = tour.CurrentStep == TourRuntime.Initializing;
 
         var map = await revisions.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");
         Robot? robot = null;
@@ -46,27 +48,21 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
         {
             robot = await TourTarget.FindReservedRobotAsync(revisions, robotId, ct)
                 ?? throw new NotFoundException("Không tìm thấy robot của Tour.");
-            var checks = await preflight.EvaluateMovementAsync(tour, robot, map, ct);
+            var checks = await preflight.EvaluateMovementAsync(tour, robot, map, ct, command.Request.Confirmation,
+                includeConfirmation: departing);
             if (checks.BlockedBy.Count > 0)
                 throw new ConflictException("Chưa đủ điều kiện để robot di chuyển.", TourStartPreflight.MovementFailedCode,
                     checks: checks.Checks, blockedBy: checks.BlockedBy);
         }
 
         var now = clock.GetUtcNow();
-        tour.CloseVisit(now);
-        repository.AddEvent(new TourEvent
-        {
-            TourId = tour.Id, EventType = TourLifecycleEvents.VisitClosed, OccurredAt = now, RobotId = robotId,
-            RouteId = tour.ActiveRouteId, StopVisitId = tour.CurrentStopVisitId, ActorUserId = command.Actor
-        });
-        if (target is null)
-            await TourLegDispatch.CompleteAsync(repository, tour, robotId, command.Actor, now, ct);
-        else
-        {
-            TourLegDispatch.Begin(repository, settings, tour, robotId, map, target, command.Actor, now);
-            // Queued before the commit, like the arrival sweep: a failed commit at worst turns the head to the front.
-            headMotion.QueueDeparture(tour.Id, robot!.RobotCode);
-        }
+        if (departing)
+            repository.AddEvent(new TourEvent
+            {
+                TourId = tour.Id, EventType = TourLifecycleEvents.Departed, OccurredAt = now, RobotId = robotId,
+                RouteId = tour.ActiveRouteId, ActorUserId = command.Actor
+            });
+        await TourAdvance.GoAsync(repository, settings, headMotion, tour, robot, map, target, command.Actor, now, ct);
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Next, fingerprint, now, "state");
         return new(tour.Id);

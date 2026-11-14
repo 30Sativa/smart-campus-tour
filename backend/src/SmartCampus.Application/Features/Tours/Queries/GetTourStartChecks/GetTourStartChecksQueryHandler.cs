@@ -12,6 +12,7 @@ public sealed class GetTourStartChecksQueryHandler(ITourManagementRepository rep
         await using var snapshot = await repository.BeginReadAsync(query.Id, ct);
         var tour = await repository.FindAsync(query.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
         // The same checks Start runs, without its locks; Start rechecks them all.
-        return await preflight.EvaluateAsync(tour, query.Viewer, null, includeConfirmation: false, lockTarget: false, ct);
+        return await preflight.EvaluateAsync(tour, query.Viewer, null, includeConfirmation: false, lockTarget: false, ct,
+            query.HoldAtStart);
     }
 }

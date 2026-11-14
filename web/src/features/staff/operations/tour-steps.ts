@@ -21,7 +21,7 @@ export function tourSteps(detail: Pick<TourDetails, 'tour' | 'startedAt'>): Step
   const status = (index: number): StepStatus => index < at ? (ended && !started && (index === 1 || index === 2) ? 'skipped' : 'done') : index === at ? (index === 3 ? 'done' : 'current') : 'next'
   return [
     { key: 'prepare', title: 'Chuẩn bị & chốt', status: status(0), note: state === 'SCHEDULED' ? 'Duyệt đăng ký, rồi chốt Tour' : STATUS_NOTE[status(0)], to: `/staff/manage/tours/${id}` },
-    { key: 'start', title: 'Kiểm tra & bắt đầu', status: status(1), note: state === 'READY' ? 'Chờ đủ điều kiện để bắt đầu' : STATUS_NOTE[status(1)], to: state === 'READY' ? `/staff/tours/${id}/start` : null },
+    { key: 'start', title: 'Mở Tour', status: status(1), note: state === 'READY' ? 'Mở Tour khi tới giờ' : STATUS_NOTE[status(1)], to: state === 'READY' ? `/staff/tours/${id}/start` : null },
     { key: 'live', title: 'Điều hành', status: status(2), note: state === 'RUNNING' ? 'Robot đang dẫn Tour' : STATUS_NOTE[status(2)], to: started ? `/staff/live/${id}` : null },
     { key: 'result', title: 'Kết quả', status: status(3), note: state === 'COMPLETED' ? 'Hoàn thành' : state === 'CANCELLED' ? 'Đã hủy' : STATUS_NOTE[status(3)], to: null },
   ]

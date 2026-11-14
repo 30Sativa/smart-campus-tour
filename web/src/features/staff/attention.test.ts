@@ -43,7 +43,7 @@ const robot = (over: Partial<AmrStatus>): AmrStatus => ({
 describe('tourAction', () => {
   it('offers the step the state calls for, and never Start from a list', () => {
     expect(tourAction(tour({ state: 'Scheduled' }))).toMatchObject({ label: 'Xem chi tiết', to: '/staff/tours/t1' })
-    expect(tourAction(tour({ state: 'Ready' }))).toMatchObject({ label: 'Kiểm tra & bắt đầu', to: '/staff/tours/t1/start', kind: 'primary' })
+    expect(tourAction(tour({ state: 'Ready' }))).toMatchObject({ label: 'Mở Tour', to: '/staff/tours/t1/start', kind: 'primary' })
     expect(tourAction(tour({ state: 'Running', operationalStatus: 'Normal' }))).toMatchObject({ label: 'Điều hành', to: '/staff/live/t1', kind: 'secondary' })
     expect(tourAction(tour({ state: 'Running', operationalStatus: 'NeedsAssistance' }))).toMatchObject({ label: 'Xử lý hỗ trợ', kind: 'primary' })
     expect(tourAction(tour({ state: 'Cancelled' })).label).toBe('Xem nhật ký')

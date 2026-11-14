@@ -126,7 +126,7 @@ export function HeadControlPanel({ tourId, isOperator, operatorName }: { tourId:
             <ScanLine size={16} aria-hidden="true" />Quét xung quanh
           </button>
           <label className={`flex items-center justify-between gap-3 rounded-lg border border-[#e2e8f0] px-3 py-2 text-[13px] ${locked ? 'text-muted' : 'text-[#0f172a]'}`}>
-            <span className="min-w-0"><span className="block font-semibold">Tự động tại điểm dừng</span>
+            <span className="min-w-0"><span className="block font-semibold">Đầu camera tự quay tại điểm dừng</span>
               <span className="block text-xs text-muted">{current ? (auto ? 'Đang bật' : 'Đang tắt, chỉ xoay bằng nút') : 'Chưa đọc được chế độ'}</span></span>
             <input type="checkbox" role="switch" className="size-4 shrink-0 accent-[#2563eb]" checked={auto} aria-checked={auto}
               disabled={locked || !current || mode.isPending} onChange={event => mode.mutate(event.target.checked ? 'AUTO' : 'MANUAL', {

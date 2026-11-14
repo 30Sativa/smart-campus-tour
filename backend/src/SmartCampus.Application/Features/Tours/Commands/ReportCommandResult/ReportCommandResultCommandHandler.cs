@@ -51,10 +51,15 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
             LegId = command.LegId, LegKind = command.LegKind, CommandId = command.Id, ReasonCode = result.Reason,
             DataJson = JsonSerializer.Serialize(new { result = content, applied = current })
         });
+        // An open Cancel on a running Tour's current leg is the Operator's pause (End Early leaves the Tour CANCELLED).
+        var pauseRequested = false;
         if (command.Kind == RobotCommandKinds.GoTo && !command.IsOpen &&
             await repository.LockOpenCancelAsync(command.Id, ct) is { } cancel)
+        {
             cancel.CloseCancel(now);
-        if (current) await ApplyToTourAsync(tour, command, result.RobotCode, now, ct);
+            pauseRequested = true;
+        }
+        if (current) await ApplyToTourAsync(tour, command, result.RobotCode, pauseRequested, now, ct);
         return new(true, false, command.State);
     }
 
@@ -79,9 +84,21 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
         }
     }
 
-    private async Task ApplyToTourAsync(Tour tour, RobotCommand command, string robotCode, DateTimeOffset now, CancellationToken ct)
+    private async Task ApplyToTourAsync(Tour tour, RobotCommand command, string robotCode, bool pauseRequested, DateTimeOffset now,
+        CancellationToken ct)
     {
-        if (command.State == RobotCommandStates.Rejected)
+        // The leg ended without arriving while the Operator asked it to stop: the robot is stopped on purpose.
+        if (pauseRequested && command.State is RobotCommandStates.Cancelled or RobotCommandStates.Failed or RobotCommandStates.Rejected)
+        {
+            tour.Pause(now);
+            repository.AddEvent(new TourEvent
+            {
+                TourId = tour.Id, EventType = TourLifecycleEvents.Paused, OccurredAt = now, RobotId = command.RobotId,
+                RouteId = tour.ActiveRouteId, LegId = command.LegId, LegKind = command.LegKind, CommandId = command.Id,
+                ReasonCode = command.ReasonCode
+            });
+        }
+        else if (command.State == RobotCommandStates.Rejected)
             tour.RequireAssistance(TourRuntime.CommandRejected, now);
         else if (command.State == RobotCommandStates.Arrived && command.LegKind == RobotLegKinds.ToEnd)
             await TourLegDispatch.CompleteAsync(repository, tour, command.RobotId, null, now, ct);

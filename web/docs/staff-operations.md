@@ -11,12 +11,13 @@ read from the backend; a value the backend does not provide is said to be missin
 Two vocabularies are kept apart on every screen:
 
 - **Tour state**: `SCHEDULED → READY → RUNNING → COMPLETED | CANCELLED`, plus
-  `operationalStatus` (`NORMAL` / `NEEDS_ASSISTANCE` with a reason) and
-  `currentStep` (`NAVIGATING`, `OBSERVING`, `RETURNING_TO_END`; ADR-0043 D8).
+  `operationalStatus` (`NORMAL` / `NEEDS_ASSISTANCE` with a reason / `PAUSED`) and
+  `currentStep` (`INITIALIZING`, `NAVIGATING`, `OBSERVING`, `RETURNING_TO_END`; ADR-0043 D8, ADR-0059).
 - **Robot command state** of the current leg (ADR-0042 §3): `PENDING`,
   `DELIVERED`, `ACCEPTED`, `ARRIVED`, `FAILED`, `CANCELLED`, `EXPIRED`,
   `REJECTED`, `UNKNOWN`, `RECONCILED`. A RUNNING Tour whose GoTo is still
-  `PENDING` says "Chờ robot lấy lệnh, robot chưa di chuyển vì lệnh này".
+  `PENDING` says "Đang gửi lệnh cho robot", and why the server holds it when the
+  robot reports it is not localized or not ready.
 
 | Route | Screen | Backend |
 |---|---|---|
@@ -24,9 +25,9 @@ Two vocabularies are kept apart on every screen:
 | `/staff/manage` | Redirect to `/staff` with its query: "Tổng quan chuẩn bị" merged into the home on 2026-11-07 | — |
 | `/staff/tours` | Redirect to `/staff` with its query: "Buổi hôm nay" merged into the overview on 2026-11-05 | — |
 | `/staff/tours/:id` | Redirect to the screen that fits the Tour's state | Tour detail |
-| `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu: a verdict first (before the window opens: when it opens and how long until then), then only the root causes grouped by who clears them: Tour and operator, Robot (each row tagged with its server source, e.g. "Robot tự báo" for telemetry, plus what to do), and the M2.3 system gates in one box nobody on site can open; the full list folded per group; Start and the 4 on-site confirmations in a sticky side column (confirmations shown only to the assigned Operator) | `GET …/start-checks` (polled 3 s), `POST …/start` |
-| `/staff/live[/:id]` | Điều hành trực tiếp: freshness line; main column camera (Staff camera lease, ADR-0055) then the situation card (what is happening and the one step it calls for: Next, Retry leg or Reconcile); side column camera head buttons (Operator only, locked on `HEAD_CONTROL_DISABLED`/`HEAD_ROBOT_NOT_CONNECTED`), mini map (opens `/staff/digital-twin`), robot telemetry, End Early; then route, Tour state and command card. Below 1024px: camera, situation, head, End Early, map, robot, route. Without a running Tour: the next READY Tour with its pre-start check, or "Xem lịch" | Tour detail `execution`/`allowedActions` (polled 3 s), `POST …/next`, `…/retry-leg`, `…/end-early`, `…/commands/{commandId}/reconcile`, `POST …/head-commands`, `PUT …/head-mode`, `GET …/head` (2 s), `POST /api/staff/manage/robots/{code}/camera-lease`, `/hubs/operations` |
-| `/staff/manage/tours/:id` | Tour preparation, now with **Chốt Tour** and **Mở lại** | `permissions.canMarkReady/canReopen/readyBlockers`, `POST …/ready`, `POST …/reopen` |
+| `/staff/tours/:id/start` | Mở Tour (ADR-0059): a verdict first (before the window opens: when it opens and how long until then), then only the root causes grouped by who clears them; the full list folded per group; one **Mở Tour** button (no confirmation, it moves nothing), the camera preview, robot and route. Opening sends no command; robot localization and motion readiness are shown, not required | `GET …/start-checks?holdAtStart=true` (polled 3 s), `POST …/start` with `holdAtStart: true` |
+| `/staff/live[/:id]` | Điều hành trực tiếp: freshness line; main column camera (Staff camera lease, ADR-0055) then the situation card (what is happening and the one step it calls for: Khởi hành with the 4 on-site confirmations at the start, Tạm dừng on a leg, Đi tới at a POI with the "Tự đi tiếp" switch and the dwell countdown, Tiếp tục after a pause, Cho robot đi lại after a failure, Bỏ qua as the smaller step, or Reconcile); the robot's own reason code leads the explanation; side column camera head buttons (Operator only, locked on `HEAD_CONTROL_DISABLED`/`HEAD_ROBOT_NOT_CONNECTED`), mini map (opens `/staff/digital-twin`), robot telemetry, End Early; then the route and, folded under "Chi tiết kỹ thuật", the Tour state, the command card and the robot's raw report. Below 1024px: camera, situation, head, End Early, map, robot, route. Without a running Tour: the next READY Tour with its pre-start check, or "Xem lịch" | Tour detail `execution`/`allowedActions` (polled 3 s), `POST …/next` (with `confirmation` from the start), `…/pause`, `…/skip`, `PUT …/auto-advance`, `…/retry-leg`, `…/end-early`, `…/commands/{commandId}/reconcile`, `POST …/head-commands`, `PUT …/head-mode`, `GET …/head` (2 s), `POST /api/staff/manage/robots/{code}/camera-lease`, `/hubs/operations` |
+| `/staff/manage/tours/:id` | Tour preparation, with **Chốt Tour**, then **Mở Tour** in place once READY (when `allowedActions.open` allows it; otherwise why not and the link to its conditions) and **Mở lại** | `permissions.canMarkReady/canReopen/readyBlockers`, `POST …/ready`, `POST …/reopen` |
 | `/staff/schedule` | Lịch Tour: week grid, day by robot (and every Tour of the day below it), or the list view (`?view=list`): every Tour across time, paged, by phase (`?tab=`) or state (`?state=`), with search. The list view is the former Danh sách Tour page. In the shift views a quick Tour (ADR-0053) is marked "Nhanh" at its latest Start | `GET /api/staff/manage/tours` (`from&to` for week and day, `phase`/`state` for the list), `GET .../tours/shifts` |
 | `/staff/manage/tours` | Redirect to `/staff/schedule?view=list`, keeping `tab`/`state` | — |
 | `/staff/robot`, `/staff/history` | unchanged, already API-backed | — |
@@ -36,7 +37,7 @@ Rules the screens follow:
 - One Tour, one flow. Its three pages (`/staff/manage/tours/:id`,
   `/staff/tours/:id/start`, `/staff/live/:id`) open with the same
   `TourStepper`: back to the list the Tour was opened from, then four steps
-  (Chuẩn bị & chốt, Kiểm tra & bắt đầu, Điều hành, Kết quả) read from the
+  (Chuẩn bị & chốt, Mở Tour, Điều hành, Kết quả) read from the
   Tour state only. A step links only when its page has something to show (the
   check while READY, the console once started). The Start panel itself is two
   steps: the server allows Start, then the four on-site confirmations.

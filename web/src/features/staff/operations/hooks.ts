@@ -29,7 +29,8 @@ export function useOperationTour(id: string) {
 export function useStartChecks(id: string, enabled: boolean) {
   return useQuery({
     queryKey: [...tourKeys.all, 'start-checks', id],
-    queryFn: () => toursApi.startChecks(id),
+    // The checks for opening the Tour without its first leg: the robot moves only when the Operator departs.
+    queryFn: () => toursApi.startChecks(id, true),
     enabled: Boolean(id) && enabled,
     refetchInterval: LIVE_TOUR_MS,
   })
@@ -102,21 +103,49 @@ function useRefreshTours() {
   return () => client.invalidateQueries({ queryKey: tourKeys.all })
 }
 
-export function useStartTour() {
+/** Opens the Tour without its first leg (`holdAtStart`): the robot moves only when the Operator departs. */
+export function useOpenTour() {
   const onSettled = useRefreshTours()
   return useMutation({
-    mutationFn: ({ id, requestId, rowVersion, confirmation }: { id: string; requestId: string; rowVersion: string; confirmation: StartConfirmation }) =>
-      toursApi.start(id, { requestId, expectedRowVersion: rowVersion, confirmation }),
+    mutationFn: ({ id, requestId, rowVersion }: TourWrite) =>
+      toursApi.start(id, { requestId, expectedRowVersion: rowVersion, confirmation: null, holdAtStart: true }),
     onSettled,
   })
 }
 
 type TourWrite = { id: string; requestId: string; rowVersion: string }
 
+/** Next, and from the start the departure, which carries the four on-site confirmations. */
 export function useNextStop() {
   const onSettled = useRefreshTours()
   return useMutation({
-    mutationFn: ({ id, requestId, rowVersion }: TourWrite) => toursApi.next(id, { requestId, expectedRowVersion: rowVersion }),
+    mutationFn: ({ id, requestId, rowVersion, confirmation }: TourWrite & { confirmation?: StartConfirmation }) =>
+      toursApi.next(id, { requestId, expectedRowVersion: rowVersion, confirmation: confirmation ?? null }),
+    onSettled,
+  })
+}
+
+export function usePauseLeg() {
+  const onSettled = useRefreshTours()
+  return useMutation({
+    mutationFn: ({ id, requestId, rowVersion }: TourWrite) => toursApi.pause(id, { requestId, expectedRowVersion: rowVersion }),
+    onSettled,
+  })
+}
+
+export function useSkipStop() {
+  const onSettled = useRefreshTours()
+  return useMutation({
+    mutationFn: ({ id, requestId, rowVersion, confirmation }: TourWrite & { confirmation?: StartConfirmation }) =>
+      toursApi.skip(id, { requestId, expectedRowVersion: rowVersion, confirmation: confirmation ?? null }),
+    onSettled,
+  })
+}
+
+export function useSetAutoAdvance() {
+  const onSettled = useRefreshTours()
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => toursApi.setAutoAdvance(id, enabled),
     onSettled,
   })
 }

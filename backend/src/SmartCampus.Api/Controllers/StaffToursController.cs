@@ -26,6 +26,9 @@ using SmartCampus.Application.Features.Tours.Commands.StartTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Application.Features.Tours.Commands.ChangeTourCapacity;
 using SmartCampus.Application.Features.Tours.Commands.ChangeTourOperator;
+using SmartCampus.Application.Features.Tours.Commands.AutoAdvanceTour;
+using SmartCampus.Application.Features.Tours.Commands.PauseTourLeg;
+using SmartCampus.Application.Features.Tours.Commands.SkipTourStop;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
@@ -113,9 +116,9 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
         Success(await sender.Send(new ReopenTourCommand(id, User.GetRequiredUserId(), request), ct), "Tour reopened to SCHEDULED.");
 
     [HttpGet("{id:guid}/start-checks")]
-    public async Task<IActionResult> StartChecks(Guid id, CancellationToken ct) =>
+    public async Task<IActionResult> StartChecks(Guid id, [FromQuery] bool holdAtStart, CancellationToken ct) =>
         Ok(new BaseResponse<TourStartChecks> { Success = true, Message = "Tour start checks retrieved.",
-            Data = await sender.Send(new GetTourStartChecksQuery(id, User.GetRequiredUserId()), ct) });
+            Data = await sender.Send(new GetTourStartChecksQuery(id, User.GetRequiredUserId(), holdAtStart), ct) });
 
     [HttpPost("{id:guid}/start")]
     public async Task<IActionResult> Start(Guid id, [FromBody] StartTourRequest request, CancellationToken ct) =>
@@ -132,6 +135,27 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     [HttpPost("{id:guid}/retry-leg")]
     public async Task<IActionResult> RetryLeg(Guid id, [FromBody] RetryTourLegRequest request, CancellationToken ct) =>
         Success(await sender.Send(new RetryTourLegCommand(id, User.GetRequiredUserId(), request), ct), "Leg retried.");
+
+    /// <summary>Stops the current leg and keeps the Tour; Retry resumes it with a new leg. Not an emergency stop.</summary>
+    [HttpPost("{id:guid}/pause")]
+    public async Task<IActionResult> Pause(Guid id, [FromBody] PauseTourLegRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new PauseTourLegCommand(id, User.GetRequiredUserId(), request), ct), "Leg pause requested.");
+
+    /// <summary>Skips the POI the robot would go to next while it stands still.</summary>
+    [HttpPost("{id:guid}/skip")]
+    public async Task<IActionResult> Skip(Guid id, [FromBody] SkipTourStopRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new SkipTourStopCommand(id, User.GetRequiredUserId(), request), ct), "Stop skipped.");
+
+    /// <summary>The Operator's switch: leave a POI by itself once its dwell ends. Off by default and after a restart.</summary>
+    [HttpPut("{id:guid}/auto-advance")]
+    [RequestSizeLimit(1024)]
+    public async Task<ActionResult<BaseResponse<TourAutoAdvanceResult>>> SetAutoAdvance(Guid id, [FromBody] SetTourAutoAdvanceRequest request,
+        CancellationToken ct) =>
+        Ok(new BaseResponse<TourAutoAdvanceResult>
+        {
+            Success = true, Message = "Auto advance set.",
+            Data = await sender.Send(new SetTourAutoAdvanceCommand(id, User.GetRequiredUserId(), request.Enabled), ct)
+        });
 
     [HttpPost("{id:guid}/commands/{commandId:guid}/reconcile")]
     public async Task<IActionResult> Reconcile(Guid id, Guid commandId, [FromBody] ReconcileRobotCommandRequest request, CancellationToken ct) =>

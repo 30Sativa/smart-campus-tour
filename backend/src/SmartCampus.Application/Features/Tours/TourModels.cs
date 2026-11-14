@@ -75,12 +75,20 @@ public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDet
 /// <summary>The running state of a Tour: null fields until Start; <see cref="DwellDeadlineAt"/> is display only (ADR-0043 D12).</summary>
 public sealed record TourExecutionView(string State, string? OperationalStatus, string? AssistanceReason, string? CurrentStep,
     Guid? CurrentLegId, string? CurrentLegKind, Guid? CurrentRevisionStopId, Guid? LastArrivedRevisionStopId,
-    DateTimeOffset? DwellDeadlineAt, TourCommandView? Command);
-public sealed record TourCommandView(Guid Id, string Kind, string State, string? Outcome, string? ReasonCode);
+    DateTimeOffset? DwellDeadlineAt, TourCommandView? Command, TourAutoAdvanceView? AutoAdvance = null);
+/// <summary><see cref="CancelRequested"/>: the Operator paused this leg and the robot has not reported its end yet.</summary>
+public sealed record TourCommandView(Guid Id, string Kind, string State, string? Outcome, string? ReasonCode, bool CancelRequested = false);
+/// <summary>The Operator's automatic departure switch; <see cref="BlockedReason"/> says why this visit's attempt did not leave.</summary>
+public sealed record TourAutoAdvanceView(bool Enabled, string? BlockedReason);
 /// <summary>Advisory for the caller; Start and Next recheck under locks. <see cref="BlockedBy"/> holds check ids, or a state reason code.</summary>
 public sealed record TourActionAvailability(bool Allowed, string? Reason, IReadOnlyList<string> BlockedBy);
+/// <summary>
+/// <see cref="Open"/> is Start with HoldAtStart (the robot's localization and motion readiness are shown, not required);
+/// <see cref="Pause"/> stops the current leg; <see cref="Skip"/> skips the POI the robot would go to next.
+/// </summary>
 public sealed record TourAllowedActions(TourActionAvailability Start, TourActionAvailability Next, TourActionAvailability EndEarly,
-    TourActionAvailability RetryLeg, TourActionAvailability Reconcile);
+    TourActionAvailability RetryLeg, TourActionAvailability Reconcile, TourActionAvailability? Open = null,
+    TourActionAvailability? Pause = null, TourActionAvailability? Skip = null);
 public sealed record TourMutationResult(Guid Id);
 public sealed record TourViewerPresence(int Accepted, int Joined);
 /// <summary>TourEvent types and receipt actions. Short-notice creation, READY and Reopen are not operational use of the Tour; the rest are.</summary>
@@ -91,6 +99,15 @@ public static class TourLifecycleEvents
     public const string Reopened = "TOUR_REOPENED";
     public const string Started = "TOUR_STARTED";
     public const string Next = "TOUR_NEXT";
+    /// <summary>The first leg of a Tour opened with HoldAtStart; carries the on-site confirmations.</summary>
+    public const string Departed = "TOUR_DEPARTED";
+    public const string Pause = "TOUR_PAUSE";
+    public const string PauseRequested = "LEG_PAUSE_REQUESTED";
+    public const string Paused = "TOUR_PAUSED";
+    public const string Skip = "TOUR_SKIP";
+    public const string StopSkipped = "STOP_SKIPPED";
+    public const string AutoAdvanced = "TOUR_AUTO_ADVANCED";
+    public const string AutoAdvanceBlocked = "TOUR_AUTO_ADVANCE_BLOCKED";
     public const string Completed = "TOUR_COMPLETED";
     public const string LegDispatchRequested = "LEG_DISPATCH_REQUESTED";
     public const string VisitClosed = "VISIT_CLOSED";

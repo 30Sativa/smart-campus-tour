@@ -69,7 +69,6 @@ describe('pre-start check wording', () => {
     // 2 passed, 3 failed, 2 not run, out of 7 counted checks (battery is information only).
     expect(screen.getByText('2/7 đạt')).toBeInTheDocument()
     expect(screen.getByText('2/7 đạt, 3 chưa đạt, 2 chưa kiểm tra')).toBeInTheDocument()
-    expect(within(screen.getByRole('group', { name: 'Bước 1: Máy chủ cho phép' })).getByText('Còn 3 mục chặn')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Robot tự báo' })).getByText('0/3 đạt, 1 chưa đạt, 2 chưa kiểm tra')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Tour và lịch' })).getByText('2/2 đạt')).toBeInTheDocument()
   })

@@ -9,7 +9,8 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Application.Features.Tours.Commands.RetryTourLeg;
 
 /// <summary>
-/// A new leg to the same target after a leg that is known to have ended or never reached the robot (EXPIRED) (ADR-0043). Never from an UNKNOWN or RECONCILED
+/// A new leg to the same target after a leg that is known to have ended or never reached the robot (EXPIRED) (ADR-0043), and
+/// the Operator's Resume of a paused leg. Never from an UNKNOWN or RECONCILED
 /// command: the old goal may still run. The movement checks include executionIdle and mapContextMatches, so a BUSY or
 /// MAP_MISMATCH rejection cannot retry in a loop.
 /// </summary>
@@ -58,7 +59,19 @@ public sealed class RetryTourLegCommandHandler(ITourManagementRepository reposit
     /// (<c>RobotDisconnected</c>, where <c>telemetryFresh</c> blocks the retry until the robot is heard again).
     /// </summary>
     internal static bool CanRetry(Tour tour, RobotCommand? previous) =>
-        tour.State == TourRuntime.Running && tour.OperationalStatus == TourRuntime.NeedsAssistance && previous is not null &&
+        tour.State == TourRuntime.Running && previous is not null &&
+        (tour.OperationalStatus == TourRuntime.Paused ? IsResumable(previous)
+            : tour.OperationalStatus == TourRuntime.NeedsAssistance && CanRetryAssistance(tour, previous));
+
+    /// <summary>
+    /// A paused leg resumes as a new leg once its GoTo is known to have ended (CANCELLED, FAILED, REJECTED) or was withdrawn
+    /// before the robot took it; never an UNKNOWN or RECONCILED one, since that goal may still run.
+    /// </summary>
+    private static bool IsResumable(RobotCommand previous) =>
+        previous.State is RobotCommandStates.Cancelled or RobotCommandStates.Failed or RobotCommandStates.Rejected ||
+        (previous.State == RobotCommandStates.Expired && previous.DeliveredStreamId is null);
+
+    private static bool CanRetryAssistance(Tour tour, RobotCommand previous) =>
         ((tour.AssistanceReason == TourRuntime.NavigationFailed && previous.State == RobotCommandStates.Failed) ||
          (tour.AssistanceReason == TourRuntime.CommandRejected && previous.State == RobotCommandStates.Rejected) ||
          (tour.AssistanceReason is TourRuntime.CommandExpired or TourRuntime.RobotDisconnected &&

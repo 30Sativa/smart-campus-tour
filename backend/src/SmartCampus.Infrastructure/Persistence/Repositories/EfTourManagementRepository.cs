@@ -156,6 +156,9 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public Task<RobotCommand?> LockOpenCancelAsync(Guid goToId, CancellationToken ct) =>
         db.RobotCommands.FromSqlInterpolated($"SELECT * FROM dbo.RobotCommands WITH (UPDLOCK, ROWLOCK) WHERE TargetCommandId = {goToId} AND IsOpen = 1").SingleOrDefaultAsync(ct);
 
+    public Task<bool> HasOpenCancelAsync(Guid goToId, CancellationToken ct) =>
+        db.RobotCommands.AsNoTracking().AnyAsync(c => c.TargetCommandId == goToId && c.IsOpen, ct);
+
     public async Task<IReadOnlyList<RobotCommand>> ListOpenCommandsAsync(CancellationToken ct) =>
         await db.RobotCommands.AsNoTracking().Where(c => c.IsOpen).ToArrayAsync(ct);
 

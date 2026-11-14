@@ -74,6 +74,8 @@ public static class DependencyInjection
             (configuration.GetValue<string?>("FleetHead:DefaultMode") ?? HeadModes.Auto).Trim().ToUpperInvariant()));
         services.AddSingleton<IHeadCommandChannel, InMemoryHeadCommandChannel>();
         services.AddSingleton<ITourHeadModeStore, InMemoryTourHeadModeStore>();
+        // The Operator's automatic departure switch per Tour, in memory like the head mode: a restart leaves every Tour manual.
+        services.AddSingleton<SmartCampus.Application.Common.Abstractions.Tours.ITourAutoAdvanceStore, SmartCampus.Application.Features.Tours.InMemoryTourAutoAdvanceStore>();
         services.AddScoped<ITourHeadControlReader, EfTourHeadControlReader>();
         // ADR-0052: the Quest camera runs only while a Tour runs or a Staff page holds a lease. In memory, like head control.
         services.AddSingleton(new FleetCameraSettings(configuration.GetValue<int?>("FleetCamera:LeaseSeconds") ?? 120,
