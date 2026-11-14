@@ -228,6 +228,8 @@ Astra Pro depth vào local costmap, đặt cạnh LiDAR (`robot/docs/depth-camer
 | `ENABLE_CAMERA=true` | `robot nav` truyền `enable_camera:=true` |
 | `robot nav --camera` / `--no-camera` | Bật / tắt cho một lần chạy, bỏ qua giá trị profile |
 
+Khi bật camera, Nav2 nhận thêm RPP `max_allowed_time_to_collision_up_to_carrot` 4.0 (tầm kiểm va chạm
+0.8 m) để robot dừng khi camera còn thấy vật thấp; camera tắt thì file params giữ nguyên.
 Launcher không từ chối nav vì camera. Khi không có USB `2bc5:0403`, thiếu `astra_camera` hoặc
 runtime cũ, nó in `WARNING … LiDAR-only` rồi chạy như baseline. Đọc mục 6 của
 `depth-camera.md` trước khi bật cho demo.

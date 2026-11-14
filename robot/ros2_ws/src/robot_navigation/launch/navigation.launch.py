@@ -28,6 +28,8 @@
 from launch import LaunchDescription
 import os
 
+import yaml
+
 from launch.actions import (DeclareLaunchArgument, GroupAction,
                             IncludeLaunchDescription, LogInfo, OpaqueFunction,
                             SetLaunchConfiguration)
@@ -38,6 +40,7 @@ from launch.logging import get_logger
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node, PushRosNamespace, SetRemap
 from launch_ros.substitutions import FindPackageShare
+from nav2_common.launch import RewrittenYaml
 
 
 def _check_map(context, *args, **kwargs):
@@ -61,6 +64,51 @@ def _check_map(context, *args, **kwargs):
                             '  Kiem tra lai duong dan (phai la file .yaml da luu).'),
                 Shutdown(reason=f'map file not found: {path}')]
     return [LogInfo(msg=f'[navigation] Dung map: {path}')]
+
+
+# Camera mode only (robot/docs/depth-camera.md). RPP checks for a collision
+# min(v * T, carrot 0.8 m) ahead; with the V2/V3 T = 1.0 s that is 0.2 m at 0.2 m/s,
+# inside the depth camera's 0.6 m blind zone, so a low obstacle seen only by the
+# camera is lost before RPP reacts. T = 4.0 s reaches the 0.8 m carrot: the robot
+# stops ~0.7 m away, where the camera still sees the obstacle. LiDAR-only runs keep
+# the params file exactly as it is.
+CAMERA_NAV2_REWRITES = {
+    'controller_server.ros__parameters.FollowPath.max_allowed_time_to_collision_up_to_carrot': '4.0',
+}
+
+
+def _nav2_params_for_mode(context, nav2_params_file, enable_camera):
+    """(params_file, log actions): the file itself, or a rewritten copy in camera mode."""
+    if not IfCondition(enable_camera).evaluate(context):
+        return nav2_params_file, []
+    source = nav2_params_file.perform(context)
+    data = yaml.safe_load(open(source))
+    missing = []
+    for path in CAMERA_NAV2_REWRITES:
+        node = data
+        for key in path.split('.'):
+            node = node.get(key) if isinstance(node, dict) else None
+        if node is None:
+            missing.append(path)
+    if missing:
+        return nav2_params_file, [LogInfo(msg=f'[navigation] camera mode: {source} has no {missing}; '
+                                              'using it unchanged (camera marks only, no longer RPP horizon)')]
+    rewritten = RewrittenYaml(source_file=source, param_rewrites=CAMERA_NAV2_REWRITES, convert_types=True)
+    return rewritten, [LogInfo(msg='[navigation] camera mode: RPP '
+                                   'max_allowed_time_to_collision_up_to_carrot 4.0 (depth-camera.md)')]
+
+
+def _nav2(context, nav2_launch, robot_id, use_sim_time, nav2_params_file, enable_camera):
+    params, logs = _nav2_params_for_mode(context, nav2_params_file, enable_camera)
+    return logs + [IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(nav2_launch),
+        launch_arguments={
+            'namespace': robot_id,
+            'use_sim_time': use_sim_time,
+            'params_file': params,
+            'autostart': 'true',
+        }.items(),
+    )]
 
 
 def _warn_if_lidar_yaw_defaulted(context):
@@ -424,15 +472,9 @@ def generate_launch_description():
             # this does the same without baking the robot id into the file.
             SetLaunchConfiguration('robot_ns', robot_ns),
 
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(nav2_launch),
-                launch_arguments={
-                    'namespace': robot_id,
-                    'use_sim_time': use_sim_time,
-                    'params_file': nav2_params_file,
-                    'autostart': 'true',
-                }.items(),
-            ),
+            # In camera mode the params file goes through CAMERA_NAV2_REWRITES first.
+            OpaqueFunction(function=_nav2, args=[nav2_launch, robot_id, use_sim_time,
+                                                 nav2_params_file, enable_camera]),
         ]),
 
         # 5) Optional: initial pose from the LiDAR instead of RViz (off by default).
