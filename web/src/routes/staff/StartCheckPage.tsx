@@ -17,6 +17,7 @@ import { operationRefusal } from '../../features/staff/operations/operation-erro
 import { RobotStatusCard, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { BlockerList, CheckGroups } from '../../features/staff/operations/StartCheckList'
 import { TourStepper } from '../../features/staff/operations/TourStepper'
+import { HeadHomeButton } from '../../features/staff/operations/live/HeadHomeButton'
 
 const slotText = (value: string) => `${formatDate(value, { weekday: 'short' })} ${formatTime(value)}`
 
@@ -161,6 +162,35 @@ export default function StartCheckPage() {
               : <p className="text-[13px] leading-5 text-muted">{cameraLease.isPending && ready
                 ? 'Đang xin quyền xem camera…'
                 : 'Máy chủ chưa cấp luồng camera cho robot này.'}</p>}</div>
+
+                : 'Máy chủ chưa cấp luồng camera cho robot này. Xem hình trên thiết bị trước khi xác nhận.'}</p>}</div>
+            {/* Re-align the head against its stops while the robot waits at the start, then check the picture. */}
+            <div className="border-t border-[#f1f5f9] p-3">
+              <HeadHomeButton tourId={summary.id} isOperator={!notOperator} operatorName={operator?.fullName} />
+            </div>
+          </section>
+          <section className={panelClass} aria-label="Bắt đầu Tour">
+            <PanelHead title="Bắt đầu Tour" description="Nút chỉ mở khi đạt cả 2 bước dưới đây." />
+            <div className="p-4">
+              <StartStep number={1} done={Boolean(result?.canStart)} title="Máy chủ cho phép"
+                status={!result ? '…' : result.canStart ? 'Đạt' : counts.failed ? `Còn ${counts.failed} mục chặn` : `${counts.notRun} mục chưa kiểm tra`}
+                note={result && !result.canStart ? 'Các mục còn chặn nằm ở phần Cần xử lý.' : undefined} />
+              {!notOperator && <StartStep number={2} done={confirmed} title="Xác nhận tại chỗ" status={`${ticked}/4`}
+                note="Bạn tự đánh dấu khi đang đứng cạnh robot." />}
+              {!notOperator && <fieldset className="mb-3 ml-8 space-y-1.5">
+                <legend className="sr-only">Xác nhận tại chỗ</legend>
+                {CONFIRMATIONS.map(({ key, label, hint }) => (
+                  <label key={key} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors duration-150 motion-reduce:transition-none ${confirmation[key] ? 'border-[#bfdbfe] bg-[#eff6ff]' : 'border-[#e2e8f0] hover:border-[#bfdbfe]'}`}>
+                    <input type="checkbox" checked={confirmation[key]} onChange={event => setConfirmation(value => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#2563eb]" />
+                    <span className="min-w-0"><span className="block text-[13px] font-semibold text-[#0f172a]">{label}</span><span className="block text-[11.5px] text-muted">{hint}</span></span>
+                  </label>
+                ))}
+              </fieldset>}
+              <button type="button" disabled={!canStart || start.isPending} onClick={() => { start.reset(); setConfirming(true) }} className={`${buttonClass('primary', 'lg')} w-full`} aria-describedby={reason ? 'start-reason' : undefined}>
+                <Play size={18} aria-hidden="true" />Bắt đầu Tour
+              </button>
+              {reason && <p id="start-reason" className="mt-2 text-xs leading-5 text-[#7d5310]">{reason}</p>}
+            </div>
           </section>
           <section className={panelClass} aria-label="Robot"><RobotStatusCard robotCode={reservation?.robotCode} /></section>
           <section className={panelClass} aria-label="Tuyến của Tour">

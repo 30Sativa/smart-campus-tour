@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using SmartCampus.Application.Common.Abstractions.FleetHead;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
@@ -6,6 +5,7 @@ using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.FleetHead.Commands.PollHeadCommands;
 using SmartCampus.Application.Features.FleetHead.Commands.SendHeadCommand;
 using SmartCampus.Application.Features.FleetHead.Commands.SetTourHeadMode;
+using SmartCampus.Application.Features.FleetHead.Queries.GetRobotHeadPois;
 using SmartCampus.Application.Features.FleetHead.Queries.GetTourHeadStatus;
 using SmartCampus.Domain.Entities;
 
@@ -32,7 +32,8 @@ public sealed class FleetHeadTests
         new HeadCommandSpec("ANGLE", PanDeg: -170, TiltDeg: 18),
         new HeadCommandSpec("SWEEP"),
         new HeadCommandSpec("SWEEP", SweepDeg: 10),
-        new HeadCommandSpec("SWEEP", SweepDeg: 170)
+        new HeadCommandSpec("SWEEP", SweepDeg: 170),
+        new HeadCommandSpec("HOME")
     };
 
     [Theory]
@@ -43,7 +44,8 @@ public sealed class FleetHeadTests
     public static TheoryData<HeadCommandSpec, string> InvalidSpecs => new()
     {
         { new HeadCommandSpec("step", PanSteps: 1), "lower-case kind" },
-        { new HeadCommandSpec("HOME"), "HOME is not exposed" },
+        { new HeadCommandSpec("HOME", PanDeg: 0), "HOME takes no field" },
+        { new HeadCommandSpec("home"), "lower-case HOME" },
         { new HeadCommandSpec("STEP"), "STEP without movement" },
         { new HeadCommandSpec("STEP", PanSteps: 0, TiltSteps: 0), "STEP of zero" },
         { new HeadCommandSpec("STEP", PanSteps: 21), "too many steps" },
@@ -137,6 +139,49 @@ public sealed class FleetHeadTests
     }
 
     [Fact]
+    public async Task Send_HomeWhileReady_GoesToTheRobotTheTourHolds_SoStaffCanAlignTheHeadBeforeStart()
+    {
+        var channel = new FakeChannel { Connected = true };
+        var ready = Running() with { State = "READY", AssignedRobotId = null, RobotCode = null, ReservedRobotCode = "amr_02" };
+        var result = await Handler(channel, new FakeReader(ready)).Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("HOME")), default);
+
+        Assert.Equal(("amr_02", new HeadCommandSpec("HOME")), Assert.Single(channel.Queued));
+        Assert.Equal("amr_02", result.RobotCode);
+    }
+
+    [Fact]
+    public async Task Send_HomeWhileRunning_GoesToTheAssignedRobot()
+    {
+        var channel = new FakeChannel { Connected = true };
+        await Handler(channel, new FakeReader(Running() with { ReservedRobotCode = "amr_02" }))
+            .Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("HOME")), default);
+        Assert.Equal(Robot, Assert.Single(channel.Queued).Robot);
+    }
+
+    [Theory]
+    [InlineData("READY", null)]
+    [InlineData("SCHEDULED", "amr_02")]
+    [InlineData("COMPLETED", "amr_02")]
+    public async Task Send_HomeIsRefused_WithoutAHeldRobot_OrOutsideReadyAndRunning(string state, string? reserved)
+    {
+        var channel = new FakeChannel { Connected = true };
+        var tour = Running() with { State = state, AssignedRobotId = null, RobotCode = null, ReservedRobotCode = reserved };
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Handler(channel, new FakeReader(tour))
+            .Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("HOME")), default));
+        Assert.Equal("TOUR_STATE_INVALID", error.Code);
+        Assert.Empty(channel.Queued);
+    }
+
+    [Fact]
+    public async Task Send_OnlyHomeWorksBeforeStart()
+    {
+        var ready = Running() with { State = "READY", AssignedRobotId = null, RobotCode = null, ReservedRobotCode = "amr_02" };
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Handler(new FakeChannel { Connected = true }, new FakeReader(ready))
+            .Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("STEP", PanSteps: 1)), default));
+        Assert.Equal("TOUR_STATE_INVALID", error.Code);
+    }
+
+    [Fact]
     public async Task Send_RefusesARunningTourWithoutARobot()
     {
         var error = await Assert.ThrowsAsync<ConflictException>(() => Handler(new FakeChannel { Connected = true },
@@ -202,6 +247,15 @@ public sealed class FleetHeadTests
         var status = await new GetTourHeadStatusQueryHandler(new FakeReader(Running() with { State = "READY", AssignedRobotId = null, RobotCode = null }),
             new FakeChannel { Connected = true }, new FakeModes(), Settings()).Handle(new GetTourHeadStatusQuery(TourId), default);
         Assert.Equal((true, "AUTO", (string?)null, false), (status.Enabled, status.Mode, status.RobotCode, status.Connected));
+    }
+
+    [Fact]
+    public async Task Status_OfAReadyTour_ShowsTheRobotItHolds()
+    {
+        var ready = Running() with { State = "READY", AssignedRobotId = null, RobotCode = null, ReservedRobotCode = "amr_02" };
+        var status = await new GetTourHeadStatusQueryHandler(new FakeReader(ready), new FakeChannel { Connected = true }, new FakeModes(), Settings())
+            .Handle(new GetTourHeadStatusQuery(TourId), default);
+        Assert.Equal(("amr_02", true), (status.RobotCode, status.Connected));
     }
 
     [Fact]
@@ -277,96 +331,67 @@ public sealed class FleetHeadTests
         Assert.Equal("AUTO", modes.GetMode(TourId));
     }
 
-    // ---- POI camera preset at arrival, front on departure ------------------------------------------------------------
+    // ---- Robot-side POI head: GET /api/fleet/head/v1/pois ---------------------------------------------------------
 
-    public static TheoryData<string, HeadCommandSpec> PresetCommands => new()
-    {
-        { "FRONT", new HeadCommandSpec("ANGLE", PanDeg: 0, TiltDeg: 0) },
-        { "LEFT", new HeadCommandSpec("ANGLE", PanDeg: 90, TiltDeg: 0) },
-        { "RIGHT", new HeadCommandSpec("ANGLE", PanDeg: -90, TiltDeg: 0) },
-        { "ANGLE:45.5,-10", new HeadCommandSpec("ANGLE", PanDeg: 45.5, TiltDeg: -10) },
-        { "SWEEP", new HeadCommandSpec("SWEEP") },
-        { "SWEEP:90", new HeadCommandSpec("SWEEP", SweepDeg: 90) }
-    };
+    private static readonly Guid MapId = Guid.NewGuid();
 
-    [Theory]
-    [MemberData(nameof(PresetCommands))]
-    public void Arrival_InAutoMode_DoesWhatThePoisCameraPresetSays(string preset, HeadCommandSpec expected)
+    private static RobotHeadPoiView HeadPoi(string name, string preset) => new(Guid.NewGuid(), name, 1.25m, -2.5m, 0.5m, preset);
+
+    [Fact]
+    public async Task Pois_OfARunningTour_CarryEachStopsPreset_AndTheToursMode()
     {
-        var channel = new FakeChannel { Connected = true };
-        Assert.True(Motion(channel, new FakeModes()).QueueArrival(TourId, Robot, preset));
-        var queued = Assert.Single(channel.Queued);
-        Assert.Equal((Robot, expected), (queued.Robot, queued.Spec));
+        var reader = new FakePoiReader(new RobotHeadPoiSet("TOUR", TourId, MapId,
+            [HeadPoi("Thư viện", "ANGLE:45,10"), HeadPoi("Sân bóng", "right"), HeadPoi("Sảnh", "SWEEP:135")]));
+        var result = await new GetRobotHeadPoisQueryHandler(reader, new FakeModes(), Settings()).Handle(new(Robot), default);
+
+        Assert.Equal(("TOUR", (Guid?)TourId, (Guid?)MapId, "AUTO", true), (result.Source, result.TourId, result.MapVersionId, result.Mode, result.AutoMotion));
+        Assert.Equal(["ANGLE:45,10", "RIGHT", "SWEEP:135"], result.Pois.Select(poi => poi.CameraPreset));
+        Assert.Equal((1.25, -2.5, 0.5), (result.Pois[0].X, result.Pois[0].Y, result.Pois[0].Yaw));
+        Assert.Equal(Robot, reader.LastRobotCode);
     }
 
     [Fact]
-    public void Arrival_AtANonePoi_OrWithAnOlderUnknownPreset_LeavesTheHeadAlone()
+    public async Task Pois_AManualTour_OrHeadControlOff_TurnsAutomaticMotionOff()
     {
-        var channel = new FakeChannel { Connected = true };
-        Assert.False(Motion(channel, new FakeModes()).QueueArrival(TourId, Robot, "NONE"));
-        Assert.False(Motion(channel, new FakeModes()).QueueArrival(TourId, Robot, "HEAD_LEFT"));
-        Assert.Empty(channel.Queued);
-    }
-
-    [Fact]
-    public void Arrival_QueuesNothing_InManualMode_WhileOff_OrWhenTheRobotIsNotListening()
-    {
+        var reader = new FakePoiReader(new RobotHeadPoiSet("TOUR", TourId, MapId, [HeadPoi("Thư viện", "FRONT")]));
         var manual = new FakeModes();
         manual.SetMode(TourId, "MANUAL");
-        var connected = new FakeChannel { Connected = true };
-        Assert.False(Motion(connected, manual).QueueArrival(TourId, Robot, "SWEEP"));
-        Assert.False(Motion(connected, new FakeModes(), enabled: false).QueueArrival(TourId, Robot, "SWEEP"));
-        Assert.Empty(connected.Queued);
-        var deaf = new FakeChannel { Connected = false };
-        Assert.False(Motion(deaf, new FakeModes()).QueueArrival(TourId, Robot, "SWEEP"));
-        Assert.Empty(deaf.Queued);
+        var manualResult = await new GetRobotHeadPoisQueryHandler(reader, manual, Settings()).Handle(new(Robot), default);
+        Assert.Equal(("MANUAL", false), (manualResult.Mode, manualResult.AutoMotion));
+
+        var off = await new GetRobotHeadPoisQueryHandler(reader, new FakeModes(), Settings(enabled: false)).Handle(new(Robot), default);
+        Assert.Equal(("AUTO", false), (off.Mode, off.AutoMotion));
+        Assert.Single(off.Pois);
     }
 
     [Fact]
-    public void Departure_InAutoMode_QueuesAnAngleBackToTheFront()
+    public async Task Pois_WithoutATour_UseTheMapsVerifiedPois_AndTheDefaultMode()
     {
-        var channel = new FakeChannel { Connected = true };
-        Assert.True(Motion(channel, new FakeModes()).QueueDeparture(TourId, Robot));
-        var queued = Assert.Single(channel.Queued);
-        Assert.Equal((Robot, new HeadCommandSpec("ANGLE", PanDeg: 0, TiltDeg: 0)), (queued.Robot, queued.Spec));
+        var reader = new FakePoiReader(new RobotHeadPoiSet("MAP", null, MapId, [HeadPoi("Thư viện", "LEFT"), HeadPoi("Cũ", "HEAD_LEFT")]));
+        var result = await new GetRobotHeadPoisQueryHandler(reader, new FakeModes(), new FleetHeadSettings(true, defaultMode: "MANUAL"))
+            .Handle(new(Robot), default);
+
+        Assert.Equal(("MAP", (Guid?)null, "MANUAL", false), (result.Source, result.TourId, result.Mode, result.AutoMotion));
+        Assert.Equal(["LEFT", "NONE"], result.Pois.Select(poi => poi.CameraPreset));
     }
 
     [Fact]
-    public void Departure_QueuesNothing_InManualMode_WhileOff_OrWhenTheRobotIsNotListening()
+    public async Task Pois_ForAnUnknownRobot_AreEmpty()
     {
-        var manual = new FakeModes();
-        manual.SetMode(TourId, "MANUAL");
-        var connected = new FakeChannel { Connected = true };
-        Assert.False(Motion(connected, manual).QueueDeparture(TourId, Robot));
-        Assert.False(Motion(connected, new FakeModes(), enabled: false).QueueDeparture(TourId, Robot));
-        Assert.Empty(connected.Queued);
-        var deaf = new FakeChannel { Connected = false };
-        Assert.False(Motion(deaf, new FakeModes()).QueueDeparture(TourId, Robot));
-        Assert.Empty(deaf.Queued);
+        var result = await new GetRobotHeadPoisQueryHandler(new FakePoiReader(null), new FakeModes(), Settings())
+            .Handle(new("nobody"), default);
+        Assert.Equal(("NONE", 0), (result.Source, result.Pois.Count));
     }
 
-    [Fact]
-    public void AnAutoTour_WhileHeadControlIsOff_SaysWhyNothingMoves()
+    private sealed class FakePoiReader(RobotHeadPoiSet? set) : IRobotHeadPoiReader
     {
-        var logger = new ListLogger();
-        var motion = new HeadAutoMotion(new FakeChannel { Connected = true }, new FakeModes(), Settings(enabled: false), logger);
-        Assert.False(motion.QueueArrival(TourId, Robot, "SWEEP"));
-        Assert.Contains(logger.Messages, message => message.Contains("FleetHead:Enabled=false"));
-        var manual = new FakeModes();
-        manual.SetMode(TourId, "MANUAL");
-        var quiet = new ListLogger();
-        Assert.False(new HeadAutoMotion(new FakeChannel { Connected = true }, manual, Settings(enabled: false), quiet)
-            .QueueArrival(TourId, Robot, "SWEEP"));
-        Assert.Empty(quiet.Messages);
-    }
+        public string? LastRobotCode { get; private set; }
 
-    private sealed class ListLogger : Microsoft.Extensions.Logging.ILogger<HeadAutoMotion>
-    {
-        public List<string> Messages { get; } = [];
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
-        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state,
-            Exception? exception, Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
+        public Task<RobotHeadPoiSet?> GetAsync(string robotCode, CancellationToken cancellationToken)
+        {
+            LastRobotCode = robotCode;
+            return Task.FromResult(set);
+        }
     }
 
     [Fact]
@@ -376,9 +401,6 @@ public sealed class FleetHeadTests
         await Handler(channel).Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("SWEEP")), default);
         Assert.Equal(new HeadCommandSpec("SWEEP"), Assert.Single(channel.Queued).Spec);
     }
-
-    private static HeadAutoMotion Motion(FakeChannel channel, FakeModes modes, bool enabled = true) =>
-        new(channel, modes, Settings(enabled), NullLogger<HeadAutoMotion>.Instance);
 
     // ---- helpers ---------------------------------------------------------------------------------------------------
 

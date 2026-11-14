@@ -46,6 +46,9 @@ class FakeActuator:
     def sweep(self, amplitude_deg):
         self._record('sweep', amplitude_deg)
 
+    def home(self):
+        self._record('home')
+
 
 class FixtureTests(unittest.TestCase):
     def test_fixtures_are_the_shared_contract(self):
@@ -69,6 +72,11 @@ class FixtureTests(unittest.TestCase):
                           ('sweep', 90.0)], actuator.calls)
         self.assertEqual((EPOCH, []), parse_head_poll_response(fixture('poll-response-empty.json')))
 
+    def test_home_rehomes_the_head(self):
+        actuator = FakeActuator()
+        HeadCommandApplier(actuator).apply(EPOCH, [parse_head_command({'seq': 1, 'kind': 'HOME'})], now=0.0)
+        self.assertEqual([('home',)], actuator.calls)
+
     def test_request_fixture_is_what_the_worker_sends(self):
         request = fixture('poll-request.json')
         self.assertEqual({'epoch', 'afterSeq', 'waitMs', 'head'}, set(request))
@@ -80,7 +88,7 @@ class ParseTests(unittest.TestCase):
         for bad in [None, {}, {'data': {'epoch': 'x', 'commands': []}}, {'data': {'epoch': EPOCH, 'commands': {}}}]:
             with self.assertRaises(ValueError):
                 parse_head_poll_response(bad)
-        for raw in [{'seq': 1, 'kind': 'HOME'}, {'seq': 0, 'kind': 'STOP'}, {'seq': True, 'kind': 'STOP'},
+        for raw in [{'seq': 1, 'kind': 'PARK'}, {'seq': 0, 'kind': 'STOP'}, {'seq': True, 'kind': 'STOP'},
                     {'seq': 1, 'kind': 'STEP', 'panSteps': 21}, {'seq': 1, 'kind': 'STEP', 'panSteps': 1.5},
                     {'seq': 1, 'kind': 'JOG', 'panDir': 2}, {'seq': 1, 'kind': 'JOG', 'panDir': 1, 'ttlMs': 0},
                     {'seq': 1, 'kind': 'ANGLE', 'panDeg': 0}, {'seq': 1, 'kind': 'ANGLE', 'panDeg': float('nan'), 'tiltDeg': 0},
@@ -147,7 +155,7 @@ class ApplierTests(unittest.TestCase):
 
     def test_release_stop_angle_sweep_and_step_end_a_jog(self):
         for ender in [{'kind': 'JOG', 'panDir': 0, 'tiltDir': 0}, {'kind': 'STOP'}, {'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 0},
-                      {'kind': 'SWEEP'}, {'kind': 'STEP', 'panSteps': -2}]:
+                      {'kind': 'SWEEP'}, {'kind': 'STEP', 'panSteps': -2}, {'kind': 'HOME'}]:
             actuator = FakeActuator()
             applier = HeadCommandApplier(actuator)
             applier.apply(EPOCH, [parse_head_command({'seq': 1, 'kind': 'JOG', 'tiltDir': 1}),

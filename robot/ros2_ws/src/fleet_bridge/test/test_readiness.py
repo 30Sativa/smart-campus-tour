@@ -77,7 +77,7 @@ class MotionReadyTests(unittest.TestCase):
 
     def test_false_conditions(self):
         for changes in ({'emergency_stop': True}, {'mode': 'manual'}, {'gate_state': 'BLOCKED'},
-                        {'gate_state': 'LATCHED:BOOT'}, {'gate_state': 'DISABLED'}, {'nav2_ready': False},
+                        {'gate_state': 'LATCHED:ESTOP'}, {'gate_state': 'DISABLED'}, {'nav2_ready': False},
                         {'unowned_goal': FOREIGN_NAV_GOAL}, {'map_fault': MAP_CONTENT_MISMATCH}):
             self.assertIs(False, run(**changes).motion_ready, changes)
 
@@ -98,6 +98,38 @@ class MotionReadyTests(unittest.TestCase):
         self.assertIsNotNone(result.goto_refusal)
 
 
+class ResettableLatchTests(unittest.TestCase):
+    """ADR-0049 addendum: a BOOT or PERMIT_LOST latch is cleared by the next leg, so it does not refuse one."""
+
+    def test_boot_and_permit_lost_are_ready_for_a_new_leg(self):
+        for gate in ('LATCHED:BOOT', 'LATCHED:PERMIT_LOST'):
+            result = run(gate_state=gate)
+            self.assertIs(True, result.motion_ready, gate)
+            self.assertIsNone(result.fault_code, gate)
+            self.assertIsNone(result.goto_refusal, gate)
+            self.assertTrue(result.latch_resettable, gate)
+
+    def test_an_estop_latch_still_needs_a_local_reset(self):
+        result = run(gate_state='LATCHED:ESTOP')
+        self.assertIs(False, result.motion_ready)
+        self.assertEqual('MOTION_GATE_LATCHED', result.fault_code)
+        self.assertEqual('MOTION_GATE_LATCHED', result.goto_refusal)
+        self.assertFalse(result.latch_resettable)
+
+    def test_an_open_gate_needs_no_reset(self):
+        self.assertFalse(run().latch_resettable)
+
+    def test_a_resettable_latch_does_not_hide_another_cause(self):
+        for changes in ({'emergency_stop': True}, {'mode': 'manual'}, {'nav2_ready': False},
+                        {'unowned_goal': FOREIGN_NAV_GOAL}, {'odom_age_sec': 0.6}):
+            self.assertIsNot(True, run(gate_state='LATCHED:PERMIT_LOST', **changes).motion_ready, changes)
+
+    def test_a_stale_gate_report_is_never_resettable(self):
+        result = run(gate_state='LATCHED:BOOT', gate_age_sec=1.6)
+        self.assertFalse(result.latch_resettable)
+        self.assertIsNone(result.motion_ready)
+
+
 class FaultCodeTests(unittest.TestCase):
     def test_each_cause_has_its_code(self):
         for changes, code in (({'emergency_stop': True}, 'ESTOP_ENGAGED'),
@@ -109,7 +141,7 @@ class FaultCodeTests(unittest.TestCase):
                               ({'odom_age_sec': 0.6}, 'STM32_LINK_STALE'),
                               ({'nav2_ready': False}, 'NAV2_UNAVAILABLE'),
                               ({'tf_age_sec': 2.0}, 'TF_STALE'),
-                              ({'gate_state': 'LATCHED:BOOT'}, 'MOTION_GATE_LATCHED')):
+                              ({'gate_state': 'LATCHED:ESTOP'}, 'MOTION_GATE_LATCHED')):
             self.assertEqual(code, run(**changes).fault_code, changes)
 
     def test_a_latched_gate_never_hides_what_tripped_it(self):

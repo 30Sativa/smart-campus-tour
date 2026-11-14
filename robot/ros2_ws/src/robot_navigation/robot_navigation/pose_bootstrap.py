@@ -113,8 +113,10 @@ class PoseBootstrap(Node):
         # Reentrant: relocalize runs for seconds and waits on scan/odom/amcl callbacks.
         cb = ReentrantCallbackGroup()
         self.create_subscription(OccupancyGrid, 'map', self.on_map, latched, callback_group=cb)
-        self.create_subscription(LaserScan, 'scan', self.on_scan, qos_profile_sensor_data, callback_group=cb)
-        self.create_subscription(Odometry, 'odom', self.on_odom, qos_profile_sensor_data, callback_group=cb)
+        # scan and odom are subscribed only during an attempt (sensors_on/off): kept open they cost
+        # ~20 % of a J5005 core for a node that is idle after the first seconds (measured 14/11).
+        self.cb = cb
+        self.sensor_subs = []
         self.create_subscription(PoseWithCovarianceStamped, 'amcl_pose', self.on_amcl, latched, callback_group=cb)
         self.create_subscription(PoseWithCovarianceStamped, 'initialpose', self.on_initialpose,
                                  QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE), callback_group=cb)
@@ -202,10 +204,22 @@ class PoseBootstrap(Node):
         return False
 
     # ---- attempt
+    def sensors_on(self):
+        with self.lock:
+            self.scans, self.odom = [], []
+        self.sensor_subs = [
+            self.create_subscription(LaserScan, 'scan', self.on_scan, qos_profile_sensor_data, callback_group=self.cb),
+            self.create_subscription(Odometry, 'odom', self.on_odom, qos_profile_sensor_data, callback_group=self.cb)]
+
+    def sensors_off(self):
+        for sub in self.sensor_subs:
+            self.destroy_subscription(sub)
+        self.sensor_subs = []
+
     def startup(self):
         time.sleep(self.start_delay)
-        if not self.wait_for(lambda: self.grid_msg is not None and bool(self.scans), 60.0):
-            self.status('ERROR', 'no map or scan within 60 s'); return
+        if not self.wait_for(lambda: self.grid_msg is not None, 60.0):
+            self.status('ERROR', 'no map within 60 s'); return
         if not self.nomotion.wait_for_service(timeout_sec=60.0):
             self.status('ERROR', 'AMCL (request_nomotion_update) not available within 60 s'); return
         if not self.wait_for(self.amcl_active, 30.0):
@@ -236,10 +250,14 @@ class PoseBootstrap(Node):
         if not self.attempt_lock.acquire(blocking=False):
             return self.status('SKIPPED', 'an attempt is already running')
         try:
+            self.sensors_on()
+            if not self.wait_for(lambda: bool(self.scans), 10.0):
+                return self.status('ERROR', 'no scan within 10 s')
             return self._attempt(force)
         except Exception as e:     # never leave the status silent
             return self.status('ERROR', f'{type(e).__name__}: {e}')
         finally:
+            self.sensors_off()
             self.attempt_lock.release()
 
     def _attempt(self, force):

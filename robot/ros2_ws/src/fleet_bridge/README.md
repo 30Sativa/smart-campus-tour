@@ -52,11 +52,26 @@ polls and `bus_interfaces` is not imported. Independent of `commands_enabled`; t
 | `STOP` | release a jog, call `head/stop` |
 | `ANGLE` | release a jog, send `head/set` (mode angle), fire and forget |
 | `SWEEP` | release a jog, call `head/sweep` (`HeadSweep`, `amplitude_deg` = `sweepDeg` or 0 for the default); stm32_bridge runs the whole left -> right -> back sweep |
+| `HOME` | release a jog, send `head/set` (mode home): find the stops, back to 0/0 (Staff "Tự canh chỉnh đầu camera", also before Start) |
 
 Each `seq` runs once, in order; a new backend `epoch` restarts the count. A failed ROS call is logged and the next
 command still runs. The latest `head/state` (fresh within 2 s) rides on the next poll. `head_wait_ms` (1500) must stay
 below `request_timeout_sec`. Code: `head.py` (pure logic, `test/test_head.py`), `head_worker.py` (HTTPS thread),
 `head_ros.py` (the only module allowed publishers, and only `head/step`/`head/jog`).
+
+**POI head (`head_poi_auto: true`, with `head_enabled`).** The robot turns the head at POIs by itself, from any Nav2
+goal sender (RViz, bus_manager, Fleet Commands):
+
+1. Every `head_poi_refresh_sec` (5 s) a background thread reads `GET /api/fleet/head/v1/pois`: the running Tour's
+   stops, or the verified POIs on the robot's map, each with the camera preset Staff set, plus `autoMotion`.
+   A failed refresh keeps the last good list.
+2. `head_ros.subscribe_poi_head` listens to `<head_poi_nav_action>/_action/status` (default `navigate_to_pose`).
+   The first, latched message is history and is ignored.
+3. A goal that starts `EXECUTING` -> `head/set` 0/0 (front). A goal that `SUCCEEDED` while the TF pose
+   `map -> base_footprint` is fresh and within `head_poi_radius_m` (0.6 m) of a POI -> that POI's preset
+   (`head/set` angle, or `head/sweep`); `NONE` does nothing. Nothing happens while `autoMotion` is false.
+
+Code: `poi_head.py` (pure logic, `test/test_poi_head.py`), `head_worker.PoiListWorker`.
 
 ## Command receiver (off by default)
 
@@ -100,7 +115,11 @@ only while the last HTTP 200 poll with a valid body is younger than
 `motion_permit_link_timeout_sec` (1.5 s). If the link is lost during a leg, the bridge cancels
 its own goal, holds the permit false until Nav2 ends that leg, and reports `FAILED`
 `LOCAL_LINK_LOSS`, or `ARRIVED` if arrival came first. `mode_manager` must run with
-`require_motion_permit: true`, and a person clears its latch with `motion_inhibit_reset`.
+`require_motion_permit: true`. A `BOOT` or `PERMIT_LOST` latch is cleared by the next leg the
+backend sends: just before that goal the bridge calls `motion_inhibit_reset`, which `mode_manager`
+still refuses while any goal is active, the permit is stale or the E-stop is on; a refusal rejects
+the GoTo with `MOTION_GATE_LATCHED` (ADR-0049 addendum). Restoring the link alone never clears it.
+An `ESTOP` latch still needs a person on the robot (`robot reset-latch`).
 If Nav2's result cannot be read, no terminal result is sent and telemetry reports `UNKNOWN`.
 
 **Readiness (ADR-0049).** With `commands_enabled` the bridge reports real `localized`,

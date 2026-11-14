@@ -64,7 +64,7 @@ Test chạy đủ 13 lệnh × 3 vị trí, rồi kiểm cây file không đổi
 |---|---|
 | manual | `ros2 launch robot_control manual_mode.launch.py robot_id:=<ID> lidar_yaw:=<LIDAR_YAW>` |
 | map | `… manual_mapping.launch.py … max_wheel_speed_mm_s:=<MAP_MAX_WHEEL_SPEED_MM_S> rviz:=false` |
-| nav | `ros2 launch robot_navigation navigation.launch.py … map:=<MAP> enable_camera:=false rviz:=false nav2_params_file:=<NAV2_PARAMS>` |
+| nav | `ros2 launch robot_navigation navigation.launch.py … map:=<MAP> enable_camera:=false rviz:=false nav2_params_file:=<NAV2_PARAMS>` (`enable_camera:=true` với `--camera`, §11) |
 
 **`robot teleop` từ chối chạy khi:**
 - chưa có `mode_manager`, hoặc có hai `mode_manager`;
@@ -218,3 +218,16 @@ một `fleet_bridge` duy nhất, gửi telemetry suốt; tự chuyển sang nh�
 chạy và về telemetry khi phiên đó kết thúc. Khi dịch vụ chạy, `robot fleet [--commands]` tay bị
 từ chối (không có hai bridge). `FLEET_SERVICE_COMMANDS=off` giữ chỉ telemetry. Cài:
 `robot/scripts/install-fleet-service`, rồi một lần `sudo loginctl enable-linger $USER`.
+
+## 11. Depth camera trong local costmap: `robot nav --camera`
+
+Astra Pro depth vào local costmap, đặt cạnh LiDAR (`robot/docs/depth-camera.md`). Mặc định tắt.
+
+| Lệnh / khóa profile | Việc làm |
+|---|---|
+| `ENABLE_CAMERA=true` | `robot nav` truyền `enable_camera:=true` |
+| `robot nav --camera` / `--no-camera` | Bật / tắt cho một lần chạy, bỏ qua giá trị profile |
+
+Launcher không từ chối nav vì camera. Khi không có USB `2bc5:0403`, thiếu `astra_camera` hoặc
+runtime cũ, nó in `WARNING … LiDAR-only` rồi chạy như baseline. Đọc mục 6 của
+`depth-camera.md` trước khi bật cho demo.
