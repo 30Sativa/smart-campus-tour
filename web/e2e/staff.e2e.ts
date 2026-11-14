@@ -41,9 +41,11 @@ test('staff: quick Tour create, then "Gửi cho đại diện"', async ({ page }
 test('staff: start check', async ({ page }) => {
   await signIn(page)
   await page.goto(`/staff/tours/${READY_ID}/start`)
-  await expect(page.getByRole('button', { name: /Bắt đầu Tour/ })).toBeVisible()
+  // ADR-0059: this page opens the Tour without moving the robot; the departure is on the live console.
+  await expect(page.getByRole('button', { name: /Mở Tour/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tự canh chỉnh đầu camera' })).toBeVisible()
   // Brief WS-0 item 3: the start check page names itself, not the Tour.
-  await capturePage(page, 'staff', 'start-check', { title: 'Kiểm tra trước khi bắt đầu' })
+  await capturePage(page, 'staff', 'start-check', { title: 'Mở Tour' })
 })
 
 test('staff: live console while RUNNING', async ({ page }) => {

@@ -11,10 +11,8 @@ namespace SmartCampus.Application.Features.Tours.Commands.NextTourStop;
 /// <summary>
 /// The Operator leaves the current POI (ADR-0043 D12): closes the visit once, then sends the next leg, or completes the Tour
 /// when the route ends at its last POI. From the start of a Tour opened with HoldAtStart it is the departure: the first
-/// leg, which also needs the four on-site confirmations. Movement checks apply only when a new command is created. In AUTO
-/// head mode a new leg also brings the head back to the front (ADR-0045 addendum).
-/// when the route ends at its last POI. Movement checks apply only when a new command is created. The robot itself turns
-/// the head to the front when the new leg starts (ADR-0045 addendum 14/11/2026).
+/// leg, which also needs the four on-site confirmations. Movement checks apply only when a new command is created. The
+/// robot itself turns the head to the front when the new leg starts (ADR-0045 addendum 14/11/2026).
 /// </summary>
 public sealed class NextTourStopCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
     IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings,
@@ -63,19 +61,7 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
                 TourId = tour.Id, EventType = TourLifecycleEvents.Departed, OccurredAt = now, RobotId = robotId,
                 RouteId = tour.ActiveRouteId, ActorUserId = command.Actor
             });
-        await TourAdvance.GoAsync(repository, settings, headMotion, tour, robot, map, target, command.Actor, now, ct);
-        tour.CloseVisit(now);
-        repository.AddEvent(new TourEvent
-        {
-            TourId = tour.Id, EventType = TourLifecycleEvents.VisitClosed, OccurredAt = now, RobotId = robotId,
-            RouteId = tour.ActiveRouteId, StopVisitId = tour.CurrentStopVisitId, ActorUserId = command.Actor
-        });
-        if (target is null)
-            await TourLegDispatch.CompleteAsync(repository, tour, robotId, command.Actor, now, ct);
-        else
-        {
-            TourLegDispatch.Begin(repository, settings, tour, robotId, map, target, command.Actor, now);
-        }
+        await TourAdvance.GoAsync(repository, settings, tour, map, target, command.Actor, now, ct);
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Next, fingerprint, now, "state");
         return new(tour.Id);

@@ -1,7 +1,6 @@
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
-using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Routes;
@@ -17,7 +16,7 @@ namespace SmartCampus.Application.Features.Tours.Commands.SkipTourStop;
 /// the route changes. Movement checks apply when a new leg is created.
 /// </summary>
 public sealed class SkipTourStopCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, HeadAutoMotion headMotion,
+    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings,
     TimeProvider clock) : IRequestHandler<SkipTourStopCommand, TourMutationResult>
 {
     public async Task<TourMutationResult> Handle(SkipTourStopCommand command, CancellationToken ct)
@@ -72,7 +71,7 @@ public sealed class SkipTourStopCommandHandler(ITourManagementRepository reposit
                 TourId = tour.Id, EventType = TourLifecycleEvents.Departed, OccurredAt = now, RobotId = robotId,
                 RouteId = tour.ActiveRouteId, ActorUserId = command.Actor
             });
-        await TourAdvance.GoAsync(repository, settings, headMotion, tour, robot, map, target, command.Actor, now, ct);
+        await TourAdvance.GoAsync(repository, settings, tour, map, target, command.Actor, now, ct);
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Skip, fingerprint, now, "state");
         return new(tour.Id);

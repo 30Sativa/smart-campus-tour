@@ -219,8 +219,10 @@ public sealed class FleetHeadChannelTests
             new FleetHeadWireCommand(44, "STOP", DateTimeOffset.UnixEpoch, null, null, null, null, null, null, null, null),
             new FleetHeadWireCommand(45, "ANGLE", DateTimeOffset.UnixEpoch, null, null, null, null, 0, 0, null, null),
             new FleetHeadWireCommand(46, "SWEEP", DateTimeOffset.UnixEpoch, null, null, null, null, null, null, null, null),
-            new FleetHeadWireCommand(47, "SWEEP", DateTimeOffset.UnixEpoch, null, null, null, null, null, null, null, 90)
+            new FleetHeadWireCommand(47, "SWEEP", DateTimeOffset.UnixEpoch, null, null, null, null, null, null, null, 90),
+            new FleetHeadWireCommand(48, "HOME", DateTimeOffset.UnixEpoch, null, null, null, null, null, null, null, null)
         };
+        Assert.Equal(expected.Count, wire.Length);
         for (var i = 0; i < wire.Length; i++)
         {
             var actual = JsonNode.Parse(JsonSerializer.Serialize(wire[i], Web))!.AsObject();

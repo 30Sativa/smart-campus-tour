@@ -3,7 +3,6 @@ using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Abstractions.Tours;
 using SmartCampus.Application.Common.Exceptions;
-using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Routes;
@@ -60,7 +59,7 @@ public sealed class ListAutoAdvanceDueQueryHandler(ITourManagementRepository rep
 /// the robot must never leave minutes after the time the Operator expected. The Operator can always press Next.
 /// </summary>
 public sealed class AutoAdvanceTourCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, HeadAutoMotion headMotion,
+    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings,
     ITourAutoAdvanceStore store, TimeProvider clock) : IRequestHandler<AutoAdvanceTourCommand, bool>
 {
     public const string NotReadyReason = "AUTO_ADVANCE_BLOCKED";
@@ -95,7 +94,7 @@ public sealed class AutoAdvanceTourCommandHandler(ITourManagementRepository repo
             TourId = tour.Id, EventType = TourLifecycleEvents.AutoAdvanced, OccurredAt = now, RobotId = robotId,
             RouteId = tour.ActiveRouteId, StopVisitId = tour.CurrentStopVisitId
         });
-        await TourAdvance.GoAsync(repository, settings, headMotion, tour, robot, map, target, null, now, ct);
+        await TourAdvance.GoAsync(repository, settings, tour, map, target, null, now, ct);
         return true;
     }
 

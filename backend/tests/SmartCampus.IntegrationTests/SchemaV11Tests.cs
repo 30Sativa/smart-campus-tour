@@ -1763,6 +1763,9 @@ public sealed class SchemaV11Tests
             services.AddSingleton<TimeProvider>(Clock);
             services.AddSingleton<IFleetTelemetryStore, InMemoryFleetTelemetryStore>();
             services.AddSingleton<IOperatorConsolePresence, UnavailableOperatorConsolePresence>();
+            // GET Tour reads the Operator's auto-advance switch (ADR-0059); registered like AddInfrastructure does.
+            services.AddSingleton<SmartCampus.Application.Common.Abstractions.Tours.ITourAutoAdvanceStore,
+                SmartCampus.Application.Features.Tours.InMemoryTourAutoAdvanceStore>();
             services.AddSingleton(new FleetCommandSettings());
             services.AddSingleton(new SmartCampus.Application.Common.Abstractions.Invitations.InvitationSettings(false, 24));
             services.AddSingleton(Shifts);
