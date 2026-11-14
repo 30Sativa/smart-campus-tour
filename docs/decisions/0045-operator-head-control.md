@@ -129,3 +129,11 @@ a non-POI point leaves the head at the front. The robot keeps the last good POI 
 including the last `autoMotion`. Hardware behaviour (head turns, no skipped steps at 1/4 with the gearbox) is READY
 FOR HARDWARE TEST, not verified by CI.
 
+## Addendum 14/11/2026 (4): "Tự canh chỉnh đầu camera" before Start (requested by team member Sơn)
+
+New Fleet Head kind `HOME` (no fields) → `stm32_bridge` `head/set` mode home. The Operator may send it while the Tour is
+`READY` (for the robot of its active reservation) as well as `RUNNING`; every other kind still needs `RUNNING`. The
+Staff start-check page shows the button under the camera picture, with the robot's head state (no reference, homing,
+ready); the live head panel has it too. The automatic HOME when the STM32 boots (`head_auto_home`) is kept, so the head
+holds its position from power-on; the button re-aligns it at the start point before each Tour.
+

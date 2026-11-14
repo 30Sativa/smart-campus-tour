@@ -4,6 +4,7 @@ Imported only when `head_enabled` is true, so the telemetry-only bridge needs no
   STEP  -> topic head/step (HeadStep)        JOG  -> topic head/jog (HeadJog), republished at 10 Hz until its TTL
   STOP  -> service head/stop (Trigger)       ANGLE -> action head/set (SetHead, mode angle), fire and forget
   SWEEP -> service head/sweep (HeadSweep): automatic left -> right -> back, run by stm32_bridge; sweepDeg -> amplitude_deg
+  HOME  -> action head/set (SetHead, mode home): find the stops, back to 0/0 (Staff button before Start)
 Feedback: topic head/state (HeadState) is sent back on the next poll.
 
 POI head (poi_head.py): subscribes to `<nav_action>/_action/status` (action_msgs/GoalStatusArray) and turns the head
@@ -68,6 +69,13 @@ class RosHeadActuator:
             return
         if result is not None and not result.success:
             self._log.warning(f'Head sweep refused by stm32_bridge: {result.message}')
+
+    def home(self) -> None:
+        if not self._set_client.server_is_ready():
+            raise RuntimeError('head/set unavailable')
+        goal = SetHead.Goal()
+        goal.mode = SetHead.Goal.MODE_HOME
+        self._set_client.send_goal_async(goal)
 
     def angle(self, pan_deg: float, tilt_deg: float) -> None:
         if not self._set_client.server_is_ready():

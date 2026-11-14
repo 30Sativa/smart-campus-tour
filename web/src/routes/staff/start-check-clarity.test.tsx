@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TourDetails, TourStartChecks } from '../../features/administration/tours/types'
@@ -86,5 +86,31 @@ describe('pre-start check wording', () => {
     const text = document.body.textContent ?? ''
     expect(text).not.toMatch(/QUEST_CONTROL_URL|quest-stream|miniPC|Fleet Sync|telemetry|M2\.3|FleetCommands|59488/i)
     expect(text).not.toMatch(/Console của người vận hành/)
+  })
+})
+
+describe('head alignment before Start (ADR-0045 HOME)', () => {
+  it('lets the Operator re-home the camera head of the robot the Tour holds, and shows it homing', async () => {
+    const sent: Array<{ path: string; body: unknown }> = []
+    let report = { state: 'IDLE', referenced: false, panDeg: 0, tiltDeg: 0, observedAt: null }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'http://localhost')
+      if (url.pathname.endsWith('/start-checks')) return json({ success: true, data: CHECKS })
+      if (url.pathname === '/api/staff/manage/tours/tour-1') return json({ success: true, data: TOUR })
+      if (url.pathname.endsWith('/head')) return json({ success: true, data: { enabled: true, mode: 'AUTO', robotCode: 'amr_01', connected: true, lastPollAt: null, head: report } })
+      if (url.pathname.endsWith('/head-commands')) {
+        sent.push({ path: url.pathname, body: JSON.parse(String(init?.body)) })
+        report = { ...report, state: 'HOMING' }
+        return json({ success: true, data: { seq: 1, robotCode: 'amr_01', issuedAt: '2026-11-04T01:50:00Z' } })
+      }
+      return json({ success: true, data: [] })
+    }))
+    renderPage()
+    expect(await screen.findByText('Đầu camera chưa có mốc. Bấm Tự canh chỉnh trước khi bắt đầu.')).toBeInTheDocument()
+    const button = screen.getByRole('button', { name: 'Tự canh chỉnh đầu camera' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    await waitFor(() => expect(sent).toEqual([{ path: '/api/staff/manage/tours/tour-1/head-commands', body: { kind: 'HOME' } }]))
+    expect(await screen.findByRole('button', { name: 'Đang canh chỉnh…' }, { timeout: 4000 })).toBeDisabled()
   })
 })

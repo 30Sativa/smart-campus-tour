@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crosshair, Lock, ScanLine } from 'lucide-react'
 import { HEAD_LOCK_TEXT, headRefusal, useHeadCommand, useHeadMode, useTourHeadStatus, type HeadCommand, type HeadLock } from './head-control'
+import { HeadHomeButton } from './HeadHomeButton'
 
 /**
  * One tap, in full motor steps: PAN 0,6° per step (3:1 gearbox) and TILT 0,36° per step (5:1 gearbox since 14/11/2026),
@@ -144,6 +145,9 @@ export function HeadControlPanel({ tourId, isOperator, operatorName }: { tourId:
         {!locked && ' Bấm một lần để xoay một nấc, giữ nút để xoay liên tục.'}
       </p>
       {message && <p role="alert" className="text-[13px] leading-5 font-semibold text-[#9d3428]">{message}</p>}
+      <div className="border-t border-[#f1f5f9] pt-3">
+        <HeadHomeButton tourId={tourId} isOperator={isOperator} operatorName={operatorName} compact />
+      </div>
     </div>
   )
 }

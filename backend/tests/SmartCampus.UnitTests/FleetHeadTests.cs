@@ -32,7 +32,8 @@ public sealed class FleetHeadTests
         new HeadCommandSpec("ANGLE", PanDeg: -170, TiltDeg: 18),
         new HeadCommandSpec("SWEEP"),
         new HeadCommandSpec("SWEEP", SweepDeg: 10),
-        new HeadCommandSpec("SWEEP", SweepDeg: 170)
+        new HeadCommandSpec("SWEEP", SweepDeg: 170),
+        new HeadCommandSpec("HOME")
     };
 
     [Theory]
@@ -43,7 +44,8 @@ public sealed class FleetHeadTests
     public static TheoryData<HeadCommandSpec, string> InvalidSpecs => new()
     {
         { new HeadCommandSpec("step", PanSteps: 1), "lower-case kind" },
-        { new HeadCommandSpec("HOME"), "HOME is not exposed" },
+        { new HeadCommandSpec("HOME", PanDeg: 0), "HOME takes no field" },
+        { new HeadCommandSpec("home"), "lower-case HOME" },
         { new HeadCommandSpec("STEP"), "STEP without movement" },
         { new HeadCommandSpec("STEP", PanSteps: 0, TiltSteps: 0), "STEP of zero" },
         { new HeadCommandSpec("STEP", PanSteps: 21), "too many steps" },
@@ -137,6 +139,49 @@ public sealed class FleetHeadTests
     }
 
     [Fact]
+    public async Task Send_HomeWhileReady_GoesToTheRobotTheTourHolds_SoStaffCanAlignTheHeadBeforeStart()
+    {
+        var channel = new FakeChannel { Connected = true };
+        var ready = Running() with { State = "READY", AssignedRobotId = null, RobotCode = null, ReservedRobotCode = "amr_02" };
+        var result = await Handler(channel, new FakeReader(ready)).Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("HOME")), default);
+
+        Assert.Equal(("amr_02", new HeadCommandSpec("HOME")), Assert.Single(channel.Queued));
+        Assert.Equal("amr_02", result.RobotCode);
+    }
+
+    [Fact]
+    public async Task Send_HomeWhileRunning_GoesToTheAssignedRobot()
+    {
+        var channel = new FakeChannel { Connected = true };
+        await Handler(channel, new FakeReader(Running() with { ReservedRobotCode = "amr_02" }))
+            .Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("HOME")), default);
+        Assert.Equal(Robot, Assert.Single(channel.Queued).Robot);
+    }
+
+    [Theory]
+    [InlineData("READY", null)]
+    [InlineData("SCHEDULED", "amr_02")]
+    [InlineData("COMPLETED", "amr_02")]
+    public async Task Send_HomeIsRefused_WithoutAHeldRobot_OrOutsideReadyAndRunning(string state, string? reserved)
+    {
+        var channel = new FakeChannel { Connected = true };
+        var tour = Running() with { State = state, AssignedRobotId = null, RobotCode = null, ReservedRobotCode = reserved };
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Handler(channel, new FakeReader(tour))
+            .Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("HOME")), default));
+        Assert.Equal("TOUR_STATE_INVALID", error.Code);
+        Assert.Empty(channel.Queued);
+    }
+
+    [Fact]
+    public async Task Send_OnlyHomeWorksBeforeStart()
+    {
+        var ready = Running() with { State = "READY", AssignedRobotId = null, RobotCode = null, ReservedRobotCode = "amr_02" };
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Handler(new FakeChannel { Connected = true }, new FakeReader(ready))
+            .Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("STEP", PanSteps: 1)), default));
+        Assert.Equal("TOUR_STATE_INVALID", error.Code);
+    }
+
+    [Fact]
     public async Task Send_RefusesARunningTourWithoutARobot()
     {
         var error = await Assert.ThrowsAsync<ConflictException>(() => Handler(new FakeChannel { Connected = true },
@@ -202,6 +247,15 @@ public sealed class FleetHeadTests
         var status = await new GetTourHeadStatusQueryHandler(new FakeReader(Running() with { State = "READY", AssignedRobotId = null, RobotCode = null }),
             new FakeChannel { Connected = true }, new FakeModes(), Settings()).Handle(new GetTourHeadStatusQuery(TourId), default);
         Assert.Equal((true, "AUTO", (string?)null, false), (status.Enabled, status.Mode, status.RobotCode, status.Connected));
+    }
+
+    [Fact]
+    public async Task Status_OfAReadyTour_ShowsTheRobotItHolds()
+    {
+        var ready = Running() with { State = "READY", AssignedRobotId = null, RobotCode = null, ReservedRobotCode = "amr_02" };
+        var status = await new GetTourHeadStatusQueryHandler(new FakeReader(ready), new FakeChannel { Connected = true }, new FakeModes(), Settings())
+            .Handle(new GetTourHeadStatusQuery(TourId), default);
+        Assert.Equal(("amr_02", true), (status.RobotCode, status.Connected));
     }
 
     [Fact]

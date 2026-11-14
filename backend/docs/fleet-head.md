@@ -35,6 +35,13 @@ Each press costs one unlocked `Tours`/`Robots` read.
 
 Environment form: `FleetHead__Enabled=true`.
 
+## HOME before Start
+
+`HOME` ("Tự canh chỉnh đầu camera" on the Staff start-check page and the live head panel) re-aligns the head against its
+stops. `SendHeadCommandHandler` accepts it for a `READY` Tour, queued to `TourHeadControlView.ReservedRobotCode` (the
+active `TourRobotReservations` row), as well as for a `RUNNING` Tour; every other kind still needs `RUNNING`.
+`GetTourHeadStatus` reports the held robot while `READY` so the page can show connection and `HOMING`.
+
 ## Head behaviour at POIs (ADR-0045 addendum 14/11/2026: the robot decides)
 
 Everything the VR camera head does at a POI is set on the POI, in Staff "Camera & tư liệu", as its camera preset

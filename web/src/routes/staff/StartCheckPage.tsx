@@ -19,6 +19,7 @@ import { operationRefusal } from '../../features/staff/operations/operation-erro
 import { RobotStatusCard, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { BlockerList, CheckGroups } from '../../features/staff/operations/StartCheckList'
 import { TourStepper } from '../../features/staff/operations/TourStepper'
+import { HeadHomeButton } from '../../features/staff/operations/live/HeadHomeButton'
 
 /** The four on-site confirmations the Start request carries (SRS §7); the server records them. */
 const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: string }> = [
@@ -179,6 +180,10 @@ export default function StartCheckPage() {
               : <p className="text-[13px] leading-5 text-muted">{cameraLease.isPending && ready
                 ? 'Đang xin quyền xem camera…'
                 : 'Máy chủ chưa cấp luồng camera cho robot này. Xem hình trên thiết bị trước khi xác nhận.'}</p>}</div>
+            {/* Re-align the head against its stops while the robot waits at the start, then check the picture. */}
+            <div className="border-t border-[#f1f5f9] p-3">
+              <HeadHomeButton tourId={summary.id} isOperator={!notOperator} operatorName={operator?.fullName} />
+            </div>
           </section>
           <section className={panelClass} aria-label="Bắt đầu Tour">
             <PanelHead title="Bắt đầu Tour" description="Nút chỉ mở khi đạt cả 2 bước dưới đây." />

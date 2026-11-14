@@ -40,7 +40,7 @@ Response: [`poll-response-commands.json`](poll-response-commands.json), or
 | `epoch` | The server's current epoch. Send it back next time. |
 | `commands` | In increasing `seq`. Only commands newer than `afterSeq` (same epoch) and not older than `FleetHead:MaxCommandAgeMs` (default 1000). Never more than the server keeps (32 per robot). |
 | `seq` | Integer, increasing per robot within an epoch. Execute each `seq` at most once; ignore `seq ≤` the last executed. |
-| `kind` | `STEP`, `JOG`, `STOP`, `ANGLE`, `SWEEP`. |
+| `kind` | `STEP`, `JOG`, `STOP`, `ANGLE`, `SWEEP`, `HOME` (added 14/11/2026). |
 | `sweepDeg` | `SWEEP` only, optional: degrees per side, integer 10..170. Absent = the robot's default (135°). |
 | `issuedAt` | Server time the Operator's request was accepted (UTC). Informational; the robot does not compare clocks. |
 | `panSteps`, `tiltSteps` | `STEP` only: full motor steps, −20..20, at least one non-zero → ROS `head/step`. |
@@ -49,6 +49,10 @@ Response: [`poll-response-commands.json`](poll-response-commands.json), or
 | `panDeg`, `tiltDeg` | `ANGLE` only: absolute degrees from the homed zero → ROS `head/set` (mode angle). The robot accepts pan −180..180, tilt −90..90 on the wire; the backend only queues the firmware soft limits, pan −170..170 and tilt −18..18. Since 14/11/2026 the backend no longer queues POI motion; the robot does it (see POIs below). |
 
 `STOP` → ROS `head/stop`, and also ends an active jog.
+
+`HOME` (no fields) → ROS `head/set` mode home, after ending an active jog: PAN and TILT turn into their mechanical stops
+and back to 0/0, about 15 s (`head/state` is `HOMING` meanwhile). A robot older than this contract rejects the whole
+response once (unknown kind) until the command ages out after `FleetHead:MaxCommandAgeMs`.
 
 `SWEEP` (optional `sweepDeg`) → ROS `head/sweep` (`HeadSweep.amplitude_deg`, 0 when absent), after ending an
 active jog: `stm32_bridge` turns PAN left `sweepDeg` (default 135°), then right twice that, then back to where it
@@ -99,7 +103,12 @@ Body, one of:
 { "kind": "ANGLE", "panDeg": 0, "tiltDeg": 0 }
 { "kind": "SWEEP" }
 { "kind": "SWEEP", "sweepDeg": 90 }
+{ "kind": "HOME" }
 ```
+
+`HOME` is the Staff button "Tự canh chỉnh đầu camera". Unlike the other kinds it is also accepted while the Tour is
+`READY`, for the robot the Tour holds (its active reservation), so the head can be aligned at the start point before
+Start. The other kinds still need a `RUNNING` Tour.
 
 Fields that do not belong to the kind must be absent or `null`. Hold a button = send `JOG` about every 200 ms (well
 under `ttlMs`); release = `JOG` with `0,0` (or `STOP`).
@@ -111,7 +120,7 @@ under `ttlMs`); release = `JOG` with `0,0` (or `STOP`).
 | 403 | | Not this Tour's Operator. |
 | 404 | | Unknown Tour. |
 | 409 | `HEAD_CONTROL_DISABLED` | `FleetHead:Enabled` is false. |
-| 409 | `TOUR_STATE_INVALID` | Tour is not RUNNING or has no assigned robot. |
+| 409 | `TOUR_STATE_INVALID` | Tour is not RUNNING or has no assigned robot (`HOME`: not READY with a held robot either). |
 | 409 | `HEAD_ROBOT_NOT_CONNECTED` | The robot has not polled within `FleetHead:RobotConnectedWithinMs`. |
 | 429 | `RATE_LIMITED` | `FleetHead` policy. |
 
@@ -130,5 +139,5 @@ The mode is kept in API memory per Tour; after an API restart every Tour is back
 ### `GET /api/staff/manage/tours/{id}/head`
 
 Any Staff. `data` = `{ enabled, mode, robotCode, connected, lastPollAt, head }`, where `head` is the robot's last report
-(`state`, `referenced`, `panDeg`, `tiltDeg`, `observedAt`, `receivedAt`) or `null`. `robotCode` is `null` before
-Start.
+(`state`, `referenced`, `panDeg`, `tiltDeg`, `observedAt`, `receivedAt`) or `null`. `robotCode` is the assigned robot,
+or while `READY` the robot the Tour holds; `null` when there is neither.
