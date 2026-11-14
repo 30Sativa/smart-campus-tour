@@ -90,7 +90,7 @@ ros2 run stm32_bridge head_teleop --ros-args -r __ns:=/robot_01
 
 | Phím | Tác dụng |
 |---|---|
-| ← → ↑ ↓ (hoặc A D W S) | **Nhấn** = 1 bước (PAN 0,6°, TILT 1,8°). **Giữ** = quay liên tục. **Nhả** = dừng |
+| ← → ↑ ↓ (hoặc A D W S) | **Nhấn** = 1 bước (PAN 0,6°, TILT 0,36°). **Giữ** = quay liên tục. **Nhả** = dừng |
 | `h` | HOME: PAN quay phải tới vật cản rồi về 0°, TILT cúi tới vật cản rồi về thẳng (khoảng 13 s). Bridge đã tự HOME một lần khi STM32 khởi động |
 | `0` | Về góc 0°/0° (cần đã HOME) |
 | Space | Dừng (`head/stop`) |

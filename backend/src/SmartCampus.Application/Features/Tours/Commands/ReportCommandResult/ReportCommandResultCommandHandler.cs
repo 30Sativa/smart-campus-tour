@@ -3,7 +3,6 @@ using System.Text.Json;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
-using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
@@ -16,7 +15,7 @@ namespace SmartCampus.Application.Features.Tours.Commands.ReportCommandResult;
 /// Accepted whatever <c>FleetCommands:Enabled</c> says: what the robot reports it did is never refused.
 /// </summary>
 public sealed class ReportCommandResultCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, HeadAutoMotion headMotion, TimeProvider clock)
+    IRouteRevisionRepository revisions, TimeProvider clock)
     : IRequestHandler<ReportCommandResultCommand, CommandResultAck>
 {
     public async Task<CommandResultAck> Handle(ReportCommandResultCommand result, CancellationToken ct)
@@ -54,7 +53,7 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
         if (command.Kind == RobotCommandKinds.GoTo && !command.IsOpen &&
             await repository.LockOpenCancelAsync(command.Id, ct) is { } cancel)
             cancel.CloseCancel(now);
-        if (current) await ApplyToTourAsync(tour, command, result.RobotCode, now, ct);
+        if (current) await ApplyToTourAsync(tour, command, now, ct);
         return new(true, false, command.State);
     }
 
@@ -79,7 +78,7 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
         }
     }
 
-    private async Task ApplyToTourAsync(Tour tour, RobotCommand command, string robotCode, DateTimeOffset now, CancellationToken ct)
+    private async Task ApplyToTourAsync(Tour tour, RobotCommand command, DateTimeOffset now, CancellationToken ct)
     {
         if (command.State == RobotCommandStates.Rejected)
             tour.RequireAssistance(TourRuntime.CommandRejected, now);
@@ -89,10 +88,8 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
         {
             var stops = await revisions.GetStopsAsync(tour.RouteRevisionId!.Value, ct);
             var stop = stops.Single(item => item.Id == command.RouteRevisionStopId);
+            // The robot turns its head to the POI's camera preset by itself (ADR-0045 addendum 14/11/2026).
             tour.ArriveAtStop(stop.Id, now.AddSeconds(stop.DwellSeconds), now);
-            // AUTO head mode does what the POI's camera preset says (in memory, best effort). Queued before the commit:
-            // if the commit failed the head would still turn, which is harmless; an exact repeat never gets here.
-            headMotion.QueueArrival(tour.Id, robotCode, stop.CameraPreset);
         }
         // A CANCELLED nobody asked for during a running leg needs the Operator like a failure does.
         else if (command.State is RobotCommandStates.Failed or RobotCommandStates.Cancelled)

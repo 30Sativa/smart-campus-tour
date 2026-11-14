@@ -5,6 +5,9 @@ Imported only when `head_enabled` is true, so the telemetry-only bridge needs no
   STOP  -> service head/stop (Trigger)       ANGLE -> action head/set (SetHead, mode angle), fire and forget
   SWEEP -> service head/sweep (HeadSweep): automatic left -> right -> back, run by stm32_bridge; sweepDeg -> amplitude_deg
 Feedback: topic head/state (HeadState) is sent back on the next poll.
+
+POI head (poi_head.py): subscribes to `<nav_action>/_action/status` (action_msgs/GoalStatusArray) and turns the head
+with the same actuator: front when a goal starts, the POI's camera preset when a goal succeeds near a POI.
 """
 
 from __future__ import annotations
@@ -14,13 +17,16 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
+from action_msgs.msg import GoalStatusArray
 from bus_interfaces.action import SetHead
 from bus_interfaces.msg import HeadJog, HeadState, HeadStep
 from bus_interfaces.srv import HeadSweep
 from rclpy.action import ActionClient
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_srvs.srv import Trigger
 
 from .head import HeadCommandApplier, head_state_report
+from .poi_head import PoiHeadDirector
 
 STATE_STALE_SEC = 2.0
 
@@ -95,8 +101,21 @@ class RosHeadState:
             return dict(self._report)
 
 
-def create_ros_head(node, on_log) -> tuple[HeadCommandApplier, RosHeadState]:
-    applier = HeadCommandApplier(RosHeadActuator(node), on_log=on_log)
+def create_ros_head(node, on_log) -> tuple[HeadCommandApplier, RosHeadState, RosHeadActuator]:
+    actuator = RosHeadActuator(node)
+    applier = HeadCommandApplier(actuator, on_log=on_log)
     state = RosHeadState(node)
     node.create_timer(0.1, lambda: applier.tick(time.monotonic()))
-    return applier, state
+    return applier, state, actuator
+
+
+def subscribe_poi_head(node, director: PoiHeadDirector, nav_action: str, pose_provider) -> None:
+    """pose_provider() -> (x, y) in the map frame, or None while the TF pose is stale."""
+    # Nav2 publishes goal status latched (transient local); the first message is the backlog the director ignores.
+    latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+
+    def on_status(msg) -> None:
+        statuses = [(bytes(item.goal_info.goal_id.uuid), int(item.status)) for item in msg.status_list]
+        director.on_goal_status(statuses, pose_provider())
+
+    node.create_subscription(GoalStatusArray, f'{nav_action}/_action/status', on_status, latched)

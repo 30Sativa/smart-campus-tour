@@ -75,6 +75,7 @@ public static class DependencyInjection
         services.AddSingleton<IHeadCommandChannel, InMemoryHeadCommandChannel>();
         services.AddSingleton<ITourHeadModeStore, InMemoryTourHeadModeStore>();
         services.AddScoped<ITourHeadControlReader, EfTourHeadControlReader>();
+        services.AddScoped<IRobotHeadPoiReader, EfRobotHeadPoiReader>();
         // ADR-0052: the Quest camera runs only while a Tour runs or a Staff page holds a lease. In memory, like head control.
         services.AddSingleton(new FleetCameraSettings(configuration.GetValue<int?>("FleetCamera:LeaseSeconds") ?? 120,
             configuration.GetValue<int?>("FleetCamera:PollSeconds") ?? 5,

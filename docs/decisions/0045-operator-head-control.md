@@ -102,3 +102,30 @@ would write SQL rows several times per second and block navigation behind the on
 - Fleet Head v1 `SWEEP` gains optional `sweepDeg`; ROS `head/sweep` changes from `std_srvs/Trigger` to
   `bus_interfaces/srv/HeadSweep` (`amplitude_deg`, 0 = default), so `bus_interfaces` must be rebuilt.
 - The route-level head steps (`RouteStops.HeadSteps`) are untouched; nothing on the robot reads them.
+
+## Addendum 14/11/2026 (3): the robot turns the head at POIs itself (requested by team member Sơn)
+
+**Context.** The backend queued a POI's preset only when the robot reported `ARRIVED` over Fleet Commands, and Fleet
+Commands dispatch stays off on the physical robot until M2.3. So the head never turned at a POI on the real robot.
+The head hardware also changed: both DRV8825 now run 1/4 microstep (quieter), and TILT drives the head through a 5:1
+planetary gearbox to hold the head + Meta Quest 3 (~2 kg, centre of mass ~183 mm above the axis).
+
+**Decision.**
+
+1. New robot endpoint `GET /api/fleet/head/v1/pois` (contract `docs/contracts/fleet-head/v1/`): the running Tour's
+   route stops with their frozen presets, otherwise the latest PASS revision of each POI on the robot's assigned map,
+   plus `autoMotion = FleetHead:Enabled && mode == AUTO`.
+2. `fleet_bridge` (`head_poi_auto`, needs `head_enabled`) watches `navigate_to_pose/_action/status` for any goal
+   sender: a goal that starts executing → `ANGLE 0/0`; a goal that succeeds within `head_poi_radius_m` of a POI → that
+   POI's preset. The first latched status message is ignored.
+3. The backend no longer queues head commands on `ARRIVED` or Next (`HeadAutoMotion` removed). Operator buttons and
+   AUTO/MANUAL are unchanged; MANUAL now reaches the robot as `autoMotion: false` within one refresh (5 s).
+4. Firmware `head_core.h`: `HEAD_MICROSTEP` 4, `HEAD_TILT_GEAR_RATIO` 5. TILT stays ±18° (stop at 20° down): at ±27°
+   the motor would need ~0.39 N·m of its 0.42 N·m and would skip steps. STEP keeps counting full motor steps, so one
+   TILT tap is now 0.36° (the Operator console sends 15 per tap, ~5.4°).
+
+**Consequences.** Head motion at POIs works without backend dispatch and without a round trip per arrival. A goal to
+a non-POI point leaves the head at the front. The robot keeps the last good POI list if the backend is unreachable,
+including the last `autoMotion`. Hardware behaviour (head turns, no skipped steps at 1/4 with the gearbox) is READY
+FOR HARDWARE TEST, not verified by CI.
+

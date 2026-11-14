@@ -2,9 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crosshair, Lock, ScanLine } from 'lucide-react'
 import { HEAD_LOCK_TEXT, headRefusal, useHeadCommand, useHeadMode, useTourHeadStatus, type HeadCommand, type HeadLock } from './head-control'
 
-/** One tap: PAN 0,6° and TILT 1,8° per full step (`robot/ros2_ws/src/stm32_bridge/HEAD_CONTROL.md`). */
+/**
+ * One tap, in full motor steps: PAN 0,6° per step (3:1 gearbox) and TILT 0,36° per step (5:1 gearbox since 14/11/2026),
+ * so both turn about 9° / 5,4° per tap (`robot/ros2_ws/src/stm32_bridge/HEAD_CONTROL.md`). The backend allows ±20.
+ */
 const PAN_TAP_STEPS = 15
-const TILT_TAP_STEPS = 3
+const TILT_TAP_STEPS = 15
 /** A press longer than this turns the head until release; the backend's JOG lives 600 ms, so it is repeated. */
 const HOLD_AFTER_MS = 350
 const JOG_EVERY_MS = 200

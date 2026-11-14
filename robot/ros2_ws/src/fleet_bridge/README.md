@@ -58,6 +58,20 @@ command still runs. The latest `head/state` (fresh within 2 s) rides on the next
 below `request_timeout_sec`. Code: `head.py` (pure logic, `test/test_head.py`), `head_worker.py` (HTTPS thread),
 `head_ros.py` (the only module allowed publishers, and only `head/step`/`head/jog`).
 
+**POI head (`head_poi_auto: true`, with `head_enabled`).** The robot turns the head at POIs by itself, from any Nav2
+goal sender (RViz, bus_manager, Fleet Commands):
+
+1. Every `head_poi_refresh_sec` (5 s) a background thread reads `GET /api/fleet/head/v1/pois`: the running Tour's
+   stops, or the verified POIs on the robot's map, each with the camera preset Staff set, plus `autoMotion`.
+   A failed refresh keeps the last good list.
+2. `head_ros.subscribe_poi_head` listens to `<head_poi_nav_action>/_action/status` (default `navigate_to_pose`).
+   The first, latched message is history and is ignored.
+3. A goal that starts `EXECUTING` -> `head/set` 0/0 (front). A goal that `SUCCEEDED` while the TF pose
+   `map -> base_footprint` is fresh and within `head_poi_radius_m` (0.6 m) of a POI -> that POI's preset
+   (`head/set` angle, or `head/sweep`); `NONE` does nothing. Nothing happens while `autoMotion` is false.
+
+Code: `poi_head.py` (pure logic, `test/test_poi_head.py`), `head_worker.PoiListWorker`.
+
 ## Command receiver (off by default)
 
 `commands_enabled: true` adds a Fleet Commands v1 poll loop

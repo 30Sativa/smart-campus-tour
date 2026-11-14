@@ -1297,9 +1297,10 @@ buttons on the Operator console:
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE\|SWEEP, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?, sweepDeg?}` (ANGLE within pan ±170, tilt ±18; `sweepDeg` 10..170, SWEEP only); 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
-| PUT | `/api/staff/manage/tours/{id}/head-mode` | `{mode: AUTO\|MANUAL}`, Operator only, until the Tour ends. AUTO (default) turns each POI's camera preset into one command at arrival (ANGLE, SWEEP with its `sweepDeg`, nothing for NONE) and queues `ANGLE 0/0` when Next starts the following leg (ADR-0045 addenda); MANUAL skips both. In memory. |
+| PUT | `/api/staff/manage/tours/{id}/head-mode` | `{mode: AUTO\|MANUAL}`, Operator only, until the Tour ends. AUTO (default) lets the robot turn the head to each POI's camera preset itself; MANUAL sets `autoMotion: false` on `GET pois`. In memory. |
 | GET | `/api/staff/manage/tours/{id}/head` | Any Staff: `{enabled, mode, robotCode, connected, lastPollAt, head}` from the robot's last poll. |
 | POST | `/api/fleet/head/v1/poll` | Robot scheme. Long poll `{epoch, afterSeq, waitMs, head}` → `{epoch, commands[]}`. |
+| GET | `/api/fleet/head/v1/pois` | Robot scheme (added 14/11/2026). `{source: TOUR\|MAP\|NONE, tourId, mapVersionId, mode, autoMotion, pois[{id, name, x, y, yaw, cameraPreset}]}`: the running Tour's stops, else the verified POIs on the robot's map. |
 
 Wire: `docs/contracts/fleet-head/v1/`. Commands live only in API memory per robot
 (epoch + seq, last 32, never older than `FleetHead:MaxCommandAgeMs`); no
@@ -1311,6 +1312,12 @@ closed tab stops the head. On the robot, `fleet_bridge` (`head_enabled`) maps
 `sweepDeg` or 0 for the default 135°: left, right, back to the start at 30°/s; any button stops it), and reports
 `head/state` on its next poll. Same
 single-API-instance limit as Fleet Sync (ADR-0019).
+
+POI head motion is robot-side (ADR-0045 addendum 14/11/2026): `fleet_bridge` (`head_poi_auto`) refreshes `GET pois`
+every 5 s and watches `navigate_to_pose/_action/status`; a goal that starts executing turns the head to `ANGLE 0/0`,
+a goal that succeeds within 0.6 m of a POI runs that POI's preset (`ANGLE` or `SWEEP`), only while `autoMotion`. The
+backend no longer queues head commands on `ARRIVED` or Next. Head hardware since 14/11/2026: DRV8825 1/4 microstep on
+both axes, PAN 3:1 and TILT 5:1 planetary gearboxes; soft limits unchanged (PAN ±170°, TILT ±18°).
 
 **Quest camera on demand (ADR-0052, proposed 09/11/2026; robot side opt-in).**
 The robot's Quest stream runs only while a Tour assigned to it is `RUNNING` or a Staff
