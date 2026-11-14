@@ -676,6 +676,46 @@ def test_relocalize_needs_an_auto_pose_nav_session(world):
             holder.wait(10)
             time.sleep(1.1)                # session directories are named to the second
 
+# ---- depth camera in the local costmap (robot nav --camera) -----------------------------------
+def camera_runtime(w, driver=True, lean=True, usb=True):
+    """astra_camera in the base install, orbbec_bringup in the overlay, a fake USB tree."""
+    if driver:
+        fake_prefix(w['root'] / 'ros2_ws' / 'install' / 'base', ['astra_camera'])
+    fake_prefix(w['overlay'] / 'nav', ['orbbec_bringup'])
+    launch = w['overlay'] / 'nav' / 'share' / 'orbbec_bringup' / 'launch'
+    launch.mkdir(parents=True, exist_ok=True)
+    (launch / 'astra_pro.launch.py').write_text("'use_uvc_camera': False,\n" if lean else "# old\n")
+    dev = w['tmp'] / 'usb' / '1-2'
+    dev.mkdir(parents=True, exist_ok=True)
+    (dev / 'idVendor').write_text('2bc5\n')
+    (dev / 'idProduct').write_text('0403\n' if usb else '0501\n')     # 0501 = the RGB half only
+    return {'SCT_USB_ROOT': str(w['tmp'] / 'usb')}
+
+
+def test_camera_is_opt_in_per_run_or_profile(world):
+    usb = camera_runtime(world)
+    assert 'enable_camera:=false' in dry(world, 'nav', extra_env=usb)['argv']
+    assert 'enable_camera:=true' in dry(world, 'nav', '--camera', extra_env=usb)['argv']
+    profile(world, ENABLE_CAMERA='true')
+    assert 'enable_camera:=true' in dry(world, 'nav', extra_env=usb)['argv']
+    assert 'enable_camera:=false' in dry(world, 'nav', '--no-camera', extra_env=usb)['argv']
+    r = robot(world, 'nav', '--camera', '--no-camera', '--dry-run', extra_env=usb)
+    assert r.returncode == 2                                       # mutually exclusive
+    assert not any(x.startswith('enable_camera') for x in dry(world, 'map', extra_env=usb)['argv'])   # nav only
+
+
+@pytest.mark.parametrize('broken, why', [(dict(usb=False), 'no Astra depth device'),
+                                         (dict(lean=False), 'predates the 14/11 camera settings'),
+                                         (dict(driver=False), 'astra_camera')])
+def test_camera_problem_falls_back_to_lidar_only(world, broken, why):
+    # the camera is supplementary (ADR-0001): a missing camera never stops nav
+    usb = camera_runtime(world, **broken)
+    r = robot(world, 'nav', '--camera', '--dry-run', extra_env=usb)
+    assert r.returncode == 0, r.stderr
+    assert 'enable_camera:=false' in json.loads(r.stdout)['argv']
+    assert 'LiDAR-only' in r.stderr and why in r.stderr, r.stderr
+
+
 # ---- fleet service (robot fleet --service, run by sct-fleet.service) -----------------------
 # The supervisor gives the bridge a clean ROS environment, so the fake reads its knobs from files.
 FAKE_BRIDGE = '''#!/bin/sh
