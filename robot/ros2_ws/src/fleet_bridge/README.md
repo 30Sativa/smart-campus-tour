@@ -100,7 +100,11 @@ only while the last HTTP 200 poll with a valid body is younger than
 `motion_permit_link_timeout_sec` (1.5 s). If the link is lost during a leg, the bridge cancels
 its own goal, holds the permit false until Nav2 ends that leg, and reports `FAILED`
 `LOCAL_LINK_LOSS`, or `ARRIVED` if arrival came first. `mode_manager` must run with
-`require_motion_permit: true`, and a person clears its latch with `motion_inhibit_reset`.
+`require_motion_permit: true`. A `BOOT` or `PERMIT_LOST` latch is cleared by the next leg the
+backend sends: just before that goal the bridge calls `motion_inhibit_reset`, which `mode_manager`
+still refuses while any goal is active, the permit is stale or the E-stop is on; a refusal rejects
+the GoTo with `MOTION_GATE_LATCHED` (ADR-0049 addendum). Restoring the link alone never clears it.
+An `ESTOP` latch still needs a person on the robot (`robot reset-latch`).
 If Nav2's result cannot be read, no terminal result is sent and telemetry reports `UNKNOWN`.
 
 **Readiness (ADR-0049).** With `commands_enabled` the bridge reports real `localized`,
