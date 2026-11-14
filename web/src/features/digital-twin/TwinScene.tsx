@@ -38,6 +38,10 @@ export type TwinRobot = {
   groundY?: number
   exactPose?: boolean
   traffic?: 'hold' | 'yield' | 'clear'
+  /** A simulated robot drawn beside real ones: patrol styling, dimmed, labelled "Mô phỏng". Defaults to the scene's `syntheticPatrol`. */
+  synthetic?: boolean
+  /** Replaces the label's " · dữ liệu cũ", e.g. "dữ liệu cũ, 3 phút trước". */
+  labelNote?: string
 }
 
 /** A request to fly the camera to a scene point; a new `id` repeats the flight to the same point. */
@@ -52,6 +56,8 @@ export type TwinRoute = {
   /** ROS map -> scene for the stops, from the map's calibration; identity when absent. */
   transform?: Affine2D
   groundY?: number
+  /** Size of the stop markers against the default; a model drawn smaller (NVH V3) shrinks them with its robots. */
+  markerScale?: number
 }
 
 export type TwinSceneProps = {
@@ -73,6 +79,8 @@ export type TwinSceneProps = {
   onSelectCamera?: (point: number) => void
   tool?: TwinTool
   focus?: TwinFocus | null
+  /** Draw the route's stops even with labels off; defaults to `showLabels` (the operations twin's behaviour). */
+  showRoute?: boolean
 }
 
 const STOP_COLOR: Record<RouteStop['status'], string> = {
@@ -121,9 +129,9 @@ const ground = (pose: MapPose, transform?: Affine2D, groundY = 0): [number, numb
   return [position[0], groundY, position[2]]
 }
 
-function Marker({ position, color, label, number, emphasis, showLabel, fixedLabel = false, transform, groundY }: { position: MapPose; color: string; label: string; number: string; emphasis: 'target' | 'selected' | null; showLabel: boolean; fixedLabel?: boolean; transform?: Affine2D; groundY?: number }) {
+function Marker({ position, color, label, number, emphasis, showLabel, fixedLabel = false, transform, groundY, scale = 1 }: { position: MapPose; color: string; label: string; number: string; emphasis: 'target' | 'selected' | null; showLabel: boolean; fixedLabel?: boolean; transform?: Affine2D; groundY?: number; scale?: number }) {
   return (
-    <group position={ground(position, transform, groundY)}>
+    <group position={ground(position, transform, groundY)} scale={scale}>
       <mesh position={[0, 0.03, 0]} rotation={fixedLabel ? [-Math.PI / 2, 0, 0] : [0, 0, 0]}>
         {fixedLabel ? <ringGeometry args={[0.6 * PATROL_MODEL_SCALE, 0.7 * PATROL_MODEL_SCALE, 48]} /> : <cylinderGeometry args={[emphasis ? 0.34 : 0.26, emphasis ? 0.34 : 0.26, 0.06, 32]} />}
         {fixedLabel ? <meshBasicMaterial color="#7dc7e8" toneMapped={false} /> : <meshStandardMaterial color={color} />}
@@ -134,7 +142,7 @@ function Marker({ position, color, label, number, emphasis, showLabel, fixedLabe
           <meshBasicMaterial color={emphasis === 'selected' ? '#1f314d' : '#2f62b8'} transparent opacity={0.75} />
         </mesh>
       )}
-      <Html position={[0, fixedLabel ? 0.06 : 0.45, 0]} center distanceFactor={fixedLabel ? undefined : 14} zIndexRange={[10, 0]}>
+      <Html position={[0, fixedLabel ? 0.06 : 0.45, 0]} center distanceFactor={fixedLabel ? undefined : 14 * scale} zIndexRange={[10, 0]}>
         <span aria-label={fixedLabel ? `Điểm point ${number}` : undefined} className={`pointer-events-none inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap ${fixedLabel ? 'text-[#40546f]' : emphasis === 'target' ? 'bg-[#2f62b8] text-white shadow-sm' : emphasis === 'selected' ? 'bg-[#1f314d] text-white shadow-sm' : 'bg-white/90 text-[#40546f] shadow-sm'}`}>
           <span className="tabular-nums">{number}</span>
           {!fixedLabel && (showLabel || emphasis) && <span>{label}</span>}
@@ -150,7 +158,7 @@ function Marker({ position, color, label, number, emphasis, showLabel, fixedLabe
  * through walls would pretend it is (scope §11.3).
  */
 function Route({ route, selectedStopId, showLabels }: { route: TwinRoute; selectedStopId?: string | null; showLabels: boolean }) {
-  const place = { transform: route.transform, groundY: route.groundY }
+  const place = { transform: route.transform, groundY: route.groundY, scale: route.markerScale ?? 1 }
   return (
     <group>
       {route.stops.map((stop, index) => (
@@ -165,7 +173,7 @@ function Route({ route, selectedStopId, showLabels }: { route: TwinRoute; select
  * The WebGL half of the operational twin. Kept apart from the DOM wrapper so
  * tests can replace it: jsdom has no WebGL (web/AGENTS.md §5).
  */
-export default function TwinScene({ robots, route, selectedStopId, overhead, showLabels, modelKey, syntheticPatrol = false, patrolPaths = [], seconds = 0, onSelectRobot, heat = {}, viewMode = 'scene', sensors = false, showCameras = false, cameraPoint = 0, onSelectCamera, tool = 'select', focus }: TwinSceneProps) {
+export default function TwinScene({ robots, route, selectedStopId, overhead, showLabels, modelKey, syntheticPatrol = false, patrolPaths = [], seconds = 0, onSelectRobot, heat = {}, viewMode = 'scene', sensors = false, showCameras = false, cameraPoint = 0, onSelectCamera, tool = 'select', focus, showRoute }: TwinSceneProps) {
   const campusView = modelKey === 'nvh-v3'
   const viewX = (overhead ? -0.01 : -14) * Math.cos(CAMPUS_VIEW_YAW)
   const viewZ = (overhead ? 0.01 : 14) * Math.sin(CAMPUS_VIEW_YAW)
@@ -207,29 +215,29 @@ export default function TwinScene({ robots, route, selectedStopId, overhead, sho
           return <group key={p.poi} position={[0, PATROL_FLOOR_Y, 0]}><Marker position={{ x: position[0], y: -position[2] }} color="#5997b4" label="60 giây" number={String(p.poi)} showLabel={showLabels} emphasis={null} fixedLabel /></group>
         })}
       </group>}
-      {route && showLabels && <Route route={route} selectedStopId={selectedStopId} showLabels={showLabels} />}
-      {robots.map((robot) => (
-        <RobotModel key={robot.id} cad={syntheticPatrol} onSelect={onSelectRobot ? () => onSelectRobot(robot.id) : undefined} pose={{ x: robot.pose.x, y: robot.pose.y, yaw: robot.pose.yaw ?? 0 }} transform={robot.transform} accent={robot.color} pulse={robot.active && !robot.stale} dimmed={robot.stale || (!robot.focused && Boolean(route))} stale={robot.stale} headYaw={robot.headYaw} scale={robot.scale} groundY={robot.groundY} exactPose={robot.exactPose} showDirection={!syntheticPatrol}>
-          {syntheticPatrol && viewMode === 'traffic' && <mesh position={[0,0.025,0]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[0.72,0.85,40]}/><meshBasicMaterial color={robot.traffic==='hold'?'#dc2626':robot.traffic==='yield'?'#f59e0b':'#16a34a'} transparent opacity={0.75}/></mesh>}
-          {syntheticPatrol && sensors && <mesh position={[0,0.02,0]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[0.2,4,48,1,-Math.PI*0.75,Math.PI*1.5]}/><meshBasicMaterial color={robot.color} transparent opacity={0.06} depthWrite={false}/></mesh>}
+      {route && (showRoute ?? showLabels) && <Route route={route} selectedStopId={selectedStopId} showLabels={showLabels} />}
+      {robots.map((robot) => { const synthetic = robot.synthetic ?? syntheticPatrol; return (
+        <RobotModel key={robot.id} cad={synthetic} onSelect={onSelectRobot ? () => onSelectRobot(robot.id) : undefined} pose={{ x: robot.pose.x, y: robot.pose.y, yaw: robot.pose.yaw ?? 0 }} transform={robot.transform} accent={robot.color} pulse={robot.active && !robot.stale} dimmed={robot.stale || robot.synthetic === true || (!robot.focused && Boolean(route))} stale={robot.stale} headYaw={robot.headYaw} scale={robot.scale} groundY={robot.groundY} exactPose={robot.exactPose} showDirection={!synthetic}>
+          {synthetic && viewMode === 'traffic' && <mesh position={[0,0.025,0]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[0.72,0.85,40]}/><meshBasicMaterial color={robot.traffic==='hold'?'#dc2626':robot.traffic==='yield'?'#f59e0b':'#16a34a'} transparent opacity={0.75}/></mesh>}
+          {synthetic && sensors && <mesh position={[0,0.02,0]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[0.2,4,48,1,-Math.PI*0.75,Math.PI*1.5]}/><meshBasicMaterial color={robot.color} transparent opacity={0.06} depthWrite={false}/></mesh>}
           {/* A robot drawn to scale is a few pixels across on the whole floor, often behind a corridor
               wall: a halo drawn through walls finds it. Stale uses the label's amber; grey vanishes on the floor. */}
-          {!syntheticPatrol && <mesh name="robot-locator" position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
+          {!synthetic && <mesh name="robot-locator" position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
             <ringGeometry args={[1.5, 1.9, 48]} />
             <meshBasicMaterial color={robot.stale ? '#d69412' : robot.color} transparent opacity={0.9} depthTest={false} depthWrite={false} toneMapped={false} />
           </mesh>}
           {/* Fixed pixel size, lifted above the robot: a label that grows with zoom covers the robot it names. */}
           <Html position={[0, 1.1, 0]} center zIndexRange={[20, 10]}>
-            {syntheticPatrol ? <span style={{ backgroundColor: robot.color }} className="pointer-events-none inline-block -translate-y-5 rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold whitespace-nowrap text-white shadow-sm">{robot.name}</span>
+            {synthetic ? <span style={{ backgroundColor: robot.color }} className={`pointer-events-none inline-block -translate-y-5 rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold whitespace-nowrap text-white shadow-sm ${robot.synthetic ? 'opacity-75' : ''}`}>{robot.name}{robot.synthetic ? ' · Mô phỏng' : ''}</span>
               : <span className="pointer-events-none flex -translate-y-6 flex-col items-center">
                 <span className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold whitespace-nowrap shadow-sm ${robot.stale ? 'bg-[#fff8e6] text-[#8a5a06]' : robot.focused ? 'bg-[#1f314d] text-white' : 'bg-white/90 text-[#40546f]'}`}>
-                  {robot.name}{robot.stale ? ' · dữ liệu cũ' : ''}
+                  {robot.name}{robot.labelNote ? ` · ${robot.labelNote}` : robot.stale ? ' · dữ liệu cũ' : ''}
                 </span>
                 <span aria-hidden="true" className={`h-0 w-0 border-x-[5px] border-t-[7px] border-x-transparent ${robot.stale ? 'border-t-[#fff8e6]' : robot.focused ? 'border-t-[#1f314d]' : 'border-t-white/90'}`} />
               </span>}
           </Html>
         </RobotModel>
-      ))}
+      ) })}
       <OrbitControls makeDefault enabled={tool !== 'measure'} mouseButtons={{ LEFT: tool === 'pan' ? MOUSE.PAN : MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }} touches={{ ONE: tool === 'pan' ? TOUCH.PAN : TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }} target={modelKey === 'nvh-v3' ? [0, 0.6, 0] : [0, 0, 0]} minDistance={modelKey === 'nvh-v3' ? 1.5 : 6} maxDistance={modelKey === 'nvh-v3' ? 80 : 32} maxPolarAngle={Math.PI / 2.1} />
       <FocusCamera focus={focus} />
     </Canvas>

@@ -210,10 +210,10 @@ describe('live console layout', () => {
     expect(sent.some(item => item.method === 'POST' && item.path === '/api/staff/manage/robots/amr_01/camera-lease')).toBe(true)
   })
 
-  it('opens the Digital Twin from the mini map', async () => {
+  it('opens the Digital Twin on the Tour robot from the mini map', async () => {
     renderAt('/staff/live/tour-1')
     const map = await screen.findByRole('region', { name: 'Bản đồ' })
-    expect(within(map).getByRole('link', { name: 'Mở Digital Twin' })).toHaveAttribute('href', '/staff/digital-twin')
+    expect(within(map).getByRole('link', { name: 'Mở Digital Twin' })).toHaveAttribute('href', '/staff/digital-twin?robot=amr_01')
   })
 
   it('shows no head control or camera on a Tour that has ended', async () => {

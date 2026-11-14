@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Camera, ChevronDown, Eye, Info, PanelRight, Pause, Play, RotateCcw, X } from 'lucide-react'
-import { createPatrol, patrolPose, robotRoute, stepPatrol, PATROL_TICK, PATROL_TRANSFORM, PATROL_MODEL_SCALE, PATROL_FLOOR_Y } from './patrol-demo'
+import { createPatrol } from './patrol-demo'
+import { patrolPaths, patrolTwinRobots, useSimulatedPatrol } from './use-simulated-patrol'
 import { FleetPanels, type FleetTab } from './FleetPanels'
 import { robotModeLabel } from './fleet-analysis'
 import type { CameraMode } from './camera-view'
@@ -30,9 +31,7 @@ export function PatrolDemo({ overhead, showLabels, onToggleLabels, toolbarStart,
   toolbarEnd?: ReactNode
 }) {
   const [tool, setTool] = useState<TwinTool>('select')
-  const [state, setState] = useState(() => createPatrol())
-  const [playing, setPlaying] = useState(true)
-  const [speed, setSpeed] = useState(1)
+  const { state, setState, playing, setPlaying, speed, setSpeed } = useSimulatedPatrol()
   const [selected, setSelected] = useState(1)
   const [tab, setTab] = useState<FleetTab>('robots')
   const [view, setView] = useState('scene')
@@ -51,33 +50,7 @@ export function PatrolDemo({ overhead, showLabels, onToggleLabels, toolbarStart,
     window.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('pointerdown', onPointer); window.removeEventListener('keydown', onKey) }
   }, [showMenu])
-  useEffect(() => {
-    if (!playing) return
-    let previous = performance.now()
-    let accumulator = 0
-    const timer = window.setInterval(() => {
-      const now = performance.now()
-      const elapsed = Math.min((now - previous) / 1000, 0.25)
-      previous = now
-      if (document.hidden) { accumulator = 0; return }
-      accumulator += elapsed * speed
-      const ticks = Math.floor((accumulator + 1e-9) / PATROL_TICK)
-      accumulator -= ticks * PATROL_TICK
-      if (ticks) setState(current => {
-        let next = current
-        for (let i = 0; i < ticks; i++) next = stepPatrol(next)
-        return next
-      })
-    }, 50)
-    return () => window.clearInterval(timer)
-  }, [playing, speed])
-  const robots = state.robots.map((r, i) => ({
-    id: r.id, name: `R${i + 1}`, color: r.color, pose: patrolPose(r),
-    transform: PATROL_TRANSFORM, scale: PATROL_MODEL_SCALE, groundY: PATROL_FLOOR_Y, exactPose: true,
-    active: (r.mode === 'moving' || r.mode === 'yielding') && !r.waiting && playing, focused: r.number === selected, stale: false,
-    headYaw: 0,
-    traffic: r.waiting ? 'hold' as const : r.yieldTo !== null ? 'yield' as const : 'clear' as const,
-  }))
+  const robots = patrolTwinRobots(state, { playing, selected })
   const shown = [routes, sensors, showLabels].filter(Boolean).length
   const cameraOn = panel && tab === 'camera' && cameraMode === 'point'
   const toggle = (label: string, on: boolean, click: () => void) => (
@@ -91,7 +64,7 @@ export function PatrolDemo({ overhead, showLabels, onToggleLabels, toolbarStart,
       {toolbarStart}
       <span className="flex-1" />
       <div role="group" aria-label="Kiểu xem" className="inline-flex gap-0.5 rounded-lg bg-[#eef2f7] p-0.5">
-        {['scene','traffic','heatmap'].map(v=><button key={v} type="button" className={segButton(view===v)} aria-pressed={view===v} onClick={()=>setView(v)}>{v==='scene'?'Bản đồ':v==='traffic'?'Giao thông':'Heatmap'}</button>)}
+        {['scene','traffic','heatmap'].map(v=><button key={v} type="button" className={segButton(view===v)} aria-pressed={view===v} onClick={()=>setView(v)}>{v==='scene'?'Bản đồ':v==='traffic'?'Giao thông':'Mật độ di chuyển'}</button>)}
       </div>
       <div ref={menuRef} className="relative">
         <button type="button" aria-haspopup="true" aria-expanded={showMenu} onClick={() => setShowMenu(v => !v)}
@@ -116,14 +89,14 @@ export function PatrolDemo({ overhead, showLabels, onToggleLabels, toolbarStart,
             tool={tool}
             showCameras={cameraOn} cameraPoint={cameraPoint}
             onSelectCamera={point => { setCameraPoint(point); setCameraMode('point'); setPanel(true); setTab('camera') }}
-            patrolPaths={routes ? state.robots.map(r=>({id:r.id,color:r.color,points:robotRoute(r),active:r.mode==='moving'||r.mode==='yielding'})) : []}
+            patrolPaths={routes ? patrolPaths(state) : []}
             onSelectRobot={tool === 'select' ? id=>{setSelected(Number(id.split('_')[1]));setPanel(true);setTab('robots')} : undefined} />
         </Suspense>
       </div>
       <TwinTools tool={tool} onTool={setTool} routes={routes} onRoutes={() => setRoutes(v => !v)} labels={showLabels} onLabels={onToggleLabels} />
 
       <div className="group absolute top-3 right-3 z-10">
-        <button type="button" aria-label="Cách mô phỏng hoạt động" aria-describedby="patrol-note" className="grid size-8 place-items-center rounded-full bg-slate-900/70 text-slate-100 backdrop-blur focus-visible:outline-2 focus-visible:outline-sky-300"><Info size={15} aria-hidden="true" /></button>
+        <button type="button" aria-label="Cách mô phỏng hoạt động" title="Cách mô phỏng hoạt động" aria-describedby="patrol-note" className="grid size-8 place-items-center rounded-full bg-slate-900/70 text-slate-100 backdrop-blur focus-visible:outline-2 focus-visible:outline-sky-300"><Info size={15} aria-hidden="true" /></button>
         <p id="patrol-note" role="tooltip" className="pointer-events-none absolute top-[calc(100%+6px)] right-0 w-64 rounded-lg bg-slate-900 px-3 py-2 text-[11px] leading-relaxed text-slate-100 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">{NOTE}</p>
       </div>
 
@@ -142,8 +115,8 @@ export function PatrolDemo({ overhead, showLabels, onToggleLabels, toolbarStart,
       </div>
 
       <div aria-label="Điều khiển mô phỏng" className="absolute right-3 bottom-3 z-10 flex items-center gap-0.5 rounded-xl bg-slate-900/85 p-1 text-xs text-slate-100 backdrop-blur @max-lg/stage:top-14 @max-lg/stage:bottom-auto">
-        <button type="button" aria-label={playing ? 'Tạm dừng' : 'Tiếp tục'} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 font-bold hover:bg-white/10" onClick={() => setPlaying(value => !value)}>{playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}<span className="hidden @3xl/stage:inline">{playing ? 'Tạm dừng' : 'Tiếp tục'}</span></button>
-        <button type="button" aria-label="Đặt lại" className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 font-bold hover:bg-white/10" onClick={() => setState(createPatrol())}><RotateCcw size={14} aria-hidden="true" /><span className="hidden @3xl/stage:inline">Đặt lại</span></button>
+        <button type="button" aria-label={playing ? 'Tạm dừng' : 'Tiếp tục'} title={playing ? 'Tạm dừng' : 'Tiếp tục'} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 font-bold hover:bg-white/10" onClick={() => setPlaying(value => !value)}>{playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}<span className="hidden @3xl/stage:inline">{playing ? 'Tạm dừng' : 'Tiếp tục'}</span></button>
+        <button type="button" aria-label="Đặt lại" title="Đặt lại" className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 font-bold hover:bg-white/10" onClick={() => setState(createPatrol())}><RotateCcw size={14} aria-hidden="true" /><span className="hidden @3xl/stage:inline">Đặt lại</span></button>
         <select aria-label="Tốc độ phát" className="h-8 cursor-pointer appearance-none rounded-lg bg-white/10 px-2.5 font-bold text-slate-100 [&>option]:text-slate-900" value={speed} onChange={e => setSpeed(Number(e.target.value))}><option value={1}>1×</option><option value={5}>5×</option><option value={10}>10×</option></select>
         <span className="hidden px-2 tabular-nums text-slate-300 @3xl/stage:inline">{Math.floor(state.seconds)}s tuần tra{!playing ? ' · tạm dừng' : ''}</span>
       </div>
@@ -151,7 +124,7 @@ export function PatrolDemo({ overhead, showLabels, onToggleLabels, toolbarStart,
       {panel && <aside aria-label="Bảng vận hành" className="absolute inset-y-0 right-0 z-20 flex w-full max-w-[400px] flex-col border-l border-[#dce9fb] bg-white text-xs text-[#40546f] shadow-[-20px_0_40px_-24px_rgba(15,23,42,0.45)] transition-[opacity,translate] duration-300 starting:translate-x-6 starting:opacity-0">
         <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5">
           <b className="text-[13px] text-[#0f172a]">Bảng vận hành</b>
-          <button type="button" aria-label="Đóng bảng vận hành" className="grid size-7 place-items-center rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => setPanel(false)}><X size={14} aria-hidden="true" /></button>
+          <button type="button" aria-label="Đóng bảng vận hành" title="Đóng bảng vận hành" className="grid size-7 place-items-center rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => setPanel(false)}><X size={14} aria-hidden="true" /></button>
         </div>
         <nav className="flex flex-wrap gap-1 border-b border-slate-200 px-3 py-2" aria-label="Chức năng Fleet Twin">
           {([['robots','Robot'],['tasks','Nhiệm vụ'],['events','Nhật ký'],['metrics','Thống kê'],['scenarios','Kịch bản'],['copilot','AI Copilot'],['camera','Camera'],['whatif','What-if']] as [FleetTab,string][]).map(([id,label])=><button key={id} className={buttonClass} aria-pressed={tab===id} onClick={()=>setTab(id)}>{label}</button>)}

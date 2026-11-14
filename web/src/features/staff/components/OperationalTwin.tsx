@@ -35,7 +35,7 @@ const HEAD_YAW: Record<string, number> = { FRONT: 0, LEFT: Math.PI / 3, RIGHT: -
  * drawn only when `mapKey` is calibrated for the NVH model (`map-config.ts`):
  * ROS metres drawn as scene units would put them in the wrong place.
  */
-export function OperationalTwin({ robots, mapKey, tour, selectedStopId, className = '', title = 'Operational Twin', onExpandedChange }: {
+export function OperationalTwin({ robots, mapKey, tour, selectedStopId, className = '', title = 'Digital Twin', onExpandedChange }: {
   robots: AmrStatus[]
   /** The map the robots' poses are in. */
   mapKey?: string | null

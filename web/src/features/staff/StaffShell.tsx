@@ -71,7 +71,7 @@ export default function StaffShell() {
   const entry = onProfile ? null : STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? null
   const section = onProfile ? 'Tài khoản' : STAFF_NAV_SECTIONS.find(({ items }) => items.some(({ path }) => path === currentPath))?.label ?? 'Vận hành'
   // Until a lazy page has set its own title, the shell names it from the address.
-  const fallback = onTourPage ? 'Chi tiết Tour' : onProfile ? 'Hồ sơ của tôi' : location.pathname.startsWith('/staff/digital-twin') ? 'Simulator robot' : null
+  const fallback = onTourPage ? 'Chi tiết Tour' : onProfile ? 'Hồ sơ của tôi' : location.pathname.startsWith('/staff/digital-twin') ? 'Digital Twin' : null
   const crumbs = consoleCrumbs({ section, entry, page: pageTitle ?? fallback })
 
   return (

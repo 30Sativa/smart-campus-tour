@@ -18,6 +18,7 @@ export type NavPagePair = {
 export const NAV_PAGE_PAIRS: NavPagePair[] = [
   { area: 'staff', path: '/staff', file: 'staff/OverviewPage.tsx', heading: 'PageHeader', pending: 'WS-C' },
   { area: 'staff', path: '/staff/live', file: 'staff/LiveOperationsPage.tsx', heading: 'PageHeader', pending: 'WS-A' },
+  { area: 'staff', path: '/staff/digital-twin', file: 'staff/DigitalTwinPage.tsx', heading: 'PageHeader' },
   { area: 'staff', path: '/staff/robot', file: 'staff/RobotPage.tsx', heading: 'PageHeader', pending: 'WS-C' },
   { area: 'staff', path: '/staff/schedule', file: 'staff/SchedulePage.tsx', heading: 'h1', pending: 'WS-C' },
   { area: 'staff', path: '/staff/manage/registrations/pending', file: 'staff/manage/StaffManageRegistrationsPage.tsx', heading: 'PageHeader', pending: 'WS-C' },
