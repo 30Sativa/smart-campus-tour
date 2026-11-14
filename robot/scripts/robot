@@ -1040,6 +1040,8 @@ def main(argv=None):
                     print('fleet service runs telemetry only (FLEET_SERVICE_COMMANDS=off): no Tour from the web.')
                 else:
                     print('no fleet service: run "robot fleet --commands" in another terminal for Tours from the web.')
+            return run(argv, env, False, lock=('workflow', dict(workflow=a.cmd, fleet=fleet, pid=os.getpid(),
+                                                                session=session)),
             return run(argv, env, False, lock=('workflow', dict(workflow=a.cmd, fleet=fleet, auto_pose=auto_pose,
                                                                 pid=os.getpid(), session=session)),
                        session=session, extra_env={'ROS_LOG_DIR': os.path.join(session, 'ros_log')})
