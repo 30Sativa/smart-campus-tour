@@ -91,6 +91,9 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         }
 
         var map = await repo.GetMapAsync(i.MapVersionId, ct) ?? throw new NotFoundException("Map version", i.MapVersionId);
+        // ADR-0062: the POI proposal row locks come before the map lock, the order the POI writers use. Discard and
+        // retire take the same row lock, so they either commit first (and this refuses) or wait and see these stops.
+        await EnsurePoisUsableAsync(i.Stops.Select(s => s.PoiRevisionId).ToArray(), ct);
         await mapRepository.LockMapPreparationStateAsync(map.Id, ct);
         await MapRetirement.EnsureActiveAsync(mapRepository, map.Id, ct);
         (await MapPreparationEligibility.LoadAsync(mapRepository, map, ct)).EnsureCanUse();
@@ -205,6 +208,22 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
                 inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], [],
             ScheduleFit: Tours.TourSchedule.ScheduleFit(schedule, expected), ExpectedDurationSeconds: expected);
+    }
+
+    private async Task EnsurePoisUsableAsync(IReadOnlyCollection<Guid> poiRevisionIds, CancellationToken ct)
+    {
+        var revisions = await repo.FindPoiRevisionsAsync(poiRevisionIds, ct);
+        var proposals = await repo.LockPoiProposalsAsync(revisions.Select(r => r.ProposalId).Distinct().ToArray(), ct);
+        foreach (var revision in revisions)
+        {
+            if (!proposals.TryGetValue(revision.ProposalId, out var proposal)) continue;
+            if (proposal.DiscardedAt is not null)
+                throw new ConflictException($"POI {revision.Name} đã bị xoá khỏi danh sách. Bỏ điểm dừng này khỏi tuyến.",
+                    PoiProposalRules.DiscardedCode);
+            if (proposal.RetiredAt is not null)
+                throw new ConflictException($"POI {revision.Name} đã ngưng dùng. Bỏ khỏi tuyến hoặc dùng lại POI.",
+                    PoiProposalRules.RetiredCode);
+        }
     }
 
     // ADR-0061: a stop points at one exact POI revision, so the revision-id check in the validator lets two revisions of

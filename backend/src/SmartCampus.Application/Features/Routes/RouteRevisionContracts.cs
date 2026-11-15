@@ -69,6 +69,13 @@ public interface IRouteRevisionRepository
     Task<PoiVerificationRecord?> GetEffectivePoiVerificationAsync(Guid proposalId, byte[] fingerprint, CancellationToken ct);
     /// <summary>The current APPROVED narration of each of these POI proposals that has one (ADR-0060).</summary>
     Task<IReadOnlyList<PoiNarrationRevision>> GetApprovedNarrationsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct);
+    /// <summary>Untracked revisions with these ids; unknown ids are left out.</summary>
+    Task<IReadOnlyList<PoiProposalRevision>> FindPoiRevisionsAsync(IReadOnlyCollection<Guid> revisionIds, CancellationToken ct);
+    /// <summary>
+    /// UPDLOCK/HOLDLOCK row locks on these POI proposals, taken one at a time in Guid order like the pose import, so a
+    /// concurrent discard or retire of one of them serializes with the route save (ADR-0062).
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, PoiProposal>> LockPoiProposalsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct);
     Task<PoiProposalRevision?> FindPoiRevisionAsync(Guid revisionId, CancellationToken ct);
     Task<PoiVerificationRecord?> FindPoiVerificationAsync(Guid verificationId, CancellationToken ct);
     Task<IReadOnlyList<RouteRevisionStop>> GetStopsAsync(Guid revisionId, CancellationToken ct);

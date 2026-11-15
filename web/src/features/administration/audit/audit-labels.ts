@@ -70,7 +70,7 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
   { label: 'POI', actions: {
     POI_CREATED: 'Tạo POI', POI_UPDATED: 'Sửa POI', POI_ACTIVATED: 'Mở lại POI', POI_DEACTIVATED: 'Ngừng dùng POI',
     POI_PROPOSAL_CREATED: 'Tạo đề xuất POI', POI_PROPOSAL_REVISION_CREATED: 'Tạo phiên bản POI', POI_PROPOSAL_SUBMITTED: 'Gửi kiểm chứng POI',
-    POI_PROPOSAL_DISCARDED: 'Bỏ đề xuất POI', POI_TECHNICAL_VERIFIED: 'Kiểm chứng POI đạt', POI_TECHNICAL_REJECTED: 'Kiểm chứng POI không đạt',
+    POI_PROPOSAL_DISCARDED: 'Bỏ đề xuất POI', POI_PROPOSAL_RETIRED: 'Ngưng dùng POI', POI_PROPOSAL_REACTIVATED: 'Dùng lại POI', POI_TECHNICAL_VERIFIED: 'Kiểm chứng POI đạt', POI_TECHNICAL_REJECTED: 'Kiểm chứng POI không đạt',
     POI_POSE_IMPORT_COMPLETED: 'Nhập POI từ file', POI_POSE_CAPTURE_VERIFIED: 'Ghi nhận vị trí trực tiếp trên robot',
     POI_NARRATION_DRAFT_CREATED: 'Viết bản nháp thuyết minh', POI_NARRATION_DRAFT_EDITED: 'Sửa bản nháp thuyết minh',
     POI_NARRATION_APPROVED: 'Duyệt thuyết minh', POI_NARRATION_DISCARDED: 'Bỏ bản nháp thuyết minh',

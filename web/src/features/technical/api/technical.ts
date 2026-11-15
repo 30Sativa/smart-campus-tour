@@ -135,6 +135,8 @@ export type PoiRevision = {
   y: number
   yaw: number
   cameraPreset: string
+  /** Hex of the server's navigation fingerprint; equal fingerprints keep the technical result. */
+  navigationFingerprint?: string
   createdAt: string
   isSubmitted: boolean
   submittedAt: string | null
@@ -149,9 +151,14 @@ export type PoiProposal = {
   rowVersion: string
   revision: PoiRevision
   sourcePoiId?: string | null
-  /** No revision ever passed, so Staff may discard it (ADR-0051). */
+  /** No route revision uses any revision of it, so Staff may discard it (ADR-0051, amended by ADR-0062). */
   canDiscard?: boolean
   discardedAt?: string | null
+  /** Passed once and a route uses it, so it cannot be discarded but may be retired ("Ngưng dùng", ADR-0062). */
+  canRetire?: boolean
+  /** Set while the POI is retired: no new work, and new routes cannot choose it. Saved routes and Tours are unchanged. */
+  retiredAt?: string | null
+  canReactivate?: boolean
   /** The current approved and draft narration versions (ADR-0060); the text itself is in the narration list. */
   narration?: PoiNarrationSummary | null
 }
@@ -289,6 +296,10 @@ export const technicalApi = {
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/draft`, { method: 'PUT', json: { requestId: crypto.randomUUID(), expectedCurrentRevision: current.currentRevision, expectedRowVersion: current.rowVersion, draft } }).then(response => response.data!),
   discardPoiProposal: (proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/discard`, { method: 'POST', json: { expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
+  retirePoiProposal: (proposal: PoiProposal) =>
+    apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/retire`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
+  reactivatePoiProposal: (proposal: PoiProposal) =>
+    apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/reactivate`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
   submitPoiProposal: (id: string, proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/submit`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
   listPoiNarrations: (proposalId: string) => apiClient<Envelope<PoiNarrationRevision[]>>(`/api/staff/poi-proposals/${proposalId}/narrations`).then(response => response.data ?? []),

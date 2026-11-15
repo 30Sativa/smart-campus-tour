@@ -16,6 +16,8 @@ public interface IPoiProposalRepository
     Task<IReadOnlyList<PoiProposalRevision>> ListRevisionsAsync(Guid proposalId, CancellationToken cancellationToken);
     Task<IReadOnlyList<PoiProposalRevision>> ListCurrentRevisionsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken cancellationToken);
     Task<IReadOnlyList<PoiProposal>> ListProposalsAsync(Guid? mapVersionId, CancellationToken cancellationToken);
+    /// <summary>The proposals among these that have a revision in any RouteRevisionStops row, of any route (ADR-0062).</summary>
+    Task<IReadOnlySet<Guid>> ListProposalsUsedInRoutesAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken cancellationToken);
     /// <summary>Every narration version of one POI, newest first, with author, editor and approver (ADR-0060).</summary>
     Task<IReadOnlyList<PoiNarrationRevision>> ListNarrationsAsync(Guid proposalId, CancellationToken cancellationToken);
     /// <summary>The DRAFT and APPROVED narration versions of these POIs, with editor and approver.</summary>

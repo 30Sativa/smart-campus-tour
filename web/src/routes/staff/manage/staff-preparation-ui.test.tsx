@@ -21,6 +21,7 @@ let failRegistrations = false
 let packageFailure: Response | null = null
 let discardResponse: Response | null = null
 const discardBodies: unknown[] = []
+const lifecycleCalls: Array<{ path: string; body: { requestId: string; expectedRowVersion: string } }> = []
 /** An uploaded package: 10x20 cells of 0.5m with the map origin at (-1, -2). */
 const packageZip = (width: number) => zipSync({
   'map.yaml': strToU8('image: map.pgm\nmode: trinary\nresolution: 0.5\norigin: [-1, -2, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.25\n'),
@@ -45,10 +46,17 @@ function show(element: React.ReactNode, path = '/staff/manage') {
 }
 beforeEach(() => {
   requests.length = 0; failRegistrations = false; packageFailure = null; proposals = standardProposals; mapVersions = standardMaps
-  discardResponse = null; discardBodies.length = 0
+  discardResponse = null; discardBodies.length = 0; lifecycleCalls.length = 0
   useAuthStore.getState().setAuth('test-token', { userId: 'staff-ui', username: 'staff', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
+    if (url.pathname.endsWith('/retire') || url.pathname.endsWith('/reactivate')) {
+      lifecycleCalls.push({ path: url.pathname, body: JSON.parse(String(init?.body)) })
+      const retire = url.pathname.endsWith('/retire')
+      proposals = proposals.map(item => url.pathname.includes(`/${item.id}/`)
+        ? { ...item, retiredAt: retire ? '2026-11-15T05:00:00Z' : null, canRetire: !retire, canReactivate: retire } : item)
+      return respond(proposals.find(item => url.pathname.includes(`/${item.id}/`)))
+    }
     if (url.pathname.endsWith('/discard')) {
       discardBodies.push(JSON.parse(String(init?.body)))
       if (discardResponse) return discardResponse
@@ -99,7 +107,9 @@ describe('staff preparation UI', () => {
     proposals = [...standardProposals,
       { ...draft, revision: { ...draft.revision, isSubmitted: false, navigationStatus: null } },
       { ...failed, revision: { ...failed.revision, navigationStatus: 'FAIL' } },
-      { ...waiting, revision: { ...waiting.revision, navigationStatus: null } }] as PoiProposal[]
+      { ...waiting, revision: { ...waiting.revision, navigationStatus: null } },
+      // A retired POI takes no new work (ADR-0062), so it is neither Staff's nor Technical's.
+      { ...failed, id: 'poi-f', retiredAt: '2026-11-15T05:00:00Z', revision: { ...failed.revision, navigationStatus: 'FAIL' } }] as PoiProposal[]
     show(<WorkQueue urgent={false} />)
     const section = screen.getByRole('group', { name: 'POI cần hoàn thiện' })
     await waitFor(() => expect(within(section).getByRole('heading')).toHaveTextContent(/POI cần hoàn thiện\s*2/))
@@ -306,6 +316,41 @@ describe('staff preparation UI', () => {
     expect(await screen.findByRole('button', { name: 'Chọn Điểm C' })).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Chọn Điểm A' })).not.toBeInTheDocument())
     expect(within(screen.getByRole('region', { name: 'Điểm đang chọn' })).queryByRole('button', { name: 'Xoá điểm' })).not.toBeInTheDocument()
+  })
+
+  it('offers delete, retire or reactivate exactly as the server flags say (ADR-0062)', async () => {
+    const used = { ...proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), rowVersion: 'rv-a', canDiscard: false, canRetire: true }
+    const free = { ...proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C'), canDiscard: true, canRetire: false }
+    proposals = [used, free]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    let chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
+    expect(within(chosen).queryByRole('button', { name: 'Xoá điểm' })).not.toBeInTheDocument()
+    expect(within(chosen).queryByRole('button', { name: 'Dùng lại' })).not.toBeInTheDocument()
+    fireEvent.click(within(chosen).getByRole('button', { name: 'Ngưng dùng' }))
+    const dialog = screen.getByRole('dialog', { name: 'Ngưng dùng Điểm A?' })
+    expect(dialog).toHaveTextContent('Tuyến và Tour đã lưu không đổi gì')
+    expect(dialog).toHaveTextContent('tuyến mới không chọn được điểm này')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ngưng dùng' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(lifecycleCalls).toEqual([{ path: '/api/staff/poi-proposals/poi-a/retire', body: { requestId: expect.any(String), expectedRowVersion: 'rv-a' } }])
+
+    // The retired POI carries its own label, filter and "Dùng lại".
+    const row = await screen.findByRole('button', { name: 'Chọn Điểm A' })
+    await waitFor(() => expect(within(row).getByText('Ngưng dùng')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /^Ngưng dùng\s*1$/ }))
+    const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
+    expect(within(list).getByText('Điểm A')).toBeInTheDocument()
+    expect(within(list).queryByText('Điểm C')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Đã đạt/ }))
+    expect(within(list).queryByText('Điểm A')).not.toBeInTheDocument()
+    expect(within(list).getByText('Điểm C')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Điểm đang chọn' })).getByRole('button', { name: 'Xoá điểm' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Ngưng dùng\s*1$/ }))
+    chosen = screen.getByRole('region', { name: 'Điểm đang chọn' })
+    expect(chosen).toHaveTextContent('tuyến mới không chọn được')
+    fireEvent.click(within(chosen).getByRole('button', { name: 'Dùng lại' }))
+    await waitFor(() => expect(lifecycleCalls.at(-1)?.path).toBe('/api/staff/poi-proposals/poi-a/reactivate'))
   })
 
   it('keeps a refused removal in the dialog with the server reason', async () => {

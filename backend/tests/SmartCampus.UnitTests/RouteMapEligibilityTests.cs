@@ -87,6 +87,8 @@ public sealed class RouteMapEligibilityTests
             nameof(IRouteRevisionRepository.FindRequestAsync) => Task.FromResult<RouteRevision?>(null),
             nameof(IRouteRevisionRepository.FindSubmissionRequestAsync) => Task.FromResult<RouteRevisionSubmission?>(null),
             nameof(IRouteRevisionRepository.GetMapAsync) => Task.FromResult<MapVersion?>(Map),
+            nameof(IRouteRevisionRepository.FindPoiRevisionsAsync) => Task.FromResult<IReadOnlyList<PoiProposalRevision>>([]),
+            nameof(IRouteRevisionRepository.LockPoiProposalsAsync) => Task.FromResult<IReadOnlyDictionary<Guid, PoiProposal>>(new Dictionary<Guid, PoiProposal>()),
             nameof(IRouteRevisionRepository.LockRouteAsync) => Task.FromResult<Route?>(Route),
             nameof(IRouteRevisionRepository.GetCurrentRevisionAsync) => Task.FromResult<RouteRevision?>(Revision),
             nameof(IRouteRevisionRepository.GetSubmissionsAsync) => Task.FromResult<IReadOnlyList<RouteRevisionSubmission>>([]),

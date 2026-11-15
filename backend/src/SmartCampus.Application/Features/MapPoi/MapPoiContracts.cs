@@ -37,7 +37,8 @@ public sealed record PoiRevisionView(
 /// </summary>
 public sealed record PoiProposalView(Guid Id, int CurrentRevision, string RowVersion, DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt, PoiRevisionView Revision, string? SourcePoiId = null,
-    bool CanDiscard = false, DateTimeOffset? DiscardedAt = null, PoiNarrationSummary? Narration = null);
+    bool CanDiscard = false, DateTimeOffset? DiscardedAt = null, PoiNarrationSummary? Narration = null,
+    bool CanRetire = false, DateTimeOffset? RetiredAt = null, bool CanReactivate = false);
 
 public sealed record PoiNarrationSummary(PoiNarrationApprovedSummary? Approved, PoiNarrationDraftSummary? Draft);
 

@@ -521,6 +521,7 @@ public partial class ApplicationDbContext : DbContext
                 .IsFixedLength();
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.DiscardedAt).HasPrecision(3);
+            entity.Property(e => e.RetiredAt).HasPrecision(3);
             entity.Property(e => e.RowVersion)
                 .IsRowVersion()
                 .IsConcurrencyToken();
@@ -540,6 +541,10 @@ public partial class ApplicationDbContext : DbContext
             entity.HasOne(d => d.DiscardedByUser).WithMany(p => p.PoiProposalDiscardedByUsers)
                 .HasForeignKey(d => d.DiscardedByUserId)
                 .HasConstraintName("FK_PoiProposals_DiscardedByUserId");
+
+            entity.HasOne(d => d.RetiredByUser).WithMany(p => p.PoiProposalRetiredByUsers)
+                .HasForeignKey(d => d.RetiredByUserId)
+                .HasConstraintName("FK_PoiProposals_RetiredByUserId");
         });
 
         modelBuilder.Entity<PoiProposalRevision>(entity =>

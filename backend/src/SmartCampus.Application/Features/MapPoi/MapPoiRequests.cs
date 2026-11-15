@@ -20,6 +20,9 @@ public sealed record SubmitPoiProposalRequest(
 
 public sealed record DiscardPoiProposalRequest(int ExpectedRevisionNumber, string ExpectedRowVersion);
 
+/// <summary>Body of POST staff/poi-proposals/{id}/retire and /reactivate (ADR-0062).</summary>
+public sealed record ChangePoiProposalLifecycleRequest(Guid RequestId, string ExpectedRowVersion);
+
 /// <summary>Creates the POI narration draft when there is none (ExpectedRowVersion absent) or edits it (ADR-0060).</summary>
 public sealed record SavePoiNarrationDraftRequest(
     Guid RequestId, string? ExpectedRowVersion, string NarrationText, string? FallbackVideoUrl);

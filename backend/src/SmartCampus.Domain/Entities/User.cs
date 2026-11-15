@@ -59,6 +59,8 @@ public partial class User
 
     public virtual ICollection<PoiProposal> PoiProposalDiscardedByUsers { get; set; } = new List<PoiProposal>();
 
+    public virtual ICollection<PoiProposal> PoiProposalRetiredByUsers { get; set; } = new List<PoiProposal>();
+
     public virtual ICollection<PoiVerificationRecord> PoiVerificationRecords { get; set; } = new List<PoiVerificationRecord>();
 
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();

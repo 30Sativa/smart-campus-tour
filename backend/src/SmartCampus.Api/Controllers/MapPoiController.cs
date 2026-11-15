@@ -270,6 +270,18 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         Ok(new BaseResponse<PoiProposalView> { Success = true, Message = "POI proposal discarded; its history is kept.",
             Data = await sender.Send(new DiscardPoiProposalCommand(User.GetRequiredUserId(), id, request), ct) });
 
+    [HttpPost("staff/poi-proposals/{id:guid}/retire")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiProposalView>>> RetireProposal(Guid id, [FromBody] ChangePoiProposalLifecycleRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiProposalView> { Success = true, Message = "POI retired; saved routes and Tours are unchanged.",
+            Data = await sender.Send(new RetirePoiProposalCommand(User.GetRequiredUserId(), id, request), ct) });
+
+    [HttpPost("staff/poi-proposals/{id:guid}/reactivate")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiProposalView>>> ReactivateProposal(Guid id, [FromBody] ChangePoiProposalLifecycleRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiProposalView> { Success = true, Message = "POI reactivated.",
+            Data = await sender.Send(new ReactivatePoiProposalCommand(User.GetRequiredUserId(), id, request), ct) });
+
     [HttpGet("staff/poi-proposals/{id:guid}/narrations")]
     [Authorize(Roles = StaffAndTechnical)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<PoiNarrationRevisionView>>>> ListNarrations(Guid id, CancellationToken ct) =>

@@ -73,7 +73,7 @@ internal static class PoiNarrationRules
         // The same row lock as revise, submit, verify, import and POI discard: narration writes of one POI serialize.
         var proposal = await repository.LockProposalAsync(proposalId, cancellationToken)
             ?? throw new NotFoundException("POI proposal", proposalId);
-        PoiProposalRules.EnsureNotDiscarded(proposal);
+        PoiProposalRules.EnsureWritable(proposal);
         return proposal;
     }
 

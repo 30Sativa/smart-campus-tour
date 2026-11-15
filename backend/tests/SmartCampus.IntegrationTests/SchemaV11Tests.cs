@@ -762,6 +762,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.20-to-v1.21-map-retirement.sql");
         await db.ApplyFileAsync("upgrade-v1.21-to-v1.22-poi-narration-approval.sql");
         await db.ApplyFileAsync("upgrade-v1.21-to-v1.22-poi-narration-approval.sql");
+        await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
+        await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -772,8 +774,10 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.22", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.23", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='PoiNarrationRevisions';"));
+        Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name IN ('RetiredAt','RetiredByUserId') AND is_nullable=1;"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.PoiProposals WHERE RetiredAt IS NOT NULL OR RetiredByUserId IS NOT NULL;"));
         Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.PoiNarrationRevisions WHERE State=N'APPROVED';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name='DiscardedAt' AND is_nullable=1;"));
         Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.MapVersions') AND name IN ('RetiredAt','RetiredByUserId','RetirementReason') AND is_nullable=1;"));
@@ -1200,6 +1204,38 @@ public sealed class SchemaV11Tests
     }
 
     [SchemaV17Fact]
+    public async Task PoiRetirementUpgrade_MatchesTheSnapshot_LeavesEveryPoiActive_AndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.22.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.22';");
+        const string bootstrapHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{bootstrapHash}';");
+
+        await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
+        await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
+
+        Assert.Equal("1.23", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        await using var snapshot = await TestDatabase.CreateAsync();
+        const string columns = "SELECT STRING_AGG(CONCAT(name,':',TYPE_NAME(system_type_id),':',max_length,':',scale,':',is_nullable), N',') WITHIN GROUP (ORDER BY name) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name IN ('RetiredAt','RetiredByUserId');";
+        const string check = "SELECT CONCAT(definition,':',is_not_trusted) FROM sys.check_constraints WHERE name=N'CK_PoiProposals_Retirement_Complete';";
+        const string foreignKey = "SELECT CONCAT(OBJECT_NAME(referenced_object_id),':',is_not_trusted) FROM sys.foreign_keys WHERE name=N'FK_PoiProposals_RetiredByUserId';";
+        foreach (var shape in new[] { columns, check, foreignKey })
+            Assert.Equal(await snapshot.ScalarAsync<string>(shape), await db.ScalarAsync<string>(shape));
+        Assert.Equal("Users:0", await db.ScalarAsync<string>(foreignKey));
+    }
+
+    [SchemaV17Fact]
+    public async Task PoiRetirementUpgrade_RefusesAnyOtherVersion()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.21.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.21';");
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql"));
+        Assert.Equal(51230, error.Number);
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name='RetiredAt';"));
+    }
+
+    [SchemaV17Fact]
     public async Task MapRetirementUpgrade_RefusesAnyOtherVersion()
     {
         await using var db = await TestDatabase.CreateAsync("snapshot-v1.19.sql");
@@ -1593,7 +1629,7 @@ public sealed class SchemaV11Tests
     [SchemaV12Fact]
     public async Task ConcurrentMapUploads_SerializeAreaVersioningAndIdempotentRetries()
     {
-        // The current snapshot (v1.22): MapVersions gained the v1.21 retirement columns (ADR-0041), which today's upload reads back.
+        // The current snapshot (v1.23): MapVersions gained the v1.21 retirement columns (ADR-0041), which today's upload reads back.
         await using var db = await TestDatabase.CreateAsync();
         await using var services = db.BuildFeatureServiceProvider();
         var package = CreateMapPackage();
@@ -1791,7 +1827,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.22.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.23.sql")
         {
             var db = new TestDatabase();
             try

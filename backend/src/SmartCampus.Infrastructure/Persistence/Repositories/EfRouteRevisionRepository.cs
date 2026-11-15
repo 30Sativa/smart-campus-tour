@@ -72,6 +72,22 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
             .OrderByDescending(v => v.ProposalRevision.RevisionNumber)
             .ThenByDescending(v => v.CheckedAt).ThenByDescending(v => v.Id).FirstOrDefaultAsync(ct);
 
+    public async Task<IReadOnlyList<PoiProposalRevision>> FindPoiRevisionsAsync(IReadOnlyCollection<Guid> revisionIds, CancellationToken ct) =>
+        revisionIds.Count == 0 ? [] : await db.PoiProposalRevisions.AsNoTracking().Where(r => revisionIds.Contains(r.Id)).ToArrayAsync(ct);
+
+    public async Task<IReadOnlyDictionary<Guid, PoiProposal>> LockPoiProposalsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct)
+    {
+        var locked = new Dictionary<Guid, PoiProposal>();
+        foreach (var id in proposalIds.Distinct().OrderBy(id => id))
+        {
+            var proposal = await db.PoiProposals
+                .FromSqlInterpolated($"SELECT * FROM dbo.PoiProposals WITH (UPDLOCK, HOLDLOCK, ROWLOCK) WHERE Id = {id}").AsNoTracking()
+                .SingleOrDefaultAsync(ct);
+            if (proposal is not null) locked[id] = proposal;
+        }
+        return locked;
+    }
+
     public Task<PoiProposalRevision?> FindPoiRevisionAsync(Guid revisionId, CancellationToken ct) =>
         db.PoiProposalRevisions.AsNoTracking().SingleOrDefaultAsync(r => r.Id == revisionId, ct);
 

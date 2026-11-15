@@ -160,6 +160,15 @@ export const useDiscardPoiProposal = () => useTechnicalMutation(technicalApi.dis
   detail: 'Lịch sử chỉnh sửa và kiểm chứng của điểm này vẫn được lưu.',
 }))
 
+export const useRetirePoiProposal = () => useTechnicalMutation(technicalApi.retirePoiProposal, keys.poiProposals, input => ({
+  title: `Đã ngưng dùng ${input.revision.name}`,
+  detail: 'Tuyến và Tour đã lưu không đổi. Tuyến mới không chọn được điểm này.',
+}))
+
+export const useReactivatePoiProposal = () => useTechnicalMutation(technicalApi.reactivatePoiProposal, keys.poiProposals, input => ({
+  title: `Đã dùng lại ${input.revision.name}`,
+}))
+
 /** Preview changes nothing on the server, so it neither invalidates data nor notifies. */
 export function usePreviewPoiImport() {
   return useMutation({ mutationFn: technicalApi.previewPoiImport })

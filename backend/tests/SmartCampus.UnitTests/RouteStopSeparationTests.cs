@@ -137,6 +137,8 @@ public sealed class RouteStopSeparationTests
         nameof(IRouteRevisionRepository.LockRequestAsync) => Task.CompletedTask,
         nameof(IRouteRevisionRepository.FindRequestAsync) => Task.FromResult<RouteRevision?>(null),
         nameof(IRouteRevisionRepository.GetMapAsync) => Task.FromResult<MapVersion?>(Map),
+        nameof(IRouteRevisionRepository.FindPoiRevisionsAsync) => Task.FromResult<IReadOnlyList<PoiProposalRevision>>([]),
+        nameof(IRouteRevisionRepository.LockPoiProposalsAsync) => Task.FromResult<IReadOnlyDictionary<Guid, PoiProposal>>(new Dictionary<Guid, PoiProposal>()),
         nameof(IRouteRevisionRepository.GetPoiEvidenceAsync) => Task.FromResult(Evidence((IReadOnlyCollection<Guid>)args[0]!)),
         nameof(IRouteRevisionRepository.GetApprovedNarrationsAsync) => Task.FromResult<IReadOnlyList<PoiNarrationRevision>>(
             ((IReadOnlyCollection<Guid>)args[0]!).Select(proposalId => new PoiNarrationRevision

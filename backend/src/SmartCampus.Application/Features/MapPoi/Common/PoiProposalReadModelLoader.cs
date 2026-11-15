@@ -36,9 +36,14 @@ internal static class PoiProposalReadModelLoader
             verification?.ProposalRevisionId, verification?.VerificationMethod);
         var results = await verificationRepository.ListVerificationRecordsAsync([proposal.Id], cancellationToken);
         var narrations = await proposalRepository.ListCurrentNarrationsAsync([proposal.Id], cancellationToken);
-        return new PoiProposalView(proposal.Id, proposal.CurrentRevision,
-            Convert.ToBase64String(proposal.RowVersion), proposal.CreatedAt, proposal.UpdatedAt, view, proposal.SourcePoiId,
-            proposal.DiscardedAt is null && PoiProposalRules.CanDiscard(results), proposal.DiscardedAt,
-            PoiNarrationRules.Summary(narrations));
+        var usedInRoute = (await proposalRepository.ListProposalsUsedInRoutesAsync([proposal.Id], cancellationToken))
+            .Contains(proposal.Id);
+        return ToProposalView(proposal, view, PoiProposalRules.HasPass(results), usedInRoute, PoiNarrationRules.Summary(narrations));
     }
+
+    public static PoiProposalView ToProposalView(PoiProposal proposal, PoiRevisionView revision, bool hasPass, bool usedInRoute,
+        PoiNarrationSummary narration) => new(proposal.Id, proposal.CurrentRevision,
+        Convert.ToBase64String(proposal.RowVersion), proposal.CreatedAt, proposal.UpdatedAt, revision, proposal.SourcePoiId,
+        PoiProposalRules.CanDiscard(proposal, usedInRoute), proposal.DiscardedAt, narration,
+        PoiProposalRules.CanRetire(proposal, hasPass, usedInRoute), proposal.RetiredAt, PoiProposalRules.CanReactivate(proposal));
 }
