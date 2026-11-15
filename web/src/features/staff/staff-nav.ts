@@ -1,4 +1,4 @@
-import { Bot, CalendarDays, ClipboardCheck, History, LayoutDashboard, MapPinned, MonitorPlay, Route } from 'lucide-react'
+import { Bot, Box, CalendarDays, ClipboardCheck, History, LayoutDashboard, MapPinned, MonitorPlay, Route } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
@@ -25,6 +25,8 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Tổng quan', path: '/staff', icon: LayoutDashboard },
       { label: 'Điều hành trực tiếp', path: '/staff/live', icon: MonitorPlay },
+      // The physical robots in 3D; the labelled simulation is its own tab there.
+      { label: 'Digital Twin', path: '/staff/digital-twin', icon: Box },
       { label: 'Robot & thiết bị', path: '/staff/robot', icon: Bot },
     ],
   },

@@ -53,8 +53,10 @@ export function LiveMiniMap({ detail }: { detail: TourDetails }) {
     </svg>
   }
 
+  const robotCode = detail.reservation?.robotCode
+  const twinPath = robotCode ? `/staff/digital-twin?robot=${encodeURIComponent(robotCode)}` : '/staff/digital-twin'
   return (
-    <Link to="/staff/digital-twin" className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]" aria-label="Mở Digital Twin">
+    <Link to={twinPath}className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]" aria-label="Mở Digital Twin">
       {body}
       {revision && caption}
       <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted" aria-hidden="true">

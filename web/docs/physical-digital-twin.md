@@ -19,9 +19,11 @@ The long glazing run follows the same measured wall planes as its door frames.
 
 ## Implemented browser preparation
 
-`web/src/routes/staff/DigitalTwinPage.tsx` renders a read-only physical robot
-surface separately from the existing labelled local simulator. The Staff route
-guard still applies. The physical surface starts disconnected, without a pose
+`web/src/routes/staff/DigitalTwinPage.tsx` renders one read-only 3D scene
+(`features/staff/components/FleetTwin.tsx`): the physical robots from the fleet
+snapshot, plus the local patrol only as an opt-in, dimmed and labelled layer.
+See `web/docs/staff-operations.md`. `PhysicalRobotTwin` is no longer mounted by
+the page. The Staff route guard still applies. The physical surface starts disconnected, without a pose
 or a robot marker. No production Hub is connected and no mock is used as a
 fallback.
 
