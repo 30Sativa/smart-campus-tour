@@ -29,6 +29,7 @@ setup(
         'console_scripts': [
             'stm32_bridge_node = stm32_bridge.stm32_bridge_node:main',
             'head_teleop = stm32_bridge.head_teleop:main',
+            'head_sim = stm32_bridge.head_sim:main',
         ],
     },
 )

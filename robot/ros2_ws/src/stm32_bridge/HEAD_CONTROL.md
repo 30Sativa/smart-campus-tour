@@ -200,3 +200,10 @@ serial, firmware cũ, service và deadman JOG.
   của Tour đang RUNNING được bấm; người xem không. Xem
   `docs/contracts/fleet-head/v1/README.md`.
 - TF động cho camera theo góc PAN/TILT (nếu camera nằm trên đầu quay).
+
+## Giả lập (Gazebo)
+
+`ros2 launch stm32_bridge head_sim.launch.py` chạy `head_sim`: cùng `head/*` như trên, nhưng không có STM32,
+dùng mô hình chuyển động `head_sim_model.py` (giới hạn, vật chặn, tốc độ, bước đủ như firmware) và vẽ
+`head/markers` trong RViz. Chỉ dùng trong mô phỏng, không chạy cùng `stm32_bridge`. Hướng dẫn thử từ web tới
+Gazebo: `robot/docs/sim-head-poi.md`.

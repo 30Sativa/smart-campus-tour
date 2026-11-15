@@ -67,8 +67,8 @@ goal sender (RViz, bus_manager, Fleet Commands):
    A failed refresh keeps the last good list.
 2. `head_ros.subscribe_poi_head` listens to `<head_poi_nav_action>/_action/status` (default `navigate_to_pose`).
    The first, latched message is history and is ignored.
-3. A goal that starts `EXECUTING` -> `head/set` 0/0 (front). A goal that `SUCCEEDED` while the TF pose
-   `map -> base_footprint` is fresh and within `head_poi_radius_m` (0.6 m) of a POI -> that POI's preset
+3. A goal that starts `EXECUTING` -> `head/set` 0/0 (front). A goal that `SUCCEEDED` with the latest TF pose
+   `map -> base_footprint` within `head_poi_radius_m` (0.6 m) of a POI -> that POI's preset
    (`head/set` angle, or `head/sweep`); `NONE` does nothing. Nothing happens while `autoMotion` is false.
 
 Code: `poi_head.py` (pure logic, `test/test_poi_head.py`), `head_worker.PoiListWorker`.

@@ -84,7 +84,7 @@ Robot rules (`fleet_bridge`, `head_poi_auto`, with `head_enabled`):
 - Refresh every `head_poi_refresh_sec` (5 s). A failed refresh keeps the last good list.
 - Watch `navigate_to_pose/_action/status` (any goal sender). The first, latched message is history and is ignored.
 - A goal that starts `EXECUTING` → `ANGLE 0/0` (the robot never drives with the head turned).
-- A goal that `SUCCEEDED` while the TF pose is fresh and within `head_poi_radius_m` (0.6 m) of a POI → that POI's
+- A goal that `SUCCEEDED` with the latest TF pose within `head_poi_radius_m` (0.6 m) of a POI → that POI's
   preset: `ANGLE` for `FRONT`/`LEFT`/`RIGHT`/`ANGLE:p,t`, `SWEEP` for `SWEEP[:deg]`, nothing for `NONE`.
 - Only when `autoMotion` is true. Operator buttons still win: the robot acts only on these two goal events.
 
