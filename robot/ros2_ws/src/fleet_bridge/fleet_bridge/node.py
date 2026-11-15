@@ -204,7 +204,7 @@ class FleetBridgeNode(Node):
                 director = PoiHeadDirector(head_actuator, float(self.get_parameter('head_poi_radius_m').value),
                                            self.get_logger().info)
                 subscribe_poi_head(self, director, str(self.get_parameter('head_poi_nav_action').value),
-                                   self._fresh_xy)
+                                   self._latest_xy)
                 self._poi_worker = PoiListWorker(
                     head_client, director, float(self.get_parameter('head_poi_refresh_sec').value),
                     self.get_logger().warning)
@@ -376,10 +376,14 @@ class FleetBridgeNode(Node):
                 self.get_logger().info('Fleet pose TF is fresh.')
             self._last_logged_pose_reason = observation.reason
 
-    def _fresh_xy(self) -> tuple[float, float] | None:
-        """Map-frame position for the POI head, only while the TF pose is fresh."""
+    def _latest_xy(self) -> tuple[float, float] | None:
+        """Map-frame position for the POI head: the latest valid map->base TF, whatever its stamp's age.
+
+        It is read when Nav2 has just reported a goal SUCCEEDED, so localization was running; the wall-clock age
+        check used for telemetry would refuse every pose in Gazebo, where TF carries simulation time.
+        """
         with self._observation_lock:
-            if self._pose is None or self._pose_stale:
+            if self._pose is None:
                 return None
             return float(self._pose['x']), float(self._pose['y'])
 

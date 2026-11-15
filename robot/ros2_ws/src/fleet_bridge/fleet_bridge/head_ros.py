@@ -118,7 +118,7 @@ def create_ros_head(node, on_log) -> tuple[HeadCommandApplier, RosHeadState, Ros
 
 
 def subscribe_poi_head(node, director: PoiHeadDirector, nav_action: str, pose_provider) -> None:
-    """pose_provider() -> (x, y) in the map frame, or None while the TF pose is stale."""
+    """pose_provider() -> (x, y) in the map frame from the latest TF, or None without one."""
     # Nav2 publishes goal status latched (transient local); the first message is the backlog the director ignores.
     latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 

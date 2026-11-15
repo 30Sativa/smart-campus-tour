@@ -98,6 +98,8 @@ Dated evidence (true for its date; later pages supersede it):
 - [Camera mounts](cad-sensor-mounts.md) — measured CAD positions.
 - [Docker dependencies and targets](docker-dependencies.md) — CI, laptop
   debug and simulation image boundaries.
+- [Camera head per POI in Gazebo](sim-head-poi.md) — set a POI's head angle on
+  the web, drive the simulated robot there and watch `head_sim` turn (simulation only).
 
 ## Historical phase records
 
