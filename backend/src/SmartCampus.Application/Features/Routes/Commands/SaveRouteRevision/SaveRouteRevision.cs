@@ -108,9 +108,14 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             var latest = await repo.GetEffectivePoiVerificationAsync(selected.Revision.ProposalId, selected.Revision.NavigationFingerprint, ct);
             if (latest?.Id != selected.Verification.Id || latest.ResultCode != "PASS")
                 throw new ConflictException("A newer POI verification result supersedes the selected PASS.", "POI_VERIFICATION_STALE");
-            if (string.IsNullOrWhiteSpace(selected.Revision.NarrationText))
-                throw new ConflictException($"POI {selected.Revision.Name} chưa có nội dung thuyết minh. Bổ sung nội dung rồi chọn lại phiên bản mới.", "POI_NARRATION_REQUIRED");
         }
+        // ADR-0060: a route uses only narration a second Staff approved. The text is snapshotted below; changing it later
+        // does not touch this revision, and it is not part of the navigation fingerprint.
+        var narrationByProposal = (await repo.GetApprovedNarrationsAsync(
+            poiIds.Select(id => byId[id].Revision.ProposalId).Distinct().ToArray(), ct)).ToDictionary(n => n.ProposalId);
+        foreach (var id in poiIds)
+            if (!narrationByProposal.ContainsKey(byId[id].Revision.ProposalId))
+                throw new ConflictException($"POI {byId[id].Revision.Name} chưa có thuyết minh đã duyệt.", PoiNarrationNotApprovedCode);
         EnsureStopSeparation(i, poiIds.Select(id => byId[id].Revision).ToArray());
         // docs/lich-tour-theo-ca.md §4: dwell alone, before any travel, already longer than the longest shift can hold.
         var totalDwell = i.Stops.Sum(stop => stop.DwellSeconds);
@@ -164,7 +169,9 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                 MapVersionId = map.Id, PoiNavigationFingerprint = selected.Revision.NavigationFingerprint,
                 StopOrder = index + 1, DwellSeconds = i.Stops[index].DwellSeconds,
                 HeadStepsJson = Route.WriteHeadSteps(i.Stops[index].HeadSteps), Name = selected.Revision.Name,
-                NarrationText = selected.Revision.NarrationText, FallbackVideoUrl = selected.Revision.FallbackVideoUrl,
+                NarrationRevisionId = narrationByProposal[selected.Revision.ProposalId].Id,
+                NarrationText = narrationByProposal[selected.Revision.ProposalId].NarrationText,
+                FallbackVideoUrl = narrationByProposal[selected.Revision.ProposalId].FallbackVideoUrl,
                 X = selected.Revision.X, Y = selected.Revision.Y, Yaw = selected.Revision.Yaw, CameraPreset = selected.Revision.CameraPreset });
         }
         repo.AddAudit(new AuditLog { ActorUserId = c.ActorUserId, Action = "ROUTE_REVISION_CREATED", EntityType = "RouteRevision",
@@ -191,7 +198,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                 var selected = byId[s.PoiRevisionId];
                 return new RouteRevisionStopView(stopIds[index], selected.Revision.Id, selected.Verification.Id, index + 1, s.DwellSeconds,
                     s.HeadSteps, selected.Revision.Name, selected.Revision.X, selected.Revision.Y, selected.Revision.Yaw,
-                    selected.Revision.CameraPreset, selected.Revision.NarrationText, selected.Revision.FallbackVideoUrl);
+                    selected.Revision.CameraPreset, narrationByProposal[selected.Revision.ProposalId].NarrationText,
+                    narrationByProposal[selected.Revision.ProposalId].FallbackVideoUrl);
             }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
                 inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], [],
@@ -229,6 +237,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         if (x == previousX && y == previousY) MapPackageValidator.EnsureFreePosition(package, x, y, yaw);
         else MapPackageValidator.EnsureClearPosition(package, x, y, yaw, settings.PoiClearanceMeters);
     }
+
+    public const string PoiNarrationNotApprovedCode = "POI_NARRATION_NOT_APPROVED";
 
     internal static string Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null! : value.Trim();
     internal static byte[] Hash<T>(T value) => SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value));

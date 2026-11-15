@@ -745,6 +745,35 @@ public sealed class BusinessFlowIntegrationTests
                 localizationPassed = true, cameraPresetConfirmed = true, reason = (string?)null,
                 evidenceNote = "SIMULATED BACKEND TEST evidence; no physical robot test was run." });
         Assert.Equal(HttpStatusCode.OK, verifyLab.StatusCode);
+
+        // ADR-0060: Staff writes the narration after the POI check, and a second Staff approves it.
+        using var noNarration = await Json(host.Client, HttpMethod.Post, "/api/staff/routes", staffToken,
+            new { requestId = Guid.NewGuid(), expectedCurrentRevision = 0, name = "Flow Route", description = "API integration test",
+                mapVersionId = mapId, startX = 0.5m, startY = 1.5m, startYaw = 0m, endMode = "LAST_POI",
+                endX = (decimal?)null, endY = (decimal?)null, endYaw = (decimal?)null,
+                stops = new[] { new { poiRevisionId, dwellSeconds = 15, headSteps = new[] { new { preset = "FRONT", holdSeconds = 5 } } },
+                    new { poiRevisionId = labRevisionId, dwellSeconds = 15, headSteps = new[] { new { preset = "FRONT", holdSeconds = 5 } } } } });
+        Assert.Equal(HttpStatusCode.Conflict, noNarration.StatusCode);
+        Assert.Equal("POI_NARRATION_NOT_APPROVED", (await Body(noNarration)).GetProperty("errors").GetProperty("code").GetString());
+        await CreateAccount(host.Client, adminToken, "flow.reviewer", "Staff");
+        var reviewerToken = await Login(host.Client, "flow.reviewer");
+        foreach (var (narrated, text) in new[] { (proposalId, "Thông tin điểm tham quan."), (labProposalId, "Thông tin phòng lab.") })
+        {
+            using var draft = await Json(host.Client, HttpMethod.Put, $"/api/staff/poi-proposals/{narrated}/narrations/draft", staffToken,
+                new { requestId = Guid.NewGuid(), narrationText = text });
+            Assert.Equal(HttpStatusCode.OK, draft.StatusCode);
+            var draftData = (await Body(draft)).GetProperty("data");
+            var approveBody = new { requestId = Guid.NewGuid(), expectedRowVersion = draftData.GetProperty("rowVersion").GetString() };
+            using var selfApprove = await Json(host.Client, HttpMethod.Post, $"/api/staff/poi-proposals/{narrated}/narrations/1/approve", staffToken, approveBody);
+            Assert.Equal(HttpStatusCode.Conflict, selfApprove.StatusCode);
+            Assert.Equal("NARRATION_SELF_APPROVAL_FORBIDDEN", (await Body(selfApprove)).GetProperty("errors").GetProperty("code").GetString());
+            using var approve = await Json(host.Client, HttpMethod.Post, $"/api/staff/poi-proposals/{narrated}/narrations/1/approve", reviewerToken,
+                new { requestId = Guid.NewGuid(), expectedRowVersion = draftData.GetProperty("rowVersion").GetString() });
+            Assert.Equal(HttpStatusCode.OK, approve.StatusCode);
+            Assert.Equal("APPROVED", (await Body(approve)).GetProperty("data").GetProperty("state").GetString());
+        }
+        var narratedPoi = (await Body(await Get(host.Client, $"/api/staff/poi-proposals/{proposalId}", staffToken))).GetProperty("data");
+        Assert.Equal("flow.reviewer", narratedPoi.GetProperty("narration").GetProperty("approved").GetProperty("approvedByName").GetString());
         Assert.Equal(2, eligibleMap.GetProperty("routeMinStops").GetInt32());
         Assert.Equal(1.0m, eligibleMap.GetProperty("routeMinStopSeparationMeters").GetDecimal());
 

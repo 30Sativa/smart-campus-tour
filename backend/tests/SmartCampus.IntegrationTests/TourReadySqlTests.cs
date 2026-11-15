@@ -302,9 +302,10 @@ public sealed class TourReadySqlTests
 
         private async Task<Guid> VerifiedPoi(Guid mapId, string name, decimal x, decimal y)
         {
-            var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(mapId, name, "Tham quan", null, x, y, 0m, "FRONT", "Đây là điểm tham quan."))));
+            var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(mapId, name, "Tham quan", null, x, y, 0m, "FRONT"))));
             var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));
             await Send(new RecordPoiVerificationCommand(technicalId, proposal.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, Robot, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+            await NarrationSeed.ApproveAsync(Send, staffId, operatorId, proposal.Id);
             return proposal.Revision.Id;
         }
 

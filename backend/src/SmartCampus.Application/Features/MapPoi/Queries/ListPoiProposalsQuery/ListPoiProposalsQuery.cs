@@ -16,6 +16,8 @@ public sealed class ListPoiProposalsQueryHandler(IPoiProposalRepository proposal
         var proposalIds = proposals.Select(proposal => proposal.Id).ToArray();
         var revisions = await proposalRepository.ListCurrentRevisionsAsync(proposalIds, ct);
         var verifications = await verificationRepository.ListVerificationRecordsAsync(proposalIds, ct);
+        var narrationsByProposal = (await proposalRepository.ListCurrentNarrationsAsync(proposalIds, ct))
+            .ToLookup(narration => narration.ProposalId);
         var effectiveByFingerprint = verifications
             .GroupBy(record => (record.ProposalRevision.ProposalId, Fingerprint: Convert.ToHexString(record.NavigationFingerprint)))
             .ToDictionary(group => group.Key, group => group
@@ -34,7 +36,8 @@ public sealed class ListPoiProposalsQueryHandler(IPoiProposalRepository proposal
             var view = PoiProposalReadModelLoader.ToRevisionView(revision, submission, verification);
             result.Add(new(proposal.Id, proposal.CurrentRevision, Convert.ToBase64String(proposal.RowVersion),
                 proposal.CreatedAt, proposal.UpdatedAt, view, proposal.SourcePoiId,
-                proposal.DiscardedAt is null && !passedProposals.Contains(proposal.Id), proposal.DiscardedAt));
+                proposal.DiscardedAt is null && !passedProposals.Contains(proposal.Id), proposal.DiscardedAt,
+                PoiNarrationRules.Summary(narrationsByProposal[proposal.Id])));
         }
         return result;
     }

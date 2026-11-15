@@ -213,7 +213,7 @@ public sealed class ImportPoiFilesCommandHandler(
         map.Id, file.File.Capture!.Name, ImportedPurpose, null, file.X!.Value, file.Y!.Value, file.Yaw!.Value,
         PoiImportPlanner.DefaultCameraPreset);
 
-    /// <summary>A new capture replaces map and pose only; name and narration already belong to Staff.</summary>
+    /// <summary>A new capture replaces map and pose only; name and content already belong to Staff (narration is separate, ADR-0060).</summary>
     private async Task<(PoiProposal Proposal, PoiProposalDraft Draft, int Number)> NextRevisionAsync(
         MapVersion map, PoiImportPlannedFile file, PoiProposal proposal, DateTimeOffset now, CancellationToken cancellationToken)
     {
@@ -223,7 +223,7 @@ public sealed class ImportPoiFilesCommandHandler(
         proposal.CurrentRevision = number;
         proposal.UpdatedAt = now;
         return (proposal, new PoiProposalDraft(map.Id, current.Name, current.Purpose, current.Description,
-            file.X!.Value, file.Y!.Value, file.Yaw!.Value, current.CameraPreset, current.NarrationText, current.FallbackVideoUrl), number);
+            file.X!.Value, file.Y!.Value, file.Yaw!.Value, current.CameraPreset), number);
     }
 
     private static PoiImportReceipt Receipt(ImportPoiFilesCommand command, byte[] requestHash, MapVersion map, Robot robot,

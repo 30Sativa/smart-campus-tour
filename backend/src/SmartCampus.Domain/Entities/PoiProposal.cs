@@ -37,5 +37,7 @@ public partial class PoiProposal
 
     public virtual ICollection<PoiImportReceipt> PoiImportReceipts { get; set; } = new List<PoiImportReceipt>();
 
+    public virtual ICollection<PoiNarrationRevision> PoiNarrationRevisions { get; set; } = new List<PoiNarrationRevision>();
+
     public virtual ICollection<PoiProposalRevision> PoiProposalRevisions { get; set; } = new List<PoiProposalRevision>();
 }

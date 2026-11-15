@@ -311,7 +311,7 @@ public sealed class MapRetirementSqlTests
         }
 
         public PoiProposalDraft Draft(Guid mapVersionId, string name) =>
-            new(mapVersionId, name, "Tham quan", null, 1.5m, 2.5m, 0m, "FRONT", "Đây là điểm tham quan.");
+            new(mapVersionId, name, "Tham quan", null, 1.5m, 2.5m, 0m, "FRONT");
 
         public async Task<Robot> Robot(string code)
         {
@@ -334,9 +334,10 @@ public sealed class MapRetirementSqlTests
             var stops = new List<RouteRevisionStopInput>();
             foreach (var (name, x) in new[] { ("Thư viện", 1.5m), ("Phòng lab", 2.5m) })
             {
-                var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(pilotMap.Id, name, "Tham quan", null, x, 1.5m, 0m, "FRONT", "Đây là điểm tham quan."))));
+                var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(pilotMap.Id, name, "Tham quan", null, x, 1.5m, 0m, "FRONT"))));
                 var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));
                 await Send(new RecordPoiVerificationCommand(technicalId, proposal.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, First, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+                await NarrationSeed.ApproveAsync(Send, staffId, technicalId, proposal.Id);
                 stops.Add(new(proposal.Revision.Id, 30, [new("FRONT", 30)]));
             }
             return stops;

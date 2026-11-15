@@ -331,6 +331,44 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
                 (proposal, revision) => new { proposal.Id, revision.CameraPreset })
             .ToDictionaryAsync(row => row.Id, row => row.CameraPreset, cancellationToken);
 
+    public async Task<IReadOnlyList<PoiNarrationRevision>> ListNarrationsAsync(Guid proposalId, CancellationToken cancellationToken) =>
+        await NarrationsWithUsers().Where(narration => narration.ProposalId == proposalId)
+            .OrderByDescending(narration => narration.RevisionNumber).ToArrayAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<PoiNarrationRevision>> ListCurrentNarrationsAsync(
+        IReadOnlyCollection<Guid> proposalIds, CancellationToken cancellationToken) =>
+        await NarrationsWithUsers()
+            .Where(narration => proposalIds.Contains(narration.ProposalId) &&
+                (narration.State == PoiNarrationStates.Draft || narration.State == PoiNarrationStates.Approved))
+            .ToArrayAsync(cancellationToken);
+
+    public Task<PoiNarrationRevision?> FindNarrationAsync(Guid proposalId, int revisionNumber, CancellationToken cancellationToken) =>
+        dbContext.PoiNarrationRevisions.SingleOrDefaultAsync(
+            narration => narration.ProposalId == proposalId && narration.RevisionNumber == revisionNumber, cancellationToken);
+
+    public Task<PoiNarrationRevision?> FindNarrationInStateAsync(Guid proposalId, string state, CancellationToken cancellationToken) =>
+        dbContext.PoiNarrationRevisions.SingleOrDefaultAsync(
+            narration => narration.ProposalId == proposalId && narration.State == state, cancellationToken);
+
+    public async Task<int> GetLastNarrationNumberAsync(Guid proposalId, CancellationToken cancellationToken) =>
+        await dbContext.PoiNarrationRevisions.Where(narration => narration.ProposalId == proposalId)
+            .Select(narration => (int?)narration.RevisionNumber).MaxAsync(cancellationToken) ?? 0;
+
+    public Task<PoiNarrationRevision?> GetNarrationForViewAsync(Guid narrationId, CancellationToken cancellationToken) =>
+        NarrationsWithUsers().SingleOrDefaultAsync(narration => narration.Id == narrationId, cancellationToken);
+
+    public Task<PoiNarrationRequestReceipt?> FindNarrationReceiptAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken) =>
+        dbContext.PoiNarrationRequestReceipts.AsNoTracking()
+            .SingleOrDefaultAsync(receipt => receipt.ActorUserId == actorUserId && receipt.RequestId == requestId, cancellationToken);
+
+    private IQueryable<PoiNarrationRevision> NarrationsWithUsers() =>
+        dbContext.PoiNarrationRevisions.AsNoTracking()
+            .Include(narration => narration.CreatedByUser)
+            .Include(narration => narration.LastEditedByUser)
+            .Include(narration => narration.ApprovedByUser);
+
+    public void Add(PoiNarrationRevision narration) => dbContext.PoiNarrationRevisions.Add(narration);
+    public void Add(PoiNarrationRequestReceipt receipt) => dbContext.PoiNarrationRequestReceipts.Add(receipt);
     public void Add(PoiImportReceipt receipt) => dbContext.PoiImportReceipts.Add(receipt);
     public void Add(MapArea area) => dbContext.MapAreas.Add(area);
     public void Add(MapVersion mapVersion) => dbContext.MapVersions.Add(mapVersion);

@@ -8,8 +8,7 @@ public sealed record RecordMapDeploymentRequest(
 
 public sealed record PoiProposalDraft(
     Guid MapVersionId, string Name, string Purpose, string? Description,
-    decimal X, decimal Y, decimal Yaw, string CameraPreset,
-    string? NarrationText = null, string? FallbackVideoUrl = null);
+    decimal X, decimal Y, decimal Yaw, string CameraPreset);
 
 public sealed record CreatePoiProposalRequest(Guid RequestId, PoiProposalDraft Draft);
 
@@ -20,6 +19,13 @@ public sealed record SubmitPoiProposalRequest(
     Guid RequestId, int ExpectedRevisionNumber, string ExpectedRowVersion);
 
 public sealed record DiscardPoiProposalRequest(int ExpectedRevisionNumber, string ExpectedRowVersion);
+
+/// <summary>Creates the POI narration draft when there is none (ExpectedRowVersion absent) or edits it (ADR-0060).</summary>
+public sealed record SavePoiNarrationDraftRequest(
+    Guid RequestId, string? ExpectedRowVersion, string NarrationText, string? FallbackVideoUrl);
+
+/// <summary>Approves or discards one narration draft (ADR-0060).</summary>
+public sealed record ChangePoiNarrationRequest(Guid RequestId, string ExpectedRowVersion);
 
 public sealed record VerifyPoiProposalRequest(
     Guid RequestId, int ExpectedRevisionNumber, string ExpectedRowVersion, string RobotCode,

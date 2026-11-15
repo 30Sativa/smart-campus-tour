@@ -147,6 +147,7 @@ public sealed class PoiDiscardTests
             nameof(IPoiProposalRepository.LockProposalAsync) => Task.FromResult<PoiProposal?>(proposal),
             nameof(IPoiProposalRepository.FindCurrentRevisionAsync) => Task.FromResult<PoiProposalRevision?>(revision),
             nameof(IPoiProposalRepository.FindSubmissionAsync) => Task.FromResult<PoiProposalSubmission?>(null),
+            nameof(IPoiProposalRepository.ListCurrentNarrationsAsync) => Task.FromResult<IReadOnlyList<PoiNarrationRevision>>([]),
             _ => throw new NotImplementedException(method.Name)
         }, args => audits.Add((AuditLog)args[0]!));
         var verifications = Proxy<IPoiVerificationRepository>(method => method.Name switch

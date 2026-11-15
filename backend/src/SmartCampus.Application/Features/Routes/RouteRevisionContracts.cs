@@ -65,6 +65,8 @@ public interface IRouteRevisionRepository
     Task<MapVersion?> GetMapAsync(Guid mapVersionId, CancellationToken ct);
     Task<IReadOnlyList<RoutePoiRevisionEvidence>> GetPoiEvidenceAsync(IReadOnlyCollection<Guid> revisionIds, CancellationToken ct);
     Task<PoiVerificationRecord?> GetEffectivePoiVerificationAsync(Guid proposalId, byte[] fingerprint, CancellationToken ct);
+    /// <summary>The current APPROVED narration of each of these POI proposals that has one (ADR-0060).</summary>
+    Task<IReadOnlyList<PoiNarrationRevision>> GetApprovedNarrationsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct);
     Task<PoiProposalRevision?> FindPoiRevisionAsync(Guid revisionId, CancellationToken ct);
     Task<PoiVerificationRecord?> FindPoiVerificationAsync(Guid verificationId, CancellationToken ct);
     Task<IReadOnlyList<RouteRevisionStop>> GetStopsAsync(Guid revisionId, CancellationToken ct);

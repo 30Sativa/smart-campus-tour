@@ -302,9 +302,15 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV121SnapshotAndMarker()
+    public async Task Bootstrap_AcceptsVerifiedV122SnapshotAndMarker()
     {
-        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.21.sql", "1.21"));
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.22.sql", "1.22"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_AskForTheUpgradeOnAVerifiedV121Database()
+    {
+        Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.21.sql", "1.21"));
     }
 
     [SchemaV11Fact]
@@ -434,7 +440,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     // Bootstraps the snapshot with its own hash and version markers, then runs the guard with every
-    // variable bound exactly as init-db.sh binds it for the current v1.21 release.
+    // variable bound exactly as init-db.sh binds it for the current v1.22 release.
     private static async Task<object?> RunCurrentGuardAsync(string snapshot, string version, string? alteration = null)
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync(snapshot);
@@ -461,7 +467,8 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV118)", await SnapshotHashAsync("snapshot-v1.18.sql"))
             .Replace("$(SchemaHashV119)", await SnapshotHashAsync("snapshot-v1.19.sql"))
             .Replace("$(SchemaHashV120)", await SnapshotHashAsync("snapshot-v1.20.sql"))
-            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.21.sql"));
+            .Replace("$(SchemaHashV121)", await SnapshotHashAsync("snapshot-v1.21.sql"))
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.22.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();
     }

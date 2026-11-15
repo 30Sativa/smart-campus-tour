@@ -117,7 +117,7 @@ public sealed class PoiMapEligibilityMutationTests
         Assert.Equal(0, writes);
     }
 
-    private static PoiProposalDraft Draft() => new(MapId, "North entrance", "Entrance", null, 1m, 2m, 0m, "FRONT", "Nội dung giới thiệu", null);
+    private static PoiProposalDraft Draft() => new(MapId, "North entrance", "Entrance", null, 1m, 2m, 0m, "FRONT");
 
     private static IMapVersionRepository MapRepository() => Proxy<IMapVersionRepository>(method => method.Name switch
     {

@@ -107,7 +107,7 @@ public sealed class RouteStopSeparationTests
     {
         var fingerprint = Guid.NewGuid().ToByteArray();
         var revision = new PoiProposalRevision { Id = Guid.NewGuid(), ProposalId = Guid.NewGuid(), MapVersionId = Map.Id, Name = name,
-            NarrationText = "Thuyết minh.", X = x, Y = y, NavigationFingerprint = fingerprint };
+            X = x, Y = y, NavigationFingerprint = fingerprint };
         var verification = new PoiVerificationRecord { Id = Guid.NewGuid(), MapVersionId = Map.Id, ResultCode = "PASS", NavigationFingerprint = fingerprint };
         var evidence = new RoutePoiRevisionEvidence(revision, verification);
         Registry[revision.Id] = evidence;
@@ -120,6 +120,11 @@ public sealed class RouteStopSeparationTests
         nameof(IRouteRevisionRepository.FindRequestAsync) => Task.FromResult<RouteRevision?>(null),
         nameof(IRouteRevisionRepository.GetMapAsync) => Task.FromResult<MapVersion?>(Map),
         nameof(IRouteRevisionRepository.GetPoiEvidenceAsync) => Task.FromResult(Evidence((IReadOnlyCollection<Guid>)args[0]!)),
+        nameof(IRouteRevisionRepository.GetApprovedNarrationsAsync) => Task.FromResult<IReadOnlyList<PoiNarrationRevision>>(
+            ((IReadOnlyCollection<Guid>)args[0]!).Select(proposalId => new PoiNarrationRevision
+            {
+                Id = Guid.NewGuid(), ProposalId = proposalId, RevisionNumber = 1, State = "APPROVED", NarrationText = "Thuyết minh."
+            }).ToArray()),
         nameof(IRouteRevisionRepository.GetEffectivePoiVerificationAsync) => Task.FromResult<PoiVerificationRecord?>(
             Known.Single(e => e.Revision.ProposalId == (Guid)args[0]!).Verification),
         _ => throw new NotImplementedException(method.Name)

@@ -696,6 +696,46 @@ checks, POI proposal/revision/submission/import (and preview), route revision/
 submission and Tour create/slots on it return 409 `MAP_VERSION_RETIRED`; existing
 data stays readable. Audit actions: `MAP_VERSION_RETIRED`, `MAP_VERSION_REOPENED`.
 
+Under ADR-0060 (schema v1.22), POI narration is versioned content of the POI
+proposal, not of a navigation revision. Narration is written and approved
+whether or not the POI has been submitted or passed, as long as it exists and is
+not discarded:
+
+- `GET /api/staff/poi-proposals/{id}/narrations` (Staff, TechnicalStaff) lists
+  every version newest first: `{ id, proposalId, revisionNumber, state,
+  narrationText, fallbackVideoUrl, createdByUserId, createdByName, createdAt,
+  lastEditedByUserId, lastEditedByName, lastEditedAt, approvedByUserId,
+  approvedByName, approvedAt, rowVersion }`; `state` is `DRAFT`, `APPROVED`,
+  `SUPERSEDED` or `DISCARDED`.
+- `PUT /api/staff/poi-proposals/{id}/narrations/draft` (Staff) with
+  `{ requestId, expectedRowVersion?, narrationText, fallbackVideoUrl? }` creates
+  the draft when there is none (`expectedRowVersion` absent) or edits the current
+  draft in place (`expectedRowVersion` required); a mismatch either way is 409
+  `STALE_VERSION`. Text is trimmed, 1–4000 characters; the video is an optional
+  HTTPS URL up to 2048 characters (400 otherwise).
+- `POST /api/staff/poi-proposals/{id}/narrations/{revisionNumber}/approve` and
+  `/discard` (Staff) with `{ requestId, expectedRowVersion }`. Approving needs an
+  approver other than the draft's last editor (409
+  `NARRATION_SELF_APPROVAL_FORBIDDEN`) and moves the previously approved version
+  to `SUPERSEDED` in the same transaction. A version that is not `DRAFT` is 409
+  `NARRATION_NOT_DRAFT`; a discarded POI is 409 `POI_PROPOSAL_DISCARDED`.
+- All three writes return the affected version, take the POI proposal row lock
+  and do not change the proposal's `rowVersion`. A repeated `requestId` with the
+  same content returns that version's current view; other content is 409
+  `IDEMPOTENCY_CONFLICT`. Audit actions: `POI_NARRATION_DRAFT_CREATED`,
+  `POI_NARRATION_DRAFT_EDITED`, `POI_NARRATION_APPROVED`, `POI_NARRATION_DISCARDED`.
+- POI proposal views add `narration: { approved: { revisionNumber,
+  approvedByUserId, approvedByName, approvedAt } | null, draft: { revisionNumber,
+  lastEditedByUserId, lastEditedByName, lastEditedAt, rowVersion } | null }`.
+- **Breaking:** POI create/revise drafts no longer accept `narrationText` or
+  `fallbackVideoUrl` (ignored if sent), and revision views no longer return them.
+  Submit no longer returns `POI_NARRATION_REQUIRED`.
+- Route revision save requires an approved narration for every selected POI,
+  otherwise 409 `POI_NARRATION_NOT_APPROVED` ("POI {tên} chưa có thuyết minh đã
+  duyệt."). The stop snapshots that text and video and records
+  `RouteRevisionStops.NarrationRevisionId`; the route fingerprint and test-run
+  inheritance are unchanged. Existing route revisions and Tours keep their snapshot.
+
 Under ADR-0028, a valid uploaded package alone is not selectable for new POI
 work. Map list/detail return backend-calculated `technicalCheckStatus`,
 `canUseForPoiPreparation`, a block reason code/text, and the evidence record
@@ -781,7 +821,7 @@ TechnicalStaff imports robot pose-capture files through multipart
 `POI_IMPORT_INVALID` with per-file errors). Verification views add `verificationMethod` and
 `sourceFileSha256`, their four observation fields are null for `POSE_CAPTURE`, revisions add the
 effective `verificationMethod`, and proposals add `sourcePoiId`. Route save returns 409
-`POI_NARRATION_REQUIRED` for a stop without narration. See ADR-0038.
+`POI_NARRATION_NOT_APPROVED` for a stop without approved narration (ADR-0060). See ADR-0038.
 
 Map and pose input limits (ADR-0040): `POST /api/technical/map-versions` returns 409
 `MAP_PACKAGE_DUPLICATE` for a package already in that area. POI create and draft return 422
