@@ -82,3 +82,16 @@ the default flight to the robot; "wide" is zoomed out over the whole floor.
 The 15/11 production reading (7,062 and 3,961 draw calls, about 36 FPS at
 765 px) came from the earlier page, which drew two scenes. Integrated graphics
 have not been measured yet.
+
+### Visual comparison (same camera, same robots)
+
+Taken in the same session as the numbers above. Two physical robots sit at
+fixed map2-v2 poses, with the default fitted camera. *Before* is the source
+model `_modern_v2.glb`; *after* is `.opt.glb`. The building outline, walls and
+robot positions must match. Glass is plain blended glass after the change, so
+it can look slightly different. **Needs the owner to check by eye.**
+
+| | Before | After |
+|---|---|---|
+| 3D | ![3D before](images/digital-twin-performance/3d-before.png) | ![3D after](images/digital-twin-performance/3d-after.png) |
+| Top-down | ![Top-down before](images/digital-twin-performance/overhead-before.png) | ![Top-down after](images/digital-twin-performance/overhead-after.png) |
