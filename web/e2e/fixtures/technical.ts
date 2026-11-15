@@ -4,7 +4,7 @@ import { MAP_ID, mapHandlers } from './map'
 
 const revision = (id: string, name: string, x: number, y: number, status: string): PoiRevision => ({
   id, revisionNumber: 1, mapVersionId: MAP_ID, mapKey: 'campus-hcm', name, purpose: 'TOUR_STOP',
-  description: `${name} trong tuyến tham quan.`, narrationText: `Đây là ${name}.`, fallbackVideoUrl: null,
+  description: `${name} trong tuyến tham quan.`,
   x, y, yaw: 1.57, cameraPreset: 'LEFT', createdAt: at(-2 * 24 * 60), isSubmitted: true, submittedAt: at(-24 * 60),
   navigationStatus: status, verificationSourceRevisionId: null, verificationMethod: null,
 })

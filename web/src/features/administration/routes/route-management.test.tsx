@@ -21,13 +21,17 @@ const occupiedPackage = () => zipSync({
 })
 
 const map = { id: 'map-v1', areaKey: 'library', areaName: 'Library', versionNumber: 1, mapKey: 'library-v1', packageFileName: 'library.zip', packageSha256: 'a'.repeat(64), imageFileName: 'map.pgm', imageWidth: 2, imageHeight: 2, resolution: 0.5, originX: 10, originY: 20, originYaw: 0, negate: false, occupiedThreshold: 0.65, freeThreshold: 0.25, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-27T10:00:00Z' }
-const proposals = [
+// ADR-0060: a route takes a POI only with an approved narration, so every passed fixture POI carries one.
+const approvedNarration = { approved: { revisionNumber: 1, approvedByUserId: 'staff-2', approvedByName: 'Lan', approvedAt: '2026-11-15T02:00:00Z' }, draft: null }
+const withApprovedNarration = <T extends { revision: { navigationStatus: string } }>(items: T[]) =>
+  items.map(item => item.revision.navigationStatus === 'PASS' ? { ...item, narration: approvedNarration } : item)
+const proposals = withApprovedNarration([
   { id: 'p-pass', currentRevision: 2, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-pass', revisionNumber: 2, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Verified entrance', purpose: 'Entry', description: null, x: 10.2, y: 20.4, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-rev-pass' } },
   { id: 'p-hall', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-hall', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Verified hall', purpose: 'Hall', description: null, x: 11.4, y: 20.4, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-rev-hall' } },
   { id: 'p-parking', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-parking', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Parking', purpose: 'Parking', description: null, x: 10.2, y: 21.6, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-rev-parking' } },
   { id: 'p-pending', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-pending', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Pending POI', purpose: 'Pending', description: null, x: 1, y: 1, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'NOT_CHECKED', verificationSourceRevisionId: null } },
   { id: 'p-other-map', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-other', revisionNumber: 1, mapVersionId: 'map-v2', mapKey: 'library-v2', name: 'Other map POI', purpose: 'Other', description: null, x: 2, y: 2, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-rev-other' } },
-]
+])
 const route = { routeId: 'route-1', revisionId: 'route-rev-1', revisionNumber: 1, name: 'Library tour', description: null, isActive: true, mapVersionId: 'map-v1', mapKey: 'library-v1', mapPackageSha256: 'a'.repeat(64), startX: 11.4, startY: 21.6, startYaw: 0, endMode: 'LAST_POI', endX: null, endY: null, endYaw: null, configurationFingerprint: 'c'.repeat(64), isSubmitted: false, verificationStatus: 'NOT_CHECKED', effectiveTestRunId: null as string | null, durationStatus: 'INCOMPLETE_CONTENT_AUDIO_DATA', dwellDurationSeconds: 60, stops: [{ poiRevisionId: 'poi-rev-pass', sourcePoiVerificationRecordId: 'verify-1', stopOrder: 1, dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 10 }], name: 'Verified entrance', x: 10.2, y: 20.4, yaw: 0, cameraPreset: 'FRONT' }, { poiRevisionId: 'poi-rev-hall', sourcePoiVerificationRecordId: 'verify-2', stopOrder: 2, dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 10 }], name: 'Verified hall', x: 11.4, y: 20.4, yaw: 0, cameraPreset: 'FRONT' }], testRuns: [] as unknown[], revisionHistory: [{ revisionId: 'route-rev-1', revisionNumber: 1, mapVersionId: 'map-v1', mapPackageSha256: 'a'.repeat(64), configurationFingerprint: 'c'.repeat(64), isSubmitted: false, verificationStatus: 'NOT_CHECKED', effectiveTestRunId: null, createdAt: '2026-10-27T10:00:00Z' }], eligibilityIssues: ['INCOMPLETE_CONTENT_AUDIO_DATA'] }
 const response = (data: unknown, status = 200) => new Response(JSON.stringify({ success: status < 400, message: 'OK', data, pagination: { page: 1, pageSize: 100, totalItems: 0, totalPages: 0 }, errors: null }), { status, headers: { 'Content-Type': 'application/json' } })
 let requests: Array<{ url: URL; init?: RequestInit }> = []
@@ -38,6 +42,7 @@ let submissionFailureBody: unknown = null
 let currentRoute = structuredClone(route)
 let scheduledTours: unknown[] = []
 let clearanceMeters: number | undefined
+let createFailure: Response | null = null
 
 function renderAt(path: string, client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
@@ -61,6 +66,7 @@ describe('Staff versioned Route workflow', () => {
     submissionFailureBody = null
     currentRoute = structuredClone(route)
     clearanceMeters = undefined
+    createFailure = null
     scheduledTours = []
     useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'staff-token', user: { userId: 'staff-1', username: 'staff', role: 'Staff' } })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -69,7 +75,7 @@ describe('Staff versioned Route workflow', () => {
       if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(occupiedPackage())
       if (url.pathname === '/api/staff/poi-proposals') return response([...proposals, ...extraProposals])
       if (url.pathname === '/api/routes' && init?.method !== 'POST') return response([currentRoute])
-      if (url.pathname === '/api/staff/routes' && init?.method === 'POST') return response(route)
+      if (url.pathname === '/api/staff/routes' && init?.method === 'POST') return createFailure ?? response(route)
       if (url.pathname === '/api/routes/route-1/revisions') return response(currentRoute)
       if (url.pathname === '/api/staff/routes/route-1/scheduled-tours') return response(scheduledTours)
       if (url.pathname === '/api/staff/routes/route-1/revisions/route-rev-1/submit') {
@@ -112,6 +118,66 @@ describe('Staff versioned Route workflow', () => {
     await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/routes/route-1/revisions/route-rev-1/submit')).toBe(true))
     const submit = requests.find(r => r.url.pathname.endsWith('/submit'))!
     expect(JSON.parse(String(submit.init?.body))).toMatchObject({ expectedCurrentRevision: 1 })
+  })
+
+  // Choice for ADR-0060: an unapproved POI stays in the list with its narration state but cannot be ticked,
+  // the same way a map without a passed POI stays visible but disabled.
+  it('shows each passed POI’s narration state and does not let Staff tick one without approved narration', async () => {
+    extraProposals = [
+      { ...proposals[2], id: 'p-draft', revision: { ...proposals[2].revision, id: 'poi-rev-draft', name: 'Draft narration POI', x: 12, y: 21 }, narration: { approved: null, draft: { revisionNumber: 1, lastEditedByUserId: 'staff-1', lastEditedByName: 'An', lastEditedAt: '2026-11-15T02:00:00Z', rowVersion: 'n1' } } },
+      { ...proposals[2], id: 'p-none', revision: { ...proposals[2].revision, id: 'poi-rev-none', name: 'No narration POI', x: 12, y: 22 }, narration: null },
+    ]
+    renderAt('/staff/manage/routes/new')
+    fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Library tour' } })
+    fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+    next()
+    expect(await screen.findByRole('checkbox', { name: /Verified entrance/ })).toBeEnabled()
+    expect(screen.getByRole('checkbox', { name: /Verified entrance/ })).not.toHaveAccessibleDescription()
+    expect(screen.getAllByText('Thuyết minh: Đã duyệt')).toHaveLength(3)
+    const draft = screen.getByRole('checkbox', { name: /Draft narration POI/ })
+    expect(draft).toBeDisabled()
+    expect(draft).toHaveAccessibleDescription('Thuyết minh chờ duyệt, chưa chọn được')
+    expect(screen.getByRole('checkbox', { name: /No narration POI/ })).toHaveAccessibleDescription('Chưa có thuyết minh, chưa chọn được')
+  })
+
+  it('names a kept stop whose narration is not approved before Save and lets Staff untick it', async () => {
+    const hall = proposals.find(item => item.id === 'p-hall')!
+    const proposalsWithoutApproval = [{ ...hall, narration: null }]
+    extraProposals = proposalsWithoutApproval
+    // The edited revision keeps poi-rev-hall; the extra copy without approval wins the lookup for that revision.
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'http://localhost'); requests.push({ url, init })
+      if (url.pathname === '/api/maps/versions') return response([{ map, latestDeployment: null, canUseForPoiPreparation: true, routeMinStops: 1, routeMinStopSeparationMeters: 1, currentlyDeployedOn: [] }])
+      if (url.pathname === '/api/staff/poi-proposals') return response([proposals[0], ...proposalsWithoutApproval])
+      if (url.pathname === '/api/routes/route-1/revisions') return response(currentRoute)
+      if (url.pathname === '/api/routes') return response([currentRoute])
+      return response(null)
+    })
+    renderAt('/staff/manage/routes/route-1/edit')
+    await screen.findByLabelText('Tên tuyến')
+    fireEvent.click(screen.getByRole('button', { name: /Điểm dừng/ }))
+    const hallBox = await screen.findByRole('checkbox', { name: /Verified hall/ })
+    expect(hallBox).toBeChecked()
+    expect(hallBox).toBeEnabled()
+    expect(screen.getByText(/bỏ chọn Verified hall hoặc duyệt thuyết minh trước/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
+    fireEvent.click(hallBox)
+    expect(screen.queryByText(/bỏ chọn Verified hall/)).not.toBeInTheDocument()
+  })
+
+  it('explains a save refused with POI_NARRATION_NOT_APPROVED in Vietnamese', async () => {
+    createFailure = new Response(JSON.stringify({ success: false, message: 'POI Verified hall chưa có thuyết minh đã duyệt.', data: null, errors: { code: 'POI_NARRATION_NOT_APPROVED' } }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+    renderAt('/staff/manage/routes/new')
+    fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Library tour' } })
+    fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+    next()
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Verified entrance/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Verified hall/ }))
+    next()
+    startFromPoi('poi-rev-parking')
+    next()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
+    expect(await screen.findByText('POI Verified hall chưa có thuyết minh đã duyệt. Nhờ một Staff khác duyệt thuyết minh ở trang POI, hoặc bỏ điểm đó ở bước 2, rồi lưu lại.')).toBeInTheDocument()
   })
 
   it('only offers maps that already have a passed POI', async () => {

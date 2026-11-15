@@ -9,7 +9,7 @@ import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { useDiscardPoiProposal, useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
 import { errorText } from '../../../features/technical/technical-format'
 import type { MapVersionItem, PoiProposal } from '../../../features/technical/api/technical'
-import { NARRATION_NEEDED, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { mapCheckLabel, narrationStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { headPresetLabel } from '../../../features/technical/head-camera-preset'
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
@@ -78,7 +78,7 @@ export default function StaffManagePoisPage() {
     <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
         <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Quản lý POI</h1>
-        <p className="mt-1 text-sm text-[#718096]">Chọn điểm trên bản đồ hoặc trong danh sách. Chỉ điểm đã đạt mới dùng được khi tạo tuyến.</p>
+        <p className="mt-1 text-sm text-[#718096]">Chọn điểm trên bản đồ hoặc trong danh sách. Chỉ điểm đã đạt và có thuyết minh đã duyệt mới dùng được khi tạo tuyến.</p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
       <Link to="/staff/manage/pois/thu-thuyet-minh" className={buttonClass('secondary')}><Volume2 size={16} aria-hidden="true" />Chạy thử thuyết minh</Link>
@@ -128,6 +128,7 @@ export default function StaffManagePoisPage() {
           (blocked && !everyProposal.length ? <NoEligibleMap maps={mapItems} /> : <EmptyState title={all.length || deployedOnly ? 'Không có POI khớp bộ lọc' : 'Chưa có đề xuất POI'} description={all.length || deployedOnly ? 'Đổi trạng thái hoặc từ khóa để tìm điểm tham quan.' : 'Tạo đề xuất từ một bản đồ đã tải lên.'} />) :
           <ul ref={listRef} aria-label="Điểm tham quan" className="min-h-0 divide-y divide-[#eef2f6] overflow-y-auto border-t border-[#eef2f6]">{rows.map((p) => {
             const st = STATUS[statusOf(p)]
+            const narration = narrationStatus(p.narration)
             const active = p.id === selected?.id
             return <li key={p.id} data-active={active} className={active ? 'bg-[#f5f9ff]' : ''}>
               <button type="button" onClick={() => setChosen(p.id)} aria-pressed={active} aria-label={`Chọn ${p.revision.name}`}
@@ -136,7 +137,7 @@ export default function StaffManagePoisPage() {
                 <span className="min-w-0 flex-1">
                   <b className="block truncate text-sm font-semibold text-[#2d3748]">{p.revision.name}</b>
                   <span className="block truncate text-xs text-[#718096]">{p.revision.purpose}</span>
-                  {p.sourcePoiId && !p.revision.narrationText && <span className="mt-1 block"><ToneBadge tone="warn">{NARRATION_NEEDED}</ToneBadge></span>}
+                  <span className="mt-1 block"><ToneBadge tone={narration.tone}>{narration.approved || p.narration?.draft ? `Thuyết minh: ${narration.label}` : narration.label}</ToneBadge></span>
                 </span>
                 <span className="shrink-0 text-right">
                   <span className={`inline-flex rounded-lg px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${st.chip}`}>{st.label}</span>
@@ -155,7 +156,7 @@ export default function StaffManagePoisPage() {
 const NEXT_STEP: Record<Status, { text: string; action: string; icon: typeof Send }> = {
   DRAFT: { text: 'Chưa gửi kiểm chứng. Hoàn tất nội dung rồi gửi để kỹ thuật viên kiểm tra trên robot.', action: 'Mở để gửi kiểm chứng', icon: Send },
   WAIT: { text: 'Đã gửi, đang chờ kỹ thuật viên kiểm tra trên robot.', action: 'Xem đề xuất', icon: FileText },
-  PASS: { text: 'Đã đạt kiểm chứng, dùng được khi tạo tuyến.', action: 'Xem đề xuất', icon: FileText },
+  PASS: { text: 'Đã đạt kiểm chứng và có thuyết minh đã duyệt, dùng được khi tạo tuyến.', action: 'Xem đề xuất', icon: FileText },
   FAIL: { text: 'Kỹ thuật viên ghi không đạt. Xem lý do, sửa rồi gửi lại.', action: 'Xem lý do và sửa', icon: Pencil },
 }
 const NEXT_TONE: Record<Status, string> = { DRAFT: 'bg-[#f8fafc] text-[#475569]', WAIT: 'bg-[#fbf5e8] text-[#7a5c22]', PASS: 'bg-[#edf3fc] text-[#3f62a0]', FAIL: 'bg-[#fbeeec] text-[#a4473d]' }
@@ -163,15 +164,19 @@ const NEXT_TONE: Record<Status, string> = { DRAFT: 'bg-[#f8fafc] text-[#475569]'
 /** The chosen point, opened under its own row: its facts and the next step. */
 function PoiDetail({ proposal }: { proposal: PoiProposal }) {
   const status = statusOf(proposal)
-  // An imported POI is Staff's to finish whatever its check says: a route cannot use it without narration (ADR-0038).
-  const needsNarration = Boolean(proposal.sourcePoiId && !proposal.revision.narrationText)
+  const narration = narrationStatus(proposal.narration)
+  // A PASS joins a route only with an approved narration (ADR-0060), so a passed POI still waiting on it says so.
+  const needsNarration = status === 'PASS' && !narration.approved
   const next = needsNarration
-    ? { text: `Nhập từ tệp ghi pose trên robot. Đặt tên và viết thuyết minh để dùng được trong tuyến.${status === 'WAIT' ? ' Kỹ thuật vẫn đang kiểm tra vị trí.' : ''}`, action: 'Bổ sung thuyết minh', icon: Pencil }
+    ? { text: proposal.narration?.draft
+        ? 'Đã đạt kiểm chứng. Thuyết minh đang chờ một Staff khác duyệt trước khi dùng được trong tuyến.'
+        : 'Đã đạt kiểm chứng. Viết thuyết minh và nhờ một Staff khác duyệt để dùng được trong tuyến.',
+      action: proposal.narration?.draft ? 'Mở để duyệt thuyết minh' : 'Viết thuyết minh', icon: Pencil }
     : NEXT_STEP[status]
   const tone = needsNarration ? NEXT_TONE.WAIT : NEXT_TONE[status]
   const facts: Array<[string, string]> = [
     ['Đầu camera VR', headPresetLabel(proposal.revision.cameraPreset)],
-    ['Thuyết minh', proposal.revision.narrationText ? 'Đã có nội dung' : 'Chưa có nội dung'],
+    ['Thuyết minh', narration.label],
     ['Cách kiểm chứng', proposal.revision.verificationMethod ? verificationMethodLabel[proposal.revision.verificationMethod] ?? '-' : '-'],
   ]
   return (

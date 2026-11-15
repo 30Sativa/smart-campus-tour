@@ -10,7 +10,9 @@ import { AdminPage, Notice } from '../../../features/administration/AdminUi'
 import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type MapVersionItem, type PoiProposal } from '../../../features/technical/api/technical'
 import { staffMapLabels } from '../../../features/administration/map-labels'
-import { errorText } from '../../../features/technical/technical-format'
+import { apiErrorCode, errorText } from '../../../features/technical/technical-format'
+import { narrationStatus, usableForRoute } from '../../../features/technical/poi-labels'
+import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { usePoiProposals } from '../../../features/technical/technical-hooks'
 import { versionedRoutesApi, type VersionedRouteDraft } from '../../../features/administration/routes/versioned-api'
 import { RouteScheduledToursList } from '../../../features/administration/routes/RouteScheduledTours'
@@ -87,7 +89,10 @@ export default function StaffManageRouteFormPage() {
   ]
   // Mirrors the server: a route needs PASS POIs on the exact map (ADR-0023) and current map evidence (ADR-0033).
   const poiMapIds = new Set(verifiedPois.map(proposal => proposal.revision.mapVersionId))
-  const mapBlock = ({ map, canUseForPoiPreparation }: MapVersionItem) => !canUseForPoiPreparation ? 'chưa đạt kiểm tra kỹ thuật' : poiMapIds.has(map.id) ? null : 'chưa có POI đạt'
+  // ADR-0060: the server also needs an approved narration for every stop (POI_NARRATION_NOT_APPROVED).
+  const usableMapIds = new Set(verifiedPois.filter(usableForRoute).map(proposal => proposal.revision.mapVersionId))
+  const mapBlock = ({ map, canUseForPoiPreparation }: MapVersionItem) => !canUseForPoiPreparation ? 'chưa đạt kiểm tra kỹ thuật'
+    : !poiMapIds.has(map.id) ? 'chưa có POI đạt' : usableMapIds.has(map.id) ? null : 'chưa có POI có thuyết minh đã duyệt'
   const mapOptions = [...(maps.data ?? [])].sort((a, b) => Number(mapBlock(a) !== null) - Number(mapBlock(b) !== null))
   const mapLabel = staffMapLabels(maps.data ?? [], item => mapBlock(item) === null)
   const chosenMap = maps.data?.find(item => item.map.id === draft.mapVersionId)
@@ -123,13 +128,18 @@ export default function StaffManageRouteFormPage() {
   const endNearStop = endChoice === 'POSE' && !samePose(endPose, startPose) ? nearStop(endPose, stopPois.slice(-1)) : null
   const closeStops = minSeparation == null ? null : stopPois.slice(1).map((poi, index) => [stopPois[index], poi] as const)
     .find(([previous, poi]) => distance(previous, poi) < minSeparation) ?? null
+  // A POI without approved narration cannot be ticked; one kept from the revision being edited is named here,
+  // so the problem shows before Save instead of as a refusal from the server.
+  const unapprovedStops = stops.flatMap(stop => available.filter(proposal => proposal.revision.id === stop.poiRevisionId && !usableForRoute(proposal)))
+    .map(proposal => proposal.revision.name)
   const totalDwell = stops.reduce((sum, stop) => sum + (Number.isFinite(stop.dwellSeconds) ? stop.dwellSeconds : 0), 0)
 
   const missingByStep: string[][] = [
     [!draft.name.trim() && 'nhập tên tuyến', !draft.mapVersionId && 'chọn bản đồ', mapNotReady && 'chọn bản đồ còn đạt kiểm tra kỹ thuật'],
     [stops.length < (minStops ?? 1) && `chọn ít nhất ${minStops ?? 1} điểm dừng`,
       stops.some(stop => !Number.isInteger(stop.dwellSeconds) || stop.dwellSeconds < MIN_DWELL_SECONDS || stop.dwellSeconds > MAX_DWELL_SECONDS) && `thời gian dừng từ ${MIN_DWELL_SECONDS} đến ${MAX_DWELL_SECONDS} giây`,
-      closeStops && `${closeStops[0].name} và ${closeStops[1].name} quá gần nhau`],
+      closeStops && `${closeStops[0].name} và ${closeStops[1].name} quá gần nhau`,
+      unapprovedStops.length > 0 && `bỏ chọn ${unapprovedStops.join(', ')} hoặc duyệt thuyết minh trước (chưa có thuyết minh đã duyệt)`],
     [!placed(startPose) && 'chọn điểm bắt đầu và hướng', startTooClose && 'điểm bắt đầu quá sát vật cản',
       startNearStop && `điểm bắt đầu quá gần điểm dừng ${startNearStop.name}`,
       endChoice === 'POSE' && !placed(endPose) && 'chọn điểm kết thúc và hướng', endChoice === 'POSE' && endTooClose && 'điểm kết thúc quá sát vật cản',
@@ -138,7 +148,7 @@ export default function StaffManageRouteFormPage() {
   ].map(list => list.filter((item): item is string => Boolean(item)))
   const firstOpen = missingByStep.findIndex(list => list.length > 0)
   // Red only for a real problem (too close, against an obstacle, a map that lost its check); what is simply still to do reads grey.
-  const problemByStep = [mapNotReady, Boolean(closeStops), Boolean(startTooClose || startNearStop || (endChoice === 'POSE' && endTooClose) || endNearStop), false]
+  const problemByStep = [mapNotReady, Boolean(closeStops) || unapprovedStops.length > 0, Boolean(startTooClose || startNearStop || (endChoice === 'POSE' && endTooClose) || endNearStop), false]
   const goTo = (index: number) => { setStep(index); setFurthest(current => Math.max(current, index)); setError(null) }
 
   const moveStop = (index: number, offset: number) => setStopsOverride(current => {
@@ -181,7 +191,7 @@ export default function StaffManageRouteFormPage() {
   return <AdminPage>
     <UnsavedChangesGuard when={changed && !busy} />
     <Link to="/staff/manage/routes" className="mb-3 inline-flex text-sm text-[#2d719e]">← Danh sách tuyến</Link>
-    <PageHeader eyebrow="Tuyến" title={routeId ? 'Sửa tuyến' : 'Tạo tuyến'} description="Tuyến gắn với đúng một bản đồ và chỉ gồm các POI đã đạt kiểm chứng trên bản đồ đó." />
+    <PageHeader eyebrow="Tuyến" title={routeId ? 'Sửa tuyến' : 'Tạo tuyến'} description="Tuyến gắn với đúng một bản đồ và chỉ gồm các POI đã đạt kiểm chứng, có thuyết minh đã duyệt, trên bản đồ đó." />
     <div className="mb-4"><Notice>Lưu xong, gửi kiểm chứng để Kỹ thuật chạy thử toàn tuyến. Chỉ tuyến chạy thử đạt mới dùng được để tạo Tour.</Notice></div>
     {scheduledTours.data && scheduledTours.data.length > 0 && <div className="mb-4"><Notice tone="warn">
       <p>{scheduledTours.data.length} Tour đã lên lịch trên tuyến này vẫn chạy bản đã chọn lúc tạo, không tự đổi theo bản bạn sắp lưu. Muốn Tour đi theo bản mới, chờ bản mới chạy thử đạt rồi hủy Tour và tạo lại.</p>
@@ -205,7 +215,7 @@ export default function StaffManageRouteFormPage() {
     <form onSubmit={event => void save(event)} className="space-y-4">
       {step === 0 && <section aria-label={STEPS[0]} className={`${panelClass} grid gap-3 p-4 sm:grid-cols-2`}>
         <label className="text-sm">Tên tuyến<input className={`${inputClass} mt-1`} required maxLength={150} value={draft.name} onChange={e => updateDraft({ name: e.target.value })} /></label>
-        <div className="text-sm"><label htmlFor="route-map">Bản đồ</label><select title="" id="route-map" className={`${inputClass} mt-1`} required value={draft.mapVersionId} onChange={e => chooseMap(e.target.value)}><option value="">— Chọn bản đồ —</option>{mapOptions.map(item => <option key={item.map.id} value={item.map.id} disabled={mapBlock(item) !== null}>{mapLabel(item.map, mapBlock(item))}</option>)}</select>{mapNotReady ? <p role="alert" className="mt-1 text-xs text-[#b23e31]">Bản đồ này không còn kiểm tra kỹ thuật đạt nên không lưu được tuyến. Nhờ Kỹ thuật kiểm tra lại hoặc chọn bản đồ khác.</p> : <p className="mt-1 text-xs text-[#64748b]">Chỉ chọn được bản đồ đạt kiểm tra kỹ thuật và đã có POI đạt kiểm chứng. Đổi bản đồ sẽ chọn lại điểm dừng và điểm bắt đầu.</p>}</div>
+        <div className="text-sm"><label htmlFor="route-map">Bản đồ</label><select title="" id="route-map" className={`${inputClass} mt-1`} required value={draft.mapVersionId} onChange={e => chooseMap(e.target.value)}><option value="">— Chọn bản đồ —</option>{mapOptions.map(item => <option key={item.map.id} value={item.map.id} disabled={mapBlock(item) !== null}>{mapLabel(item.map, mapBlock(item))}</option>)}</select>{mapNotReady ? <p role="alert" className="mt-1 text-xs text-[#b23e31]">Bản đồ này không còn kiểm tra kỹ thuật đạt nên không lưu được tuyến. Nhờ Kỹ thuật kiểm tra lại hoặc chọn bản đồ khác.</p> : <p className="mt-1 text-xs text-[#64748b]">Chỉ chọn được bản đồ đạt kiểm tra kỹ thuật và đã có POI đạt kiểm chứng, có thuyết minh đã duyệt. Đổi bản đồ sẽ chọn lại điểm dừng và điểm bắt đầu.</p>}</div>
         <label className="text-sm sm:col-span-2">Mô tả<textarea className={`${inputClass} mt-1`} rows={2} maxLength={1000} value={draft.description} onChange={e => updateDraft({ description: e.target.value })} /></label>
       </section>}
 
@@ -214,11 +224,15 @@ export default function StaffManageRouteFormPage() {
         {available.length ? <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><ol className="space-y-2">{orderedPois.map(poi => {
           const index = stops.findIndex(stop => stop.poiRevisionId === poi.revision.id)
           const selected = index >= 0
-          return <li key={poi.revision.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-3 text-sm ${selected ? 'border-[#bcd7ea] bg-[#f5fafd]' : 'border-[#e2e8f0]'}`}>
-            <label className="flex min-w-0 flex-1 basis-56 cursor-pointer items-center gap-3">
-              <input type="checkbox" className="size-4 shrink-0 accent-[#2d719e]" checked={selected} onChange={() => toggle(poi)} />
+          const narration = narrationStatus(poi.narration)
+          // Unticking stays possible for a stop kept from the edited revision, so it can be removed.
+          const lockedOut = !narration.approved && !selected
+          return <li key={poi.revision.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-3 text-sm ${selected ? narration.approved ? 'border-[#bcd7ea] bg-[#f5fafd]' : 'border-[#f1dcb0] bg-[#fffaf0]' : 'border-[#e2e8f0]'}`}>
+            <label className={`flex min-w-0 flex-1 basis-56 items-center gap-3 ${lockedOut ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+              <input type="checkbox" className="size-4 shrink-0 accent-[#2d719e]" checked={selected} disabled={lockedOut} aria-describedby={narration.approved ? undefined : `narration-${poi.revision.id}`} onChange={() => toggle(poi)} />
               {selected && <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#173b5f] text-xs font-semibold text-white">{index + 1}</span>}
-              <span className="min-w-0 break-words"><span className="font-semibold text-[#0f172a]">{poi.revision.name}</span></span>
+              <span className="min-w-0 break-words"><span className={`font-semibold ${lockedOut ? 'text-[#64748b]' : 'text-[#0f172a]'}`}>{poi.revision.name}</span>
+                <span id={`narration-${poi.revision.id}`} className="ml-2 inline-block align-middle"><ToneBadge tone={narration.tone}>{narration.approved ? `Thuyết minh: ${narration.label}` : narration.label === 'Chờ duyệt' ? 'Thuyết minh chờ duyệt, chưa chọn được' : 'Chưa có thuyết minh, chưa chọn được'}</ToneBadge></span></span>
             </label>
             {selected && <div className="flex items-center gap-2">
               <label className="flex items-center gap-2 text-xs text-[#64748b]">Dừng<span className="w-20 shrink-0"><input aria-label={`Thời gian dừng ${poi.revision.name} (giây)`} className={inputClass} type="number" min={MIN_DWELL_SECONDS} max={MAX_DWELL_SECONDS} value={stops[index].dwellSeconds} onChange={e => setStopsOverride(current => (current ?? stops).map(stop => stop.poiRevisionId === poi.revision.id ? { ...stop, dwellSeconds: Number(e.target.value) } : stop))} /></span>giây</label>
@@ -229,7 +243,7 @@ export default function StaffManageRouteFormPage() {
         })}</ol>
           <div className="lg:sticky lg:top-4"><RouteMap mapVersionId={draft.mapVersionId} start={placed(startPose) ? { x: startPose.x!, y: startPose.y! } : null}
             stops={stopPois.map(poi => ({ id: poi.id, name: poi.name, x: poi.x, y: poi.y }))}
-            candidates={available.filter(proposal => !stopIds.has(proposal.revision.id)).map(({ revision }) => ({ id: revision.id, name: revision.name, x: revision.x, y: revision.y }))}
+            candidates={available.filter(proposal => !stopIds.has(proposal.revision.id) && usableForRoute(proposal)).map(({ revision }) => ({ id: revision.id, name: revision.name, x: revision.x, y: revision.y }))}
             onToggle={id => { const proposal = available.find(item => item.revision.id === id); if (proposal) toggle(proposal) }} /></div>
         </div> : <p className="py-4 text-sm text-[#64748b]">Chưa có POI đạt kiểm chứng trên bản đồ này.</p>}
       </section>}
@@ -310,6 +324,9 @@ function routeSaveError(cause: unknown) {
   const message = errorText(cause)
   if (cause instanceof ApiError && cause.status === 409 && cause.body.includes('ROUTE_STOP_TOO_CLOSE'))
     return message.includes('cần ít nhất') ? message : 'Điểm bắt đầu, điểm kết thúc hoặc hai điểm dừng liền nhau đặt quá gần nhau. Sửa ở bước 2 hoặc 3 rồi lưu lại.'
+  // The server names the POI in Vietnamese ("POI {tên} chưa có thuyết minh đã duyệt."); say what to do next.
+  if (apiErrorCode(cause) === 'POI_NARRATION_NOT_APPROVED')
+    return `${message.startsWith('POI ') ? message : 'Một điểm dừng chưa có thuyết minh đã duyệt.'} Nhờ một Staff khác duyệt thuyết minh ở trang POI, hoặc bỏ điểm đó ở bước 2, rồi lưu lại.`
   return message
 }
 

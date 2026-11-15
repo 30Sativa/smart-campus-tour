@@ -20,7 +20,7 @@ const mapItem = { map, latestDeployment: null, technicalCheckStatus: 'PASSED', c
   currentlyDeployedOn: [{ robotCode: 'amr-01', checkedAt: '2026-10-27T10:00:00Z' }] }
 const proposal = {
   id: 'proposal-1', currentRevision: 1, rowVersion: 'AAAAAAAAAAA=',
-  revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library', purpose: 'Entrance', description: null, narrationText: 'Giới thiệu thư viện.', fallbackVideoUrl: 'https://example.test/video', x: 1, y: 2, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: true, submittedAt: '2026-10-27T10:01:00Z', navigationStatus: 'NOT_CHECKED' },
+  revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library', purpose: 'Entrance', description: null, x: 1, y: 2, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: true, submittedAt: '2026-10-27T10:01:00Z', navigationStatus: 'NOT_CHECKED' },
 }
 const queueItem = { proposalId: proposal.id, currentRevision: proposal.currentRevision, rowVersion: proposal.rowVersion, revision: proposal.revision }
 const response = (data: unknown) => new Response(JSON.stringify({ success: true, message: 'OK', data, errors: null }), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -730,13 +730,14 @@ describe('Technical Staff API integration', () => {
     expect(screen.queryByText(/library-v1/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Library' }))
     const detail = within(screen.getByRole('dialog', { name: 'Library' }))
-    expect(detail.getByText('Giới thiệu thư viện.')).toBeInTheDocument()
+    // Narration is Staff content (ADR-0060): Technical sees its state only, never its text or an edit control.
+    expect(detail.getByText('Chưa có thuyết minh')).toBeInTheDocument()
+    expect(detail.getByText('Staff viết và duyệt; không ảnh hưởng kết quả kiểm chứng.')).toBeInTheDocument()
     expect(detail.getByText('x 1, y 2, yaw 0')).toBeInTheDocument()
     expect(detail.getByText('Nhìn phía trước')).toBeInTheDocument()
     fireEvent.click(detail.getByRole('button', { name: 'Ghi kết quả' }))
     expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
-    expect(screen.getByText('Nội dung thuyết minh, chỉ đọc')).toBeInTheDocument()
-    expect(screen.getByText(/Video dự phòng: https:\/\/example\.test\/video/)).toBeInTheDocument()
+    expect(screen.queryByText('Nội dung thuyết minh, chỉ đọc')).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Nội dung thuyết minh' })).not.toBeInTheDocument()
     await screen.findByRole('option', { name: /AMR 01 · amr-01/ })
     expect(screen.getByLabelText('Robot vật lý').tagName).toBe('SELECT')

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, ChevronRight, CircleAlert, Info, MapPinned, MapPinOff, Square, Volume2 } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CircleAlert, Info, MapPinned, MapPinOff } from 'lucide-react'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
@@ -9,7 +9,7 @@ import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
 import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { NARRATION_NEEDED, mapCheckLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { mapCheckLabel, narrationStatus, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { headPresetProblem } from '../../../features/technical/head-camera-preset'
 import { HeadCameraPresetField } from '../../../features/administration/pois/HeadCameraPresetField'
 import { staffMapLabels } from '../../../features/administration/map-labels'
@@ -19,18 +19,19 @@ import { clearanceMessage, poseClearance } from '../../../features/administratio
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 import { UnsavedChangesGuard } from '../../../features/administration/UnsavedChangesGuard'
 import { AFTER_SAVE } from '../../../features/administration/after-save'
-import { canPreviewNarration, previewNarration } from '../../../features/student/use-narration-voice'
+import { PoiNarrationPanel } from '../../../features/administration/pois/PoiNarrationPanel'
 
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
 
-type Draft = { mapVersionId: string; name: string; purpose: string; description: string; narrationText: string; fallbackVideoUrl: string; x: number | null; y: number | null; yaw: number | null; cameraPreset: string }
-const empty: Draft = { mapVersionId: '', name: '', purpose: '', description: '', narrationText: '', fallbackVideoUrl: '', x: null, y: null, yaw: null, cameraPreset: 'FRONT' }
+// Narration is not part of a POI revision any more; it has its own versions and approval (ADR-0060).
+type Draft = { mapVersionId: string; name: string; purpose: string; description: string; x: number | null; y: number | null; yaw: number | null; cameraPreset: string }
+const empty: Draft = { mapVersionId: '', name: '', purpose: '', description: '', x: null, y: null, yaw: null, cameraPreset: 'FRONT' }
 
 /** The draft exactly as it is sent, so "nothing changed" means the server would get the same revision. */
 function payload(draft: Draft) {
   return { mapVersionId: draft.mapVersionId, name: draft.name.trim(), purpose: draft.purpose.trim(), description: draft.description.trim() || null,
-    narrationText: draft.narrationText.trim(), fallbackVideoUrl: draft.fallbackVideoUrl.trim() || null, x: draft.x, y: draft.y, yaw: draft.yaw, cameraPreset: draft.cameraPreset }
+    x: draft.x, y: draft.y, yaw: draft.yaw, cameraPreset: draft.cameraPreset }
 }
 const samePayload = (a: Draft, b: Draft) => JSON.stringify(payload(a)) === JSON.stringify(payload(b))
 /**
@@ -41,7 +42,7 @@ const navigationKey = (draft: Draft) => [draft.mapVersionId, draft.x?.toFixed(4)
 
 function asDraft(item: PoiProposal): Draft {
   const { revision } = item
-  return { mapVersionId: revision.mapVersionId, name: revision.name, purpose: revision.purpose, description: revision.description ?? '', narrationText: revision.narrationText ?? '', fallbackVideoUrl: revision.fallbackVideoUrl ?? '', x: revision.x, y: revision.y, yaw: revision.yaw, cameraPreset: revision.cameraPreset }
+  return { mapVersionId: revision.mapVersionId, name: revision.name, purpose: revision.purpose, description: revision.description ?? '', x: revision.x, y: revision.y, yaw: revision.yaw, cameraPreset: revision.cameraPreset }
 }
 
 export default function StaffManagePoiFormPage() {
@@ -53,9 +54,6 @@ export default function StaffManagePoiFormPage() {
   const [draftOverride, setDraftOverride] = useState<Draft | null>(null)
   const [saved, setSaved] = useState<PoiProposal | null>(null)
   const [busy, setBusy] = useState(false)
-  const [previewing, setPreviewing] = useState(false)
-  const stopPreview = useRef<(() => void) | null>(null)
-  useEffect(() => () => stopPreview.current?.(), [])
   const [error, setError] = useState<string | null>(null)
   const [poseMode, setPoseMode] = useState<PickerMode>('position')
   const current = saved ?? proposalQuery.data ?? null
@@ -88,8 +86,8 @@ export default function StaffManagePoiFormPage() {
   const mutate = async (action: 'save' | 'submit') => {
     // Enter in a field submits the form even while Save is disabled.
     if ((action === 'save' && current && !changed) || (waiting && changed)) return
-    if (!mapEligible || historicalReadOnly || !draft.mapVersionId || !draft.name.trim() || !draft.purpose.trim() || !draft.narrationText.trim() || draft.x == null || draft.y == null || draft.yaw == null) {
-      setError('Cần chọn bản đồ, nhập tên, mục đích, nội dung thuyết minh và đặt vị trí cùng hướng trên bản đồ.')
+    if (!mapEligible || historicalReadOnly || !draft.mapVersionId || !draft.name.trim() || !draft.purpose.trim() || draft.x == null || draft.y == null || draft.yaw == null) {
+      setError('Cần chọn bản đồ, nhập tên, mục đích và đặt vị trí cùng hướng trên bản đồ.')
       return
     }
     const cameraProblem = headPresetProblem(draft.cameraPreset)
@@ -122,7 +120,7 @@ export default function StaffManagePoiFormPage() {
         await queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposals'] })
       }
       const submitted = action === 'submit'
-      if (created) celebrate({ title: `Đã tạo POI “${body.name}”`, detail: submitted ? 'Đã gửi kiểm chứng. POI dùng được cho tuyến khi kỹ thuật xác nhận đạt.' : 'Đã lưu bản nháp. Gửi kiểm chứng để kỹ thuật xác nhận đạt trước khi dùng cho tuyến.' })
+      if (created) celebrate({ title: `Đã tạo POI “${body.name}”`, detail: submitted ? 'Đã gửi kiểm chứng. POI dùng được cho tuyến khi kỹ thuật xác nhận đạt và thuyết minh được duyệt.' : 'Đã lưu bản nháp. Gửi kiểm chứng để kỹ thuật xác nhận đạt trước khi dùng cho tuyến.' })
       else notify(submitted
         ? { title: `Đã gửi kiểm chứng POI “${body.name}”`, detail: 'Chờ kỹ thuật xác nhận. Gửi kiểm chứng chưa có nghĩa là đã đạt.' }
         : { title: `Đã lưu POI “${body.name}”`, detail: 'Bản nháp; chưa gửi kiểm chứng.' })
@@ -159,7 +157,10 @@ export default function StaffManagePoiFormPage() {
   const locked = !mapEligible || historicalReadOnly
   const yawDeg = draft.yaw == null ? null : Math.round((draft.yaw * 180 / Math.PI) * 10) / 10
   const placed = draft.x != null && draft.y != null
-  const contentReady = Boolean(draft.name.trim() && draft.purpose.trim() && draft.narrationText.trim())
+  const contentReady = Boolean(draft.name.trim() && draft.purpose.trim())
+  const narration = current ? narrationStatus(current.narration) : null
+  // A PASS alone is not enough for a route: its narration must be approved as well (ADR-0060).
+  const passedText = narration?.approved ? 'Đã đạt, dùng được trong tuyến.' : 'Đã đạt kiểm chứng. Còn chờ duyệt thuyết minh trước khi dùng cho tuyến.'
   const steps: Array<[boolean, string, string]> = [
     [Boolean(selectedItem), 'Bản đồ đã chọn', 'Chưa chọn bản đồ'],
     [placed, 'Vị trí đã đặt', 'Vị trí chưa đặt'],
@@ -170,7 +171,7 @@ export default function StaffManagePoiFormPage() {
   const outcome: { tone: 'ok' | 'info' | 'warn'; text: string } | null = !current
     ? { tone: 'ok', text: 'Đủ thông tin. Lưu nháp, hoặc gửi để kỹ thuật kiểm tra trên robot.' }
     : !changed
-      ? passed ? { tone: 'ok', text: 'Đã đạt, dùng được trong tuyến.' }
+      ? passed ? { tone: narration?.approved ? 'ok' : 'info', text: passedText }
         : waiting ? { tone: 'info', text: 'Đang chờ kỹ thuật kiểm tra.' }
         : failed ? { tone: 'warn', text: current.revision.isSubmitted ? 'Kỹ thuật ghi không đạt. Sửa vị trí, hướng hoặc góc camera rồi gửi kiểm chứng lại.' : 'Kỹ thuật ghi không đạt cho vị trí này. Gửi kiểm chứng để kiểm tra lại.' }
         : { tone: 'info', text: 'Bản nháp, chưa gửi kiểm chứng.' }
@@ -185,7 +186,7 @@ export default function StaffManagePoiFormPage() {
   const saveBlocked = Boolean(current) && (!changed || waiting)
   // Sending again adds nothing when the revision it would send is already submitted or already holds a PASS.
   const submitBlocked = Boolean(current) && (waiting || (!changed && (current!.revision.isSubmitted || passed)) || (changed && !navigationChanged && passed))
-  const missing = [!draft.mapVersionId && 'bản đồ', !placed && 'vị trí', draft.yaw == null && 'hướng robot', !draft.name.trim() && 'tên POI', !draft.purpose.trim() && 'mục đích', !draft.narrationText.trim() && 'thuyết minh', headPresetProblem(draft.cameraPreset) && 'hoạt động đầu camera hợp lệ'].filter(Boolean) as string[]
+  const missing = [!draft.mapVersionId && 'bản đồ', !placed && 'vị trí', draft.yaw == null && 'hướng robot', !draft.name.trim() && 'tên POI', !draft.purpose.trim() && 'mục đích', headPresetProblem(draft.cameraPreset) && 'hoạt động đầu camera hợp lệ'].filter(Boolean) as string[]
   const field = `${inputClass} mt-1.5`
   const label = 'flex items-center gap-1 text-sm font-medium text-[#2d3748]'
   const required = <span aria-hidden="true" className="text-[#c53030]">*</span>
@@ -198,7 +199,7 @@ export default function StaffManagePoiFormPage() {
     </header>
     {current && state && <div className="mb-4"><Notice tone={state.tone === 'danger' ? 'danger' : state.tone === 'ok' ? 'success' : 'info'}>{state.label}{current.revision.verificationSourceRevisionId ? ' · kết quả lấy từ một bản lưu trước' : ''}</Notice></div>}
     {current?.revision.verificationMethod && <div className="mb-4"><Notice tone="info">Cách kiểm chứng: {verificationMethodLabel[current.revision.verificationMethod]}.</Notice></div>}
-    {current?.sourcePoiId && !current.revision.narrationText && <div className="mb-4"><Notice tone="warn">{NARRATION_NEEDED}. POI này được nhập từ tệp ghi pose trên robot, chỉ cần thêm tên và thuyết minh; vị trí giữ nguyên thì không phải kiểm chứng lại.</Notice></div>}
+    {current?.sourcePoiId && !current.narration?.approved && <div className="mb-4"><Notice tone="warn">POI này được nhập từ tệp ghi pose trên robot. Thêm tên và viết thuyết minh ở khu Thuyết minh bên dưới; vị trí giữ nguyên thì không phải kiểm chứng lại.</Notice></div>}
     {current && selectedItem && !selectedItem.canUseForPoiPreparation && <div className="mb-4"><Notice tone="warn">Bản đồ của điểm này hiện không đủ điều kiện để chỉnh sửa: {selectedItem.preparationBlockReason} Lịch sử và kết quả kiểm chứng vẫn được giữ; bản đồ và vị trí bên dưới chỉ để xem.</Notice></div>}
 
     <section className={`${card} mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-3.5`} aria-label="Bản đồ và tiến độ">
@@ -237,10 +238,6 @@ export default function StaffManagePoiFormPage() {
         <div className="mt-5 space-y-2 border-t border-[#e2e8f0] pt-5">
           <h2 className="text-lg font-bold text-[#2d3748]">Camera & tư liệu</h2>
           <HeadCameraPresetField value={draft.cameraPreset} onChange={cameraPreset => update({ cameraPreset })} />
-          <details className="group rounded-xl border border-[#e2e8f0] text-sm" open={Boolean(draft.fallbackVideoUrl)}>
-            <summary className={`flex cursor-pointer list-none items-center gap-2 rounded-xl px-3.5 py-2.5 font-medium text-[#2d3748] [&::-webkit-details-marker]:hidden ${focus}`}><ChevronRight size={15} aria-hidden="true" className="text-[#718096] transition-transform group-open:rotate-90" />Video dự phòng HTTPS <span className="font-normal text-[#718096]">(không bắt buộc)</span></summary>
-            <div className="border-t border-[#e2e8f0] p-3.5"><label className="block text-sm text-[#2d3748]">Đường dẫn video<input className={field} type="url" maxLength={2048} pattern="https://.*" value={draft.fallbackVideoUrl} onChange={e => update({ fallbackVideoUrl: e.target.value })} placeholder="https://…" /></label></div>
-          </details>
         </div>
       </section>
 
@@ -254,26 +251,12 @@ export default function StaffManagePoiFormPage() {
           <div><span className={label}><label htmlFor="poi-purpose">Mục đích</label>{required}</span><input id="poi-purpose" className={field} required maxLength={500} value={draft.purpose} onChange={e => update({ purpose: e.target.value })} placeholder="Giới thiệu khu tự học" /></div>
           <div><span className={label}><label htmlFor="poi-description">Mô tả</label><span className="font-normal text-[#718096]">(không bắt buộc)</span></span><textarea id="poi-description" className={field} rows={3} maxLength={1000} value={draft.description} onChange={e => update({ description: e.target.value })} placeholder="Thông tin bổ sung về điểm tham quan…" /></div>
         </div>
-        <div className="space-y-2 border-t border-[#e2e8f0] pt-5">
-          <h2 className="text-lg font-bold text-[#2d3748]">Nội dung thuyết minh</h2>
-          <div><span className={label}><label htmlFor="poi-narration">Thuyết minh</label>{required}</span><textarea id="poi-narration" aria-label="Nội dung thuyết minh" className={field} rows={4} required maxLength={4000} value={draft.narrationText} onChange={e => update({ narrationText: e.target.value })} placeholder="Nhập nội dung giới thiệu tại điểm này…" /></div>
-          <p className="text-xs text-[#718096]">Trang của học sinh tự đọc nội dung này khi robot dừng tại điểm.</p>
-          {canPreviewNarration() && (
-            <button type="button" className={buttonClass('secondary', 'sm')} disabled={!draft.narrationText.trim()}
-              onClick={() => {
-                if (previewing) { stopPreview.current?.(); return }
-                setPreviewing(true)
-                stopPreview.current = previewNarration(draft.narrationText, () => { stopPreview.current = null; setPreviewing(false) })
-              }}>
-              {previewing ? <Square size={14} aria-hidden="true" /> : <Volume2 size={14} aria-hidden="true" />}
-              {previewing ? 'Dừng đọc' : 'Nghe thử'}
-            </button>
-          )}
-        </div>
-        <p className="flex items-start gap-2 text-xs text-[#718096]"><Info size={14} aria-hidden="true" className="mt-0.5 shrink-0" />Gửi đề xuất để kỹ thuật viên kiểm chứng. Mỗi lần lưu tạo một bản mới.</p>
+        <p className="flex items-start gap-2 text-xs text-[#718096]"><Info size={14} aria-hidden="true" className="mt-0.5 shrink-0" />Gửi đề xuất để kỹ thuật viên kiểm chứng. Mỗi lần lưu tạo một bản mới. {poiId ? 'Thuyết minh viết và duyệt ở khu Thuyết minh bên dưới.' : 'Thuyết minh viết sau khi tạo POI, ở trang chi tiết của điểm.'}</p>
         </div>
       </aside>
     </form>
+
+    {current && <PoiNarrationPanel proposal={current} />}
 
     {current && <section className={`${card} mt-4 p-5`} aria-label="Lịch sử thay đổi"><h2 className="text-lg font-bold text-[#2d3748]">Lịch sử thay đổi</h2>{historyRows.length ? <ol className="mt-2 space-y-1.5">{historyRows.map(item => <li key={item.id} className="text-sm text-[#2d3748]">Bản lưu {campusShortStamp(item.createdAt)} · {poiStatus(item).label}</li>)}</ol> : <p className="mt-2 text-sm text-[#718096]">{history.isPending ? 'Đang tải lịch sử…' : 'Chưa có lịch sử.'}</p>}{history.data?.verificationRecords.length ? <div className="mt-3 border-t border-[#e2e8f0] pt-3"><h3 className="text-sm font-semibold text-[#2d3748]">Kết quả kiểm chứng</h3><ul className="mt-2 space-y-2">{history.data.verificationRecords.map(record => <li key={record.id} className="text-sm text-[#2d3748]">{record.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'} · {record.robotCode} · {new Date(record.checkedAt).toLocaleString('vi-VN')}{record.reason && <p className="text-[#a4473d]">Lý do: {record.reason}</p>}<p className="text-xs text-[#718096]">{record.evidenceNote}</p></li>)}</ul></div> : null}</section>}
 

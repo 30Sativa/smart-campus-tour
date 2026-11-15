@@ -17,7 +17,7 @@ vi.mock('./map/load-map-image', () => ({ loadMapImage: vi.fn(async () => ({ pixe
 const map = { id: 'map-v1', areaKey: 'library', areaName: 'Library', versionNumber: 1, mapKey: 'library-v1', packageFileName: 'library.zip', packageSha256: 'a'.repeat(64), imageFileName: 'map.pgm', imageWidth: 2, imageHeight: 2, resolution: 0.5, originX: 10, originY: 20, originYaw: 0, negate: false, occupiedThreshold: 0.65, freeThreshold: 0.25, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-27T10:00:00Z' }
 const eligibleMap = { map, latestDeployment: null, technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, preparationBlockReasonCode: null, preparationBlockReason: null, preparationEvidence: { id: 'check-1', mapVersionId: map.id, robotCode: 'amr-01', packageSha256: map.packageSha256, localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Simulated test evidence', checkedAt: '2026-10-27T10:00:00Z' }, currentlyDeployedOn: [{ robotCode: 'amr-01', checkedAt: '2026-10-27T10:00:00Z' }] }
 const NativeURL = URL
-const proposal = { id: 'proposal-1', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library entry', purpose: 'Entrance', description: null, narrationText: 'Giới thiệu thư viện.', fallbackVideoUrl: null, x: 10.25, y: 20.75, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_CHECKED', verificationSourceRevisionId: null } }
+const proposal = { id: 'proposal-1', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library entry', purpose: 'Entrance', description: null, x: 10.25, y: 20.75, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_CHECKED', verificationSourceRevisionId: null } }
 const response = (data: unknown, status = 200) => new Response(JSON.stringify({ success: status < 400, message: 'OK', data, errors: null }), { status, headers: { 'Content-Type': 'application/json' } })
 let requests: Array<{ url: URL; init?: RequestInit }> = []
 let mapItem: object = eligibleMap
@@ -65,12 +65,13 @@ describe('Staff versioned POI workflow', () => {
     fireEvent.pointerDown(svg, pointerAt(svg, 1.5, 0.5))
     fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Library entry' } })
     fireEvent.change(screen.getByLabelText('Mục đích'), { target: { value: 'Entrance' } })
-    fireEvent.change(screen.getByLabelText('Nội dung thuyết minh'), { target: { value: 'Giới thiệu thư viện.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Gửi kiểm chứng' }))
     await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/submit')).toBe(true))
     const create = requests.find(r => r.url.pathname === '/api/staff/poi-proposals' && r.init?.method === 'POST')!
     const body = JSON.parse(String(create.init?.body))
-    expect(body.draft).toMatchObject({ mapVersionId: 'map-v1', x: 10.25, y: 20.75, yaw: 0, name: 'Library entry', narrationText: 'Giới thiệu thư viện.', fallbackVideoUrl: null })
+    expect(body.draft).toMatchObject({ mapVersionId: 'map-v1', x: 10.25, y: 20.75, yaw: 0, name: 'Library entry' })
+    expect(body.draft).not.toHaveProperty('narrationText')
+    expect(body.draft).not.toHaveProperty('fallbackVideoUrl')
     expect(body.requestId).toBeTruthy()
     const submit = requests.find(r => r.url.pathname.endsWith('/submit'))!
     expect(JSON.parse(String(submit.init?.body))).toMatchObject({ expectedRevisionNumber: 1, expectedRowVersion: proposal.rowVersion })
@@ -83,7 +84,10 @@ describe('Staff versioned POI workflow', () => {
     expect(screen.getByRole('region', { name: 'Vị trí và hướng robot' })).toContainElement(camera)
     const content = screen.getByRole('complementary', { name: 'Nội dung điểm' })
     expect(content).not.toContainElement(camera)
-    expect(content).toContainElement(screen.getByLabelText('Nội dung thuyết minh'))
+    expect(content).toContainElement(screen.getByLabelText('Mục đích'))
+    // Narration has its own section on the POI page (ADR-0060); a new POI is sent without it.
+    expect(screen.queryByLabelText('Nội dung thuyết minh')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Video dự phòng/)).not.toBeInTheDocument()
   })
 
   it('shows the clearance message before submit and sends nothing for a pose too close to the map edge', async () => {
@@ -96,7 +100,6 @@ describe('Staff versioned POI workflow', () => {
     fireEvent.pointerDown(svg, pointerAt(svg, 1.5, 0.5))
     fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Library entry' } })
     fireEvent.change(screen.getByLabelText('Mục đích'), { target: { value: 'Entrance' } })
-    fireEvent.change(screen.getByLabelText('Nội dung thuyết minh'), { target: { value: 'Giới thiệu thư viện.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Gửi kiểm chứng' }))
 
     expect(await screen.findByText('Điểm quá sát vật cản (cần trống bán kính 0,30 m).', { selector: '[role="alert"]' })).toBeInTheDocument()
@@ -106,7 +109,7 @@ describe('Staff versioned POI workflow', () => {
   it('lets a content edit through when the pose is kept from the current revision', async () => {
     mapItem = { ...eligibleMap, poiClearanceMeters: 0.3 }
     renderAt('/staff/manage/pois/proposal-1')
-    fireEvent.change(await screen.findByLabelText('Nội dung thuyết minh'), { target: { value: 'Nội dung mới.' } })
+    fireEvent.change(await screen.findByLabelText('Mục đích'), { target: { value: 'Mục đích mới' } })
     await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
 
@@ -194,11 +197,10 @@ describe('Staff versioned POI workflow', () => {
     expect((await screen.findAllByText(/Bản lưu \d\d\/\d\d \d\d:\d\d · Không đạt/)).length).toBeGreaterThan(0)
     expect(await screen.findByText(/Lý do: POI chưa tới được/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Library updated' } })
-    fireEvent.change(screen.getByLabelText('Nội dung thuyết minh'), { target: { value: 'Nội dung đã cập nhật.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
     await waitFor(() => expect(requests.some(r => r.url.pathname.endsWith('/draft') && r.init?.method === 'PUT')).toBe(true))
     const revise = requests.find(r => r.url.pathname.endsWith('/draft'))!
-    expect(JSON.parse(String(revise.init?.body))).toMatchObject({ expectedCurrentRevision: 1, expectedRowVersion: proposal.rowVersion, draft: { mapVersionId: 'map-v1', name: 'Library updated', narrationText: 'Nội dung đã cập nhật.' } })
+    expect(JSON.parse(String(revise.init?.body))).toMatchObject({ expectedCurrentRevision: 1, expectedRowVersion: proposal.rowVersion, draft: { mapVersionId: 'map-v1', name: 'Library updated' } })
   })
 
   it('shows ineligible maps disabled and preserves edits if eligibility changes on the server', async () => {
@@ -259,7 +261,6 @@ describe('Staff versioned POI workflow', () => {
     await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
     fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Draft to keep' } })
     fireEvent.change(screen.getByLabelText('Mục đích'), { target: { value: 'Entrance' } })
-    fireEvent.change(screen.getByLabelText('Nội dung thuyết minh'), { target: { value: 'Nội dung giới thiệu.' } })
     fireEvent.change(screen.getByLabelText('X (m)'), { target: { value: '10.25' } })
     fireEvent.change(screen.getByLabelText('Y (m)'), { target: { value: '20.75' } })
     fireEvent.change(screen.getByLabelText('Hướng (độ)'), { target: { value: '0' } })
@@ -268,23 +269,22 @@ describe('Staff versioned POI workflow', () => {
     expect(screen.getAllByRole('alert').at(-1)).toHaveTextContent('Map vừa mất điều kiện kỹ thuật.')
     expect(screen.getByLabelText('Tên POI')).toHaveValue('Draft to keep')
     expect(screen.getByLabelText('Mục đích')).toHaveValue('Entrance')
-    expect(screen.getByLabelText('Nội dung thuyết minh')).toHaveValue('Nội dung giới thiệu.')
     expect(screen.getByLabelText('X (m)')).toHaveValue(10.25)
   })
 
   describe('saving only what changed', () => {
-    const serve = (revision: object) => vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const serve = (revision: object, extra: object = {}) => vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })
       if (url.pathname === '/api/maps/versions') return response([eligibleMap])
       if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(new Blob(['zip']))
-      if (url.pathname === '/api/staff/poi-proposals/proposal-1') return response({ ...proposal, revision: { ...proposal.revision, ...revision } })
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1') return response({ ...proposal, ...extra, revision: { ...proposal.revision, ...revision } })
       if (url.pathname === '/api/staff/poi-proposals/proposal-1/submit') return response({ ...proposal, revision: { ...proposal.revision, ...revision, isSubmitted: true } })
       return response(null)
     }))
     const writes = () => requests.filter(r => r.init?.method === 'PUT' || r.init?.method === 'POST').map(r => r.url.pathname)
 
     it('locks both actions on an unchanged passed POI and says why', async () => {
-      serve({ isSubmitted: true, navigationStatus: 'PASS' })
+      serve({ isSubmitted: true, navigationStatus: 'PASS' }, { narration: { approved: { revisionNumber: 1, approvedByUserId: 'staff-2', approvedByName: 'Lan', approvedAt: '2026-11-15T03:00:00Z' }, draft: null } })
       renderAt('/staff/manage/pois/proposal-1')
       expect(await screen.findByText('Đã đạt, dùng được trong tuyến.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeDisabled()
@@ -292,10 +292,27 @@ describe('Staff versioned POI workflow', () => {
       expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toHaveAccessibleDescription('Đã đạt, dùng được trong tuyến.')
     })
 
+    // ADR-0060: a PASS alone no longer makes the POI usable in a route.
+    it('says a passed POI still waits for an approved narration before a route can use it', async () => {
+      serve({ isSubmitted: true, navigationStatus: 'PASS' }, { narration: { approved: null, draft: { revisionNumber: 1, lastEditedByUserId: 'staff-1', lastEditedByName: 'Tôi', lastEditedAt: '2026-11-15T03:00:00Z', rowVersion: 'n1' } } })
+      renderAt('/staff/manage/pois/proposal-1')
+      expect(await screen.findByText('Đã đạt kiểm chứng. Còn chờ duyệt thuyết minh trước khi dùng cho tuyến.')).toBeInTheDocument()
+      expect(screen.queryByText('Đã đạt, dùng được trong tuyến.')).not.toBeInTheDocument()
+    })
+
+    // A revision that only renamed the POI keeps the PASS of its fingerprint without being submitted again.
+    it('treats an unsubmitted revision that kept its PASS as passed, not as a draft', async () => {
+      serve({ isSubmitted: false, navigationStatus: 'PASS', verificationSourceRevisionId: 'revision-0' })
+      renderAt('/staff/manage/pois/proposal-1')
+      expect(await screen.findByText(/^Đạt · kết quả lấy từ một bản lưu trước/)).toBeInTheDocument()
+      expect(screen.queryByText('Bản nháp, chưa gửi kiểm chứng.')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeDisabled()
+    })
+
     it('says a content edit keeps the PASS and a camera change needs a new check', async () => {
       serve({ isSubmitted: true, navigationStatus: 'PASS' })
       renderAt('/staff/manage/pois/proposal-1')
-      fireEvent.change(await screen.findByLabelText('Nội dung thuyết minh'), { target: { value: 'Nội dung mới.' } })
+      fireEvent.change(await screen.findByLabelText('Mục đích'), { target: { value: 'Mục đích mới' } })
       expect(screen.getByText('Lưu sẽ tạo bản mới và giữ kết quả đạt.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeEnabled()
       expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeDisabled()

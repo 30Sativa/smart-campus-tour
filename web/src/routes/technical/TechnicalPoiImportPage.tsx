@@ -7,16 +7,16 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { CheckRow, DetailFact, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
-import { mapVersionLabel, poiObservationLabels, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { mapVersionLabel, narrationStatus, poiObservationLabels, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { headPresetLabel } from '../../features/technical/head-camera-preset'
 import { errorText, poiVerifyErrors } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
 import { useMapVersions, usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
-import type { PoiProposal, PoiRevision, PoiVerificationQueueItem } from '../../features/technical/api/technical'
+import type { PoiNarrationSummary, PoiProposal, PoiRevision, PoiVerificationQueueItem } from '../../features/technical/api/technical'
 
 type PoiFilter = 'pending' | 'retry' | 'passed'
 /** `recordable` follows the backend queue: it holds exactly the revisions still accepting a result. */
-type PoiRow = PoiVerificationQueueItem & { filter: PoiFilter; recordable: boolean }
+type PoiRow = PoiVerificationQueueItem & { filter: PoiFilter; recordable: boolean; narration?: PoiNarrationSummary | null }
 
 const filterText: Record<PoiFilter, { title: string; empty: string }> = {
   pending: { title: 'POI chờ kiểm chứng', empty: 'Chưa có POI chờ kiểm chứng' },
@@ -27,9 +27,11 @@ const filterText: Record<PoiFilter, { title: string; empty: string }> = {
 function toRows(queue: PoiVerificationQueueItem[], proposals: PoiProposal[]): PoiRow[] {
   const queued = new Set(queue.map(item => item.proposalId))
   const recorded = proposals.filter(item => !queued.has(item.id) && ['PASS', 'FAIL'].includes(item.revision.navigationStatus))
+  // The queue carries no narration summary; the proposal list does (ADR-0060), read-only here.
+  const narrationOf = new Map(proposals.map(item => [item.id, item.narration ?? null]))
   return [
-    ...queue.map(item => ({ ...item, filter: (item.revision.navigationStatus === 'FAIL' ? 'retry' : 'pending') as PoiFilter, recordable: true })),
-    ...recorded.map(({ id, currentRevision, rowVersion, revision }) => ({ proposalId: id, currentRevision, rowVersion, revision, filter: (revision.navigationStatus === 'PASS' ? 'passed' : 'retry') as PoiFilter, recordable: false })),
+    ...queue.map(item => ({ ...item, narration: narrationOf.get(item.proposalId) ?? null, filter: (item.revision.navigationStatus === 'FAIL' ? 'retry' : 'pending') as PoiFilter, recordable: true })),
+    ...recorded.map(({ id, currentRevision, rowVersion, revision, narration }) => ({ proposalId: id, currentRevision, rowVersion, revision, narration, filter: (revision.navigationStatus === 'PASS' ? 'passed' : 'retry') as PoiFilter, recordable: false })),
   ]
 }
 
@@ -126,8 +128,7 @@ function PoiDetailModal({ row, mapName, onClose, onRecord }: { row: PoiRow; mapN
         <DetailFact label="Phiên bản POI">{revision.revisionNumber}</DetailFact>
         <DetailFact label="Tọa độ"><span className="font-mono">x {revision.x}, y {revision.y}, yaw {revision.yaw}</span></DetailFact>
         <DetailFact label="Đầu camera VR">{headPresetLabel(revision.cameraPreset)}</DetailFact>
-        <DetailFact label="Thuyết minh"><span className="whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</span></DetailFact>
-        {revision.fallbackVideoUrl && <DetailFact label="Video dự phòng"><span className="break-all">{revision.fallbackVideoUrl}</span></DetailFact>}
+        <DetailFact label="Thuyết minh"><ToneBadge tone={narrationStatus(row.narration).tone}>{narrationStatus(row.narration).label}</ToneBadge><p className="mt-0.5 text-[11.5px] text-[#64748b]">Staff viết và duyệt; không ảnh hưởng kết quả kiểm chứng.</p></DetailFact>
       </dl>
     </Modal>
   )
@@ -200,7 +201,6 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
           {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {revision.mapKey}. Ghi kiểm tra triển khai đạt ở trang Bản đồ rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
         <ResultToggle id="verify-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này, sửa POI và gửi lại phiên bản mới." />
-        <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm"><p className="font-medium">Nội dung thuyết minh, chỉ đọc</p><p className="mt-1 whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</p>{revision.fallbackVideoUrl && <p className="mt-2 break-all text-xs text-[#64748b]">Video dự phòng: {revision.fallbackVideoUrl}</p>}</div>
         <div className="space-y-2">
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
           {passBlocked && <p role="alert" className="text-xs text-[#b23e18]">Chưa thể ghi Đạt, còn thiếu: {missing.join(', ')}. Tick đủ cả bốn mục hoặc chọn Không đạt.</p>}

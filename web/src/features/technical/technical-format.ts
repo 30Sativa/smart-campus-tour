@@ -18,6 +18,31 @@ export function errorText(error: unknown) {
   return error instanceof Error ? error.message : 'Không lưu được. Thử lại.'
 }
 
+/** The `errors.code` of a refused request, when the backend sent one. */
+export function apiErrorCode(error: unknown): string | null {
+  if (!(error instanceof ApiError) || !error.body) return null
+  try {
+    const code = (JSON.parse(error.body) as { errors?: { code?: unknown } }).errors?.code
+    return typeof code === 'string' ? code : null
+  } catch { return null }
+}
+
+const narrationConflicts: Record<string, string> = {
+  NARRATION_SELF_APPROVAL_FORBIDDEN: 'Bạn là người sửa bản này lần cuối nên không duyệt được. Cần một Staff khác duyệt. Dữ liệu mới nhất đã được tải lại.',
+  STALE_VERSION: 'Thuyết minh vừa được người khác thay đổi. Dữ liệu mới nhất đã được tải lại, hãy kiểm tra rồi thử lại.',
+  NARRATION_NOT_DRAFT: 'Bản này không còn là bản nháp, có thể đã được duyệt hoặc bỏ. Dữ liệu mới nhất đã được tải lại.',
+  POI_PROPOSAL_DISCARDED: 'POI này đã bị xoá khỏi danh sách nên không sửa được thuyết minh.',
+  IDEMPOTENCY_CONFLICT: 'Yêu cầu này đã được gửi với nội dung khác. Tải lại trang rồi thử lại.',
+}
+
+/** Vietnamese text for a refused narration write, and whether the page should reload its data. */
+export function narrationErrorText(error: unknown): { text: string; reload: boolean } {
+  const code = apiErrorCode(error)
+  if (code && narrationConflicts[code]) return { text: narrationConflicts[code], reload: code !== 'IDEMPOTENCY_CONFLICT' }
+  if (error instanceof ApiError && error.status === 400) return { text: 'Thuyết minh cần 1 đến 4000 ký tự; video dự phòng phải là đường dẫn HTTPS.', reload: false }
+  return { text: errorText(error), reload: false }
+}
+
 export function mapUploadFieldErrors(error: unknown): { areaKey?: string; areaName?: string; package?: string; form?: string } {
   if (!(error instanceof ApiError) || !error.body) return { form: errorText(error) }
   try {

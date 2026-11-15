@@ -6,7 +6,7 @@ import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePr
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { mapCheckLabel, mapVersionLabel, poiImportActionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { mapCheckLabel, mapVersionLabel, narrationStatus, poiImportActionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { errorText } from '../../features/technical/technical-format'
 import { useImportPoiFiles, useMapVersions, usePhysicalRobots, usePoiProposals, usePreviewPoiImport } from '../../features/technical/technical-hooks'
 import type { MapVersionItem, PoiImportResult, PoiProposal } from '../../features/technical/api/technical'
@@ -189,7 +189,7 @@ function ImportedPoiList({ maps }: { maps: MapVersionItem[] }) {
                   <td className={tdClass}>{proposal.revision.name}<span className="block text-[11.5px] text-[#64748b]">Phiên bản POI {proposal.currentRevision}</span></td>
                   <td className={tdClass}>{mapName(proposal.revision.mapVersionId, proposal.revision.mapKey)}</td>
                   <td className={tdClass}><ToneBadge tone={status.tone}>{status.label}</ToneBadge></td>
-                  <td className={tdClass}>{proposal.revision.narrationText ? 'Staff đã bổ sung' : <span className="text-amber-800">Chờ Staff bổ sung</span>}</td>
+                  <td className={tdClass}><ToneBadge tone={narrationStatus(proposal.narration).tone}>{narrationStatus(proposal.narration).label}</ToneBadge></td>
                 </tr>
               })}
             </tbody>
