@@ -94,7 +94,7 @@ function DegreeControl({ label, side, text, min, max, step, ends, reversed, nudg
     <input type="range" aria-label={`Thanh kéo ${label}`} min={min} max={max} step={step} value={current}
       dir={reversed ? 'rtl' : undefined} onChange={e => onChange(e.target.value)} className="mt-3 w-full accent-[#2d719e]" />
     <div className="mt-0.5 flex justify-between text-[11px] text-[#64748b]" aria-hidden="true">
-      <span>{ends[0]}</span><span>0°</span><span>{ends[1]}</span>
+      <span>{ends[0]}</span><span>{(min + max) / 2}°</span><span>{ends[1]}</span>
     </div>
     <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label={`Góc nhanh ${label}`}>
       {chips.map(item => {
@@ -119,7 +119,8 @@ export function HeadCameraPresetField({ value, onChange }: { value: string; onCh
   const parts = stored && editable(stored)
   const problem = stored ? headPresetProblem(value) : null
   const change = (patch: Partial<HeadCameraParts>) => parts && onChange(joinHeadPreset({ ...parts, ...patch }))
-  return <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+  // Sized by the room the form gives it, not the window: side by side only when the field itself is wide.
+  return <div className="@container"><div className="grid grid-cols-1 gap-4 @3xl:grid-cols-[minmax(0,1fr)_320px]">
     <div className="min-w-0 space-y-3">
       <fieldset>
         <legend id="poi-camera-legend" className="sr-only">Hoạt động đầu camera VR khi robot tới điểm</legend>
@@ -165,5 +166,5 @@ export function HeadCameraPresetField({ value, onChange }: { value: string; onCh
     </div>
     {parts ? <HeadCameraPreview key={value} parts={parts} />
       : <p className="grid place-items-center rounded-2xl border border-dashed border-[#e2e8f0] p-6 text-center text-xs text-[#64748b]">Chọn lại hoạt động để xem mô phỏng.</p>}
-  </div>
+  </div></div>
 }

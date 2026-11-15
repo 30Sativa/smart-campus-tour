@@ -1,29 +1,40 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Pause, Play } from 'lucide-react'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { HEAD_PAN_LIMIT_DEG, HEAD_TILT_LIMIT_DEG, type HeadCameraParts } from '../../technical/head-camera-preset'
 import { headPlan, poseAt, type Pose } from './head-motion'
+import { ROBOT_SILHOUETTES } from './robot-silhouettes'
 
 /**
- * A picture of what the head will do at the POI: PAN seen from above (front up, left is positive like the robot) and
- * TILT seen from the side. "Chạy thử" plays the motion at three times the robot's speed (button speed 30°/s for a
+ * A picture of what the head will do at the POI, drawn to scale from the real robot (its CAD model, traced into
+ * `robot-silhouettes.ts`): PAN seen from above (front up, the robot's left on the left) turns the dome, head and
+ * Meta Quest 3 about the column's axis; TILT seen from the robot's right side turns the mount, head and Quest about the
+ * pan-tilt shaft, 968,65 mm above the floor. "Chạy thử" plays the motion at three times the robot's speed (30°/s for a
  * sweep, 60°/s to an angle); it is a drawing of the plan, not the robot's live state.
  */
 
 const SPEED_UP = 3
-/** The mechanical stop of the PAN axis (robot firmware HOME offset): 174° to the right. */
-const STOP_DEG = -174
+/** Hardware stops (firmware `head_core.h`): PAN 174° to the right, TILT 20° down. */
+const PAN_STOP_DEG = -174
+const TILT_STOP_DEG = -20
+/** On the CAD model, in mm, in each view's coordinates (see `robot-silhouettes.ts`). */
+const TOP = { quest: { x: 0, y: -152 }, ring: 215, cone: 360 } as const
+const SIDE = { axis: { x: 1.9, y: -968.65 }, quest: { x: 152, y: -1190 }, cone: 360 } as const
+/** The TILT reach: the directions the camera can point (±18°), drawn from the Quest's lenses, this long (mm). */
+const TILT_FAN_RADIUS = 400
+const VIEW_HALF_DEG = { pan: 28, tilt: 20 }
+
+const INK = { line: '#cbd5e1', muted: '#64748b', body: '#94a3b8', accent: '#2d719e', stop: '#f59e0b', quest: '#1e293b', head: '#475569', moving: '#a9c7de', mount: '#7fa9c9' }
+/** Direction words, drawn last with a white halo so a view cone never hides them. */
+const LABEL = { fontSize: 30, fill: INK.muted, letterSpacing: 2, fontWeight: 600, stroke: '#ffffff', strokeWidth: 10, paintOrder: 'stroke' } as const
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
-// ---- drawing -------------------------------------------------------------------------------------------------------
+// ---- geometry ------------------------------------------------------------------------------------------------------
 
-const CX = 120, CY = 122
-/** PAN θ (positive left) seen from above with the robot's front up. */
-const polar = (r: number, deg: number, cx = CX, cy = CY) => {
-  const a = deg * Math.PI / 180
-  return [cx - r * Math.sin(a), cy - r * Math.cos(a)] as const
-}
+const RAD = Math.PI / 180
+/** A PAN angle (positive = left) seen from above with the front up, around the column at the origin. */
+const polar = (r: number, deg: number) => [-r * Math.sin(deg * RAD), -r * Math.cos(deg * RAD)] as const
 const arc = (r: number, from: number, to: number) => {
   const points: string[] = []
   const step = from < to ? 2 : -2
@@ -31,11 +42,74 @@ const arc = (r: number, from: number, to: number) => {
   points.push(polar(r, to).join(','))
   return points.join(' ')
 }
-const wedge = (r: number, center: number, half: number) =>
-  `M${CX},${CY} L${polar(r, center + half).join(',')} A${r},${r} 0 0 1 ${polar(r, center - half).join(',')} Z`
+/** A view wedge from (x, y) along the unit direction (dirX, dirY). */
+const wedgeFrom = (x: number, y: number, dirX: number, dirY: number, length: number, halfDeg: number) => {
+  const turn = (a: number) => [dirX * Math.cos(a) - dirY * Math.sin(a), dirX * Math.sin(a) + dirY * Math.cos(a)] as const
+  const [ax, ay] = turn(halfDeg * RAD), [bx, by] = turn(-halfDeg * RAD)
+  return `M${x},${y} L${x + ax * length},${y + ay * length} L${x + bx * length},${y + by * length} Z`
+}
+/** Turn a point by `deg` counter-clockwise on screen around (cx, cy). */
+const turnAround = (x: number, y: number, cx: number, cy: number, deg: number) => {
+  const a = -deg * RAD, dx = x - cx, dy = y - cy
+  return [cx + dx * Math.cos(a) - dy * Math.sin(a), cy + dx * Math.sin(a) + dy * Math.cos(a)] as const
+}
+/** A point `r` mm from the Quest's lenses (at TILT 0) in direction `deg`, measured up from the front. */
+const tiltPoint = (deg: number, r: number) => [SIDE.quest.x + r * Math.cos(deg * RAD), SIDE.quest.y - r * Math.sin(deg * RAD)] as const
+const tiltFan = (from: number, to: number, r: number) =>
+  `M${SIDE.quest.x},${SIDE.quest.y} ` + Array.from({ length: Math.abs(to - from) + 1 }, (_, i) => `L${tiltPoint(from + Math.sign(to - from) * i, r).join(',')}`).join(' ') + ' Z'
+const tiltRay = (deg: number, from: number, to: number) => {
+  const [x1, y1] = tiltPoint(deg, from), [x2, y2] = tiltPoint(deg, to)
+  return { x1, y1, x2, y2 }
+}
 
 const sideLabel = (deg: number, positive: string, negative: string) =>
   Math.round(deg) === 0 ? '0°' : `${Math.abs(Math.round(deg))}° ${deg > 0 ? positive : negative}`
+
+/** Where the Quest looks: a wedge from its lenses, fading with distance. */
+function ViewCone({ x, y, dirX, dirY, length, halfDeg }: { x: number; y: number; dirX: number; dirY: number; length: number; halfDeg: number }) {
+  const fade = useId()
+  return <>
+    <defs>
+      <linearGradient id={fade} gradientUnits="userSpaceOnUse" x1={x} y1={y} x2={x + dirX * length} y2={y + dirY * length}>
+        <stop offset="0%" stopColor={INK.accent} stopOpacity="0.42" />
+        <stop offset="100%" stopColor={INK.accent} stopOpacity="0.05" />
+      </linearGradient>
+    </defs>
+    <path d={wedgeFrom(x, y, dirX, dirY, length, halfDeg)} fill={`url(#${fade})`} />
+  </>
+}
+
+// ---- view frame ----------------------------------------------------------------------------------------------------
+
+/** One view: a titled, bordered drawing on a 5 cm grid with a 10 cm scale bar (the drawing is in millimetres). */
+function View({ title, value, viewBox, label, scaleAt, children }: {
+  title: string; value: string; viewBox: [number, number, number, number]; label: string; scaleAt: [number, number]; children: ReactNode
+}) {
+  const grid = useId()
+  const [x, y, w, h] = viewBox
+  return <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white">
+    <div className="flex items-center justify-between gap-2 border-b border-[#f1f5f9] px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#64748b]">{title}</p>
+      <p className="rounded-full bg-[#eff6fb] px-2 py-0.5 text-xs font-semibold tabular-nums text-[#1f557a]">{value}</p>
+    </div>
+    <svg viewBox={viewBox.join(' ')} className="block w-full" role="img" aria-label={label}>
+      <defs>
+        <pattern id={grid} width={50} height={50} patternUnits="userSpaceOnUse">
+          <circle cx={0} cy={0} r={3} fill="#e2e8f0" />
+        </pattern>
+      </defs>
+      <rect x={x} y={y} width={w} height={h} fill={`url(#${grid})`} />
+      {children}
+      {/* 10 cm, so the drawing reads as a real size. */}
+      <g transform={`translate(${scaleAt[0]} ${scaleAt[1]})`} aria-hidden="true">
+        <path d="M0,-10 V0 H100 V-10" fill="none" stroke={INK.muted} strokeWidth={4} />
+        <text x={116} y={4} fontSize={26} fill={INK.muted}>10 cm</text>
+      </g>
+    </svg>
+  </div>
+}
+
+// ---- preview -------------------------------------------------------------------------------------------------------
 
 export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
   const plan = headPlan(parts)
@@ -61,60 +135,77 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
 
   const pose = playing ?? plan.target
   const still = parts.mode === 'NONE'
-  const [hx, hy] = polar(26, pose.pan)
-  const tiltRad = pose.tilt * Math.PI / 180
+  const top = ROBOT_SILHOUETTES.top
+  const side = ROBOT_SILHOUETTES.side
+  const [qx, qy] = turnAround(TOP.quest.x, TOP.quest.y, 0, 0, pose.pan)
+  const [sx, sy] = turnAround(SIDE.quest.x, SIDE.quest.y, SIDE.axis.x, SIDE.axis.y, pose.tilt)
+  const [panStopX, panStopY] = polar(TOP.ring, PAN_STOP_DEG)
+  const [tiltStopX, tiltStopY] = tiltPoint(TILT_STOP_DEG, TILT_FAN_RADIUS)
+  const panText = sideLabel(pose.pan, 'trái', 'phải')
+  const tiltText = sideLabel(pose.tilt, 'ngửa', 'cúi')
 
-  const views = <>
-      <svg viewBox="0 0 240 236" className="mt-1 w-full" role="img" aria-label={`Nhìn từ trên: PAN ${sideLabel(pose.pan, 'trái', 'phải')}`}>
-        <defs>
-          <radialGradient id="head-fov" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0%" stopColor="#5b9dc9" stopOpacity="0.45" />
-            <stop offset="100%" stopColor="#5b9dc9" stopOpacity="0.05" />
-          </radialGradient>
-        </defs>
-        {/* Reach of the PAN axis: soft limits ±170°, the stop 174° to the right. */}
-        <circle cx={CX} cy={CY} r={88} fill="none" stroke="#e2e8f0" strokeWidth={1} />
-        <polyline points={arc(88, -HEAD_PAN_LIMIT_DEG, HEAD_PAN_LIMIT_DEG)} fill="none" stroke="#cbd5e1" strokeWidth={2} strokeLinecap="round" />
-        {plan.sweepDeg != null && <polyline points={arc(88, -plan.sweepDeg, plan.sweepDeg)} fill="none" stroke="#2d719e" strokeWidth={3.5} strokeLinecap="round" strokeDasharray="1 7" />}
-        {(() => { const [x, y] = polar(88, STOP_DEG); return <g><rect x={x - 5} y={y - 5} width={10} height={10} rx={2} fill="#f59e0b" transform={`rotate(${-STOP_DEG} ${x} ${y})`} /><text x={x + 9} y={y + 13} fontSize={9} fill="#b45309">Chặn</text></g> })()}
-        <text x={CX} y={24} textAnchor="middle" fontSize={10} fill="#64748b">Trước</text>
-        <text x={4} y={CY + 3} textAnchor="start" fontSize={10} fill="#64748b">Trái</text>
-        <text x={236} y={CY + 3} textAnchor="end" fontSize={10} fill="#64748b">Phải</text>
-        {/* Field of view of the Quest camera. */}
-        {!still && <path d={wedge(80, pose.pan, 28)} fill="url(#head-fov)" />}
-        {/* Robot body, front up. */}
-        <rect x={CX - 34} y={CY - 30} width={68} height={84} rx={18} fill="#ffffff" stroke="#94a3b8" strokeWidth={1.5} />
-        <path d={`M${CX - 8},${CY - 22} L${CX},${CY - 30} L${CX + 8},${CY - 22}`} fill="none" stroke="#94a3b8" strokeWidth={1.5} strokeLinecap="round" />
-        {/* Head and camera. */}
-        <circle cx={CX} cy={CY} r={18} fill="#2d3748" />
-        <line x1={CX} y1={CY} x2={hx} y2={hy} stroke="#2d3748" strokeWidth={9} strokeLinecap="round" />
-        <circle cx={hx} cy={hy} r={4} fill="#93c5fd" />
-      </svg>
-  
-      <svg viewBox="0 0 240 92" className="mt-1 w-full" role="img" aria-label={`Nhìn ngang: TILT ${sideLabel(pose.tilt, 'ngửa', 'cúi')}`}>
-        <path d={`M70,46 L${70 + 150 * Math.cos(HEAD_TILT_LIMIT_DEG * Math.PI / 180)},${46 - 150 * Math.sin(HEAD_TILT_LIMIT_DEG * Math.PI / 180)} L${70 + 150 * Math.cos(HEAD_TILT_LIMIT_DEG * Math.PI / 180)},${46 + 150 * Math.sin(HEAD_TILT_LIMIT_DEG * Math.PI / 180)} Z`} fill="#f1f5f9" />
-        {!still && <path d={`M70,46 L${70 + 140 * Math.cos(tiltRad + 0.26)},${46 - 140 * Math.sin(tiltRad + 0.26)} L${70 + 140 * Math.cos(tiltRad - 0.26)},${46 - 140 * Math.sin(tiltRad - 0.26)} Z`} fill="#5b9dc9" fillOpacity={0.22} />}
-        <rect x={52} y={52} width={20} height={36} rx={6} fill="#e2e8f0" />
-        <circle cx={62} cy={46} r={15} fill="#2d3748" />
-        <line x1={62} y1={46} x2={62 + 24 * Math.cos(tiltRad)} y2={46 - 24 * Math.sin(tiltRad)} stroke="#2d3748" strokeWidth={9} strokeLinecap="round" />
-        <text x={228} y={14} textAnchor="end" fontSize={10} fill="#64748b">Ngửa</text>
-        <text x={228} y={86} textAnchor="end" fontSize={10} fill="#64748b">Cúi</text>
-      </svg>
-  </>
-
-  return <figure className="rounded-2xl border border-[#e2e8f0] bg-gradient-to-b from-[#f8fbfe] to-white p-3.5" aria-label="Mô phỏng đầu camera">
-    <div className="flex items-center justify-between gap-2">
-      <figcaption className="text-[13px] font-semibold text-[#2d3748]">Mô phỏng</figcaption>
-      {!still && <button type="button" onClick={play} className={buttonClass('ghost', 'sm')} aria-pressed={Boolean(playing)} title={`Phát nhanh gấp ${SPEED_UP} lần robot thật`}>
+  return <figure className="@container min-w-0 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-3" aria-label="Mô phỏng đầu camera">
+    <div className="flex items-start justify-between gap-2 px-0.5">
+      <figcaption>
+        <span className="block text-[13px] font-semibold text-[#0f172a]">Mô phỏng</span>
+        <span className="block text-[11px] text-[#64748b]">Đúng tỉ lệ robot thật</span>
+      </figcaption>
+      {!still && <button type="button" onClick={play} className={buttonClass('secondary', 'sm')} aria-pressed={Boolean(playing)} title={`Phát nhanh gấp ${SPEED_UP} lần robot thật`}>
         {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}{playing ? 'Dừng' : 'Chạy thử'}
       </button>}
     </div>
 
-    {views}
+    <div className="mt-2.5 grid items-start gap-2 @lg:grid-cols-2">
+      <View title="Nhìn từ trên · PAN" value={panText} viewBox={[-400, -580, 800, 1040]} label={`Nhìn từ trên: PAN ${panText}`} scaleAt={[-370, 430]}>
+        {/* The robot body (563 × 803 mm) with its front marked, and the column. */}
+        <path d={top.body} fill="#ffffff" stroke={INK.body} strokeWidth={5} strokeLinejoin="round" />
+        <path d="M-36,-374 L0,-394 L36,-374" fill="none" stroke={INK.body} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
+        <path d={top.column} fill="#f1f5f9" stroke={INK.line} strokeWidth={3} />
+        {/* PAN reach: ±170°, the stop 174° to the right; a sweep as a dotted arc. */}
+        <polyline points={arc(TOP.ring, -HEAD_PAN_LIMIT_DEG, HEAD_PAN_LIMIT_DEG)} fill="none" stroke={INK.line} strokeWidth={9} strokeLinecap="round" />
+        {plan.sweepDeg != null && <polyline points={arc(TOP.ring, -plan.sweepDeg, plan.sweepDeg)} fill="none" stroke={INK.accent} strokeWidth={13} strokeLinecap="round" strokeDasharray="1 24" />}
+        <rect x={panStopX - 15} y={panStopY - 15} width={30} height={30} rx={6} fill={INK.stop} transform={`rotate(${-PAN_STOP_DEG} ${panStopX} ${panStopY})`} />
+        {!still && <ViewCone x={qx} y={qy} dirX={-Math.sin(pose.pan * RAD)} dirY={-Math.cos(pose.pan * RAD)} length={TOP.cone} halfDeg={VIEW_HALF_DEG.pan} />}
+        {/* What PAN turns, about the column's axis. */}
+        <g transform={`rotate(${-pose.pan})`}>
+          <path d={top.dome} fill={INK.moving} />
+          <path d={top.head} fill="#ffffff" stroke={INK.head} strokeWidth={4} strokeLinejoin="round" />
+          <path d={top.quest} fill={INK.quest} />
+        </g>
+        <circle cx={0} cy={0} r={8} fill="#ffffff" stroke={INK.quest} strokeWidth={4} />
+        <text x={0} y={-540} textAnchor="middle" {...LABEL}>TRƯỚC</text>
+        <text x={-385} y={10} textAnchor="start" {...LABEL}>TRÁI</text>
+        <text x={385} y={10} textAnchor="end" {...LABEL}>PHẢI</text>
+      </View>
 
-    <dl className="mt-2 grid grid-cols-2 gap-1.5 text-center">
-      {[['PAN', sideLabel(pose.pan, 'trái', 'phải')], ['TILT', sideLabel(pose.tilt, 'ngửa', 'cúi')]].map(([name, value]) =>
-        <div key={name} className="rounded-lg bg-[#f1f5f9] px-1.5 py-1.5"><dt className="text-[11px] text-[#64748b]">{name}</dt><dd className="text-[13px] font-semibold tabular-nums text-[#2d3748]">{value}</dd></div>)}
-    </dl>
+      <View title="Nhìn ngang · TILT" value={tiltText} viewBox={[-250, -1330, 840, 580]} label={`Nhìn ngang: TILT ${tiltText}`} scaleAt={[-225, -785]}>
+        {/* TILT reach: the camera points within ±18° (the fan); the stop is 20° down. The head turns about the
+            real shaft (the dot), so the lenses also move a little: the fan is drawn from where they are at 0°. */}
+        <path d={tiltFan(-HEAD_TILT_LIMIT_DEG, HEAD_TILT_LIMIT_DEG, TILT_FAN_RADIUS)} fill="#eef2f7" />
+        {[HEAD_TILT_LIMIT_DEG, -HEAD_TILT_LIMIT_DEG].map(deg => <line key={deg} {...tiltRay(deg, 40, TILT_FAN_RADIUS)} stroke={INK.line} strokeWidth={5} strokeDasharray="16 12" />)}
+        <line {...tiltRay(TILT_STOP_DEG, 40, TILT_FAN_RADIUS)} stroke={INK.stop} strokeWidth={5} strokeDasharray="16 12" />
+        <rect x={tiltStopX - 14} y={tiltStopY - 14} width={28} height={28} rx={6} fill={INK.stop} transform={`rotate(${-TILT_STOP_DEG} ${tiltStopX} ${tiltStopY})`} />
+        {!still && <ViewCone x={sx} y={sy} dirX={Math.cos(pose.tilt * RAD)} dirY={-Math.sin(pose.tilt * RAD)} length={SIDE.cone} halfDeg={VIEW_HALF_DEG.tilt} />}
+        <path d={side.column} fill="#f1f5f9" stroke={INK.line} strokeWidth={3} />
+        <path d={side.base} fill="#dbe4ee" />
+        <path d={side.dome} fill={INK.moving} />
+        {/* What TILT turns, about the shaft (the dot). */}
+        <g transform={`rotate(${-pose.tilt} ${SIDE.axis.x} ${SIDE.axis.y})`}>
+          <path d={side.mount} fill={INK.mount} />
+          <path d={side.head} fill="#ffffff" stroke={INK.head} strokeWidth={4} strokeLinejoin="round" />
+          <path d={side.quest} fill={INK.quest} />
+        </g>
+        <circle cx={SIDE.axis.x} cy={SIDE.axis.y} r={9} fill="#ffffff" stroke={INK.quest} strokeWidth={4} />
+        <text x={575} y={-1290} textAnchor="end" {...LABEL}>TRƯỚC</text>
+        <text x={-235} y={-1290} textAnchor="start" {...LABEL}>SAU</text>
+      </View>
+    </div>
+
+    <ul className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 px-0.5 text-[11px] text-[#64748b]" aria-label="Chú thích">
+      <li className="flex items-center gap-1.5"><span className="h-1 w-4 rounded-full bg-[#cbd5e1]" aria-hidden="true" />Tầm quay</li>
+      <li className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-[#f59e0b]" aria-hidden="true" />Vật chặn</li>
+      <li className="flex items-center gap-1.5"><span className="h-2.5 w-4 bg-gradient-to-r from-[#2d719e]/50 to-[#2d719e]/10 [clip-path:polygon(0_50%,100%_0,100%_100%)]" aria-hidden="true" />Hướng camera nhìn</li>
+      <li className="flex items-center gap-1.5"><span className="size-2.5 rounded-full border-2 border-[#1e293b] bg-white" aria-hidden="true" />Trục quay</li>
+    </ul>
   </figure>
 }
