@@ -28,7 +28,7 @@ const packageZip = (width: number) => zipSync({
 })
 const mapVersion = (id: string, mapKey: string, currentlyDeployedOn: unknown[], areaName = mapKey) => ({ map: { id, mapKey, frameId: 'map', imageFileName: 'map.pgm', packageSha256: 'a'.repeat(64), areaName, areaKey: mapKey.replace(/-v\d+$/, ''), versionNumber: 1 }, currentlyDeployedOn })
 const proposal = (id: string, mapVersionId: string, mapKey: string, name: string): PoiProposal => ({
-  id, currentRevision: 1, rowVersion: 'version', revision: { id: `${id}-rev`, revisionNumber: 1, mapVersionId, mapKey, name, purpose: 'Tham quan', description: null, narrationText: null, fallbackVideoUrl: null,
+  id, currentRevision: 1, rowVersion: 'version', revision: { id: `${id}-rev`, revisionNumber: 1, mapVersionId, mapKey, name, purpose: 'Tham quan', description: null,
     x: 0, y: 0, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-30T00:00:00Z', isSubmitted: true, submittedAt: '2026-10-30T00:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: null },
 })
 let proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), proposal('poi-b', 'map-b', 'test123-v2', 'Điểm B')]
@@ -197,27 +197,51 @@ describe('staff preparation UI', () => {
     expect(requests.some(url => url.pathname.endsWith('/package'))).toBe(false)
   })
 
-  it('marks imported POIs that still need narration and names how they were verified', async () => {
-    const imported = proposal('poi-c', 'map-a', 'test123-v1', 'POI 02')
+  // ADR-0060 replaced the "imported POI needs narration" badge (read from revision.narrationText) with the
+  // narration summary every proposal now carries, so each row says where its narration stands.
+  it('shows each POI’s narration state from its summary and names how it was verified', async () => {
+    const approved = { revisionNumber: 1, approvedByUserId: 'u2', approvedByName: 'Lan', approvedAt: '2026-11-15T02:00:00Z' }
+    const draft = { revisionNumber: 2, lastEditedByUserId: 'u1', lastEditedByName: 'An', lastEditedAt: '2026-11-15T03:00:00Z', rowVersion: 'n2' }
+    const withNarration = (id: string, name: string, narration: PoiProposal['narration'], method?: 'POSE_CAPTURE' | 'MANUAL_CHECK') => {
+      const item = proposal(id, 'map-a', 'test123-v1', name)
+      return { ...item, narration, revision: { ...item.revision, verificationMethod: method ?? null } }
+    }
     proposals = [
-      { ...imported, sourcePoiId: 'POI_02', revision: { ...imported.revision, verificationMethod: 'POSE_CAPTURE' } },
-      { ...proposal('poi-d', 'map-a', 'test123-v1', 'Thư viện'), sourcePoiId: 'POI_03', revision: { ...imported.revision, id: 'poi-d-rev', name: 'Thư viện', narrationText: 'Đây là thư viện.', verificationMethod: 'MANUAL_CHECK' } },
+      withNarration('poi-c', 'POI 02', null, 'POSE_CAPTURE'),
+      withNarration('poi-d', 'Thư viện', { approved: null, draft }, 'MANUAL_CHECK'),
+      withNarration('poi-e', 'Sảnh', { approved, draft: null }),
+      withNarration('poi-f', 'Căng tin', { approved, draft }),
     ]
     show(<StaffManagePoisPage />, '/staff/manage/pois')
-    expect(await screen.findAllByText('POI 02')).not.toHaveLength(0)
-    expect(screen.getAllByText('Cần bổ sung nội dung thuyết minh')).toHaveLength(1)
-    const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
-    expect(within(within(list).getByRole('button', { name: 'Chọn POI 02' })).getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
-    expect(within(within(list).getByRole('button', { name: 'Chọn Thư viện' })).getByText('Kiểm tra thủ công')).toBeInTheDocument()
+    const list = await screen.findByRole('region', { name: 'Danh sách đề xuất POI' })
+    const row = async (name: string) => within(await within(list).findByRole('button', { name: `Chọn ${name}` }))
+    expect((await row('POI 02')).getByText('Chưa có thuyết minh')).toBeInTheDocument()
+    expect((await row('Thư viện')).getByText('Thuyết minh: Chờ duyệt')).toBeInTheDocument()
+    expect((await row('Sảnh')).getByText('Thuyết minh: Đã duyệt')).toBeInTheDocument()
+    expect((await row('Căng tin')).getByText('Thuyết minh: Đã duyệt · có bản nháp mới')).toBeInTheDocument()
+    expect((await row('POI 02')).getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
+    expect((await row('Thư viện')).getByText('Kiểm tra thủ công')).toBeInTheDocument()
   })
 
-  it('asks Staff to add narration first for a POI imported from a pose file', async () => {
-    const imported = proposal('poi-a', 'map-a', 'test123-v1', 'POI 02')
-    proposals = [{ ...imported, sourcePoiId: 'POI_02', revision: { ...imported.revision, navigationStatus: 'NOT_TESTED', narrationText: null } } as PoiProposal]
+  it('asks Staff to get the narration of a passed POI approved before routes can use it', async () => {
+    const passed = proposal('poi-a', 'map-a', 'test123-v1', 'POI 02')
+    proposals = [{ ...passed, sourcePoiId: 'POI_02', narration: null }]
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
-    expect(chosen).toHaveTextContent('Nhập từ tệp ghi pose trên robot. Đặt tên và viết thuyết minh để dùng được trong tuyến. Kỹ thuật vẫn đang kiểm tra vị trí.')
-    expect(within(chosen).getByRole('link', { name: 'Bổ sung thuyết minh' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
+    expect(chosen).toHaveTextContent('Đã đạt kiểm chứng. Viết thuyết minh và nhờ một Staff khác duyệt để dùng được trong tuyến.')
+    expect(within(chosen).getByRole('link', { name: 'Viết thuyết minh' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
+  })
+
+  // POI E in production: Technical listed it as passed while this list said "Bản nháp". Renaming a passed POI
+  // makes an unsubmitted revision that keeps the PASS of its unchanged navigation fingerprint.
+  it('lists an unsubmitted revision that kept its PASS as passed, not as a draft', async () => {
+    const renamed = proposal('poi-a', 'map-a', 'test123-v1', 'E')
+    proposals = [{ ...renamed, revision: { ...renamed.revision, isSubmitted: false, submittedAt: null, navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-a-rev-1' } }]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const list = await screen.findByRole('region', { name: 'Danh sách đề xuất POI' })
+    const row = within(await within(list).findByRole('button', { name: 'Chọn E' }))
+    expect(row.getByText('Đã đạt')).toBeInTheDocument()
+    expect(row.queryByText('Bản nháp')).not.toBeInTheDocument()
   })
 
   it('draws the chosen pin on top of another pin at the same spot', async () => {
@@ -232,7 +256,7 @@ describe('staff preparation UI', () => {
 
   it('keeps the map frame when a status tab hides some points', async () => {
     const draft = proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C')
-    proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), { ...draft, revision: { ...draft.revision, x: 3, y: 6, isSubmitted: false, submittedAt: null } } as PoiProposal]
+    proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), { ...draft, revision: { ...draft.revision, x: 3, y: 6, isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_CHECKED' } } as PoiProposal]
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     const before = (await screen.findByRole('img', { name: /với 2 POI/ })).getAttribute('viewBox')
     fireEvent.click(screen.getByRole('button', { name: /^Bản nháp/ }))

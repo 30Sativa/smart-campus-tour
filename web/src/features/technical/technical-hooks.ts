@@ -63,6 +63,40 @@ export function usePoiHistory(proposalId: string) {
   return useQuery({ queryKey: [...keys.poiProposals, 'history', proposalId], queryFn: () => technicalApi.getPoiHistory(proposalId) })
 }
 
+/** Every narration version of one POI, newest first (ADR-0060). */
+export function usePoiNarrations(proposalId: string | undefined) {
+  return useQuery({ queryKey: [...keys.poiProposals, 'narrations', proposalId], queryFn: () => technicalApi.listPoiNarrations(proposalId!), enabled: Boolean(proposalId) })
+}
+
+/**
+ * A narration write changes the POI's narration summary as well as its version list. Both live under the POI
+ * proposal keys; the detail page reads its proposal under a key of its own. Refusals are refreshed too: a stale
+ * version or a self-approval means the page shows data that no longer holds.
+ */
+function useNarrationMutation<T, R>(run: (input: T) => Promise<R>, done: (input: T) => ToastInput) {
+  const client = useQueryClient()
+  const refresh = () => Promise.all([
+    client.invalidateQueries({ queryKey: keys.poiProposals }),
+    client.invalidateQueries({ queryKey: ['technical', 'poi-proposal'] }),
+  ])
+  return useMutation({
+    mutationFn: run,
+    onSuccess: (_result, input) => { notify(done(input)); return refresh() },
+    onError: () => refresh(),
+  })
+}
+
+export const useSavePoiNarrationDraft = () => useNarrationMutation(technicalApi.savePoiNarrationDraft, input => ({
+  title: input.expectedRowVersion ? 'Đã lưu bản nháp thuyết minh' : 'Đã tạo bản nháp thuyết minh',
+  detail: 'Bản nháp cần một Staff khác duyệt trước khi dùng cho tuyến.',
+}))
+export const useApprovePoiNarration = () => useNarrationMutation(technicalApi.approvePoiNarration, () => ({
+  title: 'Đã duyệt thuyết minh', detail: 'Tuyến lưu từ bây giờ dùng bản này. Tuyến và Tour đã có giữ nội dung cũ.',
+}))
+export const useDiscardPoiNarration = () => useNarrationMutation(technicalApi.discardPoiNarration, () => ({
+  tone: 'info', title: 'Đã bỏ bản nháp thuyết minh', detail: 'Bản đã duyệt (nếu có) vẫn được dùng.',
+}))
+
 export function useRouteTestQueue() {
   return useQuery({ queryKey: [...keys.routeTests, 'queue'], queryFn: technicalApi.listRouteTestQueue })
 }

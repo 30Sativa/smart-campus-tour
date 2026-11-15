@@ -131,8 +131,6 @@ export type PoiRevision = {
   name: string
   purpose: string
   description: string | null
-  narrationText: string | null
-  fallbackVideoUrl: string | null
   x: number
   y: number
   yaw: number
@@ -154,7 +152,28 @@ export type PoiProposal = {
   /** No revision ever passed, so Staff may discard it (ADR-0051). */
   canDiscard?: boolean
   discardedAt?: string | null
+  /** The current approved and draft narration versions (ADR-0060); the text itself is in the narration list. */
+  narration?: PoiNarrationSummary | null
 }
+
+export type PoiNarrationSummary = {
+  approved: { revisionNumber: number; approvedByUserId: string; approvedByName: string; approvedAt: string } | null
+  draft: { revisionNumber: number; lastEditedByUserId: string; lastEditedByName: string; lastEditedAt: string; rowVersion: string } | null
+}
+
+export type PoiNarrationState = 'DRAFT' | 'APPROVED' | 'SUPERSEDED' | 'DISCARDED'
+
+/** One narration version of a POI (ADR-0060, docs/architecture.md). */
+export type PoiNarrationRevision = {
+  id: string; proposalId: string; revisionNumber: number; state: PoiNarrationState
+  narrationText: string; fallbackVideoUrl: string | null
+  createdByUserId: string; createdByName: string; createdAt: string
+  lastEditedByUserId: string; lastEditedByName: string; lastEditedAt: string
+  approvedByUserId: string | null; approvedByName: string | null; approvedAt: string | null
+  rowVersion: string
+}
+
+export type NarrationVersionRef = { proposalId: string; revisionNumber: number; expectedRowVersion: string }
 
 export type PoiVerificationQueueItem = { proposalId: string; currentRevision: number; rowVersion: string; revision: PoiRevision; sourcePoiId?: string | null }
 export type PoiVerification = {
@@ -264,14 +283,22 @@ export const technicalApi = {
   getPoiProposal: (id: string) => apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}`).then(response => response.data!),
   getPoiHistory: (id: string) => apiClient<Envelope<{ proposalId: string; revisions: PoiRevision[]; verificationRecords: PoiVerification[] }>>(`/api/staff/poi-proposals/${id}/history`).then(response => response.data!),
   listPoiVerificationQueue: (mapVersionId?: string) => apiClient<Envelope<PoiVerificationQueueItem[]>>(`/api/technical/poi-verifications${mapVersionId ? `?mapVersionId=${encodeURIComponent(mapVersionId)}` : ''}`).then(response => response.data ?? []),
-  createPoiProposal: (draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string; narrationText: string; fallbackVideoUrl: string | null }) =>
+  createPoiProposal: (draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string }) =>
     apiClient<Envelope<PoiProposal>>('/api/staff/poi-proposals', { method: 'POST', json: { requestId: crypto.randomUUID(), draft } }).then(response => response.data!),
-  revisePoiProposal: (id: string, current: PoiProposal, draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string; narrationText: string; fallbackVideoUrl: string | null }) =>
+  revisePoiProposal: (id: string, current: PoiProposal, draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string }) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/draft`, { method: 'PUT', json: { requestId: crypto.randomUUID(), expectedCurrentRevision: current.currentRevision, expectedRowVersion: current.rowVersion, draft } }).then(response => response.data!),
   discardPoiProposal: (proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/discard`, { method: 'POST', json: { expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
   submitPoiProposal: (id: string, proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/submit`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
+  listPoiNarrations: (proposalId: string) => apiClient<Envelope<PoiNarrationRevision[]>>(`/api/staff/poi-proposals/${proposalId}/narrations`).then(response => response.data ?? []),
+  /** Creates the draft when `expectedRowVersion` is absent, otherwise edits the current draft in place. */
+  savePoiNarrationDraft: ({ proposalId, ...body }: { proposalId: string; expectedRowVersion?: string; narrationText: string; fallbackVideoUrl: string | null }) =>
+    apiClient<Envelope<PoiNarrationRevision>>(`/api/staff/poi-proposals/${proposalId}/narrations/draft`, { method: 'PUT', json: { requestId: crypto.randomUUID(), ...body } }).then(response => response.data!),
+  approvePoiNarration: ({ proposalId, revisionNumber, expectedRowVersion }: NarrationVersionRef) =>
+    apiClient<Envelope<PoiNarrationRevision>>(`/api/staff/poi-proposals/${proposalId}/narrations/${revisionNumber}/approve`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRowVersion } }).then(response => response.data!),
+  discardPoiNarration: ({ proposalId, revisionNumber, expectedRowVersion }: NarrationVersionRef) =>
+    apiClient<Envelope<PoiNarrationRevision>>(`/api/staff/poi-proposals/${proposalId}/narrations/${revisionNumber}/discard`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRowVersion } }).then(response => response.data!),
   listRouteTestQueue: () => apiClient<Envelope<VersionedRoute[]>>('/api/technical/route-verifications/queue').then(response => response.data ?? []),
   listRouteRerunQueue: () => apiClient<Envelope<VersionedRoute[]>>('/api/technical/route-verifications/rerun-queue').then(response => response.data ?? []),
   listRouteTestParticipants: () => apiClient<Envelope<RouteTestParticipant[]>>('/api/technical/route-verifications/participants').then(response => response.data ?? []),
