@@ -19,7 +19,9 @@ public sealed record RouteRunRequest(
 public sealed record RouteRevisionStopView(Guid Id, Guid PoiRevisionId, Guid SourcePoiVerificationRecordId,
     int StopOrder, int DwellSeconds, IReadOnlyList<RouteHeadStep> HeadSteps,
     string Name, decimal X, decimal Y, decimal Yaw, string CameraPreset,
-    string? NarrationText = null, string? FallbackVideoUrl = null);
+    string? NarrationText = null, string? FallbackVideoUrl = null,
+    // ADR-0061: the POI the stop's revision belongs to, so a reader can find that POI's newer revisions.
+    Guid? PoiProposalId = null);
 public sealed record RouteTestRunView(Guid Id, Guid RouteRevisionId, Guid MapVersionId, string MapPackageSha256,
     string RobotCode, Guid CheckedByUserId, Guid ParticipatingStaffUserId, string ResultCode,
     bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed, int MeasuredDurationSeconds,

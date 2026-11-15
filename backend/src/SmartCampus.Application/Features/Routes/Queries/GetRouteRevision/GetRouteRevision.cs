@@ -33,9 +33,11 @@ internal static class RouteRevisionMapper
         var map = await repo.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Map version", revision.MapVersionId);
         var stops = await repo.GetStopsAsync(revision.Id, ct);
         var eligibilityIssues = new List<string>();
+        var proposalByStop = new Dictionary<Guid, Guid>();
         foreach (var stop in stops)
         {
             var poi = await repo.FindPoiRevisionAsync(stop.PoiProposalRevisionId, ct);
+            if (poi is not null) proposalByStop[stop.Id] = poi.ProposalId;
             var source = await repo.FindPoiVerificationAsync(stop.SourcePoiVerificationRecordId, ct);
             var latestPoiResult = poi is null ? null : await repo.GetEffectivePoiVerificationAsync(poi.ProposalId, poi.NavigationFingerprint, ct);
             if (poi is null || source is null || source.ResultCode != "PASS" || latestPoiResult is null || latestPoiResult.ResultCode != "PASS")
@@ -83,7 +85,8 @@ internal static class RouteRevisionMapper
             effective?.ResultCode ?? "NOT_TESTED", effective?.Id, duration, dwell,
             stops.Select(s => new RouteRevisionStopView(s.Id, s.PoiProposalRevisionId, s.SourcePoiVerificationRecordId,
                 s.StopOrder, s.DwellSeconds, Route.ReadHeadSteps(s.HeadStepsJson), s.Name, s.X, s.Y, s.Yaw,
-                s.CameraPreset, s.NarrationText, s.FallbackVideoUrl)).ToArray(), dtoRuns, summaries, eligibilityIssues,
+                s.CameraPreset, s.NarrationText, s.FallbackVideoUrl,
+                proposalByStop.TryGetValue(s.Id, out var proposalId) ? proposalId : null)).ToArray(), dtoRuns, summaries, eligibilityIssues,
             route.IsOpenForNewTours, LegacyRouteRevision.For(route), schedule is null ? Tours.RouteScheduleFit.Unknown
                 : Tours.TourSchedule.ScheduleFit(schedule, expected), expected);
     }

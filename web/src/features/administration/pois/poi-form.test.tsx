@@ -300,6 +300,29 @@ describe('Staff versioned POI workflow', () => {
       expect(screen.queryByText('Đã đạt, dùng được trong tuyến.')).not.toBeInTheDocument()
     })
 
+    // ADR-0061 investigation ("Test_1" renamed to "B" lost its PASS): values exactly as the API returns them
+    // (X, Y decimal(10,4), Yaw decimal(9,6), canonical camera). Opening the form, switching the picker mode and
+    // focusing/leaving the pose fields must not touch them, and a rename must send them back unchanged.
+    it.each(['FRONT', 'LEFT', 'RIGHT', 'NONE', 'SWEEP', 'SWEEP:60', 'ANGLE:30,-10', 'ANGLE:12.5,3.5'])(
+      'a name-only edit of a passed POI sends its pose and camera %s unchanged and keeps the PASS', async camera => {
+        const pose = { x: 10.2333, y: 20.7667, yaw: 0.785398, cameraPreset: camera }
+        serve({ isSubmitted: true, navigationStatus: 'PASS', ...pose })
+        renderAt('/staff/manage/pois/proposal-1')
+        const name = await screen.findByLabelText('Tên POI')
+        await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn hướng' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn vị trí' }))
+        for (const field of ['X (m)', 'Y (m)', 'Hướng (độ)']) { fireEvent.focus(screen.getByLabelText(field)); fireEvent.blur(screen.getByLabelText(field)) }
+        expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeDisabled()
+
+        fireEvent.change(name, { target: { value: 'B' } })
+        expect(screen.getByText('Lưu sẽ tạo bản mới và giữ kết quả đạt.')).toBeInTheDocument()
+        fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+        await waitFor(() => expect(writes()).toContain('/api/staff/poi-proposals/proposal-1/draft'))
+        const sent = JSON.parse(String(requests.find(r => r.url.pathname.endsWith('/draft'))!.init!.body)).draft
+        expect(sent).toMatchObject({ name: 'B', ...pose })
+      })
+
     // A revision that only renamed the POI keeps the PASS of its fingerprint without being submitted again.
     it('treats an unsubmitted revision that kept its PASS as passed, not as a draft', async () => {
       serve({ isSubmitted: false, navigationStatus: 'PASS', verificationSourceRevisionId: 'revision-0' })

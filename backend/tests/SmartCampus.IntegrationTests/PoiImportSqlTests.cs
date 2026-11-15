@@ -325,6 +325,28 @@ public sealed class PoiImportSqlTests
         Assert.Equal(1, content.Narration!.Approved!.RevisionNumber);
         var route = await h.SaveRoute(content.Revision.Id);
         Assert.Equal("Đây là thư viện.", route.Stops[0].NarrationText);
+        // ADR-0061: each stop names its POI, on save and on read.
+        Assert.Equal(proposalId, route.Stops[0].PoiProposalId);
+        var read = await h.Send(new GetRouteRevisionQuery(route.RouteId, null, false));
+        Assert.Equal(proposalId, read.Stops[0].PoiProposalId);
+        Assert.Equal(content.Revision.Id, read.Stops[0].PoiRevisionId);
+    }
+
+    // ADR-0061: two revisions of one POI in a route, which only the revision-id check let through before.
+    [SchemaV11Fact]
+    public async Task TwoRevisionsOfOnePoi_InOneRoute_AreRefused()
+    {
+        await using var h = await Harness.Create();
+        var proposalId = (await h.Import([File("a.yaml", "POI_A", x: 1.5m, y: 2.5m)])).CreatedProposalIds[0];
+        var older = await h.AddStaffContent(proposalId, "Thư viện", "Đây là thư viện.");
+        var newer = await h.AddStaffContent(proposalId, "Thư viện mới", "Đây là thư viện.");
+        Assert.NotEqual(older.Revision.Id, newer.Revision.Id);
+
+        var error = await Assert.ThrowsAsync<ConflictException>(() => h.Send(new SaveRouteRevisionCommand(h.StaffId, null,
+            new(Guid.NewGuid(), 0, "Tuyến trùng", null, h.MapId, 3.5m, 3.5m, 0m, "LAST_POI", null, null, null,
+                [new(older.Revision.Id, 30, [new("FRONT", 10)]), new(newer.Revision.Id, 30, [new("FRONT", 10)])]))));
+        Assert.Equal("ROUTE_DUPLICATE_POI", error.Code);
+        Assert.Equal("POI Thư viện mới đã có trong tuyến. Mỗi POI chỉ được dùng một lần.", error.Message);
     }
 
     [SchemaV11Fact]
@@ -496,6 +518,61 @@ public sealed class PoiImportSqlTests
     }
 
     private const string ClearanceMessage = "Điểm quá sát vật cản (cần trống bán kính 0,30 m).";
+
+    // Investigation for "renaming Test_1 to B lost its PASS" (ADR-0061): the web reloads a POI from SQL and sends back
+    // exactly what it read. A name-only revision built from those values must keep the fingerprint and so the PASS,
+    // at the full precision the columns hold (X, Y decimal(10,4), Yaw decimal(9,6)), trailing zeros and every camera form.
+    [SchemaV11Theory]
+    [InlineData("2.5", "2.5", "0", "FRONT")]
+    [InlineData("1.5333", "2.4667", "0.785398", "FRONT")]
+    [InlineData("1.5556", "2.4444", "-1.570796", "LEFT")]
+    [InlineData("2.1235", "2.9877", "3.141593", "RIGHT")]
+    [InlineData("1.6667", "2.3333", "0.000001", "NONE")]
+    [InlineData("1.7500", "2.2500", "1.000000", "SWEEP")]
+    [InlineData("1.9", "2.1", "0.5", "sweep:60")]
+    [InlineData("2.0001", "2.0002", "-0.000002", "ANGLE:30,-10")]
+    [InlineData("2.4", "2.6", "0.1", "angle:12.5,3.5")]
+    public async Task NameOnlyRevision_FromValuesReadBackFromSql_KeepsTheFingerprintAndThePass(string x, string y, string yaw, string camera)
+    {
+        await using var h = await Harness.Create();
+        var created = await h.Send(new CreatePoiProposalCommand(h.StaffId, new(Guid.NewGuid(),
+            new(h.MapId, "Test_1", "Giới thiệu", null, Number(x), Number(y), Number(yaw), camera))));
+        var submitted = await h.Send(new SubmitPoiProposalCommand(h.StaffId, created.Id, new(Guid.NewGuid(), 1, created.RowVersion)));
+        await h.Send(new RecordPoiVerificationCommand(h.TechnicalId, created.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, Robot,
+            "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+
+        await AssertRenameKeepsPass(h, created.Id);
+    }
+
+    [SchemaV11Theory]
+    [InlineData("1.5333", "2.4667")]
+    [InlineData("2.0001", "2.9999")]
+    public async Task NameOnlyRevision_OfAnImportedPoi_FromValuesReadBackFromSql_KeepsThePass(string x, string y)
+    {
+        await using var h = await Harness.Create();
+        var proposalId = (await h.Import([File("a.yaml", "POI_A", x: Number(x), y: Number(y))])).CreatedProposalIds[0];
+        Assert.Equal("PASS", (await h.Send(new GetPoiProposalQuery(proposalId))).Revision.NavigationStatus);
+
+        await AssertRenameKeepsPass(h, proposalId);
+    }
+
+    private static async Task AssertRenameKeepsPass(Harness h, Guid proposalId)
+    {
+        var stored = await h.Send(new GetPoiProposalQuery(proposalId));
+        Assert.Equal("PASS", stored.Revision.NavigationStatus);
+        var r = stored.Revision;
+        var renamed = await h.Send(new CreatePoiRevisionCommand(h.StaffId, proposalId, new(Guid.NewGuid(), stored.CurrentRevision, stored.RowVersion,
+            new(h.MapId, "B", r.Purpose, r.Description, r.X, r.Y, r.Yaw, r.CameraPreset))));
+
+        Assert.True(r.NavigationFingerprint == renamed.Revision.NavigationFingerprint,
+            $"Stored x={r.X} y={r.Y} yaw={r.Yaw} camera={r.CameraPreset}: fingerprint changed on a rename.");
+        var after = await h.Send(new GetPoiProposalQuery(proposalId));
+        Assert.Equal("B", after.Revision.Name);
+        Assert.Equal("PASS", after.Revision.NavigationStatus);
+        Assert.False(after.Revision.IsSubmitted);
+    }
+
+    private static decimal Number(string value) => decimal.Parse(value, CultureInfo.InvariantCulture);
 
     private static void AssertClearanceFailure(ValidationException error)
     {

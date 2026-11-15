@@ -103,10 +103,28 @@ public sealed class RouteStopSeparationTests
         return null;
     }
 
-    private static RoutePoiRevisionEvidence Poi(string name, decimal x, decimal y)
+    // ADR-0061: a route visits a POI once, whichever revisions of it the stops name.
+    [Fact]
+    public async Task Two_revisions_of_one_POI_in_a_route_are_refused_before_the_distance_rule()
+    {
+        var renamed = Poi("Thư viện mới", 2m, 2.1m, proposalId: Library.Revision.ProposalId);
+        var handler = new SaveRouteRevisionHandler(RouteRepository(), MapRepository(), new MapPoiSettings(null),
+            new RouteRuleSettings(null, null), TourShiftsFixture.Settings, TimeProvider.System);
+        // 0.1 m apart, so the separation rule would refuse too; the duplicate POI is the error Staff must see.
+        var error = await Record.ExceptionAsync(() => handler.Handle(new SaveRouteRevisionCommand(Guid.NewGuid(), null, Draft(0m, 0m, Library, Lab, renamed)), default));
+        var conflict = Assert.IsType<ConflictException>(error);
+        Assert.Equal("ROUTE_DUPLICATE_POI", conflict.Code);
+        Assert.Equal("POI Thư viện mới đã có trong tuyến. Mỗi POI chỉ được dùng một lần.", conflict.Message);
+    }
+
+    [Fact]
+    public async Task Different_POIs_pass_the_duplicate_rule() =>
+        Assert.Null(await Save(Draft(0m, 0m, Library, Lab)));
+
+    private static RoutePoiRevisionEvidence Poi(string name, decimal x, decimal y, Guid? proposalId = null)
     {
         var fingerprint = Guid.NewGuid().ToByteArray();
-        var revision = new PoiProposalRevision { Id = Guid.NewGuid(), ProposalId = Guid.NewGuid(), MapVersionId = Map.Id, Name = name,
+        var revision = new PoiProposalRevision { Id = Guid.NewGuid(), ProposalId = proposalId ?? Guid.NewGuid(), MapVersionId = Map.Id, Name = name,
             X = x, Y = y, NavigationFingerprint = fingerprint };
         var verification = new PoiVerificationRecord { Id = Guid.NewGuid(), MapVersionId = Map.Id, ResultCode = "PASS", NavigationFingerprint = fingerprint };
         var evidence = new RoutePoiRevisionEvidence(revision, verification);
@@ -126,7 +144,7 @@ public sealed class RouteStopSeparationTests
                 Id = Guid.NewGuid(), ProposalId = proposalId, RevisionNumber = 1, State = "APPROVED", NarrationText = "Thuyết minh."
             }).ToArray()),
         nameof(IRouteRevisionRepository.GetEffectivePoiVerificationAsync) => Task.FromResult<PoiVerificationRecord?>(
-            Known.Single(e => e.Revision.ProposalId == (Guid)args[0]!).Verification),
+            Known.Single(e => e.Revision.ProposalId == (Guid)args[0]! && e.Revision.NavigationFingerprint.SequenceEqual((byte[])args[1]!)).Verification),
         _ => throw new NotImplementedException(method.Name)
     });
 
