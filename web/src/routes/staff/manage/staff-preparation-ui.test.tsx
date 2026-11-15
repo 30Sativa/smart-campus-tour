@@ -226,9 +226,13 @@ describe('staff preparation UI', () => {
     const list = await screen.findByRole('region', { name: 'Danh sách đề xuất POI' })
     const row = async (name: string) => within(await within(list).findByRole('button', { name: `Chọn ${name}` }))
     expect((await row('POI 02')).getByText('Chưa có thuyết minh')).toBeInTheDocument()
-    expect((await row('Thư viện')).getByText('Thuyết minh: Chờ duyệt')).toBeInTheDocument()
+    // "Chờ duyệt" is now a link beside the row button that opens the narration tab (owner's layout).
+    const waiting = within(list).getByRole('link', { name: 'Mở thuyết minh chờ duyệt của Thư viện' })
+    expect(waiting).toHaveTextContent('Thuyết minh: Chờ duyệt')
+    expect(waiting).toHaveAttribute('href', '/staff/manage/pois/poi-d?tab=thuyet-minh')
+    expect((await row('Thư viện')).queryByText('Thuyết minh: Chờ duyệt')).not.toBeInTheDocument()
     expect((await row('Sảnh')).getByText('Thuyết minh: Đã duyệt')).toBeInTheDocument()
-    expect((await row('Căng tin')).getByText('Thuyết minh: Đã duyệt · có bản nháp mới')).toBeInTheDocument()
+    expect((await row('Căng tin')).getByText('Thuyết minh: Đã duyệt · có bản đang soạn')).toBeInTheDocument()
     expect((await row('POI 02')).getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
     expect((await row('Thư viện')).getByText('Kiểm tra thủ công')).toBeInTheDocument()
   })
@@ -239,7 +243,8 @@ describe('staff preparation UI', () => {
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
     expect(chosen).toHaveTextContent('Đã đạt kiểm chứng. Viết thuyết minh và nhờ một Staff khác duyệt để dùng được trong tuyến.')
-    expect(within(chosen).getByRole('link', { name: 'Viết thuyết minh' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
+    // The narration step opens the POI page on its narration tab.
+    expect(within(chosen).getByRole('link', { name: 'Viết thuyết minh' })).toHaveAttribute('href', '/staff/manage/pois/poi-a?tab=thuyet-minh')
   })
 
   // POI E in production: Technical listed it as passed while this list said "Bản nháp". Renaming a passed POI

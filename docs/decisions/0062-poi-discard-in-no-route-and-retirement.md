@@ -52,6 +52,15 @@ it would let a route pick a discarded POI once discard is widened.
 - A retired POI cannot be discarded (`canDiscard` is false while retired); in practice it is always in a route.
 - The web shows "Ngưng dùng" POIs only under the "Tất cả" and "Ngưng dùng" filters, not under their check-state filter.
 
+## Follow-up (owner's web test, 15/11/2026; separate PR after #335 was merged)
+
+- `GetPoiHistoryQuery` labelled each revision only by a result recorded on that exact revision, so a content-only
+  save (for example a new description) read "Bản nháp" in the history while the list said "Đạt". It now uses the
+  effective result per (proposal, navigation fingerprint), like `ListPoiProposalsQuery` and the read-model loader.
+- Web only: the POI page is split into "Vị trí & camera", "Thuyết minh" and "Lịch sử" tabs (`?tab=`), with a header
+  that states navigation, narration and route use; the description field is labelled as an internal note; the
+  narration tab separates the version in use, the version being written and the approval box. No API change.
+
 ## Consequences
 
 - Nothing updates an existing route revision or Tour; Staff removes the stop and saves a new route revision.

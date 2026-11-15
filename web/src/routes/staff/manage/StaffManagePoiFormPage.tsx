@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, ChevronRight, CircleAlert, Info, MapPinned, MapPinOff } from 'lucide-react'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
@@ -9,7 +9,8 @@ import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
 import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { mapCheckLabel, narrationStatus, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { mapCheckLabel, narrationHeadline, narrationStatus, navigationHeadline, routeUseLine, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { headPresetProblem } from '../../../features/technical/head-camera-preset'
 import { HeadCameraPresetField } from '../../../features/administration/pois/HeadCameraPresetField'
 import { staffMapLabels } from '../../../features/administration/map-labels'
@@ -23,6 +24,9 @@ import { PoiHistory } from '../../../features/administration/pois/PoiHistory'
 import { useReactivatePoiProposal } from '../../../features/technical/technical-hooks'
 
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
+/** The page's tabs, kept in `?tab=` so a link (the list's "Chờ duyệt" badge) can open one directly. */
+const TABS = [['vi-tri', 'Vị trí & camera'], ['thuyet-minh', 'Thuyết minh'], ['lich-su', 'Lịch sử']] as const
+type Tab = typeof TABS[number][0]
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
 
 // Narration is not part of a POI revision any more; it has its own versions and approval (ADR-0060).
@@ -49,6 +53,10 @@ function asDraft(item: PoiProposal): Draft {
 export default function StaffManagePoiFormPage() {
   const { poiId } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  // A new POI has only its position and content; narration and history need a saved POI.
+  const tab: Tab = poiId && TABS.some(([key]) => key === requestedTab) ? requestedTab as Tab : 'vi-tri'
   const queryClient = useQueryClient()
   const maps = useMapVersions()
   const proposalQuery = useQuery({ queryKey: ['technical', 'poi-proposal', poiId], queryFn: () => technicalApi.getPoiProposal(poiId!), enabled: Boolean(poiId) })
@@ -157,7 +165,6 @@ export default function StaffManagePoiFormPage() {
     </section>
   </AdminPage>
 
-  const state = current ? poiStatus(current.revision) : null
   const locked = !mapEligible || historicalReadOnly || retired
   const yawDeg = draft.yaw == null ? null : Math.round((draft.yaw * 180 / Math.PI) * 10) / 10
   const placed = draft.x != null && draft.y != null
@@ -210,9 +217,18 @@ export default function StaffManagePoiFormPage() {
       </span>
       {reactivate.error && <span role="alert" className="mt-1 block text-[#a4473d]">{errorText(reactivate.error)}</span>}
     </Notice></div>}
-    {current && state && <div className="mb-4"><Notice tone={state.tone === 'danger' ? 'danger' : state.tone === 'ok' ? 'success' : 'info'}>{state.label}{current.revision.verificationSourceRevisionId ? ' · kết quả lấy từ một bản lưu trước' : ''}</Notice></div>}
+    {current?.discardedAt && <div className="mb-4"><Notice tone="warn">POI này đã bị xoá khỏi danh sách. Trang chỉ để xem.</Notice></div>}
+    {current && <PoiHeadline proposal={current} />}
+    {current && <div role="tablist" aria-label="Phần của POI" className="mb-4 flex flex-wrap gap-1.5 border-b border-[#e2e8f0]">
+      {TABS.map(([key, title]) => <button key={key} type="button" role="tab" id={`poi-tab-${key}`} aria-selected={tab === key} aria-controls={`poi-panel-${key}`}
+        onClick={() => setSearchParams(params => { const next = new URLSearchParams(params); next.set('tab', key); return next })}
+        className={`-mb-px rounded-t-lg border-b-2 px-3.5 py-2 text-sm font-semibold transition-colors ${focus} ${tab === key ? 'border-[#2563eb] text-[#1e293b]' : 'border-transparent text-[#64748b] hover:text-[#1e293b]'}`}>{title}</button>)}
+    </div>}
+
+    {/* Every panel stays mounted and only the chosen one shows, so switching tabs keeps what is being typed. */}
+    <div role="tabpanel" id="poi-panel-vi-tri" aria-labelledby={current ? 'poi-tab-vi-tri' : undefined} hidden={tab !== 'vi-tri'}>
     {current?.revision.verificationMethod && <div className="mb-4"><Notice tone="info">Cách kiểm chứng: {verificationMethodLabel[current.revision.verificationMethod]}.</Notice></div>}
-    {current?.sourcePoiId && !current.narration?.approved && <div className="mb-4"><Notice tone="warn">POI này được nhập từ tệp ghi pose trên robot. Thêm tên và viết thuyết minh ở khu Thuyết minh bên dưới; vị trí giữ nguyên thì không phải kiểm chứng lại.</Notice></div>}
+    {current?.sourcePoiId && !current.narration?.approved && <div className="mb-4"><Notice tone="warn">POI này được nhập từ tệp ghi pose trên robot. Thêm tên ở đây và viết thuyết minh ở tab Thuyết minh; vị trí giữ nguyên thì không phải kiểm chứng lại.</Notice></div>}
     {current && selectedItem && !selectedItem.canUseForPoiPreparation && <div className="mb-4"><Notice tone="warn">Bản đồ của điểm này hiện không đủ điều kiện để chỉnh sửa: {selectedItem.preparationBlockReason} Lịch sử và kết quả kiểm chứng vẫn được giữ; bản đồ và vị trí bên dưới chỉ để xem.</Notice></div>}
 
     <section className={`${card} mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-3.5`} aria-label="Bản đồ và tiến độ">
@@ -262,19 +278,23 @@ export default function StaffManagePoiFormPage() {
           <h2 className="text-lg font-bold text-[#2d3748]">Thông tin điểm</h2>
           <div><span className={label}><label htmlFor="poi-name">Tên POI</label>{required}</span><input id="poi-name" readOnly={retired} className={field} required maxLength={150} value={draft.name} onChange={e => update({ name: e.target.value })} placeholder="Sảnh thư viện" /></div>
           <div><span className={label}><label htmlFor="poi-purpose">Mục đích</label>{required}</span><input id="poi-purpose" readOnly={retired} className={field} required maxLength={500} value={draft.purpose} onChange={e => update({ purpose: e.target.value })} placeholder="Giới thiệu khu tự học" /></div>
-          <div><span className={label}><label htmlFor="poi-description">Mô tả</label><span className="font-normal text-[#718096]">(không bắt buộc)</span></span><textarea id="poi-description" readOnly={retired} className={field} rows={3} maxLength={1000} value={draft.description} onChange={e => update({ description: e.target.value })} placeholder="Thông tin bổ sung về điểm tham quan…" /></div>
+          <div><span className={label}><label htmlFor="poi-description">Ghi chú nội bộ (không hiện cho học sinh)</label><span className="font-normal text-[#718096]">(không bắt buộc)</span></span><textarea id="poi-description" readOnly={retired} className={field} rows={3} maxLength={1000} value={draft.description} onChange={e => update({ description: e.target.value })} placeholder="Ghi chú cho Staff về điểm này…" />
+            {/* The API field stays `description`; owners took it for the narration students hear. */}
+            <p className="mt-1 text-xs text-[#718096]">Lời guide đọc cho học sinh là Thuyết minh, sửa ở {poiId ? <Link to={{ search: '?tab=thuyet-minh' }} className="font-semibold text-[#2d719e] underline">tab Thuyết minh</Link> : 'tab Thuyết minh sau khi tạo POI'}.</p></div>
         </div>
-        <p className="flex items-start gap-2 text-xs text-[#718096]"><Info size={14} aria-hidden="true" className="mt-0.5 shrink-0" />Gửi đề xuất để kỹ thuật viên kiểm chứng. Mỗi lần lưu tạo một bản mới. {poiId ? 'Thuyết minh viết và duyệt ở khu Thuyết minh bên dưới.' : 'Thuyết minh viết sau khi tạo POI, ở trang chi tiết của điểm.'}</p>
+        <p className="flex items-start gap-2 text-xs text-[#718096]"><Info size={14} aria-hidden="true" className="mt-0.5 shrink-0" />Gửi đề xuất để kỹ thuật viên kiểm chứng. Mỗi lần lưu tạo một bản mới. {poiId ? 'Thuyết minh viết và duyệt ở tab Thuyết minh.' : 'Thuyết minh viết sau khi tạo POI, ở trang chi tiết của điểm.'}</p>
         </div>
       </aside>
     </form>
+    </div>
 
-    {current && <PoiNarrationPanel proposal={current} />}
+    {current && <div role="tabpanel" id="poi-panel-thuyet-minh" aria-labelledby="poi-tab-thuyet-minh" hidden={tab !== 'thuyet-minh'}><PoiNarrationPanel proposal={current} /></div>}
 
-    {current && <PoiHistory revisions={history.data?.revisions ?? []} records={history.data?.verificationRecords ?? []} loading={history.isPending} />}
+    {current && <div role="tabpanel" id="poi-panel-lich-su" aria-labelledby="poi-tab-lich-su" hidden={tab !== 'lich-su'}>
+      <PoiHistory proposalId={current.id} revisions={history.data?.revisions ?? []} records={history.data?.verificationRecords ?? []} loading={history.isPending} /></div>}
 
-    {/* The page's actions stay in reach at the bottom of the screen. */}
-    <div className="sticky bottom-20 z-20 lg:bottom-3 mt-4 rounded-[15px] border border-[#e2e8f0] bg-white/90 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.25)] backdrop-blur-xl">
+    {/* The page's actions stay in reach at the bottom of the screen; they save the position, camera and content only. */}
+    {tab === 'vi-tri' && <div className="sticky bottom-20 z-20 lg:bottom-3 mt-4 rounded-[15px] border border-[#e2e8f0] bg-white/90 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.25)] backdrop-blur-xl">
       <div className="flex flex-wrap items-center gap-3 px-5 py-3">
         <div className="min-w-0 flex-1">
           {error ? <p role="alert" className="flex items-start gap-2 text-sm text-[#a4473d]"><CircleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0" />{error}</p>
@@ -284,11 +304,25 @@ export default function StaffManagePoiFormPage() {
         </div>
         <p className="hidden text-xs text-[#a0aec0] xl:block">Lưu tạo bản mới; gửi kiểm chứng chưa phải kết quả đạt.</p>
         <Link to="/staff/manage/pois" className={buttonClass('secondary')}>Hủy bỏ</Link>
-        <button type="submit" form="poi-form" disabled={busy || locked || saveBlocked} aria-describedby={saveBlocked ? 'poi-outcome' : undefined} className={buttonClass('secondary')}>{busy ? 'Đang lưu…' : 'Lưu nháp'}</button>
-        <button type="button" disabled={busy || locked || submitBlocked} aria-describedby={submitBlocked ? 'poi-outcome' : undefined} onClick={() => void mutate('submit')} className={buttonClass('primary')}>{busy ? 'Đang xử lý…' : 'Gửi kiểm chứng'}</button>
+        <button type="submit" form="poi-form" disabled={busy || locked || saveBlocked} aria-describedby={saveBlocked ? 'poi-outcome' : undefined} className={buttonClass('secondary')}>{busy ? 'Đang lưu…' : 'Lưu POI (chưa gửi kiểm)'}</button>
+        <button type="button" disabled={busy || locked || submitBlocked} aria-describedby={submitBlocked ? 'poi-outcome' : undefined} onClick={() => void mutate('submit')} className={buttonClass('primary')}>{busy ? 'Đang xử lý…' : 'Lưu và gửi kiểm chứng'}</button>
       </div>
-    </div>
+    </div>}
   </AdminPage>
+}
+
+/** Always above the tabs: the navigation check, the narration and whether a route can use the POI, by the server's rule. */
+function PoiHeadline({ proposal }: { proposal: PoiProposal }) {
+  const navigation = navigationHeadline(proposal.revision)
+  const narration = narrationHeadline(proposal.narration)
+  const use = routeUseLine(proposal)
+  return <section aria-label="Tình trạng POI" className={`${card} mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3`}>
+    <span className="text-sm text-[#475569]">Điều hướng: <ToneBadge tone={proposal.retiredAt ? 'muted' : navigation.tone}>{navigation.label}{proposal.revision.verificationSourceRevisionId && proposal.revision.verificationSourceRevisionId !== proposal.revision.id ? ' · giữ kết quả của bản lưu trước' : ''}</ToneBadge></span>
+    <span className="text-sm text-[#475569]">Thuyết minh: <ToneBadge tone={proposal.retiredAt ? 'muted' : narration.tone}>{narration.label}</ToneBadge></span>
+    {proposal.retiredAt && <ToneBadge tone="muted">Ngưng dùng</ToneBadge>}
+    {proposal.discardedAt && <ToneBadge tone="muted">Đã xoá</ToneBadge>}
+    <span className={`text-sm font-semibold sm:ml-auto ${use.usable ? 'text-[#166534]' : 'text-[#7d5310]'}`}>Dùng được cho tuyến: {use.text}</span>
+  </section>
 }
 
 function isMapEligibilityConflict(error: unknown) {
