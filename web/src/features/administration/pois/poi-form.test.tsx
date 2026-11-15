@@ -386,4 +386,62 @@ describe('Staff versioned POI workflow', () => {
       expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeDisabled()
     })
   })
+
+  it('says what each save changed and which save each technical result belongs to', async () => {
+    const first = { ...proposal.revision, navigationFingerprint: 'aa', navigationStatus: 'PASS', isSubmitted: true }
+    const renamed = { ...first, id: 'revision-2', revisionNumber: 2, name: 'Library renamed', createdAt: '2026-10-28T10:00:00Z' }
+    const moved = { ...renamed, id: 'revision-3', revisionNumber: 3, x: 11.25, cameraPreset: 'LEFT', navigationFingerprint: 'bb', navigationStatus: 'FAIL', createdAt: '2026-10-29T10:00:00Z' }
+    const check = { proposalId: 'proposal-1', mapVersionId: 'map-v1', mapKey: 'library-v1', robotCode: 'amr-01', reason: null, evidenceNote: 'Ghi tại chỗ.', checkedByUserId: 'tech-1', sourceFileSha256: null }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })
+      if (url.pathname === '/api/maps/versions') return response([mapItem])
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1') return response({ ...proposal, currentRevision: 3, revision: moved })
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1/history') return response({ proposalId: 'proposal-1', revisions: [moved, first, renamed], verificationRecords: [
+        { ...check, id: 'check-1', proposalRevisionId: 'revision-1', revisionNumber: 1, resultCode: 'PASS', verificationMethod: 'POSE_CAPTURE', reached: null, stopped: null, localizationPassed: null, cameraPresetConfirmed: null, checkedAt: '2026-10-27T11:00:00Z' },
+        { ...check, id: 'check-3', proposalRevisionId: 'revision-3', revisionNumber: 3, resultCode: 'FAIL', verificationMethod: 'MANUAL_CHECK', reached: true, stopped: true, localizationPassed: true, cameraPresetConfirmed: false, reason: 'Đầu không quay', checkedAt: '2026-10-29T11:00:00Z' },
+      ] })
+      return response(null)
+    }))
+    renderAt('/staff/manage/pois/proposal-1')
+    const history = await screen.findByRole('region', { name: 'Lịch sử thay đổi' })
+    const saves = await within(history).findAllByText(/^Bản lưu/)
+    expect(saves).toHaveLength(3)
+    expect(saves[0]).not.toHaveTextContent('so với bản trước')
+    expect(saves[1]).toHaveTextContent('so với bản trước: chỉ đổi nội dung (tên)')
+    expect(saves[2]).toHaveTextContent('so với bản trước: đổi điều hướng: vị trí, camera')
+
+    expect(within(history).getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
+    const steps = within(history).getAllByRole('list', { name: 'Các bước kiểm' })
+    expect(steps).toHaveLength(1)
+    const items = within(steps[0]).getAllByRole('listitem')
+    expect(items.map(item => item.textContent)).toEqual([
+      'Robot tới đúng POI: Đạt', 'Robot dừng đúng vị trí: Đạt', 'Định vị đạt: Đạt', expect.stringMatching(/^Đầu camera làm đúng: .+: Không đạt$/)])
+    expect(items[3]).toHaveAttribute('data-failed', 'true')
+    expect(items[0]).not.toHaveAttribute('data-failed')
+    expect(within(history).getAllByText(/^Kết quả cho bản lưu \d\d\/\d\d/)).toHaveLength(2)
+  })
+
+  it('keeps a retired POI read-only and offers "Dùng lại"', async () => {
+    const retired = { ...proposal, retiredAt: '2026-11-15T05:00:00Z', canReactivate: true, canRetire: false, revision: { ...proposal.revision, navigationStatus: 'PASS', isSubmitted: true } }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })
+      if (url.pathname === '/api/maps/versions') return response([mapItem])
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1/reactivate') return response({ ...retired, retiredAt: null, canReactivate: false, canRetire: true, rowVersion: 'CAcGBQQDAgE=' })
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1') return response(retired)
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1/history') return response({ proposalId: 'proposal-1', revisions: [retired.revision], verificationRecords: [] })
+      return response(null)
+    }))
+    renderAt('/staff/manage/pois/proposal-1')
+    expect(await screen.findByText(/POI này đã ngưng dùng\. Tuyến và Tour đã lưu vẫn giữ điểm này/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Tên POI')).toHaveAttribute('readonly')
+    expect(screen.getByLabelText('X (m)')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Gửi kiểm chứng' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Dùng lại' }))
+    await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/reactivate')).toBe(true))
+    const body = JSON.parse(String(requests.find(r => r.url.pathname.endsWith('/reactivate'))!.init?.body))
+    expect(body).toEqual({ requestId: expect.any(String), expectedRowVersion: proposal.rowVersion })
+    await waitFor(() => expect(screen.queryByText(/POI này đã ngưng dùng\./)).not.toBeInTheDocument())
+    expect(screen.getByLabelText('Tên POI')).not.toHaveAttribute('readonly')
+  })
 })

@@ -6,7 +6,7 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.UnitTests;
 
-/// <summary>ADR-0051: Staff discard a never-passed POI proposal without deleting any row.</summary>
+/// <summary>ADR-0051 amended by ADR-0062: Staff discard a POI proposal no route revision uses, without deleting any row.</summary>
 public sealed class PoiDiscardTests
 {
     private static readonly Guid ActorId = Guid.NewGuid();
@@ -36,16 +36,30 @@ public sealed class PoiDiscardTests
     }
 
     [Fact]
-    public async Task Proposal_with_a_pass_on_any_revision_is_refused_without_writes()
+    public async Task Passed_proposal_in_no_route_is_discarded()
+    {
+        var proposal = Proposal();
+        var audits = new List<AuditLog>();
+        var handler = Handler(proposal, results: [Result("PASS")], audits, () => { });
+
+        var view = await handler.Handle(Command(), default);
+
+        Assert.Equal(Now, view.DiscardedAt);
+        Assert.False(view.CanRetire);
+        Assert.Single(audits);
+    }
+
+    [Fact]
+    public async Task Proposal_used_by_a_route_revision_is_refused_without_writes()
     {
         var proposal = Proposal();
         var audits = new List<AuditLog>();
         var saves = 0;
-        var handler = Handler(proposal, results: [Result("PASS"), Result("FAIL")], audits, () => saves++);
+        var handler = Handler(proposal, results: [Result("PASS"), Result("FAIL")], audits, () => saves++, usedInRoute: true);
 
         var error = await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(Command(), default));
 
-        Assert.Equal("POI_PROPOSAL_HAS_PASS", error.Code);
+        Assert.Equal("POI_PROPOSAL_IN_ROUTE", error.Code);
         Assert.Null(proposal.DiscardedAt);
         Assert.Empty(audits);
         Assert.Equal(0, saves);
@@ -113,6 +127,49 @@ public sealed class PoiDiscardTests
     }
 
     [Fact]
+    public async Task Submit_of_a_retired_proposal_is_refused_before_any_write()
+    {
+        var proposal = Proposal();
+        proposal.RetiredAt = Now;
+        proposal.RetiredByUserId = ActorId;
+        var writes = 0;
+        var handler = new SubmitPoiProposalCommandHandler(
+            Proxy<IMapVersionRepository>(method => throw new NotImplementedException(method.Name)),
+            Proxy<IPoiProposalRepository>(method => method.Name switch
+            {
+                nameof(IPoiProposalRepository.FindSubmissionRequestAsync) => Task.FromResult<PoiProposalSubmission?>(null),
+                nameof(IPoiProposalRepository.LockProposalAsync) => Task.FromResult<PoiProposal?>(proposal),
+                nameof(IPoiProposalRepository.Add) or nameof(IPoiProposalRepository.AddAuditLog) => writes++,
+                _ => throw new NotImplementedException(method.Name)
+            }),
+            Proxy<IPoiVerificationRepository>(method => throw new NotImplementedException(method.Name)),
+            Proxy<IMapPoiRequestLock>(_ => Task.CompletedTask),
+            Proxy<IApplicationDbContext>(_ => Task.FromResult(0)), TimeProvider.System);
+
+        var error = await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            new SubmitPoiProposalCommand(ActorId, ProposalId, new(Guid.NewGuid(), 1, Convert.ToBase64String(RowVersion))), default));
+
+        Assert.Equal("POI_RETIRED", error.Code);
+        Assert.Equal(0, writes);
+    }
+
+    [Fact]
+    public async Task Retired_proposal_is_not_discarded()
+    {
+        var proposal = Proposal();
+        proposal.RetiredAt = Now;
+        proposal.RetiredByUserId = ActorId;
+        var audits = new List<AuditLog>();
+        var handler = Handler(proposal, results: [Result("PASS")], audits, () => { }, usedInRoute: true);
+
+        var error = await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(Command(), default));
+
+        Assert.Equal("POI_RETIRED", error.Code);
+        Assert.Null(proposal.DiscardedAt);
+        Assert.Empty(audits);
+    }
+
+    [Fact]
     public void Validator_requires_the_expected_version()
     {
         var result = new DiscardPoiProposalCommandValidator().Validate(new DiscardPoiProposalCommand(ActorId, ProposalId, new(0, "")));
@@ -134,7 +191,7 @@ public sealed class PoiDiscardTests
     };
 
     private static DiscardPoiProposalCommandHandler Handler(PoiProposal proposal, IReadOnlyList<PoiVerificationRecord> results,
-        List<AuditLog> audits, Action save)
+        List<AuditLog> audits, Action save, bool usedInRoute = false)
     {
         var revision = new PoiProposalRevision
         {
@@ -148,6 +205,8 @@ public sealed class PoiDiscardTests
             nameof(IPoiProposalRepository.FindCurrentRevisionAsync) => Task.FromResult<PoiProposalRevision?>(revision),
             nameof(IPoiProposalRepository.FindSubmissionAsync) => Task.FromResult<PoiProposalSubmission?>(null),
             nameof(IPoiProposalRepository.ListCurrentNarrationsAsync) => Task.FromResult<IReadOnlyList<PoiNarrationRevision>>([]),
+            nameof(IPoiProposalRepository.ListProposalsUsedInRoutesAsync) => Task.FromResult<IReadOnlySet<Guid>>(
+                usedInRoute ? new HashSet<Guid> { ProposalId } : new HashSet<Guid>()),
             _ => throw new NotImplementedException(method.Name)
         }, args => audits.Add((AuditLog)args[0]!));
         var verifications = Proxy<IPoiVerificationRepository>(method => method.Name switch

@@ -40,7 +40,8 @@ export function PoiNarrationPanel({ proposal }: { proposal: PoiProposal }) {
   const list = versions.data ?? []
   const approved = list.find(item => item.state === 'APPROVED') ?? null
   const draft = list.find(item => item.state === 'DRAFT') ?? null
-  const readOnly = Boolean(proposal.discardedAt)
+  // A discarded or retired POI (ADR-0051, ADR-0062) takes no narration write; the server refuses one too.
+  const readOnly = Boolean(proposal.discardedAt || proposal.retiredAt)
   const status = narrationStatus(proposal.narration)
   // The form shows the draft, or the approved text copied into a new version, or an empty first draft.
   const base: Edit = draft ? { text: draft.narrationText, video: draft.fallbackVideoUrl ?? '' }
@@ -106,7 +107,7 @@ export function PoiNarrationPanel({ proposal }: { proposal: PoiProposal }) {
           </div>
         </div>}
 
-        {readOnly && !approved && <p className="mt-3 text-sm text-[#718096]">POI đã bị xoá khỏi danh sách; thuyết minh chỉ để xem.</p>}
+        {readOnly && <p className="mt-3 text-sm text-[#718096]">{proposal.retiredAt ? 'POI đã ngưng dùng; thuyết minh chỉ để xem. Dùng lại POI để sửa hoặc duyệt thuyết minh.' : 'POI đã bị xoá khỏi danh sách; thuyết minh chỉ để xem.'}</p>}
 
         {editorOpen && <div className="mt-4 rounded-xl border border-[#e2e8f0] p-4" role="group" aria-label="Bản nháp">
           <div className="flex flex-wrap items-center justify-between gap-2">

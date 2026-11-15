@@ -180,6 +180,60 @@ describe('Staff versioned Route workflow', () => {
     expect(await screen.findByText('POI Verified hall chưa có thuyết minh đã duyệt. Nhờ một Staff khác duyệt thuyết minh ở trang POI, hoặc bỏ điểm đó ở bước 2, rồi lưu lại.')).toBeInTheDocument()
   })
 
+  // ADR-0062: a retired POI is never offered for a new stop; a kept stop on one says so and can be removed.
+  describe('a retired POI', () => {
+    it('is not offered as a stop', async () => {
+      extraProposals = [{ ...proposals[2], id: 'p-retired', retiredAt: '2026-11-15T05:00:00Z', canReactivate: true,
+        revision: { ...proposals[2].revision, id: 'poi-rev-retired', name: 'Retired POI', x: 12, y: 21 } }]
+      renderAt('/staff/manage/routes/new')
+      fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Library tour' } })
+      fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+      next()
+      expect(await screen.findByRole('checkbox', { name: /Verified entrance/ })).toBeInTheDocument()
+      expect(screen.queryByText('Retired POI')).not.toBeInTheDocument()
+    })
+
+    it('names a kept stop on it, blocks Next, and removes the stop on request', async () => {
+      const hall = proposals.find(item => item.id === 'p-hall')!
+      const retiredHall = { ...hall, retiredAt: '2026-11-15T05:00:00Z', canReactivate: true }
+      vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input), 'http://localhost'); requests.push({ url, init })
+        if (url.pathname === '/api/maps/versions') return response([{ map, latestDeployment: null, canUseForPoiPreparation: true, routeMinStops: 1, routeMinStopSeparationMeters: 1, currentlyDeployedOn: [] }])
+        if (url.pathname === '/api/staff/poi-proposals') return response([proposals[0], retiredHall])
+        if (url.pathname === '/api/routes/route-1/revisions') return response(currentRoute)
+        if (url.pathname === '/api/routes') return response([currentRoute])
+        return response(null)
+      })
+      renderAt('/staff/manage/routes/route-1/edit')
+      await screen.findByLabelText('Tên tuyến')
+      fireEvent.click(screen.getByRole('button', { name: /Điểm dừng/ }))
+      const hallBox = await screen.findByRole('checkbox', { name: /Verified hall/ })
+      expect(hallBox).toBeChecked()
+      const notice = screen.getByText('POI này đã ngưng dùng. Bỏ điểm dừng này, hoặc dùng lại POI ở trang POI, rồi lưu tuyến.')
+      expect(screen.getByText(/bỏ điểm dừng Verified hall \(POI đã ngưng dùng\)/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
+      fireEvent.click(within(notice.parentElement!).getByRole('button', { name: 'Bỏ điểm dừng' }))
+      expect(screen.queryByText(/POI này đã ngưng dùng/)).not.toBeInTheDocument()
+      // The retired POI is not offered again once its stop is gone.
+      expect(screen.queryByRole('checkbox', { name: /Verified hall/ })).not.toBeInTheDocument()
+    })
+
+    it('explains POI_RETIRED from the server in Vietnamese', async () => {
+      createFailure = new Response(JSON.stringify({ success: false, message: 'POI Verified hall đã ngưng dùng. Bỏ khỏi tuyến hoặc dùng lại POI.', data: null, errors: { code: 'POI_RETIRED' } }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+      renderAt('/staff/manage/routes/new')
+      fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Library tour' } })
+      fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+      next()
+      fireEvent.click(await screen.findByRole('checkbox', { name: /Verified entrance/ }))
+      fireEvent.click(screen.getByRole('checkbox', { name: /Verified hall/ }))
+      next()
+      startFromPoi('poi-rev-parking')
+      next()
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
+      expect(await screen.findByText('POI Verified hall đã ngưng dùng. Bỏ khỏi tuyến hoặc dùng lại POI.')).toBeInTheDocument()
+    })
+  })
+
   // ADR-0061: a stop keeps the exact POI revision it was saved with. Before this change a stop on an older revision
   // vanished from the list, its name fell back to its GUID, and ticking the POI added a second revision of it.
   describe('a stop on an older revision of its POI', () => {

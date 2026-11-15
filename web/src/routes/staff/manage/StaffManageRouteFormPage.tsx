@@ -85,7 +85,8 @@ export default function StaffManageRouteFormPage() {
   const initialStops = source.data?.stops.map(stop => ({ poiRevisionId: stop.poiRevisionId, dwellSeconds: stop.dwellSeconds, headSteps: stop.headSteps })) ?? []
   const changed = JSON.stringify([draft, stops]) !== JSON.stringify([initialDraft, initialStops])
   const updateDraft = (update: Partial<Draft>) => setDraftOverride(current => ({ ...draft, ...current, ...update }))
-  const verifiedPois = (proposals.data ?? []).filter((proposal: PoiProposal) => proposal.revision.navigationStatus === 'PASS')
+  // ADR-0062: a retired POI is never offered for a route; the server refuses it with POI_RETIRED.
+  const verifiedPois = (proposals.data ?? []).filter((proposal: PoiProposal) => proposal.revision.navigationStatus === 'PASS' && !proposal.retiredAt)
   const available = verifiedPois.filter(proposal => proposal.revision.mapVersionId === draft.mapVersionId)
   // ADR-0061: a stop keeps the exact POI revision it was saved with. Its name and pose come from the route itself, so a
   // stop on an older revision still reads by name, and its POI is not offered again as a second stop.
@@ -151,7 +152,9 @@ export default function StaffManageRouteFormPage() {
   // A POI without approved narration cannot be ticked; one kept from the revision being edited is named here,
   // so the problem shows before Save instead of as a refusal from the server.
   // Narration belongs to the POI, so a stop on an older revision needs the same approval.
-  const unapprovedStops = stopPois.filter(poi => poi.proposal && !poi.proposal.narration?.approved).map(poi => poi.name)
+  const unapprovedStops = stopPois.filter(poi => poi.proposal && !poi.proposal.retiredAt && !poi.proposal.narration?.approved).map(poi => poi.name)
+  // A stop kept from the edited revision whose POI was retired since; Staff removes it or reactivates the POI.
+  const retiredStops = stopPois.filter(poi => poi.proposal?.retiredAt).map(poi => poi.name)
   const totalDwell = stops.reduce((sum, stop) => sum + (Number.isFinite(stop.dwellSeconds) ? stop.dwellSeconds : 0), 0)
 
   const missingByStep: string[][] = [
@@ -159,7 +162,8 @@ export default function StaffManageRouteFormPage() {
     [stops.length < (minStops ?? 1) && `chọn ít nhất ${minStops ?? 1} điểm dừng`,
       stops.some(stop => !Number.isInteger(stop.dwellSeconds) || stop.dwellSeconds < MIN_DWELL_SECONDS || stop.dwellSeconds > MAX_DWELL_SECONDS) && `thời gian dừng từ ${MIN_DWELL_SECONDS} đến ${MAX_DWELL_SECONDS} giây`,
       closeStops && `${closeStops[0].name} và ${closeStops[1].name} quá gần nhau`,
-      unapprovedStops.length > 0 && `bỏ chọn ${unapprovedStops.join(', ')} hoặc duyệt thuyết minh trước (chưa có thuyết minh đã duyệt)`],
+      unapprovedStops.length > 0 && `bỏ chọn ${unapprovedStops.join(', ')} hoặc duyệt thuyết minh trước (chưa có thuyết minh đã duyệt)`,
+      retiredStops.length > 0 && `bỏ điểm dừng ${retiredStops.join(', ')} (POI đã ngưng dùng) hoặc dùng lại POI`],
     [!placed(startPose) && 'chọn điểm bắt đầu và hướng', startTooClose && 'điểm bắt đầu quá sát vật cản',
       startNearStop && `điểm bắt đầu quá gần điểm dừng ${startNearStop.name}`,
       endChoice === 'POSE' && !placed(endPose) && 'chọn điểm kết thúc và hướng', endChoice === 'POSE' && endTooClose && 'điểm kết thúc quá sát vật cản',
@@ -168,7 +172,7 @@ export default function StaffManageRouteFormPage() {
   ].map(list => list.filter((item): item is string => Boolean(item)))
   const firstOpen = missingByStep.findIndex(list => list.length > 0)
   // Red only for a real problem (too close, against an obstacle, a map that lost its check); what is simply still to do reads grey.
-  const problemByStep = [mapNotReady, Boolean(closeStops) || unapprovedStops.length > 0, Boolean(startTooClose || startNearStop || (endChoice === 'POSE' && endTooClose) || endNearStop), false]
+  const problemByStep = [mapNotReady, Boolean(closeStops) || unapprovedStops.length > 0 || retiredStops.length > 0, Boolean(startTooClose || startNearStop || (endChoice === 'POSE' && endTooClose) || endNearStop), false]
   const goTo = (index: number) => { setStep(index); setFurthest(current => Math.max(current, index)); setError(null) }
 
   const moveStop = (index: number, offset: number) => setStopsOverride(current => {
@@ -251,7 +255,8 @@ export default function StaffManageRouteFormPage() {
           // Unticking stays possible for a stop kept from the edited revision, so it can be removed.
           const lockedOut = !narration.approved && !selected
           // A stop on an older revision of a POI that has moved on (ADR-0061): never swapped by itself.
-          const newer = selected && poi.proposal && poi.proposal.revision.id !== poi.id ? poi.proposal.revision : null
+          const retired = selected && Boolean(poi.proposal?.retiredAt)
+          const newer = selected && !retired && poi.proposal && poi.proposal.revision.id !== poi.id ? poi.proposal.revision : null
           const newerUsable = newer?.navigationStatus === 'PASS' && newer.mapVersionId === draft.mapVersionId
           return <li key={poi.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-3 text-sm ${selected ? narration.approved ? 'border-[#bcd7ea] bg-[#f5fafd]' : 'border-[#f1dcb0] bg-[#fffaf0]' : 'border-[#e2e8f0]'}`}>
             <label className={`flex min-w-0 flex-1 basis-56 items-center gap-3 ${lockedOut ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
@@ -264,6 +269,10 @@ export default function StaffManageRouteFormPage() {
               <label className="flex items-center gap-2 text-xs text-[#64748b]">Dừng<span className="w-20 shrink-0"><input aria-label={`Thời gian dừng ${poi.name} (giây)`} className={inputClass} type="number" min={MIN_DWELL_SECONDS} max={MAX_DWELL_SECONDS} value={stops[index].dwellSeconds} onChange={e => setStopsOverride(current => (current ?? stops).map(stop => stop.poiRevisionId === poi.id ? { ...stop, dwellSeconds: Number(e.target.value) } : stop))} /></span>giây</label>
               <button type="button" className={moveButton} aria-label={`Đưa ${poi.name} lên`} disabled={index === 0} onClick={() => moveStop(index, -1)}><ChevronUp size={16} aria-hidden="true" /></button>
               <button type="button" className={moveButton} aria-label={`Đưa ${poi.name} xuống`} disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}><ChevronDown size={16} aria-hidden="true" /></button>
+            </div>}
+            {retired && <div role="alert" className="flex w-full flex-wrap items-center gap-2 rounded-lg bg-[#fbeeec] px-2.5 py-1.5 text-xs text-[#a4473d]">
+              <span className="min-w-0 flex-1">POI này đã ngưng dùng. Bỏ điểm dừng này, hoặc dùng lại POI ở trang POI, rồi lưu tuyến.</span>
+              <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => toggle(poi.id)}>Bỏ điểm dừng</button>
             </div>}
             {newer && <div className="flex w-full flex-wrap items-center gap-2 rounded-lg bg-white/70 px-2.5 py-1.5 text-xs text-[#7d5310]">
               <span className="min-w-0 flex-1">{newerUsable
@@ -362,6 +371,11 @@ function routeSaveError(cause: unknown) {
   // ADR-0061: "POI {tên} đã có trong tuyến. Mỗi POI chỉ được dùng một lần."
   if (apiErrorCode(cause) === 'ROUTE_DUPLICATE_POI')
     return `${message.startsWith('POI ') ? message : 'Một POI có hai điểm dừng trong tuyến. Mỗi POI chỉ được dùng một lần.'} Bỏ một trong hai điểm dừng ở bước 2 rồi lưu lại.`
+  // ADR-0062: "POI {tên} đã ngưng dùng. Bỏ khỏi tuyến hoặc dùng lại POI." / a discarded POI.
+  if (apiErrorCode(cause) === 'POI_RETIRED')
+    return message.startsWith('POI ') ? message : 'Một điểm dừng dùng POI đã ngưng dùng. Bỏ điểm dừng đó ở bước 2 hoặc dùng lại POI ở trang POI.'
+  if (apiErrorCode(cause) === 'POI_PROPOSAL_DISCARDED')
+    return message.startsWith('POI ') ? message : 'Một điểm dừng dùng POI đã bị xoá. Bỏ điểm dừng đó ở bước 2 rồi lưu lại.'
   return message
 }
 

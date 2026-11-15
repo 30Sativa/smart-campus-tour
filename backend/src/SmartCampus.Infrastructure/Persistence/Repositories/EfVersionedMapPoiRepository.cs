@@ -276,6 +276,12 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
             .ThenBy(proposal => proposal.Id).Take(100).ToArrayAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlySet<Guid>> ListProposalsUsedInRoutesAsync(IReadOnlyCollection<Guid> proposalIds,
+        CancellationToken cancellationToken) =>
+        proposalIds.Count == 0 ? new HashSet<Guid>() : (await dbContext.RouteRevisionStops.AsNoTracking()
+            .Where(stop => proposalIds.Contains(stop.PoiProposalRevision.ProposalId))
+            .Select(stop => stop.PoiProposalRevision.ProposalId).Distinct().ToArrayAsync(cancellationToken)).ToHashSet();
+
     public async Task<IReadOnlyList<PoiProposalRevision>> ListCurrentRevisionsAsync(
         IReadOnlyCollection<Guid> proposalIds, CancellationToken cancellationToken) =>
         await dbContext.PoiProposalRevisions.AsNoTracking()
@@ -293,6 +299,7 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
             .Include(revision => revision.PoiProposalSubmission)
             .Where(revision => revision.RevisionNumber == revision.Proposal.CurrentRevision &&
                                revision.Proposal.DiscardedAt == null &&
+                               revision.Proposal.RetiredAt == null &&
                                dbContext.PoiProposalSubmissions.Any(submission => submission.ProposalRevisionId == revision.Id) &&
                                !dbContext.PoiVerificationRecords.Any(verification => verification.ProposalRevisionId == revision.Id) &&
                                !dbContext.PoiVerificationRecords

@@ -66,14 +66,28 @@ internal static class PoiProposalRules
         CreatedAt = now
     };
     public const string DiscardedCode = "POI_PROPOSAL_DISCARDED";
-    public const string HasPassCode = "POI_PROPOSAL_HAS_PASS";
+    public const string InRouteCode = "POI_PROPOSAL_IN_ROUTE";
+    public const string RetiredCode = "POI_RETIRED";
+    public const string NotRetirableCode = "POI_NOT_RETIRABLE";
+    public const string RetiredAudit = "POI_PROPOSAL_RETIRED";
+    public const string ReactivatedAudit = "POI_PROPOSAL_REACTIVATED";
+
+    public static bool HasPass(IEnumerable<PoiVerificationRecord> results) =>
+        results.Any(result => result.ResultCode == "PASS");
 
     /// <summary>
-    /// Only a proposal with no PASS on any revision may be discarded: a Route revision can only reference a POI revision
-    /// with an effective PASS, so such a proposal is in no Route, Tour or history that a discard could orphan.
+    /// ADR-0051 amended by ADR-0062: a proposal may be discarded when no revision of it is a stop of any route revision
+    /// (retired routes included; a Tour always points at a route revision). A proposal that never passed cannot be in a
+    /// route, so the ADR-0051 case is a subset. The caller holds the proposal row lock, which SaveRouteRevision also takes.
     /// </summary>
-    public static bool CanDiscard(IEnumerable<PoiVerificationRecord> results) =>
-        !results.Any(result => result.ResultCode == "PASS");
+    public static bool CanDiscard(PoiProposal proposal, bool usedInRoute) =>
+        proposal.DiscardedAt is null && proposal.RetiredAt is null && !usedInRoute;
+
+    /// <summary>"Ngưng dùng" is for a POI that once passed and cannot be discarded because a route uses it (ADR-0062).</summary>
+    public static bool CanRetire(PoiProposal proposal, bool hasPass, bool usedInRoute) =>
+        hasPass && proposal.DiscardedAt is null && proposal.RetiredAt is null && !CanDiscard(proposal, usedInRoute);
+
+    public static bool CanReactivate(PoiProposal proposal) => proposal.DiscardedAt is null && proposal.RetiredAt is not null;
 
     public static void EnsureNotDiscarded(PoiProposal proposal)
     {
@@ -81,9 +95,22 @@ internal static class PoiProposalRules
             throw new ConflictException("POI này đã bị xoá khỏi danh sách nên không thể chỉnh sửa, gửi hay kiểm chứng.", DiscardedCode);
     }
 
-    public static void EnsureCurrent(PoiProposal proposal, int expectedRevision, string expectedRowVersion)
+    public static void EnsureNotRetired(PoiProposal proposal)
+    {
+        if (proposal.RetiredAt is not null)
+            throw new ConflictException("POI này đã ngưng dùng nên không thể chỉnh sửa, gửi kiểm, ghi kết quả kiểm hay đổi thuyết minh. Dùng lại POI trước.", RetiredCode);
+    }
+
+    /// <summary>Every writer of new POI work: create revision, submit, verify, narration and import.</summary>
+    public static void EnsureWritable(PoiProposal proposal)
     {
         EnsureNotDiscarded(proposal);
+        EnsureNotRetired(proposal);
+    }
+
+    public static void EnsureCurrent(PoiProposal proposal, int expectedRevision, string expectedRowVersion)
+    {
+        EnsureWritable(proposal);
         if (proposal.CurrentRevision != expectedRevision ||
             !proposal.RowVersion.AsSpan().SequenceEqual(PoiProposalRowVersion.Decode(expectedRowVersion)))
             throw new ConflictException("The proposal changed since it was loaded. Reload it before retrying.", "STALE_VERSION");

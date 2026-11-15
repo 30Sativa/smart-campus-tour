@@ -2,6 +2,7 @@
 
 Date: 2026-11-09
 Status: accepted by the owner (09/11/2026, soft discard chosen over hard delete); implemented
+Amended by ADR-0062 (discard allowed while no route revision uses the POI; retirement for one that a route uses)
 
 ## Context
 

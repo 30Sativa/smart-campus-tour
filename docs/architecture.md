@@ -680,6 +680,27 @@ Staff list and verification queue but no row is deleted. Proposal views add
 `canDiscard` and `discardedAt`; later writes to it return 409
 `POI_PROPOSAL_DISCARDED`.
 
+Under ADR-0062 (schema v1.23), which amends that rule:
+
+- Discard is allowed while no revision of the proposal is a stop of any route
+  revision (retired routes included), whether or not it ever passed; otherwise
+  409 `POI_PROPOSAL_IN_ROUTE` (replaces `POI_PROPOSAL_HAS_PASS`). Request unchanged.
+- `POST /api/staff/poi-proposals/{id}/retire` and `/reactivate` (Staff only) with
+  `{ requestId, expectedRowVersion }` return the proposal view. Retire needs
+  `canRetire`, else 409 `POI_NOT_RETIRABLE`; stale rowversion 409 `STALE_VERSION`;
+  a discarded POI 409 `POI_PROPOSAL_DISCARDED`; a request for a POI already in the
+  requested state returns it unchanged. Audit actions `POI_PROPOSAL_RETIRED`,
+  `POI_PROPOSAL_REACTIVATED`.
+- A retired POI refuses create revision, submit, verification and narration
+  save/approve/discard with 409 `POI_RETIRED`, leaves the verification queue, and
+  a pose import of its source id fails with `POI_RETIRED`. It stays in the Staff list.
+- Route revision save returns 409 `POI_PROPOSAL_DISCARDED` or `POI_RETIRED`
+  ("POI {tên} đã ngưng dùng. Bỏ khỏi tuyến hoặc dùng lại POI.") for such a stop.
+  It locks each stop's proposal row before the map-preparation lock, the lock that
+  discard and retire take, so neither can interleave with the save. Saved route
+  revisions and Tours are unchanged.
+- Proposal views add `canRetire`, `retiredAt` and `canReactivate` at the end.
+
 Under ADR-0041 (schema v1.21), TechnicalStaff retire a map version instead of
 deleting it: `POST /api/technical/map-versions/{id}/retire` with
 `{ reason, expectedRowVersion }` and `POST /api/technical/map-versions/{id}/reopen`
