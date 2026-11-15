@@ -2,7 +2,9 @@
 
 ## Campus display styling
 
-The V3 view loads `web/public/models/simulator-map/NVHSV_Tang6_V3_modern_v2.glb`.
+The V3 view loads `web/public/models/simulator-map/NVHSV_Tang6_V3_modern_v2.opt.glb`,
+built from `NVHSV_Tang6_V3_modern_v2.glb` by `web/scripts/optimize-twin-model.mjs`
+(see [Digital Twin performance](digital-twin-performance.md)); rerun it after restyling.
 Rebuild this independent display asset with `node web/scripts/style-campus-model.mjs`
 from the repo root. The original V3 GLB and legacy OBJ remain available unchanged.
 The styled variant uses light terrazzo, ivory walls and pale aqua glass with slim

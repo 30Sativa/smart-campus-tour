@@ -2,7 +2,8 @@ import { Children, isValidElement, type ReactElement, type ReactNode } from 'rea
 import { FleetPathLine } from './FleetPaths'
 import { PointCameras } from './PointCameras'
 import { describe, expect, it } from 'vitest'
-import TwinScene from './TwinScene'
+// The plain function: these tests read the scene composition without a WebGL context.
+import { TwinScene } from './TwinScene'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { mapToScenePose } from './map-config'
 import { PATROL_TRANSFORM } from './patrol-demo'

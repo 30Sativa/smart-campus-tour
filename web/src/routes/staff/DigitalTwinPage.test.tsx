@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fleetKey, type FleetRobot, type FleetSnapshot } from '../../features/staff/operations/fleet-telemetry'
@@ -78,6 +78,8 @@ describe('Digital Twin page', () => {
     // Traffic and density exist only with the simulation.
     expect(screen.getByRole('button', { name: 'Giao thông' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Mật độ di chuyển' })).toBeDisabled()
+    // Nothing moves on its own: the scene draws only when something changes.
+    expect(screen.getByTestId('twin-stage')).toHaveAttribute('data-frameloop', 'demand')
   })
 
   it('never counts simulated robots: S1–S6 are dimmed extras, not real robots', async () => {
@@ -85,6 +87,7 @@ describe('Digital Twin page', () => {
     fireEvent.click(simSwitch())
     const scene = await screen.findByTestId('scene-robots')
     expect(scene).toHaveTextContent('amr_01*,S1(sim),S2(sim),S3(sim),S4(sim),S5(sim),S6(sim)')
+    expect(screen.getByTestId('twin-stage')).toHaveAttribute('data-frameloop', 'always')
     expect(screen.getByTestId('fleet-summary')).toHaveTextContent(/^1 robot thật · amr_01 đang chờ$/)
     expect(screen.getByRole('heading', { name: 'Robot thật (1)' })).toBeInTheDocument()
     expect(screen.getByText('Mô phỏng (6)')).toBeInTheDocument()
@@ -109,6 +112,7 @@ describe('Digital Twin page', () => {
     expect(await screen.findByText('Đang có Tour chạy, đã tắt mô phỏng')).toBeInTheDocument()
     expect(simSwitch()).toBeDisabled()
     expect(simSwitch()).not.toBeChecked()
+    expect(screen.getByTestId('twin-stage')).toHaveAttribute('data-frameloop', 'demand')
     expect(await screen.findByTestId('scene-route')).toHaveTextContent('Sảnh>Phòng Lab @1')
     const card = screen.getByRole('listitem', { name: 'Robot amr_02' })
     expect(within(card).getByRole('link', { name: 'Tour sáng' })).toHaveAttribute('href', '/staff/live/tour-run')
@@ -125,6 +129,16 @@ describe('Digital Twin page', () => {
     renderAt('/staff/digital-twin', [robot({ poseAgeSeconds: 125 })])
     expect(await screen.findByTestId('scene-robots')).toHaveTextContent('amr_01[dữ liệu cũ, 2 phút trước]')
     expect(screen.getByTestId('fleet-summary')).toHaveTextContent('1 robot thật · amr_01 dữ liệu cũ')
+  })
+
+  it('shows the renderer numbers only with ?perf=1', () => {
+    renderAt('/staff/digital-twin', [robot()])
+    expect(screen.queryByLabelText('Hiệu năng 3D')).not.toBeInTheDocument()
+    cleanup()
+    renderAt('/staff/digital-twin?perf=1', [robot()])
+    const overlay = screen.getByLabelText('Hiệu năng 3D')
+    for (const label of ['FPS', 'Lệnh vẽ', 'Tam giác', 'Texture']) expect(within(overlay).getByText(label)).toBeInTheDocument()
+    expect(within(overlay).getByText('demand')).toBeInTheDocument()
   })
 
   it('names every icon-only button with a title and a label', () => {
