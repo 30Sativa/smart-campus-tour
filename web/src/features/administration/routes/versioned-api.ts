@@ -23,6 +23,8 @@ export type VersionedRoute = {
   rowVersion: string
   /** docs/lich-tour-theo-ca.md §4: how the expected length sits against the shifts. An older server omits it. */
   scheduleFit?: RouteScheduleFit; expectedDurationSeconds?: number | null
+  /** ADR-0062: stops whose POI is retired or discarded now; no new Tour on this revision. An older server omits it. */
+  retiredPoiNames?: string[]
   testRuns: RouteTestRun[]; revisionHistory: Array<{ revisionId: string; revisionNumber: number; mapVersionId: string; mapPackageSha256: string; configurationFingerprint: string; isSubmitted: boolean; verificationStatus: string; effectiveTestRunId: string | null; createdAt: string }>; eligibilityIssues: string[]
 }
 export type VersionedRouteDraft = {

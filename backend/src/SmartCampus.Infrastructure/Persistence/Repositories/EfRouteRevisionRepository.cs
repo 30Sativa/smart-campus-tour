@@ -88,6 +88,9 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
         return locked;
     }
 
+    public async Task<IReadOnlyList<PoiProposal>> FindPoiProposalsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct) =>
+        proposalIds.Count == 0 ? [] : await db.PoiProposals.AsNoTracking().Where(p => proposalIds.Contains(p.Id)).ToArrayAsync(ct);
+
     public Task<PoiProposalRevision?> FindPoiRevisionAsync(Guid revisionId, CancellationToken ct) =>
         db.PoiProposalRevisions.AsNoTracking().SingleOrDefaultAsync(r => r.Id == revisionId, ct);
 

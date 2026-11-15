@@ -43,6 +43,10 @@ internal static class RouteRevisionMapper
             if (poi is null || source is null || source.ResultCode != "PASS" || latestPoiResult is null || latestPoiResult.ResultCode != "PASS")
                 eligibilityIssues.Add($"POI_VERIFICATION_REQUIRED:{stop.PoiProposalRevisionId:D}");
         }
+        var unusable = (await repo.FindPoiProposalsAsync(proposalByStop.Values.Distinct().ToArray(), ct))
+            .Where(p => p.RetiredAt is not null || p.DiscardedAt is not null).Select(p => p.Id).ToHashSet();
+        var retiredPoiNames = stops.Where(s => proposalByStop.TryGetValue(s.Id, out var id) && unusable.Contains(id))
+            .OrderBy(s => s.StopOrder).Select(s => s.Name).ToArray();
         var submissions = await repo.GetSubmissionsAsync(revision.Id, ct);
         var targetNavigation = RouteNavigationConfigurationFactory.FromRevision(revision, stops);
         var routeRuns = await repo.GetTestRunsForRouteAsync(route.Id, ct);
@@ -88,7 +92,7 @@ internal static class RouteRevisionMapper
                 s.CameraPreset, s.NarrationText, s.FallbackVideoUrl,
                 proposalByStop.TryGetValue(s.Id, out var proposalId) ? proposalId : null)).ToArray(), dtoRuns, summaries, eligibilityIssues,
             route.IsOpenForNewTours, LegacyRouteRevision.For(route), schedule is null ? Tours.RouteScheduleFit.Unknown
-                : Tours.TourSchedule.ScheduleFit(schedule, expected), expected);
+                : Tours.TourSchedule.ScheduleFit(schedule, expected), expected, retiredPoiNames);
     }
 
     /// <summary>The effective PASS measured with dwell, plus any dwell added since (the same sum a reservation uses).</summary>

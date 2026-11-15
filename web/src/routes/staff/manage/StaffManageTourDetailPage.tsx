@@ -86,6 +86,8 @@ export default function StaffManageTourDetailPage() {
         <Link to={`/staff/manage/routes/${routeRevision.routeId}?revisionId=${routeRevision.revisionId}`} className="text-sm text-[#2d719e]">Xem bản Tour đang dùng</Link>
       </div>
       {(tour.state === 'SCHEDULED' || tour.state === 'READY') && <NewerRevisionNotice routeId={routeRevision.routeId} revisionId={routeRevision.revisionId} />}
+      {/* ADR-0062: a retired POI blocks new Tours only; this one still goes READY and starts. */}
+      {(tour.state === 'SCHEDULED' || tour.state === 'READY') && Boolean(routeRevision.retiredPoiNames?.length) && <div className="mt-2"><Notice tone="warn">Tuyến của Tour này có POI đã ngưng dùng: {routeRevision.retiredPoiNames!.join(', ')}.</Notice></div>}
       <p className="mt-1 text-sm text-muted">{routePassedAt && `Tuyến đã chạy thử đạt ngày ${formatDate(routePassedAt)} · `}{routeRevision.stops.length} điểm dừng</p>
       <ol className="mt-3 divide-y divide-[#e2e8f0]">{routeRevision.stops.map(stop => <li key={stop.poiRevisionId} className="py-2.5 text-sm">
         <span className="font-medium">{stop.stopOrder}. {stop.name}</span>

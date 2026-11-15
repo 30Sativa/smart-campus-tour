@@ -80,6 +80,9 @@ export function tourError(error: unknown): string {
   if (error.status === 403) return 'Tài khoản không có quyền quản lý Tour.'
   const body = errorBody(error)
   const code = (body.errors as { code?: string } | undefined)?.code
+  // ADR-0062: the server names the retired POIs ("Tuyến có POI đã ngưng dùng: {tên}. …"), so its wording is kept.
+  if (error.status === 409 && code === 'ROUTE_HAS_RETIRED_POI')
+    return backendMessage(error) ?? 'Tuyến có POI đã ngưng dùng. Lưu phiên bản tuyến mới không có POI này, hoặc dùng lại POI.'
   if (error.status === 409 && code && CONFLICTS[code]) return CONFLICTS[code]
   if (error.status === 400) {
     const messages = Object.values(body.errors ?? {}).flat().filter((v): v is string => typeof v === 'string')

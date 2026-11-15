@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.FleetSync;
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.StartTour;
@@ -39,6 +40,19 @@ public sealed class TourStartPreflightSqlTests
         Assert.Equal([Transport], refused.BlockedBy);
         Assert.Equal(4, refused.Checks!.Count(c => c is { Source: "OPERATOR_CONFIRMATION", Passed: true }));
         Assert.Equal(before, await w.State());
+    }
+
+    [SchemaV11Fact]
+    public async Task ARetiredRoutePoi_DoesNotBlockStartingAReadyTour()
+    {
+        // ADR-0062: retiring a POI stops new Tours on its routes, not the Tours already created on them.
+        await using var w = await World.Create();
+        var poi = await TourRetiredPoiSqlTests.RoutePoi(w.H, "Thư viện");
+        await w.H.Send(new RetirePoiProposalCommand(w.H.StaffId, poi.Id, new(Guid.NewGuid(), poi.RowVersion)));
+        var checks = await w.Checks();
+        Assert.Equal([Transport], checks.BlockedBy);
+        Assert.All(checks.Checks.Where(c => c.Id != Transport), c => Assert.True(c.Passed, c.Id));
+        Assert.Equal("COMMAND_TRANSPORT_DISABLED", (await w.StartRefused()).Code);
     }
 
     [SchemaV11Fact]

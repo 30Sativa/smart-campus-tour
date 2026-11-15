@@ -704,6 +704,13 @@ Under ADR-0062 (schema v1.23), which amends that rule:
   effective result for its navigation fingerprint (`navigationStatus`,
   `verificationSourceRevisionId`), the rule the list and detail views already use;
   a content-only save shows the PASS it kept. Response shape unchanged.
+- Tour create (regular and quick) returns 409 `ROUTE_HAS_RETIRED_POI` ("Tuyến có
+  POI đã ngưng dùng: {tên}. Lưu phiên bản tuyến mới không có POI này, hoặc dùng
+  lại POI.") when a stop's POI on the chosen route revision is retired or
+  discarded, checked under row locks on those POIs after the Route lock. Tours
+  already SCHEDULED or READY still go READY and Start. Route revision views (route
+  detail and list, and `routeRevision` in Tour detail) add `retiredPoiNames` at the
+  end: the stop names whose POI is retired or discarded now.
 
 Under ADR-0041 (schema v1.21), TechnicalStaff retire a map version instead of
 deleting it: `POST /api/technical/map-versions/{id}/retire` with

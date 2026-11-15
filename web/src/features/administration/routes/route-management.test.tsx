@@ -472,6 +472,19 @@ describe('Staff versioned Route workflow', () => {
     expect(await screen.findByText(/Tuyến đang ngừng sử dụng nên chưa tạo được Tour mới/)).toBeInTheDocument()
   })
 
+  // ADR-0062: a current revision with a retired POI takes no new Tour, and both route pages say so.
+  it('labels a current revision with a retired POI and offers no Tour on it', async () => {
+    const run = { id: 'run-1', routeRevisionId: 'route-rev-1', robotCode: 'amr-01', checkedByUserId: 'tech-1', participatingStaffUserId: 'staff-1', resultCode: 'PASS', allStopsReached: true, safelyStopped: true, localizationPassed: true, measuredDurationSeconds: 600, failureReason: null, evidenceNote: 'ok', checkedAt: '2026-10-28T10:00:00Z', measurementBasis: 'TOTAL_WITH_DWELL' }
+    currentRoute = { ...currentRoute, isSubmitted: true, verificationStatus: 'PASS', effectiveTestRunId: 'run-1', testRuns: [run], retiredPoiNames: ['Verified hall'] } as typeof route
+    const catalog = renderAt('/staff/manage/routes')
+    expect(await screen.findByText('Có POI ngưng dùng')).toBeInTheDocument()
+    catalog.unmount()
+    renderAt('/staff/manage/routes/route-1')
+    expect(await screen.findByText(/Tuyến có POI đã ngưng dùng: Verified hall\. Không tạo được Tour mới trên phiên bản này; Tour đã tạo vẫn chạy như cũ\./)).toBeInTheDocument()
+    expect(screen.getByText('Có POI ngưng dùng')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Tạo Tour' })).not.toBeInTheDocument()
+  })
+
   it('labels a route too long for one shift in red and one over the recommendation in amber', async () => {
     currentRoute = { ...route, isSubmitted: true, verificationStatus: 'PASS', scheduleFit: 'TOO_LONG_FOR_SHIFT', expectedDurationSeconds: 6000 } as typeof route
     const catalog = renderAt('/staff/manage/routes')
