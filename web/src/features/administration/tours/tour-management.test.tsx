@@ -59,6 +59,7 @@ const lockedSlot = { ...freeSlot, time: '13:15', startsAt: '2099-01-03T06:15:00Z
 let slotDay = [freeSlot, lockedSlot]
 let expectedSeconds = 1320
 let refuseCreate: string | null = null
+let refuseMessage = 'x'
 let shortNoticeMinutes = 30
 /** What `/api/routes/route-2/revisions` returns as the route's current revision. */
 let currentRevision: Record<string, unknown> = { ...TESTED, revisionHistory: [] }
@@ -75,7 +76,7 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
       days: [{ date: '2099-01-03', slots: slotDay }] } }))
     if (method !== 'GET') {
       writes.push({ method, path, body: JSON.parse(String(init?.body)) as Record<string, unknown> })
-      if (refuseCreate) return Promise.resolve(json({ success: false, message: 'x', errors: { code: refuseCreate } }, 409))
+      if (refuseCreate) return Promise.resolve(json({ success: false, message: refuseMessage, errors: { code: refuseCreate } }, 409))
       return Promise.resolve(json({ success: true, data: { id: 'tour-1' } }))
     }
     if (path === '/api/routes/route-2/revisions') return Promise.resolve(json({ success: true, data: currentRevision }))
@@ -100,7 +101,7 @@ function renderAt(path: string) {
     <Route path="/staff/manage/tours/:tourId/edit" element={<StaffManageTourEditPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
-beforeEach(() => { slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null; shortNoticeMinutes = 30; currentRevision = { ...TESTED, revisionHistory: [] } })
+beforeEach(() => { slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null; refuseMessage = 'x'; shortNoticeMinutes = 30; currentRevision = { ...TESTED, revisionHistory: [] } })
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
@@ -372,6 +373,29 @@ describe('live Tour management', () => {
     expect(screen.queryByRole('region', { name: 'Xem lại trước khi tạo' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
     expect(writes).toHaveLength(1)
+  })
+
+  // ADR-0062: a route revision with a retired POI takes no new Tour; the server names the POI, so its words are kept.
+  it('shows ROUTE_HAS_RETIRED_POI with the POI the server names when create is refused', async () => {
+    const writes = api()
+    renderAt('/staff/manage/tours/new?kind=normal')
+    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour POI' } })
+    await chooseTarget()
+    pickDate()
+    fireEvent.click(await screen.findByRole('button', { name: /Ca sáng/ }))
+    refuseCreate = 'ROUTE_HAS_RETIRED_POI'
+    refuseMessage = 'Tuyến có POI đã ngưng dùng: Thư viện. Lưu phiên bản tuyến mới không có POI này, hoặc dùng lại POI.'
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
+    expect(await screen.findByText(refuseMessage)).toBeInTheDocument()
+    expect(writes).toHaveLength(1)
+    expect(tourError(new ApiError(409, JSON.stringify({ errors: { code: 'ROUTE_HAS_RETIRED_POI' } }))))
+      .toBe('Tuyến có POI đã ngưng dùng. Lưu phiên bản tuyến mới không có POI này, hoặc dùng lại POI.')
+  })
+
+  it('warns on a Tour still to run whose route has a retired POI', async () => {
+    api({ ...versionedTour, routeRevision: { ...TESTED, retiredPoiNames: ['Thư viện'] } as unknown as TourDetails['routeRevision'] })
+    renderAt('/staff/manage/tours/tour-1')
+    expect(await screen.findByText('Tuyến của Tour này có POI đã ngưng dùng: Thư viện.')).toBeInTheDocument()
   })
 
   it('edits only metadata when schedule and Route are locked, keeping the unchanged past schedule', async () => {

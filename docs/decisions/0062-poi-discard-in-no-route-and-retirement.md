@@ -66,3 +66,11 @@ it would let a route pick a discarded POI once discard is widened.
 - Nothing updates an existing route revision or Tour; Staff removes the stop and saves a new route revision.
 - `POI_PROPOSAL_HAS_PASS` disappears from the discard contract; clients that matched it see `POI_PROPOSAL_IN_ROUTE`.
 - The navigation fingerprint and narration rules (ADR-0060) are unchanged.
+- **No new Tour on a route revision with a retired POI** (owner, 15/11/2026). Tour create, regular and quick (ADR-0053),
+  returns 409 `ROUTE_HAS_RETIRED_POI`, "Tuyến có POI đã ngưng dùng: {tên}. Lưu phiên bản tuyến mới không có POI
+  này, hoặc dùng lại POI." when a stop's POI is retired or discarded. The check runs after the Route lock, row-locks
+  the stop POIs as retire and discard do, and reads them again in the create transaction; it comes before the
+  map-preparation lock, the order `SaveRouteRevision` uses. Tours already created (SCHEDULED, READY) are not blocked
+  from READY or Start. Route revision views (route detail, route list, Tour detail) add `retiredPoiNames`; the web
+  shows "Có POI ngưng dùng" on the current revision and "Tuyến của Tour này có POI đã ngưng dùng: {tên}." on a Tour.
+  The slots read does not check it; the refusal comes at create.

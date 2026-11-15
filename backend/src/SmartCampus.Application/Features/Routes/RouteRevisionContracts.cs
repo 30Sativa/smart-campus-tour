@@ -41,7 +41,9 @@ public sealed record RouteRevisionView(Guid RouteId, Guid RevisionId, int Revisi
     IReadOnlyList<RouteRevisionSummaryView> RevisionHistory, IReadOnlyList<string> EligibilityIssues,
     bool IsActive = true, string RowVersion = "",
     // docs/lich-tour-theo-ca.md §4: kept apart from EligibilityIssues, which READY reads as stale POI evidence.
-    string ScheduleFit = "UNKNOWN", int? ExpectedDurationSeconds = null);
+    string ScheduleFit = "UNKNOWN", int? ExpectedDurationSeconds = null,
+    // ADR-0062: names of the stops whose POI is retired or discarded now. A new Tour is refused on such a revision.
+    IReadOnlyList<string>? RetiredPoiNames = null);
 public sealed record RouteAvailabilityRequest(Guid RequestId, string ExpectedRowVersion);
 public sealed record RouteScheduledTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State);
 public sealed record RouteAvailabilityResult(Guid RouteId, bool IsActive, IReadOnlyList<RouteScheduledTourView> ScheduledTours);
@@ -76,6 +78,8 @@ public interface IRouteRevisionRepository
     /// concurrent discard or retire of one of them serializes with the route save (ADR-0062).
     /// </summary>
     Task<IReadOnlyDictionary<Guid, PoiProposal>> LockPoiProposalsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct);
+    /// <summary>Untracked proposals with these ids, discarded or retired ones included.</summary>
+    Task<IReadOnlyList<PoiProposal>> FindPoiProposalsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct);
     Task<PoiProposalRevision?> FindPoiRevisionAsync(Guid revisionId, CancellationToken ct);
     Task<PoiVerificationRecord?> FindPoiVerificationAsync(Guid verificationId, CancellationToken ct);
     Task<IReadOnlyList<RouteRevisionStop>> GetStopsAsync(Guid revisionId, CancellationToken ct);

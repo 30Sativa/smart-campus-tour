@@ -19,11 +19,36 @@ internal static class TourTarget
         var route = await (lockTarget ? revisions.LockRouteAsync(revision.RouteId, ct) : revisions.FindRouteAsync(revision.RouteId, ct));
         if (route is not { IsOpenForNewTours: true })
             throw new ConflictException("Tuyến đã ngừng sử dụng nên không dùng được cho Tour mới.", "ROUTE_UNAVAILABLE");
+        if (lockTarget) await EnsureNoRetiredPoiAsync(revisions, revision.Id, ct);
         var run = await RequireSchedulableRevisionAsync(revisions, maps, revision, lockTarget, ct);
         // Only new Tours: READY repeats the schedulable check, and retiring is refused while SCHEDULED or READY Tours use the
         // version (ADR-0041). Create holds the map lock taken above, so a retirement cannot slip in before commit.
         await MapRetirement.EnsureActiveAsync(maps, revision.MapVersionId, ct);
         return (revision, run);
+    }
+
+    public const string RouteHasRetiredPoiCode = "ROUTE_HAS_RETIRED_POI";
+
+    /// <summary>
+    /// ADR-0062: a new Tour (regular or quick) never starts on a route revision with a retired or discarded POI. The
+    /// stop POIs are row-locked as retire and discard lock them, after the Route lock and before the map lock (the order
+    /// SaveRouteRevision uses), and read again under that lock. READY and Start do not ask: a Tour already created keeps
+    /// its route, and its page warns instead.
+    /// </summary>
+    private static async Task EnsureNoRetiredPoiAsync(IRouteRevisionRepository revisions, Guid revisionId, CancellationToken ct)
+    {
+        var stops = await revisions.GetStopsAsync(revisionId, ct);
+        var pois = await revisions.FindPoiRevisionsAsync(stops.Select(stop => stop.PoiProposalRevisionId).Distinct().ToArray(), ct);
+        var proposalByRevision = pois.ToDictionary(poi => poi.Id, poi => poi.ProposalId);
+        var locked = await revisions.LockPoiProposalsAsync(proposalByRevision.Values.Distinct().ToArray(), ct);
+        var names = stops.OrderBy(stop => stop.StopOrder)
+            .Where(stop => proposalByRevision.TryGetValue(stop.PoiProposalRevisionId, out var id) && locked.TryGetValue(id, out var proposal) &&
+                           (proposal.RetiredAt is not null || proposal.DiscardedAt is not null))
+            .Select(stop => stop.Name).Distinct().ToArray();
+        if (names.Length > 0)
+            throw new ConflictException(
+                $"Tuyến có POI đã ngưng dùng: {string.Join(", ", names)}. Lưu phiên bản tuyến mới không có POI này, hoặc dùng lại POI.",
+                RouteHasRetiredPoiCode);
     }
 
     /// <summary>

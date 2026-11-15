@@ -11,6 +11,7 @@ import { versionedRoutesApi, type VersionedRoute } from '../../../features/admin
 import { DeactivateRouteDialog } from '../../../features/administration/routes/DeactivateRouteDialog'
 import { RouteMap } from '../../../features/administration/routes/RouteMap'
 import { NewerPoiRevisionNotice } from '../../../features/administration/routes/NewerPoiRevisionNotice'
+import { RetiredPoiBadge } from '../../../features/administration/routes/RetiredPoiBadge'
 import { tourKeys } from '../../../features/administration/tours/hooks'
 import { mapAreaName } from '../../../features/administration/map-labels'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
@@ -101,9 +102,12 @@ export default function StaffManageRouteDetailsPage() {
     <div className="mb-4 space-y-2">
       {!isCurrentRevision && <Notice tone="warn">{viewedAt ? `Đây là bản lưu ${campusShortStamp(viewedAt)}, chỉ xem được.` : 'Đây là bản lưu cũ, chỉ xem được.'}</Notice>}
       {isCurrentRevision && <NewerPoiRevisionNotice route={value} />}
+      {isCurrentRevision && Boolean(value.retiredPoiNames?.length) && <Notice tone="warn" action={<Link to={`/staff/manage/routes/${value.routeId}/edit`} className="text-sm whitespace-nowrap text-[#2d719e] hover:underline">Sửa tuyến</Link>}>
+        Tuyến có POI đã ngưng dùng: {value.retiredPoiNames!.join(', ')}. Không tạo được Tour mới trên phiên bản này; Tour đã tạo vẫn chạy như cũ. Lưu phiên bản mới không có POI này, hoặc dùng lại POI.
+      </Notice>}
       {notice && <div role={submitMutation.isSuccess ? 'status' : undefined}><Note tone={notice.tone}><div className="flex flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 flex-1">{notice.text}</p>
-        {notice.createTour && <Link to={`/staff/manage/tours/new?route=${value.revisionId}`} className={buttonClass('secondary', 'sm')}>Tạo Tour</Link>}
+        {notice.createTour && !value.retiredPoiNames?.length && <Link to={`/staff/manage/tours/new?route=${value.revisionId}`} className={buttonClass('secondary', 'sm')}>Tạo Tour</Link>}
         {notice.reopen && <button type="button" className={buttonClass('secondary', 'sm')} disabled={availability.isPending} onClick={() => availability.mutate({ target: value, requestId: crypto.randomUUID(), open: true })}>Mở lại</button>}
       </div></Note></div>}
       {submitMutation.isError && <Notice tone="danger" action={submitMutation.error instanceof ApiError && submitMutation.error.status === 409 ? <button className={buttonClass('secondary', 'sm')} disabled={route.isFetching} onClick={() => void reload()}>Tải lại tuyến</button> : undefined}>{submitMessage(submitMutation.error)}</Notice>}
@@ -112,7 +116,7 @@ export default function StaffManageRouteDetailsPage() {
     <section className={`${panelClass} p-4`} aria-label="Tổng quan tuyến">
       <dl className="grid gap-3 sm:grid-cols-4">
         <div className="min-w-0 sm:col-span-4"><dt className="text-xs text-[#64748b]">Mô tả</dt><dd className="mt-0.5 break-words">{value.description ?? 'Chưa có mô tả.'}</dd></div>
-        <div><dt className="text-xs text-[#64748b]">Trạng thái</dt><dd className="mt-1 flex flex-wrap gap-1"><span className={`inline-flex rounded-full border px-2 py-px text-[11px] font-bold whitespace-nowrap ${status.chip}`}>{status.label}</span><ScheduleFitBadge route={value} /></dd></div>
+        <div><dt className="text-xs text-[#64748b]">Trạng thái</dt><dd className="mt-1 flex flex-wrap gap-1"><span className={`inline-flex rounded-full border px-2 py-px text-[11px] font-bold whitespace-nowrap ${status.chip}`}>{status.label}</span><ScheduleFitBadge route={value} />{isCurrentRevision && <RetiredPoiBadge route={value} />}</dd></div>
         <div className="min-w-0"><dt className="text-xs text-[#64748b]">Bản đồ</dt><dd className="mt-0.5 break-words">{area ?? (maps.isPending ? 'Đang tải…' : '-')}</dd></div>
         <div><dt className="text-xs text-[#64748b]">Số điểm dừng</dt><dd className="mt-0.5">{value.stops.length}</dd></div>
         <div><dt className="text-xs text-[#64748b]">Tổng thời gian dừng</dt><dd className="mt-0.5">{formatDuration(value.dwellDurationSeconds)}</dd></div>
