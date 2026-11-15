@@ -43,6 +43,17 @@ public sealed class SchemaV11FactAttribute : FactAttribute, ITraitAttribute
 
 }
 
+/// <summary>The data-driven form of <see cref="SchemaV11FactAttribute"/>, with the same opt-in and trait.</summary>
+[TraitDiscoverer("SmartCampus.IntegrationTests.SqlIntegrationTraitDiscoverer", "SmartCampus.IntegrationTests")]
+public sealed class SchemaV11TheoryAttribute : TheoryAttribute, ITraitAttribute
+{
+    public SchemaV11TheoryAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")))
+            Skip = "Set SMARTCAMPUS_SCHEMA_TEST_CONNECTION to a disposable local SQL Server instance (CREATE DATABASE permission).";
+    }
+}
+
 public sealed class SchemaV12FactAttribute : FactAttribute, ITraitAttribute
 {
     public SchemaV12FactAttribute()

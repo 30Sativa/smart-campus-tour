@@ -180,6 +180,89 @@ describe('Staff versioned Route workflow', () => {
     expect(await screen.findByText('POI Verified hall chưa có thuyết minh đã duyệt. Nhờ một Staff khác duyệt thuyết minh ở trang POI, hoặc bỏ điểm đó ở bước 2, rồi lưu lại.')).toBeInTheDocument()
   })
 
+  // ADR-0061: a stop keeps the exact POI revision it was saved with. Before this change a stop on an older revision
+  // vanished from the list, its name fell back to its GUID, and ticking the POI added a second revision of it.
+  describe('a stop on an older revision of its POI', () => {
+    const oldStop = (poiRevisionId: string, poiProposalId: string, name: string, x: number) =>
+      ({ ...route.stops[0], poiRevisionId, poiProposalId, name, x, y: 20.4, yaw: 0, cameraPreset: 'FRONT' })
+    const editStops = async () => {
+      renderAt('/staff/manage/routes/route-1/edit')
+      await screen.findByLabelText('Tên tuyến')
+      fireEvent.click(screen.getByRole('button', { name: /Điểm dừng/ }))
+      return screen.findByRole('region', { name: 'Điểm dừng' })
+    }
+
+    it('keeps its saved name and offers the newer passed revision, saying a moved POI needs a new test run', async () => {
+      currentRoute = { ...route, stops: [oldStop('poi-rev-pass-old', 'p-pass', 'Old entrance', 9.8), route.stops[1]] } as typeof route
+      const step = within(await editStops())
+      const box = step.getByRole('checkbox', { name: /Old entrance/ })
+      expect(box).toBeChecked()
+      expect(step.queryByText(/poi-rev-pass-old/)).not.toBeInTheDocument()
+      // The newer revision of the same POI is not offered as a second stop.
+      expect(step.queryByRole('checkbox', { name: /Verified entrance/ })).not.toBeInTheDocument()
+      const row = within(box.closest('li')!)
+      expect(row.getByText('POI này có phiên bản mới đã đạt. Tuyến sẽ phải chạy thử lại.')).toBeInTheDocument()
+      fireEvent.change(row.getByLabelText('Thời gian dừng Old entrance (giây)'), { target: { value: '45' } })
+      fireEvent.click(row.getByRole('button', { name: 'Dùng bản mới' }))
+      expect(step.getByRole('checkbox', { name: /Verified entrance/ })).toBeChecked()
+      expect(step.queryByRole('checkbox', { name: /Old entrance/ })).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /Xem lại và lưu/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
+      await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/routes/route-1/revisions' && r.init?.method === 'POST')).toBe(true))
+      const body = JSON.parse(String(requests.find(r => r.url.pathname === '/api/staff/routes/route-1/revisions' && r.init?.method === 'POST')!.init?.body))
+      expect(body.stops[0]).toEqual({ poiRevisionId: 'poi-rev-pass', dwellSeconds: 45, headSteps: [{ preset: 'FRONT', holdSeconds: 10 }] })
+      expect(body.stops).toHaveLength(2)
+    })
+
+    it('does not ask for a new test run when the newer revision kept the pose and camera', async () => {
+      currentRoute = { ...route, stops: [oldStop('poi-rev-pass-old', 'p-pass', 'Old entrance', 10.2), route.stops[1]] } as typeof route
+      const row = within((await within(await editStops()).findByRole('checkbox', { name: /Old entrance/ })).closest('li')!)
+      expect(row.getByText('POI này có phiên bản mới đã đạt.')).toBeInTheDocument()
+      expect(row.getByRole('button', { name: 'Dùng bản mới' })).toBeInTheDocument()
+    })
+
+    it('keeps the old revision without an offer while the newer one has not passed', async () => {
+      currentRoute = { ...route, stops: [route.stops[0], oldStop('poi-rev-pending-old', 'p-pending', 'Old pending', 11.4)] } as typeof route
+      const step = within(await editStops())
+      const row = within(step.getByRole('checkbox', { name: /Old pending/ }).closest('li')!)
+      expect(row.getByText('POI này đang có bản sửa chưa đạt, tuyến giữ bản cũ.')).toBeInTheDocument()
+      expect(row.queryByRole('button', { name: 'Dùng bản mới' })).not.toBeInTheDocument()
+      expect(step.queryByText(/poi-rev-pending-old/)).not.toBeInTheDocument()
+    })
+
+    it('names the stops whose POI has a newer passed revision on the current route revision, with a way to edit', async () => {
+      currentRoute = { ...route, stops: [oldStop('poi-rev-pass-old', 'p-pass', 'Old entrance', 9.8), oldStop('poi-rev-hall-old', 'p-hall', 'Old hall', 11.4), oldStop('poi-rev-pending-old', 'p-pending', 'Old pending', 12)] } as typeof route
+      renderAt('/staff/manage/routes/route-1')
+      const notice = (await screen.findByText(/có phiên bản mới đã đạt/)).closest('[role="alert"]')!
+      expect(notice).toHaveTextContent('POI Old entrance, Old hall có phiên bản mới đã đạt. Sửa tuyến để dùng bản mới. Đổi vị trí, hướng hoặc camera thì tuyến phải chạy thử lại.')
+      expect(within(notice as HTMLElement).getByRole('link', { name: 'Sửa tuyến' })).toHaveAttribute('href', '/staff/manage/routes/route-1/edit')
+    })
+
+    it('says nothing about newer POI revisions on an older, read-only route revision', async () => {
+      currentRoute = { ...route, stops: [oldStop('poi-rev-pass-old', 'p-pass', 'Old entrance', 9.8), route.stops[1]],
+        revisionHistory: [...route.revisionHistory, { ...route.revisionHistory[0], revisionId: 'route-rev-2', revisionNumber: 2 }] } as typeof route
+      renderAt('/staff/manage/routes/route-1?revisionId=route-rev-1')
+      expect(await screen.findByText(/chỉ xem được/)).toBeInTheDocument()
+      expect(screen.queryByText(/có phiên bản mới đã đạt/)).not.toBeInTheDocument()
+    })
+
+    it('explains ROUTE_DUPLICATE_POI in Vietnamese', async () => {
+      createFailure = new Response(JSON.stringify({ success: false, message: 'POI Verified hall đã có trong tuyến. Mỗi POI chỉ được dùng một lần.', data: null, errors: { code: 'ROUTE_DUPLICATE_POI' } }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+      renderAt('/staff/manage/routes/new')
+      fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Library tour' } })
+      fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+      next()
+      fireEvent.click(await screen.findByRole('checkbox', { name: /Verified entrance/ }))
+      fireEvent.click(screen.getByRole('checkbox', { name: /Verified hall/ }))
+      next()
+      startFromPoi('poi-rev-parking')
+      next()
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
+      expect(await screen.findByText('POI Verified hall đã có trong tuyến. Mỗi POI chỉ được dùng một lần. Bỏ một trong hai điểm dừng ở bước 2 rồi lưu lại.')).toBeInTheDocument()
+    })
+  })
+
   it('only offers maps that already have a passed POI', async () => {
     renderAt('/staff/manage/routes/new')
     const select = await screen.findByLabelText('Bản đồ')

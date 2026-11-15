@@ -736,6 +736,14 @@ not discarded:
   `RouteRevisionStops.NarrationRevisionId`; the route fingerprint and test-run
   inheritance are unchanged. Existing route revisions and Tours keep their snapshot.
 
+Under ADR-0061, a POI proposal appears at most once in a route revision: route
+revision save returns 409 `ROUTE_DUPLICATE_POI` ("POI {tên} đã có trong tuyến.
+Mỗi POI chỉ được dùng một lần.") when two stops name revisions of the same POI,
+checked before the stop-separation rule. Route revision stop views add
+`poiProposalId` (null only if the POI revision is missing); existing fields are
+unchanged. A stop still points at its exact POI revision; nothing moves an
+existing route revision or Tour to a newer POI revision.
+
 Under ADR-0028, a valid uploaded package alone is not selectable for new POI
 work. Map list/detail return backend-calculated `technicalCheckStatus`,
 `canUseForPoiPreparation`, a block reason code/text, and the evidence record

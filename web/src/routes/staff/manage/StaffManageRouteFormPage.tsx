@@ -43,6 +43,11 @@ const metres = (value: number) => value.toLocaleString('vi-VN', { maximumFractio
 const durationText = (seconds: number) => seconds < 60 ? `${seconds} giây`
   : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
 type NearStop = { name: string; meters: number }
+/** A stop's POI revision as the route saved it, with the POI it belongs to when that POI is still listed. */
+type StopPoi = { id: string; name: string; x: number; y: number; yaw: number; cameraPreset: string; proposal: PoiProposal | null }
+// The server's PoiNavigationFingerprint fields at its precision: a newer revision that keeps them keeps the route's test run.
+const navigationKey = (poi: { x: number; y: number; yaw: number; cameraPreset: string }) =>
+  [poi.x.toFixed(4), poi.y.toFixed(4), poi.yaw.toFixed(6), poi.cameraPreset.trim().toUpperCase()].join('|')
 
 /**
  * Route authoring as four steps, because each one depends on the one before: stops need the map,
@@ -82,10 +87,24 @@ export default function StaffManageRouteFormPage() {
   const updateDraft = (update: Partial<Draft>) => setDraftOverride(current => ({ ...draft, ...current, ...update }))
   const verifiedPois = (proposals.data ?? []).filter((proposal: PoiProposal) => proposal.revision.navigationStatus === 'PASS')
   const available = verifiedPois.filter(proposal => proposal.revision.mapVersionId === draft.mapVersionId)
+  // ADR-0061: a stop keeps the exact POI revision it was saved with. Its name and pose come from the route itself, so a
+  // stop on an older revision still reads by name, and its POI is not offered again as a second stop.
+  const allPois = proposals.data ?? []
+  const savedStops = new Map((source.data?.stops ?? []).map(stop => [stop.poiRevisionId, stop]))
+  const stopPoi = (revisionId: string): StopPoi | null => {
+    const current = allPois.find(proposal => proposal.revision.id === revisionId)
+    if (current) return { ...current.revision, proposal: current }
+    const saved = savedStops.get(revisionId)
+    return saved ? { id: revisionId, name: saved.name, x: saved.x, y: saved.y, yaw: saved.yaw, cameraPreset: saved.cameraPreset,
+      proposal: allPois.find(proposal => proposal.id === saved.poiProposalId) ?? null } : null
+  }
+  const stopPois = stops.flatMap(stop => { const poi = stopPoi(stop.poiRevisionId); return poi ? [poi] : [] })
+  const stopProposalIds = new Set(stopPois.flatMap(poi => poi.proposal ? [poi.proposal.id] : []))
+  const candidates = available.filter(proposal => !stopProposalIds.has(proposal.id))
   // Stops come first, in route order, so the order being saved is the order on screen.
-  const orderedPois = [
-    ...stops.flatMap(stop => available.filter(proposal => proposal.revision.id === stop.poiRevisionId)),
-    ...available.filter(proposal => !stops.some(stop => stop.poiRevisionId === proposal.revision.id)),
+  const rows: StopPoi[] = [
+    ...stops.map(stop => stopPoi(stop.poiRevisionId) ?? { id: stop.poiRevisionId, name: 'POI không còn trong danh sách', x: 0, y: 0, yaw: 0, cameraPreset: '', proposal: null }),
+    ...candidates.map(proposal => ({ ...proposal.revision, proposal })),
   ]
   // Mirrors the server: a route needs PASS POIs on the exact map (ADR-0023) and current map evidence (ADR-0033).
   const poiMapIds = new Set(verifiedPois.map(proposal => proposal.revision.mapVersionId))
@@ -111,12 +130,13 @@ export default function StaffManageRouteFormPage() {
     && poseClearance(raster.map, raster.map.pixels ?? null, { x: pose.x, y: pose.y }, clearance) === 'blocked')
   const startTooClose = tooClose(startPose) && !kept(startPose, saved?.startX, saved?.startY)
   const endTooClose = tooClose(endPose) && !kept(endPose, saved?.endX, saved?.endY)
-  const poiName = (id: string) => available.find(proposal => proposal.revision.id === id)?.revision.name ?? id
+  const poiName = (id: string) => stopPoi(id)?.name ?? 'POI không còn trong danh sách'
   // Both rules come with the map version from the server; without them the server alone decides.
   const minStops = chosenMap?.routeMinStops
   const minSeparation = chosenMap?.routeMinStopSeparationMeters
-  const stopPois = stops.flatMap(stop => available.filter(proposal => proposal.revision.id === stop.poiRevisionId).map(proposal => proposal.revision))
   const stopIds = new Set(stops.map(stop => stop.poiRevisionId))
+  // The current revision of a POI already on the route is taken too, for the "copy a POI's pose" pickers.
+  const takenPoiRevisions = new Set([...stopIds, ...available.filter(proposal => stopProposalIds.has(proposal.id)).map(proposal => proposal.revision.id)])
   const nearStop = (pose: PickerPose, candidates: typeof stopPois): NearStop | null => {
     if (minSeparation == null || pose.x == null || pose.y == null) return null
     const point = { x: pose.x, y: pose.y }
@@ -130,8 +150,8 @@ export default function StaffManageRouteFormPage() {
     .find(([previous, poi]) => distance(previous, poi) < minSeparation) ?? null
   // A POI without approved narration cannot be ticked; one kept from the revision being edited is named here,
   // so the problem shows before Save instead of as a refusal from the server.
-  const unapprovedStops = stops.flatMap(stop => available.filter(proposal => proposal.revision.id === stop.poiRevisionId && !usableForRoute(proposal)))
-    .map(proposal => proposal.revision.name)
+  // Narration belongs to the POI, so a stop on an older revision needs the same approval.
+  const unapprovedStops = stopPois.filter(poi => poi.proposal && !poi.proposal.narration?.approved).map(poi => poi.name)
   const totalDwell = stops.reduce((sum, stop) => sum + (Number.isFinite(stop.dwellSeconds) ? stop.dwellSeconds : 0), 0)
 
   const missingByStep: string[][] = [
@@ -156,9 +176,12 @@ export default function StaffManageRouteFormPage() {
     ;[next[index], next[index + offset]] = [next[index + offset], next[index]]
     return next
   })
-  const toggle = (proposal: PoiProposal) => setStopsOverride(current => (current ?? stops).some(stop => stop.poiRevisionId === proposal.revision.id)
-    ? (current ?? stops).filter(stop => stop.poiRevisionId !== proposal.revision.id)
-    : [...(current ?? stops), { poiRevisionId: proposal.revision.id, dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 10 }] }])
+  const toggle = (revisionId: string) => setStopsOverride(current => (current ?? stops).some(stop => stop.poiRevisionId === revisionId)
+    ? (current ?? stops).filter(stop => stop.poiRevisionId !== revisionId)
+    : [...(current ?? stops), { poiRevisionId: revisionId, dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 10 }] }])
+  // Swaps a stop onto its POI's newer revision; order, dwell and head steps stay.
+  const swapToNewer = (oldRevisionId: string, newRevisionId: string) => setStopsOverride(current =>
+    (current ?? stops).map(stop => stop.poiRevisionId === oldRevisionId ? { ...stop, poiRevisionId: newRevisionId } : stop))
   const chooseMap = (mapVersionId: string) => {
     // Stops and poses belong to one map version, so another version starts them again.
     updateDraft({ mapVersionId, startX: null, startY: null, startYaw: null, endX: null, endY: null, endYaw: null })
@@ -221,37 +244,46 @@ export default function StaffManageRouteFormPage() {
 
       {step === 1 && <section aria-label={STEPS[1]} className={`${panelClass} p-4`}><h2 className="font-semibold">Điểm dừng</h2><p className="mt-1 text-xs text-[#64748b]">Tick POI hoặc bấm điểm trên bản đồ để chọn. Robot đi theo thứ tự đánh số, dùng mũi tên để đổi thứ tự.{minStops != null && ` Cần ít nhất ${minStops} điểm dừng.`} Mỗi điểm dừng từ {MIN_DWELL_SECONDS} đến {MAX_DWELL_SECONDS} giây.</p>
         {closeStops && <p role="alert" className="mt-2 text-xs text-[#b23e18]">{closeStops[0].name} và {closeStops[1].name} cách nhau {metres(distance(closeStops[0], closeStops[1]))} m, cần ít nhất {metres(minSeparation!)} m. Đổi thứ tự hoặc bỏ bớt một điểm.</p>}
-        {available.length ? <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><ol className="space-y-2">{orderedPois.map(poi => {
-          const index = stops.findIndex(stop => stop.poiRevisionId === poi.revision.id)
+        {rows.length ? <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><ol className="space-y-2">{rows.map(poi => {
+          const index = stops.findIndex(stop => stop.poiRevisionId === poi.id)
           const selected = index >= 0
-          const narration = narrationStatus(poi.narration)
+          const narration = narrationStatus(poi.proposal?.narration)
           // Unticking stays possible for a stop kept from the edited revision, so it can be removed.
           const lockedOut = !narration.approved && !selected
-          return <li key={poi.revision.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-3 text-sm ${selected ? narration.approved ? 'border-[#bcd7ea] bg-[#f5fafd]' : 'border-[#f1dcb0] bg-[#fffaf0]' : 'border-[#e2e8f0]'}`}>
+          // A stop on an older revision of a POI that has moved on (ADR-0061): never swapped by itself.
+          const newer = selected && poi.proposal && poi.proposal.revision.id !== poi.id ? poi.proposal.revision : null
+          const newerUsable = newer?.navigationStatus === 'PASS' && newer.mapVersionId === draft.mapVersionId
+          return <li key={poi.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-3 text-sm ${selected ? narration.approved ? 'border-[#bcd7ea] bg-[#f5fafd]' : 'border-[#f1dcb0] bg-[#fffaf0]' : 'border-[#e2e8f0]'}`}>
             <label className={`flex min-w-0 flex-1 basis-56 items-center gap-3 ${lockedOut ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-              <input type="checkbox" className="size-4 shrink-0 accent-[#2d719e]" checked={selected} disabled={lockedOut} aria-describedby={narration.approved ? undefined : `narration-${poi.revision.id}`} onChange={() => toggle(poi)} />
+              <input type="checkbox" className="size-4 shrink-0 accent-[#2d719e]" checked={selected} disabled={lockedOut} aria-describedby={narration.approved ? undefined : `narration-${poi.id}`} onChange={() => toggle(poi.id)} />
               {selected && <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#173b5f] text-xs font-semibold text-white">{index + 1}</span>}
-              <span className="min-w-0 break-words"><span className={`font-semibold ${lockedOut ? 'text-[#64748b]' : 'text-[#0f172a]'}`}>{poi.revision.name}</span>
-                <span id={`narration-${poi.revision.id}`} className="ml-2 inline-block align-middle"><ToneBadge tone={narration.tone}>{narration.approved ? `Thuyết minh: ${narration.label}` : narration.label === 'Chờ duyệt' ? 'Thuyết minh chờ duyệt, chưa chọn được' : 'Chưa có thuyết minh, chưa chọn được'}</ToneBadge></span></span>
+              <span className="min-w-0 break-words"><span className={`font-semibold ${lockedOut ? 'text-[#64748b]' : 'text-[#0f172a]'}`}>{poi.name}</span>
+                {poi.proposal && <span id={`narration-${poi.id}`} className="ml-2 inline-block align-middle"><ToneBadge tone={narration.tone}>{narration.approved ? `Thuyết minh: ${narration.label}` : narration.label === 'Chờ duyệt' ? 'Thuyết minh chờ duyệt, chưa chọn được' : 'Chưa có thuyết minh, chưa chọn được'}</ToneBadge></span>}</span>
             </label>
             {selected && <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-xs text-[#64748b]">Dừng<span className="w-20 shrink-0"><input aria-label={`Thời gian dừng ${poi.revision.name} (giây)`} className={inputClass} type="number" min={MIN_DWELL_SECONDS} max={MAX_DWELL_SECONDS} value={stops[index].dwellSeconds} onChange={e => setStopsOverride(current => (current ?? stops).map(stop => stop.poiRevisionId === poi.revision.id ? { ...stop, dwellSeconds: Number(e.target.value) } : stop))} /></span>giây</label>
-              <button type="button" className={moveButton} aria-label={`Đưa ${poi.revision.name} lên`} disabled={index === 0} onClick={() => moveStop(index, -1)}><ChevronUp size={16} aria-hidden="true" /></button>
-              <button type="button" className={moveButton} aria-label={`Đưa ${poi.revision.name} xuống`} disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}><ChevronDown size={16} aria-hidden="true" /></button>
+              <label className="flex items-center gap-2 text-xs text-[#64748b]">Dừng<span className="w-20 shrink-0"><input aria-label={`Thời gian dừng ${poi.name} (giây)`} className={inputClass} type="number" min={MIN_DWELL_SECONDS} max={MAX_DWELL_SECONDS} value={stops[index].dwellSeconds} onChange={e => setStopsOverride(current => (current ?? stops).map(stop => stop.poiRevisionId === poi.id ? { ...stop, dwellSeconds: Number(e.target.value) } : stop))} /></span>giây</label>
+              <button type="button" className={moveButton} aria-label={`Đưa ${poi.name} lên`} disabled={index === 0} onClick={() => moveStop(index, -1)}><ChevronUp size={16} aria-hidden="true" /></button>
+              <button type="button" className={moveButton} aria-label={`Đưa ${poi.name} xuống`} disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}><ChevronDown size={16} aria-hidden="true" /></button>
+            </div>}
+            {newer && <div className="flex w-full flex-wrap items-center gap-2 rounded-lg bg-white/70 px-2.5 py-1.5 text-xs text-[#7d5310]">
+              <span className="min-w-0 flex-1">{newerUsable
+                ? `POI này có phiên bản mới đã đạt.${navigationKey(newer) !== navigationKey(poi) ? ' Tuyến sẽ phải chạy thử lại.' : ''}`
+                : 'POI này đang có bản sửa chưa đạt, tuyến giữ bản cũ.'}</span>
+              {newerUsable && <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => swapToNewer(poi.id, newer.id)}>Dùng bản mới</button>}
             </div>}
           </li>
         })}</ol>
           <div className="lg:sticky lg:top-4"><RouteMap mapVersionId={draft.mapVersionId} start={placed(startPose) ? { x: startPose.x!, y: startPose.y! } : null}
             stops={stopPois.map(poi => ({ id: poi.id, name: poi.name, x: poi.x, y: poi.y }))}
-            candidates={available.filter(proposal => !stopIds.has(proposal.revision.id) && usableForRoute(proposal)).map(({ revision }) => ({ id: revision.id, name: revision.name, x: revision.x, y: revision.y }))}
-            onToggle={id => { const proposal = available.find(item => item.revision.id === id); if (proposal) toggle(proposal) }} /></div>
+            candidates={candidates.filter(usableForRoute).map(({ revision }) => ({ id: revision.id, name: revision.name, x: revision.x, y: revision.y }))}
+            onToggle={toggle} /></div>
         </div> : <p className="py-4 text-sm text-[#64748b]">Chưa có POI đạt kiểm chứng trên bản đồ này.</p>}
       </section>}
 
       {step === 2 && <div className="space-y-4">
         <PoseStep title="Điểm bắt đầu" help="Nơi robot đứng chờ trước khi Tour bắt đầu, ví dụ chỗ đỗ. Không bắt buộc trùng một POI."
           pose={startPose} onChange={pose => updateDraft({ startX: pose.x, startY: pose.y, startYaw: pose.yaw, ...(endChoice === 'START' && { endX: pose.x, endY: pose.y, endYaw: pose.yaw }) })}
-          raster={raster} clearance={clearance} tooClose={startTooClose} pois={available} stopIds={stopIds}
+          raster={raster} clearance={clearance} tooClose={startTooClose} pois={available} stopIds={takenPoiRevisions}
           nearStop={startNearStop} nearStopLabel="Điểm bắt đầu" minSeparation={minSeparation} placing="điểm bắt đầu" stops={stopPois} />
         <section aria-label="Điểm kết thúc" className={`${panelClass} space-y-3 p-4`}>
           <div><h2 className="font-semibold">Điểm kết thúc</h2><p className="mt-1 text-xs text-[#64748b]">Robot dừng ở đâu khi hết tuyến.</p></div>
@@ -275,7 +307,7 @@ export default function StaffManageRouteFormPage() {
         </section>
         {endChoice === 'POSE' && <PoseStep title="Vị trí kết thúc" help="Robot đi tới đây sau điểm dừng cuối."
           pose={endPose} onChange={pose => updateDraft({ endX: pose.x, endY: pose.y, endYaw: pose.yaw })}
-          raster={raster} clearance={clearance} tooClose={endTooClose} pois={available} stopIds={stopIds}
+          raster={raster} clearance={clearance} tooClose={endTooClose} pois={available} stopIds={takenPoiRevisions}
           nearStop={endNearStop} nearStopLabel="Điểm kết thúc" minSeparation={minSeparation} placing="điểm kết thúc" stops={stopPois} />}
       </div>}
 
@@ -327,6 +359,9 @@ function routeSaveError(cause: unknown) {
   // The server names the POI in Vietnamese ("POI {tên} chưa có thuyết minh đã duyệt."); say what to do next.
   if (apiErrorCode(cause) === 'POI_NARRATION_NOT_APPROVED')
     return `${message.startsWith('POI ') ? message : 'Một điểm dừng chưa có thuyết minh đã duyệt.'} Nhờ một Staff khác duyệt thuyết minh ở trang POI, hoặc bỏ điểm đó ở bước 2, rồi lưu lại.`
+  // ADR-0061: "POI {tên} đã có trong tuyến. Mỗi POI chỉ được dùng một lần."
+  if (apiErrorCode(cause) === 'ROUTE_DUPLICATE_POI')
+    return `${message.startsWith('POI ') ? message : 'Một POI có hai điểm dừng trong tuyến. Mỗi POI chỉ được dùng một lần.'} Bỏ một trong hai điểm dừng ở bước 2 rồi lưu lại.`
   return message
 }
 

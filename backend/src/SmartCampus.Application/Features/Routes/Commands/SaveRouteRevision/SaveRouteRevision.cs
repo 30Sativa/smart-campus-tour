@@ -109,6 +109,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             if (latest?.Id != selected.Verification.Id || latest.ResultCode != "PASS")
                 throw new ConflictException("A newer POI verification result supersedes the selected PASS.", "POI_VERIFICATION_STALE");
         }
+        EnsureEachPoiOnce(poiIds.Select(id => byId[id].Revision).ToArray());
         // ADR-0060: a route uses only narration a second Staff approved. The text is snapshotted below; changing it later
         // does not touch this revision, and it is not part of the navigation fingerprint.
         var narrationByProposal = (await repo.GetApprovedNarrationsAsync(
@@ -199,12 +200,23 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                 return new RouteRevisionStopView(stopIds[index], selected.Revision.Id, selected.Verification.Id, index + 1, s.DwellSeconds,
                     s.HeadSteps, selected.Revision.Name, selected.Revision.X, selected.Revision.Y, selected.Revision.Yaw,
                     selected.Revision.CameraPreset, narrationByProposal[selected.Revision.ProposalId].NarrationText,
-                    narrationByProposal[selected.Revision.ProposalId].FallbackVideoUrl);
+                    narrationByProposal[selected.Revision.ProposalId].FallbackVideoUrl, selected.Revision.ProposalId);
             }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
                 inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], [],
             ScheduleFit: Tours.TourSchedule.ScheduleFit(schedule, expected), ExpectedDurationSeconds: expected);
     }
+
+    // ADR-0061: a stop points at one exact POI revision, so the revision-id check in the validator lets two revisions of
+    // one POI into the same route. A POI is visited once; the stop keeps the revision the route was tested with.
+    private static void EnsureEachPoiOnce(IReadOnlyList<PoiProposalRevision> stops)
+    {
+        var duplicate = stops.GroupBy(stop => stop.ProposalId).FirstOrDefault(group => group.Count() > 1);
+        if (duplicate is not null)
+            throw new ConflictException($"POI {duplicate.Last().Name} đã có trong tuyến. Mỗi POI chỉ được dùng một lần.", DuplicatePoiCode);
+    }
+
+    public const string DuplicatePoiCode = "ROUTE_DUPLICATE_POI";
 
     // docs/lich-tour-theo-ca.md §2: the start, each consecutive pair of stops and a separate end pose must be
     // MinStopSeparationMeters apart. An end pose on the start is "return to start" and is always allowed.

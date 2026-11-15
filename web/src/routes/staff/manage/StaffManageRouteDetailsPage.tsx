@@ -10,6 +10,7 @@ import { ScheduleFitBadge } from '../../../features/administration/routes/Schedu
 import { versionedRoutesApi, type VersionedRoute } from '../../../features/administration/routes/versioned-api'
 import { DeactivateRouteDialog } from '../../../features/administration/routes/DeactivateRouteDialog'
 import { RouteMap } from '../../../features/administration/routes/RouteMap'
+import { NewerPoiRevisionNotice } from '../../../features/administration/routes/NewerPoiRevisionNotice'
 import { tourKeys } from '../../../features/administration/tours/hooks'
 import { mapAreaName } from '../../../features/administration/map-labels'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
@@ -99,6 +100,7 @@ export default function StaffManageRouteDetailsPage() {
     <PageHeader eyebrow="Tuyến" title={value.name} description={statusLine(value)} action={<div className="flex max-w-sm flex-col items-end gap-1.5"><div className="flex flex-wrap justify-end gap-2"><Link className={buttonClass('secondary')} to={`/staff/manage/routes/${value.routeId}/edit`}>Sửa tuyến</Link>{value.isActive && isCurrentRevision && <button type="button" className={buttonClass('secondary')} onClick={() => { availability.reset(); setDeactivating(value) }}>Ngừng sử dụng</button>}{!value.isSubmitted && isCurrentRevision && <button className={buttonClass('primary')} disabled={!canSubmit} onClick={() => void submitMutation.mutateAsync(value).catch(() => undefined)}>{submitMutation.isPending ? 'Đang gửi…' : 'Gửi kiểm chứng tuyến'}</button>}</div><p className="text-right text-xs text-[#64748b]">Lưu sẽ tạo bản mới; bản mới cần gửi kiểm chứng và chạy thử lại. Tour đã tạo vẫn dùng bản cũ.</p></div>} />
     <div className="mb-4 space-y-2">
       {!isCurrentRevision && <Notice tone="warn">{viewedAt ? `Đây là bản lưu ${campusShortStamp(viewedAt)}, chỉ xem được.` : 'Đây là bản lưu cũ, chỉ xem được.'}</Notice>}
+      {isCurrentRevision && <NewerPoiRevisionNotice route={value} />}
       {notice && <div role={submitMutation.isSuccess ? 'status' : undefined}><Note tone={notice.tone}><div className="flex flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 flex-1">{notice.text}</p>
         {notice.createTour && <Link to={`/staff/manage/tours/new?route=${value.revisionId}`} className={buttonClass('secondary', 'sm')}>Tạo Tour</Link>}
