@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Common.Models;
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
 
@@ -60,6 +61,10 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
         }
         return result;
     }
+
+    public async Task<IReadOnlyList<PoiNarrationRevision>> GetApprovedNarrationsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct) =>
+        proposalIds.Count == 0 ? [] : await db.PoiNarrationRevisions.AsNoTracking()
+            .Where(n => proposalIds.Contains(n.ProposalId) && n.State == PoiNarrationStates.Approved).ToArrayAsync(ct);
 
     public Task<PoiVerificationRecord?> GetEffectivePoiVerificationAsync(Guid proposalId, byte[] fingerprint, CancellationToken ct) =>
         db.PoiVerificationRecords.AsNoTracking()

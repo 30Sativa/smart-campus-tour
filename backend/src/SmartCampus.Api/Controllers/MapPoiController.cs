@@ -270,6 +270,33 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         Ok(new BaseResponse<PoiProposalView> { Success = true, Message = "POI proposal discarded; its history is kept.",
             Data = await sender.Send(new DiscardPoiProposalCommand(User.GetRequiredUserId(), id, request), ct) });
 
+    [HttpGet("staff/poi-proposals/{id:guid}/narrations")]
+    [Authorize(Roles = StaffAndTechnical)]
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<PoiNarrationRevisionView>>>> ListNarrations(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<PoiNarrationRevisionView>> { Success = true, Message = "POI narration versions retrieved.",
+            Data = await sender.Send(new ListPoiNarrationsQuery(id), ct) });
+
+    [HttpPut("staff/poi-proposals/{id:guid}/narrations/draft")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiNarrationRevisionView>>> SaveNarrationDraft(
+        Guid id, [FromBody] SavePoiNarrationDraftRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiNarrationRevisionView> { Success = true, Message = "POI narration draft saved.",
+            Data = await sender.Send(new SavePoiNarrationDraftCommand(User.GetRequiredUserId(), id, request), ct) });
+
+    [HttpPost("staff/poi-proposals/{id:guid}/narrations/{revisionNumber:int}/approve")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiNarrationRevisionView>>> ApproveNarration(
+        Guid id, int revisionNumber, [FromBody] ChangePoiNarrationRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiNarrationRevisionView> { Success = true, Message = "POI narration approved.",
+            Data = await sender.Send(new ApprovePoiNarrationCommand(User.GetRequiredUserId(), id, revisionNumber, request), ct) });
+
+    [HttpPost("staff/poi-proposals/{id:guid}/narrations/{revisionNumber:int}/discard")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiNarrationRevisionView>>> DiscardNarration(
+        Guid id, int revisionNumber, [FromBody] ChangePoiNarrationRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiNarrationRevisionView> { Success = true, Message = "POI narration draft discarded; it is kept as history.",
+            Data = await sender.Send(new DiscardPoiNarrationCommand(User.GetRequiredUserId(), id, revisionNumber, request), ct) });
+
     [HttpGet("technical/poi-verifications")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<PoiVerificationQueueItem>>>> VerificationQueue([FromQuery] Guid? mapVersionId, CancellationToken ct) =>

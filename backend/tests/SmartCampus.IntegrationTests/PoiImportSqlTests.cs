@@ -187,10 +187,12 @@ public sealed class PoiImportSqlTests
         Assert.Equal(3, current.RevisionNumber);
         Assert.Equal(2.5m, current.X);
         Assert.Equal("Thư viện", current.Name);
-        Assert.Equal("Đây là thư viện.", current.NarrationText);
+        // ADR-0060: import no longer copies narration to the revision; the approved narration stays on the POI.
+        Assert.Null(current.NarrationText);
         var view = await h.Send(new GetPoiProposalQuery(proposalId));
         Assert.Equal("PASS", view.Revision.NavigationStatus);
         Assert.Equal(current.Id, view.Revision.VerificationSourceRevisionId);
+        Assert.Equal(1, view.Narration!.Approved!.RevisionNumber);
     }
 
     [SchemaV11Fact]
@@ -262,7 +264,7 @@ public sealed class PoiImportSqlTests
         var moved = await h.Send(new GetPoiProposalQuery(proposalId));
         var revision = moved.Revision;
         moved = await h.Send(new CreatePoiRevisionCommand(h.StaffId, proposalId, new(Guid.NewGuid(), moved.CurrentRevision, moved.RowVersion,
-            new(h.MapId, revision.Name, revision.Purpose, null, 2.5m, revision.Y, revision.Yaw, revision.CameraPreset, "Nội dung thuyết minh."))));
+            new(h.MapId, revision.Name, revision.Purpose, null, 2.5m, revision.Y, revision.Yaw, revision.CameraPreset))));
         Assert.Equal("NOT_CHECKED", moved.Revision.NavigationStatus);
         Assert.False(moved.CanDiscard);
         Assert.False(Assert.Single(await h.Send(new ListPoiProposalsQuery(h.MapId))).CanDiscard);
@@ -301,7 +303,7 @@ public sealed class PoiImportSqlTests
     }
 
     [SchemaV11Fact]
-    public async Task ContentOnlyRevision_KeepsThePoseCapturePass_AndARouteCanUseIt()
+    public async Task ContentOnlyRevision_KeepsThePoseCapturePass_AndARouteNeedsApprovedNarration()
     {
         await using var h = await Harness.Create();
         var proposalId = (await h.Import([File("a.yaml", "POI_A")])).CreatedProposalIds[0];
@@ -310,14 +312,17 @@ public sealed class PoiImportSqlTests
         Assert.Equal("PASS", noNarration.Revision.NavigationStatus);
         Assert.Equal("POSE_CAPTURE", noNarration.Revision.VerificationMethod);
         Assert.Equal("POI_A", noNarration.SourcePoiId);
+        // ADR-0060: a passed POI without approved narration cannot join a route; the message names the POI.
         var rejected = await Assert.ThrowsAsync<ConflictException>(() => h.SaveRoute(noNarration.Revision.Id));
-        Assert.Equal("POI_NARRATION_REQUIRED", rejected.Code);
+        Assert.Equal("POI_NARRATION_NOT_APPROVED", rejected.Code);
+        Assert.Contains("chưa có thuyết minh đã duyệt", rejected.Message);
 
         var content = await h.AddStaffContent(proposalId, "Thư viện", "Đây là thư viện.");
 
         Assert.Equal("PASS", content.Revision.NavigationStatus);
         Assert.Equal("POSE_CAPTURE", content.Revision.VerificationMethod);
         Assert.Equal(noNarration.Revision.NavigationFingerprint, content.Revision.NavigationFingerprint);
+        Assert.Equal(1, content.Narration!.Approved!.RevisionNumber);
         var route = await h.SaveRoute(content.Revision.Id);
         Assert.Equal("Đây là thư viện.", route.Stops[0].NarrationText);
     }
@@ -340,7 +345,7 @@ public sealed class PoiImportSqlTests
         Assert.Equal("POI_VERIFICATION_REQUIRED", stale.Code);
 
         var moved = await h.Send(new CreatePoiRevisionCommand(h.StaffId, proposalId, new(Guid.NewGuid(), 2, failed.RowVersion,
-            new(h.MapId, "Thư viện", "Nhập từ tệp", null, 2.5m, 1.5m, 0m, "FRONT", "Đây là thư viện."))));
+            new(h.MapId, "Thư viện", "Nhập từ tệp", null, 2.5m, 1.5m, 0m, "FRONT"))));
         Assert.Equal("NOT_CHECKED", moved.Revision.NavigationStatus);
     }
 
@@ -405,14 +410,14 @@ public sealed class PoiImportSqlTests
         await using var h = await Harness.Create();
 
         var created = await Assert.ThrowsAsync<ValidationException>(() => h.Send(new CreatePoiProposalCommand(h.StaffId, new(Guid.NewGuid(),
-            new(h.MapId, "Sát tường", "Giới thiệu", null, 1.1m, 0.5m, 0m, "FRONT", "Nội dung.")))));
+            new(h.MapId, "Sát tường", "Giới thiệu", null, 1.1m, 0.5m, 0m, "FRONT")))));
         AssertClearanceFailure(created);
 
         var proposal = await h.Send(new CreatePoiProposalCommand(h.StaffId, new(Guid.NewGuid(),
-            new(h.MapId, "Thoáng", "Giới thiệu", null, 2.5m, 2.5m, 0m, "front", "Nội dung."))));
+            new(h.MapId, "Thoáng", "Giới thiệu", null, 2.5m, 2.5m, 0m, "front"))));
         Assert.Equal("FRONT", proposal.Revision.CameraPreset);
         var moved = await Assert.ThrowsAsync<ValidationException>(() => h.Send(new CreatePoiRevisionCommand(h.StaffId, proposal.Id,
-            new(Guid.NewGuid(), 1, proposal.RowVersion, new(h.MapId, "Thoáng", "Giới thiệu", null, 1.1m, 0.5m, 0m, "FRONT", "Nội dung.")))));
+            new(Guid.NewGuid(), 1, proposal.RowVersion, new(h.MapId, "Thoáng", "Giới thiệu", null, 1.1m, 0.5m, 0m, "FRONT")))));
         AssertClearanceFailure(moved);
     }
 
@@ -446,7 +451,7 @@ public sealed class PoiImportSqlTests
         Assert.Equal(1.1m, nextRoute.StartX);
 
         AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.Send(new CreatePoiRevisionCommand(h.StaffId, proposalId,
-            new(Guid.NewGuid(), edited.CurrentRevision, edited.RowVersion, new(h.MapId, "Thư viện", "Giới thiệu", null, 1.15m, 0.5m, 0m, "FRONT", "Nội dung mới."))))));
+            new(Guid.NewGuid(), edited.CurrentRevision, edited.RowVersion, new(h.MapId, "Thư viện", "Giới thiệu", null, 1.15m, 0.5m, 0m, "FRONT"))))));
         AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.SaveRoute(edited.Revision.Id, startX: 0.4m, startY: 1.25m,
             routeId: route.RouteId, expectedRevision: 2)));
     }
@@ -525,7 +530,7 @@ public sealed class PoiImportSqlTests
 
     private static byte[] Marked(string marker) => MapPackage(marker);
 
-    private sealed class Harness(InitialAdminSeederTests.EmptySchemaDatabase database, ServiceProvider provider, Guid technicalId, Guid staffId, MapVersionView map)
+    private sealed class Harness(InitialAdminSeederTests.EmptySchemaDatabase database, ServiceProvider provider, Guid technicalId, Guid staffId, Guid reviewerId, MapVersionView map)
         : IAsyncDisposable
     {
         public const string Note = "Ghi tại hiện trường.";
@@ -540,13 +545,14 @@ public sealed class PoiImportSqlTests
             var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
             var technical = await database.InsertUserAsync(true, username: "import.technical", roles: ["TECHNICAL_STAFF"]);
             var staff = await database.InsertUserAsync(true, username: "import.staff", roles: ["STAFF"]);
+            var reviewer = await database.InsertUserAsync(true, username: "import.reviewer", roles: ["STAFF"]);
             var provider = BuildProvider(database, clearanceMeters);
 
             MapVersionView map;
             await using (var scope = provider.CreateAsyncScope())
                 map = await scope.ServiceProvider.GetRequiredService<ISender>().Send(
                     new CreateMapVersionCommand(technical.Id, new("pilot", "Pilot", Guid.NewGuid(), MapPackage())));
-            var harness = new Harness(database, provider, technical.Id, staff.Id, map);
+            var harness = new Harness(database, provider, technical.Id, staff.Id, reviewer.Id, map);
             await harness.AddRobot(Robot);
             await harness.AddRobot("amr_backup");
             if (deployed) await harness.RecordDeployment(passed: true);
@@ -582,7 +588,7 @@ public sealed class PoiImportSqlTests
             var current = await Send(new GetPoiProposalQuery(proposalId));
             var revision = current.Revision;
             return await Send(new CreatePoiRevisionCommand(staffId, proposalId, new(Guid.NewGuid(), current.CurrentRevision, current.RowVersion,
-                new(MapId, revision.Name, revision.Purpose, null, revision.X, revision.Y, revision.Yaw, camera, "Nội dung thuyết minh."))));
+                new(MapId, revision.Name, revision.Purpose, null, revision.X, revision.Y, revision.Yaw, camera))));
         }
 
         public async Task<Guid> ContentPoi(string sourceId)
@@ -606,12 +612,27 @@ public sealed class PoiImportSqlTests
         public Task RecordDeployment(bool passed, string robot = Robot) =>
             Send(new RecordMapDeploymentCommand(technicalId, MapId, new(Guid.NewGuid(), robot, map.PackageSha256, passed, true, "Kiểm tra triển khai.")));
 
+        /// <summary>
+        /// Staff names the imported POI (a content-only POI revision when the name changes) and its narration is
+        /// approved by a second Staff (ADR-0060), as a route requires.
+        /// </summary>
         public async Task<PoiProposalView> AddStaffContent(Guid proposalId, string name, string narration)
         {
             var current = await Send(new GetPoiProposalQuery(proposalId));
             var revision = current.Revision;
-            return await Send(new CreatePoiRevisionCommand(staffId, proposalId, new(Guid.NewGuid(), current.CurrentRevision, current.RowVersion,
-                new(MapId, name, "Giới thiệu điểm tham quan", null, revision.X, revision.Y, revision.Yaw, revision.CameraPreset, narration))));
+            if (revision.Name != name || revision.Purpose != StaffPurpose)
+                await Send(new CreatePoiRevisionCommand(staffId, proposalId, new(Guid.NewGuid(), current.CurrentRevision, current.RowVersion,
+                    new(MapId, name, StaffPurpose, null, revision.X, revision.Y, revision.Yaw, revision.CameraPreset))));
+            await ApproveNarration(proposalId, narration);
+            return await Send(new GetPoiProposalQuery(proposalId));
+        }
+
+        private const string StaffPurpose = "Giới thiệu điểm tham quan";
+
+        public async Task<PoiNarrationRevisionView> ApproveNarration(Guid proposalId, string narration)
+        {
+            var draft = await Send(new SavePoiNarrationDraftCommand(staffId, proposalId, new(Guid.NewGuid(), null, narration, null)));
+            return await Send(new ApprovePoiNarrationCommand(reviewerId, proposalId, draft.RevisionNumber, new(Guid.NewGuid(), draft.RowVersion)));
         }
 
         private Guid? secondStop;

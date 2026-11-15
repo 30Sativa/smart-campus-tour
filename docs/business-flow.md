@@ -40,7 +40,7 @@ Decision: ADR-0038.
 - A `verified: false` file goes to the normal "Kiểm chứng POI" queue.
 - The same file on the same map changes nothing. A new file with a known `id` adds a revision of that POI and keeps what Staff wrote.
 - Staff sees "Cần bổ sung nội dung thuyết minh" on imported POIs and adds name and narration through a normal edit. Keeping the pose keeps the PASS. Moving it or changing the camera needs a new check.
-- A route cannot use a stop without narration (`POI_NARRATION_REQUIRED`), and the whole-route test run is still required.
+- A route cannot use a POI without narration approved by a second Staff (`POI_NARRATION_NOT_APPROVED`, ADR-0060), and the whole-route test run is still required.
 
 ## Input limits for maps and poses
 

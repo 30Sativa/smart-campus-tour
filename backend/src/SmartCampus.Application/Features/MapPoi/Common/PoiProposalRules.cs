@@ -55,8 +55,6 @@ internal static class PoiProposalRules
         Name = draft.Name,
         Purpose = draft.Purpose,
         Description = draft.Description,
-        NarrationText = draft.NarrationText,
-        FallbackVideoUrl = draft.FallbackVideoUrl,
         X = draft.X,
         Y = draft.Y,
         Yaw = draft.Yaw,

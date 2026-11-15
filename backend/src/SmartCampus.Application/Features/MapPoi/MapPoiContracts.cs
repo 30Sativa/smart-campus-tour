@@ -29,13 +29,30 @@ public sealed record PoiRevisionView(
     string? Description, decimal X, decimal Y, decimal Yaw, string CameraPreset,
     string NavigationFingerprint, Guid CreatedByUserId, DateTimeOffset CreatedAt,
     bool IsSubmitted, DateTimeOffset? SubmittedAt, string NavigationStatus,
-    string? NarrationText, string? FallbackVideoUrl,
     Guid? VerificationSourceRevisionId, string? VerificationMethod = null);
 
-/// <summary>CanDiscard: no revision of this proposal ever passed verification (ADR-0051).</summary>
+/// <summary>
+/// CanDiscard: no revision of this proposal ever passed verification (ADR-0051). Narration: the current approved and
+/// draft narration versions (ADR-0060); every reader fills it.
+/// </summary>
 public sealed record PoiProposalView(Guid Id, int CurrentRevision, string RowVersion, DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt, PoiRevisionView Revision, string? SourcePoiId = null,
-    bool CanDiscard = false, DateTimeOffset? DiscardedAt = null);
+    bool CanDiscard = false, DateTimeOffset? DiscardedAt = null, PoiNarrationSummary? Narration = null);
+
+public sealed record PoiNarrationSummary(PoiNarrationApprovedSummary? Approved, PoiNarrationDraftSummary? Draft);
+
+public sealed record PoiNarrationApprovedSummary(int RevisionNumber, Guid ApprovedByUserId, string ApprovedByName,
+    DateTimeOffset ApprovedAt);
+
+public sealed record PoiNarrationDraftSummary(int RevisionNumber, Guid LastEditedByUserId, string LastEditedByName,
+    DateTimeOffset LastEditedAt, string RowVersion);
+
+/// <summary>One narration version of a POI (ADR-0060). State: DRAFT, APPROVED, SUPERSEDED or DISCARDED.</summary>
+public sealed record PoiNarrationRevisionView(
+    Guid Id, Guid ProposalId, int RevisionNumber, string State, string NarrationText, string? FallbackVideoUrl,
+    Guid CreatedByUserId, string CreatedByName, DateTimeOffset CreatedAt,
+    Guid LastEditedByUserId, string LastEditedByName, DateTimeOffset LastEditedAt,
+    Guid? ApprovedByUserId, string? ApprovedByName, DateTimeOffset? ApprovedAt, string RowVersion);
 
 public sealed record PoiVerificationView(
     Guid Id, Guid ProposalId, Guid ProposalRevisionId, int RevisionNumber, Guid MapVersionId,

@@ -72,6 +72,8 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
     POI_PROPOSAL_CREATED: 'Tạo đề xuất POI', POI_PROPOSAL_REVISION_CREATED: 'Tạo phiên bản POI', POI_PROPOSAL_SUBMITTED: 'Gửi kiểm chứng POI',
     POI_PROPOSAL_DISCARDED: 'Bỏ đề xuất POI', POI_TECHNICAL_VERIFIED: 'Kiểm chứng POI đạt', POI_TECHNICAL_REJECTED: 'Kiểm chứng POI không đạt',
     POI_POSE_IMPORT_COMPLETED: 'Nhập POI từ file', POI_POSE_CAPTURE_VERIFIED: 'Ghi nhận vị trí trực tiếp trên robot',
+    POI_NARRATION_DRAFT_CREATED: 'Viết bản nháp thuyết minh', POI_NARRATION_DRAFT_EDITED: 'Sửa bản nháp thuyết minh',
+    POI_NARRATION_APPROVED: 'Duyệt thuyết minh', POI_NARRATION_DISCARDED: 'Bỏ bản nháp thuyết minh',
   } },
   { label: 'Bản đồ và robot', actions: {
     MAP_VERSION_UPLOADED: 'Tải lên bản đồ', MAP_DEPLOYMENT_CHECK_RECORDED: 'Ghi kiểm tra bản đồ',
@@ -88,7 +90,7 @@ export const STUDENT_INVITATION_ACTIONS: ReadonlySet<string> = new Set(['INVITAT
 const ACTION_LABELS: Record<string, string> = Object.assign({}, ...AUDIT_ACTION_GROUPS.map(group => group.actions))
 const ENTITY_LABELS: Record<string, string> = {
   User: 'Tài khoản', Tour: 'Tour', GroupRegistration: 'Đăng ký đoàn', RosterRow: 'Dòng danh sách', RosterEmailChangeRequest: 'Yêu cầu đổi email',
-  Invitation: 'Lời mời', Route: 'Tuyến', RouteRevision: 'Phiên bản tuyến', Poi: 'POI', PoiProposal: 'POI', PoiProposalRevision: 'Phiên bản POI',
+  Invitation: 'Lời mời', Route: 'Tuyến', RouteRevision: 'Phiên bản tuyến', Poi: 'POI', PoiProposal: 'POI', PoiProposalRevision: 'Phiên bản POI', PoiNarrationRevision: 'Thuyết minh POI',
   MapVersion: 'Bản đồ', Robot: 'Robot', PoiImport: 'Nhập POI', TourScheduleBlock: 'Khoá lịch',
 }
 const RESULT_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'danger' | 'muted' }> = {
@@ -97,7 +99,7 @@ const RESULT_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'dang
   ACCEPTED: { label: 'Đã gửi', tone: 'ok' }, PENDING: { label: 'Đang chờ', tone: 'muted' }, UNKNOWN: { label: 'Chưa rõ kết quả', tone: 'warn' },
   SYSTEM: { label: 'Tự động', tone: 'muted' }, SYSTEM_NO_START: { label: 'Tự huỷ: không bắt đầu đúng giờ', tone: 'warn' },
   DRAFT: { label: 'Bản nháp', tone: 'muted' }, SUBMITTED: { label: 'Đã gửi', tone: 'muted' }, IMPORTED: { label: 'Đã nhập', tone: 'ok' },
-  DISCARDED: { label: 'Đã bỏ', tone: 'muted' },
+  DISCARDED: { label: 'Đã bỏ', tone: 'muted' }, APPROVED: { label: 'Đã duyệt', tone: 'ok' },
 }
 
 export const auditActionLabel = (action: string) => ACTION_LABELS[action] ?? 'Thao tác khác'

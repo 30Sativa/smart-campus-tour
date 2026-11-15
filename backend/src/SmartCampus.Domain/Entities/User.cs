@@ -43,6 +43,14 @@ public partial class User
 
     public virtual ICollection<PoiImportReceipt> PoiImportReceipts { get; set; } = new List<PoiImportReceipt>();
 
+    public virtual ICollection<PoiNarrationRequestReceipt> PoiNarrationRequestReceipts { get; set; } = new List<PoiNarrationRequestReceipt>();
+
+    public virtual ICollection<PoiNarrationRevision> PoiNarrationRevisionApprovedByUsers { get; set; } = new List<PoiNarrationRevision>();
+
+    public virtual ICollection<PoiNarrationRevision> PoiNarrationRevisionCreatedByUsers { get; set; } = new List<PoiNarrationRevision>();
+
+    public virtual ICollection<PoiNarrationRevision> PoiNarrationRevisionLastEditedByUsers { get; set; } = new List<PoiNarrationRevision>();
+
     public virtual ICollection<PoiProposalRevision> PoiProposalRevisions { get; set; } = new List<PoiProposalRevision>();
 
     public virtual ICollection<PoiProposalSubmission> PoiProposalSubmissions { get; set; } = new List<PoiProposalSubmission>();

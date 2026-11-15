@@ -38,6 +38,10 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<PoiImportReceipt> PoiImportReceipts { get; set; }
 
+    public virtual DbSet<PoiNarrationRequestReceipt> PoiNarrationRequestReceipts { get; set; }
+
+    public virtual DbSet<PoiNarrationRevision> PoiNarrationRevisions { get; set; }
+
     public virtual DbSet<PoiVerificationRecord> PoiVerificationRecords { get; set; }
 
     public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
@@ -435,6 +439,72 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.RobotId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_PoiImportReceipts_RobotId");
+        });
+
+        modelBuilder.Entity<PoiNarrationRequestReceipt>(entity =>
+        {
+            entity.HasIndex(e => new { e.ActorUserId, e.RequestId }, "UQ_PoiNarrationRequestReceipts_Request").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.Operation).HasMaxLength(20);
+            entity.Property(e => e.RequestHash)
+                .HasMaxLength(32)
+                .IsFixedLength();
+
+            entity.HasOne(d => d.ActorUser).WithMany(p => p.PoiNarrationRequestReceipts)
+                .HasForeignKey(d => d.ActorUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PoiNarrationRequestReceipts_ActorUserId");
+
+            entity.HasOne(d => d.NarrationRevision).WithMany(p => p.PoiNarrationRequestReceipts)
+                .HasForeignKey(d => d.NarrationRevisionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PoiNarrationRequestReceipts_NarrationRevisionId");
+        });
+
+        modelBuilder.Entity<PoiNarrationRevision>(entity =>
+        {
+            entity.HasIndex(e => new { e.ProposalId, e.RevisionNumber }, "UQ_PoiNarrationRevisions_Number").IsUnique();
+
+            entity.HasIndex(e => e.ProposalId, "UX_PoiNarrationRevisions_Approved")
+                .IsUnique()
+                .HasFilter("([State]=N'APPROVED')");
+
+            entity.HasIndex(e => e.ProposalId, "UX_PoiNarrationRevisions_Draft")
+                .IsUnique()
+                .HasFilter("([State]=N'DRAFT')");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.ApprovedAt).HasPrecision(3);
+            entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.FallbackVideoUrl).HasMaxLength(2048);
+            entity.Property(e => e.LastEditedAt).HasPrecision(3);
+            entity.Property(e => e.NarrationText).HasMaxLength(4000);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.State).HasMaxLength(20);
+
+            entity.HasOne(d => d.ApprovedByUser).WithMany(p => p.PoiNarrationRevisionApprovedByUsers)
+                .HasForeignKey(d => d.ApprovedByUserId)
+                .HasConstraintName("FK_PoiNarrationRevisions_ApprovedByUserId");
+
+            entity.HasOne(d => d.CreatedByUser).WithMany(p => p.PoiNarrationRevisionCreatedByUsers)
+                .HasForeignKey(d => d.CreatedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PoiNarrationRevisions_CreatedByUserId");
+
+            entity.HasOne(d => d.LastEditedByUser).WithMany(p => p.PoiNarrationRevisionLastEditedByUsers)
+                .HasForeignKey(d => d.LastEditedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PoiNarrationRevisions_LastEditedByUserId");
+
+            // Only one DRAFT and one APPROVED row are unique by ProposalId; a POI keeps every other version as history.
+            entity.HasOne(d => d.Proposal).WithMany(p => p.PoiNarrationRevisions)
+                .HasForeignKey(d => d.ProposalId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PoiNarrationRevisions_ProposalId");
         });
 
         modelBuilder.Entity<PoiProposal>(entity =>
@@ -923,6 +993,10 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => new { d.SourcePoiVerificationRecordId, d.MapVersionId, d.PoiNavigationFingerprint })
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_RouteRevisionStops_SourceEvidence");
+
+            entity.HasOne(d => d.NarrationRevision).WithMany(p => p.RouteRevisionStops)
+                .HasForeignKey(d => d.NarrationRevisionId)
+                .HasConstraintName("FK_RouteRevisionStops_NarrationRevisionId");
         });
 
         modelBuilder.Entity<RouteRevisionSubmission>(entity =>
