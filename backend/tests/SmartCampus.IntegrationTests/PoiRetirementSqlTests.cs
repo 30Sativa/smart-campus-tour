@@ -206,6 +206,30 @@ public sealed partial class PoiImportSqlTests
         }
     }
 
+    [SchemaV11Fact]
+    public async Task History_ShowsAContentOnlySave_WithThePassItKept_LikeTheList()
+    {
+        // Before this fix a save that only changed the description read "not checked" (Bản nháp) in the history,
+        // because the history took only results recorded on that exact revision.
+        await using var h = await Harness.Create();
+        var poi = await Passed(h, "POI_D", "POI D", 1.5m, 1.5m);
+        var current = await h.Send(new GetPoiProposalQuery(poi.Id));
+        current = await h.Send(new CreatePoiRevisionCommand(h.StaffId, poi.Id, new(Guid.NewGuid(), current.CurrentRevision, current.RowVersion,
+            new(h.MapId, current.Revision.Name, current.Revision.Purpose, "Mô tả mới", current.Revision.X, current.Revision.Y, current.Revision.Yaw, current.Revision.CameraPreset))));
+        Assert.Equal("PASS", current.Revision.NavigationStatus);
+
+        var history = await h.Send(new GetPoiHistoryQuery(poi.Id));
+        var latest = history.Revisions.Single(revision => revision.RevisionNumber == current.CurrentRevision);
+        var listed = (await h.Send(new ListPoiProposalsQuery(h.MapId))).Single(item => item.Id == poi.Id);
+        Assert.Equal("PASS", latest.NavigationStatus);
+        Assert.Equal(listed.Revision.NavigationStatus, latest.NavigationStatus);
+        Assert.Equal(listed.Revision.VerificationSourceRevisionId, latest.VerificationSourceRevisionId);
+        var checkedRevision = Assert.Single(history.VerificationRecords).ProposalRevisionId;
+        Assert.Equal(checkedRevision, latest.VerificationSourceRevisionId);
+        Assert.NotEqual(latest.Id, checkedRevision);
+        Assert.All(history.Revisions, revision => Assert.Equal("PASS", revision.NavigationStatus));
+    }
+
     /// <summary>A POI imported with a verified pose (PASS), named by Staff and with approved narration.</summary>
     private static async Task<PoiProposalView> Passed(Harness h, string sourceId, string name, decimal x, decimal y)
     {

@@ -134,6 +134,8 @@ export default function StaffManagePoisPage() {
           <ul ref={listRef} aria-label="Điểm tham quan" className="min-h-0 divide-y divide-[#eef2f6] overflow-y-auto border-t border-[#eef2f6]">{rows.map((p) => {
             const st = STATUS[statusOf(p)]
             const narration = narrationStatus(p.narration)
+            // "Chờ duyệt" opens the narration tab directly; the POI page keeps its tab in `?tab=`.
+            const waitingApproval = Boolean(p.narration?.draft) && !p.narration?.approved && !isRetired(p)
             const active = p.id === selected?.id
             return <li key={p.id} data-active={active} className={active ? 'bg-[#f5f9ff]' : ''}>
               <button type="button" onClick={() => setChosen(p.id)} aria-pressed={active} aria-label={`Chọn ${p.revision.name}`}
@@ -142,13 +144,16 @@ export default function StaffManagePoisPage() {
                 <span className="min-w-0 flex-1">
                   <b className="block truncate text-sm font-semibold text-[#2d3748]">{p.revision.name}</b>
                   <span className="block truncate text-xs text-[#718096]">{p.revision.purpose}</span>
-                  <span className="mt-1 block"><ToneBadge tone={narration.tone}>{narration.approved || p.narration?.draft ? `Thuyết minh: ${narration.label}` : narration.label}</ToneBadge></span>
+                  {!waitingApproval && <span className="mt-1 block"><ToneBadge tone={narration.tone}>{narration.approved || p.narration?.draft ? `Thuyết minh: ${narration.label}` : narration.label}</ToneBadge></span>}
                 </span>
                 <span className="shrink-0 text-right">
                   <span className={`inline-flex rounded-lg px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${isRetired(p) ? RETIRED_CHIP : st.chip}`}>{isRetired(p) ? 'Ngưng dùng' : st.label}</span>
                   {p.revision.verificationMethod && <span className="mt-0.5 block text-[11px] text-[#718096]">{verificationMethodLabel[p.revision.verificationMethod]}</span>}
                 </span>
               </button>
+              {/* A link cannot sit inside the row's button, so a narration waiting for approval gets its badge here. */}
+              {waitingApproval && <Link to={`/staff/manage/pois/${p.id}?tab=thuyet-minh`} aria-label={`Mở thuyết minh chờ duyệt của ${p.revision.name}`}
+                className={`-mt-2 mb-2 ml-15 inline-block rounded-full ${focus}`}><ToneBadge tone={narration.tone}>Thuyết minh: {narration.label}</ToneBadge></Link>}
               {active && <PoiDetail proposal={p} />}
             </li>
           })}</ul>}
@@ -194,7 +199,7 @@ function PoiDetail({ proposal }: { proposal: PoiProposal }) {
         ? 'Đã ngưng dùng. Tuyến và Tour đã lưu vẫn giữ điểm này, nhưng tuyến mới không chọn được và điểm không sửa hay gửi kiểm được.'
         : next.text}</p>
       <div className="flex flex-wrap items-center gap-2">
-        <Link to={`/staff/manage/pois/${proposal.id}`} className={buttonClass(retired ? 'secondary' : 'primary', 'sm')}>{retired ? <><FileText size={14} aria-hidden="true" />Xem đề xuất</> : <><next.icon size={14} aria-hidden="true" />{next.action}</>}</Link>
+        <Link to={`/staff/manage/pois/${proposal.id}${needsNarration && !retired ? '?tab=thuyet-minh' : ''}`} className={buttonClass(retired ? 'secondary' : 'primary', 'sm')}>{retired ? <><FileText size={14} aria-hidden="true" />Xem đề xuất</> : <><next.icon size={14} aria-hidden="true" />{next.action}</>}</Link>
         {/* The server decides (ADR-0062): discard while no route revision uses it, retire once one does. */}
         {proposal.canDiscard && <DiscardPoi proposal={proposal} />}
         {proposal.canRetire && <RetirePoi proposal={proposal} />}

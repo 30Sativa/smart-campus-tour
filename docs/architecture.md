@@ -700,6 +700,10 @@ Under ADR-0062 (schema v1.23), which amends that rule:
   discard and retire take, so neither can interleave with the save. Saved route
   revisions and Tours are unchanged.
 - Proposal views add `canRetire`, `retiredAt` and `canReactivate` at the end.
+- `GET /api/staff/poi-proposals/{id}/history` now gives each revision the
+  effective result for its navigation fingerprint (`navigationStatus`,
+  `verificationSourceRevisionId`), the rule the list and detail views already use;
+  a content-only save shows the PASS it kept. Response shape unchanged.
 
 Under ADR-0041 (schema v1.21), TechnicalStaff retire a map version instead of
 deleting it: `POST /api/technical/map-versions/{id}/retire` with

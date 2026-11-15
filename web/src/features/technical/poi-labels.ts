@@ -22,15 +22,40 @@ export const poiImportActionLabel: Record<string, string> = { CREATE: 'Tạo POI
  * version can join a new route revision; a draft waits for a second Staff to approve it.
  */
 export function narrationStatus(summary: PoiNarrationSummary | null | undefined): { label: string; tone: StatusTone; approved: boolean } {
-  if (summary?.approved && summary.draft) return { label: 'Đã duyệt · có bản nháp mới', tone: 'ok', approved: true }
+  if (summary?.approved && summary.draft) return { label: 'Đã duyệt · có bản đang soạn', tone: 'ok', approved: true }
   if (summary?.approved) return { label: 'Đã duyệt', tone: 'ok', approved: true }
   if (summary?.draft) return { label: 'Chờ duyệt', tone: 'warn', approved: false }
   return { label: 'Chưa có thuyết minh', tone: 'muted', approved: false }
 }
 
-/** A route revision takes a POI only with both a navigation PASS and an approved narration. */
+/** A route revision takes a POI only with both a navigation PASS and an approved narration, and not once retired (ADR-0062). */
 export const usableForRoute = (proposal: PoiProposal) =>
-  proposal.revision.navigationStatus === 'PASS' && Boolean(proposal.narration?.approved)
+  proposal.revision.navigationStatus === 'PASS' && Boolean(proposal.narration?.approved) && !proposal.retiredAt && !proposal.discardedAt
+
+/** The POI page header: the navigation check and the narration, each in its own words. */
+export function navigationHeadline(revision: { navigationStatus: string; isSubmitted: boolean }): { label: string; tone: StatusTone } {
+  if (revision.navigationStatus === 'PASS') return { label: 'Đạt', tone: 'ok' }
+  if (revision.navigationStatus === 'FAIL') return { label: 'Không đạt', tone: 'danger' }
+  return revision.isSubmitted ? { label: 'Chờ kiểm', tone: 'warn' } : { label: 'Chưa gửi kiểm', tone: 'muted' }
+}
+
+export function narrationHeadline(summary: PoiNarrationSummary | null | undefined): { label: string; tone: StatusTone } {
+  if (summary?.approved && summary.draft) return { label: 'Đã duyệt · có bản đang soạn', tone: 'ok' }
+  if (summary?.approved) return { label: 'Đã duyệt', tone: 'ok' }
+  if (summary?.draft) return { label: 'Đang soạn', tone: 'warn' }
+  return { label: 'Chưa có', tone: 'muted' }
+}
+
+/** "Dùng được cho tuyến: …", by the server's rule for SaveRouteRevision (PASS, approved narration, not retired or discarded). */
+export function routeUseLine(proposal: PoiProposal): { usable: boolean; text: string } {
+  if (proposal.discardedAt) return { usable: false, text: 'Không, POI đã bị xoá khỏi danh sách' }
+  if (proposal.retiredAt) return { usable: false, text: 'Chưa, vì POI đã ngưng dùng' }
+  const reasons = [
+    proposal.revision.navigationStatus !== 'PASS' && 'điều hướng chưa đạt kiểm chứng',
+    !proposal.narration?.approved && 'chưa có thuyết minh đã duyệt',
+  ].filter(Boolean)
+  return reasons.length ? { usable: false, text: `Chưa, vì ${reasons.join(' và ')}` } : { usable: true, text: 'Có' }
+}
 
 /** Two areas may share a display name, so the area key keeps map choices apart. */
 export const mapVersionLabel = (map: { areaName: string; areaKey: string; versionNumber: number }) => `${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`
