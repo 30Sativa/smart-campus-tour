@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ChevronDown, Layers, LoaderCircle, Map as MapIcon, Maximize2, Minimize2, Navigation, Pause, Play, RotateCcw } from 'lucide-react'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { buttonClass } from '../../../components/ui/ui-classes'
-import type { TwinFocus } from '../../digital-twin/TwinScene'
+import type { TwinFocus, TwinPerfSample } from '../../digital-twin/TwinScene'
+import { twinFrameloop, useTwinVisibility } from '../../digital-twin/frameloop'
 import { robotModeLabel } from '../../digital-twin/fleet-analysis'
 import { twinIconButton } from '../../digital-twin/twin-classes'
 import { patrolPaths, patrolTwinRobots, useSimulatedPatrol } from '../../digital-twin/use-simulated-patrol'
@@ -19,6 +20,16 @@ const segButton = (on: boolean) =>
   `rounded-md px-2.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f8df7] disabled:cursor-not-allowed disabled:opacity-45 ${on ? 'bg-white text-[#0f172a] shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-[#64748b] enabled:hover:text-[#0f172a]'}`
 const iconButton = (label: string, on = false) => ({ 'aria-label': label, title: label, className: twinIconButton(on) })
 
+/** The previous value while `key` is unchanged, so the scene's props keep their identity between equal updates. */
+function useStable<T>(value: T, key: string): T {
+  const [held, setHeld] = useState({ key, value })
+  if (held.key !== key) {
+    setHeld({ key, value })
+    return value
+  }
+  return held.value
+}
+
 /**
  * One 3D view of the floor for Staff: the physical robots first (status colour,
  * label always on, camera on the freshest report or `?robot=`), the running
@@ -26,7 +37,7 @@ const iconButton = (label: string, on = false) => ({ 'aria-label': label, title:
  * optional, dimmed layer (S1–S6) that is off by default and forced off while a
  * Tour runs. Simulated robots are never counted or coloured by a real state.
  */
-export function FleetTwin({ requestedRobot }: { requestedRobot: string | null }) {
+export function FleetTwin({ requestedRobot, perf = false }: { requestedRobot: string | null; perf?: boolean }) {
   const snapshot = useFleetTelemetry()
   const now = useNow()
   const { tours } = useRunningTours()
@@ -36,7 +47,8 @@ export function FleetTwin({ requestedRobot }: { requestedRobot: string | null })
   const [chosen, setChosen] = useState<string | null>(null)
   const selected = (chosen ? views.find(view => view.robot.id === chosen) : null) ?? defaultRobot(views, requestedRobot)
   const detail = useOperationTour(selected?.tour?.id ?? '').data
-  const route = detail && selected?.tour && detail.tour.id === selected.tour.id ? tourTwinRoute(detail) : null
+  const routeDetail = detail && selected?.tour && detail.tour.id === selected.tour.id ? detail : null
+  const route = useMemo(() => (routeDetail ? tourTwinRoute(routeDetail) : null), [routeDetail])
   const currentStop = route?.targetIndex != null ? route.stops[route.targetIndex] : null
 
   const locked = tours.length > 0
@@ -67,10 +79,18 @@ export function FleetTwin({ requestedRobot }: { requestedRobot: string | null })
     if (target.scenePoint) { setFlownTo(target.robot.id); setFocus({ id: (focus?.id ?? 0) + 1, position: target.scenePoint }) }
   }
 
-  const robots = [
-    ...realTwinRobots(views, selected?.robot.id ?? null, now),
-    ...(simOn ? patrolTwinRobots(patrol.state, { playing: patrol.playing, prefix: 'S', synthetic: true }) : []),
-  ]
+  // A new array only when something drawn changes: the hub re-broadcasts the same pose every second.
+  const realList = realTwinRobots(views, selected?.robot.id ?? null, now)
+  const real = useStable(realList, JSON.stringify(realList))
+  const simulated = useMemo(() => (simOn ? patrolTwinRobots(patrol.state, { playing: patrol.playing, prefix: 'S', synthetic: true, livePose: patrol.livePose }) : []),
+    [simOn, patrol.state, patrol.playing, patrol.livePose])
+  const robots = useMemo(() => [...real, ...simulated], [real, simulated])
+  const paths = useMemo(() => (simOn ? patrolPaths(patrol.state) : []), [simOn, patrol.state])
+
+  const stage = useRef<HTMLDivElement>(null)
+  const { onScreen, pageVisible } = useTwinVisibility(stage)
+  const frameloop = twinFrameloop({ simulation: simOn, tourRunning: locked, onScreen, pageVisible })
+  const [perfSample, setPerfSample] = useState<TwinPerfSample | null>(null)
   const placedCount = views.filter(item => item.scenePoint).length
 
   return (
@@ -100,13 +120,21 @@ export function FleetTwin({ requestedRobot }: { requestedRobot: string | null })
 
       <div className={`grid min-h-0 lg:grid-cols-[minmax(0,1fr)_300px] ${expanded ? 'flex-1 overflow-y-auto lg:overflow-hidden' : ''}`}>
         {/* As tall as the screen leaves under the header, never a fixed 820px; full screen fills the window. */}
-        <div data-testid="twin-stage" className={`relative bg-[#20313f] ${expanded ? 'h-[calc(100dvh-9rem)] lg:h-full' : 'h-[calc(100dvh-15rem)] min-h-[360px]'}`}>
+        <div ref={stage} data-testid="twin-stage" data-frameloop={frameloop} className={`relative bg-[#20313f] ${expanded ? 'h-[calc(100dvh-9rem)] lg:h-full' : 'h-[calc(100dvh-15rem)] min-h-[360px]'}`}>
           <div className="absolute inset-0" role="img" aria-label={`Bản đồ 3D với ${placedCount} robot thật${simOn ? ' và 6 robot mô phỏng' : ''}`}>
             <Suspense fallback={<div className="grid size-full place-items-center text-sm text-[#c7d4e4]"><span className="flex items-center gap-2"><LoaderCircle size={16} className="animate-spin" aria-hidden="true" />Đang tải bản đồ 3D…</span></div>}>
               <TwinScene modelKey="nvh-v3" robots={robots} route={route} showRoute selectedStopId={null} overhead={overhead} showLabels={labels} focus={focus}
-                syntheticPatrol={simOn} seconds={patrol.state.seconds} viewMode={view} heat={patrol.state.heat} patrolPaths={simOn ? patrolPaths(patrol.state) : []} />
+                syntheticPatrol={simOn} seconds={patrol.state.seconds} viewMode={view} heat={patrol.state.heat} patrolPaths={paths}
+                frameloop={frameloop} onPerf={perf ? setPerfSample : undefined} />
             </Suspense>
           </div>
+          {perf && <dl aria-label="Hiệu năng 3D" className="pointer-events-none absolute top-2 left-2 z-10 grid grid-cols-[auto_auto] gap-x-3 rounded-lg bg-slate-900/85 px-3 py-2 font-mono text-[11px] text-slate-100">
+            <dt>FPS</dt><dd>{perfSample?.fps ?? '–'}</dd>
+            <dt>Lệnh vẽ</dt><dd>{perfSample?.calls ?? '–'}</dd>
+            <dt>Tam giác</dt><dd>{perfSample ? perfSample.triangles.toLocaleString('vi-VN') : '–'}</dd>
+            <dt>Texture</dt><dd>{perfSample?.textures ?? '–'}</dd>
+            <dt>Vẽ</dt><dd>{frameloop}</dd>
+          </dl>}
           {!everReported && !simOn && <div className="absolute inset-0 grid place-items-center bg-[#20313f]/80 p-4">
             <div className="max-w-md rounded-xl bg-white">
               <EmptyState variant="empty" title="Chưa có robot thật nào gửi vị trí" description="Robot hiện ở đây khi miniPC gửi vị trí lên hệ thống. Có thể bật mô phỏng để xem demo."

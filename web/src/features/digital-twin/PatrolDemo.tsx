@@ -31,7 +31,7 @@ export function PatrolDemo({ overhead, showLabels, onToggleLabels, toolbarStart,
   toolbarEnd?: ReactNode
 }) {
   const [tool, setTool] = useState<TwinTool>('select')
-  const { state, setState, playing, setPlaying, speed, setSpeed } = useSimulatedPatrol()
+  const { state, setState, playing, setPlaying, speed, setSpeed, livePose } = useSimulatedPatrol()
   const [selected, setSelected] = useState(1)
   const [tab, setTab] = useState<FleetTab>('robots')
   const [view, setView] = useState('scene')
@@ -50,7 +50,7 @@ export function PatrolDemo({ overhead, showLabels, onToggleLabels, toolbarStart,
     window.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('pointerdown', onPointer); window.removeEventListener('keydown', onKey) }
   }, [showMenu])
-  const robots = patrolTwinRobots(state, { playing, selected })
+  const robots = patrolTwinRobots(state, { playing, selected, livePose })
   const shown = [routes, sensors, showLabels].filter(Boolean).length
   const cameraOn = panel && tab === 'camera' && cameraMode === 'point'
   const toggle = (label: string, on: boolean, click: () => void) => (

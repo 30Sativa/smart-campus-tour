@@ -18,7 +18,7 @@
  */
 
 import { occupancyMapFor } from '../administration/pois/map/catalog'
-import type { CampusModelKey } from './campus-model'
+import { NVH_V3_FIT, type CampusModelKey } from './campus-model'
 
 /** out = [a b; c d] · [x y] + [tx ty] */
 export type Affine2D = { a: number; b: number; c: number; d: number; tx: number; ty: number }
@@ -52,10 +52,11 @@ function snapshotGrid(mapKey: string): MapConfig['grid'] {
 
 /**
  * NVH tầng 6 V3 (`robot/Map3d/NVHSV_Tang6_V3.glb`; the `_modern_v2` skin the
- * app loads has the same footprint). `prepareCampusModel` scales its 99.92 m
- * depth to 20 scene units and centres it; glTF y = 0 is the floor.
+ * app loads, optimised, has the same footprint). `prepareCampusModel` scales its
+ * 99.92 m depth to 20 scene units and centres it with these same numbers
+ * (`NVH_V3_FIT`); glTF y = 0 is the floor.
  */
-const NVH_V3 = { scale: 20 / (2.14561939 + 97.7707138), centerX: 35.803092385, centerZ: -47.812547205 }
+const NVH_V3 = { scale: 20 / NVH_V3_FIT.width, centerX: NVH_V3_FIT.centerX, centerZ: NVH_V3_FIT.centerZ }
 
 /**
  * map2 (`robot/robot_maps/map2.yaml` with `map_fix.pgm`, used by map2-v1,
