@@ -51,6 +51,12 @@ public partial class MapVersion
 
     public DateTimeOffset UploadedAt { get; set; }
 
+    public DateTimeOffset? RetiredAt { get; set; }
+
+    public Guid? RetiredByUserId { get; set; }
+
+    public string? RetirementReason { get; set; }
+
     public virtual MapArea AreaKeyNavigation { get; set; } = null!;
 
     public virtual ICollection<MapDeploymentCheck> MapDeploymentChecks { get; set; } = new List<MapDeploymentCheck>();
@@ -66,6 +72,8 @@ public partial class MapVersion
     public virtual ICollection<RouteRevision> RouteRevisionMapVersionNavigations { get; set; } = new List<RouteRevision>();
 
     public virtual ICollection<RouteRevision> RouteRevisionMapVersions { get; set; } = new List<RouteRevision>();
+
+    public virtual User? RetiredByUser { get; set; }
 
     public virtual User UploadedByUser { get; set; } = null!;
 }

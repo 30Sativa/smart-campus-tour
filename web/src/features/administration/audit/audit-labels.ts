@@ -75,6 +75,7 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
   } },
   { label: 'Bản đồ và robot', actions: {
     MAP_VERSION_UPLOADED: 'Tải lên bản đồ', MAP_DEPLOYMENT_CHECK_RECORDED: 'Ghi kiểm tra bản đồ',
+    MAP_VERSION_RETIRED: 'Ngừng sử dụng phiên bản bản đồ', MAP_VERSION_REOPENED: 'Mở lại phiên bản bản đồ',
     PHYSICAL_ROBOT_REGISTERED: 'Đăng ký robot', ROBOT_DEACTIVATED: 'Ngừng dùng robot', ROBOT_ACTIVATED: 'Mở lại robot',
     ROBOT_MAP_ASSIGNED: 'Gán bản đồ cho robot', ROBOT_MAP_CLEARED: 'Gỡ bản đồ khỏi robot',
     ROBOT_CREDENTIAL_ISSUED: 'Cấp khóa robot', ROBOT_CREDENTIAL_ROTATED: 'Cấp lại khóa robot', ROBOT_CREDENTIAL_REVOKED: 'Thu hồi khóa robot',

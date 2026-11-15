@@ -43,6 +43,7 @@ public sealed class SubmitRouteRevisionHandler(IRouteRevisionRepository repo, IM
         var map = await mapRepository.FindMapVersionAsync(current.MapVersionId, includePackage: false, ct)
             ?? throw new NotFoundException("Map version", current.MapVersionId);
         await mapRepository.LockMapPreparationStateAsync(map.Id, ct);
+        await MapRetirement.EnsureActiveAsync(mapRepository, map.Id, ct);
         (await MapPreparationEligibility.LoadAsync(mapRepository, map, ct)).EnsureCanUse();
         await EnsurePoisStillPass(repo, current.Id, ct);
         var now = clock.GetUtcNow();

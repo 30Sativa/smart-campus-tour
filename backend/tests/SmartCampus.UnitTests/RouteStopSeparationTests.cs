@@ -133,6 +133,7 @@ public sealed class RouteStopSeparationTests
     private static IMapVersionRepository MapRepository() => Proxy<IMapVersionRepository>((method, _) => method.Name switch
     {
         nameof(IMapVersionRepository.LockMapPreparationStateAsync) => Task.CompletedTask,
+        nameof(IMapVersionRepository.IsMapVersionRetiredAsync) => Task.FromResult(false),
         nameof(IMapVersionRepository.ListDeploymentChecksForMapAsync) => Task.FromResult<IReadOnlyList<MapDeploymentCheck>>([new MapDeploymentCheck
         {
             Id = Guid.NewGuid(), MapVersionId = Map.Id, RobotId = Guid.NewGuid(), Robot = new Robot { SourceType = "PHYSICAL" },

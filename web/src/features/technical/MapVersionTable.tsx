@@ -8,11 +8,11 @@ import { usePagination } from '../../components/ui/use-pagination'
 import { useMapRaster } from '../administration/pois/map/use-map-raster'
 import { DetailFact, ToneBadge, ViewDetailButton } from './TechnicalUi'
 import type { MapAreaOption, MapVersionItem, PhysicalRobotOption } from './api/technical'
-import { areaLabel, duplicateAreaNames, mapVersionLabel } from './poi-labels'
+import { mapVersionLabel } from './poi-labels'
 import { formatDateTime } from '../../components/ui/date-time'
 import { EmptyState } from '../../components/ui/EmptyState'
 
-type Actions = { onUpload: (area: MapAreaOption) => void; onCheck: (item: MapVersionItem) => void }
+type Actions = { onUpload: (area: MapAreaOption) => void; onCheck: (item: MapVersionItem) => void; onRetire: (item: MapVersionItem) => void }
 /** Registered robots, only to say which one holds an area; the assignment itself is edited on the robot page. */
 type RobotList = { data?: PhysicalRobotOption[]; isPending: boolean; isError: boolean }
 
@@ -93,7 +93,7 @@ function MapPreview({ mapVersionId, label }: { mapVersionId: string; label: stri
  * What the table leaves out, for one version of the area. The checksum is here so the file on the robot
  * can be compared with the one uploaded; the version list switches which version the dialog shows.
  */
-function MapVersionDetail({ area, itemId, robotList, onSelect, onClose, onUpload, onCheck }: { area: AreaRow; itemId: string; robotList: RobotList; onSelect: (id: string) => void; onClose: () => void } & Actions) {
+function MapVersionDetail({ area, itemId, robotList, onSelect, onClose, onUpload, onCheck, onRetire }: { area: AreaRow; itemId: string; robotList: RobotList; onSelect: (id: string) => void; onClose: () => void } & Actions) {
   const item = area.versions.find(version => version.map.id === itemId) ?? area.latest
   const { map, preparationEvidence: evidence, currentlyDeployedOn: robots } = item
   const status = versionStatus(item)
@@ -103,6 +103,7 @@ function MapVersionDetail({ area, itemId, robotList, onSelect, onClose, onUpload
   return (
     <Modal open size="lg" title={mapVersionLabel(map)} description={isLatest ? `${map.areaKey} · phiên bản mới nhất` : `${map.areaKey} · phiên bản cũ, mới nhất là phiên bản ${area.latest.map.versionNumber}`} onClose={onClose}
       footer={<div className="flex flex-wrap justify-end gap-2">
+        <button type="button" className={`${buttonClass('secondary')} sm:mr-auto !text-[#b23e31]`} onClick={() => { onClose(); onRetire(item) }}>Ngừng sử dụng phiên bản này</button>
         <button type="button" className={buttonClass('secondary')} onClick={() => { onClose(); onUpload({ areaKey: map.areaKey, displayName: map.areaName }) }}>Tải phiên bản mới</button>
         <button type="button" className={buttonClass('primary')} onClick={() => { onClose(); onCheck(item) }}>Ghi kết quả kiểm tra</button>
       </div>}>
@@ -147,7 +148,7 @@ function MapVersionDetail({ area, itemId, robotList, onSelect, onClose, onUpload
 }
 
 /** One line per area, led by its newest version: only what decides the next step. The rest opens from the eye. */
-export function MapVersionTable({ items, robots, onUpload, onCheck }: { items: MapVersionItem[]; robots: RobotList } & Actions) {
+export function MapVersionTable({ items, robots, onUpload, onCheck, onRetire }: { items: MapVersionItem[]; robots: RobotList } & Actions) {
   const [search, setSearch] = useState('')
   const [viewing, setViewing] = useState<{ areaKey: string; itemId: string } | null>(null)
   const [sort, setSort] = useState<{ field: SortField; descending: boolean } | null>(null)
@@ -158,7 +159,6 @@ export function MapVersionTable({ items, robots, onUpload, onCheck }: { items: M
   const paged = usePagination(sorted, PAGE_SIZE, `${term}|${sort?.field}|${sort?.descending}`)
   const toggleSort = (field: SortField) => setSort(sort?.field === field ? { field, descending: !sort.descending } : { field, descending: false })
   const viewedArea = viewing && areas.find(area => area.latest.map.areaKey === viewing.areaKey)
-  const duplicates = duplicateAreaNames(areas.map(area => ({ areaKey: area.latest.map.areaKey, name: area.latest.map.areaName })))
   // People know robots by name; the code stays the fallback while the robot list loads.
   const robotName = (code: string) => robots.data?.find(robot => robot.robotCode === code)?.displayName || code
 
@@ -181,7 +181,7 @@ export function MapVersionTable({ items, robots, onUpload, onCheck }: { items: M
                 const run = runState(area)
                 return (
                   <tr key={map.areaKey} className={rowClass}>
-                    <td className={tdClass}><span className="font-semibold text-[#0f172a]">{areaLabel(map.areaName, map.areaKey, duplicates)}</span>
+                    <td className={tdClass}><span className="font-semibold text-[#0f172a]">{map.areaName}</span> <span className="font-mono text-[11.5px] text-[#64748b]">{map.areaKey}</span>
                       <p className="text-[11.5px] text-[#64748b] xl:hidden">Phiên bản {map.versionNumber}{versions.length > 1 ? ` (${versions.length - 1} bản cũ)` : ''} · {formatDateTime(map.uploadedAt)}</p></td>
                     <td className={`${tdClass} hidden xl:table-cell`}><span className="font-semibold">{map.versionNumber}</span>{versions.length > 1 && <p className="text-[11.5px] text-[#64748b]">{versions.length - 1} bản cũ</p>}</td>
                     <td className={`${tdClass} hidden whitespace-nowrap text-[13px] text-[#64748b] xl:table-cell`}>{formatDateTime(map.uploadedAt)}</td>
@@ -204,7 +204,7 @@ export function MapVersionTable({ items, robots, onUpload, onCheck }: { items: M
         </div>
         <Pagination page={paged.page} pageCount={paged.pageCount} total={paged.total} pageSize={paged.pageSize} onPage={paged.setPage} label="Phân trang danh sách bản đồ" />
       </>}
-      {viewedArea && viewing && <MapVersionDetail area={viewedArea} itemId={viewing.itemId} robotList={robots} onSelect={itemId => setViewing({ ...viewing, itemId })} onClose={() => setViewing(null)} onUpload={onUpload} onCheck={onCheck} />}
+      {viewedArea && viewing && <MapVersionDetail area={viewedArea} itemId={viewing.itemId} robotList={robots} onSelect={itemId => setViewing({ ...viewing, itemId })} onClose={() => setViewing(null)} onUpload={onUpload} onCheck={onCheck} onRetire={onRetire} />}
     </section>
   )
 }

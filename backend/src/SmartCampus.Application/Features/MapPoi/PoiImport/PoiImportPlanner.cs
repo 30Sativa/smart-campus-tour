@@ -37,7 +37,7 @@ internal static class PoiImportPlanner
             await importRepository.ListCurrentCameraPresetsAsync(proposals.Select(proposal => proposal.Id).ToArray(), cancellationToken);
         var applied = (await importRepository.ListAppliedImportReceiptsAsync(map.Id, cancellationToken))
             .ToDictionary(receipt => Convert.ToHexString(receipt.FileSha256));
-        var eligibility = await MapPreparationEligibility.LoadAsync(mapRepository, map, cancellationToken);
+        var eligibility = (await MapPreparationEligibility.LoadAsync(mapRepository, map, cancellationToken)).WithRetirement(map);
         var deployed = PoiProposalRules.IsDeployedOn(await mapRepository.GetLatestDeploymentCheckForRobotAsync(robot.Id, cancellationToken), map);
         var package = MapPackageValidator.Validate(map.PackageBytes);
 

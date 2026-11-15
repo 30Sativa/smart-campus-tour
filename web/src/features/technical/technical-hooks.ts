@@ -15,6 +15,20 @@ export function useMapVersions() {
   return useQuery({ queryKey: keys.maps, queryFn: technicalApi.listMaps })
 }
 
+/** Map Management: active and retired versions together, each with its status (ADR-0041). */
+export function useAllMapVersions() {
+  return useQuery({ queryKey: [...keys.maps, 'all'], queryFn: technicalApi.listAllMaps })
+}
+
+/** Routes, robots, waiting items and Tours that retiring this version would touch or be blocked by. */
+export function useMapRetirementImpact(mapVersionId: string | undefined) {
+  return useQuery({
+    queryKey: [...keys.maps, 'retirement-impact', mapVersionId],
+    queryFn: () => technicalApi.getMapRetirementImpact(mapVersionId!),
+    enabled: Boolean(mapVersionId),
+  })
+}
+
 export function useMapAreas(enabled = true) {
   return useQuery({ queryKey: ['technical', 'map-areas'], queryFn: technicalApi.listMapAreas, enabled })
 }
@@ -93,6 +107,17 @@ function useTechnicalMutation<T, R>(run: (input: T) => Promise<R>, invalidate: r
 export const useUploadMap = () => useTechnicalMutation(technicalApi.uploadMap, keys.maps, (input, map) => ({
   title: `Đã lưu ${map?.mapKey ?? input.package.name} · v${map?.versionNumber ?? ''}`,
   detail: 'Upload chỉ lưu phiên bản trên hệ thống; chưa nạp map lên robot.',
+}))
+
+/** Nothing is deleted: the version leaves every picker and keeps its history (ADR-0041). */
+export const useRetireMap = () => useTechnicalMutation(technicalApi.retireMap, keys.maps, (_input, map) => ({
+  title: `Đã ngừng sử dụng ${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`,
+  detail: 'POI, tuyến và kết quả kiểm tra trên phiên bản này vẫn được giữ.',
+}))
+
+export const useReopenMap = () => useTechnicalMutation(technicalApi.reopenMap, keys.maps, (_input, map) => ({
+  title: `Đã mở lại ${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`,
+  detail: 'Phiên bản này lại dùng được cho việc mới.',
 }))
 
 /** Staff remove a never-passed POI from the list; its history stays on the server (ADR-0051). */

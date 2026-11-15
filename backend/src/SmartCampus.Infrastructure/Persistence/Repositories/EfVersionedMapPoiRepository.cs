@@ -62,14 +62,16 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
 
     public Task<MapVersion?> FindMapVersionAsync(Guid id, bool includePackage, CancellationToken cancellationToken)
     {
-        IQueryable<MapVersion> query = dbContext.MapVersions.Include(map => map.AreaKeyNavigation);
+        IQueryable<MapVersion> query = dbContext.MapVersions.Include(map => map.AreaKeyNavigation).Include(map => map.RetiredByUser);
         if (!includePackage) query = query.AsNoTracking();
         return query.SingleOrDefaultAsync(map => map.Id == id, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<MapVersion>> ListMapVersionsAsync(string? areaKey, int take, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<MapVersion>> ListMapVersionsAsync(string? areaKey, int take, bool includeRetired, CancellationToken cancellationToken)
     {
-        var query = dbContext.MapVersions.AsNoTracking().Include(map => map.AreaKeyNavigation).AsQueryable();
+        var query = dbContext.MapVersions.AsNoTracking().Include(map => map.AreaKeyNavigation).Include(map => map.RetiredByUser).AsQueryable();
+        // Pickers never offer a retired version (ADR-0041); Map Management asks for them explicitly.
+        if (!includeRetired) query = query.Where(map => map.RetiredAt == null);
         if (areaKey is not null) query = query.Where(map => map.AreaKey == areaKey);
         return await query.OrderByDescending(map => map.UploadedAt).ThenBy(map => map.Id).Take(take).ToArrayAsync(cancellationToken);
     }
@@ -111,6 +113,66 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
                 @LockOwner = N'Transaction', @LockTimeout = 10000;
             IF @lockResult < 0 THROW 51023, 'Could not acquire map preparation state lock.', 1;
             """, cancellationToken);
+    }
+
+    public async Task<bool> IsMapVersionRetiredAsync(Guid mapVersionId, CancellationToken cancellationToken) =>
+        await dbContext.MapVersions.AsNoTracking().Where(map => map.Id == mapVersionId)
+            .Select(map => map.RetiredAt != null).SingleOrDefaultAsync(cancellationToken);
+
+    public async Task<(bool Found, DateTimeOffset? RetiredAt)> LockMapVersionRowAsync(Guid mapVersionId, CancellationToken cancellationToken)
+    {
+        // Column-limited so the lock never reads the package bytes.
+        var rows = await dbContext.Database.SqlQuery<MapRetirementRow>($"""
+            SELECT Id, RetiredAt FROM dbo.MapVersions WITH (UPDLOCK, HOLDLOCK, ROWLOCK) WHERE Id = {mapVersionId}
+            """).ToListAsync(cancellationToken);
+        return rows.Count == 0 ? (false, null) : (true, rows[0].RetiredAt);
+    }
+
+    public Task SetMapVersionRetirementAsync(Guid mapVersionId, DateTimeOffset? retiredAt, Guid? retiredByUserId, string? reason,
+        CancellationToken cancellationToken) =>
+        // The runtime may update only these three columns of a stored map version.
+        dbContext.MapVersions.Where(map => map.Id == mapVersionId).ExecuteUpdateAsync(setters => setters
+            .SetProperty(map => map.RetiredAt, retiredAt)
+            .SetProperty(map => map.RetiredByUserId, retiredByUserId)
+            .SetProperty(map => map.RetirementReason, reason), cancellationToken);
+
+    public async Task<MapRetirementImpact> GetMapRetirementImpactAsync(Guid mapVersionId, CancellationToken cancellationToken)
+    {
+        var routes = await dbContext.Routes.AsNoTracking()
+            .Where(route => dbContext.RouteRevisions.Any(revision => revision.RouteId == route.Id && revision.MapVersionId == mapVersionId))
+            .OrderBy(route => route.Name).ThenBy(route => route.Id)
+            .ToArrayAsync(cancellationToken);
+        var robots = await dbContext.Robots.AsNoTracking()
+            .Where(robot => robot.AssignedMapVersionId == mapVersionId && robot.DeactivatedAt == null)
+            .OrderBy(robot => robot.RobotCode)
+            .Select(robot => new MapRetirementRobot(robot.Id, robot.RobotCode))
+            .ToArrayAsync(cancellationToken);
+        // The same rule as the Technical POI and route queues: submitted and still waiting for a result.
+        var pendingPois = (await ListSubmittedVerificationQueueAsync(mapVersionId, cancellationToken))
+            .Select(revision => new MapRetirementPendingPoi(revision.ProposalId, revision.Name, revision.RevisionNumber))
+            .ToArray();
+        var pendingRoutes = await dbContext.RouteRevisions.AsNoTracking()
+            .Where(revision => revision.MapVersionId == mapVersionId &&
+                dbContext.RouteRevisionSubmissions.Any(submission => submission.RouteRevisionId == revision.Id) &&
+                !dbContext.RouteTestRuns.Any(run => run.RouteRevisionId == revision.Id))
+            .OrderBy(revision => revision.CreatedAt).ThenBy(revision => revision.Id)
+            .Select(revision => new MapRetirementPendingRoute(revision.RouteId, revision.Id, revision.Name, revision.RevisionNumber))
+            .ToArrayAsync(cancellationToken);
+        var tours = await dbContext.Tours.AsNoTracking()
+            .Where(tour => (tour.State == "SCHEDULED" || tour.State == "READY") &&
+                tour.RouteRevision != null && tour.RouteRevision.MapVersionId == mapVersionId)
+            .OrderBy(tour => tour.ScheduledStartAt).ThenBy(tour => tour.Id)
+            .Select(tour => new MapRetirementTour(tour.Id, tour.Name, tour.ScheduledStartAt, tour.State))
+            .ToArrayAsync(cancellationToken);
+        return new(mapVersionId,
+            routes.Select(route => new MapRetirementRoute(route.Id, route.Name, route.IsOpenForNewTours)).ToArray(),
+            robots, pendingPois, pendingRoutes, tours);
+    }
+
+    private sealed class MapRetirementRow
+    {
+        public Guid Id { get; init; }
+        public DateTimeOffset? RetiredAt { get; init; }
     }
 
     public Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken) =>

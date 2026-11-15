@@ -1,3 +1,4 @@
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Common.Abstractions.Persistence;
@@ -12,7 +13,7 @@ public interface IMapVersionRepository
     Task<int> GetNextMapVersionAsync(string areaKey, CancellationToken cancellationToken);
     Task<int?> FindVersionNumberByPackageAsync(string areaKey, byte[] packageSha256, CancellationToken cancellationToken);
     Task<MapVersion?> FindMapVersionAsync(Guid id, bool includePackage, CancellationToken cancellationToken);
-    Task<IReadOnlyList<MapVersion>> ListMapVersionsAsync(string? areaKey, int take, CancellationToken cancellationToken);
+    Task<IReadOnlyList<MapVersion>> ListMapVersionsAsync(string? areaKey, int take, bool includeRetired, CancellationToken cancellationToken);
     Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksForPhysicalRobotsAsync(CancellationToken cancellationToken);
     Task<MapDeploymentCheck?> FindDeploymentRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken);
     Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken cancellationToken);
@@ -22,6 +23,12 @@ public interface IMapVersionRepository
     Task<MapDeploymentCheck?> GetLatestDeploymentCheckAsync(Guid mapVersionId, Guid? robotId, CancellationToken cancellationToken);
     Task<IReadOnlyList<MapDeploymentCheck>> ListDeploymentChecksForMapAsync(Guid mapVersionId, CancellationToken cancellationToken);
     Task LockMapPreparationStateAsync(Guid mapVersionId, CancellationToken cancellationToken);
+    /// <summary>Fresh read of RetiredAt; callers take <see cref="LockMapPreparationStateAsync"/> first (ADR-0041).</summary>
+    Task<bool> IsMapVersionRetiredAsync(Guid mapVersionId, CancellationToken cancellationToken);
+    /// <summary>Row-locks the version (UPDLOCK, HOLDLOCK) and returns its RetiredAt; Found is false when the version does not exist.</summary>
+    Task<(bool Found, DateTimeOffset? RetiredAt)> LockMapVersionRowAsync(Guid mapVersionId, CancellationToken cancellationToken);
+    Task SetMapVersionRetirementAsync(Guid mapVersionId, DateTimeOffset? retiredAt, Guid? retiredByUserId, string? reason, CancellationToken cancellationToken);
+    Task<MapRetirementImpact> GetMapRetirementImpactAsync(Guid mapVersionId, CancellationToken cancellationToken);
     Task<IReadOnlyList<MapDeploymentCheck>> ListDeploymentChecksAsync(Guid mapVersionId, CancellationToken cancellationToken);
     void Add(MapArea area);
     void Add(MapVersion mapVersion);

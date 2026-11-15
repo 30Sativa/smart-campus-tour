@@ -25,3 +25,5 @@ public sealed record VerifyPoiProposalRequest(
     Guid RequestId, int ExpectedRevisionNumber, string ExpectedRowVersion, string RobotCode,
     string ResultCode, bool Reached, bool Stopped, bool LocalizationPassed,
     bool CameraPresetConfirmed, string? Reason, string EvidenceNote);
+public sealed record RetireMapVersionRequest(string Reason, string ExpectedRowVersion);
+public sealed record ReopenMapVersionRequest(string? ExpectedRowVersion);

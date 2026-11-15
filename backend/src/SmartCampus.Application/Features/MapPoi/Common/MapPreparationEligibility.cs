@@ -43,6 +43,10 @@ public sealed record MapPreparationEligibility(
         IMapVersionRepository repository, MapVersion map, CancellationToken cancellationToken) =>
         Calculate(map, await repository.ListDeploymentChecksForMapAsync(map.Id, cancellationToken));
 
+    /// <summary>What pickers and the preview show: a retired version cannot take new work (ADR-0041).</summary>
+    public MapPreparationEligibility WithRetirement(MapVersion map) => map.RetiredAt is null ? this
+        : this with { CanUseForPoiPreparation = false, BlockReasonCode = MapRetirement.RetiredCode, BlockReason = MapRetirement.RetiredMessage };
+
     public void EnsureCanUse()
     {
         if (!CanUseForPoiPreparation)

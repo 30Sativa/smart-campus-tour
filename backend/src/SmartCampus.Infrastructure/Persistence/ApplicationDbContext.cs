@@ -348,6 +348,8 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(32)
                 .IsFixedLength();
             entity.Property(e => e.Resolution).HasColumnType("decimal(12, 6)");
+            entity.Property(e => e.RetiredAt).HasPrecision(3);
+            entity.Property(e => e.RetirementReason).HasMaxLength(500);
             entity.Property(e => e.UploadedAt).HasPrecision(3);
             entity.Property(e => e.ValidationStatus)
                 .HasMaxLength(20)
@@ -358,7 +360,11 @@ public partial class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_MapVersions_AreaKey");
 
-            entity.HasOne(d => d.UploadedByUser).WithMany(p => p.MapVersions)
+            entity.HasOne(d => d.RetiredByUser).WithMany(p => p.MapVersionRetiredByUsers)
+                .HasForeignKey(d => d.RetiredByUserId)
+                .HasConstraintName("FK_MapVersions_RetiredByUserId");
+
+            entity.HasOne(d => d.UploadedByUser).WithMany(p => p.MapVersionUploadedByUsers)
                 .HasForeignKey(d => d.UploadedByUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_MapVersions_UploadedByUserId");

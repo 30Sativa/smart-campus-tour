@@ -214,7 +214,7 @@ public sealed class RobotDiagnosticsTests
 
     private sealed class TestMapRepository(IReadOnlyList<MapVersion> versions) : IMapVersionRepository
     {
-        public Task<IReadOnlyList<MapVersion>> ListMapVersionsAsync(string? areaKey, int take, CancellationToken cancellationToken) => Task.FromResult(versions);
+        public Task<IReadOnlyList<MapVersion>> ListMapVersionsAsync(string? areaKey, int take, bool includeRetired, CancellationToken cancellationToken) => Task.FromResult(versions);
         public Task<IReadOnlyList<MapArea>> ListMapAreasAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<MapArea>>([]);
         public Task<MapArea?> LockAreaAsync(string areaKey, CancellationToken cancellationToken) => Task.FromResult<MapArea?>(null);
         public Task<MapArea?> GetAreaAsync(string areaKey, CancellationToken cancellationToken) => Task.FromResult<MapArea?>(null);
@@ -231,6 +231,10 @@ public sealed class RobotDiagnosticsTests
         public Task<MapDeploymentCheck?> GetLatestDeploymentCheckAsync(Guid mapVersionId, Guid? robotId, CancellationToken cancellationToken) => Task.FromResult<MapDeploymentCheck?>(null);
         public Task<IReadOnlyList<MapDeploymentCheck>> ListDeploymentChecksForMapAsync(Guid mapVersionId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<MapDeploymentCheck>>([]);
         public Task LockMapPreparationStateAsync(Guid mapVersionId, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<bool> IsMapVersionRetiredAsync(Guid mapVersionId, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<(bool Found, DateTimeOffset? RetiredAt)> LockMapVersionRowAsync(Guid mapVersionId, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task SetMapVersionRetirementAsync(Guid mapVersionId, DateTimeOffset? retiredAt, Guid? retiredByUserId, string? reason, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<MapRetirementImpact> GetMapRetirementImpactAsync(Guid mapVersionId, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<IReadOnlyList<MapDeploymentCheck>> ListDeploymentChecksAsync(Guid mapVersionId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<MapDeploymentCheck>>([]);
         public void Add(MapArea area) => throw new NotSupportedException();
         public void Add(MapVersion mapVersion) => throw new NotSupportedException();

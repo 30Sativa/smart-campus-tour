@@ -23,6 +23,25 @@ export type MapVersion = {
   frameId: string
   validationStatus: string
   uploadedAt: string
+  /** ADR-0041: a retired version stays readable but takes no new work. Older fixtures may omit these. */
+  status?: MapVersionStatus
+  retiredAt?: string | null
+  retiredByName?: string | null
+  retirementReason?: string | null
+  /** Opaque version the retire call echoes back. */
+  rowVersion?: string
+}
+
+export type MapVersionStatus = 'ACTIVE' | 'RETIRED'
+
+/** What retiring a version touches or is blocked by; nothing listed is changed (ADR-0041). */
+export type MapRetirementImpact = {
+  mapVersionId: string
+  routes: { routeId: string; name: string; isActive: boolean }[]
+  assignedRobots: { robotId: string; robotCode: string }[]
+  pendingPois: { proposalId: string; name: string; revisionNumber: number }[]
+  pendingRoutes: { routeId: string; revisionId: string; name: string; revisionNumber: number }[]
+  upcomingTours: { tourId: string; name: string; scheduledStartAt: string; state: string }[]
 }
 
 export type RobotAffectedTour = { tourId: string; name: string; scheduledStartAt: string; state: string }
@@ -177,7 +196,15 @@ type Envelope<T> = ApiResponse<T>
 
 export const technicalApi = {
   listMaps: () => apiClient<Envelope<MapVersionItem[]>>('/api/maps/versions').then(response => response.data ?? []),
+  /** Map Management only: every picker uses listMaps, which leaves retired versions out (ADR-0041). */
+  listAllMaps: () => apiClient<Envelope<MapVersionItem[]>>('/api/maps/versions?includeRetired=true&take=100').then(response => response.data ?? []),
   getMap: (id: string) => apiClient<Envelope<MapVersionItem>>(`/api/maps/versions/${id}`).then(response => response.data!),
+  getMapRetirementImpact: (id: string) =>
+    apiClient<Envelope<MapRetirementImpact>>(`/api/technical/map-versions/${id}/retirement-impact`).then(response => response.data!),
+  retireMap: ({ map, reason }: { map: MapVersion; reason: string }) =>
+    apiClient<Envelope<MapVersion>>(`/api/technical/map-versions/${map.id}/retire`, { method: 'POST', json: { reason, expectedRowVersion: map.rowVersion ?? '' } }).then(response => response.data!),
+  reopenMap: (map: MapVersion) =>
+    apiClient<Envelope<MapVersion>>(`/api/technical/map-versions/${map.id}/reopen`, { method: 'POST', json: { expectedRowVersion: map.rowVersion ?? null } }).then(response => response.data!),
   listMapAreas: () => apiClient<Envelope<MapAreaOption[]>>('/api/technical/map-areas').then(response => response.data ?? []),
   listPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots').then(response => response.data ?? []),
   listAllPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots?includeDeactivated=true').then(response => response.data ?? []),

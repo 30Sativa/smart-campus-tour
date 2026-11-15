@@ -20,8 +20,9 @@ const noRobots = { data: [] as PhysicalRobotOption[], isPending: false, isError:
 const show = (items: MapVersionItem[], robots = noRobots) => {
   const onUpload = vi.fn()
   const onCheck = vi.fn()
-  render(<MemoryRouter><MapVersionTable items={items} robots={robots} onUpload={onUpload} onCheck={onCheck} /></MemoryRouter>)
-  return { onUpload, onCheck }
+  const onRetire = vi.fn()
+  render(<MemoryRouter><MapVersionTable items={items} robots={robots} onUpload={onUpload} onCheck={onCheck} onRetire={onRetire} /></MemoryRouter>)
+  return { onUpload, onCheck, onRetire }
 }
 const dataRows = () => screen.getAllByRole('row').slice(1)
 
@@ -33,8 +34,8 @@ describe('MapVersionTable', () => {
     expect(row).toHaveTextContent('Tầng 6')
     expect(row).toHaveTextContent('Hợp lệ')
     expect(row).toHaveTextContent('amr_01')
-    // A name no other area uses needs no key beside it.
-    expect(within(row).queryByText(/tang-6/)).not.toBeInTheDocument()
+    // Every row names the area and its key, so two areas called "Tầng 6" are never confused (ADR-0041).
+    expect(within(row).getByText('tang-6')).toBeInTheDocument()
     expect(screen.queryByText('tang-6-v1.zip')).not.toBeInTheDocument()
   })
 
@@ -66,6 +67,16 @@ describe('MapVersionTable', () => {
     expect(detail).not.toHaveTextContent('amr_08')
     expect(detail).toHaveTextContent('Gán hoặc đổi bản đồ ở trang Robot.')
     expect(within(detail).queryByRole('button', { name: /Gán bản đồ|Thay đổi bản đồ/ })).not.toBeInTheDocument()
+  })
+
+  it('offers to retire the version shown in the detail', () => {
+    const older = version('a', 'A', 1)
+    const { onRetire } = show([version('a', 'A', 2, passed), older])
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A · a · phiên bản 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xem phiên bản 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ngừng sử dụng phiên bản này' }))
+    expect(onRetire).toHaveBeenCalledWith(older)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('says when no robot holds the area', () => {
@@ -150,9 +161,9 @@ describe('MapVersionTable', () => {
     const [tang6, test123] = dataRows()
     expect(within(tang6).getAllByRole('cell')[1]).toHaveTextContent('32 bản cũ')
     expect(within(tang6).getAllByRole('cell')[3]).toHaveTextContent('Hợp lệ')
-    // Two areas share the display name, so each shows its key.
-    expect(within(tang6).getAllByRole('cell')[0].querySelector('span')?.textContent).toBe('Tầng 6 · tang-6')
-    expect(within(test123).getAllByRole('cell')[0].querySelector('span')?.textContent).toBe('Tầng 6 · test123')
+    // Two areas share the display name; each row shows its key beside it.
+    expect(within(tang6).getAllByRole('cell')[0]).toHaveTextContent(/^Tầng 6 tang-6/)
+    expect(within(test123).getAllByRole('cell')[0]).toHaveTextContent(/^Tầng 6 test123/)
     expect(within(tang6).getAllByRole('cell')[4]).toHaveTextContent('amr_01 · đang ở phiên bản 1')
     expect(within(test123).getAllByRole('cell')[1]).toHaveTextContent(/^1$/)
     fireEvent.click(within(tang6).getByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · phiên bản 3' }))
