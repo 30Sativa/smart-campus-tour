@@ -132,6 +132,20 @@ describe('Staff registration list', () => {
     renderAt('/staff/manage/registrations', 'all')
     expect(within(await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })).getByText('Tour đã kết thúc')).toBeInTheDocument()
   })
+
+  it('shows the rows still pending instead of "Đã duyệt" for an approved registration (B4)', async () => {
+    registration.summary.state = 'APPROVED'; registration.summary.pendingRowCount = 2
+    renderAt('/staff/manage/registrations', 'all')
+    const table = await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })
+    expect(within(table).getByText('Còn 2 dòng chờ duyệt')).toBeInTheDocument()
+    expect(within(table).queryByText('Đã duyệt')).not.toBeInTheDocument()
+  })
+
+  it('says "Đã duyệt" once no row is pending', async () => {
+    registration.summary.state = 'APPROVED'; registration.summary.pendingRowCount = 0
+    renderAt('/staff/manage/registrations', 'all')
+    expect(within(await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })).getByText('Đã duyệt')).toBeInTheDocument()
+  })
 })
 
 describe('Staff registration review boundary', () => {

@@ -76,7 +76,7 @@ export default function StaffManageRegistrationsPage({ mode }: { mode: 'pending'
               <td className={tdClass}><p className="font-semibold text-[#0f172a]">{reg.groupName}</p><p className="text-[11.5px] text-[#64748b]">{reg.schoolName}</p></td>
               <td className={tdClass}><p>{reg.tourName}</p><p className="text-[11.5px] text-[#64748b]">{reviewTime(reg.tourScheduledStartAt)}</p>{endedTourLabel(reg.tourState) && <span className="mt-1 inline-flex rounded-full border border-[#e2e8f0] bg-[#f1f5f9] px-2 py-px text-[11px] font-semibold whitespace-nowrap text-[#475569]">{endedTourLabel(reg.tourState)}</span>}{reg.state === 'SUBMITTED' && expiryLabel(pendingExpiresAt(reg.tourScheduledStartAt), now) && <p className="text-[11.5px] text-[#92400e]">{expiryLabel(pendingExpiresAt(reg.tourScheduledStartAt), now)}</p>}</td>
               <td className={tdClass}>{reg.representativeName}</td><td className={`${tdClass} tabular-nums`}>{reg.rowCount}</td>
-              <td className={tdClass}>{mode === 'pending' ? <Waited since={reg.submittedAt} /> : <ReviewStateBadge state={reg.state} />}</td>
+              <td className={tdClass}>{mode === 'pending' ? <Waited since={reg.submittedAt} /> : <ReviewStateBadge state={reg.state} pendingRows={reg.pendingRowCount} />}</td>
               <td className={`${tdClass} sticky right-0 bg-white text-right`}><button type="button" onClick={(event) => { event.stopPropagation(); open(reg.id) }} className={buttonClass(reg.state === 'SUBMITTED' ? 'primary' : 'secondary', 'sm')}>Xem & duyệt<span className="sr-only"> {reg.groupName}</span></button></td>
             </tr>)}</tbody>
           </table></div></>}

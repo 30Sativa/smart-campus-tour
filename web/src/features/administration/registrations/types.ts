@@ -11,6 +11,8 @@ export type ReviewSummary = {
   id: string; tourId: string; tourName: string; tourScheduledStartAt: string; tourState: string
   schoolName: string; groupName: string; state: RegistrationState; rowCount: number
   representativeName: string; submittedAt: string; updatedAt: string
+  /** Active roster rows still PENDING a Staff decision; the server counts it (absent on older payloads). */
+  pendingRowCount?: number
 }
 export type ReviewDetails = {
   summary: ReviewSummary; contactName: string; contactEmail: string; rowVersion: string; tourRowVersion: string
