@@ -25,7 +25,7 @@ async function access(tourId: string, action: string, code?: string, signal?: Ab
 }
 const RECONNECT_WINDOW_EXPIRED = 'RECONNECT_WINDOW_EXPIRED'
 const SESSION_ENDED = 'Phiên xem đã kết thúc vì mã đã bị thu hồi hoặc thay bằng mã mới. Kiểm tra email mới nhất hoặc liên hệ đại diện đoàn.'
-const IN_USE_FALLBACK = 'Lời mời đang được dùng trên browser khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
+const IN_USE_FALLBACK = 'Lời mời đang được dùng trên trình duyệt khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
 /** A 409's code, message and `errors.fields.retryAfterSeconds` (docs/architecture.md §3.2.3). */
 function conflict(error: ApiError): { code?: string; message?: string; retryAfterSeconds?: number } {
   try {
