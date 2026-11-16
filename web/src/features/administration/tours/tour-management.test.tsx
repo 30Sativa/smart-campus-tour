@@ -160,6 +160,25 @@ describe('choosing the route of a new Tour', () => {
     expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('')
   })
 
+  // ADR-0062: create refuses a revision with a retired POI (ROUTE_HAS_RETIRED_POI), so the form does not offer it.
+  const retired = { ...TESTED, revisionId: 'revision-retired', name: 'Tuyến có POI cũ', retiredPoiNames: ['Thư viện'] }
+
+  it('shows a route with a retired POI as disabled, naming the POI', async () => {
+    api(tour(), [TESTED, retired])
+    renderAt('/staff/manage/tours/new?kind=normal')
+    expect(await screen.findByRole('option', { name: 'Tuyến có POI cũ · 1 điểm dừng (có POI ngưng dùng: Thư viện)' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })).toBeEnabled()
+  })
+
+  it('does not select a linked route with a retired POI, and explains why', async () => {
+    api(tour(), [TESTED, retired])
+    renderAt('/staff/manage/tours/new?kind=normal&route=revision-retired')
+    expect(await screen.findByText(/Tuyến vừa mở \(Tuyến có POI cũ\) có POI đã ngưng dùng: Thư viện\. Không tạo được Tour mới trên tuyến này\./)).toBeInTheDocument()
+    expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('')
+    expect(screen.queryByText('Tuyến vừa mở chưa dùng được để tạo Tour. Chọn tuyến khác.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Xem lại trước khi tạo' })).not.toBeInTheDocument()
+  })
+
   it('lets Staff change a linked route', async () => {
     api(tour(), [TESTED, { ...TESTED, revisionId: 'revision-3', name: 'Tuyến khác' }])
     renderAt('/staff/manage/tours/new?kind=normal&route=revision-2')

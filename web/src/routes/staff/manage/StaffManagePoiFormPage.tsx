@@ -6,10 +6,10 @@ import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
 import { celebrate, notify } from '../../../components/ui/toast-store'
-import { technicalApi, type PoiProposal, type PoiRevision, type PoiVerification } from '../../../features/technical/api/technical'
+import { technicalApi, type PoiProposal, type PoiVerification } from '../../../features/technical/api/technical'
 import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { mapCheckLabel, narrationHeadline, narrationStatus, navigationHeadline, poiObservationLabels, routeUseLine, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { mapCheckLabel, narrationStatus, poiObservationLabels, poiStatus, routeUseLine, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { headPresetProblem } from '../../../features/technical/head-camera-preset'
@@ -22,6 +22,7 @@ import { UnsavedChangesGuard } from '../../../features/administration/UnsavedCha
 import { AFTER_SAVE } from '../../../features/administration/after-save'
 import { PoiNarrationPanel } from '../../../features/administration/pois/PoiNarrationPanel'
 import { PoiHistory } from '../../../features/administration/pois/PoiHistory'
+import { effectiveFailRecord } from '../../../features/administration/pois/poi-status'
 import { useReactivatePoiProposal } from '../../../features/technical/technical-hooks'
 
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
@@ -335,11 +336,11 @@ export default function StaffManagePoiFormPage() {
 
 /** Always above the tabs: the navigation check, the narration and whether a route can use the POI, by the server's rule. */
 function PoiHeadline({ proposal }: { proposal: PoiProposal }) {
-  const navigation = navigationHeadline(proposal.revision)
-  const narration = narrationHeadline(proposal.narration)
+  const navigation = poiStatus(proposal.revision)
+  const narration = narrationStatus(proposal.narration)
   const use = routeUseLine(proposal)
   return <section aria-label="Tình trạng POI" className={`${card} mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3`}>
-    <span className="text-sm text-[#475569]">Điều hướng: <ToneBadge tone={proposal.retiredAt ? 'muted' : navigation.tone}>{navigation.label}{proposal.revision.verificationSourceRevisionId && proposal.revision.verificationSourceRevisionId !== proposal.revision.id ? ' · giữ kết quả của bản lưu trước' : ''}</ToneBadge></span>
+    <span className="text-sm text-[#475569]">Kiểm chứng: <ToneBadge tone={proposal.retiredAt ? 'muted' : navigation.tone}>{navigation.label}{proposal.revision.verificationSourceRevisionId && proposal.revision.verificationSourceRevisionId !== proposal.revision.id ? ' · giữ kết quả của bản lưu trước' : ''}</ToneBadge></span>
     <span className="text-sm text-[#475569]">Thuyết minh: <ToneBadge tone={proposal.retiredAt ? 'muted' : narration.tone}>{narration.label}</ToneBadge></span>
     {proposal.retiredAt && <ToneBadge tone="muted">Ngưng dùng</ToneBadge>}
     {proposal.discardedAt && <ToneBadge tone="muted">Đã xoá</ToneBadge>}
@@ -393,21 +394,6 @@ function PoseNumberField({ label, value, disabled, change, hint }: { label: stri
     <label>{label}<input type="number" disabled={disabled} className={`${inputClass} mt-1`} step="any" value={value ?? ''} onChange={event => change(event.target.value === '' ? null : globalThis.Number(event.target.value))} /></label>
     {hint && <p className="mt-1 font-mono text-xs text-[#718096]">{hint}</p>}
   </div>
-}
-
-/**
- * The FAIL record in effect: the check of the revision whose result the current one carries
- * (`verificationSourceRevisionId`, or itself), newest first. Without one, a FAIL of a revision with the same
- * navigation fingerprint. The API returns records unordered, so they are sorted by `checkedAt`.
- */
-function effectiveFailRecord(revision: PoiRevision, revisions: PoiRevision[], records: PoiVerification[]): PoiVerification | null {
-  const fails = records.filter(record => record.resultCode === 'FAIL').sort((a, b) => b.checkedAt.localeCompare(a.checkedAt))
-  const sourceId = revision.verificationSourceRevisionId ?? revision.id
-  const direct = fails.find(record => record.proposalRevisionId === sourceId || record.proposalRevisionId === revision.id)
-  if (direct) return direct
-  if (!revision.navigationFingerprint) return null
-  const sameFingerprint = new Set(revisions.filter(item => item.navigationFingerprint === revision.navigationFingerprint).map(item => item.id))
-  return fails.find(record => sameFingerprint.has(record.proposalRevisionId)) ?? null
 }
 
 const observationKeys = ['reached', 'stopped', 'localizationPassed', 'cameraPresetConfirmed'] as const

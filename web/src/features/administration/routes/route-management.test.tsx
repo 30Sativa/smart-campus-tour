@@ -511,11 +511,15 @@ describe('Staff versioned Route workflow', () => {
     const run = { id: 'run-1', routeRevisionId: 'route-rev-1', robotCode: 'amr-01', checkedByUserId: 'tech-1', participatingStaffUserId: 'staff-1', resultCode: 'PASS', allStopsReached: true, safelyStopped: true, localizationPassed: true, measuredDurationSeconds: 600, failureReason: null, evidenceNote: 'ok', checkedAt: '2026-10-28T10:00:00Z', measurementBasis: 'TOTAL_WITH_DWELL' }
     currentRoute = { ...currentRoute, isSubmitted: true, verificationStatus: 'PASS', effectiveTestRunId: 'run-1', testRuns: [run], retiredPoiNames: ['Verified hall'] } as typeof route
     const catalog = renderAt('/staff/manage/routes')
-    expect(await screen.findByText('Có POI ngưng dùng')).toBeInTheDocument()
+    // The list gives it that status instead of "Đã chạy thử đạt", so it never reads as usable.
+    expect(await screen.findByText('Có POI ngưng dùng')).toHaveAttribute('title', 'POI đã ngưng dùng: Verified hall')
+    expect(screen.queryByText('Đã chạy thử đạt')).not.toBeInTheDocument()
     catalog.unmount()
     renderAt('/staff/manage/routes/route-1')
     expect(await screen.findByText(/Tuyến có POI đã ngưng dùng: Verified hall\. Không tạo được Tour mới trên phiên bản này; Tour đã tạo vẫn chạy như cũ\./)).toBeInTheDocument()
     expect(screen.getByText('Có POI ngưng dùng')).toBeInTheDocument()
+    expect(screen.getByText('Đã chạy thử đạt · chưa tạo được Tour mới (có POI ngưng dùng)')).toBeInTheDocument()
+    expect(screen.queryByText(/Dùng được để tạo Tour/)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Tạo Tour' })).not.toBeInTheDocument()
   })
 

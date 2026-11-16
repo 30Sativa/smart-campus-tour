@@ -436,7 +436,7 @@ describe('Staff versioned POI workflow', () => {
     for (const title of ['Phiên bản POI (3)', 'Kết quả kiểm chứng (2)', 'Lịch sử thuyết minh (0)']) fireEvent.click(within(history).getByText(title))
     const saves = await within(history).findAllByText(/^Bản lưu/)
     expect(saves).toHaveLength(3)
-    expect(saves[0]).toHaveTextContent('Không đạt · cần sửa · so với bản trước: đổi điều hướng: vị trí, camera')
+    expect(saves[0]).toHaveTextContent('Không đạt · so với bản trước: đổi điều hướng: vị trí, camera')
     expect(saves[1]).toHaveTextContent(/Đạt · giữ kết quả của bản lưu \d\d\/\d\d \d\d:\d\d · so với bản trước: chỉ đổi nội dung \(tên\)/)
     expect(saves[2]).not.toHaveTextContent('so với bản trước')
 

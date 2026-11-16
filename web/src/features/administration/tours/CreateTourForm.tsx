@@ -28,6 +28,11 @@ const shiftLabel = (slot: TourSlot) =>
 const routeBlockReason = (route: VersionedRoute) =>
   route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? scheduleFitLabel(route)!.text : null
 
+/** ADR-0062: no new Tour on a revision with a retired POI. Asked first, as create checks it first (ROUTE_HAS_RETIRED_POI). */
+const retiredPoiReason = (route: VersionedRoute) =>
+  route.retiredPoiNames?.length ? `có POI ngưng dùng: ${route.retiredPoiNames.join(', ')}` : null
+const pickBlockReason = (route: VersionedRoute) => retiredPoiReason(route) ?? routeBlockReason(route)
+
 /** A quick Tour holds its robot from now, so a robot another Tour holds over that hold cannot be chosen (create re-checks). */
 const robotPickable = (robot: TourRobotOption, quick: boolean) => robot.usable && !(quick && robot.heldByTourName)
 /**
@@ -71,9 +76,13 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const routes = useTestedRoutes()
   const linkedRouteId = params.get('route')
   const linkedRoute = linkedRouteId ? routes.data?.find(route => route.revisionId === linkedRouteId) : undefined
-  const linkedUsable = linkedRoute != null && routeBlockReason(linkedRoute) === null
-  const routeRevisionId = pickedRouteId ?? (linkedUsable ? linkedRoute.revisionId : '')
-  const noRouteUsable = Boolean(routes.data?.length) && routes.data!.every(route => routeBlockReason(route) !== null)
+  const linkedUsable = linkedRoute != null && pickBlockReason(linkedRoute) === null
+  const linkedRetired = linkedRoute != null && pickedRouteId === null ? linkedRoute.retiredPoiNames ?? [] : []
+  // A picked route that a refresh blocks (a POI retired meanwhile) drops out, so the review never shows it as usable.
+  const pickedRoute = pickedRouteId ? routes.data?.find(route => route.revisionId === pickedRouteId) : undefined
+  const routeRevisionId = pickedRouteId !== null ? (pickedRoute && pickBlockReason(pickedRoute) === null ? pickedRoute.revisionId : '')
+    : linkedUsable ? linkedRoute.revisionId : ''
+  const noRouteUsable = Boolean(routes.data?.length) && routes.data!.every(route => pickBlockReason(route) !== null)
   const robots = useTourRobots(routeRevisionId, quick)
   const operators = useTourOperators()
   const operatorUserId = pickedOperatorId ?? (signedIn && operators.data?.some(person => person.userId === signedIn) ? signedIn : '')
@@ -129,11 +138,12 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
         <option value="">Chọn tuyến</option>
         {/* docs/lich-tour-theo-ca.md §4: a route no shift can hold is shown but cannot be chosen. */}
         {routes.data?.map(route => {
-          const blocked = routeBlockReason(route)
+          const blocked = pickBlockReason(route)
           return <option key={route.revisionId} value={route.revisionId} disabled={blocked !== null}>{route.name} · {route.stops.length} điểm dừng{blocked ? ` (${blocked})` : ''}</option>
         })}
       </select>
         {routes.isError ? <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh mục tuyến.</span>
+          : linkedRetired.length ? null
           : linkedRouteId && routes.data && !linkedUsable && pickedRouteId === null ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Tuyến vừa mở chưa dùng được để tạo Tour. Chọn tuyến khác.</span>
           : routes.data?.length === 0 ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có tuyến nào chạy thử đạt. Gửi kiểm chứng ở Danh mục tuyến và chờ Kỹ thuật ghi kết quả.</span>
           : <span className="mt-1 block text-xs text-[#64748b]">Chỉ hiện tuyến đã gửi kiểm chứng và có kết quả chạy thử đạt. Tuyến quá dài cho 1 ca thì chưa chọn được.</span>}</label>
@@ -142,6 +152,15 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
         <ul className="mt-1 list-disc pl-5" aria-label="Lý do từng tuyến">{routes.data!.map(route => {
           const reason = routeBlockReason(route)
           return <li key={route.revisionId}>{route.name}: {reason}.</li>
+          : <span className="mt-1 block text-xs text-[#64748b]">Chỉ hiện tuyến đã gửi kiểm chứng và có kết quả chạy thử đạt. Tuyến quá dài cho 1 ca hoặc cần chạy thử lại thì chưa chọn được.</span>}</label>
+      {linkedRetired.length > 0 && <Notice tone="warn" action={<Link to={`/staff/manage/routes/${linkedRoute!.routeId}`} className="text-sm whitespace-nowrap text-[#2d719e] hover:underline">Xem tuyến</Link>}>
+        Tuyến vừa mở ({linkedRoute!.name}) có POI đã ngưng dùng: {linkedRetired.join(', ')}. Không tạo được Tour mới trên tuyến này. Lưu phiên bản tuyến mới không có POI này, hoặc dùng lại POI; hoặc chọn tuyến khác.
+      </Notice>}
+      {noRouteUsable && <Notice tone="warn">
+        <p className="font-semibold">Chưa có tuyến nào dùng được để tạo Tour.</p>
+        <ul className="mt-1 list-disc pl-5" aria-label="Lý do từng tuyến">{routes.data!.map(route => {
+          const reason = pickBlockReason(route)
+          return <li key={route.revisionId}>{route.name}: {reason}.{reason === RERUN_REASON && ' Nhờ Kỹ thuật ghi một lần chạy mới.'}</li>
         })}</ul>
       </Notice>}
       <label className="block text-sm">Robot<select title="" required aria-label="Robot" className={inputClass} value={robotCode} disabled={!routeRevisionId || robots.isPending} onChange={e => setRobotCode(e.target.value)}>
