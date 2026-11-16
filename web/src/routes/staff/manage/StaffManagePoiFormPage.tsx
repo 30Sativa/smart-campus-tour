@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, CircleAlert, Info, MapPinned, MapPinOff } from 'lucide-react'
@@ -188,7 +188,6 @@ export default function StaffManagePoiFormPage() {
   </AdminPage>
 
   const locked = !mapEligible || historicalReadOnly || retired
-  const yawDeg = draft.yaw == null ? null : Math.round((draft.yaw * 180 / Math.PI) * 10) / 10
   const placed = draft.x != null && draft.y != null
   const contentReady = Boolean(draft.name.trim() && draft.purpose.trim())
   const narration = current ? narrationStatus(current.narration) : null
@@ -280,8 +279,7 @@ export default function StaffManagePoiFormPage() {
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x: x == null ? null : quantizeMeters(x) })} />
           <PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y: y == null ? null : quantizeMeters(y) })} />
-          <PoseNumberField label="Hướng (độ)" value={yawDeg} disabled={locked} change={deg => update({ yaw: deg == null ? null : yawFromDegrees(deg) })}
-            hint={draft.yaw == null ? undefined : `= ${draft.yaw.toFixed(6)} rad`} />
+          <YawDegreesField yaw={draft.yaw} disabled={locked} change={yaw => update({ yaw })} />
         </div>
         <div className="mt-5 space-y-2 border-t border-[#e2e8f0] pt-5">
           <h2 className="text-lg font-bold text-[#2d3748]">Camera & tư liệu</h2>
@@ -355,6 +353,39 @@ function isMapEligibilityConflict(error: unknown) {
     const code = (JSON.parse(error.body) as { errors?: { code?: unknown } }).errors?.code
     return code === 'TECHNICAL_CHECK_PENDING' || code === 'TECHNICAL_CHECK_NOT_PASSED'
   } catch { return false }
+}
+
+/** A heading in degrees, in (−180, 180] to one decimal. */
+const yawDegreesText = (yaw: number | null) => {
+  if (yaw == null) return ''
+  const degrees = Math.round((yaw * 180 / Math.PI) * 10) / 10
+  return String(degrees <= -180 ? degrees + 360 : degrees)
+}
+
+/**
+ * The heading keeps what is being typed: the marker follows each parsable value, but the text is put into
+ * (−180, 180] and rounded only on blur, or when the map turns the heading.
+ */
+function YawDegreesField({ yaw, disabled, change }: { yaw: number | null; disabled: boolean; change: (yaw: number | null) => void }) {
+  const [text, setText] = useState(() => yawDegreesText(yaw))
+  // The yaw this field last sent; any other value came from the map (or a reload) and replaces the text.
+  const sent = useRef(yaw)
+  useEffect(() => {
+    if (yaw !== sent.current) { sent.current = yaw; setText(yawDegreesText(yaw)) }
+  }, [yaw])
+  const typed = (raw: string) => {
+    setText(raw)
+    const degrees = raw.trim() === '' ? null : globalThis.Number(raw)
+    if (degrees != null && !Number.isFinite(degrees)) return
+    const next = degrees == null ? null : yawFromDegrees(degrees)
+    sent.current = next
+    change(next)
+  }
+  return <div className="text-sm">
+    <label>Hướng (độ)<input type="number" disabled={disabled} className={`${inputClass} mt-1`} step="any" value={text}
+      onChange={event => typed(event.target.value)} onBlur={() => setText(yawDegreesText(yaw))} /></label>
+    {yaw != null && <p className="mt-1 font-mono text-xs text-[#718096]">{`= ${yaw.toFixed(6)} rad`}</p>}
+  </div>
 }
 
 function PoseNumberField({ label, value, disabled, change, hint }: { label: string; value: number | null; disabled: boolean; change: (value: number | null) => void; hint?: string }) {

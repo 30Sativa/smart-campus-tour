@@ -552,5 +552,32 @@ describe('Staff versioned POI workflow', () => {
       expect(screen.getByText('= 1.623156 rad')).toBeInTheDocument()
       expect(screen.getByLabelText('Hướng (độ)')).toHaveValue(93)
     })
+
+    it('keeps a typed heading as typed, and puts it in (−180, 180] only on blur', async () => {
+      renderAt('/staff/manage/pois/new')
+      fireEvent.change(await screen.findByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+      await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
+      const field = screen.getByLabelText('Hướng (độ)')
+      fireEvent.change(field, { target: { value: '93.25' } })
+      expect(field).toHaveValue(93.25)
+      expect(screen.getByText('= 1.627520 rad')).toBeInTheDocument()
+      fireEvent.change(field, { target: { value: '270' } })
+      expect(field).toHaveValue(270)
+      expect(screen.getByText('= -1.570796 rad')).toBeInTheDocument()
+      fireEvent.blur(field)
+      expect(field).toHaveValue(-90)
+      expect(screen.getByText('= -1.570796 rad')).toBeInTheDocument()
+    })
+
+    it('shows the heading the map sets', async () => {
+      renderAt('/staff/manage/pois/new')
+      fireEvent.change(await screen.findByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+      const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
+      fireEvent.change(screen.getByLabelText('Hướng (độ)'), { target: { value: '93.25' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Chọn vị trí' }))
+      fireEvent.pointerDown(svg, pointerAt(svg, 0.5, 0.5))
+      fireEvent.pointerDown(svg, pointerAt(svg, 1.5, 0.5))
+      expect(screen.getByLabelText('Hướng (độ)')).toHaveValue(0)
+    })
   })
 })
