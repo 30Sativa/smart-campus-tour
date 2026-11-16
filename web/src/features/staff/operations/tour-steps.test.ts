@@ -21,7 +21,8 @@ describe('Tour steps', () => {
 
   it('marks the check and the console skipped for a Tour cancelled before it ran', () => {
     const steps = at('CANCELLED')
-    expect(statuses(steps)).toEqual(['done', 'skipped', 'skipped', 'done'])
+    expect(statuses(steps)).toEqual(['skipped', 'skipped', 'skipped', 'done'])
+    expect(steps[0].note).toBe('Hủy trước khi chạy')
     expect(steps[3].note).toBe('Đã hủy')
     expect(links(steps)).toEqual(['/staff/manage/tours/t1', null, null, null])
   })

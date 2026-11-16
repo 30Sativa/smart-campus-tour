@@ -38,7 +38,13 @@ public sealed class ListRouteRevisionQueueHandler(IRouteRevisionRepository repo,
     {
         var revisions = await repo.ListSubmittedPendingAsync(ct);
         var views = new List<RouteRevisionView>(revisions.Count);
-        foreach (var item in revisions) views.Add(await RouteRevisionMapper.Load(repo, item.RouteId, item.Id, false, ct, schedule));
+        foreach (var item in revisions)
+        {
+            var view = await RouteRevisionMapper.Load(repo, item.RouteId, item.Id, false, ct, schedule);
+            // A save that only changed dwell or narration already has the result of its path (ADR-0023 addendum): it is not
+            // waiting for a first run, and the passed or failed list shows it with that result.
+            if (view.VerificationStatus is not ("PASS" or "FAIL")) views.Add(view);
+        }
         return views;
     }
 }

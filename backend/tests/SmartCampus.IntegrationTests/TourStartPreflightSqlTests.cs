@@ -111,7 +111,11 @@ public sealed class TourStartPreflightSqlTests
         await using var w = await World.Create();
         await w.H.FailRouteTest();
         var result = await w.AssertBlocked(["revisionStillSchedulable"]);
-        Assert.Contains("ROUTE_TEST_PASS_REQUIRED", Assert.Single(result.Checks, c => c.Id == "revisionStillSchedulable").Detail);
+        var detail = Assert.Single(result.Checks, c => c.Id == "revisionStillSchedulable").Detail;
+        Assert.Contains("ROUTE_TEST_PASS_REQUIRED", detail);
+        // The run that failed is named, since it may have been recorded on another save with the same path.
+        Assert.Contains("Lần chạy thử mới nhất của đường đi này không đạt (", detail);
+        Assert.Contains("lý do Kẹt ở cửa", detail);
     }
 
     [SchemaV11Fact]

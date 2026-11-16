@@ -117,7 +117,7 @@ describe('Staff versioned Route workflow', () => {
     await fillNewRoute()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu và gửi kiểm chứng' }))
     expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
-    expect(useToastStore.getState().toasts.at(-1)).toMatchObject({ tone: 'error', title: 'Đã lưu bản nháp “Library tour” nhưng chưa gửi được kiểm chứng' })
+    expect(useToastStore.getState().toasts.at(-1)).toMatchObject({ tone: 'error', title: 'Đã lưu “Library tour” nhưng chưa gửi được kiểm chứng' })
     expect(screen.getByRole('button', { name: 'Gửi kiểm chứng tuyến' })).toBeInTheDocument()
   })
 
@@ -134,7 +134,7 @@ describe('Staff versioned Route workflow', () => {
     next()
     startFromPoi('poi-rev-parking')
     next()
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }))
     expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
     expect(requests.filter(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')).toHaveLength(1)
     const create = requests.find(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')!
@@ -143,7 +143,7 @@ describe('Staff versioned Route workflow', () => {
     expect(createBody.requestId).toBeTruthy()
     expect(requests.some(r => r.url.pathname === '/api/technical/poi-verifications')).toBe(false)
     // One notice per state: the draft says what Staff does next, with no second warning beside it.
-    expect(screen.getByText(/^Đây là bản nháp. Staff kiểm tra lại các điểm dừng/)).toBeInTheDocument()
+    expect(screen.getByText(/^Bản này chưa gửi kiểm chứng. Staff kiểm tra lại các điểm dừng/)).toBeInTheDocument()
     expect(screen.queryByText(/Chưa tạo được Tour/)).not.toBeInTheDocument()
     expect(screen.queryByText('NOT_TESTED')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Gửi kiểm chứng tuyến' }))
@@ -208,7 +208,7 @@ describe('Staff versioned Route workflow', () => {
     next()
     startFromPoi('poi-rev-parking')
     next()
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }))
     expect(await screen.findByText('POI Verified hall chưa có thuyết minh đã duyệt. Nhờ một Staff khác duyệt thuyết minh ở trang POI, hoặc bỏ điểm đó ở bước 2, rồi lưu lại.')).toBeInTheDocument()
   })
 
@@ -261,7 +261,7 @@ describe('Staff versioned Route workflow', () => {
       next()
       startFromPoi('poi-rev-parking')
       next()
-      fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }))
       expect(await screen.findByText('POI Verified hall đã ngưng dùng. Bỏ khỏi tuyến hoặc dùng lại POI.')).toBeInTheDocument()
     })
   })
@@ -294,7 +294,7 @@ describe('Staff versioned Route workflow', () => {
       expect(step.queryByRole('checkbox', { name: /Old entrance/ })).not.toBeInTheDocument()
 
       fireEvent.click(screen.getByRole('button', { name: /Xem lại và lưu/ }))
-      fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }))
       await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/routes/route-1/revisions' && r.init?.method === 'POST')).toBe(true))
       const body = JSON.parse(String(requests.find(r => r.url.pathname === '/api/staff/routes/route-1/revisions' && r.init?.method === 'POST')!.init?.body))
       expect(body.stops[0]).toEqual({ poiRevisionId: 'poi-rev-pass', dwellSeconds: 45, headSteps: [{ preset: 'FRONT', holdSeconds: 10 }] })
@@ -344,7 +344,7 @@ describe('Staff versioned Route workflow', () => {
       next()
       startFromPoi('poi-rev-parking')
       next()
-      fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }))
       expect(await screen.findByText('POI Verified hall đã có trong tuyến. Mỗi POI chỉ được dùng một lần. Bỏ một trong hai điểm dừng ở bước 2 rồi lưu lại.')).toBeInTheDocument()
     })
   })
@@ -480,7 +480,7 @@ describe('Staff versioned Route workflow', () => {
     expect(screen.getByRole('button', { name: /Bước 4/ })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: /Bước 4/ }))
     expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getByText('x 11.40 m · y 21.60 m · hướng 0°')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Lưu bản nháp' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' })).toBeEnabled()
   })
 
   it('says when a tested route can start a Tour, and why not otherwise', async () => {
@@ -521,6 +521,28 @@ describe('Staff versioned Route workflow', () => {
     expect(screen.getByText('Đã chạy thử đạt · chưa tạo được Tour mới (có POI ngưng dùng)')).toBeInTheDocument()
     expect(screen.queryByText(/Dùng được để tạo Tour/)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Tạo Tour' })).not.toBeInTheDocument()
+  })
+
+  it('shows Staff why the route failed on its page, at the top of the edit form, and beside a retired POI in the list', async () => {
+    const run = { id: 'run-9', routeRevisionId: 'route-rev-1', robotCode: 'amr-01', checkedByUserId: 'tech-1', participatingStaffUserId: 'staff-1', resultCode: 'FAIL', allStopsReached: false, safelyStopped: true, localizationPassed: false, measuredDurationSeconds: 600, failureReason: 'Kẹt ở cửa', evidenceNote: 'ok', checkedAt: '2026-11-16T12:09:00Z', measurementBasis: 'TOTAL_WITH_DWELL', checkedByName: 'Kỹ thuật Minh', participatingStaffName: 'Lan Staff' }
+    currentRoute = { ...currentRoute, isSubmitted: true, verificationStatus: 'FAIL', effectiveTestRunId: 'run-9', testRuns: [run], retiredPoiNames: ['Verified hall'] } as typeof route
+    const catalog = renderAt('/staff/manage/routes')
+    expect(await screen.findByText('Có POI ngưng dùng')).toBeInTheDocument()
+    expect(screen.getByText('Chạy thử không đạt')).toBeInTheDocument()
+    catalog.unmount()
+
+    const page = renderAt('/staff/manage/routes/route-1')
+    const banner = await screen.findByRole('region', { name: 'Kết quả chạy thử không đạt' })
+    expect(within(banner).getByText('Lý do: Kẹt ở cửa')).toBeInTheDocument()
+    expect(within(within(banner).getByRole('list', { name: 'Mục không đạt' })).getAllByRole('listitem').map(item => item.textContent)).toEqual(['đi đủ điểm dừng', 'định vị'])
+    expect(within(banner).getByText('Robot amr-01 · Staff đi cùng Lan Staff · ghi bởi Kỹ thuật Minh · ghi lúc 16/11 19:09')).toBeInTheDocument()
+    expect(within(banner).getByRole('link', { name: 'Sửa tuyến' })).toHaveAttribute('href', '/staff/manage/routes/route-1/edit')
+    // B6: the run is in the change history under its save.
+    expect(screen.getByText(/Chạy thử 16\/11 19:09 · Không đạt · robot amr-01/)).toBeInTheDocument()
+    page.unmount()
+
+    renderAt('/staff/manage/routes/route-1/edit')
+    expect(within(await screen.findByRole('region', { name: 'Kết quả chạy thử không đạt' })).getByText('Lý do: Kẹt ở cửa')).toBeInTheDocument()
   })
 
   it('labels a route too long for one shift in red and one over the recommendation in amber', async () => {
@@ -584,7 +606,7 @@ describe('Staff versioned Route workflow', () => {
     startFromPoi('poi-rev-parking')
     next()
     expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Verified hall · dừng 45 giây', 'Verified entrance · dừng 30 giây'])
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }))
     await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')).toBe(true))
     const body = JSON.parse(String(requests.find(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')!.init?.body))
     expect(body.stops.map((stop: { poiRevisionId: string; dwellSeconds: number }) => [stop.poiRevisionId, stop.dwellSeconds])).toEqual([['poi-rev-hall', 45], ['poi-rev-pass', 30]])

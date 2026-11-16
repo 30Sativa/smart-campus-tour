@@ -1086,6 +1086,33 @@ describe('Technical Staff API integration', () => {
     await waitFor(() => expect(useToastStore.getState().toasts.at(-1)?.title).toBe('Đã ghi chạy thử đạt: Tuyến thư viện'))
   })
 
+  it('names the other saves and Tours a result also decides, and warns on FAIL that those Tours stop', async () => {
+    routeQueue = [{ ...routeFixture, sharedResultRevisions: [{ revisionId: 'rev-0', revisionNumber: 1, createdAt: '2026-11-16T05:23:00Z',
+      scheduledTours: [{ id: 't1', name: 'TEST WF-A Tour thường', scheduledStartAt: '2026-11-20T04:15:00Z', state: 'SCHEDULED' }] }] }]
+    renderPage(<TechnicalConfirmationsPage />)
+    expect(await screen.findByText('Kết quả này áp dụng cho cả: bản lưu 16/11 12:23 (1 Tour đã lên lịch: TEST WF-A Tour thường · 20/11 11:15)')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi kết quả Tuyến thư viện' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Kết quả này áp dụng cho cả: bản lưu 16/11 12:23 (1 Tour đã lên lịch: TEST WF-A Tour thường · 20/11 11:15).')).toBeInTheDocument()
+    expect(within(dialog).queryByText(/sẽ không chốt và không bắt đầu được/)).not.toBeInTheDocument()
+    // Each check is named by its text, not by the checkbox value "on".
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Robot dừng an toàn' }))
+    expect(within(dialog).getByText('Các Tour này sẽ không chốt và không bắt đầu được cho tới khi có lần chạy đạt.')).toBeInTheDocument()
+    expect(within(dialog).getByText(/Chỉ đổi thời gian dừng hoặc thuyết minh thì giữ kết quả\./)).toBeInTheDocument()
+  })
+
+  it('lists a save that carries its path\'s PASS with the passed ones, not with saves never run', async () => {
+    routeQueue = [{ ...routeFixture, verificationStatus: 'PASS', effectiveTestRunId: 'run-0',
+      testRuns: [{ id: 'run-0', routeRevisionId: 'rev-0', resultCode: 'PASS', checkedAt: '2026-11-16T05:30:00Z' }],
+      sharedResultRevisions: [{ revisionId: 'rev-0', revisionNumber: 1, createdAt: '2026-11-16T05:23:00Z', scheduledTours: [] }] }]
+    routeCatalog = routeQueue
+    renderPage(<TechnicalConfirmationsPage />)
+    expect(await screen.findByText('Chưa có tuyến chờ chạy thử')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: /Đã đạt\s*1/ }))
+    expect(await screen.findByText('Giữ kết quả từ bản 16/11 12:23')).toBeInTheDocument()
+    expect(screen.getByText('Chạy thử đạt')).toBeInTheDocument()
+  })
+
   it('asks for no run time and shows the estimated length instead', async () => {
     await openRouteTest()
     expect(screen.queryByLabelText(/Tổng thời gian chạy/)).not.toBeInTheDocument()

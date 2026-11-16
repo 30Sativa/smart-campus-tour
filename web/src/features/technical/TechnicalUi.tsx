@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { Check, CircleCheck, CircleX, Eye } from 'lucide-react'
 import { toneClass, type StatusTone } from '../../components/ui/status-tone'
@@ -132,10 +132,12 @@ export function SaveBlockedHint({ id, missing, lead = 'Chưa lưu được', ton
 }
 
 export function CheckRow({ checked, onChange, children }: { checked: boolean; onChange: (value: boolean) => void; children: ReactNode }) {
+  // Named by its text explicitly: some assistive tools read a wrapped checkbox by its value, "on".
+  const textId = useId()
   return (
     <label className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg border border-[#e2e8f0] px-3 text-[13px] text-[#334155] transition-colors hover:bg-[#fafcfe] has-[:checked]:border-[#cde9dc] has-[:checked]:bg-[#effbf5]">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="size-4 accent-[#1f7a55]" />
-      {children}
+      <input type="checkbox" aria-labelledby={textId} checked={checked} onChange={(event) => onChange(event.target.checked)} className="size-4 accent-[#1f7a55]" />
+      <span id={textId}>{children}</span>
     </label>
   )
 }
