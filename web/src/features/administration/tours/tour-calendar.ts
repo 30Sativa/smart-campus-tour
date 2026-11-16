@@ -23,8 +23,3 @@ export const campusShortStamp = (value: string) => `${campusShortDate(value)} ${
 export const dayStart =(day: string) => new Date(`${day}T00:00:00+07:00`).toISOString()
 export const dayEnd = (day: string) => new Date(`${day}T23:59:59.999+07:00`).toISOString()
 
-export function formatDuration(seconds: number) {
-  const minutes = Math.floor(seconds / 60)
-  const rest = seconds % 60
-  return minutes && rest ? `${minutes} phút ${rest} giây` : minutes ? `${minutes} phút` : `${rest} giây`
-}

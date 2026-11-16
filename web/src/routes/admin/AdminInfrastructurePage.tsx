@@ -7,6 +7,7 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import { KpiRow, KpiTile } from '../../components/ui/Charts'
+import { formatDuration } from '../../components/ui/date-time'
 import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, SkeletonRows } from '../../features/administration/AdminUi'
@@ -25,19 +26,6 @@ function formatBytes(bytes: number | null | undefined, decimals = 1): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`
 }
 
-function formatDuration(seconds: number | null | undefined): string {
-  if (!seconds || seconds < 0) return '0 giây'
-  const d = Math.floor(seconds / 86400)
-  const h = Math.floor((seconds % 86400) / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = Math.floor(seconds % 60)
-  const parts: string[] = []
-  if (d > 0) parts.push(`${d} ngày`)
-  if (h > 0) parts.push(`${h} giờ`)
-  if (m > 0) parts.push(`${m} phút`)
-  if (parts.length === 0 || s > 0) parts.push(`${s} giây`)
-  return parts.slice(0, 2).join(' ')
-}
 
 export default function AdminInfrastructurePage() {
   const [autoRefresh, setAutoRefresh] = useState(true)

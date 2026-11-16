@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  campusDateKey, formatDate, formatDateTime, formatDuration, formatDurationBetween, formatRelative, formatTime,
+  campusDateKey, expectedEndAt, formatDate, formatDateTime, formatDuration, formatDurationBetween, formatExpectedDuration, formatMinutesSeconds,
+  formatRelative, formatTime, roundedDurationSeconds,
   isoToDisplay, maskDateText, parseDisplayDate,
 } from './date-time'
 
@@ -69,6 +70,33 @@ describe('formatDuration', () => {
   it('measures between two instants', () => {
     expect(formatDurationBetween('2026-11-13T07:00:00Z', '2026-11-13T07:45:00Z')).toBe('45 phút')
     expect(formatDurationBetween('2026-11-13T07:00:00Z', null)).toBe('-')
+  })
+})
+
+describe('one expected-length rule (B3, same as TourSchedule.RoundedDurationSeconds)', () => {
+  it('rounds an expected length up to a whole minute', () => {
+    expect(roundedDurationSeconds(0)).toBe(0)
+    expect(roundedDurationSeconds(1)).toBe(60)
+    expect(roundedDurationSeconds(60)).toBe(60)
+    expect(roundedDurationSeconds(2349)).toBe(2400)
+    expect(formatExpectedDuration(2349)).toBe('40 phút') // 39 min 9 s
+    expect(formatExpectedDuration(189)).toBe('4 phút')
+    expect(formatExpectedDuration(6000)).toBe('100 phút')
+    expect(formatExpectedDuration(null)).toBe('-')
+  })
+
+  it('ends a Tour at its start plus the rounded length', () => {
+    // 3 min 9 s from 11:15 campus time: shown as 4 minutes, so it ends 11:19, not 11:18.
+    const end = expectedEndAt('2026-11-16T04:15:00Z', 189)
+    expect(end?.toISOString()).toBe('2026-11-16T04:19:00.000Z')
+    expect(formatTime(end)).toBe('11:19')
+  })
+
+  it('prints a dwell to the second', () => {
+    expect(formatMinutesSeconds(45)).toBe('45 giây')
+    expect(formatMinutesSeconds(1800)).toBe('30 phút')
+    expect(formatMinutesSeconds(330)).toBe('5 phút 30 giây')
+    expect(formatMinutesSeconds(null)).toBe('-')
   })
 })
 

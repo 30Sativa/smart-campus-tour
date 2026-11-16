@@ -7,6 +7,8 @@ import { AdminPage, Notice } from '../../../features/administration/AdminUi'
 import { expectedDurationText, passedAt, routeAvailabilityError, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
 import { campusShortDate, campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
+import { ShiftLengthWarning } from '../../../features/administration/routes/ShiftLengthWarning'
+import { formatMinutesSeconds } from '../../../components/ui/date-time'
 import { versionedRoutesApi, type VersionedRoute } from '../../../features/administration/routes/versioned-api'
 import { DeactivateRouteDialog } from '../../../features/administration/routes/DeactivateRouteDialog'
 import { RouteMap } from '../../../features/administration/routes/RouteMap'
@@ -47,7 +49,7 @@ function routeNotice(route: VersionedRoute, hasUnverifiedPoi: boolean): RouteNot
   return { tone: 'ok', text: 'Dùng được để tạo Tour. Khi tạo, hệ thống còn kiểm tra bản đồ, robot và ca.', createTour: true }
 }
 
-const formatDuration =(seconds: number) => seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
+const formatDuration = formatMinutesSeconds
 
 /**
  * The one line under the title: the route's state, with the day of the run that passed it. A passed current revision
@@ -126,6 +128,7 @@ export default function StaffManageRouteDetailsPage() {
         <div><dt className="text-xs text-[#64748b]">Tổng thời gian dừng</dt><dd className="mt-0.5">{formatDuration(value.dwellDurationSeconds)}</dd></div>
       </dl>
       {value.expectedDurationSeconds ? <p className="mt-3 text-[13px] text-[#334155]">{expectedDurationText(value.expectedDurationSeconds)}</p> : null}
+      <ShiftLengthWarning expectedSeconds={value.expectedDurationSeconds} />
     </section>
     <section className={`${panelClass} mt-4 p-4`} aria-label="Các điểm dừng">
       <h2 className="font-semibold">Các điểm dừng</h2>
