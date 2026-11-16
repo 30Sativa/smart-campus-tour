@@ -110,7 +110,7 @@ describe('Map version retirement', () => {
     expect(useToastStore.getState().toasts[0]?.title).toBe('Đã ngừng sử dụng Tầng 6 · tang-6 · phiên bản 2')
   })
 
-  it('names each blocker with a link to the robot, the waiting item or the Tour, and keeps confirm disabled', async () => {
+  it('names each blocker with a link to the robot, the waiting item or the Tour, and keeps the reason and confirm disabled', async () => {
     impact = {
       ...impact,
       assignedRobots: [{ robotId: 'robot-7', robotCode: 'amr_07' }],
@@ -125,7 +125,7 @@ describe('Map version retirement', () => {
     expect(within(blocked).getByRole('link', { name: 'Hội trường · phiên bản 2' })).toHaveAttribute('href', '/technical/poi-import')
     expect(within(blocked).getByRole('link', { name: 'Tuyến mới · phiên bản 1' })).toHaveAttribute('href', '/technical/confirmations')
     expect(within(blocked).getByRole('link', { name: 'Tour sáng' })).toHaveAttribute('href', '/staff/manage/tours/tour-9')
-    fireEvent.change(within(dialog).getByLabelText('Lý do ngừng sử dụng (bắt buộc)'), { target: { value: 'Quét lại' } })
+    expect(within(dialog).getByLabelText('Lý do ngừng sử dụng (bắt buộc)')).toBeDisabled()
     expect(within(dialog).getByRole('button', { name: 'Ngừng sử dụng' })).toBeDisabled()
   })
 
@@ -142,6 +142,7 @@ describe('Map version retirement', () => {
 
     expect(await within(dialog).findByText('Còn Tour đã lên lịch hoặc sẵn sàng dùng tuyến trên phiên bản này.')).toBeInTheDocument()
     expect(await within(dialog).findByRole('link', { name: 'Tour vừa tạo' })).toHaveAttribute('href', '/staff/manage/tours/tour-3')
+    expect(within(dialog).getByLabelText('Lý do ngừng sử dụng (bắt buộc)')).toBeDisabled()
     expect(within(dialog).getByRole('button', { name: 'Ngừng sử dụng' })).toBeDisabled()
   })
 

@@ -98,6 +98,36 @@ export function formatDuration(seconds: number | null | undefined): string {
   return hours % 24 ? `${days} ngày ${hours % 24} giờ` : `${days} ngày`
 }
 
+/**
+ * A Tour's or route's expected length, rounded UP to a whole minute: 39 min 9 s reads "40 phút".
+ * The backend (`TourSchedule.RoundedDurationSeconds`) applies the same rule, so every screen
+ * and every refusal message shows the same number.
+ */
+export function roundedDurationSeconds(seconds: number): number {
+  return seconds > 0 ? Math.ceil(seconds / 60) * 60 : 0
+}
+
+/** An expected length for people, in whole minutes as the backend writes it: "40 phút", "100 phút". `-` when unknown. */
+export function formatExpectedDuration(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return EMPTY
+  return `${roundedDurationSeconds(seconds) / 60} phút`
+}
+
+/** When a Tour starting at `start` is expected to end: the start plus the rounded length. */
+export function expectedEndAt(start: DateValue, seconds: number): Date | null {
+  const begin = toDate(start)
+  return begin ? new Date(begin.getTime() + roundedDurationSeconds(seconds) * 1000) : null
+}
+
+/** A dwell or a camera hold, to the second: "45 giây", "30 phút", "5 phút 30 giây". `-` when unknown. */
+export function formatMinutesSeconds(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return EMPTY
+  const total = Math.round(seconds)
+  const minutes = Math.floor(total / 60)
+  const rest = total % 60
+  return minutes && rest ? `${minutes} phút ${rest} giây` : minutes ? `${minutes} phút` : `${rest} giây`
+}
+
 /** The time between two instants, as `formatDuration`. `-` when either is missing or `to` is earlier. */
 export function formatDurationBetween(from: DateValue, to: DateValue): string {
   const start = toDate(from)

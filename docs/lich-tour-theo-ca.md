@@ -76,6 +76,10 @@ Trên form tạo/sửa tuyến:
 - Cột `MeasuredDurationSeconds` của `RouteTestRuns` và `TourRobotReservations` vẫn NOT NULL nên nhận cùng giá trị ước
   tính; `MeasurementBasis` vẫn ghi `TOTAL_WITH_DWELL` cho hợp CHECK nhưng không còn được đọc để xếp lịch. Hai cột này sẽ
   được dọn ở một phiên bản schema sau.
+- **Hiển thị và giờ kết thúc (16/11/2026):** thời lượng dự kiến luôn **làm tròn lên phút** (`TourSchedule.RoundedDurationSeconds`,
+  web `roundedDurationSeconds` trong `web/src/components/ui/date-time.ts`): tuyến 39 phút 9 giây ghi "40 phút" ở trang
+  tuyến, form tạo Tour, lịch và thông báo từ chối của máy chủ. Giờ kết thúc dự kiến = giờ bắt đầu + thời lượng đã làm tròn.
+  So với thời lượng tối đa của ca (luôn tròn phút) thì kết quả không đổi. Tổng thời gian dừng ghi "x phút y giây".
 
 Kiểm tra ở 3 chỗ:
 1. **Lưu tuyến:** tổng thời gian dừng vượt thời lượng tối đa của ca dài nhất thì trả 409 `ROUTE_TOO_LONG_FOR_SHIFT`.
@@ -104,8 +108,8 @@ Với ca bị khoá, danh sách ca trống hiện lý do `SHIFT_BLOCKED`, còn t
 | Endpoint | Role | Việc |
 |---|---|---|
 | `GET /api/staff/manage/tours/shifts?from=&to=` | Staff | Các ca của từng ngày kèm `block`, tối đa 31 ngày |
-| `GET /api/admin/schedule-blocks?from=&to=` | Admin | Cùng dạng response với `shifts` |
-| `POST /api/admin/schedule-blocks` | Admin | Khoá ngày (`shiftCode` null) hoặc khoá một ca; không khoá được ngày đã qua |
+| `GET /api/admin/schedule-blocks?from=&to=` | Admin | Cùng dạng response với `shifts`, thêm `tours` ở mỗi ca và mỗi ngày: các Tour chưa huỷ đang chiếm chỗ, đúng những Tour làm lệnh khoá bị từ chối |
+| `POST /api/admin/schedule-blocks` | Admin | Khoá ngày (`shiftCode` null) hoặc khoá một ca; không khoá được ngày đã qua hay ca đã kết thúc; ca đang diễn ra vẫn khoá được nếu không còn Tour |
 | `POST /api/admin/schedule-blocks/{id}/remove` | Admin | Gỡ khoá, kể cả khoá của ngày đã qua |
 
 ## 6. Mã lỗi và lý do mới
@@ -413,7 +417,7 @@ mục trên giữ nguyên.
   không chọn ca (`scheduledStartAt` để trống), không cần báo trước 72 giờ. Robot đang bận thì tạo báo lỗi kèm lý do.
 - **Hạn Start:** lúc tạo + `Tours:ShortNoticeMinLeadMinutes`, làm tròn lên phút. Mặc định 30 phút (đúng giá trị đã có trong
   `appsettings.json`); không còn công tắc bật/tắt. Hạn Start cũng là giờ ghi cho người xem.
-- **Giữ robot:** từ lúc tạo đến hạn Start + thời lượng tuyến + 15 phút. Vẫn kiểm tra trùng khung giữ robot của mọi Tour khác
+- **Giữ robot:** từ lúc tạo đến hạn Start + thời lượng tuyến (làm tròn lên phút, như mục 4) + 15 phút. Vẫn kiểm tra trùng khung giữ robot của mọi Tour khác
   (kể cả Tour theo ca), và bị từ chối nếu khung giữ chạm vào ngày hoặc ca Admin đã khoá. Tuyến không được dài hơn ca dài nhất.
 - **Luồng:** tạo → (đại diện trường đăng ký, Staff duyệt nếu có người xem) → chốt READY → **Start ngay**, không chờ tới giờ.
   Từ ADR-0057, Start không cần chờ đủ điểm xem vào phòng chờ: màn hình chỉ cảnh báo số điểm xem đã vào (X/Y), và sự kiện

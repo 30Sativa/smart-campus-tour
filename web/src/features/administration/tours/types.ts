@@ -131,8 +131,10 @@ export type TourSlots = {
   maxCapacity?: number
 }
 /** A configured shift on one day, for the calendar before a route or robot is chosen. */
-export type TourShift = { code: string; name: string; startsAt: string; endsAt: string; tourStartsAt: string; time: string; maxDurationSeconds: number; block: TourShiftBlock | null }
+/** `tours`: only the Admin schedule receives it, listing the Tours not cancelled that stop the shift or day being closed. */
+export type TourShift = { code: string; name: string; startsAt: string; endsAt: string; tourStartsAt: string; time: string; maxDurationSeconds: number; block: TourShiftBlock | null; tours?: TourShiftTour[] | null }
+export type TourShiftTour = { id: string; name: string; scheduledStartAt: string; state: TourState; isShortNotice: boolean; registrationClosesAt: string }
 /** An Admin closure of this shift; `scope` says whether it covers the whole day (docs/lich-tour-theo-ca.md §5). */
 export type TourShiftBlock = { id: string; scope: 'DAY' | 'SHIFT'; reason: string }
 /** `quickTourWaitMinutes`: how long a quick Tour waits to be started (ADR-0053). */
-export type TourShifts = { days: { date: string; shifts: TourShift[] }[]; recommendedMaxSeconds: number; quickTourWaitMinutes: number }
+export type TourShifts = { days: { date: string; shifts: TourShift[]; tours?: TourShiftTour[] | null }[]; recommendedMaxSeconds: number; quickTourWaitMinutes: number }

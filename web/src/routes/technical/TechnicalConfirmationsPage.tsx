@@ -4,14 +4,14 @@ import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../co
 import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
-import { dwellText, expectedDurationText, failedCheckNames, hasScheduledToursOnPath, resultSource, revisionTone, routeChanges, sharedResultLine } from '../../features/administration/routes/route-messages'
+import { expectedDurationText, failedCheckNames, hasScheduledToursOnPath, resultSource, revisionTone, routeChanges, sharedResultLine } from '../../features/administration/routes/route-messages'
 import { campusShortStamp } from '../../features/administration/tours/tour-calendar'
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
 import { CheckRow, ComputedResult, NoneChecked, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { errorText, robotNotReadyReason, routeTestErrors } from '../../features/technical/technical-format'
-import { formatDateTime } from '../../components/ui/date-time'
+import { formatDateTime, formatMinutesSeconds } from '../../components/ui/date-time'
 import { usePhysicalRobots, usePreviousRevision, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 
 type RouteFilter = 'pending' | 'passed' | 'failed'
@@ -82,7 +82,7 @@ export default function TechnicalConfirmationsPage() {
                   return <tr key={route.revisionId} className={rowClass}>
                   <td className={tdClass}><span className="font-semibold text-[#0f172a]">{route.name}</span><p className="text-[11.5px] text-[#64748b]">Phiên bản {route.revisionNumber}</p>{shared && <p className="mt-0.5 max-w-md text-[11.5px] text-[#8a5a06]">{shared}</p>}</td>
                   <td className={`${tdClass} font-mono text-xs`}>{route.mapKey}</td>
-                  <td className={`${tdClass} text-xs text-[#64748b]`}>{route.stops.length} điểm · dừng {dwellText(route.dwellDurationSeconds)}</td>
+                  <td className={`${tdClass} text-xs text-[#64748b]`}>{route.stops.length} điểm · dừng {formatMinutesSeconds(route.dwellDurationSeconds)}</td>
                   <td className={tdClass}><ToneBadge tone={rowFilter === 'passed' ? 'ok' : rowFilter === 'failed' ? 'danger' : 'warn'}>{revisionTone(true, route.verificationStatus).label}</ToneBadge>{source && <p className="mt-1 text-[11.5px] text-[#64748b]">Giữ kết quả từ bản {campusShortStamp(source.createdAt)}</p>}</td>
                   <td className={`${tdClass} text-right`}>{rowFilter === 'pending'
                     ? <button type="button" className={buttonClass('primary', 'sm')} aria-label={`Ghi kết quả ${route.name}`} onClick={() => setDialog({ view: 'record', route })}>Ghi kết quả</button>

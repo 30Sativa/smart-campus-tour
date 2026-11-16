@@ -67,8 +67,13 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
     ROUTE_TEST_PASSED: 'Chạy thử tuyến đạt', ROUTE_TEST_FAILED: 'Chạy thử tuyến không đạt',
     ROUTE_DEACTIVATED: 'Ngừng sử dụng tuyến', ROUTE_ACTIVATED: 'Mở lại tuyến',
   } },
+  // The old POI list (backend `Features/Pois`, before versioned POIs). Its own group and wording, so its on/off
+  // switch never reads like the versioned POI's "Ngưng dùng POI" / "Dùng lại POI" in the filter.
+  { label: 'POI danh sách cũ', actions: {
+    POI_CREATED: 'Tạo POI (danh sách cũ)', POI_UPDATED: 'Sửa POI (danh sách cũ)',
+    POI_ACTIVATED: 'Bật lại POI (danh sách cũ)', POI_DEACTIVATED: 'Tắt POI (danh sách cũ)',
+  } },
   { label: 'POI', actions: {
-    POI_CREATED: 'Tạo POI', POI_UPDATED: 'Sửa POI', POI_ACTIVATED: 'Mở lại POI', POI_DEACTIVATED: 'Ngừng dùng POI',
     POI_PROPOSAL_CREATED: 'Tạo đề xuất POI', POI_PROPOSAL_REVISION_CREATED: 'Tạo phiên bản POI', POI_PROPOSAL_SUBMITTED: 'Gửi kiểm chứng POI',
     POI_PROPOSAL_DISCARDED: 'Bỏ đề xuất POI', POI_PROPOSAL_RETIRED: 'Ngưng dùng POI', POI_PROPOSAL_REACTIVATED: 'Dùng lại POI', POI_TECHNICAL_VERIFIED: 'Kiểm chứng POI đạt', POI_TECHNICAL_REJECTED: 'Kiểm chứng POI không đạt',
     POI_POSE_IMPORT_COMPLETED: 'Nhập POI từ file', POI_POSE_CAPTURE_VERIFIED: 'Ghi nhận vị trí trực tiếp trên robot',
@@ -106,6 +111,19 @@ export const auditActionLabel = (action: string) => ACTION_LABELS[action] ?? 'Th
 export const isKnownAuditAction = (action: string) => Object.hasOwn(ACTION_LABELS, action)
 export const auditEntityLabel = (entityType: string) => ENTITY_LABELS[entityType] ?? 'Đối tượng khác'
 export const auditResult = (resultCode: string | null) => (resultCode ? RESULT_LABELS[resultCode] : undefined) ?? null
-/** Who did it: the account's name; a student's invitation step when there is no account; otherwise the system. */
-export const auditActorLabel = (entry: Pick<AuditLogEntry, 'action' | 'actorName'>) =>
-  entry.actorName ?? (STUDENT_INVITATION_ACTIONS.has(entry.action) ? 'Học sinh (lời mời)' : 'Hệ thống')
+/**
+ * Who did it: the system for its own auto-cancel (`SYSTEM_NO_START`), whatever the row carries; otherwise the account's
+ * name; a student's invitation step when there is no account; otherwise the system.
+ */
+export const auditActorLabel = (entry: Pick<AuditLogEntry, 'action' | 'actorName'> & { resultCode?: string | null }) =>
+  entry.resultCode === 'SYSTEM_NO_START' ? 'Hệ thống'
+    : entry.actorName ?? (STUDENT_INVITATION_ACTIONS.has(entry.action) ? 'Học sinh (lời mời)' : 'Hệ thống')
+
+/**
+ * What a row is about, under its kind: a route row names the route (and for a revision, such as a test run, when that
+ * revision was saved), so it never reads as the robot that ran it; otherwise the Tour, then the robot.
+ */
+export function auditTargetLabel(entry: Pick<AuditLogEntry, 'tourName' | 'robotCode' | 'routeName' | 'routeRevisionSavedAt'>, formatTime: (iso: string) => string): string | null {
+  if (entry.routeName) return entry.routeRevisionSavedAt ? `${entry.routeName} · bản lưu ${formatTime(entry.routeRevisionSavedAt)}` : entry.routeName
+  return entry.tourName ?? entry.robotCode
+}

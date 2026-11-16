@@ -48,7 +48,9 @@ public sealed class EfScheduleBlockRepository(ApplicationDbContext db) : ISchedu
                 ((t.ScheduledStartAt >= startsAt && t.ScheduledStartAt < endsAt) ||
                  t.TourRobotReservations.Any(r => r.ReleasedAt == null && r.StartsAt < endsAt && r.EndsAt > startsAt)))
             .OrderBy(t => t.ScheduledStartAt)
-            .Select(t => new ScheduleBlockingTour(t.Id, t.Name, t.ScheduledStartAt)).ToArrayAsync(ct);
+            .Select(t => new ScheduleBlockingTour(t.Id, t.Name, t.ScheduledStartAt, t.State, t.IsShortNotice,
+                t.TourRobotReservations.Where(r => r.ReleasedAt == null).Select(r => new ScheduleHold(r.StartsAt, r.EndsAt)).ToArray()))
+            .ToArrayAsync(ct);
 
     public void Add(TourScheduleBlock block) => db.TourScheduleBlocks.Add(block);
 

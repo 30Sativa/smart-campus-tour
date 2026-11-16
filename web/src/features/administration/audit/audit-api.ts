@@ -5,6 +5,8 @@ export type AuditLogEntry = {
   id: number; occurredAt: string; action: string; entityType: string; entityId: string
   actorUserId: string | null; actorName: string | null; tourId: string | null; tourName: string | null
   robotCode: string | null; resultCode: string | null
+  /** Route rows only: the route's name, and for a RouteRevision row when that revision was saved. Older servers omit them. */
+  routeName?: string | null; routeRevisionSavedAt?: string | null
 }
 /** `from`/`to` are campus days (yyyy-mm-dd, Asia/Ho_Chi_Minh), both inclusive. */
 export type AuditLogFilter = { action: string; actor: string; from: string; to: string; page: number }

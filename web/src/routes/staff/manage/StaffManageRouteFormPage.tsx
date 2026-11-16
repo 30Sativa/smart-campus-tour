@@ -21,6 +21,8 @@ import { routeChanges, saveResultText } from '../../../features/administration/r
 import { useRouteScheduledTours } from '../../../features/administration/routes/hooks'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
 import { RouteMap } from '../../../features/administration/routes/RouteMap'
+import { ShiftLengthWarning } from '../../../features/administration/routes/ShiftLengthWarning'
+import { formatMinutesSeconds } from '../../../components/ui/date-time'
 import { UnsavedChangesGuard } from '../../../features/administration/UnsavedChangesGuard'
 import { AFTER_SAVE } from '../../../features/administration/after-save'
 import { clearanceMessage, poseClearance, yawDegrees } from '../../../features/administration/pois/map/occupancy-grid'
@@ -42,8 +44,7 @@ const MIN_DWELL_SECONDS = 15
 const MAX_DWELL_SECONDS = 300
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y)
 const metres = (value: number) => value.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
-const durationText = (seconds: number) => seconds < 60 ? `${seconds} giây`
-  : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
+const durationText = formatMinutesSeconds
 type NearStop = { name: string; meters: number }
 /** A stop's POI revision as the route saved it, with the POI it belongs to when that POI is still listed. */
 type StopPoi = { id: string; name: string; x: number; y: number; yaw: number; cameraPreset: string; proposal: PoiProposal | null }
@@ -354,6 +355,7 @@ export default function StaffManageRouteFormPage() {
               endChoice === 'LAST_POI' ? 'Kết thúc tại điểm dừng cuối' : endChoice === 'START' ? 'Kết thúc tại điểm bắt đầu' : 'Kết thúc'].join(' → ')}</p>
             <p className="mt-1">Tổng thời gian dừng: <span className="font-semibold">{durationText(totalDwell)}</span></p>
             <p className="mt-1 text-xs text-[#64748b]">Thời lượng dự kiến được tự tính khi lưu, từ thời gian dừng và quãng đường.</p>
+            <ShiftLengthWarning expectedSeconds={totalDwell} />
           </ReviewRow>
         </dl>
         {pathChange && <div className="mt-3"><Notice tone={keepsResult && keptPass ? 'success' : 'warn'}>

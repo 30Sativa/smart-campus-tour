@@ -1,10 +1,11 @@
 import { ApiError, apiErrorDetail } from '../../../api/client'
+import { formatExpectedDuration } from '../../../components/ui/date-time'
 import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
 import type { RouteScheduledTour, RouteSharedResultRevision, RouteTestRun, VersionedRoute } from './versioned-api'
 import { campusShortStamp } from '../tours/tour-calendar'
 
-const fitMinutes = (seconds: number) => `${Math.ceil(seconds / 60)} phút`
+const fitMinutes = formatExpectedDuration
 
 /** The server estimates a route's length (dwell plus travel at a configured speed); nobody types it. */
 export const expectedDurationText = (seconds: number) => `Thời lượng dự kiến: ${fitMinutes(seconds)} (tự tính từ thời gian dừng và quãng đường)`
@@ -81,13 +82,6 @@ export function sharedResultLine(route: Pick<VersionedRoute, 'sharedResultRevisi
 /** Whether a FAIL here stops Tours: those on this save or on a save sharing its path. */
 export const hasScheduledToursOnPath = (route: Pick<VersionedRoute, 'sharedResultRevisions' | 'scheduledTours'>) =>
   Boolean(route.scheduledTours?.length || route.sharedResultRevisions?.some(save => save.scheduledTours.length))
-
-/**
- * "x phút y giây". `formatDuration` in components/ui/date-time.ts drops the seconds above a minute, which hides a 15 s
- * dwell change, so route screens keep this one until the shared formatter covers it.
- */
-export const dwellText = (seconds: number) =>
-  seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
 
 /**
  * What a save means for its run, after Staff saved or submitted it: it keeps the result of its path (only dwell or
