@@ -35,6 +35,13 @@ public sealed class EfAuthRepository(ApplicationDbContext dbContext) : IAuthRepo
             .SingleOrDefaultAsync(token => token.TokenHash == tokenHash, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<RefreshToken>> ListUnrevokedRefreshTokensAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.RefreshTokens
+            .Where(token => token.UserId == userId && token.RevokedAt == null)
+            .ToListAsync(cancellationToken);
+
     public void AddRefreshToken(RefreshToken refreshToken) =>
         dbContext.RefreshTokens.Add(refreshToken);
 }

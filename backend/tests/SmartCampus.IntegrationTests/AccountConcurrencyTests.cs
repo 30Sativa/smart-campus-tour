@@ -59,6 +59,23 @@ public sealed class AccountConcurrencyTests
     }
 
     [SchemaV11Fact]
+    public async Task SecondLogin_RevokesThePreviousSessionsRefreshToken()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(true, username: "single.staff", roles: ["STAFF"]);
+        await using var provider = Provider(database.ConnectionString);
+        var first = await Send(provider, new LoginCommand("single.staff", InitialAdminSeederTests.Password));
+        var second = await Send(provider, new LoginCommand("single.staff", InitialAdminSeederTests.Password));
+
+        await Assert.ThrowsAsync<UnauthorizedException>(() => Send(provider, new RefreshSessionQuery(first.RefreshToken)));
+        Assert.Equal(second.RefreshToken, (await Send(provider, new RefreshSessionQuery(second.RefreshToken))).RefreshToken);
+        await using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options);
+        var tokens = await db.RefreshTokens.AsNoTracking().ToListAsync();
+        Assert.Equal(2, tokens.Count);
+        Assert.Single(tokens, token => token.RevokedAt is null);
+    }
+
+    [SchemaV11Fact]
     public async Task ConcurrentAccountCreation_WithSameUsername_HasOneSuccessAndOneConflict()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -113,6 +130,7 @@ public sealed class AccountConcurrencyTests
         }
         public Task<User?> LockUserAsync(Guid id, CancellationToken ct = default) => inner.LockUserAsync(id, ct);
         public Task<RefreshToken?> FindRefreshTokenByHashAsync(byte[] hash, CancellationToken ct = default) => inner.FindRefreshTokenByHashAsync(hash, ct);
+        public Task<IReadOnlyList<RefreshToken>> ListUnrevokedRefreshTokensAsync(Guid id, CancellationToken ct = default) => inner.ListUnrevokedRefreshTokensAsync(id, ct);
         public void AddRefreshToken(RefreshToken token) => inner.AddRefreshToken(token);
     }
 }

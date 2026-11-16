@@ -16,5 +16,10 @@ public interface IAuthRepository
         byte[] tokenHash,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Tracked unrevoked tokens of a User whose root lock the caller already holds.</summary>
+    Task<IReadOnlyList<RefreshToken>> ListUnrevokedRefreshTokensAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
     void AddRefreshToken(RefreshToken refreshToken);
 }

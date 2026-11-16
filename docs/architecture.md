@@ -499,7 +499,7 @@ Integration instructions and separate frontend tasks:
 
 | Endpoint | Request and success | Rejection behavior |
 |---|---|---|
-| `POST /api/auth/login` | JSON `{ "username": "...", "password": "..." }`; HTTP 200 with `accessToken`, `userId`, `username`, and `role`, and sets the refresh cookie. | Invalid username (empty, over 100 characters, or containing whitespace): 400. Unknown username or incorrect password: 401. Inactive account or invalid role assignment: 403. |
+| `POST /api/auth/login` | JSON `{ "username": "...", "password": "..." }`; HTTP 200 with `accessToken`, `userId`, `username`, and `role`, and sets the refresh cookie. Revokes the account's earlier refresh tokens (one session per account). | Invalid username (empty, over 100 characters, or containing whitespace): 400. Unknown username or incorrect password: 401. Inactive account or invalid role assignment: 403. |
 | `POST /api/auth/refresh` | No body; reads the refresh cookie. HTTP 200 returns the same response fields and re-sets the same refresh token with its stored expiry. Tokens are not rotated. | Missing, unknown, expired, or revoked refresh token: 401. Inactive account or invalid role assignment: 403. Rejected refresh clears the cookie. |
 | `POST /api/auth/logout` | No body; HTTP 204 and clears the cookie. A matching stored token is marked revoked. Missing, unknown, or already revoked tokens are an idempotent no-op. | An unexpected persistence failure uses the common error response and still clears the cookie. |
 
@@ -545,7 +545,11 @@ ProblemDetails shape. Conflict responses that use a feature code expose
 `errors` as `{ code, fields }`; legacy generic conflicts keep `errors: null`
 for existing clients. Login failures do not create a refresh token. Login
 creates a cryptographically random refresh token and stores only its SHA-256
-hash in `RefreshTokens`; it lives for 7 days. Refresh does not rotate or mutate
+hash in `RefreshTokens`; it lives for 7 days. One session per account
+(2026-11-16): under the same User lock, a successful login revokes every
+earlier unrevoked refresh token of that account, so the previous browser's
+refresh returns 401 and it is signed out once its access token (at most 15
+minutes) expires; already-issued access tokens are not revoked early. Refresh does not rotate or mutate
 the stored token: it returns the same refresh token and stored expiry while
 issuing a new access token. Logout revokes a matching stored token. The cookie
 is named `campustour.refresh`, with `HttpOnly`, `Secure`, `SameSite=None`, and
