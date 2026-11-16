@@ -211,7 +211,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
           <Review label="Bắt đầu">{QUICK_TOUR_RULES.start.value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.start.note}</span></Review>
           <Review label="Hạn bắt đầu">{QUICK_TOUR_RULES.deadline(waitMinutes).value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.deadline(waitMinutes).note}</span></Review>
           {quickPreview && <>
-            <Review label="Thời lượng dự kiến">{formatDuration(quickPreview.expectedDurationSeconds)} (tự tính từ thời gian dừng và quãng đường)</Review>
+            <Review label="Thời lượng dự kiến">{formatExpectedDuration(quickPreview.expectedDurationSeconds)} (tự tính từ thời gian dừng và quãng đường)</Review>
             <Review label="Nếu tạo lúc này">Bắt đầu trước {formatTime(quickPreview.startBy)}, giữ robot {formatTime(quickPreview.holdStartsAt)} - {formatTime(quickPreview.holdEndsAt)}
               <span className="block text-xs text-muted">Giờ chính xác được tính lại lúc bấm Tạo Tour.</span></Review>
           </>}
