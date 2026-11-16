@@ -5,18 +5,30 @@ import { useAuthStore } from '../../../stores/auth-store'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { notify } from '../../../components/ui/toast-store'
 import { buttonClass } from '../../../components/ui/ui-classes'
+import { toneClass } from '../../../components/ui/status-tone'
 import { invitationsApi, type InvitationItem, type InvitationWrite } from './api'
 import { ConfirmationDialog as RepConfirmationDialog, Callout } from '../../representative/components/RepUi'
 import { repButton } from '../../representative/rep-classes'
+import { presenceSummary, time, viewerPresence } from './viewer-presence'
 
 const statusLabel = { NOT_REQUESTED: 'Chưa gửi', PENDING: 'Đang chờ gửi', ACCEPTED: 'Dịch vụ chấp nhận gửi', FAILED: 'Gửi thất bại', UNKNOWN: 'Chưa biết kết quả' }
-const time = (stamp: string) => new Date(stamp).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
 function message(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 409) return 'Dữ liệu hoặc quyền thao tác đã thay đổi. Tải lại trước khi tiếp tục; gửi lại cần cách nhau một phút.'
     if (error.status === 403 || error.status === 404) return 'Bạn không có quyền hỗ trợ đăng ký này.'
   }
   return 'Không xác nhận được kết quả. Thử lại cùng yêu cầu hoặc tải lại danh sách.'
+}
+function RepPresence({ item }: { item: InvitationItem }) {
+  const view = viewerPresence(item)
+  return view && <div className="rep-table-cell"><span className={`rep-badge rep-badge--${view.tone}`}>{view.label}</span>
+    {view.firstEntered && <p className="rep-hint num">{view.firstEntered}</p>}{view.hint && <p className="rep-hint">{view.hint}</p>}</div>
+}
+function ConsolePresence({ item }: { item: InvitationItem }) {
+  const view = viewerPresence(item)
+  return view && <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-600"><span>Người xem:</span>
+    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${toneClass[view.tone]}`}>{view.label}</span>
+    {view.firstEntered && <span>{view.firstEntered}</span>}{view.hint && <span className="basis-full">{view.hint}</span>}</p>
 }
 export function InvitationPanel({ registrationId, rowVersion, tourRowVersion, variant = 'console' }: { registrationId: string; rowVersion: string; tourRowVersion: string; variant?: 'console' | 'representative' }) {
   const owner = useAuthStore(s => s.user?.userId)
@@ -27,6 +39,8 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion, va
   const mutation = useMutation({ mutationFn: (write: InvitationWrite) => invitationsApi.write(registrationId, write),
     onSuccess: () => client.invalidateQueries({ queryKey: key }) })
   const [choice, setChoice] = useState<InvitationWrite | null>(null)
+  // Null when the backend predates viewer presence: the "Người xem" parts are then left out entirely.
+  const summary = query.data ? presenceSummary(query.data.items) : null
   const choose = (operation: InvitationWrite['operation'], item?: InvitationItem) => {
     mutation.reset()
     setChoice({ operation, invitationId: item?.id, requestId: crypto.randomUUID(),
@@ -46,10 +60,12 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion, va
       {!query.data.enabled && <p>Hỗ trợ lời mời chưa được bật. Liên hệ quản trị hệ thống.</p>}
       {query.data.canIssue && <div className="rep-inline-actions"><button type="button" className={repButton('primary')} disabled={mutation.isPending} onClick={() => choose('issue')}>Cấp và gửi lời mời</button></div>}
       {query.data.enabled && query.data.items.length === 0 && !query.data.canIssue && <p>Đăng ký này chưa có lời mời được cấp.</p>}
-      {query.data.items.length > 0 && <div className="rep-table-wrap"><table className="rep-table" aria-label="Lời mời và email"><thead><tr><th scope="col">Người nhận</th><th scope="col">Hiệu lực mã</th><th scope="col">Email lời mời</th><th scope="col">Thao tác</th></tr></thead><tbody>{query.data.items.map(item => <tr key={item.id}>
+      {summary && <p className="rep-hint num">{summary}</p>}
+      {query.data.items.length > 0 && <div className="rep-table-wrap"><table className="rep-table" aria-label="Lời mời và email"><thead><tr><th scope="col">Người nhận</th><th scope="col">Hiệu lực mã</th><th scope="col">Email lời mời</th>{summary && <th scope="col">Người xem</th>}<th scope="col">Thao tác</th></tr></thead><tbody>{query.data.items.map(item => <tr key={item.id}>
         <td data-label="Người nhận"><div className="rep-table-cell"><strong>{item.displayName}</strong><p className="rep-hint">{item.rowType === 'SHARED_VIEWING' ? 'Điểm xem chung' : 'Cá nhân'}</p><p className="rep-hint">{item.email}</p></div></td>
         <td data-label="Hiệu lực mã"><div className="rep-table-cell"><span className={`rep-badge rep-badge--${item.revokedAt || new Date(item.expiresAt) <= new Date() ? 'muted' : 'ok'}`}>{item.revokedAt ? 'Đã thu hồi mã' : new Date(item.expiresAt) <= new Date() ? 'Mã đã hết hạn' : 'Mã còn hiệu lực'}</span><p className="rep-hint num">Hạn: {time(item.expiresAt)}</p></div></td>
         <td data-label="Email lời mời"><span className={`rep-badge rep-badge--${item.emailStatus === 'FAILED' ? 'danger' : item.emailStatus === 'ACCEPTED' ? 'info' : 'muted'}`}>{statusLabel[item.emailStatus] ?? 'Chưa biết kết quả'}</span></td>
+        {summary && <td data-label="Người xem"><RepPresence item={item} /></td>}
         <td data-label="Thao tác"><div className="rep-stack"><button type="button" className={repButton('secondary', 'sm')} disabled={!item.canSend || mutation.isPending || query.isFetching} onClick={() => choose('resend', item)}>Gửi lại email</button><details className="rep-invitation-more"><summary>Thao tác khác</summary><div className="rep-stack"><button type="button" className={repButton('secondary', 'sm')} disabled={!item.canReissue || mutation.isPending || query.isFetching} onClick={() => choose('reissue', item)}>Thu hồi và cấp mã mới</button><button type="button" className={repButton('danger', 'sm')} disabled={!item.canRevoke || mutation.isPending || query.isFetching} onClick={() => choose('revoke', item)}>Thu hồi mã</button></div></details></div></td>
       </tr>)}</tbody></table></div>}
       {query.data.items.length > 0 && <p className="rep-hint">Gửi lại giữ nguyên mã và phiên đang xem. Cấp mã mới ngắt phiên cũ, giữ nguyên hạn. Dịch vụ chấp nhận gửi chưa xác nhận người nhận đã nhận thư.</p>}
@@ -72,12 +88,14 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion, va
       {!query.data.enabled && <p>Hỗ trợ lời mời chưa được bật. Liên hệ quản trị hệ thống.</p>}
       {query.data.canIssue && <button className={buttonClass('primary', 'sm')} disabled={mutation.isPending} onClick={() => choose('issue')}>Cấp và gửi lời mời</button>}
       {query.data.enabled && query.data.items.length === 0 && !query.data.canIssue && <p>Đăng ký này chưa có lời mời được cấp.</p>}
+      {summary && <p className="mt-3 text-[13px] text-slate-600">{summary}</p>}
       <div className="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200">{query.data.items.map(item => <article key={item.id} className="flex flex-col gap-2 p-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="font-medium text-slate-900">{item.displayName} <span className="text-xs text-slate-500">· {item.rowType === 'SHARED_VIEWING' ? 'Điểm xem chung' : 'Cá nhân'}</span></p>
           <p className="break-all text-sm text-slate-600">{item.email}</p>
           <p className="text-[13px] text-slate-600">{item.revokedAt ? 'Đã thu hồi mã' : new Date(item.expiresAt) <= new Date() ? 'Mã đã hết hạn' : 'Mã còn hiệu lực'} · Hạn: {time(item.expiresAt)}</p>
           <p className="text-[13px] font-medium text-slate-700">{statusLabel[item.emailStatus] ?? 'Chưa biết kết quả'}</p>
+          <ConsolePresence item={item} />
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <button className={buttonClass('secondary', 'sm')} disabled={!item.canSend || mutation.isPending || query.isFetching} onClick={() => choose('resend', item)}>Gửi lại email</button>

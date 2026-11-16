@@ -23,12 +23,38 @@ async function access(tourId: string, action: string, code?: string, signal?: Ab
     method: 'POST', credentials: 'include', auth: false, signal, ...(code ? { json: { accessCode: code } } : {}),
   })).data
 }
+const RECONNECT_WINDOW_EXPIRED = 'RECONNECT_WINDOW_EXPIRED'
+const IN_USE_FALLBACK = 'Lời mời đang được dùng trên browser khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
+/** A 409's code, message and `errors.fields.retryAfterSeconds` (docs/architecture.md §3.2.3). */
+function conflict(error: ApiError): { code?: string; message?: string; retryAfterSeconds?: number } {
+  try {
+    const body = JSON.parse(error.body) as { message?: unknown; errors?: { code?: unknown; fields?: { retryAfterSeconds?: unknown } } }
+    const seconds = Number(Array.isArray(body.errors?.fields?.retryAfterSeconds) ? body.errors.fields.retryAfterSeconds[0] : undefined)
+    return {
+      code: typeof body.errors?.code === 'string' ? body.errors.code : undefined,
+      message: typeof body.message === 'string' && body.message.trim() ? body.message : undefined,
+      retryAfterSeconds: Number.isFinite(seconds) && seconds > 0 ? seconds : undefined,
+    }
+  } catch { return {} }
+}
+const isReconnectWindowExpired = (error: unknown) =>
+  error instanceof ApiError && error.status === 409 && conflict(error).code === RECONNECT_WINDOW_EXPIRED
+function conflictMessage(error: ApiError) {
+  const { code, message, retryAfterSeconds } = conflict(error)
+  if (code === RECONNECT_WINDOW_EXPIRED) {
+    const text = message ?? 'Trình duyệt này đã mất kết nối quá lâu nên phiên cũ đang bị giữ. Nhờ đại diện hoặc Staff cấp mã mới để vào ngay.'
+    // The backend sentence may already name the wait; never say it twice.
+    if (!retryAfterSeconds || /thử lại sau/i.test(text)) return text
+    return `${text} Thử lại sau khoảng ${Math.max(1, Math.ceil(retryAfterSeconds / 60))} phút.`
+  }
+  return code === 'INVITATION_IN_USE' && message ? message : IN_USE_FALLBACK
+}
 function accessError(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 400) return 'Mã truy cập không hợp lệ. Kiểm tra mã trong email rồi thử lại.'
     if (error.status === 401) return 'Mã hoặc phiên đã hết hạn, bị thu hồi hoặc không thuộc Tour này.'
     if (error.status === 403) return 'Nguồn truy cập không được phép. Liên hệ quản trị hệ thống để kiểm tra cấu hình truy cập.'
-    if (error.status === 409) return 'Lời mời đang được dùng trên browser khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
+    if (error.status === 409) return conflictMessage(error)
     if (error.status === 429) return 'Bạn đã thử quá nhiều lần. Đợi một phút rồi thử lại.'
   }
   return 'Không kết nối được hệ thống. Vui lòng thử lại.'
@@ -68,7 +94,9 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
     retry: false, enabled: sessionEnabled, refetchIntervalInBackground: true,
     // SRS v1.9: a revoked or reissued invitation must stop playback within 10 s,
     // so a running Tour re-checks the session every 5 s.
-    refetchInterval: query => query.state.data?.tourState === 'RUNNING' ? SESSION_CHECK_RUNNING_MS : 30000 })
+    // A held old session answers the same 409 until its lease ends: wait for the viewer, never poll it.
+    refetchInterval: query => isReconnectWindowExpired(query.state.error) ? false
+      : query.state.data?.tourState === 'RUNNING' ? SESSION_CHECK_RUNNING_MS : 30000 })
   const sessionHash = hashKey(key)
   const [slow, setSlow] = useState(false)
   const [attempt, setAttempt] = useState(0)
