@@ -44,7 +44,9 @@ export function RegistrationDetailContent({ registrationId }: { registrationId: 
   const summary = { ...r.summary, rejectionReason: r.rejectionReason ?? r.summary.rejectionReason }
   const reviewExpired = isReviewExpired(summary)
   const tourCancelled = summary.tourState === 'CANCELLED'
-  const edit = r.allowedActions.edit.allowed ? r.allowedActions.edit : r.allowedActions.resubmit
+  // Resubmission is the rejected/cancelled path; any other locked record (READY included) is still an edit.
+  const resubmitMode = !r.allowedActions.edit.allowed && (r.allowedActions.resubmit.allowed || summary.state === 'REJECTED' || summary.state === 'CANCELLED')
+  const edit = resubmitMode ? r.allowedActions.resubmit : r.allowedActions.edit
   return <div className="rep-stack">
     <RepPageHeader title={summary.tourName} description={[groupLine(summary), summary.schoolName].filter(Boolean).join(', ')}
       badges={tourCancelled ? <RegistrationStatusBadge state={summary.state} tourState={summary.tourState} /> : <><RegistrationStatusBadge state={summary.state} rejectionReason={summary.rejectionReason} /><TourStateBadge state={summary.tourState} /></>} />
@@ -69,7 +71,7 @@ export function RegistrationDetailContent({ registrationId }: { registrationId: 
       ]} /></Panel>
       <p className="rep-hint">Mỗi dòng được duyệt riêng. <Link to={link('roster')} className="rep-text-link">Xem kết quả từng dòng</Link></p>
       <Panel title="Thao tác"><div className="rep-inline-actions">
-        {!tourCancelled && !reviewExpired && <GatedAction gate={edit} label={r.allowedActions.edit.allowed ? 'Sửa đăng ký' : 'Sửa và gửi lại'} to={`/dai-dien/dang-ky/${summary.id}/sua?${params}`} kind="secondary" />}
+        {!tourCancelled && !reviewExpired && <GatedAction gate={edit} label={resubmitMode ? 'Sửa và gửi lại' : 'Sửa đăng ký'} to={`/dai-dien/dang-ky/${summary.id}/sua?${params}`} kind="secondary" />}
         {!tourCancelled && <GatedAction gate={r.allowedActions.cancel} label="Hủy đăng ký" kind="danger" onClick={() => { setCancelConflict(false); setCancelError(null); setConfirm(r) }} />}
         <Link to={`/dai-dien/buoi/${summary.tourId}`} className={repButton('secondary')}>Xem buổi tham quan</Link>
       </div></Panel>

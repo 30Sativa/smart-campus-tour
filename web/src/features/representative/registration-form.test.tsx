@@ -136,3 +136,67 @@ describe('registration form live intent and version boundaries', () => {
     expect(writes).toHaveLength(1)
   })
 })
+
+function upload(body: string) {
+  const file = new File([body], 'roster.csv', { type: 'text/csv' })
+  Object.defineProperty(file, 'arrayBuffer', { value: async () => new TextEncoder().encode(body).buffer })
+  fireEvent.change(screen.getByLabelText('Chọn file Excel danh sách lời mời'), { target: { files: [file] } })
+}
+const csvHeader = 'LoaiDong,HoTen,Email,Lop\n'
+const csvLines = (count: number) => Array.from({ length: count }, (_, i) => `CA_NHAN,Người ${i + 1},p${i + 1}@example.test,10A1`).join('\n')
+
+describe('registration form roster capacity feedback (workflow B retest)', () => {
+  async function toRosterStep() {
+    fireEvent.change(await screen.findByLabelText(/Tên trường/), { target: { value: 'Trường mới' } })
+    fireEvent.change(screen.getByLabelText(/Tên đoàn/), { target: { value: 'Đoàn mới' } })
+    fireEvent.change(screen.getByLabelText(/Người liên hệ/), { target: { value: 'Liên hệ mới' } })
+    fireEvent.change(screen.getByLabelText(/Email liên hệ/), { target: { value: 'new@example.test' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    await screen.findByLabelText('Chọn file Excel danh sách lời mời')
+  }
+  it('flags an over-capacity file in its preview and clears the seat error once a fitting roster is confirmed', async () => {
+    tour.remainingSeats = 4
+    renderAt('/dai-dien/buoi/tour/dang-ky')
+    await toRosterStep()
+    upload(csvHeader + csvLines(5))
+    expect(await screen.findByText('Tệp đúng định dạng nhưng có 5 dòng, Tour chỉ còn 4 chỗ cho đoàn của bạn. Bớt dòng rồi chọn lại tệp.')).toBeInTheDocument()
+    expect(screen.queryByText(/Tệp hợp lệ/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận sử dụng danh sách này' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Danh sách có 5 dòng, nhưng Tour chỉ còn 4 chỗ')
+    upload(csvHeader + csvLines(3))
+    expect(await screen.findByText(/Tệp hợp lệ: 3 dòng lời mời/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận sử dụng danh sách này' }))
+    await waitFor(() => expect(screen.queryByText(/Danh sách có 5 dòng/)).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    const consent = await screen.findByRole('checkbox', { name: 'Tôi xác nhận có quyền cung cấp thông tin đăng ký và email lời mời trong danh sách này.' })
+    expect(consent).toHaveAttribute('aria-labelledby')
+  })
+  it('clears the seat error when the Representative drops the file just chosen', async () => {
+    tour.remainingSeats = 1
+    renderAt('/dai-dien/buoi/tour/dang-ky')
+    await toRosterStep()
+    upload(csvHeader + csvLines(2))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận sử dụng danh sách này' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Danh sách có 2 dòng')
+    upload(csvHeader + csvLines(1))
+    fireEvent.click(await screen.findByRole('button', { name: 'Bỏ tệp vừa chọn' }))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+  it('counts the seats this registration already holds when editing', async () => {
+    tour.remainingSeats = 1
+    renderAt('/dai-dien/dang-ky/registration/sua')
+    fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục' }))
+    await screen.findByLabelText('Chọn file Excel danh sách lời mời')
+    const kept = 'CA_NHAN,Người nhận,person@example.test,12A\n'
+    upload(csvHeader + kept + csvLines(2))
+    expect(await screen.findByText('Tệp đúng định dạng nhưng có 3 dòng, Tour chỉ còn 2 chỗ cho đoàn của bạn. Bớt dòng rồi chọn lại tệp.')).toBeInTheDocument()
+    upload(csvHeader + kept + csvLines(1))
+    expect(await screen.findByText(/Tệp hợp lệ: 2 dòng lời mời/)).toBeInTheDocument()
+  })
+  it('tells the Representative what stays editable after sending', async () => {
+    renderAt('/dai-dien/buoi/tour/dang-ky')
+    expect(await screen.findByText(/Sau khi gửi, bạn vẫn sửa được danh sách tới hạn thêm dòng\. Dòng đã duyệt muốn đổi email thì gửi yêu cầu đổi email\./)).toBeInTheDocument()
+  })
+})
