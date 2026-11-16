@@ -62,6 +62,16 @@ describe('roster import (flow review §4.2)', () => {
       ]))
     }
   })
+  it('names the row where a duplicated email first appeared', () => {
+    const result = rowsToRoster('ds.csv', parseCsv('LoaiDong,HoTen,Email,Lop\nCA_NHAN,An,an@example.com,10A\nCA_NHAN,Chi,chi@example.com,10A\nCA_NHAN,Binh,AN@EXAMPLE.COM,10A\nCA_NHAN,Dung,an@example.com,10A\n'))
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.issues).toEqual([
+        { row: 4, column: 'Email', message: 'Email trùng với dòng 2.' },
+        { row: 5, column: 'Email', message: 'Email trùng với dòng 2.' },
+      ])
+    }
+  })
   it('skips blanks, keeps identical names and accepts a shared-only group', () => {
     const result = rowsToRoster('ds.csv', parseCsv('﻿Loại dòng;Họ tên;Email;Lớp\r\nDIEM_XEM_CHUNG;Phòng A; ROOM@example.com ;\r\n;;;\r\nDIEM_XEM_CHUNG;Phòng A;other@example.com;\r\n'))
     expect(result.ok).toBe(true)
