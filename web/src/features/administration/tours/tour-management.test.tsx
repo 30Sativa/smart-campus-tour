@@ -331,7 +331,11 @@ describe('live Tour management', () => {
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).toHaveAccessibleDescription('Cần: chọn ngày, chọn ca.')
     pickDate()
     // Shifts only: no typed time any more (docs/lich-tour-theo-ca.md §3).
-    expect(await screen.findByRole('button', { name: /Ca sáng · 08:15-09:45 · Giữ robot 08:00-10:00/ })).toBeEnabled()
+    // The card is named by shift, Tour time and availability; the robot hold stays in its visible text.
+    const morning = await screen.findByRole('button', { name: 'Ca sáng 08:15–09:45, còn trống' })
+    expect(morning).toBeEnabled()
+    expect(morning).toHaveTextContent('Ca sáng · 08:15-09:45 · Giữ robot 08:00-10:00')
+    expect(screen.getByRole('button', { name: 'Ca chiều 1 13:15–14:45, Trùng khung giữ robot của Tour Tour chiều' })).toBeDisabled()
     expect(screen.getByText('Cần: chọn ca.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Giờ khác/ })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Ca sáng/ }))
@@ -529,7 +533,7 @@ describe('live Tour management', () => {
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour cũ' } })
     await chooseTarget()
     pickDate()
-    const locked = await screen.findByRole('button', { name: /Ca chiều 1 · 13:15-14:45/ })
+    const locked = await screen.findByRole('button', { name: /^Ca chiều 1 13:15–14:45, / })
     expect(locked).toBeDisabled()
     expect(locked).toHaveTextContent('Trùng khung giữ robot của Tour Tour chiều')
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
