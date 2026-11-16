@@ -16,8 +16,9 @@ export function viewerPresence(item: InvitationItem): PresenceView | null {
   const label = state === 'CONNECTED' ? 'Đang xem'
     : state === 'DISCONNECTED' ? `Mất kết nối${last}`
       : state === 'LEFT' ? `Đã rời${last}` : 'Chưa vào'
-  const hint = state === 'DISCONNECTED'
-    ? `Cấp mã mới để em vào lại ngay${item.sessionExpiresAt ? `, hoặc đợi tới ${time(item.sessionExpiresAt)}` : ''}.`
+  // Only suggest a new code when the backend says reissue is allowed right now.
+  const hint = state === 'DISCONNECTED' && item.canReissue
+    ? `Cấp mã mới để vào lại ngay${item.sessionExpiresAt ? `, hoặc đợi tới ${time(item.sessionExpiresAt)}` : ''}.`
     : undefined
   return { state, label, tone: tone[state], hint, ...(item.firstEnteredAt ? { firstEntered: `Vào lần đầu ${time(item.firstEnteredAt)}` } : {}) }
 }

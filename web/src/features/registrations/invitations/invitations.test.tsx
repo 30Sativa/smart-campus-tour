@@ -6,7 +6,7 @@ import { useToastStore } from '../../../components/ui/toast-store'
 import { InvitationPanel } from './InvitationPanel'
 import { StudentInvitationPage } from '../../student/invitation/StudentInvitationPage'
 import type { InvitationDetails } from './api'
-import { time } from './viewer-presence'
+import { time, viewerPresence } from './viewer-presence'
 
 let client: QueryClient
 const initial: InvitationDetails = { enabled: true, canIssue: false, items: [{
@@ -106,11 +106,11 @@ it.each(['console', 'representative'] as const)('shows viewer presence for each 
 
   const disconnected = within(rowOf('Em Bình', variant))
   expect(disconnected.getByText(`Mất kết nối · lần cuối ${time('2026-10-20T02:10:00Z')}`)).toBeInTheDocument()
-  expect(disconnected.getByText(`Cấp mã mới để em vào lại ngay, hoặc đợi tới ${time('2026-10-20T02:20:00Z')}.`)).toBeInTheDocument()
+  expect(disconnected.getByText(`Cấp mã mới để vào lại ngay, hoặc đợi tới ${time('2026-10-20T02:20:00Z')}.`)).toBeInTheDocument()
 
   const left = within(rowOf('Em Chi', variant))
   expect(left.getByText(`Đã rời · lần cuối ${time('2026-10-20T02:15:00Z')}`)).toBeInTheDocument()
-  expect(left.queryByText(/Cấp mã mới để em/)).not.toBeInTheDocument()
+  expect(left.queryByText(/Cấp mã mới để vào/)).not.toBeInTheDocument()
 
   const notEntered = within(rowOf('Em Dũng', variant))
   expect(notEntered.getByText('Chưa vào')).toBeInTheDocument()
@@ -134,4 +134,12 @@ it.each(['console', 'representative'] as const)('leaves out viewer presence when
   expect(screen.queryByText(/Người xem/)).not.toBeInTheDocument()
   expect(screen.queryByText(/đang xem ·/)).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Gửi lại email' })).toBeEnabled()
+})
+
+it('offers no new-code hint for a disconnected viewer when reissue is not allowed', () => {
+  const disconnected = withPresence.items[1]
+  expect(viewerPresence({ ...disconnected, canReissue: true })?.hint).toBe(`Cấp mã mới để vào lại ngay, hoặc đợi tới ${time('2026-10-20T02:20:00Z')}.`)
+  const view = viewerPresence({ ...disconnected, canReissue: false })
+  expect(view?.state).toBe('DISCONNECTED')
+  expect(view?.hint).toBeUndefined()
 })
