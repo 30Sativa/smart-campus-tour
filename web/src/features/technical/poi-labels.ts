@@ -4,13 +4,13 @@ import type { PoiNarrationSummary, PoiProposal } from './api/technical'
 
 /**
  * Staff-facing wording for a POI revision's lifecycle. The API speaks in
- * revisions, submit and PASS/FAIL; the screen speaks in drafts, "gửi kiểm
- * chứng" and Đạt/Không đạt.
+ * revisions, submit and PASS/FAIL; the screen speaks in "Phiên bản",
+ * "Chưa gửi kiểm", "gửi kiểm chứng" and Đạt/Không đạt.
  */
 export function poiStatus(revision: { navigationStatus: string; isSubmitted: boolean }): { label: string; tone: StatusTone } {
   if (revision.navigationStatus === 'PASS') return { label: 'Đạt', tone: 'ok' }
   if (revision.navigationStatus === 'FAIL') return { label: 'Không đạt · cần sửa', tone: 'danger' }
-  return revision.isSubmitted ? { label: 'Chờ kiểm chứng', tone: 'warn' } : { label: 'Bản nháp', tone: 'muted' }
+  return revision.isSubmitted ? { label: 'Chờ kiểm chứng', tone: 'warn' } : { label: 'Chưa gửi kiểm', tone: 'muted' }
 }
 
 export const verificationMethodLabel: Record<string, string> = { POSE_CAPTURE: 'Ghi pose trực tiếp trên robot', MANUAL_CHECK: 'Kiểm tra thủ công' }

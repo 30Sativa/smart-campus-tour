@@ -115,7 +115,10 @@ public sealed class GlobalExceptionHandler(
             Success = false,
             Message = message,
             Data = null,
-            Errors = errors
+            Errors = errors,
+            // A ValidationException thrown with only a message (no field failure) would otherwise lose it.
+            Detail = exception is ValidationException { Errors: var failures } && !failures.Any() &&
+                     !string.IsNullOrWhiteSpace(exception.Message) ? exception.Message : null
         };
 
         await httpContext.Response.WriteAsJsonAsync(response, cancellationToken);

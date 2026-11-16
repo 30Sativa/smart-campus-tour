@@ -8,6 +8,7 @@ import { useRoute, useRoutes } from '../routes/hooks'
 import { routeIssue } from '../routes/route-messages'
 import { mapAreaName } from '../map-labels'
 import { useMapVersions } from '../../technical/technical-hooks'
+import { SaveBlockedHint } from '../../technical/TechnicalUi'
 import type { TourInput } from './types'
 
 const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
@@ -39,6 +40,8 @@ export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = f
   const route = useRoute(fixedStops ? undefined : routeId || undefined)
   const maps = useMapVersions()
   const routeReady = Boolean(fixedStops || route.data)
+  // Why "Lưu" is off: the Route detail supplies the revision the API checks, so the button waits for it.
+  const routeMissing = routeReady ? [] : [!routeId ? 'chọn tuyến' : route.isError ? 'tải lại cấu hình tuyến' : 'chờ tải xong tuyến']
   const options = routes.data?.data.map(r => ({ id: r.id, name: `${r.name} · ${r.stopCount} điểm dừng` })) ?? []
   if (currentRoute && !options.some(o => o.id === currentRoute.id)) options.unshift({ id: currentRoute.id, name: `${currentRoute.name} (đang dùng)` })
   const scheduleChanged = schedule !== toLocalInput(initial?.scheduledStartAt)
@@ -76,9 +79,10 @@ export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = f
       <label className="block text-sm">Video dự phòng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
       {fixedStops ? <Notice tone="info">Muốn đổi lịch, tuyến hoặc robot, hãy hủy Tour rồi tạo lại; ở đây chỉ sửa được tên, mô tả và video.</Notice>
         : scheduleLocked && <Notice tone="info">Tour đã có đăng ký hoặc lịch sử nên lịch và tuyến bị khóa; chỉ sửa được tên, mô tả và video.</Notice>}
-      <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:justify-end">
+      <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:items-center sm:justify-end">
+        <SaveBlockedHint id="tour-form-missing" tone="neutral" lead="Cần" missing={busy ? [] : routeMissing} />
         <Link to={cancelTo} className={buttonClass('secondary')}>Hủy bỏ</Link>
-        <button type="submit" disabled={busy || !routeReady} className={buttonClass('primary')}>{busy ? 'Đang lưu…' : submitLabel}</button>
+        <button type="submit" disabled={busy || !routeReady} aria-describedby={!busy && !routeReady ? 'tour-form-missing' : undefined} className={buttonClass('primary')}>{busy ? 'Đang lưu…' : submitLabel}</button>
       </div>
     </fieldset>
 

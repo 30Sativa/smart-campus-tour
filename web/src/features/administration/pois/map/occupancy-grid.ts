@@ -49,12 +49,23 @@ export function headingFromPoints(from: RosPoint, to: RosPoint): number | null {
   return normalizeYaw(Math.atan2(to.y - from.y, to.x - from.x))
 }
 
-export function quantizePosition(point: RosPoint): RosPoint {
-  return { x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)) }
+/** Metres at the server's stored precision (4 decimals, PoiProposalRules.EnsurePersistedPrecision). */
+export function quantizeMeters(value: number): number {
+  return Number(value.toFixed(4))
 }
 
+export function quantizePosition(point: RosPoint): RosPoint {
+  return { x: quantizeMeters(point.x), y: quantizeMeters(point.y) }
+}
+
+/** Radians at the server's stored precision (6 decimals), normalised to (-π, π]. */
 export function quantizeYaw(yaw: number): number {
   return Number(normalizeYaw(yaw).toFixed(6))
+}
+
+/** A heading typed in degrees, as the radians the map click would store. */
+export function yawFromDegrees(degrees: number): number {
+  return quantizeYaw(degrees * Math.PI / 180)
 }
 
 /** Invert the actual SVG screen CTM, including viewBox letterboxing and pan/zoom. */

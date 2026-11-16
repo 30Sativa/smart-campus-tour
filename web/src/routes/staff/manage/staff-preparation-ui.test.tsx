@@ -274,7 +274,7 @@ describe('staff preparation UI', () => {
     proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), { ...draft, revision: { ...draft.revision, x: 3, y: 6, isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_CHECKED' } } as PoiProposal]
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     const before = (await screen.findByRole('img', { name: /với 2 POI/ })).getAttribute('viewBox')
-    fireEvent.click(screen.getByRole('button', { name: /^Bản nháp/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Chưa gửi kiểm/ }))
     const after = await screen.findByRole('img', { name: /với 1 POI/ })
     expect(after.getAttribute('viewBox')).toBe(before)
   })

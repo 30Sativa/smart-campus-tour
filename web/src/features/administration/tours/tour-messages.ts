@@ -11,10 +11,15 @@ export const TOUR_STATE_FILTER_LABEL: Record<TourState, string> = { ...TOUR_STAT
 export const REGISTRATION_CLOSED_LABEL = 'Đã đóng đăng ký'
 /** Backend `TourSchedule.RegistrationClose`; used only for a server that does not send `registrationClosesAt`. */
 const REGISTRATION_CLOSE_MS = 48 * 3600_000
-type TourTiming = Pick<TourSummary, 'state' | 'scheduledStartAt' | 'registrationClosesAt'>
+type TourTiming = Pick<TourSummary, 'state' | 'scheduledStartAt' | 'registrationClosesAt' | 'isShortNotice'>
 
-export const registrationClosesAtOf = (tour: Pick<TourTiming, 'scheduledStartAt' | 'registrationClosesAt'>) =>
-  tour.registrationClosesAt ? new Date(tour.registrationClosesAt).getTime() : new Date(tour.scheduledStartAt).getTime() - REGISTRATION_CLOSE_MS
+/**
+ * Backend `TourSchedule.RegistrationClosesAt`. The 48-hour fallback is only for a Tour on a shift: a quick Tour's
+ * registration stays open until its latest Start (`scheduledStartAt`), which is under 48 hours away from creation.
+ */
+export const registrationClosesAtOf = (tour: Pick<TourTiming, 'scheduledStartAt' | 'registrationClosesAt' | 'isShortNotice'>) =>
+  tour.registrationClosesAt ? new Date(tour.registrationClosesAt).getTime()
+    : new Date(tour.scheduledStartAt).getTime() - (tour.isShortNotice ? 0 : REGISTRATION_CLOSE_MS)
 
 /** Display only: a SCHEDULED Tour past the close of registration. The Tour's state does not change at this mark. */
 export const isRegistrationClosed = (tour: TourTiming, now: number) => tour.state === 'SCHEDULED' && now >= registrationClosesAtOf(tour)
@@ -74,7 +79,12 @@ export function openSeatsLabel(tour: { state: TourState; capacity?: number; held
   return tour.state === 'CANCELLED' || tour.state === 'COMPLETED' ? null : seatsLabel(tour)
 }
 
-export function tourError(error: unknown): string {
+/** A quick Tour has no shift, so a robot clash there speaks of the hold, not of "ca". */
+const QUICK_CONFLICTS: Record<string, string> = {
+  ROBOT_RESERVATION_CONFLICT: 'Robot đang được giữ cho Tour khác trong khoảng thời gian này. Chọn robot khác.',
+}
+
+export function tourError(error: unknown, context: { quick?: boolean } = {}): string {
   if (!(error instanceof ApiError)) return 'Không thể kết nối máy chủ. Hãy thử lại.'
   if (error.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
   if (error.status === 403) return 'Tài khoản không có quyền quản lý Tour.'
@@ -83,6 +93,7 @@ export function tourError(error: unknown): string {
   // ADR-0062: the server names the retired POIs ("Tuyến có POI đã ngưng dùng: {tên}. …"), so its wording is kept.
   if (error.status === 409 && code === 'ROUTE_HAS_RETIRED_POI')
     return backendMessage(error) ?? 'Tuyến có POI đã ngưng dùng. Lưu phiên bản tuyến mới không có POI này, hoặc dùng lại POI.'
+  if (error.status === 409 && code && context.quick && QUICK_CONFLICTS[code]) return QUICK_CONFLICTS[code]
   if (error.status === 409 && code && CONFLICTS[code]) return CONFLICTS[code]
   if (error.status === 400) {
     const messages = Object.values(body.errors ?? {}).flat().filter((v): v is string => typeof v === 'string')

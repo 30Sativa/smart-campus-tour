@@ -24,7 +24,7 @@ export function ToneBadge({ tone, children }: { tone: StatusTone; children: Reac
 
 const STATE_TONE: Record<TourState, StatusTone> = { SCHEDULED: 'info', READY: 'ok', RUNNING: 'info', COMPLETED: 'muted', CANCELLED: 'danger' }
 /** The Tour's own state, in the same words as Tour preparation. */
-export function TourStateBadge({ tour }: { tour: Pick<TourSummary, 'state' | 'scheduledStartAt' | 'registrationClosesAt'> }) {
+export function TourStateBadge({ tour }: { tour: Pick<TourSummary, 'state' | 'scheduledStartAt' | 'registrationClosesAt' | 'isShortNotice'> }) {
   const [now] = useState(() => Date.now())
   return <ToneBadge tone={STATE_TONE[tour.state] ?? 'muted'}>{tourStateLabel(tour, now) ?? 'Trạng thái khác'}</ToneBadge>
 }

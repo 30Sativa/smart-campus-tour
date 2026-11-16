@@ -1,4 +1,4 @@
-import { ApiError } from '../../../api/client'
+import { ApiError, apiErrorDetail } from '../../../api/client'
 import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
 import type { RouteScheduleFit, VersionedRoute } from './versioned-api'
@@ -67,6 +67,8 @@ export function routeError(error: unknown): string {
     ? 'Tuyến đã thay đổi. Nội dung đang nhập vẫn được giữ; tải lại trang để lấy phiên bản mới trước khi sửa tiếp.'
     : 'Tuyến đang được tham chiếu hoặc được Tour đã chốt sử dụng. Hãy tải lại; sao chép tuyến nếu cần đổi hành trình.'
   if (error.status === 400) {
+    const detail = apiErrorDetail(error)
+    if (detail) return detail
     const codes = Object.values(body.errors ?? {}).flat().filter((v): v is string => typeof v === 'string' && v in ISSUES)
     return codes.length ? [...new Set(codes)].map(routeIssue).join(' ') : 'Dữ liệu chưa hợp lệ. Kiểm tra tên, map, pose, điểm dừng và thời gian giữ góc nhìn.'
   }

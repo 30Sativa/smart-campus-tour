@@ -49,7 +49,7 @@ export default function StaffNarrationRehearsalPage() {
     .map(id => withNarration.find(p => p.id === id))
     .filter(p => p !== undefined)
     .map((p, index) => ({
-      order: index + 1, poiId: p.id, name: p.isDraft ? `${p.name} (Bản nháp)` : p.name, description: p.description ?? null,
+      order: index + 1, poiId: p.id, name: p.isDraft ? `${p.name} (Bản đang soạn)` : p.name, description: p.description ?? null,
       narrationText: p.text, audioUrl: null, narrationSeconds: null, dwellSeconds: 60,
     }))
 
@@ -92,10 +92,10 @@ export default function StaffNarrationRehearsalPage() {
               return <li key={p.id}><label className="inline-flex items-center gap-2 rounded-lg border border-[#e2e8f0] px-3 py-1.5 text-sm">
                 <input type="checkbox" checked={order >= 0} disabled={phase !== null} onChange={() => toggle(p.id)} />
                 {order >= 0 && <b>{order + 1}.</b>}{p.name}
-                {p.isDraft && <ToneBadge tone="warn">Bản nháp</ToneBadge>}
+                {p.isDraft && <ToneBadge tone="warn">Bản đang soạn</ToneBadge>}
               </label></li>
             })}</ul>}
-        <p className="mt-2 text-xs text-[#718096]">Mỗi điểm đọc bản thuyết minh đã duyệt; điểm chỉ có bản nháp đọc bản nháp và có nhãn “Bản nháp”. Bỏ chọn rồi chọn lại để đổi thứ tự. Bấm vào trang ít nhất một lần để trình duyệt cho phép phát tiếng.</p>
+        <p className="mt-2 text-xs text-[#718096]">Mỗi điểm đọc bản thuyết minh đã duyệt; điểm chỉ có bản đang soạn đọc bản đó và có nhãn “Bản đang soạn”. Bỏ chọn rồi chọn lại để đổi thứ tự. Bấm vào trang ít nhất một lần để trình duyệt cho phép phát tiếng.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className={buttonClass('primary', 'sm')} disabled={!stops.length || phase?.at === 'travelling' || finished}
             onClick={() => setPhase({ index: next, at: 'travelling' })}>

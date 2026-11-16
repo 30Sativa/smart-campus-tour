@@ -119,7 +119,9 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
         await db.Tours.AsNoTracking().Where(t => (t.RouteId == routeId || t.ActiveRouteId == routeId) &&
                 (t.State == "SCHEDULED" || t.State == "READY"))
             .OrderBy(t => t.ScheduledStartAt).ThenBy(t => t.Id)
-            .Select(t => new RouteScheduledTourView(t.Id, t.Name, t.ScheduledStartAt, t.State)).ToArrayAsync(ct);
+            .Select(t => new RouteScheduledTourView(t.Id, t.Name, t.ScheduledStartAt, t.State,
+                t.IsShortNotice ? t.ScheduledStartAt : t.ScheduledStartAt.AddHours(-Application.Features.Tours.TourSchedule.RegistrationCloseHours),
+                t.IsShortNotice)).ToArrayAsync(ct);
 
     public Task<AuditLog?> FindAvailabilityRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct) =>
         db.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.ActorUserId == actorUserId && a.CorrelationId == requestId &&

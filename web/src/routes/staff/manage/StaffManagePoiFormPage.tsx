@@ -1,21 +1,22 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, ChevronRight, CircleAlert, Info, MapPinned, MapPinOff } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, Info, MapPinned, MapPinOff } from 'lucide-react'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
 import { celebrate, notify } from '../../../components/ui/toast-store'
-import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
+import { technicalApi, type PoiProposal, type PoiRevision, type PoiVerification } from '../../../features/technical/api/technical'
 import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { mapCheckLabel, narrationHeadline, narrationStatus, navigationHeadline, routeUseLine, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { mapCheckLabel, narrationHeadline, narrationStatus, navigationHeadline, poiObservationLabels, routeUseLine, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { headPresetProblem } from '../../../features/technical/head-camera-preset'
 import { HeadCameraPresetField } from '../../../features/administration/pois/HeadCameraPresetField'
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
-import { clearanceMessage, poseClearance } from '../../../features/administration/pois/map/occupancy-grid'
+import { clearanceMessage, poseClearance, quantizeMeters, yawFromDegrees } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 import { UnsavedChangesGuard } from '../../../features/administration/UnsavedChangesGuard'
 import { AFTER_SAVE } from '../../../features/administration/after-save'
@@ -94,7 +95,26 @@ export default function StaffManagePoiFormPage() {
   const pose: PickerPose = { x: draft.x, y: draft.y, yaw: draft.yaw }
 
   const history = useQuery({ queryKey: ['technical', 'poi-history', poiId], queryFn: () => technicalApi.getPoiHistory(poiId!), enabled: Boolean(poiId) })
-  const update = (values: Partial<Draft>) => { setDraftOverride(value => ({ ...draft, ...value, ...values })); setError(null) }
+  const mapSectionRef = useRef<HTMLElement>(null)
+  // "Sent before": this revision or an earlier one went to Technical, so sending now is a re-check.
+  const sentBefore = Boolean(current) && (Boolean(current!.revision.isSubmitted) || passed || failed
+    || Boolean(history.data?.revisions.some(revision => revision.isSubmitted)) || Boolean(history.data?.verificationRecords.length))
+  // A PASS POI whose position, heading, camera and map are unchanged keeps its PASS on save, so it offers one button.
+  const keepsPass = Boolean(current) && passed && !navigationChanged
+  const failRecord = failed && current ? effectiveFailRecord(current.revision, history.data?.revisions ?? [], history.data?.verificationRecords ?? []) : null
+  const invalidatePoi = async (id: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposals'] }),
+      queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposal', id] }),
+      queryClient.invalidateQueries({ queryKey: ['technical', 'poi-history', id] }),
+    ])
+  }
+  const openPosition = () => {
+    setSearchParams(params => { const next = new URLSearchParams(params); next.set('tab', 'vi-tri'); return next })
+    // The panel is un-hidden on the next render; scroll once it is laid out.
+    setTimeout(() => mapSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 0)
+  }
+  const update =(values: Partial<Draft>) => { setDraftOverride(value => ({ ...draft, ...value, ...values })); setError(null) }
   const mutate = async (action: 'save' | 'submit') => {
     // Enter in a field submits the form even while Save is disabled.
     if ((action === 'save' && current && !changed) || (waiting && changed)) return
@@ -125,18 +145,20 @@ export default function StaffManagePoiFormPage() {
         result = result ? await technicalApi.revisePoiProposal(result.id, result, body) : await technicalApi.createPoiProposal(body)
         setSaved(result)
         setDraftOverride(null)
-        await queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposals'] })
+        await invalidatePoi(result.id)
       }
       if (action === 'submit') {
         result = await technicalApi.submitPoiProposal(result.id, result)
         setSaved(result)
-        await queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposals'] })
+        await invalidatePoi(result.id)
       }
       const submitted = action === 'submit'
-      if (created) celebrate({ title: `Đã tạo POI “${body.name}”`, detail: submitted ? 'Đã gửi kiểm chứng. POI dùng được cho tuyến khi kỹ thuật xác nhận đạt và thuyết minh được duyệt.' : 'Đã lưu bản nháp. Gửi kiểm chứng để kỹ thuật xác nhận đạt trước khi dùng cho tuyến.' })
+      if (created) celebrate({ title: `Đã tạo POI “${body.name}”`, detail: submitted ? 'Đã gửi kiểm chứng. POI dùng được cho tuyến khi kỹ thuật xác nhận đạt và thuyết minh được duyệt.' : 'Đã lưu, chưa gửi kiểm. Gửi kiểm chứng để kỹ thuật xác nhận đạt trước khi dùng cho tuyến.' })
       else notify(submitted
-        ? { title: `Đã gửi kiểm chứng POI “${body.name}”`, detail: 'Chờ kỹ thuật xác nhận. Gửi kiểm chứng chưa có nghĩa là đã đạt.' }
-        : { title: `Đã lưu POI “${body.name}”`, detail: 'Bản nháp; chưa gửi kiểm chứng.' })
+        ? { title: sentBefore ? `Đã gửi kiểm lại POI “${body.name}”` : `Đã gửi kiểm chứng POI “${body.name}”`, detail: 'Chờ kỹ thuật xác nhận. Gửi kiểm chứng chưa có nghĩa là đã đạt.' }
+        : { title: `Đã lưu POI “${body.name}”`, detail: keepsPass ? 'Vẫn đạt kiểm chứng, không cần kiểm lại.'
+          : failed && !navigationChanged ? 'Vẫn giữ kết quả không đạt. Sửa vị trí, hướng hoặc camera rồi gửi kiểm lại.'
+          : sentBefore ? 'Chưa gửi kiểm lại. Gửi kiểm lại khi sẵn sàng để kỹ thuật kiểm tra trên robot.' : 'Chưa gửi kiểm chứng.' })
       if (!poiId) navigate(`/staff/manage/pois/${result.id}`, { replace: true, ...AFTER_SAVE })
     } catch (cause) {
       setError(errorText(cause))
@@ -180,20 +202,20 @@ export default function StaffManagePoiFormPage() {
   ]
   // What Save and Send would do from here, in the server's terms; see navigationKey above.
   const outcome: { tone: 'ok' | 'info' | 'warn'; text: string } | null = !current
-    ? { tone: 'ok', text: 'Đủ thông tin. Lưu nháp, hoặc gửi để kỹ thuật kiểm tra trên robot.' }
+    ? { tone: 'ok', text: 'Đủ thông tin. Lưu rồi gửi kiểm sau, hoặc gửi ngay để kỹ thuật kiểm tra trên robot.' }
     : !changed
       ? passed ? { tone: narration?.approved ? 'ok' : 'info', text: passedText }
         : waiting ? { tone: 'info', text: 'Đang chờ kỹ thuật kiểm tra.' }
         : failed ? { tone: 'warn', text: current.revision.isSubmitted ? 'Kỹ thuật ghi không đạt. Sửa vị trí, hướng hoặc góc camera rồi gửi kiểm chứng lại.' : 'Kỹ thuật ghi không đạt cho vị trí này. Gửi kiểm chứng để kiểm tra lại.' }
-        : { tone: 'info', text: 'Bản nháp, chưa gửi kiểm chứng.' }
+        : { tone: 'info', text: 'Đã lưu, chưa gửi kiểm.' }
       : waiting ? { tone: 'warn', text: 'Đang chờ kỹ thuật kiểm tra nên chưa lưu được thay đổi. Chờ có kết quả rồi sửa tiếp.' }
       : navigationChanged
         ? passed ? { tone: 'warn', text: 'Lưu sẽ tạo bản mới và phải gửi kiểm chứng lại. Tuyến và Tour đang dùng bản cũ không bị ảnh hưởng.' }
           : failed ? { tone: 'info', text: 'Lưu sẽ tạo bản mới và phải gửi kiểm chứng lại.' }
-          : { tone: 'info', text: 'Lưu sẽ tạo bản nháp mới, chưa gửi kiểm chứng.' }
+          : { tone: 'info', text: 'Lưu sẽ tạo phiên bản mới, chưa gửi kiểm.' }
         : passed ? { tone: 'ok', text: 'Lưu sẽ tạo bản mới và giữ kết quả đạt.' }
           : failed ? { tone: 'warn', text: 'Lưu sẽ tạo bản mới. Vị trí, hướng và góc camera không đổi nên vẫn giữ kết quả không đạt.' }
-          : { tone: 'info', text: 'Lưu sẽ tạo bản nháp mới, chưa gửi kiểm chứng.' }
+          : { tone: 'info', text: 'Lưu sẽ tạo phiên bản mới, chưa gửi kiểm.' }
   const saveBlocked = Boolean(current) && (!changed || waiting)
   // Sending again adds nothing when the revision it would send is already submitted or already holds a PASS.
   const submitBlocked = Boolean(current) && (waiting || (!changed && (current!.revision.isSubmitted || passed)) || (changed && !navigationChanged && passed))
@@ -212,13 +234,15 @@ export default function StaffManagePoiFormPage() {
       <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="min-w-0 flex-1">POI này đã ngưng dùng. Tuyến và Tour đã lưu vẫn giữ điểm này, nhưng tuyến mới không chọn được. Trang chỉ để xem; dùng lại POI để sửa, gửi kiểm hoặc đổi thuyết minh.</span>
         {current.canReactivate && <button type="button" disabled={reactivate.isPending} className={buttonClass('secondary', 'sm')}
-          onClick={() => reactivate.mutate(current, { onSuccess: result => { setSaved(result); void queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposal', poiId] }) } })}>
+          onClick={() => reactivate.mutate(current, { onSuccess: result => { setSaved(result); void invalidatePoi(result.id) } })}>
           {reactivate.isPending ? 'Đang lưu…' : 'Dùng lại'}</button>}
       </span>
       {reactivate.error && <span role="alert" className="mt-1 block text-[#a4473d]">{errorText(reactivate.error)}</span>}
     </Notice></div>}
     {current?.discardedAt && <div className="mb-4"><Notice tone="warn">POI này đã bị xoá khỏi danh sách. Trang chỉ để xem.</Notice></div>}
     {current && <PoiHeadline proposal={current} />}
+    {current && failed && <PoiFailBanner record={failRecord} onFix={openPosition}
+      cameraPreset={history.data?.revisions.find(item => item.id === failRecord?.proposalRevisionId)?.cameraPreset ?? current.revision.cameraPreset} />}
     {current && <div role="tablist" aria-label="Phần của POI" className="mb-4 flex flex-wrap gap-1.5 border-b border-[#e2e8f0]">
       {TABS.map(([key, title]) => <button key={key} type="button" role="tab" id={`poi-tab-${key}`} aria-selected={tab === key} aria-controls={`poi-panel-${key}`}
         onClick={() => setSearchParams(params => { const next = new URLSearchParams(params); next.set('tab', key); return next })}
@@ -234,7 +258,7 @@ export default function StaffManagePoiFormPage() {
     <section className={`${card} mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-3.5`} aria-label="Bản đồ và tiến độ">
       <span className="text-sm text-[#718096]">Bản đồ</span>
       <select title="" id="poi-map" aria-label="Bản đồ" className={`min-h-10 min-w-56 rounded-xl border border-[#e2e8f0] bg-white px-3 text-sm font-semibold text-[#2d3748] ${focus}`} required value={draft.mapVersionId} onChange={event => { update({ mapVersionId: event.target.value, x: null, y: null, yaw: null }); setPoseMode('position') }}><option value="">— Chọn bản đồ —</option>{maps.data?.map(item => { const { map } = item; return <option key={map.id} value={map.id} disabled={!item.canUseForPoiPreparation}>{mapLabel(map, item.canUseForPoiPreparation ? null : mapCheckLabel(item.technicalCheckStatus))}</option> })}{selectedItem && !maps.data?.some(item => item.map.id === selectedItem.map.id) && <option value={selectedItem.map.id} disabled={!selectedItem.canUseForPoiPreparation}>{mapLabel(selectedItem.map, mapCheckLabel(selectedItem.technicalCheckStatus))}</option>}</select>
-      {selectedItem && selectedItem.currentlyDeployedOn.length > 0 && <span className="rounded-lg bg-[#edf3fc] px-2.5 py-1 text-xs font-medium text-[#3f62a0]">Robot kiểm tra đạt: {selectedItem.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}
+      {selectedItem && selectedItem.currentlyDeployedOn.length > 0 && <span className="rounded-lg bg-[#edf3fc] px-2.5 py-1 text-xs font-medium text-[#3f62a0]">Robot đang chạy bản đồ này: {selectedItem.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}
       <ol aria-label="Tiến độ" className="flex flex-wrap items-center gap-x-3 gap-y-2 xl:ml-auto xl:border-l xl:border-[#e2e8f0] xl:pl-4">
         {steps.map(([ok, done, todo], index) => (
           <li key={done} className="flex items-center gap-2 text-[13px]">
@@ -248,22 +272,17 @@ export default function StaffManagePoiFormPage() {
     {selectedItem?.technicalCheckStatus === 'PASSED' && selectedItem.currentlyDeployedOn.length === 0 && <div role="status" className="mb-4"><Notice tone="warn">Chưa có robot nào đang chạy bản đồ này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.</Notice></div>}
 
     <form id="poi-form" className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]" onSubmit={event => { event.preventDefault(); void mutate('save') }}>
-      <section className={`${card} min-w-0 p-5`} aria-label="Vị trí và hướng robot">
+      <section ref={mapSectionRef} className={`${card} min-w-0 scroll-mt-4 p-5`} aria-label="Vị trí và hướng robot">
         <h2 className="mb-3 text-lg font-bold text-[#2d3748]">Vị trí & hướng robot</h2>
         {mapError && <div role="alert" className="mb-3"><Notice tone="danger" action={<button type="button" onClick={retryMap} className={buttonClass('secondary', 'sm')}>Thử lại</button>}>{mapError}</Notice></div>}
         {pickerMap && selectedItem ? <PoiPosePicker map={pickerMap} pose={pose} editable={mapEligible} mode={mapEligible ? poseMode : 'pan'} onModeChange={setPoseMode} onPoseChange={value => update(value)} clearanceMeters={selectedItem.poiClearanceMeters} /> : <div className="grid min-h-[380px] place-items-center rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-5 text-center text-sm text-[#718096]"><div><MapPinned size={26} className="mx-auto mb-2 text-[#a0aec0]" aria-hidden="true" />{mapDetailsQuery.isError ? 'Không tải được bản đồ lịch sử.' : mapError ? 'Chưa tải được bản đồ.' : draft.mapVersionId ? 'Đang tải bản đồ…' : 'Chọn bản đồ ở trên để đặt vị trí điểm.'}</div></div>}
-        <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-          {([['X (m)', draft.x == null ? null : draft.x.toFixed(2), 'Chưa đặt'], ['Y (m)', draft.y == null ? null : draft.y.toFixed(2), 'Chưa đặt'], ['Hướng thân robot (rad)', draft.yaw == null ? null : draft.yaw.toFixed(3), 'Chưa chọn']] as const).map(([name, value, none]) => (
-            <div key={name} className="rounded-xl border border-[#e2e8f0] px-3.5 py-2.5">
-              <dt className="text-xs text-[#718096]">{name}</dt>
-              <dd className={`mt-1 rounded-lg bg-[#f8fafc] px-3 py-1.5 font-mono text-sm ${value == null ? 'text-[#a0aec0]' : 'font-semibold text-[#2d3748]'}`}>{value ?? none}</dd>
-            </div>
-          ))}
-        </dl>
-        <details className="group mt-3 rounded-xl border border-[#e2e8f0] text-sm">
-          <summary className={`flex cursor-pointer list-none items-center gap-2 rounded-xl px-3.5 py-2.5 font-medium text-[#2d3748] [&::-webkit-details-marker]:hidden ${focus}`}><ChevronRight size={15} aria-hidden="true" className="text-[#718096] transition-transform group-open:rotate-90" />Nhập tọa độ thủ công <span className="font-normal text-[#718096]">(không bắt buộc){placed && yawDeg != null ? ` · ${yawDeg}°` : ''}</span></summary>
-          <div className="grid gap-3 border-t border-[#e2e8f0] p-3.5 sm:grid-cols-3"><PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x })} /><PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y })} /><PoseNumberField label="Hướng (độ)" value={yawDeg} disabled={locked} change={deg => update({ yaw: deg == null ? null : deg * Math.PI / 180 })} /></div>
-        </details>
+        {/* One set of fields, synced both ways with the map: clicking the map fills them, typing moves the marker. */}
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x: x == null ? null : quantizeMeters(x) })} />
+          <PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y: y == null ? null : quantizeMeters(y) })} />
+          <PoseNumberField label="Hướng (độ)" value={yawDeg} disabled={locked} change={deg => update({ yaw: deg == null ? null : yawFromDegrees(deg) })}
+            hint={draft.yaw == null ? undefined : `= ${draft.yaw.toFixed(6)} rad`} />
+        </div>
         <div className="mt-5 space-y-2 border-t border-[#e2e8f0] pt-5">
           <h2 className="text-lg font-bold text-[#2d3748]">Camera & tư liệu</h2>
           <HeadCameraPresetField value={draft.cameraPreset} onChange={cameraPreset => update({ cameraPreset })} />
@@ -304,8 +323,13 @@ export default function StaffManagePoiFormPage() {
         </div>
         <p className="hidden text-xs text-[#a0aec0] xl:block">Lưu tạo bản mới; gửi kiểm chứng chưa phải kết quả đạt.</p>
         <Link to="/staff/manage/pois" className={buttonClass('secondary')}>Hủy bỏ</Link>
-        <button type="submit" form="poi-form" disabled={busy || locked || saveBlocked} aria-describedby={saveBlocked ? 'poi-outcome' : undefined} className={buttonClass('secondary')}>{busy ? 'Đang lưu…' : 'Lưu POI (chưa gửi kiểm)'}</button>
-        <button type="button" disabled={busy || locked || submitBlocked} aria-describedby={submitBlocked ? 'poi-outcome' : undefined} onClick={() => void mutate('submit')} className={buttonClass('primary')}>{busy ? 'Đang xử lý…' : 'Lưu và gửi kiểm chứng'}</button>
+        {/* A PASS POI whose navigation is unchanged keeps its PASS, so sending it again would add nothing. */}
+        {keepsPass
+          ? <button type="submit" form="poi-form" disabled={busy || locked || saveBlocked} aria-describedby={saveBlocked ? 'poi-outcome' : undefined} className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Lưu (giữ kết quả Đạt)'}</button>
+          : <>
+            <button type="submit" form="poi-form" disabled={busy || locked || saveBlocked} aria-describedby={saveBlocked ? 'poi-outcome' : undefined} className={buttonClass('secondary')}>{busy ? 'Đang lưu…' : 'Lưu, chưa gửi kiểm'}</button>
+            <button type="button" disabled={busy || locked || submitBlocked} aria-describedby={submitBlocked ? 'poi-outcome' : undefined} onClick={() => void mutate('submit')} className={buttonClass('primary')}>{busy ? 'Đang xử lý…' : sentBefore ? 'Lưu và gửi kiểm lại' : 'Lưu và gửi kiểm chứng'}</button>
+          </>}
       </div>
     </div>}
   </AdminPage>
@@ -333,6 +357,47 @@ function isMapEligibilityConflict(error: unknown) {
   } catch { return false }
 }
 
-function PoseNumberField({ label, value, disabled, change }: { label: string; value: number | null; disabled: boolean; change: (value: number | null) => void }) {
-  return <label className="text-sm">{label}<input type="number" disabled={disabled} className={`${inputClass} mt-1`} step="any" value={value ?? ''} onChange={event => change(event.target.value === '' ? null : globalThis.Number(event.target.value))} /></label>
+function PoseNumberField({ label, value, disabled, change, hint }: { label: string; value: number | null; disabled: boolean; change: (value: number | null) => void; hint?: string }) {
+  return <div className="text-sm">
+    <label>{label}<input type="number" disabled={disabled} className={`${inputClass} mt-1`} step="any" value={value ?? ''} onChange={event => change(event.target.value === '' ? null : globalThis.Number(event.target.value))} /></label>
+    {hint && <p className="mt-1 font-mono text-xs text-[#718096]">{hint}</p>}
+  </div>
+}
+
+/**
+ * The FAIL record in effect: the check of the revision whose result the current one carries
+ * (`verificationSourceRevisionId`, or itself), newest first. Without one, a FAIL of a revision with the same
+ * navigation fingerprint. The API returns records unordered, so they are sorted by `checkedAt`.
+ */
+function effectiveFailRecord(revision: PoiRevision, revisions: PoiRevision[], records: PoiVerification[]): PoiVerification | null {
+  const fails = records.filter(record => record.resultCode === 'FAIL').sort((a, b) => b.checkedAt.localeCompare(a.checkedAt))
+  const sourceId = revision.verificationSourceRevisionId ?? revision.id
+  const direct = fails.find(record => record.proposalRevisionId === sourceId || record.proposalRevisionId === revision.id)
+  if (direct) return direct
+  if (!revision.navigationFingerprint) return null
+  const sameFingerprint = new Set(revisions.filter(item => item.navigationFingerprint === revision.navigationFingerprint).map(item => item.id))
+  return fails.find(record => sameFingerprint.has(record.proposalRevisionId)) ?? null
+}
+
+const observationKeys = ['reached', 'stopped', 'localizationPassed', 'cameraPresetConfirmed'] as const
+
+/** Under the status strip on every tab while the result in effect is Không đạt: why, what failed, who and when. */
+function PoiFailBanner({ cameraPreset, record, onFix }: { cameraPreset: string; record: PoiVerification | null; onFix: () => void }) {
+  // The camera step names the action of the revision that was checked, as in the history tab.
+  const labels = poiObservationLabels(cameraPreset)
+  const failedSteps = record ? observationKeys.flatMap((key, index) => record[key] === false ? [labels[index]] : []) : []
+  return <section aria-label="Kết quả kiểm chứng không đạt" className="mb-4 rounded-[15px] border border-[#f1c9c3] bg-[#fbeeec] px-5 py-3.5 text-sm text-[#7f2f27]">
+    <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="flex items-center gap-2 font-semibold"><CircleAlert size={16} aria-hidden="true" className="shrink-0" />Kỹ thuật ghi không đạt</p>
+        <p>Lý do: {record?.reason?.trim() || 'Không ghi lý do.'}</p>
+        {failedSteps.length > 0 && <div>
+          <p>Không đạt ở:</p>
+          <ul aria-label="Bước không đạt" className="ml-5 list-disc">{failedSteps.map(step => <li key={step}>{step}</li>)}</ul>
+        </div>}
+        {record && <p className="text-xs text-[#a4473d]">Robot {record.robotCode} · ghi lúc {campusShortStamp(record.checkedAt)}</p>}
+      </div>
+      <button type="button" onClick={onFix} className={buttonClass('secondary', 'sm')}>Sửa vị trí</button>
+    </div>
+  </section>
 }

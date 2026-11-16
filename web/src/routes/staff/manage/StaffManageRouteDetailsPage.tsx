@@ -136,7 +136,7 @@ export default function StaffManageRouteDetailsPage() {
       <details className="mt-2 text-xs text-[#64748b]">
         <summary className="cursor-pointer">Thông tin kỹ thuật</summary>
         <p className="mt-2 break-all">Bản đồ {value.mapVersionId}</p>
-        <ul className="mt-2 space-y-2">{value.stops.map(stop => <li key={stop.poiRevisionId} className="break-all"><span className="font-medium text-[#334155]">{stop.stopOrder}. {stop.name}</span>: tọa độ {stop.x}, {stop.y}, {stop.yaw}. POI revision {stop.poiRevisionId}. Kết quả kiểm chứng {stop.sourcePoiVerificationRecordId}.</li>)}</ul>
+        <ul className="mt-2 space-y-2">{value.stops.map(stop => <li key={stop.poiRevisionId} className="break-all"><span className="font-medium text-[#334155]">{stop.stopOrder}. {stop.name}</span>: tọa độ {stop.x}, {stop.y}, {stop.yaw}. Bản lưu POI {stop.poiRevisionId}. Kết quả kiểm chứng {stop.sourcePoiVerificationRecordId}.</li>)}</ul>
       </details>
     </section>
     <details className={`${panelClass} mt-4 p-4`} aria-label="Lịch sử thay đổi">

@@ -20,6 +20,18 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The refusal's own explanation (`detail`) when the server sent one: a rule checked in a handler that names no
+ * field, which would otherwise reach the screen only as the generic "One or more validation errors occurred.".
+ */
+export function apiErrorDetail(error: unknown): string | null {
+  if (!(error instanceof ApiError) || !error.body) return null
+  try {
+    const detail = (JSON.parse(error.body) as { detail?: unknown }).detail
+    return typeof detail === 'string' && detail.trim() ? detail : null
+  } catch { return null }
+}
+
 /** Resolve an API path against the configured base URL. */
 export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`

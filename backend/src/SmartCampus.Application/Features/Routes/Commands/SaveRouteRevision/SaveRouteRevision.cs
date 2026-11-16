@@ -130,9 +130,9 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         EnsureWrittenPose(package, i.StartX, i.StartY, i.StartYaw, previous?.StartX, previous?.StartY);
         if (i.EndMode == "POSE")
         {
-            var endX = i.EndX ?? throw new ValidationException("End pose X is required.");
-            var endY = i.EndY ?? throw new ValidationException("End pose Y is required.");
-            var endYaw = i.EndYaw ?? throw new ValidationException("End pose yaw is required.");
+            var endX = i.EndX ?? throw new ValidationException("Cần nhập X của điểm kết thúc.");
+            var endY = i.EndY ?? throw new ValidationException("Cần nhập Y của điểm kết thúc.");
+            var endYaw = i.EndYaw ?? throw new ValidationException("Cần nhập hướng của điểm kết thúc.");
             EnsureWrittenPose(package, endX, endY, endYaw, previous?.EndX, previous?.EndY);
         }
 

@@ -94,8 +94,25 @@ describe('sending a new quick Tour to the Representative', () => {
     await act(async () => { fireEvent.click(within(block).getByRole('button', { name: 'Sao chép link' })) })
     expect(writeText).toHaveBeenCalledWith(link)
     expect(within(block).getByRole('button', { name: 'Đã sao chép' })).toBeInTheDocument()
+    // The steps stay folded under "Xem hướng dẫn" until Staff opens them.
+    const steps = within(block).getByRole('list', { name: 'Các bước tiếp theo', hidden: true })
+    expect(steps).not.toBeVisible()
+    fireEvent.click(within(block).getByText('Xem hướng dẫn'))
+    expect(steps).toBeVisible()
+    expect(within(steps).getAllByRole('listitem')).toHaveLength(4)
     expect(within(block).getByRole('link', { name: 'danh sách đăng ký của Tour' })).toHaveAttribute('href', '/staff/manage/registrations?tourId=tour-1')
-    expect(within(block).getAllByRole('listitem')).toHaveLength(4)
+  })
+
+  it('gives one line of guidance per state: the share panel for a quick Tour, the registration notice for a Tour on a shift', async () => {
+    current = detail('SCHEDULED', { isShortNotice: true })
+    const view = renderAt('/staff/manage/tours/tour-1')
+    await screen.findByRole('region', { name: 'Gửi cho đại diện' })
+    expect(screen.queryByText(/Đại diện trường đang thấy Tour này/)).not.toBeInTheDocument()
+    view.unmount()
+    current = detail('SCHEDULED', { scheduledStartAt: '2099-01-03T01:15:00Z' })
+    renderAt('/staff/manage/tours/tour-1')
+    expect(await screen.findByText(/Đại diện trường đang thấy Tour này/)).toBeInTheDocument()
+    expect(screen.queryByText('Xem hướng dẫn')).not.toBeInTheDocument()
   })
 
   it('selects the link for Ctrl+C when the browser has no clipboard', async () => {

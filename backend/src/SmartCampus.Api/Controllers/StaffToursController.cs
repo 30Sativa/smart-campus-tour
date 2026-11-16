@@ -68,9 +68,9 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
             Data = await sender.Send(new ListRouteTestParticipantsQuery(), ct) });
 
     [HttpGet("robots")]
-    public async Task<IActionResult> Robots([FromQuery] Guid routeRevisionId, CancellationToken ct) =>
+    public async Task<IActionResult> Robots([FromQuery] Guid routeRevisionId, [FromQuery] bool quick, CancellationToken ct) =>
         Ok(new BaseResponse<IReadOnlyList<TourRobotOption>> { Success = true, Message = "Tour robots retrieved.",
-            Data = await sender.Send(new ListTourRobotsQuery(routeRevisionId), ct) });
+            Data = await sender.Send(new ListTourRobotsQuery(routeRevisionId, quick), ct) });
 
     [HttpGet("slots")]
     public async Task<IActionResult> Slots([FromQuery] Guid routeRevisionId, [FromQuery] string robotCode,

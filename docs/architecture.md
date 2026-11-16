@@ -77,7 +77,7 @@ branch-request endpoint is implemented here.
 | POST | `/api/technical/physical-robots/{id}/dispatch` | `{requestId, expectedRowVersion, enabled, reason, evidenceRef}`; Technical Staff (ADR-0049). Turning off always works, even from a stale page. Turning on needs `evidenceRef` (the GATE A record), an active robot (`ROBOT_DEACTIVATED`) with a key (`ROBOT_CREDENTIAL_REQUIRED`), an assigned map (`ROBOT_MAP_REQUIRED`), a passing latest deployment check on that map (`ROBOT_DEPLOYMENT_CHECK_REQUIRED`) and no pending inspection (`ROBOT_NEEDS_INSPECTION`); `STALE_VERSION`. Audit `ROBOT_DISPATCH_CHANGED`; same `requestId` replays, other content is `IDEMPOTENCY_CONFLICT`. Returns `{robotId, isDispatchEnabled}`. It does not stop a robot already moving. The physical-robot list, the Technical dashboard and the robot diagnostics read return `isDispatchEnabled`. |
 | POST | `/api/staff/routes/{id}/deactivate` | Staff only. `{requestId, expectedRowVersion}`; `expectedRowVersion` is the route view's opaque `rowVersion`. Stops new Tours on a VERSIONED route (ADR-0037); returns `{routeId, isActive, scheduledTours}`. 409 `STALE_ROUTE` or `IDEMPOTENCY_CONFLICT`; 404 for a legacy or missing Route. |
 | POST | `/api/staff/routes/{id}/activate` | Same body and result. Only lifts the stop; Tour create still requires an effective PASS. |
-| GET | `/api/staff/routes/{id}/scheduled-tours` | Staff only. SCHEDULED/READY Tours on a VERSIONED route, shown before deactivating. |
+| GET | `/api/staff/routes/{id}/scheduled-tours` | Staff only. SCHEDULED/READY Tours on a VERSIONED route, shown before deactivating. Each row adds `registrationClosesAt` and `isShortNotice` (additive), so a quick Tour is not labelled by the 48-hour shift rule. |
 
 `configuration` is `{name, description?, routeId, scheduledStartAt,
 fallbackVideoUrl?}`. Name <=150, description <=1000, fallback URL <=1000 and
@@ -135,7 +135,10 @@ Errors use BaseResponse: 400 validation, 401/403 auth/role, 404 missing Tour/Rou
 409 STALE_VERSION, STALE_ROUTE, IDEMPOTENCY_CONFLICT, TOUR_LOCKED,
 TOUR_CONFIGURATION_LOCKED, ROUTE_VERSION_REQUIRED, ROUTE_UNAVAILABLE or
 TOUR_CONCURRENT_CHANGE. Data-valid/active configuration is not physical
-commissioning or readiness for robot operation.
+commissioning or readiness for robot operation. A 400 from a `ValidationException`
+that names no field (a rule checked in a handler, e.g. POI precision) also carries
+its own message in the additive top-level `detail` (omitted otherwise); `errors`
+stays the per-field map.
 
 ## Versioned Route authoring and legacy Tour read boundary
 
@@ -145,7 +148,9 @@ authoring uses `GET /api/routes`, `POST /api/staff/routes`, revision creation,
 submission and Technical Staff manual test evidence described in
 `backend/docs/route-revisions.md` and ADR-0023. Technical Staff picks the
 participating Staff account from the read-only
-`GET /api/technical/route-verifications/participants`. Route stops carry exact
+`GET /api/technical/route-verifications/participants`. A test run's
+`measuredDurationSeconds` must exceed the revision's dwell sum, for PASS and FAIL
+alike (409 `ROUTE_TEST_DURATION_TOO_SHORT`), since it sizes the Tour's robot hold. Route stops carry exact
 `PoiRevisionId` and the corresponding effective verification evidence; they do
 not pass legacy `PoiId` values. Each stop view (route revision reads and the Tour detail's
 `routeRevision.stops[]`) also returns its own `id`, the `RouteRevisionStops.Id` that Tour
@@ -883,7 +888,9 @@ Robot integrity (ADR-0039): map assignment returns `affectedTours` and 409
 `deactivatedAt`, `deactivationReason`; it also returns `needsInspection`, `currentTourId`, `currentTourName` and
 `currentTourState` (ADR-0043 D13) so the Technical robots page can offer release-inspection only for a
 held robot. Staff `GET /api/staff/manage/tours/robots?routeRevisionId=` lists
-robots with `usable` and `blockReason`; create and slots return 409 `ROBOT_NOT_READY_FOR_ROUTE`. Writers
+robots with `usable` and `blockReason`, plus read-only `needsInspection` (create still accepts such a robot;
+only the Start preflight refuses it). With `quick=true` each row also names `heldByTourName`/`heldUntil` when another
+Tour holds the robot over the hold a quick Tour created now would take (display only; create re-checks); create and slots return 409 `ROBOT_NOT_READY_FOR_ROUTE`. Writers
 refuse a deactivated robot with 409 `ROBOT_DEACTIVATED`.
 
 Project POI YAML templates/frame mapping, route revision/test tuple, scheduling/READY,

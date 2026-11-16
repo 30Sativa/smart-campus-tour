@@ -9,12 +9,13 @@ import { useAuthStore } from '../../../stores/auth-store'
 import { Notice } from '../AdminUi'
 import { passedAt, scheduleFitLabel } from '../routes/route-messages'
 import { useMapVersions } from '../../technical/technical-hooks'
+import { SaveBlockedHint } from '../../technical/TechnicalUi'
 import { useTestedRoutes, useTourOperators, useTourRobots, useTourShifts, useTourSlots } from './hooks'
 import { campusDay } from './tour-calendar'
 import { tourError } from './tour-messages'
 import type { VersionedRoute } from '../routes/versioned-api'
 import { QUICK_TOUR_RULES, tourKindOf, type TourKind } from './quick-tour'
-import type { CreateTourInput, TourSlot } from './types'
+import type { CreateTourInput, TourRobotOption, TourSlot } from './types'
 
 const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/
 /** When a shift's Tour must have ended: its start plus the most the shift holds. */
@@ -27,6 +28,17 @@ const RERUN_REASON = 'Cần chạy thử lại'
 /** Why this route cannot be chosen (docs/lich-tour-theo-ca.md §4); null when it can. UNKNOWN is a PASS measured the old way, which cannot size a shift. */
 const routeBlockReason = (route: VersionedRoute) =>
   route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? scheduleFitLabel(route)!.text : route.scheduleFit === 'UNKNOWN' ? RERUN_REASON : null
+
+/** A quick Tour holds its robot from now, so a robot another Tour holds over that hold cannot be chosen (create re-checks). */
+const robotPickable = (robot: TourRobotOption, quick: boolean) => robot.usable && !(quick && robot.heldByTourName)
+/**
+ * Why an option is off, or what it still needs. A robot waiting for its on-site check stays pickable: it may be
+ * released before the Tour starts, and only Start refuses it (robotNotNeedsInspection).
+ */
+const robotNote = (robot: TourRobotOption, quick: boolean) =>
+  robot.blockReason ? ` (${robot.blockReason})`
+    : quick && robot.heldByTourName ? ` (đang giữ cho Tour ${robot.heldByTourName}${robot.heldUntil ? ` tới ${formatTime(robot.heldUntil)}` : ''})`
+    : robot.needsInspection ? ' (chờ kiểm tra tại chỗ, phải trả robot trước khi bắt đầu)' : ''
 
 type CreateTourFormProps = {
   busy: boolean; error: string | null
@@ -57,14 +69,13 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const [video, setVideo] = useState('')
   const [capacity, setCapacity] = useState('20')
   const [quickReason, setQuickReason] = useState('')
-  const [clientError, setClientError] = useState('')
   const routes = useTestedRoutes()
   const linkedRouteId = params.get('route')
   const linkedRoute = linkedRouteId ? routes.data?.find(route => route.revisionId === linkedRouteId) : undefined
   const linkedUsable = linkedRoute != null && routeBlockReason(linkedRoute) === null
   const routeRevisionId = pickedRouteId ?? (linkedUsable ? linkedRoute.revisionId : '')
   const noRouteUsable = Boolean(routes.data?.length) && routes.data!.every(route => routeBlockReason(route) !== null)
-  const robots = useTourRobots(routeRevisionId)
+  const robots = useTourRobots(routeRevisionId, quick)
   const operators = useTourOperators()
   const operatorUserId = pickedOperatorId ?? (signedIn && operators.data?.some(person => person.userId === signedIn) ? signedIn : '')
   const slots = useTourSlots(routeRevisionId, robotCode, date, !quick)
@@ -79,15 +90,23 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   // Derived, so a shift that stops being free after a refresh drops out of the review by itself.
   const picked = day?.slots.find(item => item.shiftCode === shiftCode)
   const usable = picked?.available ? picked : undefined
-  const ready = Boolean(selected && robotCode && operatorUserId && (quick ? quickReason.trim() : usable))
+  // What still stops "Tạo Tour", in the order of the fields, shown beside the disabled button.
+  const missing = [
+    !name.trim() && 'nhập tên Tour',
+    quick && !quickReason.trim() && 'nhập lý do tạo gấp',
+    !selected && 'chọn tuyến',
+    !robotCode && 'chọn robot',
+    !operatorUserId && 'chọn người vận hành',
+    !quick && !date && 'chọn ngày',
+    !quick && !usable && (picked ? 'chọn ca còn trống' : 'chọn ca'),
+  ].filter((item): item is string => Boolean(item))
+  const ready = missing.length === 0
   const expected = slots.data?.expectedDurationSeconds
   const overRecommended = expected != null && slots.data != null && expected > slots.data.recommendedMaxSeconds
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (busy || !ready) return
-    if (!name.trim()) return setClientError('Nhập tên Tour.')
-    setClientError('')
     const common = { name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, fallbackVideoUrl: video.trim() || null, capacity: Number(capacity) }
     if (quick) onSubmit({ ...common, scheduledStartAt: null, shortNoticeReason: quickReason.trim() })
     else if (usable) onSubmit({ ...common, scheduledStartAt: usable.startsAt })
@@ -98,7 +117,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   return <form onSubmit={submit} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
     <fieldset disabled={busy} className={`${panelClass} space-y-4 p-4`}>
       <legend className="sr-only">Thông tin Tour</legend>
-      {(clientError || error) && <Notice tone="danger">{clientError || error}</Notice>}
+      {error && <Notice tone="danger">{error}</Notice>}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#f1f5f9] pb-3 text-[13px]">
         <KindPill short={quick} />
         <span className="text-muted">{quick ? QUICK_TOUR_RULES.summary : 'Trước giờ bắt đầu ít nhất 72 giờ'}</span>
@@ -128,11 +147,11 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
       </Notice>}
       <label className="block text-sm">Robot<select title="" required aria-label="Robot" className={inputClass} value={robotCode} disabled={!routeRevisionId || robots.isPending} onChange={e => setRobotCode(e.target.value)}>
         <option value="">Chọn robot vật lý</option>
-        {robots.data?.map(robot => <option key={robot.robotCode} value={robot.robotCode} disabled={!robot.usable}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}{robot.blockReason ? ` (${robot.blockReason})` : ''}</option>)}
+        {robots.data?.map(robot => <option key={robot.robotCode} value={robot.robotCode} disabled={!robotPickable(robot, quick)}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}{robotNote(robot, quick)}</option>)}
       </select>
         {robots.isError ? <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh sách robot.</span>
           : !routeRevisionId ? <span className="mt-1 block text-xs text-[#64748b]">Chọn tuyến trước để biết robot nào chạy được.</span>
-          : robots.data && !robots.data.some(robot => robot.usable) && <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có robot nào sẵn sàng cho tuyến này.</span>}</label>
+          : robots.data && !robots.data.some(robot => robotPickable(robot, quick)) && <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có robot nào sẵn sàng cho tuyến này.</span>}</label>
       <label className="block text-sm">Người vận hành<select title="" required aria-label="Người vận hành" className={inputClass} value={operatorUserId} disabled={operators.isPending} onChange={e => setPickedOperatorId(e.target.value)}>
         <option value="">Chọn Staff</option>
         {operators.data?.map(person => <option key={person.userId} value={person.userId}>{person.fullName} · {person.username}</option>)}
@@ -155,9 +174,10 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
       <label className="block text-sm">Sức chứa<input required type="number" min={1} max={slots.data?.maxCapacity ?? 20} step={1} className={inputClass} value={capacity} onChange={e => setCapacity(e.target.value)} />
         <span className="mt-1 block text-xs text-[#64748b]">Số dòng đăng ký tối đa của cả Tour. Mỗi điểm xem chung tính là 1 chỗ.</span></label>
       <label className="block text-sm">Video dự phòng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
-      <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:justify-end">
+      <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:items-center sm:justify-end">
+        <SaveBlockedHint id="create-tour-missing" tone="neutral" lead="Cần" missing={busy ? [] : missing} />
         <Link to="/staff/schedule" className={buttonClass('secondary')}>Hủy bỏ</Link>
-        <button type="submit" disabled={busy || !ready} className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Tạo Tour'}</button>
+        <button type="submit" disabled={busy || !ready} aria-describedby={!busy && !ready ? 'create-tour-missing' : undefined} className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Tạo Tour'}</button>
       </div>
     </fieldset>
 
