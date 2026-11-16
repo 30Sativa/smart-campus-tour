@@ -20,8 +20,6 @@ internal static class PoiNarrationRules
     public const string SelfApprovalForbiddenCode = "NARRATION_SELF_APPROVAL_FORBIDDEN";
     public const string NotDraftCode = "NARRATION_NOT_DRAFT";
     public const int MaxTextLength = 4000;
-    public const int MaxVideoUrlLength = 2048;
-
     /// <summary>The receipt and request-lock operation; one request id per user covers every narration operation.</summary>
     public const string LockOperation = "poi-narration";
 
@@ -29,15 +27,9 @@ internal static class PoiNarrationRules
     {
         rules.Must(request => !string.IsNullOrWhiteSpace(request.NarrationText) && request.NarrationText.Trim().Length <= MaxTextLength)
             .WithMessage($"Nội dung thuyết minh là bắt buộc và không quá {MaxTextLength} ký tự.");
-        rules.Must(request => request.FallbackVideoUrl is null || request.FallbackVideoUrl.Trim().Length <= MaxVideoUrlLength)
-            .WithMessage($"Đường dẫn video dự phòng không quá {MaxVideoUrlLength} ký tự.");
-        rules.Must(request => string.IsNullOrWhiteSpace(request.FallbackVideoUrl) ||
-                              Uri.TryCreate(request.FallbackVideoUrl.Trim(), UriKind.Absolute, out var uri) &&
-                              uri.Scheme == Uri.UriSchemeHttps && string.IsNullOrEmpty(uri.UserInfo))
-            .WithMessage("Video dự phòng phải là đường dẫn HTTPS.");
+        // `fallbackVideoUrl` is still accepted on the wire but ignored: no screen ever played a POI video. The Tour's own
+        // fallback video is the one students see. The column stays until a later schema drops it.
     }
-
-    public static string? CleanVideoUrl(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     public static void EnsureRowVersion(PoiNarrationRevision narration, string expectedRowVersion)
     {

@@ -34,7 +34,8 @@ public sealed class SavePoiNarrationDraftCommandHandler(
     {
         var request = command.Request;
         var text = request.NarrationText.Trim();
-        var videoUrl = PoiNarrationRules.CleanVideoUrl(request.FallbackVideoUrl);
+        // A POI narration carries no fallback video any more; the request field is ignored and the column kept NULL.
+        string? videoUrl = null;
         var requestHash = MapPoiRequestHash.Compute(new
         {
             Operation = "DRAFT", command.ProposalId, request.ExpectedRowVersion, text, videoUrl

@@ -32,7 +32,8 @@ public sealed class PoiNarrationApprovalSqlTests
         Assert.Equal(1, created.RevisionNumber);
         Assert.Equal(PoiNarrationStates.Draft, created.State);
         Assert.Equal("Bản đầu tiên.", created.NarrationText);
-        Assert.Equal("https://video.example.test/a", created.FallbackVideoUrl);
+        // A POI narration keeps no fallback video: the request field is ignored and the column stays NULL.
+        Assert.Null(created.FallbackVideoUrl);
         Assert.Equal(h.A, created.CreatedByUserId);
         Assert.Equal(h.A, created.LastEditedByUserId);
         Assert.Null(created.ApprovedByUserId);

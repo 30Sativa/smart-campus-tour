@@ -20,19 +20,15 @@ public sealed class PoiNarrationValidationTests
         Assert.False(validator.Validate(Command(new string('x', 4001))).IsValid);
     }
 
-    [Fact]
-    public void Fallback_video_is_optional_bounded_and_https_only()
-    {
-        var validator = new SavePoiNarrationDraftCommandValidator();
-        Assert.True(validator.Validate(Command(video: null)).IsValid);
-        Assert.True(validator.Validate(Command(video: "https://example.test/video")).IsValid);
-        Assert.False(validator.Validate(Command(video: "http://example.test/video")).IsValid);
-        Assert.False(validator.Validate(Command(video: "file:///tmp/video")).IsValid);
-        Assert.False(validator.Validate(Command(video: "https://user:secret@example.test/video")).IsValid);
-        var maxUrl = "https://example.test/" + new string('a', 2048 - "https://example.test/".Length);
-        Assert.True(validator.Validate(Command(video: maxUrl)).IsValid);
-        Assert.False(validator.Validate(Command(video: maxUrl + "a")).IsValid);
-    }
+    // A POI narration no longer has a fallback video (group H): the field is still accepted for older clients but
+    // ignored, so no value of it can make a draft invalid. The handler stores NULL (PoiNarrationApprovalSqlTests).
+    [Theory]
+    [InlineData(null)]
+    [InlineData("https://example.test/video")]
+    [InlineData("http://example.test/video")]
+    [InlineData("file:///tmp/video")]
+    public void Fallback_video_is_ignored_by_validation(string? video) =>
+        Assert.True(new SavePoiNarrationDraftCommandValidator().Validate(Command(video: video)).IsValid);
 
     [Fact]
     public void Draft_needs_a_request_id_and_state_changes_need_a_version()

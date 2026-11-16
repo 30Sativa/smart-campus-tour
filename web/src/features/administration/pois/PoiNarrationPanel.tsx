@@ -14,7 +14,8 @@ import { narrationDiff } from './narration-diff'
 const MAX_TEXT = 4000
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
 
-type Edit = { text: string; video: string }
+/** A POI narration has no fallback video any more (group H): only the Tour's own video is ever shown to students. */
+type Edit = { text: string }
 
 /**
  * A POI's narration, separate from its navigation revisions (ADR-0060), in three parts that never share a button row:
@@ -42,15 +43,14 @@ export function PoiNarrationPanel({ proposal }: { proposal: PoiProposal }) {
   // A discarded or retired POI (ADR-0051, ADR-0062) takes no narration write; the server refuses one too.
   const readOnly = Boolean(proposal.discardedAt || proposal.retiredAt)
   // The form shows the draft, or the approved text copied into a new version, or an empty first draft.
-  const base: Edit = draft ? { text: draft.narrationText, video: draft.fallbackVideoUrl ?? '' }
-    : composing && approved ? { text: approved.narrationText, video: approved.fallbackVideoUrl ?? '' }
-    : { text: '', video: '' }
+  const base: Edit = draft ? { text: draft.narrationText }
+    : composing && approved ? { text: approved.narrationText }
+    : { text: '' }
   const value = edit ?? base
   const editorOpen = !readOnly && (Boolean(draft) || composing || !approved)
-  const changed = value.text.trim() !== base.text.trim() || value.video.trim() !== base.video.trim()
-  const videoProblem = value.video.trim() && !/^https:\/\/\S+$/i.test(value.video.trim()) ? 'Video dự phòng phải là đường dẫn HTTPS.' : null
+  const changed = value.text.trim() !== base.text.trim()
   // A new version needs no change: copying the approved text and saving is how wording gets reworked.
-  const canSave = !save.isPending && Boolean(value.text.trim()) && !videoProblem && (draft ? changed : true)
+  const canSave = !save.isPending && Boolean(value.text.trim()) && (draft ? changed : true)
   const selfLastEditor = Boolean(draft && userId && draft.lastEditedByUserId === userId)
   const busy = save.isPending || approve.isPending || discard.isPending
 
@@ -60,7 +60,7 @@ export function PoiNarrationPanel({ proposal }: { proposal: PoiProposal }) {
   const saveDraft = () => {
     if (!canSave) return
     setError(null)
-    save.mutate({ proposalId: proposal.id, expectedRowVersion: draft?.rowVersion, narrationText: value.text.trim(), fallbackVideoUrl: value.video.trim() || null },
+    save.mutate({ proposalId: proposal.id, expectedRowVersion: draft?.rowVersion, narrationText: value.text.trim(), fallbackVideoUrl: null },
       { onSuccess: reset, onError: fail })
   }
   const decide = (kind: 'approve' | 'discard', target: PoiNarrationRevision) => {
@@ -98,7 +98,6 @@ export function PoiNarrationPanel({ proposal }: { proposal: PoiProposal }) {
             <span className="text-xs text-[#64748b]">Duyệt bởi {approved.approvedByName} lúc {approved.approvedAt ? campusShortStamp(approved.approvedAt) : '-'}</span>
           </div>
           <p className="mt-2 text-sm whitespace-pre-wrap text-[#2d3748]">{approved.narrationText}</p>
-          {approved.fallbackVideoUrl && <p className="mt-2 text-xs break-all text-[#64748b]">Video dự phòng: {approved.fallbackVideoUrl}</p>}
           <div className="mt-3 flex flex-wrap gap-2">
             {listenButton(approved.narrationText, 'approved')}
             {!draft && !composing && !readOnly && <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => { setComposing(true); setEdit(null); setError(null) }}><FilePlus2 size={14} aria-hidden="true" />Soạn phiên bản mới</button>}
@@ -119,13 +118,6 @@ export function PoiNarrationPanel({ proposal }: { proposal: PoiProposal }) {
               {listenButton(value.text, 'editor')}
               <span className="ml-auto text-xs text-[#718096] tabular-nums">{value.text.length}/{MAX_TEXT}</span>
             </div>
-            <details className="mt-3 rounded-lg border border-[#eef2f6] px-3 py-2" open={Boolean(value.video) || undefined}>
-              <summary className="cursor-pointer text-sm font-medium text-[#475569]">Tùy chọn</summary>
-              <label className="mt-2 block text-sm font-medium text-[#2d3748]" htmlFor="narration-video">Video dự phòng HTTPS <span className="font-normal text-[#718096]">(không bắt buộc)</span></label>
-              <input id="narration-video" type="url" className={`${inputClass} mt-1.5`} maxLength={2048} value={value.video} aria-invalid={Boolean(videoProblem)}
-                onChange={event => { setEdit({ ...value, video: event.target.value }); setError(null) }} placeholder="https://…" />
-              {videoProblem && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{videoProblem}</p>}
-            </details>
           </div>
           <div className="flex flex-wrap items-center gap-2 border-t border-[#eef2f6] bg-[#fafbfc] px-4 py-3">
             <button type="button" className={buttonClass('primary', 'sm')} disabled={!canSave} onClick={saveDraft}>{save.isPending ? 'Đang lưu…' : 'Lưu bản đang soạn'}</button>
@@ -142,7 +134,6 @@ export function PoiNarrationPanel({ proposal }: { proposal: PoiProposal }) {
       description="Tuyến lưu từ bây giờ sẽ dùng nội dung này. Tuyến và Tour đã có vẫn giữ nội dung cũ."
       onConfirm={() => decide('approve', draft)} onCancel={() => setConfirm(null)}>
       <div className="max-h-64 overflow-y-auto rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm whitespace-pre-wrap text-[#2d3748]">{draft.narrationText}</div>
-      {draft.fallbackVideoUrl && <p className="mt-2 text-xs break-all text-[#64748b]">Video dự phòng: {draft.fallbackVideoUrl}</p>}
     </ConfirmationDialog>}
     {draft && <ConfirmationDialog open={confirm === 'discard'} tone="danger" title="Bỏ bản đang soạn" withReason={false} confirmLabel="Bỏ bản này" busyLabel="Đang bỏ…" busy={discard.isPending}
       description={approved ? 'Bản đang dùng vẫn được dùng. Bản đang soạn này được giữ trong lịch sử.' : 'POI sẽ chưa có thuyết minh. Bản đang soạn này được giữ trong lịch sử.'}
@@ -166,7 +157,6 @@ function ApprovalBox({ draft, approved, selfLastEditor, unsaved, busy, onApprove
             : part.kind === 'removed' ? <del key={index} className="rounded bg-[#fde2e1] text-[#a4473d]">{part.text}</del>
             : <span key={index}>{part.text}</span>)}
         </p>
-        {(approved?.fallbackVideoUrl ?? null) !== draft.fallbackVideoUrl && <p className="mt-2 text-xs break-all text-[#64748b]">Video dự phòng đổi thành: {draft.fallbackVideoUrl ?? 'không có'}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" className={buttonClass('primary', 'sm')} disabled={busy || unsaved} aria-describedby={unsaved ? 'narration-unsaved' : undefined} onClick={onApprove}>
             <Check size={14} aria-hidden="true" />Duyệt phiên bản {draft.revisionNumber}</button>

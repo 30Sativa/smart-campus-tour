@@ -175,7 +175,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                 HeadStepsJson = Route.WriteHeadSteps(i.Stops[index].HeadSteps), Name = selected.Revision.Name,
                 NarrationRevisionId = narrationByProposal[selected.Revision.ProposalId].Id,
                 NarrationText = narrationByProposal[selected.Revision.ProposalId].NarrationText,
-                FallbackVideoUrl = narrationByProposal[selected.Revision.ProposalId].FallbackVideoUrl,
+                // Not copied from the narration any more: no screen plays a stop video; the Tour has its own.
+                FallbackVideoUrl = null,
                 X = selected.Revision.X, Y = selected.Revision.Y, Yaw = selected.Revision.Yaw, CameraPreset = selected.Revision.CameraPreset });
         }
         repo.AddAudit(new AuditLog { ActorUserId = c.ActorUserId, Action = "ROUTE_REVISION_CREATED", EntityType = "RouteRevision",
@@ -203,7 +204,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                 return new RouteRevisionStopView(stopIds[index], selected.Revision.Id, selected.Verification.Id, index + 1, s.DwellSeconds,
                     s.HeadSteps, selected.Revision.Name, selected.Revision.X, selected.Revision.Y, selected.Revision.Yaw,
                     selected.Revision.CameraPreset, narrationByProposal[selected.Revision.ProposalId].NarrationText,
-                    narrationByProposal[selected.Revision.ProposalId].FallbackVideoUrl, selected.Revision.ProposalId);
+                    null, selected.Revision.ProposalId);
             }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
                 inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], [],
