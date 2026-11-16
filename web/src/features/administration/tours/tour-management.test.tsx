@@ -3,6 +3,7 @@ import { tourError } from './tour-messages'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useToastStore } from '../../../components/ui/toast-store'
+import { formatDuration, formatTime } from '../../../components/ui/date-time'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageTourCreatePage from '../../../routes/staff/manage/StaffManageTourCreatePage'
@@ -411,6 +412,19 @@ describe('live Tour management', () => {
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).not.toHaveAttribute('aria-describedby')
   })
 
+  it('previews the expected duration and robot hold the server would give a quick Tour created now (B12)', async () => {
+    const quick = { expectedDurationSeconds: 1260, startBy: '2099-01-03T01:30:00.000Z', holdStartsAt: '2099-01-03T01:00:00.000Z', holdEndsAt: '2099-01-03T02:06:00.000Z' }
+    robotRows = [{ ...BASE_ROBOTS[0], quick }]
+    api()
+    renderAt('/staff/manage/tours/new?kind=quick')
+    await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })
+    const how = within(screen.getByRole('region', { name: 'Tour nhanh chạy thế nào' }))
+    expect(how.queryByText('Thời lượng dự kiến')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
+    expect(await how.findByText(`${formatDuration(1260)} (tự tính từ thời gian dừng và quãng đường)`)).toBeInTheDocument()
+    expect(how.getByText(`Bắt đầu trước ${formatTime(quick.startBy)}, giữ robot ${formatTime(quick.holdStartsAt)} - ${formatTime(quick.holdEndsAt)}`, { exact: false })).toBeInTheDocument()
+  })
+
   it('opens the quick form from an old ?kind=short link', async () => {
     api()
     renderAt('/staff/manage/tours/new?kind=short')
@@ -452,10 +466,26 @@ describe('live Tour management', () => {
     await chooseTarget()
     expect(await screen.findByRole('button', { name: /Ca sáng/ })).toHaveAttribute('aria-pressed', 'true')
     const review = screen.getByRole('region', { name: 'Xem lại trước khi tạo' })
-    expect(within(review).getByText("Tuyến dài 1 giờ 6 phút, hơn mức khuyến nghị 1 giờ. Vẫn tạo được, nhưng nên cân nhắc tuyến ngắn hơn.")).toBeInTheDocument()
+    expect(within(review).getByText("Tuyến dài 67 phút, hơn mức khuyến nghị 60 phút. Vẫn tạo được, nhưng nên cân nhắc tuyến ngắn hơn.")).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
     await waitFor(() => expect(writes).toHaveLength(1))
     expect(writes[0].body).toMatchObject({ configuration: { scheduledStartAt: '2099-01-03T01:15:00Z' } })
+  })
+
+  it('says in Vietnamese, and in the "Cần" list, that the capacity is over the maximum', async () => {
+    const writes = api()
+    renderAt('/staff/manage/tours/new?kind=normal&date=2099-01-03&shift=S1')
+    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour đông' } })
+    await chooseTarget()
+    await screen.findByRole('button', { name: /Ca sáng/ })
+    fireEvent.change(screen.getByLabelText(/^Sức chứa/), { target: { value: '21' } })
+    expect(screen.getByText('Sức chứa phải từ 1 đến 20 chỗ.')).toBeInTheDocument()
+    expect(screen.getByText('Cần: sức chứa từ 1 đến 20 chỗ.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/^Sức chứa/), { target: { value: '20' } })
+    expect(screen.queryByText('Sức chứa phải từ 1 đến 20 chỗ.')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
+    await waitFor(() => expect(writes).toHaveLength(1))
   })
 
   it('shows a route too long for one shift but does not let it be chosen', async () => {

@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router'
 import { panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { DateInput } from '../../../components/ui/DateInput'
-import { formatDate, formatDateTime, formatDuration, formatTime } from '../../../components/ui/date-time'
+import { formatDate, formatDateTime, formatExpectedDuration, formatMinutesSeconds, formatTime } from '../../../components/ui/date-time'
 import { useAuthStore } from '../../../stores/auth-store'
 import { Notice } from '../AdminUi'
 import { passedAt, scheduleFitLabel } from '../routes/route-messages'
@@ -90,6 +90,8 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const today = campusDay(new Date())
   // Only for the wait shown to Staff; the server sets the quick Tour's latest Start when it creates it.
   const waitMinutes = useTourShifts(today, today, quick).data?.quickTourWaitMinutes
+  // B12: the server's preview of the quick Tour create would make now; the same for every robot of the route.
+  const quickPreview = quick ? (robots.data?.find(robot => robot.robotCode === robotCode) ?? robots.data?.[0])?.quick : null
   const maps = useMapVersions()
   const selected = routes.data?.find(route => route.revisionId === routeRevisionId)
   const selectedArea = maps.data?.find(item => item.map.id === selected?.mapVersionId)?.map.areaName
@@ -98,6 +100,11 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   // Derived, so a shift that stops being free after a refresh drops out of the review by itself.
   const picked = day?.slots.find(item => item.shiftCode === shiftCode)
   const usable = picked?.available ? picked : undefined
+  // BR-26: the server refuses more than its configured maximum; said here in Vietnamese instead of the browser's English bubble.
+  const maxCapacity = slots.data?.maxCapacity ?? 20
+  const capacityValue = Number(capacity)
+  const capacityProblem = capacity.trim() === '' || !Number.isInteger(capacityValue) || capacityValue < 1 || capacityValue > maxCapacity
+    ? `sức chứa từ 1 đến ${maxCapacity} chỗ` : null
   // What still stops "Tạo Tour", in the order of the fields, shown beside the disabled button.
   const missing = [
     !name.trim() && 'nhập tên Tour',
@@ -107,6 +114,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
     !operatorUserId && 'chọn người vận hành',
     !quick && !date && 'chọn ngày',
     !quick && !usable && (picked ? 'chọn ca còn trống' : 'chọn ca'),
+    capacityProblem,
   ].filter((item): item is string => Boolean(item))
   const ready = missing.length === 0
   const expected = slots.data?.expectedDurationSeconds
@@ -183,7 +191,9 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
             {picked && !picked.available && <p role="alert" className="text-xs text-[#b23e31]">{picked.shiftName} không dùng được: {picked.reason}. Chọn ca khác.</p>}
           </div>}
       </div></>}
-      <label className="block text-sm">Sức chứa<input required type="number" min={1} max={slots.data?.maxCapacity ?? 20} step={1} className={inputClass} value={capacity} onChange={e => setCapacity(e.target.value)} />
+      <label className="block text-sm">Sức chứa<input required type="number" min={1} max={maxCapacity} step={1} className={inputClass} value={capacity} onChange={e => setCapacity(e.target.value)}
+          aria-invalid={capacityProblem ? true : undefined} aria-describedby={capacityProblem ? 'create-tour-capacity-error' : undefined} />
+        {capacityProblem && <span id="create-tour-capacity-error" role="alert" className="mt-1 block text-xs text-[#b23e31]">Sức chứa phải từ 1 đến {maxCapacity} chỗ.</span>}
         <span className="mt-1 block text-xs text-[#64748b]">Số dòng đăng ký tối đa của cả Tour. Mỗi điểm xem chung tính là 1 chỗ.</span></label>
       <label className="block text-sm">Video dự phòng khi Tour bị huỷ giữa chừng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
       <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:items-center sm:justify-end">
@@ -200,6 +210,11 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
           <Review label="Giữ robot">{QUICK_TOUR_RULES.hold.value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.hold.note}</span></Review>
           <Review label="Bắt đầu">{QUICK_TOUR_RULES.start.value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.start.note}</span></Review>
           <Review label="Hạn bắt đầu">{QUICK_TOUR_RULES.deadline(waitMinutes).value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.deadline(waitMinutes).note}</span></Review>
+          {quickPreview && <>
+            <Review label="Thời lượng dự kiến">{formatDuration(quickPreview.expectedDurationSeconds)} (tự tính từ thời gian dừng và quãng đường)</Review>
+            <Review label="Nếu tạo lúc này">Bắt đầu trước {formatTime(quickPreview.startBy)}, giữ robot {formatTime(quickPreview.holdStartsAt)} - {formatTime(quickPreview.holdEndsAt)}
+              <span className="block text-xs text-muted">Giờ chính xác được tính lại lúc bấm Tạo Tour.</span></Review>
+          </>}
           <Review label="Đóng đăng ký">{QUICK_TOUR_RULES.registration}</Review>
           <Review label="Sức chứa">{capacity} chỗ</Review>
         </dl>
@@ -209,13 +224,13 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
         <dl className="mt-3 space-y-2 text-sm">
           <Review label="Ca">{usable.shiftName}</Review>
           <Review label="Bắt đầu">{formatDateTime(usable.startsAt)}</Review>
-          <Review label="Thời lượng dự kiến">{formatDuration(expected!)} (tự tính từ thời gian dừng và quãng đường)
-            <span className="block text-xs text-muted">Ca này chứa tối đa {formatDuration(usable.maxDurationSeconds)}.</span></Review>
+          <Review label="Thời lượng dự kiến">{formatExpectedDuration(expected!)} (tự tính từ thời gian dừng và quãng đường)
+            <span className="block text-xs text-muted">Ca này chứa tối đa {formatExpectedDuration(usable.maxDurationSeconds)}.</span></Review>
           <Review label="Giữ robot">{formatTime(usable.reservationStartsAt)} - {formatTime(usable.reservationEndsAt)}</Review>
           <Review label="Đóng đăng ký">{formatDateTime(usable.registrationClosesAt)}</Review>
           <Review label="Sức chứa">{capacity} chỗ</Review>
         </dl>
-        {overRecommended && <div className="mt-3"><Notice tone="warn">Tuyến dài {formatDuration(expected!)}, hơn mức khuyến nghị {formatDuration(slots.data.recommendedMaxSeconds)}. Vẫn tạo được, nhưng nên cân nhắc tuyến ngắn hơn.</Notice></div>}
+        {overRecommended && <div className="mt-3"><Notice tone="warn">Tuyến dài {formatExpectedDuration(expected!)}, hơn mức khuyến nghị {formatExpectedDuration(slots.data.recommendedMaxSeconds)}. Vẫn tạo được, nhưng nên cân nhắc tuyến ngắn hơn.</Notice></div>}
       </section>}
       <section className={`${panelClass} p-4`} aria-label="Xem trước tuyến">
         <h2 className="text-[15px] font-semibold">Xem trước tuyến</h2>
@@ -224,7 +239,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
             <p className="text-sm text-muted">{selectedArea && `${selectedArea} · `}đã chạy thử đạt{selectedPassedAt && ` ngày ${formatDate(selectedPassedAt)}`}</p>
             <ol className="divide-y divide-[#e2e8f0]">{selected.stops.map(stop => <li key={stop.poiRevisionId} className="py-2.5 text-sm">
               <span className="font-medium">{stop.stopOrder}. {stop.name}</span>
-              <span className="block text-xs text-muted">Dừng {formatDuration(stop.dwellSeconds)}</span>
+              <span className="block text-xs text-muted">Dừng {formatMinutesSeconds(stop.dwellSeconds)}</span>
             </li>)}</ol>
           </div>}
       </section>

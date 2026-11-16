@@ -35,11 +35,12 @@ export function RetireMapDialog({ map, onClose }: { map: MapVersion; onClose: ()
   const code = refusalCode(retire.error)
   useEffect(() => { if (code && BLOCKED_CODES.has(code)) void refetch() }, [code, refetch])
   const blocked = impact.data ? isRetirementBlocked(impact.data) : false
+  const undecidable = impact.isPending || impact.isError || blocked
   const close = () => { retire.reset(); onClose() }
   return (
     <ConfirmationDialog open tone="danger" title={`Ngừng sử dụng ${mapVersionLabel(map)}?`} confirmLabel="Ngừng sử dụng"
       requireReason reasonLabel="Lý do ngừng sử dụng" reasonPlaceholder="Ví dụ: bản đồ quét lại, tải nhầm tệp…" busy={retire.isPending}
-      confirmDisabled={impact.isPending || impact.isError || blocked}
+      confirmDisabled={undecidable} reasonDisabled={undecidable}
       error={retire.error ? errorText(retire.error) : null}
       description="Phiên bản này sẽ không còn trong các danh sách chọn và không nhận việc mới. POI, tuyến, kết quả kiểm tra và Tour cũ vẫn giữ nguyên, có thể mở lại bất cứ lúc nào."
       onConfirm={reason => retire.mutate({ map, reason }, { onSuccess: onClose })} onCancel={close}>

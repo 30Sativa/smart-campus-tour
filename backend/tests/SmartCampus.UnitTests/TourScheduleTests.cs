@@ -179,7 +179,7 @@ public sealed class TourScheduleTests
         Assert.Equal(1804, estimate);
         var block = TourSchedule.Evaluate(lunch, LongAgo, new(estimate, estimate), []);
         Assert.Equal(TourSchedule.RouteTooLongForShift, block!.Code);
-        Assert.Equal("Tuyến cần 30 phút 4 giây, ca này chỉ chứa được 30 phút", block.Message);
+        Assert.Equal("Tuyến cần 31 phút, ca này chỉ chứa được 30 phút", block.Message);
     }
 
     [Fact]
@@ -211,7 +211,38 @@ public sealed class TourScheduleTests
     {
         var deadline = Start.AddMinutes(30);
         var estimate = TourSchedule.EstimatedDurationSeconds(Revision("POSE", 0m, 0m), TwoStops, 0.25);
-        Assert.Equal(deadline.AddSeconds(161).AddMinutes(15), TourSchedule.QuickTourHold(Start, deadline, estimate).EndsAt);
+        Assert.Equal(161, estimate);
+        // 161 s is shown as 3 minutes, so the run is expected to end 3 minutes after the deadline.
+        Assert.Equal(deadline.AddMinutes(3).AddMinutes(15), TourSchedule.QuickTourHold(Start, deadline, estimate).EndsAt);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 60)]
+    [InlineData(59, 60)]
+    [InlineData(60, 60)]
+    [InlineData(61, 120)]
+    [InlineData(2349, 2400)] // 39 min 9 s reads 40 minutes
+    [InlineData(1804, 1860)]
+    public void TheExpectedLength_RoundsUpToAWholeMinute(int seconds, int rounded) =>
+        Assert.Equal(rounded, TourSchedule.RoundedDurationSeconds(seconds));
+
+    [Fact]
+    public void TheExpectedEnd_IsTheStartPlusTheRoundedLength()
+    {
+        var start = new DateTimeOffset(2026, 11, 16, 4, 15, 0, TimeSpan.Zero); // 11:15 campus time
+        Assert.Equal(start.AddMinutes(4), TourSchedule.ExpectedEnd(start, 189)); // 3 min 9 s -> 4 minutes, ends 11:19
+        Assert.Equal(start.AddMinutes(40), TourSchedule.ExpectedEnd(start, 2349));
+        Assert.Equal(start.AddMinutes(3), TourSchedule.ExpectedEnd(start, 180));
+    }
+
+    [Fact]
+    public void AnEveryShiftRefusal_NamesTheRoundedLength()
+    {
+        var settings = new TourScheduleSettings(TourShiftsFixture.Options, 60);
+        var block = TourSchedule.EvaluateQuickTour(settings, Start, Start.AddMinutes(30),
+            new(settings.LongestShiftMaxSeconds + 9, settings.LongestShiftMaxSeconds + 9), [], []);
+        Assert.Equal($"Tuyến cần {settings.LongestShiftMaxSeconds / 60 + 1} phút, Tour dài nhất được {settings.LongestShiftMaxSeconds / 60} phút", block!.Message);
     }
 
     [Fact]

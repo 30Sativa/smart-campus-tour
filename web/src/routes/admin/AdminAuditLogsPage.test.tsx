@@ -53,6 +53,14 @@ describe('system audit log', () => {
     expect(screen.queryByText('SYSTEM_NO_START')).not.toBeInTheDocument()
   })
 
+  it('names a route test run by its route and save time, not by the robot that ran it', async () => {
+    rows = [{ ...entry, action: 'ROUTE_TEST_PASSED', entityType: 'RouteRevision', entityId: 'rev-1', tourId: null, tourName: null,
+      robotCode: 'amr_01', resultCode: 'PASS', routeName: 'Tuyến thư viện', routeRevisionSavedAt: '2026-11-16T01:00:00Z' }]
+    show()
+    expect(await screen.findByText(/^Tuyến thư viện · bản lưu /)).toBeInTheDocument()
+    expect(screen.queryByText('amr_01')).not.toBeInTheDocument()
+  })
+
   it('sends the action code and actor, then clears the filters', async () => {
     show()
     await screen.findByRole('cell', { name: 'Hủy Tour' })

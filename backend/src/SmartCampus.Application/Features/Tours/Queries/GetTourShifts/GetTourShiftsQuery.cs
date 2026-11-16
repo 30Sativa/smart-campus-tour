@@ -6,8 +6,11 @@ using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
 
 namespace SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 
-/// <summary>The configured shifts of each day and their Admin blocks, for the Staff calendar and the Admin schedule page.</summary>
-public sealed record GetTourShiftsQuery(DateOnly From, DateOnly To) : IQuery<TourShiftsView>;
+/// <summary>
+/// The configured shifts of each day and their Admin blocks, for the Staff calendar and the Admin schedule page.
+/// <paramref name="IncludeTours"/> adds the Tours occupying each shift and day: the same ones that refuse a block (SHIFT_HAS_TOURS).
+/// </summary>
+public sealed record GetTourShiftsQuery(DateOnly From, DateOnly To, bool IncludeTours = false) : IQuery<TourShiftsView>;
 
 public sealed class GetTourShiftsQueryValidator : AbstractValidator<GetTourShiftsQuery>
 {
@@ -25,13 +28,23 @@ public sealed class GetTourShiftsQueryHandler(TourScheduleSettings settings, ISc
     public async Task<TourShiftsView> Handle(GetTourShiftsQuery query, CancellationToken ct)
     {
         var active = await blocks.ListActiveAsync(query.From, query.To, ct);
-        return new TourShiftsView(TourShiftDays.Expand(settings, query.From, query.To).Select(day => new TourShiftDay(day[0].Date,
-            day.Select(item =>
+        var tours = query.IncludeTours
+            ? await blocks.ListToursInWindowAsync(TourSchedule.DayWindow(query.From).StartsAt, TourSchedule.DayWindow(query.To).EndsAt, ct)
+            : null;
+        return new TourShiftsView(TourShiftDays.Expand(settings, query.From, query.To).Select(day =>
+        {
+            var (dayStart, dayEnd) = TourSchedule.DayWindow(day[0].Date);
+            return new TourShiftDay(day[0].Date, day.Select(item =>
             {
                 var (startsAt, endsAt) = TourSchedule.ShiftWindow(item.Date, item.Shift);
                 return new TourShiftView(item.Shift.Code, item.Shift.Name, startsAt, endsAt, TourSchedule.TourStart(item.Date, item.Shift),
                     item.Shift.Start.Add(TourSchedule.ReservationBuffer).ToString("HH\\:mm"), TourSchedule.MaxDurationSeconds(item.Shift),
-                    TourSchedule.BlockOf(active, item));
-            }).ToArray())).ToArray(), settings.RecommendedMaxSeconds, (int)settings.ShortNoticeMinLead.TotalMinutes);
+                    TourSchedule.BlockOf(active, item), Occupying(tours, startsAt, endsAt));
+            }).ToArray(), Occupying(tours, dayStart, dayEnd));
+        }).ToArray(), settings.RecommendedMaxSeconds, (int)settings.ShortNoticeMinLead.TotalMinutes);
     }
+
+    private static TourShiftTourView[]? Occupying(IReadOnlyList<ScheduleBlockingTour>? tours, DateTimeOffset startsAt, DateTimeOffset endsAt) =>
+        tours?.Where(tour => tour.Occupies(startsAt, endsAt)).Select(tour => new TourShiftTourView(tour.Id, tour.Name, tour.ScheduledStartAt,
+            tour.State, tour.IsShortNotice, TourSchedule.RegistrationClosesAt(tour.ScheduledStartAt, tour.IsShortNotice))).ToArray();
 }

@@ -6,7 +6,7 @@ import { Drawer } from '../../components/ui/Drawer'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { useTour, useTourCalendar, useTourShifts } from '../../features/administration/tours/hooks'
 import { TourListPanel } from '../../features/administration/tours/TourListPanel'
-import { campusDateKey, formatDate, formatTime } from '../../components/ui/date-time'
+import { campusDateKey, expectedEndAt, formatDate, formatExpectedDuration, formatTime } from '../../components/ui/date-time'
 import { REGISTRATION_CLOSED_LABEL, TOUR_STATE_FILTER_LABEL, TOUR_STATE_LABEL, isRegistrationClosed, openSeatsLabel, tourError, tourStateLabel } from '../../features/administration/tours/tour-messages'
 import { overdueStartLabel } from '../../features/administration/tours/overdue-start'
 import type { TourReservation, TourShift, TourState, TourSummary } from '../../features/administration/tours/types'
@@ -58,7 +58,7 @@ const durationOf = (hold: TourReservation | null | undefined) => (hold?.expected
 /** Start and end when the length is known, otherwise the start alone. */
 const span = (tour: TourSummary, hold = tour.reservation) => {
   const seconds = durationOf(hold)
-  return seconds ? `${formatTime(tour.scheduledStartAt)} - ${formatTime(new Date(new Date(tour.scheduledStartAt).getTime() + seconds * 1000).toISOString())}` : formatTime(tour.scheduledStartAt)
+  return seconds ? `${formatTime(tour.scheduledStartAt)} - ${formatTime(expectedEndAt(tour.scheduledStartAt, seconds))}` : formatTime(tour.scheduledStartAt)
 }
 
 const LEAD_TIME_MS = 72 * 3600_000
@@ -395,7 +395,7 @@ function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void 
     [Clock, 'Thời gian Tour', span(tour, hold)],
     [Bot, 'Robot', hold?.robotCode ?? (loading ? 'Đang tải…' : '-')],
     [CalendarDays, hold?.releasedAt ? 'Khung giữ đã trả' : 'Giữ chỗ robot', hold ? `${formatTime(hold.startsAt)} - ${formatTime(hold.endsAt)}` : loading ? 'Đang tải…' : 'Không giữ robot'],
-    ...(seconds ? [[Timer, 'Thời lượng dự kiến', `${Math.round(seconds / 60)} phút`] as [typeof Clock, string, ReactNode]] : []),
+    ...(seconds ? [[Timer, 'Thời lượng dự kiến', formatExpectedDuration(seconds)] as [typeof Clock, string, ReactNode]] : []),
     [MapIcon, 'Tuyến', tour.routeName],
     [Users, 'Đăng ký', `${tour.registrationCount} đoàn`],
     ...(openSeatsLabel(tour) ? [[Users, 'Chỗ', openSeatsLabel(tour)] as [typeof Clock, string, ReactNode]] : []),

@@ -221,7 +221,19 @@ public static class TourSchedule
     /// end. Start may come at any moment inside it, so the hold needs no shift (ADR-0053).
     /// </summary>
     public static (DateTimeOffset StartsAt, DateTimeOffset EndsAt) QuickTourHold(DateTimeOffset now, DateTimeOffset deadline, int expectedSeconds) =>
-        (now, deadline + TimeSpan.FromSeconds(expectedSeconds) + ReservationBuffer);
+        (now, ExpectedEnd(deadline, expectedSeconds) + ReservationBuffer);
+
+    /// <summary>
+    /// The one rule for a Tour's expected length: the estimate rounded up to a whole minute. Every message and every
+    /// expected end uses it, so a route of 39 min 9 s reads "40 phút" and a Tour starting 11:15 ends 11:55. The web
+    /// formatter (web/src/components/ui/date-time.ts) applies the same rule.
+    /// </summary>
+    public static int RoundedDurationSeconds(int expectedSeconds) =>
+        expectedSeconds <= 0 ? 0 : (int)Math.Min(int.MaxValue / 60 * 60, ((long)expectedSeconds + 59) / 60 * 60);
+
+    /// <summary>When a Tour started at <paramref name="start"/> is expected to end: the start plus the rounded length.</summary>
+    public static DateTimeOffset ExpectedEnd(DateTimeOffset start, int expectedSeconds) =>
+        start + TimeSpan.FromSeconds(RoundedDurationSeconds(expectedSeconds));
 
     /// <summary>The campus dates a hold touches, in order, so their Admin locks are taken the same way every time.</summary>
     public static IReadOnlyList<DateOnly> DatesOf(DateTimeOffset startsAt, DateTimeOffset endsAt)
@@ -277,7 +289,7 @@ public static class TourSchedule
         : seconds > settings.RecommendedMaxSeconds ? RouteScheduleFit.OverRecommended
         : RouteScheduleFit.Fits;
 
-    private static string Minutes(int seconds) => seconds % 60 == 0 ? $"{seconds / 60} phút" : $"{seconds / 60} phút {seconds % 60} giây";
+    private static string Minutes(int seconds) => $"{RoundedDurationSeconds(seconds) / 60} phút";
 }
 
 public static class RouteScheduleFit

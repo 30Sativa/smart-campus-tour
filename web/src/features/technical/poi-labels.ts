@@ -25,6 +25,17 @@ export const verificationState = (revision: { navigationStatus: string; isSubmit
 
 export const poiStatus = (revision: { navigationStatus: string; isSubmitted: boolean }) => VERIFICATION[verificationState(revision)]
 
+/**
+ * "Kiểm chứng: …" for a whole POI. Retiring takes a submitted revision out of the technical queue (ADR-0062), so a
+ * retired POI is never "Chờ kỹ thuật": nobody will check it until it is used again. A result it already has stays.
+ */
+export function poiCheckBadge(proposal: Pick<PoiProposal, 'revision' | 'retiredAt'>): { label: string; tone: StatusTone } {
+  const state = verificationState(proposal.revision)
+  if (!proposal.retiredAt) return VERIFICATION[state]
+  if (state === 'WAIT') return { label: 'Không kiểm vì đã ngưng dùng', tone: 'muted' }
+  return { label: VERIFICATION[state].label, tone: 'muted' }
+}
+
 export const verificationMethodLabel: Record<string, string> = { POSE_CAPTURE: 'Ghi pose trực tiếp trên robot', MANUAL_CHECK: 'Kiểm tra thủ công' }
 
 export const poiImportActionLabel: Record<string, string> = { CREATE: 'Tạo POI mới', NEW_REVISION: 'Thêm phiên bản', NO_CHANGE: 'Không thay đổi' }

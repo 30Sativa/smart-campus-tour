@@ -59,6 +59,7 @@ beforeEach(() => {
         ? { ...item, retiredAt: retire ? '2026-11-15T05:00:00Z' : null, canRetire: !retire, canReactivate: retire } : item)
       return respond(proposals.find(item => url.pathname.includes(`/${item.id}/`)))
     }
+    if (url.pathname.endsWith('/scheduled-tours')) return respond([{ id: 'tour-1', name: 'Tour sáng thứ Hai', scheduledStartAt: '2026-11-23T01:15:00Z', state: 'SCHEDULED', registrationClosesAt: '2026-11-21T01:15:00Z' }])
     if (url.pathname.endsWith('/discard')) {
       discardBodies.push(JSON.parse(String(init?.body)))
       if (discardResponse) return discardResponse
@@ -393,6 +394,10 @@ describe('staff preparation UI', () => {
     const dialog = screen.getByRole('dialog', { name: 'Ngưng dùng Điểm A?' })
     expect(dialog).toHaveTextContent('Tuyến và Tour đã lưu không đổi gì')
     expect(dialog).toHaveTextContent('tuyến mới không chọn được điểm này')
+    // Like "Ngừng sử dụng tuyến": the Tours that stop here, each a link, before deciding.
+    expect(await within(dialog).findByText('1 Tour đã lên lịch đi qua điểm này, vẫn chạy như cũ:')).toBeInTheDocument()
+    expect(within(dialog).getByRole('link', { name: 'Tour sáng thứ Hai' })).toHaveAttribute('href', '/staff/manage/tours/tour-1')
+    expect(requests.some(request => request.pathname === '/api/staff/poi-proposals/poi-a/scheduled-tours')).toBe(true)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ngưng dùng' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(lifecycleCalls).toEqual([{ path: '/api/staff/poi-proposals/poi-a/retire', body: { requestId: expect.any(String), expectedRowVersion: 'rv-a' } }])

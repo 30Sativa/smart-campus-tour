@@ -26,13 +26,19 @@ public static class TourPhases
     public const string Running = "RUNNING";
     public const string Finished = "FINISHED";
 }
+/// <summary>
+/// <see cref="LatestStartAt"/> is the last moment Start is accepted (published time + StartLateLimit);
+/// <see cref="AutoCancelAt"/> is when the system cancels the Tour if it has not started (<see cref="TourAutoCancel.HoldEndsAt"/>).
+/// Both are set by the query handlers while the Tour is SCHEDULED or READY and are null otherwise, so no screen recomputes them.
+/// </summary>
 public sealed record TourSummary(Guid Id, string Name, string? Description, Guid RouteId, string RouteName,
     Guid ActiveRouteId, DateTimeOffset ScheduledStartAt, string State, Guid CreatedByUserId,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string RowVersion,
     int RegistrationCount, int InvitationCount, Guid? RouteRevisionId, TourReservationView? Reservation = null,
     TourExecutionSummary? Execution = null, RouteTestParticipantView? Operator = null,
     IReadOnlyList<ConflictBlocker>? ReadyBlockers = null, int Capacity = 0, int HeldSeats = 0,
-    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false);
+    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false,
+    DateTimeOffset? LatestStartAt = null, DateTimeOffset? AutoCancelAt = null);
 /// <summary>
 /// Read-only situation of a Tour for list rows. <see cref="CommandState"/> is the current leg's GoTo, the command
 /// <c>GetTour</c> shows. <see cref="NeedsReconcile"/> is true while any GoTo of the Tour is UNKNOWN, in any Tour state.
@@ -56,13 +62,21 @@ public sealed record TourSlotView(string Time, DateTimeOffset StartsAt, bool Ava
 public sealed record TourSlotDay(DateOnly Date, IReadOnlyList<TourSlotView> Slots);
 public sealed record TourSlotsView(Guid RouteRevisionId, string RobotCode, int? MeasuredDurationSeconds,
     int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days, int RecommendedMaxSeconds, int MaxCapacity = 0);
-/// <summary>A configured shift on one day, for drawing the calendar before a route or robot is chosen.</summary>
+/// <summary>
+/// A configured shift on one day, for drawing the calendar before a route or robot is chosen. <see cref="Tours"/>, sent only
+/// on the Admin schedule, lists the Tours not cancelled that stop the shift being closed; null when not asked for.
+/// </summary>
 public sealed record TourShiftView(string Code, string Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
-    DateTimeOffset TourStartsAt, string Time, int MaxDurationSeconds, TourShiftBlockView? Block);
+    DateTimeOffset TourStartsAt, string Time, int MaxDurationSeconds, TourShiftBlockView? Block,
+    IReadOnlyList<TourShiftTourView>? Tours = null);
+/// <summary>A Tour occupying a shift or day that Admin may want to close.</summary>
+public sealed record TourShiftTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State, bool IsShortNotice,
+    DateTimeOffset RegistrationClosesAt);
 /// <summary>The Admin block closing a shift; <see cref="Scope"/> says whether it covers the whole day.</summary>
 public sealed record TourShiftBlockView(Guid Id, string Scope, string Reason);
 public static class ScheduleBlockScope { public const string Day = "DAY"; public const string Shift = "SHIFT"; }
-public sealed record TourShiftDay(DateOnly Date, IReadOnlyList<TourShiftView> Shifts);
+/// <summary><see cref="Tours"/>: as on <see cref="TourShiftView"/>, for closing the whole day.</summary>
+public sealed record TourShiftDay(DateOnly Date, IReadOnlyList<TourShiftView> Shifts, IReadOnlyList<TourShiftTourView>? Tours = null);
 /// <summary><see cref="QuickTourWaitMinutes"/>: how long a quick Tour waits to be started (ADR-0053).</summary>
 public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds, int QuickTourWaitMinutes);
 public sealed record TourTargetView(RouteTestParticipantView? Operator, TourReservationView? Reservation);

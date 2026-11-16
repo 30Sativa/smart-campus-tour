@@ -4,6 +4,13 @@ import { placeView, zoomView, type FittedView } from './fit-view'
 import { screenToImage, type ImagePoint } from './occupancy-grid'
 
 type PanDrag = { pointerId: number; start: ImagePoint; matrix: DOMMatrix; view: FittedView }
+/** Two fingers on the map: their distance and midpoint when the second one landed, and the view at that moment. */
+type Pinch = { distance: number; focus: ImagePoint; view: FittedView }
+
+const fingerDistance = (points: Iterable<{ x: number; y: number }>) => {
+  const [a, b] = [...points]
+  return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0
+}
 
 const STEP = 1.5
 const WHEEL_STEP = 1.25
@@ -28,6 +35,9 @@ export function ZoomableMap({ map, fitted, className, role, label, reveal, child
   const [moved, setMoved] = useState<FittedView | null>(null)
   const [revealed, setRevealed] = useState(reveal)
   const drag = useRef<PanDrag | null>(null)
+  // Every finger on the map, so a second one turns a drag into a pinch.
+  const fingers = useRef(new Map<number, { x: number; y: number }>())
+  const pinch = useRef<Pinch | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const view = moved ?? fitted
 
@@ -52,6 +62,15 @@ export function ZoomableMap({ map, fitted, className, role, label, reveal, child
   }, [map, fitted])
 
   const pointerDown = (event: PointerEvent<SVGSVGElement>) => {
+    if (event.pointerType !== 'mouse') fingers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (fingers.current.size === 2) {
+      // Second finger: the pinch takes over from the drag, zooming around the point between the two fingers.
+      const [a, b] = [...fingers.current.values()]
+      const focus = screenToImage(event.currentTarget.getScreenCTM(), (a.x + b.x) / 2, (a.y + b.y) / 2)
+      if (focus) pinch.current = { distance: fingerDistance(fingers.current.values()), focus, view }
+      drag.current = null
+      return
+    }
     // Capturing the pointer would send a marker's click to the map instead.
     if (event.button !== 0 || drag.current || (event.target as Element).closest('[role="button"]')) return
     const matrix = event.currentTarget.getScreenCTM()
@@ -61,6 +80,13 @@ export function ZoomableMap({ map, fitted, className, role, label, reveal, child
     event.currentTarget.setPointerCapture(event.pointerId)
   }
   const pointerMove = (event: PointerEvent<SVGSVGElement>) => {
+    if (fingers.current.has(event.pointerId)) fingers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    const zooming = pinch.current
+    if (zooming && fingers.current.size === 2) {
+      const distance = fingerDistance(fingers.current.values())
+      if (zooming.distance > 0 && distance > 0) setMoved(zoomView(map, zooming.view, distance / zooming.distance, zooming.focus))
+      return
+    }
     const current = drag.current
     if (!current || current.pointerId !== event.pointerId) return
     // Freeze the starting CTM: reading the moving CTM would introduce pan drift.
@@ -68,6 +94,8 @@ export function ZoomableMap({ map, fitted, className, role, label, reveal, child
     if (point) setMoved(placeView(map, { ...current.view, x: current.view.x - (point.u - current.start.u), y: current.view.y - (point.v - current.start.v) }))
   }
   const finishPan = (event: PointerEvent<SVGSVGElement>) => {
+    fingers.current.delete(event.pointerId)
+    if (fingers.current.size < 2) pinch.current = null
     if (drag.current?.pointerId === event.pointerId) drag.current = null
   }
 
@@ -76,11 +104,11 @@ export function ZoomableMap({ map, fitted, className, role, label, reveal, child
 
   return (
     <div className="relative">
-      {/* A finger keeps scrolling the page until the map has been zoomed. */}
+      {/* One finger keeps scrolling the page until the map has been zoomed; two fingers zoom the map, never the page. */}
       <svg
         ref={svgRef} role={role} aria-label={label}
         viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
-        className={`block w-full cursor-grab rounded-xl bg-[#eef2f6] select-none active:cursor-grabbing ${moved ? 'touch-none' : ''} ${className}`}
+        className={`block w-full cursor-grab rounded-xl bg-[#eef2f6] select-none active:cursor-grabbing ${className}`} style={{ touchAction: moved ? 'none' : 'pan-x pan-y' }}
         onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={finishPan} onPointerCancel={finishPan} onLostPointerCapture={finishPan}
       >
         <image href={map.imageUrl} x={0} y={0} width={map.width} height={map.height} style={{ imageRendering: 'pixelated' }} opacity={0.9} />

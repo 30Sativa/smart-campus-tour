@@ -7,7 +7,7 @@ import { formatDateTime } from '../../components/ui/date-time'
 import { buttonClass, inputClass, labelClass, rowClass } from '../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, SkeletonRows } from '../../features/administration/AdminUi'
 import { AUDIT_PAGE_SIZE, listAuditLogs, type AuditLogEntry } from '../../features/administration/audit/audit-api'
-import { AUDIT_ACTION_GROUPS, auditActionLabel, auditActorLabel, auditEntityLabel, auditResult } from '../../features/administration/audit/audit-labels'
+import { AUDIT_ACTION_GROUPS, auditActionLabel, auditActorLabel, auditEntityLabel, auditResult, auditTargetLabel } from '../../features/administration/audit/audit-labels'
 import { useDebouncedValue } from '../../features/administration/use-debounced-value'
 import { ToneBadge } from '../../features/technical/TechnicalUi'
 import { errorText } from '../../features/technical/technical-format'
@@ -56,10 +56,11 @@ export default function AdminAuditLogsPage() {
 
 function AuditRow({ entry }: { entry: AuditLogEntry }) {
   const result = auditResult(entry.resultCode)
+  const target = auditTargetLabel(entry, formatDateTime)
   return <tr className={`${rowClass} block py-2 md:table-row md:py-0`}>
     <td data-label={COLUMNS[0]} className={`${cellClass} text-xs text-[#64748b] tabular-nums md:whitespace-nowrap`}>{formatDateTime(entry.occurredAt)}</td>
     <td data-label={COLUMNS[1]} className={`${cellClass} font-medium text-[#0f172a]`}>{auditActionLabel(entry.action)}</td>
-    <td data-label={COLUMNS[2]} className={cellClass}>{auditEntityLabel(entry.entityType)}{(entry.tourName || entry.robotCode) && <p className="text-[11.5px] break-words text-[#64748b]">{entry.tourName ?? entry.robotCode}</p>}</td>
+    <td data-label={COLUMNS[2]} className={cellClass}>{auditEntityLabel(entry.entityType)}{target && <p className="text-[11.5px] break-words text-[#64748b]">{target}</p>}</td>
     <td data-label={COLUMNS[3]} className={cellClass}>{auditActorLabel(entry)}</td>
     <td data-label={COLUMNS[4]} className={cellClass}>{result ? <ToneBadge tone={result.tone}>{result.label}</ToneBadge> : '-'}</td>
   </tr>

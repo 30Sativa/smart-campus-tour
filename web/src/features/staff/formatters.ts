@@ -58,15 +58,6 @@ export function formatStopwatch(from?: string | null, now: number = Date.now()):
   return hours > 0 ? `${hours}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`
 }
 
-/** "45 phút" / "1 giờ 10 phút" between two instants. */
-export function formatDuration(from?: string | null, to?: string | null): string {
-  if (!from || !to) return '-'
-  const minutes = Math.max(0, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 60_000))
-  if (minutes < 60) return `${minutes} phút`
-  const rest = minutes % 60
-  return rest === 0 ? `${Math.floor(minutes / 60)} giờ` : `${Math.floor(minutes / 60)} giờ ${rest} phút`
-}
-
 /** Heartbeat freshness: seconds while fresh, then the usual relative time. */
 export function formatHeartbeat(ageSeconds?: number | null, lastSeenAt?: string | null, now: number = Date.now()): string {
   if (ageSeconds == null) return 'Không có dữ liệu'

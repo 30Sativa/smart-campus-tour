@@ -17,6 +17,12 @@ describe('overdueStartLabel', () => {
       .toBe('Quá giờ bắt đầu · tự huỷ lúc 08:30')
   })
 
+  it('reads the moments the server sends instead of its own rule', () => {
+    const tour = { state: 'SCHEDULED' as const, scheduledStartAt: start, latestStartAt: '2026-11-07T01:20:00.000Z', autoCancelAt: '2026-11-07T01:25:00.000Z' }
+    expect(overdueStartLabel(tour, hold, at('2026-11-07T01:20:00.000Z'))).toBeNull()
+    expect(overdueStartLabel(tour, hold, at('2026-11-07T01:21:00.000Z'))).toBe('Quá giờ bắt đầu · tự huỷ lúc 08:25')
+  })
+
   it('never labels a Tour that started or ended', () => {
     for (const state of ['RUNNING', 'COMPLETED', 'CANCELLED'] as const)
       expect(overdueStartLabel({ state, scheduledStartAt: start }, hold, at('2026-11-07T05:00:00.000Z'))).toBeNull()
