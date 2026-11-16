@@ -122,7 +122,7 @@ khi luồng yêu cầu/duyệt có API.
 **Phiên người xem:** vào lại cùng thiết bị trong 2 phút trả về đúng chỗ; trình
 duyệt thứ hai nhận 409 `INVITATION_IN_USE` (backend dùng mã này, không phải
 `SESSION_IN_USE`). Cùng trình duyệt nhưng mất kết nối quá 2 phút khi phiên cũ
-còn hạn nhận 409 `RECONNECT_WINDOW_EXPIRED` kèm `errors.retryAfterSeconds` (số
+còn hạn nhận 409 `RECONNECT_WINDOW_EXPIRED` kèm `errors.fields.retryAfterSeconds` (string array, like `remainingSeats`) (số
 giây tới khi phiên cũ hết hạn); các trường hợp khác vẫn là 401 chung. GET
 `/api/registrations/{registrationId}/invitations` trả thêm cho mỗi mã
 `viewerPresence` (`NOT_ENTERED | CONNECTED | DISCONNECTED | LEFT`),

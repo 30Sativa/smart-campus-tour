@@ -1780,7 +1780,7 @@ session token. A stale session cookie does not bypass the grace, and the
 lock) or the session/device cookie matched but that browser's grace has passed
 while its session is still open, the response is 409
 `RECONNECT_WINDOW_EXPIRED` (since 2026-11-16; was the generic 401) with
-`errors.retryAfterSeconds` = seconds until that session's ExpiresAt; the viewer
+`errors.fields.retryAfterSeconds` (string array, like `remainingSeats`) = seconds until that session's ExpiresAt; the viewer
 asks for a new code or retries after it. Every other refusal keeps the generic
 401. The Tour-scoped device token is a
 browser credential, never an IP-derived identity. First successful entry
