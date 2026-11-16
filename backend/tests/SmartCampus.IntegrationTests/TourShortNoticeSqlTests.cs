@@ -57,7 +57,8 @@ public sealed class TourShortNoticeSqlTests
         await using var db = w.H.Context();
         var hold = await db.TourRobotReservations.AsNoTracking().SingleAsync(r => r.TourId == id);
         Assert.Equal(w.Noon, hold.StartsAt);
-        Assert.Equal(deadline + TimeSpan.FromSeconds(hold.ExpectedDurationSeconds!.Value) + TourSchedule.ReservationBuffer, hold.EndsAt);
+        Assert.Equal(TourSchedule.ExpectedEnd(deadline, hold.ExpectedDurationSeconds!.Value) + TourSchedule.ReservationBuffer, hold.EndsAt);
+        Assert.Equal(0, hold.EndsAt.Second); // the rounded length keeps the hold on a whole minute
         var recorded = await db.TourEvents.AsNoTracking().SingleAsync(e => e.TourId == id);
         Assert.Equal((TourLifecycleEvents.CreatedShortNotice, Reason), (recorded.EventType, recorded.ReasonNote));
 

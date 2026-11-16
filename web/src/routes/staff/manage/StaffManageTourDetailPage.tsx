@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
-import { formatDate, formatDateTime, formatDuration, formatTime } from '../../../components/ui/date-time'
+import { formatDate, formatDateTime, formatMinutesSeconds, formatTime } from '../../../components/ui/date-time'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { notify } from '../../../components/ui/toast-store'
 import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
@@ -92,7 +92,7 @@ export default function StaffManageTourDetailPage() {
       <p className="mt-1 text-sm text-muted">{routePassedAt && `Tuyến đã chạy thử đạt ngày ${formatDate(routePassedAt)} · `}{routeRevision.stops.length} điểm dừng</p>
       <ol className="mt-3 divide-y divide-[#e2e8f0]">{routeRevision.stops.map(stop => <li key={stop.poiRevisionId} className="py-2.5 text-sm">
         <span className="font-medium">{stop.stopOrder}. {stop.name}</span>
-        <span className="block text-xs text-muted">Dừng {formatDuration(stop.dwellSeconds)}</span>
+        <span className="block text-xs text-muted">Dừng {formatMinutesSeconds(stop.dwellSeconds)}</span>
       </li>)}</ol>
     </section>}
 
@@ -104,7 +104,7 @@ export default function StaffManageTourDetailPage() {
       <p className="mt-1 text-sm text-[#64748b]">{mapAreaName(maps.data, { mapKey: route.mapKey }) ?? '-'} · {route.stops.length} điểm dừng</p>
       <ol className="mt-3 divide-y divide-[#e2e8f0]">{route.stops.map(stop => <li key={stop.id} className="py-2.5 text-sm">
         <span className="font-medium">{stop.stopOrder}. {stop.poiName}</span>
-        <span className="block text-xs text-muted">Dừng {formatDuration(stop.dwellSeconds)} · nhìn {stop.headSteps.map(h => `${HEAD_LABEL[h.preset]} ${formatDuration(h.holdSeconds)}`).join(', ')}</span>
+        <span className="block text-xs text-muted">Dừng {formatMinutesSeconds(stop.dwellSeconds)} · nhìn {stop.headSteps.map(h => `${HEAD_LABEL[h.preset]} ${formatMinutesSeconds(h.holdSeconds)}`).join(', ')}</span>
       </li>)}</ol>
     </section>}
 
