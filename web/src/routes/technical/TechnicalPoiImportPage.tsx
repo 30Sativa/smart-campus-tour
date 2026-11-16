@@ -55,7 +55,9 @@ export default function TechnicalPoiImportPage() {
   const [filter, setFilter] = useState<PoiFilter>('pending')
 
   const rows = useMemo(() => toRows(proposals.data ?? [], allProposals.data ?? []), [proposals.data, allProposals.data])
+  // Newest submission first; a revision without a submit time goes last.
   const visible = rows.filter(row => row.filter === filter)
+    .sort((a, b) => (b.revision.submittedAt ? Date.parse(b.revision.submittedAt) : -Infinity) - (a.revision.submittedAt ? Date.parse(a.revision.submittedAt) : -Infinity) || 0)
   const count = (value: PoiFilter) => rows.filter(row => row.filter === value).length
   // The queue alone is enough for the first two figures; only recorded results need the full list.
   const recordedCount = (value: PoiFilter) => allProposals.isPending ? '…' : allProposals.isError ? '-' : count(value)

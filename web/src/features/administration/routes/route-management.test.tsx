@@ -8,6 +8,7 @@ import StaffManageRouteDetailsPage from '../../../routes/staff/manage/StaffManag
 import StaffManageRouteFormPage from '../../../routes/staff/manage/StaffManageRouteFormPage'
 import { versionedRoutesApi } from './versioned-api'
 import { useAuthStore } from '../../../stores/auth-store'
+import { useToastStore } from '../../../components/ui/toast-store'
 
 // jsdom has no canvas; the package itself still goes through the real reader.
 vi.mock('../../administration/pois/map/versioned-package', async importActual => ({
@@ -88,6 +89,37 @@ describe('Staff versioned Route workflow', () => {
     }))
   })
   afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
+
+  const fillNewRoute = async () => {
+    renderAt('/staff/manage/routes/new')
+    fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Library tour' } })
+    fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+    next()
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Verified entrance/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Verified hall/ }))
+    next()
+    startFromPoi('poi-rev-parking')
+    next()
+  }
+
+  it('offers cancel, save draft, and save-and-submit on the review step, like the POI form', async () => {
+    await fillNewRoute()
+    expect(screen.getByRole('link', { name: 'Hủy bỏ' })).toHaveAttribute('href', '/staff/manage/routes')
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và gửi kiểm chứng' }))
+    expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
+    const order = requests.filter(r => r.init?.method === 'POST').map(r => r.url.pathname)
+    expect(order).toEqual(['/api/staff/routes', '/api/staff/routes/route-1/revisions/route-rev-1/submit'])
+    expect(useToastStore.getState().toasts.at(-1)).toMatchObject({ title: 'Đã tạo tuyến “Library tour”', detail: expect.stringMatching(/Đã gửi kiểm chứng, chờ kỹ thuật chạy thử/) })
+  })
+
+  it('keeps the saved draft and says so when the submit after saving is refused', async () => {
+    submissionFailure = 409
+    await fillNewRoute()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và gửi kiểm chứng' }))
+    expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
+    expect(useToastStore.getState().toasts.at(-1)).toMatchObject({ tone: 'error', title: 'Đã lưu bản nháp “Library tour” nhưng chưa gửi được kiểm chứng' })
+    expect(screen.getByRole('button', { name: 'Gửi kiểm chứng tuyến' })).toBeInTheDocument()
+  })
 
   it('selects only PASS POI revisions for the chosen map and creates/submits the exact route revision', async () => {
     renderAt('/staff/manage/routes/new')

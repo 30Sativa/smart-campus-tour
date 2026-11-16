@@ -179,22 +179,16 @@ function PoiDetail({ proposal }: { proposal: PoiProposal }) {
   const needsNarration = status === 'PASS' && !narration.approved
   const next = needsNarration
     ? { text: proposal.narration?.draft
-        ? 'Đã đạt kiểm chứng. Thuyết minh đang chờ một Staff khác duyệt trước khi dùng được trong tuyến.'
+        ? 'Đã đạt kiểm chứng. Thuyết minh cần một Staff khác duyệt trước khi dùng trong tuyến.'
         : 'Đã đạt kiểm chứng. Viết thuyết minh và nhờ một Staff khác duyệt để dùng được trong tuyến.',
-      action: proposal.narration?.draft ? 'Mở để duyệt thuyết minh' : 'Viết thuyết minh', icon: Pencil }
+      action: proposal.narration?.draft ? 'Mở thuyết minh' : 'Viết thuyết minh', icon: Pencil }
     : NEXT_STEP[status]
   const retired = isRetired(proposal)
   const tone = retired ? RETIRED_CHIP : needsNarration ? NEXT_TONE.WAIT : NEXT_TONE[status]
-  const facts: Array<[string, string]> = [
-    ['Đầu camera VR', headPresetLabel(proposal.revision.cameraPreset)],
-    ['Thuyết minh', narration.label],
-    ['Cách kiểm chứng', proposal.revision.verificationMethod ? verificationMethodLabel[proposal.revision.verificationMethod] ?? '-' : '-'],
-  ]
+  // The row above already shows the check status, check method and narration badge; only the camera is new here.
   return (
     <section aria-label="Điểm đang chọn" className="space-y-3 px-4 pb-4 pl-15">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">
-        {facts.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-[#718096]">{label}</dt><dd className="truncate font-semibold text-[#2d3748]">{value}</dd></div>)}
-      </dl>
+      <p className="text-[13px] text-[#718096]">Đầu camera VR: <span className="font-semibold text-[#2d3748]">{headPresetLabel(proposal.revision.cameraPreset)}</span></p>
       <p className={`rounded-xl px-3.5 py-2.5 text-[13px] ${tone}`}>{retired
         ? 'Đã ngưng dùng. Tuyến và Tour đã lưu vẫn giữ điểm này, nhưng tuyến mới không chọn được và điểm không sửa hay gửi kiểm được.'
         : next.text}</p>
