@@ -1,4 +1,5 @@
 import { ApiError } from '../../../api/client'
+import { formatDateTime } from '../../../components/ui/date-time'
 import type { TourState, TourSummary } from './types'
 
 export const TOUR_STATE_LABEL: Record<TourState, string> = {
@@ -67,10 +68,30 @@ export function backendMessage(error: ApiError): string | null {
 
 export const MISSING_ENDPOINT_MESSAGE = 'Không kết nối được chức năng này, có thể máy chủ chưa cập nhật.'
 
+/** Seats still free (never negative); null when the server has not sent seats. */
+export function seatsLeft(tour: { capacity?: number; heldSeats?: number }): number | null {
+  if (tour.capacity == null || tour.heldSeats == null) return null
+  return Math.max(0, tour.capacity - tour.heldSeats)
+}
+
 /** "Còn 12/20 chỗ"; null when the server has not sent seats. */
 export function seatsLabel(tour: { capacity?: number; heldSeats?: number }): string | null {
-  if (tour.capacity == null || tour.heldSeats == null) return null
-  return `Còn ${Math.max(0, tour.capacity - tour.heldSeats)}/${tour.capacity} chỗ`
+  const left = seatsLeft(tour)
+  return left == null ? null : `Còn ${left}/${tour.capacity} chỗ`
+}
+
+/**
+ * The READY confirmation's warning for a Tour on a shift that is closed before its registration deadline or with seats
+ * still free: READY closes registration early. Null for a quick Tour, whose list Staff closes with READY anyway, and
+ * when neither holds. Display only: READY is not blocked.
+ */
+export function earlyReadyWarning(tour: TourTiming & { capacity?: number; heldSeats?: number }, now: number): string | null {
+  if (tour.isShortNotice) return null
+  const closesAt = registrationClosesAtOf(tour)
+  const left = seatsLeft(tour)
+  if (now >= closesAt && !left) return null
+  const seats = left == null ? '' : ` và Tour còn ${left} chỗ`
+  return `Hạn đăng ký là ${formatDateTime(closesAt)}${seats}. Chốt bây giờ sẽ đóng đăng ký sớm: trường khác không đăng ký thêm được. Có thể mở lại trước giờ bắt đầu.`
 }
 
 /** Seats for a Tour that can still fill them; an ended Tour has nothing left to book. */
