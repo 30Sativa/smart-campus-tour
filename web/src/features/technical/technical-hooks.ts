@@ -123,7 +123,7 @@ export const useRecordRouteTest = () => useTechnicalMutation(
   ({ run }: { routeName: string; run: RouteTestRunInput }) => technicalApi.recordRouteTest(run),
   keys.routeTests,
   ({ routeName, run }) => run.resultCode === 'PASS'
-    ? { title: `Đã ghi chạy thử đạt: ${routeName}`, detail: 'Đây là bằng chứng thủ công, chưa làm tuyến READY.' }
+    ? { title: `Đã ghi chạy thử đạt: ${routeName}`, detail: 'Kết quả do người kiểm tra nhập. Tuyến đã dùng được để tạo Tour.' }
     : { tone: 'info', title: `Đã ghi chạy thử không đạt: ${routeName}`, detail: 'Staff cần tạo phiên bản mới nếu phải đổi tuyến.' })
 
 /** Every technical record ends with a notification saying what was written; refusals stay on the form. */
@@ -234,7 +234,7 @@ export function useClearRobotMap() {
 }
 
 export const useVerifyPoi = () => useTechnicalMutation(technicalApi.verifyPoi, keys.poiProposals, (input) => input.resultCode === 'PASS'
-  ? { title: 'Đã ghi POI đạt', detail: `Kiểm tra cùng robot ${input.robotCode}, gắn với revision ${input.revisionNumber}.` }
+  ? { title: 'Đã ghi POI đạt', detail: `Kiểm tra cùng robot ${input.robotCode}, gắn với phiên bản POI ${input.revisionNumber}.` }
   : { tone: 'info', title: 'Đã ghi POI không đạt', detail: 'Staff cần chỉnh POI rồi gửi lại để kiểm chứng.' })
 
 /**

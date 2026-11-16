@@ -8,7 +8,7 @@ import { revisionTone } from '../../features/administration/routes/route-message
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
-import { CheckRow, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
+import { CheckRow, ComputedResult, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { durationTooShortText, errorText, robotNotReadyReason, routeTestErrors } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
 import { usePhysicalRobots, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
@@ -50,7 +50,7 @@ export default function TechnicalConfirmationsPage() {
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="Tuyến" title="Xác nhận chạy thử" description="Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Đây là bằng chứng người kiểm tra nhập, không chứng minh robot đã chạy thật và không tự cho phép tạo Tour." />
+      <PageHeader eyebrow="Tuyến" title="Xác nhận chạy thử" description="Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Kết quả do người kiểm tra nhập, hệ thống không tự xác minh robot đã chạy. Tuyến đạt thì Staff dùng được để tạo Tour." />
 
       {!queue.isPending && !queue.error && (
         <div className="mb-3">
@@ -105,8 +105,6 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const participants = useRouteTestParticipants()
   const [robotCode, setRobotCode] = useState('')
   const [staffUserId, setStaffUserId] = useState('')
-  // No result is chosen up front; the checker picks one after the run.
-  const [resultCode, setResultCode] = useState<'PASS' | 'FAIL' | null>(null)
   const [allStopsReached, setAllStopsReached] = useState(false)
   const [safelyStopped, setSafelyStopped] = useState(false)
   const [localizationPassed, setLocalizationPassed] = useState(false)
@@ -121,9 +119,8 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
     { label: 'Robot dừng an toàn', checked: safelyStopped, set: setSafelyStopped },
     { label: 'Định vị đạt', checked: localizationPassed, set: setLocalizationPassed },
   ]
-  const missing = checks.filter(check => !check.checked).map(check => check.label)
-  const passBlocked = resultCode === 'PASS' && missing.length > 0
-  const failBlocked = resultCode === 'FAIL' && missing.length === 0
+  // The result follows the ticks: all three ticked is Đạt, any left unticked is Không đạt and needs a reason.
+  const resultCode: 'PASS' | 'FAIL' = checks.every(check => check.checked) ? 'PASS' : 'FAIL'
   const seconds = Number(duration)
   const durationValid = Number.isInteger(seconds) && seconds >= 1 && seconds <= 86400
   // The server refuses a total that does not exceed the dwell sum (ROUTE_TEST_DURATION_TOO_SHORT): it becomes the reservation length.
@@ -135,14 +132,11 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const errors = record.error ? routeTestErrors(record.error) : {}
   const changed = () => { record.reset(); setRequestId(crypto.randomUUID()) }
   const missingToSave = [
-    !resultCode && 'chọn kết quả',
     !robotCode && 'chọn robot',
     robotNotReady && `robot ${robotNotReady}`,
     !staffUserId && 'chọn Staff đi cùng',
     !durationValid && 'nhập tổng thời gian chạy',
     durationTooShort && `thời gian chạy lớn hơn tổng dừng ${dwell} giây`,
-    passBlocked && 'tick đủ ba mục để ghi Đạt',
-    failBlocked && 'bỏ tick mục không đạt',
     resultCode === 'FAIL' && !failureReason.trim() && 'nhập lý do không đạt',
     !evidence.trim() && 'nhập ghi chú bằng chứng',
   ].filter((item): item is string => Boolean(item))
@@ -150,7 +144,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!ready || !resultCode || record.isPending) return
+    if (!ready || record.isPending) return
     record.mutate({ routeName: route.name, run: {
       routeId: route.routeId, revisionId: route.revisionId, requestId, robotCode, participatingStaffUserId: staffUserId, resultCode,
       allStopsReached, safelyStopped, localizationPassed, measuredDurationSeconds: seconds,
@@ -160,7 +154,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
 
   return (
     <Modal open size="lg" title={`Chạy thử ${route.name}`} description={`Phiên bản ${route.revisionNumber} · bản đồ ${route.mapKey} · ${route.stops.length} điểm dừng. Đạt khi cả ba kiểm tra đều đạt.`} onClose={onClose}
-      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
+      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="route-test-form" className="space-y-3.5" onSubmit={submit}>
         <div>
           <RobotPicker id="route-test-robot" label="Robot vật lý" mapKey={route.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} requireReady emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
@@ -175,17 +169,13 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
           {participants.data?.length === 0 && <p role="status" className="mt-1 text-sm text-[#b23e18]">Chưa có tài khoản Staff đang hoạt động. Cần một Staff đi cùng để ghi kết quả.</p>}
           {errors.staff && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.staff}</p>}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ResultToggle id="route-test-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này khi sửa tuyến." />
-          <div><label className={labelClass} htmlFor="route-test-duration">Tổng thời gian chạy toàn tuyến (giây)</label><input id="route-test-duration" aria-describedby="route-test-duration-hint" aria-invalid={durationTooShort || Boolean(errors.duration)} className={`${inputClass} mt-1`} type="number" required min={1} max={86400} step={1} value={duration} onChange={event => { setDuration(event.target.value); changed() }} /><p id="route-test-duration-hint" className="mt-1 text-xs text-[#64748b]">Tính từ lúc xuất phát đến khi kết thúc, gồm cả thời gian dừng tại các điểm. Tổng dừng {dwell} giây, thời gian chạy phải lớn hơn.</p>
+        <div><label className={labelClass} htmlFor="route-test-duration">Tổng thời gian chạy toàn tuyến (giây)</label><input id="route-test-duration" aria-describedby="route-test-duration-hint" aria-invalid={durationTooShort || Boolean(errors.duration)} className={`${inputClass} mt-1`} type="number" required min={1} max={86400} step={1} value={duration} onChange={event => { setDuration(event.target.value); changed() }} /><p id="route-test-duration-hint" className="mt-1 text-xs text-[#64748b]">Tính từ lúc xuất phát đến khi kết thúc, gồm cả thời gian dừng tại các điểm. Tổng dừng {dwell} giây, thời gian chạy phải lớn hơn.</p>
             {(durationTooShort || errors.duration) && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.duration ?? durationTooShortText(dwell)}</p>}</div>
-        </div>
         <div className="space-y-2">
+          <p className="text-xs text-[#64748b]">Tick mục đã đạt. Còn mục chưa tick thì kết quả là Không đạt.</p>
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
-          {passBlocked && missing.length < checks.length && <p role="alert" className="text-xs text-[#b23e18]">Chưa thể ghi Đạt, còn thiếu: {missing.join(', ')}. Tick đủ cả ba mục hoặc chọn Không đạt.</p>}
-          {failBlocked && <p role="alert" className="text-xs text-[#b23e18]">Không đạt cần ít nhất một mục chưa đạt. Bỏ tick mục không đạt hoặc chọn Đạt.</p>}
         </div>
-        {resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="route-test-reason">Lý do không đạt</label><input id="route-test-reason" className={`${inputClass} mt-1`} required maxLength={1000} value={failureReason} onChange={event => { setFailureReason(event.target.value); changed() }} /></div>}
+        {resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="route-test-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này khi sửa tuyến.</p><input id="route-test-reason" className={`${inputClass} mt-1`} required maxLength={1000} value={failureReason} onChange={event => { setFailureReason(event.target.value); changed() }} /></div>}
         <div><label className={labelClass} htmlFor="route-test-evidence">Ghi chú bằng chứng</label><textarea id="route-test-evidence" rows={3} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={event => { setEvidence(event.target.value); changed() }} /></div>
         {errors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errors.form}</p>}
         <Note>Mỗi lần chạy được ghi thêm, không sửa được. Lần chạy mới nhất của cùng cấu hình là kết quả đang áp dụng.</Note>

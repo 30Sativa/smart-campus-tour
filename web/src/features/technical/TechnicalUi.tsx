@@ -54,7 +54,15 @@ export function ResultToggle({ id, value, onChange, hint }: { id: string; value:
   )
 }
 
-export type SetupStep = { label: string; done: boolean; hint: string; action?: ReactNode }
+/**
+ * The result an observation form will record, worked out from its ticks: every box ticked is Đạt,
+ * anything left unticked is Không đạt. Shown beside the save button so the checker sees what is saved.
+ */
+export function ComputedResult({ passed }: { passed: boolean }) {
+  return <p role="status" className="flex items-center gap-1.5 text-[13px] font-semibold text-[#334155]">Kết quả: <ToneBadge tone={passed ? 'ok' : 'danger'}>{passed ? 'Đạt' : 'Không đạt'}</ToneBadge></p>
+}
+
+export type SetupStep ={ label: string; done: boolean; hint: string; action?: ReactNode }
 
 /**
  * A numbered list of steps that can span days and happen partly off the web, so it is a

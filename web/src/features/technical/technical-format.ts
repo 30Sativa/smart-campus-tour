@@ -77,7 +77,7 @@ export type PoiVerifyErrors = { robotCode?: string; reason?: string; evidenceNot
 
 const poiVerifyConflicts: Record<string, PoiVerifyErrors> = {
   MAP_NOT_DEPLOYED: { robotCode: 'Robot này chưa có kiểm tra triển khai đạt mới nhất trên đúng phiên bản map của POI. Ghi kết quả kiểm tra map cho robot trước rồi thử lại.' },
-  STALE_VERSION: { form: 'POI vừa được Staff thay đổi. Đóng cửa sổ này và mở lại để kiểm tra revision mới nhất.' },
+  STALE_VERSION: { form: 'POI vừa được Staff thay đổi. Đóng cửa sổ này và mở lại để kiểm tra phiên bản mới nhất.' },
   IDEMPOTENCY_CONFLICT: { form: 'Yêu cầu này đã được gửi với nội dung khác. Đóng cửa sổ này và mở lại.' },
 }
 
@@ -94,7 +94,7 @@ export function poiVerifyErrors(error: unknown): PoiVerifyErrors {
   const errors = typeof payload.errors === 'object' && payload.errors !== null ? payload.errors as Record<string, unknown> : {}
   if (error.status === 409) {
     if (typeof errors.code === 'string' && poiVerifyConflicts[errors.code]) return poiVerifyConflicts[errors.code]
-    if (message.includes('already exists')) return { form: 'Revision này đã có kết quả kiểm chứng. Đóng cửa sổ này để tải lại danh sách.' }
+    if (message.includes('already exists')) return { form: 'Phiên bản POI này đã có kết quả kiểm chứng. Đóng cửa sổ này để tải lại danh sách.' }
   }
   if (error.status === 404 && message.toLowerCase().includes('robot')) return { robotCode: 'Robot này không còn trong danh sách đã đăng ký. Chọn robot khác.' }
   if (error.status !== 400) return { form: errorText(error) }

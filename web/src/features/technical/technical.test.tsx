@@ -57,7 +57,11 @@ let credentialStatus: RobotCredentialView = { robotCode: 'amr-01', status: 'NOT_
 const openRobotDetail = async () => fireEvent.click(await screen.findByRole('button', { name: 'Quản lý amr-01' }))
 const chooseResult = (label: 'Đạt' | 'Không đạt') => fireEvent.click(within(screen.getByRole('group', { name: 'Kết quả' })).getByRole('button', { name: label }))
 const POI_CHECKS = ['Robot tới đúng POI', 'Robot dừng đúng vị trí', 'Định vị đạt', 'Đầu camera làm đúng: Nhìn phía trước']
-const passAllPoiChecks = () => { chooseResult('Đạt'); for (const label of POI_CHECKS) fireEvent.click(screen.getByLabelText(label)) }
+const passAllPoiChecks = () => { for (const label of POI_CHECKS) fireEvent.click(screen.getByLabelText(label)) }
+const ROUTE_CHECKS = ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Định vị đạt']
+const passAllRouteChecks = () => { for (const label of ROUTE_CHECKS) fireEvent.click(screen.getByLabelText(label)) }
+/** The result a POI or route form will save, worked out from its ticks and shown beside the save button. */
+const computedResult = () => within(screen.getByRole('dialog')).getByText(/^Kết quả:/)
 
 function renderPage(page: React.ReactNode, path = '/') {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[path]}>{page}</MemoryRouter></QueryClientProvider>)
@@ -770,52 +774,50 @@ describe('Technical Staff API integration', () => {
   }
   const verificationCalls = () => requests.filter(item => item.url.pathname.endsWith('/verification'))
 
-  it('starts with no result chosen and nothing ticked, and names the head action to confirm', async () => {
+  it('starts with nothing ticked, so the result reads Không đạt and asks for a reason, and names the head action', async () => {
     await openPoiCheck()
-    const result = within(screen.getByRole('group', { name: 'Kết quả' }))
-    expect(result.getByRole('button', { name: 'Đạt' })).toHaveAttribute('aria-pressed', 'false')
-    expect(result.getByRole('button', { name: 'Không đạt' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByRole('group', { name: 'Kết quả' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Đạt' })).not.toBeInTheDocument()
     for (const label of POI_CHECKS) expect(screen.getByLabelText(label)).not.toBeChecked()
     expect(screen.queryByLabelText('Localization đạt')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Camera preset được xác nhận')).not.toBeInTheDocument()
+    expect(computedResult()).toHaveTextContent('Kết quả: Không đạt')
+    expect(screen.getByLabelText('Lý do không đạt')).toBeRequired()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
-    expect(screen.getByText('Chưa lưu được: chọn kết quả.')).toBeInTheDocument()
+    expect(screen.getByText('Chưa lưu được: nhập lý do không đạt.')).toBeInTheDocument()
     fireEvent.submit(document.getElementById('poi-verify-form')!)
     expect(verificationCalls()).toHaveLength(0)
   })
 
-  it('blocks Đạt until all four checks are ticked and names the missing one', async () => {
+  it('reads Đạt once all four checks are ticked and saves PASS without a reason', async () => {
     await openPoiCheck()
-    chooseResult('Đạt')
     for (const label of POI_CHECKS.slice(0, 3)) fireEvent.click(screen.getByLabelText(label))
-    expect(screen.getByRole('alert')).toHaveTextContent('còn thiếu: Đầu camera làm đúng: Nhìn phía trước')
-    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
-    fireEvent.submit(document.getElementById('poi-verify-form')!)
-    expect(verificationCalls()).toHaveLength(0)
+    expect(computedResult()).toHaveTextContent('Kết quả: Không đạt')
+    expect(screen.getByLabelText('Lý do không đạt')).toBeInTheDocument()
 
     fireEvent.click(screen.getByLabelText('Đầu camera làm đúng: Nhìn phía trước'))
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(computedResult()).toHaveTextContent('Kết quả: Đạt')
+    expect(screen.queryByLabelText('Lý do không đạt')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Chưa lưu được/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
     await waitFor(() => expect(verificationCalls()).toHaveLength(1))
-    expect(JSON.parse(String(verificationCalls()[0].init?.body))).toMatchObject({ resultCode: 'PASS', reached: true, stopped: true, localizationPassed: true, cameraPresetConfirmed: true })
+    const body = JSON.parse(String(verificationCalls()[0].init?.body))
+    expect(body).toMatchObject({ resultCode: 'PASS', reached: true, stopped: true, localizationPassed: true, cameraPresetConfirmed: true })
+    expect(body.reason).toBeUndefined()
   })
 
-  it('requires a failed observation and a reason for Không đạt', async () => {
+  it('records Không đạt with the unticked observation false and a required reason', async () => {
     await openPoiCheck()
     passAllPoiChecks()
-    chooseResult('Không đạt')
-    const result = within(screen.getByRole('group', { name: 'Kết quả' }))
-    expect(result.getByRole('button', { name: 'Không đạt' })).toHaveAttribute('aria-pressed', 'true')
-    expect(result.getByRole('button', { name: 'Đạt' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('alert')).toHaveTextContent('Không đạt cần ít nhất một mục chưa đạt')
     fireEvent.click(screen.getByLabelText('Robot dừng đúng vị trí'))
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(computedResult()).toHaveTextContent('Kết quả: Không đạt')
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    expect(screen.getByText('Chưa lưu được: nhập lý do không đạt.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch vị trí.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
     await waitFor(() => expect(verificationCalls()).toHaveLength(1))
-    expect(JSON.parse(String(verificationCalls()[0].init?.body))).toMatchObject({ resultCode: 'FAIL', stopped: false, reason: 'Lệch vị trí.' })
+    expect(JSON.parse(String(verificationCalls()[0].init?.body))).toMatchObject({ resultCode: 'FAIL', reached: true, stopped: false, localizationPassed: true, cameraPresetConfirmed: true, reason: 'Lệch vị trí.' })
   })
 
   it('replaces the generic validation refusal with Vietnamese text', async () => {
@@ -874,7 +876,6 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByText(/không phải kết quả đạt trên library-v1/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
     expect(screen.getByText('Chưa lưu được: robot chưa kiểm tra triển khai đạt trên map này.')).toBeInTheDocument()
-    fireEvent.click(within(screen.getByRole('group', { name: 'Kết quả' })).getByRole('button', { name: 'Không đạt' }))
     fireEvent.click(screen.getByLabelText('Robot dừng đúng vị trí'))
     fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch vị trí.' } })
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
@@ -884,7 +885,6 @@ describe('Technical Staff API integration', () => {
 
   it('says what is missing when Không đạt cannot be saved yet', async () => {
     await openPoiCheck()
-    fireEvent.click(within(screen.getByRole('group', { name: 'Kết quả' })).getByRole('button', { name: 'Không đạt' }))
     fireEvent.click(screen.getByLabelText('Robot dừng đúng vị trí'))
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
     expect(screen.getByText('Chưa lưu được: nhập lý do không đạt.')).toBeInTheDocument()
@@ -1020,8 +1020,7 @@ describe('Technical Staff API integration', () => {
 
   it('states that a route record is human evidence and shows no result without a queue item', async () => {
     renderPage(<TechnicalConfirmationsPage />)
-    expect(screen.getByText(/không chứng minh robot đã chạy thật/)).toBeInTheDocument()
-    expect(screen.getByText(/không tự cho phép tạo Tour/)).toBeInTheDocument()
+    expect(screen.getByText('Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Kết quả do người kiểm tra nhập, hệ thống không tự xác minh robot đã chạy. Tuyến đạt thì Staff dùng được để tạo Tour.')).toBeInTheDocument()
     expect(await screen.findByText('Chưa có tuyến chờ chạy thử')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Ghi kết quả/ })).not.toBeInTheDocument()
   })
@@ -1030,13 +1029,17 @@ describe('Technical Staff API integration', () => {
     await openRouteTest()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(within(screen.getByRole('group', { name: 'Kết quả' })).getAllByRole('button').map(button => button.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
-    expect(screen.getByText(/Chưa lưu được: chọn kết quả/)).toBeInTheDocument()
-    chooseResult('Đạt')
+    expect(screen.queryByRole('group', { name: 'Kết quả' })).not.toBeInTheDocument()
+    // Nothing ticked yet: the form reads Không đạt and asks for the reason, it never looks finished.
+    expect(computedResult()).toHaveTextContent('Kết quả: Không đạt')
+    expect(screen.getByText('Chưa lưu được: nhập lý do không đạt.')).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText('Robot dừng an toàn'))
-    expect(screen.getByRole('alert')).toHaveTextContent('còn thiếu: Robot đi đủ các điểm dừng')
-    fireEvent.click(screen.getByLabelText('Robot dừng an toàn'))
-    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Định vị đạt']) fireEvent.click(screen.getByLabelText(label))
+    expect(computedResult()).toHaveTextContent('Kết quả: Không đạt')
+    fireEvent.click(screen.getByLabelText('Robot đi đủ các điểm dừng'))
+    fireEvent.click(screen.getByLabelText('Định vị đạt'))
+    expect(computedResult()).toHaveTextContent('Kết quả: Đạt')
+    expect(screen.queryByLabelText('Lý do không đạt')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
     await waitFor(() => expect(testRunCalls()).toHaveLength(1))
     expect(testRunCalls()[0].url.pathname).toBe('/api/technical/routes/route-1/revisions/rev-1/test-runs')
@@ -1051,8 +1054,7 @@ describe('Technical Staff API integration', () => {
   it('blocks a total run time that does not exceed the dwell sum, in the server words', async () => {
     await openRouteTest()
     expect(screen.getByText(/Tổng dừng 60 giây, thời gian chạy phải lớn hơn/)).toBeInTheDocument()
-    chooseResult('Đạt')
-    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Định vị đạt']) fireEvent.click(screen.getByLabelText(label))
+    passAllRouteChecks()
     fireEvent.change(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)'), { target: { value: '30' } })
     expect(screen.getByRole('alert')).toHaveTextContent('Tổng thời gian chạy phải lớn hơn tổng thời gian dừng (60 giây).')
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
@@ -1066,8 +1068,7 @@ describe('Technical Staff API integration', () => {
   it('shows the server duration refusal under the time field', async () => {
     routeRefusal = { status: 409, body: { message: 'Tổng thời gian chạy phải lớn hơn tổng thời gian dừng (90 giây).', errors: { code: 'ROUTE_TEST_DURATION_TOO_SHORT', fields: null } } }
     await openRouteTest()
-    chooseResult('Đạt')
-    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Định vị đạt']) fireEvent.click(screen.getByLabelText(label))
+    passAllRouteChecks()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('(90 giây)')
     expect(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)')).toHaveAttribute('aria-invalid', 'true')
@@ -1075,8 +1076,7 @@ describe('Technical Staff API integration', () => {
 
   it('closes the dialog and keeps it closed when the saved route moves to the recorded list', async () => {
     await openRouteTest()
-    chooseResult('Đạt')
-    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Định vị đạt']) fireEvent.click(screen.getByLabelText(label))
+    passAllRouteChecks()
     routeQueue = []
     routeCatalog = [{ ...routeFixture, verificationStatus: 'PASS' }]
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
@@ -1097,22 +1097,25 @@ describe('Technical Staff API integration', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('requires a reason and a failed observation for a failed run', async () => {
+  it('records Không đạt when a box is left unticked, with the reason required', async () => {
     await openRouteTest()
-    fireEvent.click(within(screen.getByRole('group', { name: 'Kết quả' })).getByRole('button', { name: 'Không đạt' }))
+    fireEvent.click(screen.getByLabelText('Robot dừng an toàn'))
+    fireEvent.click(screen.getByLabelText('Định vị đạt'))
+    expect(computedResult()).toHaveTextContent('Kết quả: Không đạt')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Lý do không đạt')).toBeRequired()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    expect(screen.getByText('Chưa lưu được: nhập lý do không đạt.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch điểm 2.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
     await waitFor(() => expect(testRunCalls()).toHaveLength(1))
-    expect(JSON.parse(String(testRunCalls()[0].init?.body))).toMatchObject({ resultCode: 'FAIL', failureReason: 'Lệch điểm 2.', allStopsReached: false })
+    expect(JSON.parse(String(testRunCalls()[0].init?.body))).toMatchObject({ resultCode: 'FAIL', failureReason: 'Lệch điểm 2.', allStopsReached: false, safelyStopped: true, localizationPassed: true })
   })
 
   it('shows a refused robot beside its field and retries with the same request id', async () => {
     routeRefusal = { status: 409, body: { message: 'x', errors: { code: 'MAP_NOT_CURRENTLY_DEPLOYED', fields: null } } }
     await openRouteTest()
-    chooseResult('Đạt')
-    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Định vị đạt']) fireEvent.click(screen.getByLabelText(label))
+    passAllRouteChecks()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
     expect(await screen.findByText(/phải đạt trên đúng bản đồ và checksum/)).toBeInTheDocument()
     routeRefusal = null
@@ -1135,8 +1138,7 @@ describe('Technical Staff API integration', () => {
 
   it('blocks saving when the picked robot loses its connection confirmation', async () => {
     await openRouteTest()
-    chooseResult('Đạt')
-    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Định vị đạt']) fireEvent.click(screen.getByLabelText(label))
+    passAllRouteChecks()
     physicalRobots = [makePhysicalRobot({ connectionStatus: 'UNCONFIRMED', firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null })]
     fireEvent.click(screen.getByRole('button', { name: 'Cập nhật trạng thái' }))
     expect(await screen.findByText(/Robot này chưa xác nhận kết nối/)).toBeInTheDocument()
