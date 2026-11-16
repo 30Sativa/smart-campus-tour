@@ -3,6 +3,7 @@ import { tourError } from './tour-messages'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useToastStore } from '../../../components/ui/toast-store'
+import { formatDuration, formatTime } from '../../../components/ui/date-time'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageTourCreatePage from '../../../routes/staff/manage/StaffManageTourCreatePage'
@@ -387,6 +388,19 @@ describe('live Tour management', () => {
     expect(screen.queryByText(/^Cần:/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).not.toHaveAttribute('aria-describedby')
+  })
+
+  it('previews the expected duration and robot hold the server would give a quick Tour created now (B12)', async () => {
+    const quick = { expectedDurationSeconds: 1260, startBy: '2099-01-03T01:30:00.000Z', holdStartsAt: '2099-01-03T01:00:00.000Z', holdEndsAt: '2099-01-03T02:06:00.000Z' }
+    robotRows = [{ ...BASE_ROBOTS[0], quick }]
+    api()
+    renderAt('/staff/manage/tours/new?kind=quick')
+    await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })
+    const how = within(screen.getByRole('region', { name: 'Tour nhanh chạy thế nào' }))
+    expect(how.queryByText('Thời lượng dự kiến')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
+    expect(await how.findByText(`${formatDuration(1260)} (tự tính từ thời gian dừng và quãng đường)`)).toBeInTheDocument()
+    expect(how.getByText(`Bắt đầu trước ${formatTime(quick.startBy)}, giữ robot ${formatTime(quick.holdStartsAt)} - ${formatTime(quick.holdEndsAt)}`, { exact: false })).toBeInTheDocument()
   })
 
   it('opens the quick form from an old ?kind=short link', async () => {

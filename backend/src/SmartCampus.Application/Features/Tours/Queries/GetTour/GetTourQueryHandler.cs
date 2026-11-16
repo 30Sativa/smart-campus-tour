@@ -1,6 +1,7 @@
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Common.Abstractions.Tours;
 using SmartCampus.Application.Features.Tours.Commands.RetryTourLeg;
@@ -11,13 +12,15 @@ namespace SmartCampus.Application.Features.Tours.Queries.GetTour;
 
 public sealed class GetTourQueryHandler(ITourManagementRepository repository, IRouteManagementRepository routes,
     IRouteRevisionRepository revisions, IRegistrationRepository registrations, IMapVersionRepository maps, TourStartPreflight preflight,
-    TourScheduleSettings settings, ITourAutoAdvanceStore autoAdvance, TimeProvider clock) : IRequestHandler<GetTourQuery, TourDetails>
+    TourScheduleSettings settings, ITourAutoAdvanceStore autoAdvance, FleetCommandSettings fleet, TimeProvider clock)
+    : IRequestHandler<GetTourQuery, TourDetails>
 {
     public async Task<TourDetails> Handle(GetTourQuery query, CancellationToken ct)
     {
         await using var snapshot = await repository.BeginReadAsync(query.Id, ct);
         var tour = await repository.FindAsync(query.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
-        var summary = await repository.GetSummaryAsync(query.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
+        var summary = TourAutoCancel.WithDeadlines(
+            await repository.GetSummaryAsync(query.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour."), fleet.StartLateLimit);
         var usage = await repository.GetUsageAsync(query.Id, ct);
         // The same checks Mark READY runs, without its locks; the write rechecks them all.
         var blockers = await TourReadiness.EvaluateAsync(tour, usage, repository, registrations, revisions, maps, clock, lockTarget: false, ct);

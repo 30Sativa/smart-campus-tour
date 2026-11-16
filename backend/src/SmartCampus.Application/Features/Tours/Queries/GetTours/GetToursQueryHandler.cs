@@ -1,16 +1,19 @@
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Models;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.Routes;
 
 namespace SmartCampus.Application.Features.Tours.Queries.GetTours;
 
 public sealed class GetToursQueryHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, IMapVersionRepository maps, TimeProvider clock) : IRequestHandler<GetToursQuery, PagedResult<TourSummary>>
+    IRouteRevisionRepository revisions, IMapVersionRepository maps, FleetCommandSettings fleet, TimeProvider clock)
+    : IRequestHandler<GetToursQuery, PagedResult<TourSummary>>
 {
     public async Task<PagedResult<TourSummary>> Handle(GetToursQuery query, CancellationToken ct)
     {
-        var page = await repository.ListAsync(query.Request with { Now = clock.GetUtcNow() }, ct);
+        var listed = await repository.ListAsync(query.Request with { Now = clock.GetUtcNow() }, ct);
+        var page = listed with { Items = listed.Items.Select(row => TourAutoCancel.WithDeadlines(row, fleet.StartLateLimit)).ToArray() };
         if (!query.Request.IncludeReadyBlockers) return page;
 
         // The READY checks the Tour detail shows, without locks: advisory, Mark READY rechecks them all.

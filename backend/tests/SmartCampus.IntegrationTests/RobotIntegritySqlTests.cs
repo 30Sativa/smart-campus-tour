@@ -116,8 +116,20 @@ public sealed class RobotIntegritySqlTests
         Assert.True(quick.Usable);
         Assert.Equal("Tour nhanh đầu", quick.HeldByTourName);
         Assert.NotNull(quick.HeldUntil);
-        // The shift form judges its hold per shift through the slots API, so the plain list names no holder.
-        Assert.Null(Assert.Single(await h.TourRobots(tested), robot => robot.RobotCode == First).HeldByTourName);
+        // B12: the quick form previews the duration and hold create would take now, matching the Tour just created.
+        var preview = Assert.IsType<QuickTourPreview>(quick.Quick);
+        await using (var db = h.Context())
+        {
+            var made = await db.TourRobotReservations.AsNoTracking().SingleAsync(r => r.Tour.Name == "Tour nhanh đầu");
+            Assert.Equal(made.ExpectedDurationSeconds ?? made.MeasuredDurationSeconds, preview.ExpectedDurationSeconds);
+            Assert.Equal(TourSchedule.ReservationBuffer, preview.HoldEndsAt - preview.StartBy - TimeSpan.FromSeconds(preview.ExpectedDurationSeconds));
+            Assert.True(preview.HoldStartsAt < preview.StartBy);
+            Assert.InRange(preview.HoldEndsAt - made.EndsAt, TimeSpan.Zero, TimeSpan.FromMinutes(2));
+        }
+        // The shift form judges its hold per shift through the slots API, so the plain list names no holder and no preview.
+        var plain = Assert.Single(await h.TourRobots(tested), robot => robot.RobotCode == First);
+        Assert.Null(plain.HeldByTourName);
+        Assert.Null(plain.Quick);
 
         await h.SetNeedsInspection(First);
         var held = Assert.Single(await h.TourRobots(tested), robot => robot.RobotCode == First);
