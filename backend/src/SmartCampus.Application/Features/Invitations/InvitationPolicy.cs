@@ -17,6 +17,14 @@ public static class InvitationPolicy
         invitation.RevokedAt is null && (tour.State is "SCHEDULED" or "READY" or "RUNNING" ||
         tour.State == "CANCELLED" && tour.StartedAt is not null);
 
+    /// <summary>
+    /// Whether a viewer may enter or keep watching: the invitation is still sendable, or a started Tour was
+    /// cancelled (fallback video) and the invitation is still revocable. Shared by AccessTour and viewer presence.
+    /// </summary>
+    public static bool CanEnter(Tour tour, GroupRegistration registration, Invitation invitation, DateTimeOffset now) =>
+        CanSend(tour, registration, invitation, now) ||
+        tour.State == "CANCELLED" && tour.StartedAt is not null && CanRevoke(tour, registration, invitation, now);
+
     public static bool CanReissue(Tour tour, GroupRegistration registration, Invitation invitation, DateTimeOffset now) =>
         invitation.RosterRow.ParticipationState == RosterParticipationStates.Accepted &&
         invitation.RosterRow.IsActive && invitation.ExpiresAt > now &&
