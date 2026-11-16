@@ -326,7 +326,9 @@ public sealed class InvitationEndpointTests
         var cookie = CookieHeader(join.Cookie!);
         Assert.DoesNotContain(code, join.Body.GetRawText());
         Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "session", cookie: cookie)).Status);
-        Assert.Equal(HttpStatusCode.Conflict, (await AccessAsync(host.Client, f.TourId, "join", code)).Status);
+        var otherBrowser = await AccessAsync(host.Client, f.TourId, "join", code);
+        Assert.Equal(HttpStatusCode.Conflict, otherBrowser.Status);
+        Assert.Equal(InUseMessage, otherBrowser.Body.GetProperty("message").GetString());
         Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, Guid.NewGuid(), "join", code)).Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await AccessAsync(host.Client, f.TourId, "leave", cookie: cookie, origin: "https://evil.test")).Status);
 
@@ -423,11 +425,12 @@ public sealed class InvitationEndpointTests
             session.LastSeenAt = staleLastSeen;
             await db.SaveChangesAsync();
         }
+        // Past the reconnect grace but inside the lease: the same browser is told it is held, not that the code is bad.
         var stale = await AccessAsync(host.Client, f.TourId, "session", cookie: bothCookies);
-        Assert.Equal(HttpStatusCode.Unauthorized, stale.Status);
+        AssertReconnectWindowExpired(stale);
         Assert.Null(stale.Cookie);
         var deviceOnlyStale = await AccessAsync(host.Client, f.TourId, "session", cookie: deviceCookie);
-        Assert.Equal(HttpStatusCode.Unauthorized, deviceOnlyStale.Status);
+        AssertReconnectWindowExpired(deviceOnlyStale);
         Assert.Null(deviceOnlyStale.Cookie);
         await using (var db = f.Context())
         {
@@ -449,6 +452,79 @@ public sealed class InvitationEndpointTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "session", cookie: sessionCookie)).Status);
         Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "session",
             cookie: CookieHeader(deviceOnlyReconnect.Cookie!))).Status);
+    }
+
+    private const string InUseMessage = "Mã này đang được dùng trên một trình duyệt khác. Nhờ đại diện hoặc Staff cấp mã mới nếu đó không phải bạn.";
+
+    /// <summary>409 RECONNECT_WINDOW_EXPIRED; returns retryAfterSeconds after checking the minutes in the message agree.</summary>
+    private static int AssertReconnectWindowExpired((HttpStatusCode Status, JsonElement Body, string? Cookie) result)
+    {
+        Assert.Equal(HttpStatusCode.Conflict, result.Status);
+        var errors = result.Body.GetProperty("errors");
+        Assert.Equal("RECONNECT_WINDOW_EXPIRED", errors.GetProperty("code").GetString());
+        var retry = errors.GetProperty("fields").GetProperty("retryAfterSeconds");
+        Assert.Equal(1, retry.GetArrayLength());
+        var seconds = int.Parse(retry[0].GetString()!, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.True(seconds >= 1);
+        Assert.Equal("Trình duyệt này đã mất kết nối quá 2 phút nên phiên cũ đang bị giữ. Nhờ đại diện hoặc Staff cấp mã mới " +
+            $"để vào ngay, hoặc thử lại sau khoảng {(seconds + 59) / 60} phút.", result.Body.GetProperty("message").GetString());
+        return seconds;
+    }
+
+    [SchemaV11Fact]
+    public async Task ReconnectWindow_RefreshRejoins_StaleSameBrowserGets409WithRetry_ExpiryFreesTheCode()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var registration = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var invitationId = (await f.SendAsync(HttpMethod.Get, Path(registration))).Data.GetProperty("items")[0].GetProperty("id").GetGuid();
+        var code = await CodeAsync(f, invitationId);
+        var joined = await AccessAsync(host.Client, f.TourId, "join", code);
+        Assert.Equal(HttpStatusCode.OK, joined.Status);
+        var bothCookies = CookieHeader(joined.Cookie!);
+        var deviceCookie = bothCookies.Split("; ").Single(cookie => cookie.Contains("device", StringComparison.OrdinalIgnoreCase));
+        async Task<int> SessionRowsAsync() { await using var db = f.Context(); return await db.BrowserSessions.CountAsync(s => s.InvitationId == invitationId); }
+
+        // F5 inside the grace reuses the same row, by session cookie and by re-entering the code on this browser.
+        await f.Database.ExecuteAsync("UPDATE dbo.BrowserSessions SET LastSeenAt=DATEADD(second,-90,SYSDATETIMEOFFSET()) WHERE EndedAt IS NULL;");
+        Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "session", cookie: bothCookies)).Status);
+        await f.Database.ExecuteAsync("UPDATE dbo.BrowserSessions SET LastSeenAt=DATEADD(second,-90,SYSDATETIMEOFFSET()) WHERE EndedAt IS NULL;");
+        var rejoined = await AccessAsync(host.Client, f.TourId, "join", code, cookie: deviceCookie);
+        Assert.Equal(HttpStatusCode.OK, rejoined.Status);
+        bothCookies = CookieHeader(rejoined.Cookie!); // the code path rotates the session token
+        Assert.Equal(1, await SessionRowsAsync());
+
+        // A different browser (no cookies) is refused while the seat is held; no wait is offered.
+        var other = await AccessAsync(host.Client, f.TourId, "join", code);
+        Assert.Equal(HttpStatusCode.Conflict, other.Status);
+        Assert.Equal("INVITATION_IN_USE", other.Body.GetProperty("errors").GetProperty("code").GetString());
+        Assert.Equal(InUseMessage, other.Body.GetProperty("message").GetString());
+        Assert.False(other.Body.GetProperty("errors").TryGetProperty("fields", out var otherFields) &&
+            otherFields.ValueKind != JsonValueKind.Null);
+
+        // Past the grace, lease five minutes away: the session path and the code+device path both answer 409 with the wait.
+        await f.Database.ExecuteAsync("UPDATE dbo.BrowserSessions SET LastSeenAt=DATEADD(minute,-3,SYSDATETIMEOFFSET()), " +
+            "ExpiresAt=DATEADD(second,300,SYSDATETIMEOFFSET()) WHERE EndedAt IS NULL;");
+        Assert.InRange(AssertReconnectWindowExpired(await AccessAsync(host.Client, f.TourId, "session", cookie: bothCookies)), 270, 300);
+        Assert.InRange(AssertReconnectWindowExpired(await AccessAsync(host.Client, f.TourId, "join", code, cookie: deviceCookie)), 270, 300);
+        // Rounded up: just over a minute left reads as two minutes.
+        await f.Database.ExecuteAsync("UPDATE dbo.BrowserSessions SET ExpiresAt=DATEADD(millisecond,61500,SYSDATETIMEOFFSET()) WHERE EndedAt IS NULL;");
+        Assert.InRange(AssertReconnectWindowExpired(await AccessAsync(host.Client, f.TourId, "session", cookie: deviceCookie)), 61, 62);
+        Assert.Equal(1, await SessionRowsAsync());
+
+        // Once the lease passes the code is free again: for this browser, and then for a new one.
+        await f.Database.ExecuteAsync("UPDATE dbo.BrowserSessions SET ExpiresAt=DATEADD(minute,-1,SYSDATETIMEOFFSET()) WHERE EndedAt IS NULL;");
+        Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "join", code, cookie: deviceCookie)).Status);
+        Assert.Equal(2, await SessionRowsAsync());
+        await f.Database.ExecuteAsync("UPDATE dbo.BrowserSessions SET ExpiresAt=DATEADD(minute,-1,SYSDATETIMEOFFSET()) WHERE EndedAt IS NULL;");
+        Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "join", code)).Status);
+        Assert.Equal(3, await SessionRowsAsync());
+
+        // Unchanged 401s: wrong code, and a Tour outside SCHEDULED/READY/RUNNING even for a past holder.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "join", "WRONG-CODE")).Status);
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='COMPLETED';");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "join", code, cookie: deviceCookie)).Status);
     }
 
     [SchemaV11Fact]
