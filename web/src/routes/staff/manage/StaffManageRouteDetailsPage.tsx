@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
-import { dwellText, expectedDurationText, failedCheckNames, passedAt, routeAvailabilityError, saveResultText, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
+import { expectedDurationText, failedCheckNames, passedAt, routeAvailabilityError, saveResultText, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
 import { RouteFailBanner } from '../../../features/administration/routes/RouteFailBanner'
 import { campusShortDate, campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
@@ -51,7 +51,6 @@ function routeNotice(route: VersionedRoute, hasUnverifiedPoi: boolean): RouteNot
   return { tone: 'ok', text: 'Dùng được để tạo Tour. Khi tạo, hệ thống còn kiểm tra bản đồ, robot và ca.', createTour: true }
 }
 
-const formatDuration = dwellText
 const formatDuration = formatMinutesSeconds
 
 /**

@@ -122,7 +122,7 @@ public sealed class RobotIntegritySqlTests
         {
             var made = await db.TourRobotReservations.AsNoTracking().SingleAsync(r => r.Tour.Name == "Tour nhanh đầu");
             Assert.Equal(made.ExpectedDurationSeconds ?? made.MeasuredDurationSeconds, preview.ExpectedDurationSeconds);
-            Assert.Equal(TourSchedule.ReservationBuffer, preview.HoldEndsAt - preview.StartBy - TimeSpan.FromSeconds(preview.ExpectedDurationSeconds));
+            Assert.Equal(TourSchedule.ReservationBuffer, preview.HoldEndsAt - preview.StartBy - TimeSpan.FromSeconds(TourSchedule.RoundedDurationSeconds(preview.ExpectedDurationSeconds)));
             Assert.True(preview.HoldStartsAt < preview.StartBy);
             Assert.InRange(preview.HoldEndsAt - made.EndsAt, TimeSpan.Zero, TimeSpan.FromMinutes(2));
         }
