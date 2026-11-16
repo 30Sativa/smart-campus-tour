@@ -108,8 +108,8 @@ Với ca bị khoá, danh sách ca trống hiện lý do `SHIFT_BLOCKED`, còn t
 | Endpoint | Role | Việc |
 |---|---|---|
 | `GET /api/staff/manage/tours/shifts?from=&to=` | Staff | Các ca của từng ngày kèm `block`, tối đa 31 ngày |
-| `GET /api/admin/schedule-blocks?from=&to=` | Admin | Cùng dạng response với `shifts` |
-| `POST /api/admin/schedule-blocks` | Admin | Khoá ngày (`shiftCode` null) hoặc khoá một ca; không khoá được ngày đã qua |
+| `GET /api/admin/schedule-blocks?from=&to=` | Admin | Cùng dạng response với `shifts`, thêm `tours` ở mỗi ca và mỗi ngày: các Tour chưa huỷ đang chiếm chỗ, đúng những Tour làm lệnh khoá bị từ chối |
+| `POST /api/admin/schedule-blocks` | Admin | Khoá ngày (`shiftCode` null) hoặc khoá một ca; không khoá được ngày đã qua hay ca đã kết thúc; ca đang diễn ra vẫn khoá được nếu không còn Tour |
 | `POST /api/admin/schedule-blocks/{id}/remove` | Admin | Gỡ khoá, kể cả khoá của ngày đã qua |
 
 ## 6. Mã lỗi và lý do mới

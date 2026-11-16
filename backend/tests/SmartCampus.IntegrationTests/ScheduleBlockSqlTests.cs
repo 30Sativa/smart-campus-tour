@@ -40,6 +40,26 @@ public sealed class ScheduleBlockSqlTests
     }
 
     [SchemaV11Fact]
+    public async Task TheAdminCalendar_ListsTheSameToursThatRefuseTheLock_UntilTheyAreCancelled()
+    {
+        await using var h = await TourReadySqlTests.Harness.Create();
+        var date = DateOf(h);
+        var day = (await h.Send(new GetTourShiftsQuery(date, date, IncludeTours: true))).Days.Single();
+        var listed = Assert.Single(day.Shifts.Single(shift => shift.Code == "S1").Tours!);
+        Assert.Equal((h.TourId, h.Start), (listed.Id, listed.ScheduledStartAt));
+        Assert.Contains("Tour READY", listed.Name);
+        Assert.NotEqual("CANCELLED", listed.State);
+        Assert.Empty(day.Shifts.Single(shift => shift.Code == "S2").Tours!);
+        Assert.Equal([h.TourId], day.Tours!.Select(tour => tour.Id));
+        Assert.Null((await h.Send(new GetTourShiftsQuery(date, date))).Days.Single().Tours);
+
+        await h.Send(new CancelTourCommand(h.TourId, h.StaffId, new(Guid.NewGuid(), await h.Version(), "Đổi lịch")));
+        day = (await h.Send(new GetTourShiftsQuery(date, date, IncludeTours: true))).Days.Single();
+        Assert.All(day.Shifts, shift => Assert.Empty(shift.Tours!));
+        Assert.Empty(day.Tours!);
+    }
+
+    [SchemaV11Fact]
     public async Task ACancelledTour_NoLongerStopsTheShiftBeingClosed()
     {
         await using var h = await TourReadySqlTests.Harness.Create();

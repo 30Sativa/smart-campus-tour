@@ -2,8 +2,17 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Common.Abstractions.Persistence;
 
-/// <summary>A Tour that still occupies a day or shift being closed.</summary>
-public sealed record ScheduleBlockingTour(Guid Id, string Name, DateTimeOffset ScheduledStartAt);
+/// <summary>A robot hold still in force.</summary>
+public sealed record ScheduleHold(DateTimeOffset StartsAt, DateTimeOffset EndsAt);
+
+/// <summary>A Tour not cancelled with the robot holds it still has; <see cref="Occupies"/> says whether it stops a window being closed.</summary>
+public sealed record ScheduleBlockingTour(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State, bool IsShortNotice,
+    IReadOnlyList<ScheduleHold> Holds)
+{
+    /// <summary>Starts in the window, or holds a robot in it: the same test <see cref="IScheduleBlockRepository.ListToursInWindowAsync"/> applies in SQL.</summary>
+    public bool Occupies(DateTimeOffset startsAt, DateTimeOffset endsAt) =>
+        (ScheduledStartAt >= startsAt && ScheduledStartAt < endsAt) || Holds.Any(hold => hold.StartsAt < endsAt && hold.EndsAt > startsAt);
+}
 
 /// <summary>Admin day and shift blocks (docs/lich-tour-theo-ca.md §5).</summary>
 public interface IScheduleBlockRepository
