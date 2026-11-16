@@ -51,7 +51,7 @@ export function PoiYamlImporter({ map, disabled, onImport, onReadingChange }: Pr
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[#173b59]">Có file POI từ robot?</p>
-          <p className="mt-1 text-xs leading-5 text-[#647b8d]">Nhập .yaml / .yml (tối đa 64 KB) để điền X, Y và yaw vào bản nháp.</p>
+          <p className="mt-1 text-xs leading-5 text-[#647b8d]">Nhập .yaml / .yml (tối đa 64 KB) để điền X, Y và hướng vào POI đang sửa.</p>
         </div>
         <button type="button" disabled={disabled || !map} onClick={() => inputRef.current?.click()} className={buttonClass('secondary', 'sm')}>
           <Upload size={15} aria-hidden="true" />{reading ? 'Đang đọc YAML…' : 'Nhập file YAML'}

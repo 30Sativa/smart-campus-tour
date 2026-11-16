@@ -98,7 +98,7 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
         </QueueSection>
 
         <QueueSection title="POI cần hoàn thiện" total={poiWork} failed={pois.isError} loading={pois.isPending} onRetry={() => void pois.refetch()}
-          note={poiWaiting ? `Bản nháp và cần sửa, mọi bản đồ. ${poiWaiting} POI khác đang chờ kỹ thuật kiểm tra, Staff không cần làm gì.` : 'Bản nháp và cần sửa, mọi bản đồ.'}
+          note={poiWaiting ? `Chưa gửi kiểm và cần sửa, mọi bản đồ. ${poiWaiting} POI khác đang chờ kỹ thuật kiểm tra, Staff không cần làm gì.` : 'Chưa gửi kiểm và cần sửa, mọi bản đồ.'}
           more={<Link to="/staff/manage/pois" className={buttonClass('ghost', 'sm')}>Mở POI</Link>} />
       </div>}
     </section>

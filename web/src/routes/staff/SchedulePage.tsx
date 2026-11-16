@@ -313,7 +313,7 @@ function TourCard({ tour, outside = false, showRobot, onSelect }: { tour: TourSu
   const [now] = useState(() => Date.now())
   const overdue = overdueStartLabel(tour, tour.reservation, now)
   return <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" title={tour.name}
-    aria-label={`${outside ? 'Ngoài ca: ' : ''}${tour.isShortNotice ? 'Tour nhanh: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}${robot ? `, robot ${robot}` : ''}`}
+    aria-label={`${tour.isShortNotice ? 'Tour nhanh: ' : outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}${robot ? `, robot ${robot}` : ''}`}
     className={`block w-full rounded-lg border px-1.5 py-1 text-left transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${chipOf(tour, now)} ${focus}`}>
     <span className="flex flex-wrap items-center gap-x-1.5 text-[11px] tabular-nums opacity-80">{tour.isShortNotice && <QuickMark />}{formatTime(tour.scheduledStartAt)}{robot && <span className="font-mono whitespace-nowrap">{robot}</span>}</span>
     <span className={`line-clamp-2 text-xs font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
@@ -364,7 +364,7 @@ function ShiftCard({ day, shift, tours, open, onSelect }: { day: string; shift: 
 function TourRows({ tours, outside = false, onSelect }: { tours: TourSummary[]; outside?: boolean; onSelect: (id: string) => void }) {
   const [now] = useState(() => Date.now())
   return <ul aria-label="Tour trong ca" className="mt-2.5 space-y-2">{tours.map(tour => <li key={tour.id}>
-    <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" aria-label={`${outside ? 'Ngoài ca: ' : ''}${tour.isShortNotice ? 'Tour nhanh: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}`}
+    <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" aria-label={`${tour.isShortNotice ? 'Tour nhanh: ' : outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${tourStateLabel(tour, now)}`}
       className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-left text-sm transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${chipOf(tour, now)} ${focus}`}>
       <span className="flex items-center gap-1.5 font-semibold tabular-nums">{tour.isShortNotice && <QuickMark />}{span(tour)}</span>
       <span className="min-w-0 flex-1 basis-48"><span className={`block font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
