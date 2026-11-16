@@ -27,7 +27,7 @@ const RETIRED_CHIP = 'bg-[#eef0f3] text-[#5a6473]'
 const matchesFilter = (p: PoiProposal, filter: Filter) =>
   filter === 'all' || (filter === 'RETIRED' ? isRetired(p) : !isRetired(p) && statusOf(p) === filter)
 /**
- * Labels carry a muted tint per state (grey draft, sand waiting, soft blue passed,
+ * Labels carry a muted tint per state (grey not yet sent, sand waiting, soft blue passed,
  * soft red to fix). On the map every point is grey except a failed one (red) and
  * the chosen one (blue).
  */
@@ -36,7 +36,7 @@ const NEUTRAL_PIN = '#7c8ba1'
 const FAIL_PIN = '#e05a4f'
 const SELECTED_PIN = '#3b82f6'
 const STATUS: Record<Status, { label: string; chip: string; pin: string }> = {
-  DRAFT: { label: 'Bản nháp', chip: NEUTRAL_CHIP, pin: NEUTRAL_PIN },
+  DRAFT: { label: 'Chưa gửi kiểm', chip: NEUTRAL_CHIP, pin: NEUTRAL_PIN },
   WAIT: { label: 'Chờ kỹ thuật', chip: 'bg-[#fbf5e8] text-[#8a6a2e]', pin: NEUTRAL_PIN },
   PASS: { label: 'Đã đạt', chip: 'bg-[#edf3fc] text-[#3f62a0]', pin: NEUTRAL_PIN },
   FAIL: { label: 'Cần sửa', chip: 'bg-[#fbeeec] text-[#a4473d]', pin: FAIL_PIN },

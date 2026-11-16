@@ -77,7 +77,7 @@ function useNarrationMutation<T, R>(run: (input: T) => Promise<R>, done: (input:
   const client = useQueryClient()
   const refresh = () => Promise.all([
     client.invalidateQueries({ queryKey: keys.poiProposals }),
-    client.invalidateQueries({ queryKey: ['technical', 'poi-proposal'] }),
+    ...poiDetailKeys.map(queryKey => client.invalidateQueries({ queryKey })),
   ])
   return useMutation({
     mutationFn: run,
@@ -126,14 +126,21 @@ export const useRecordRouteTest = () => useTechnicalMutation(
     ? { title: `Đã ghi chạy thử đạt: ${routeName}`, detail: 'Kết quả do người kiểm tra nhập. Tuyến đã dùng được để tạo Tour.' }
     : { tone: 'info', title: `Đã ghi chạy thử không đạt: ${routeName}`, detail: 'Staff cần tạo phiên bản mới nếu phải đổi tuyến.' })
 
+/**
+ * The POI page reads its proposal and its Lịch sử tab (versions, checks, narration) under keys of their own, so every
+ * POI write refreshes them as well; otherwise the tab keeps the old list until a reload.
+ */
+const poiDetailKeys = [['technical', 'poi-proposal'], ['technical', 'poi-history']] as const
+
 /** Every technical record ends with a notification saying what was written; refusals stay on the form. */
-function useTechnicalMutation<T, R>(run: (input: T) => Promise<R>, invalidate: readonly unknown[], done: (input: T, result: R) => ToastInput) {
+function useTechnicalMutation<T, R>(run: (input: T) => Promise<R>, invalidate: readonly unknown[], done: (input: T, result: R) => ToastInput,
+  alsoInvalidate: readonly (readonly unknown[])[] = []) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: run,
     onSuccess: (result, input) => {
       notify(done(input, result))
-      return client.invalidateQueries({ queryKey: invalidate })
+      return Promise.all([invalidate, ...alsoInvalidate].map(queryKey => client.invalidateQueries({ queryKey })))
     },
   })
 }
@@ -158,16 +165,16 @@ export const useReopenMap = () => useTechnicalMutation(technicalApi.reopenMap, k
 export const useDiscardPoiProposal = () => useTechnicalMutation(technicalApi.discardPoiProposal, keys.poiProposals, input => ({
   title: `Đã xoá ${input.revision.name} khỏi danh sách`,
   detail: 'Lịch sử chỉnh sửa và kiểm chứng của điểm này vẫn được lưu.',
-}))
+}), poiDetailKeys)
 
 export const useRetirePoiProposal = () => useTechnicalMutation(technicalApi.retirePoiProposal, keys.poiProposals, input => ({
   title: `Đã ngưng dùng ${input.revision.name}`,
   detail: 'Tuyến và Tour đã lưu không đổi. Tuyến mới không chọn được điểm này.',
-}))
+}), poiDetailKeys)
 
 export const useReactivatePoiProposal = () => useTechnicalMutation(technicalApi.reactivatePoiProposal, keys.poiProposals, input => ({
   title: `Đã dùng lại ${input.revision.name}`,
-}))
+}), poiDetailKeys)
 
 /** Preview changes nothing on the server, so it neither invalidates data nor notifies. */
 export function usePreviewPoiImport() {
