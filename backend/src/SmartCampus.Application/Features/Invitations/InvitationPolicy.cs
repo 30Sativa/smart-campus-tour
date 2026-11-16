@@ -28,9 +28,17 @@ public static class InvitationPolicy
 }
 public sealed record InvitationItem(Guid Id, int RowNumber, string RowType, string DisplayName, string Email,
     string RowVersion, int AccessVersion, DateTimeOffset ExpiresAt, DateTimeOffset? RevokedAt,
-    string EmailStatus, DateTimeOffset? LastEmailAt, bool CanSend, bool CanReissue, bool CanRevoke);
+    string EmailStatus, DateTimeOffset? LastEmailAt, bool CanSend, bool CanReissue, bool CanRevoke,
+    string ViewerPresence, DateTimeOffset? FirstEnteredAt, DateTimeOffset? LastSeenAt, DateTimeOffset? SessionExpiresAt);
 public sealed record InvitationReadModel(IReadOnlyList<Invitation> Invitations, Tour Tour,
-    GroupRegistration Registration, IReadOnlyList<AuditLog> Audits);
+    GroupRegistration Registration, IReadOnlyList<AuditLog> Audits,
+    IReadOnlyDictionary<Guid, ViewerSessionSummary> Sessions);
+/// <summary>
+/// Per-invitation aggregate over every BrowserSession (closed ones included), without device/IP data.
+/// The unended session is reported as stored; the caller decides whether its lease is still open.
+/// </summary>
+public sealed record ViewerSessionSummary(DateTimeOffset FirstEnteredAt, DateTimeOffset? LastSeenAt,
+    DateTimeOffset? UnendedLastSeenAt, DateTimeOffset? UnendedExpiresAt);
 public sealed record InvitationDetails(bool Enabled, bool CanIssue, IReadOnlyList<InvitationItem> Items);
 public sealed record EmailWorkItem(Guid AttemptId, bool Interrupted);
 public sealed record TourCancelRecipient(Guid RegistrationId, string Email);

@@ -527,6 +527,129 @@ public sealed class InvitationEndpointTests
         Assert.Empty(db.ChangeTracker.Entries<SmartCampus.Domain.Entities.BrowserSession>());
     }
 
+    private static string? Presence(JsonElement item) => item.GetProperty("viewerPresence").GetString();
+    private static DateTimeOffset? Time(JsonElement item, string name) =>
+        item.GetProperty(name).ValueKind == JsonValueKind.Null ? null : item.GetProperty(name).GetDateTimeOffset();
+
+    [SchemaV11Fact]
+    public async Task ViewerPresence_FollowsJoinLeaveReissueRevokeAndLease_AndFirstEntrySurvivesReissue()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        async Task<JsonElement> Item(Guid invitation) => (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")
+            .EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == invitation);
+        var items = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items");
+        var invitation = items[0].GetProperty("id").GetGuid();
+        var other = items[1].GetProperty("id").GetGuid();
+        var item = await Item(invitation);
+        Assert.Equal("NOT_ENTERED", Presence(item));
+        Assert.All(new[] { "firstEnteredAt", "lastSeenAt", "sessionExpiresAt" }, name => Assert.Null(Time(item, name)));
+
+        var join = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitation));
+        Assert.Equal(HttpStatusCode.OK, join.Status);
+        item = await Item(invitation);
+        Assert.Equal("CONNECTED", Presence(item));
+        var firstEntered = Time(item, "firstEnteredAt")!.Value;
+        Assert.NotNull(Time(item, "lastSeenAt"));
+        Assert.True(Time(item, "sessionExpiresAt") > DateTimeOffset.UtcNow);
+        // Only presence/time fields; never device, IP or browser detail.
+        Assert.All(new[] { "device", "ip", "browser", "token", "userAgent" }, word =>
+            Assert.DoesNotContain(item.EnumerateObject(), p => p.Name.Contains(word, StringComparison.OrdinalIgnoreCase)));
+
+        await f.Database.ExecuteAsync("UPDATE dbo.BrowserSessions SET LastSeenAt=DATEADD(minute,-3,SYSDATETIMEOFFSET()) WHERE EndedAt IS NULL;");
+        item = await Item(invitation);
+        Assert.Equal("DISCONNECTED", Presence(item));
+        Assert.NotNull(Time(item, "sessionExpiresAt"));
+
+        // A Representative of another group still cannot locate the registration, presence included.
+        Assert.Equal(HttpStatusCode.NotFound, (await f.SendAsync(HttpMethod.Get, Path(id), token: await LoginAsync(host.Client, "rep.two"))).Status);
+
+        await f.Database.ExecuteAsync("UPDATE dbo.BrowserSessions SET LastSeenAt=SYSDATETIMEOFFSET() WHERE EndedAt IS NULL;");
+        Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "leave", cookie: CookieHeader(join.Cookie!))).Status);
+        item = await Item(invitation);
+        Assert.Equal("LEFT", Presence(item));
+        Assert.Null(Time(item, "sessionExpiresAt"));
+        Assert.Equal(firstEntered, Time(item, "firstEnteredAt"));
+
+        var rejoin = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitation));
+        Assert.Equal(HttpStatusCode.OK, rejoin.Status);
+        item = await Item(invitation);
+        Assert.Equal("CONNECTED", Presence(item));
+        Assert.Equal(firstEntered, Time(item, "firstEnteredAt"));
+
+        await f.Database.ExecuteAsync("UPDATE dbo.AuditLogs SET OccurredAt=DATEADD(minute,-2,OccurredAt) WHERE Action='EMAIL_SEND_REQUESTED';");
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitation}/reissue", Write(item, Guid.NewGuid()))).Status);
+        item = await Item(invitation);
+        Assert.Equal("LEFT", Presence(item));
+        Assert.Null(Time(item, "sessionExpiresAt"));
+        Assert.Equal(firstEntered, Time(item, "firstEnteredAt"));
+
+        Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitation))).Status);
+        item = await Item(invitation);
+        Assert.Equal("CONNECTED", Presence(item));
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitation}/revoke", Write(item, Guid.NewGuid()))).Status);
+        item = await Item(invitation);
+        Assert.Equal("LEFT", Presence(item));
+        Assert.Null(Time(item, "sessionExpiresAt"));
+        Assert.Equal(firstEntered, Time(item, "firstEnteredAt"));
+
+        // Lease passed but the idle close has not run yet (EndedAt still NULL): no longer holds the invitation.
+        Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, other))).Status);
+        Assert.Equal("CONNECTED", Presence(await Item(other)));
+        await f.Database.ExecuteAsync($"UPDATE dbo.BrowserSessions SET ExpiresAt=DATEADD(minute,-1,SYSDATETIMEOFFSET()) WHERE InvitationId='{other:D}';");
+        var expired = await Item(other);
+        Assert.Equal("LEFT", Presence(expired));
+        Assert.Null(Time(expired, "sessionExpiresAt"));
+        Assert.NotNull(Time(expired, "firstEnteredAt"));
+        await using var db = f.Context();
+        Assert.Equal(1, await db.BrowserSessions.CountAsync(s => s.InvitationId == other && s.EndedAt == null));
+    }
+
+    [SchemaV11Fact]
+    public async Task ViewerPresence_UsesTheInjectedClockForGraceAndLease()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var invitation = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0].GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitation))).Status);
+        SmartCampus.Domain.Entities.BrowserSession session;
+        await using (var db = f.Context()) session = await db.BrowserSessions.AsNoTracking().SingleAsync(s => s.InvitationId == invitation);
+
+        var values = InvitationPrimitiveTests.ConfigurationValues().Select(p => new KeyValuePair<string, string?>(p.Key, p.Value))
+            .Append(new("ConnectionStrings:DefaultConnection", f.Database.ConnectionString));
+        var clock = new TourStartPreflightSqlTests.MutableClock();
+        var services = new ServiceCollection(); services.AddLogging(); services.AddApplication();
+        services.AddInfrastructure(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
+        services.AddSingleton<TimeProvider>(clock);
+        await using var provider = services.BuildServiceProvider();
+        async Task<SmartCampus.Application.Features.Invitations.InvitationItem> At(DateTimeOffset now, Guid? owner = null)
+        {
+            clock.Now = now;
+            await using var scope = provider.CreateAsyncScope();
+            var details = await scope.ServiceProvider.GetRequiredService<ISender>().Send(
+                new SmartCampus.Application.Features.Invitations.Queries.GetInvitations.GetInvitationsQuery(id, owner));
+            return details.Items.Single(i => i.Id == invitation);
+        }
+        var seen = session.LastSeenAt!.Value;
+        var connected = await At(seen.AddMinutes(2));
+        Assert.Equal("CONNECTED", connected.ViewerPresence);
+        Assert.Equal(session.CreatedAt, connected.FirstEnteredAt);
+        Assert.Equal(seen, connected.LastSeenAt);
+        Assert.Equal(session.ExpiresAt, connected.SessionExpiresAt);
+        var disconnected = await At(seen.AddMinutes(2).AddTicks(1));
+        Assert.Equal("DISCONNECTED", disconnected.ViewerPresence);
+        Assert.Equal(session.ExpiresAt, disconnected.SessionExpiresAt);
+        var lapsed = await At(session.ExpiresAt);
+        Assert.Equal("LEFT", lapsed.ViewerPresence);
+        Assert.Null(lapsed.SessionExpiresAt);
+        Assert.Equal(seen, lapsed.LastSeenAt);
+        await Assert.ThrowsAsync<SmartCampus.Application.Common.Exceptions.NotFoundException>(() => At(seen, Guid.NewGuid()));
+    }
+
     [SchemaV11Fact]
     public async Task StudentQuestionRevokedDuringTheHttpCall_DiscardsLateAnswerWithoutHoldingTourLock()
     {
