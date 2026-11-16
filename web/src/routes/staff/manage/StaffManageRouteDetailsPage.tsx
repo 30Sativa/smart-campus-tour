@@ -52,9 +52,13 @@ function routeNotice(route: VersionedRoute, hasUnverifiedPoi: boolean): RouteNot
 
 const formatDuration =(seconds: number) => seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
 
-/** The one line under the title: the route's state, with the day of the run that passed it. */
-function statusLine(route: VersionedRoute) {
+/**
+ * The one line under the title: the route's state, with the day of the run that passed it. A passed current revision
+ * with a retired POI says it takes no new Tour (ADR-0062), so the line never reads as usable.
+ */
+function statusLine(route: VersionedRoute, retiredPoi: boolean) {
   const { label } = staffRouteStatus(route)
+  if (retiredPoi && label === 'Đã chạy thử đạt') return `${label} · chưa tạo được Tour mới (có POI ngưng dùng)`
   const passed = label === 'Đã chạy thử đạt' ? passedAt(route) : undefined
   return passed ? `${label} ngày ${campusShortDate(passed)}` : label
 }
@@ -88,7 +92,10 @@ export default function StaffManageRouteDetailsPage() {
   const latestRevisionNumber = Math.max(...value.revisionHistory.map(revision => revision.revisionNumber), value.revisionNumber)
   const isCurrentRevision = value.revisionNumber === latestRevisionNumber && value.revisionHistory.some(revision => revision.revisionId === value.revisionId && revision.revisionNumber === latestRevisionNumber)
   const hasUnverifiedPoi = value.eligibilityIssues.some(issue => issue.startsWith('POI_VERIFICATION_REQUIRED:'))
-  const notice = isCurrentRevision ? routeNotice(value, hasUnverifiedPoi) : null
+  const retiredPoi = isCurrentRevision && Boolean(value.retiredPoiNames?.length)
+  // The amber retired-POI warning replaces "Dùng được để tạo Tour": create refuses this revision (ROUTE_HAS_RETIRED_POI).
+  const nextStep = isCurrentRevision ? routeNotice(value, hasUnverifiedPoi) : null
+  const notice = retiredPoi && nextStep?.createTour ? null : nextStep
   const area = mapAreaName(maps.data, { mapVersionId: value.mapVersionId })
   const start = { x: value.startX, y: value.startY }
   const end = value.endMode === 'POSE' && value.endX != null && value.endY != null ? { x: value.endX, y: value.endY } : null
@@ -98,16 +105,16 @@ export default function StaffManageRouteDetailsPage() {
   const status = staffRouteStatus(value)
   return <AdminPage>
     <Link to="/staff/manage/routes" className="mb-3 inline-flex text-sm text-[#2d719e]">← Danh sách tuyến</Link>
-    <PageHeader eyebrow="Tuyến" title={value.name} description={statusLine(value)} action={<div className="flex max-w-sm flex-col items-end gap-1.5"><div className="flex flex-wrap justify-end gap-2"><Link className={buttonClass('secondary')} to={`/staff/manage/routes/${value.routeId}/edit`}>Sửa tuyến</Link>{value.isActive && isCurrentRevision && <button type="button" className={buttonClass('secondary')} onClick={() => { availability.reset(); setDeactivating(value) }}>Ngừng sử dụng</button>}{!value.isSubmitted && isCurrentRevision && <button className={buttonClass('primary')} disabled={!canSubmit} onClick={() => void submitMutation.mutateAsync(value).catch(() => undefined)}>{submitMutation.isPending ? 'Đang gửi…' : 'Gửi kiểm chứng tuyến'}</button>}</div><p className="text-right text-xs text-[#64748b]">Lưu sẽ tạo bản mới; bản mới cần gửi kiểm chứng và chạy thử lại. Tour đã tạo vẫn dùng bản cũ.</p></div>} />
+    <PageHeader eyebrow="Tuyến" title={value.name} description={statusLine(value, retiredPoi)} action={<div className="flex max-w-sm flex-col items-end gap-1.5"><div className="flex flex-wrap justify-end gap-2"><Link className={buttonClass('secondary')} to={`/staff/manage/routes/${value.routeId}/edit`}>Sửa tuyến</Link>{value.isActive && isCurrentRevision && <button type="button" className={buttonClass('secondary')} onClick={() => { availability.reset(); setDeactivating(value) }}>Ngừng sử dụng</button>}{!value.isSubmitted && isCurrentRevision && <button className={buttonClass('primary')} disabled={!canSubmit} onClick={() => void submitMutation.mutateAsync(value).catch(() => undefined)}>{submitMutation.isPending ? 'Đang gửi…' : 'Gửi kiểm chứng tuyến'}</button>}</div><p className="text-right text-xs text-[#64748b]">Lưu sẽ tạo bản mới; bản mới cần gửi kiểm chứng và chạy thử lại. Tour đã tạo vẫn dùng bản cũ.</p></div>} />
     <div className="mb-4 space-y-2">
       {!isCurrentRevision && <Notice tone="warn">{viewedAt ? `Đây là bản lưu ${campusShortStamp(viewedAt)}, chỉ xem được.` : 'Đây là bản lưu cũ, chỉ xem được.'}</Notice>}
       {isCurrentRevision && <NewerPoiRevisionNotice route={value} />}
-      {isCurrentRevision && Boolean(value.retiredPoiNames?.length) && <Notice tone="warn" action={<Link to={`/staff/manage/routes/${value.routeId}/edit`} className="text-sm whitespace-nowrap text-[#2d719e] hover:underline">Sửa tuyến</Link>}>
+      {retiredPoi && <Notice tone="warn" action={<Link to={`/staff/manage/routes/${value.routeId}/edit`} className="text-sm whitespace-nowrap text-[#2d719e] hover:underline">Sửa tuyến</Link>}>
         Tuyến có POI đã ngưng dùng: {value.retiredPoiNames!.join(', ')}. Không tạo được Tour mới trên phiên bản này; Tour đã tạo vẫn chạy như cũ. Lưu phiên bản mới không có POI này, hoặc dùng lại POI.
       </Notice>}
       {notice && <div role={submitMutation.isSuccess ? 'status' : undefined}><Note tone={notice.tone}><div className="flex flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 flex-1">{notice.text}</p>
-        {notice.createTour && !value.retiredPoiNames?.length && <Link to={`/staff/manage/tours/new?route=${value.revisionId}`} className={buttonClass('secondary', 'sm')}>Tạo Tour</Link>}
+        {notice.createTour && <Link to={`/staff/manage/tours/new?route=${value.revisionId}`} className={buttonClass('secondary', 'sm')}>Tạo Tour</Link>}
         {notice.reopen && <button type="button" className={buttonClass('secondary', 'sm')} disabled={availability.isPending} onClick={() => availability.mutate({ target: value, requestId: crypto.randomUUID(), open: true })}>Mở lại</button>}
       </div></Note></div>}
       {submitMutation.isError && <Notice tone="danger" action={submitMutation.error instanceof ApiError && submitMutation.error.status === 409 ? <button className={buttonClass('secondary', 'sm')} disabled={route.isFetching} onClick={() => void reload()}>Tải lại tuyến</button> : undefined}>{submitMessage(submitMutation.error)}</Notice>}
