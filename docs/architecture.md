@@ -95,7 +95,9 @@ Metadata corrections on an unchanged Route do not reactivate/reconfigure it.
 
 List returns PagedResponse with Tour summaries: id, name, description, routeId,
 routeName, activeRouteId, scheduledStartAt, state, createdByUserId, createdAt,
-updatedAt, base64 SQL rowVersion, registrationCount and invitationCount. Detail
+updatedAt, base64 SQL rowVersion, registrationCount and invitationCount
+(invitations of active roster rows only since 2026-11-17; a row removed by a roster
+replace keeps its revoked invitation for audit but is no longer counted). Detail
 is BaseResponse data `{tour, route, activeRoute, fallbackVideoUrl, startedAt,
 endedAt, endReason, usage, permissions}`. Permission fields are canEditMetadata,
 canChangeScheduleAndRoute, canCancel and canDelete (always false). Responses
@@ -1653,6 +1655,9 @@ optional '-' descending and ID tie-breaker. State uses the SQL uppercase values.
 from/to are offset-qualified instants filtering Tour scheduled time, inclusive
 lower/exclusive upper bound; the web converts calendar dates using UTC+7.
 Unknown IDs return 404. Anonymous/non-Staff requests return 401/403.
+Each list item (and the detail summary) carries `rowCount` (active rows) and, since
+2026-11-17, `pendingRowCount`: active roster rows still PENDING a Staff row
+decision, counted in SQL; removed rows are never counted and `state` is unchanged.
 
 Both decisions accept {expectedRowVersion, expectedTourRowVersion, reason?};
 versions must be 8-byte base64 SQL rowversions, reason is required for rejection
@@ -1727,7 +1732,9 @@ per active approved row; failed mail never reverses approval or changes Tour sta
 
 Staff or owner Representative GET /api/registrations/{registrationId}/invitations
 returns enabled/canIssue and items with approved row identity, version, expiry,
-revocation, latest email status and action gates. Codes/hashes/ciphertext/session
+revocation, latest email status and action gates. Since 2026-11-17 items cover
+active roster rows only: a row removed by a roster replace keeps its revoked
+invitation and audit history in SQL but is no longer listed. Codes/hashes/ciphertext/session
 credentials are never returned. Staff has organization-wide support; a Representative can access only their own group's invitations; Admin is denied.
 Each item also carries viewer presence (since 2026-11-16): `viewerPresence`
 `NOT_ENTERED | CONNECTED | DISCONNECTED | LEFT`, `firstEnteredAt`, `lastSeenAt`

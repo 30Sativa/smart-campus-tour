@@ -227,6 +227,89 @@ public sealed class InvitationEndpointTests
     }
 
     [SchemaV11Fact]
+    public async Task RemovedRosterRow_IsNotListedInInvitations_OrCountedOnTheTour_ButKeepsItsRevokedInvitation()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        var representative = await LoginAsync(host.Client, "rep.one");
+        var staff = await LoginAsync(host.Client, "review.staff");
+        f.Bind(host.Client, representative);
+        var registrationId = await ApproveAsync(f, staff);
+        async Task<int> TourInvitationCountAsync() =>
+            (await f.SendAsync(HttpMethod.Get, $"/api/staff/manage/tours/{f.TourId}", token: staff)).Data
+                .GetProperty("tour").GetProperty("invitationCount").GetInt32();
+        Assert.Equal(2, (await f.SendAsync(HttpMethod.Get, Path(registrationId))).Data.GetProperty("items").GetArrayLength());
+        Assert.Equal(2, await TourInvitationCountAsync());
+
+        var detail = await f.DataAsync($"/registrations/{registrationId}");
+        var rows = detail.GetProperty("roster").EnumerateArray().ToArray();
+        var keptId = rows[0].GetProperty("id").GetGuid();
+        var removedId = rows[1].GetProperty("id").GetGuid();
+        Guid keptInvitation;
+        await using (var before = f.Context())
+            keptInvitation = await before.Invitations.Where(i => i.RosterRowId == keptId).Select(i => i.Id).SingleAsync();
+        var tour = await f.DataAsync($"/tours/{f.TourId}");
+        var input = Input(tour, "Group", "viewer@example.test") with
+        {
+            Roster = [new(2, "INDIVIDUAL", "Same name", "viewer@example.test", null, keptId)]
+        };
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Put, $"/registrations/{registrationId}",
+            new { input, expectedRowVersion = Version(detail) })).Status);
+
+        foreach (var token in new[] { representative, staff })
+        {
+            var items = (await f.SendAsync(HttpMethod.Get, Path(registrationId), token: token)).Data.GetProperty("items");
+            Assert.Equal(keptInvitation, Assert.Single(items.EnumerateArray()).GetProperty("id").GetGuid());
+        }
+        Assert.Equal(1, await TourInvitationCountAsync());
+        await using var db = f.Context();
+        Assert.NotNull((await db.Invitations.SingleAsync(i => i.RosterRowId == removedId)).RevokedAt);
+        Assert.False((await db.RosterRows.SingleAsync(row => row.Id == removedId)).IsActive);
+    }
+
+    [SchemaV11Fact]
+    public async Task ReviewList_PendingRowCount_CountsOnlyActivePendingRows_AndLeavesStateAlone()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        var representative = await LoginAsync(host.Client, "rep.one");
+        var staff = await LoginAsync(host.Client, "review.staff");
+        f.Bind(host.Client, representative);
+        var registrationId = await ApproveAsync(f, staff);
+        async Task<JsonElement> ListItemAsync() => Assert.Single((await f.SendAsync(HttpMethod.Get,
+            "/api/staff/manage/registrations", token: staff)).Data.EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == registrationId);
+        Assert.Equal(0, (await ListItemAsync()).GetProperty("pendingRowCount").GetInt32());
+
+        async Task ReplaceAsync(params SmartCampus.Application.Features.Registrations.RosterInput[] roster)
+        {
+            var detail = await f.DataAsync($"/registrations/{registrationId}");
+            var tour = await f.DataAsync($"/tours/{f.TourId}");
+            var input = Input(tour, "Group", "viewer@example.test") with { Roster = roster };
+            Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Put, $"/registrations/{registrationId}",
+                new { input, expectedRowVersion = Version(detail) })).Status);
+        }
+        var rows = (await f.DataAsync($"/registrations/{registrationId}")).GetProperty("roster").EnumerateArray().ToArray();
+        var keptId = rows[0].GetProperty("id").GetGuid();
+        var kept = new SmartCampus.Application.Features.Registrations.RosterInput(2, "INDIVIDUAL", "Same name", "viewer@example.test", null, keptId);
+        await ReplaceAsync(kept, new(6, "INDIVIDUAL", "New C", "c@example.test", null), new(7, "INDIVIDUAL", "New D", "d@example.test", null));
+        var item = await ListItemAsync();
+        Assert.Equal(2, item.GetProperty("pendingRowCount").GetInt32());
+        Assert.Equal("APPROVED", item.GetProperty("state").GetString());
+
+        var current = (await f.DataAsync($"/registrations/{registrationId}")).GetProperty("roster").EnumerateArray().ToArray();
+        var rowC = current.Single(row => row.GetProperty("email").GetString() == "c@example.test").GetProperty("id").GetGuid();
+        await ReplaceAsync(kept, new(6, "INDIVIDUAL", "New C", "c@example.test", null, rowC));
+        item = await ListItemAsync();
+        Assert.Equal(1, item.GetProperty("pendingRowCount").GetInt32());
+        Assert.Equal(2, item.GetProperty("rowCount").GetInt32());
+        Assert.Equal("APPROVED", item.GetProperty("state").GetString());
+        await using var db = f.Context();
+        Assert.Equal(1, await db.RosterRows.CountAsync(row => row.RegistrationId == registrationId && !row.IsActive &&
+            row.Email == "d@example.test"));
+    }
+
+    [SchemaV11Fact]
     public async Task RosterUpdateEnforcesTenRowsAndRollsBackInvalidOrLateFailure()
     {
         await using var f = await Fixture.CreateAsync();
