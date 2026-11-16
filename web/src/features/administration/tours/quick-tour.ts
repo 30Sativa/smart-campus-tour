@@ -34,8 +34,6 @@ export const QUICK_TOUR_RULES = {
     waitMinutes != null ? `Chưa bắt đầu sau ${waitMinutes} phút thì tự huỷ` : 'Tự huỷ nếu không bắt đầu kịp',
     'Cần ghi lý do',
   ],
-  /** Toast after a quick Tour is created. */
-  created: 'Robot đã được giữ. Gửi link cho đại diện trường để đăng ký đoàn, duyệt rồi chốt Tour và bắt đầu trước hạn.',
 } as const
 
 /** Where a Representative opens a Tour to register a group (`/dai-dien/buoi/:tourId` in app/router). */

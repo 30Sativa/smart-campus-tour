@@ -55,8 +55,9 @@ export default function StaffManageTourDetailPage() {
     <PageHeader eyebrow={`Tour · ${tourStateLabel(tour, now)}`} title={tour.name} description={tour.description ?? 'Chưa có mô tả.'}
       action={permissions.canEditMetadata ? <Link to={`/staff/manage/tours/${tour.id}/edit`} className={buttonClass('secondary')}>Sửa</Link> : undefined} />
     <TourReadyPanel detail={data} />
+    {/* One line of guidance per state: a new quick Tour's share panel says what to do next, so the registration notice is for a Tour on a shift. */}
     {tour.isShortNotice && tour.state === 'SCHEDULED' && <QuickTourShare tour={tour} />}
-    {tour.state === 'SCHEDULED' && <div className="mb-3"><Notice tone="info">{isRegistrationClosed(tour, now) ? 'Đã đóng đăng ký, Đại diện trường không thêm đoàn mới được nữa. Duyệt nốt đơn còn chờ ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.' : 'Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.'}</Notice></div>}
+    {tour.state === 'SCHEDULED' && !tour.isShortNotice && <div className="mb-3"><Notice tone="info">{isRegistrationClosed(tour, now) ? 'Đã đóng đăng ký, Đại diện trường không thêm đoàn mới được nữa. Duyệt nốt đơn còn chờ ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.' : 'Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.'}</Notice></div>}
     {overdue && <div className="mb-3"><Notice tone="warn">{overdue}. Hệ thống tự huỷ Tour không được bắt đầu trong khung giờ.</Notice></div>}
 
     <section className={`${panelClass} p-4`} aria-label="Thông tin Tour">

@@ -24,9 +24,8 @@ export default function StaffManageTourCreatePage() {
     const key = JSON.stringify(input)
     if (attempt.current?.key !== key) attempt.current = { key, id: newRequestId() }
     create.mutate({ requestId: attempt.current.id, input }, { onSuccess: id => {
-      celebrate({ title: `Đã tạo Tour “${input.name}”`, detail: input.shortNoticeReason
-        ? QUICK_TOUR_RULES.created
-        : 'Tour đang nhận đăng ký. Đại diện trường đã thấy Tour và có thể đăng ký đoàn.', action: { label: 'Lịch Tour', to: '/staff/schedule' } })
+      // The Tour page it opens says what comes next, so the toast only confirms what happened.
+      celebrate({ title: `Đã tạo Tour “${input.name}”`, detail: 'Robot đã được giữ.', action: { label: 'Lịch Tour', to: '/staff/schedule' } })
       navigate(`/staff/manage/tours/${id}`, { replace: true })
     } })
   }

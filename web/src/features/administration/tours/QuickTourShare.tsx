@@ -43,11 +43,15 @@ export function QuickTourShare({ tour }: { tour: Pick<TourSummary, 'id' | 'sched
       <button type="button" onClick={copyLink} className={`${buttonClass('primary', 'sm')} shrink-0`}><Copy size={15} aria-hidden="true" />{copy === 'copied' ? 'Đã sao chép' : 'Sao chép link'}</button>
     </div>
     {copy === 'manual' && <p role="status" className="mt-1.5 text-xs text-[#7d5310]">Trình duyệt không cho sao chép tự động. Link đã được chọn, bấm Ctrl+C để sao chép.</p>}
-    <ol className="mt-3 list-decimal space-y-1 pl-5 text-[13px] leading-5 text-[#334155]" aria-label="Các bước tiếp theo">
-      <li>Gửi link này cho đại diện trường.</li>
-      <li>Đại diện mở link, đăng ký đoàn và gửi lời mời cho học sinh.</li>
-      <li>Duyệt đăng ký ở <Link to={`/staff/manage/registrations?tourId=${tour.id}`} className="font-semibold text-[#2563eb] underline-offset-2 hover:underline">danh sách đăng ký của Tour</Link>.</li>
-      <li>Chốt Tour, rồi Mở Tour trước hạn và bấm Khởi hành khi robot sẵn sàng.</li>
-    </ol>
+    {/* The countdown line above is the one thing to act on; the full sequence stays folded until asked for. */}
+    <details className="mt-3 text-[13px] leading-5">
+      <summary className="w-fit cursor-pointer rounded font-semibold text-[#2563eb] hover:text-[#1d4ed8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]">Xem hướng dẫn</summary>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-[#334155]" aria-label="Các bước tiếp theo">
+        <li>Gửi link này cho đại diện trường.</li>
+        <li>Đại diện mở link, đăng ký đoàn và gửi lời mời cho học sinh.</li>
+        <li>Duyệt đăng ký ở <Link to={`/staff/manage/registrations?tourId=${tour.id}`} className="font-semibold text-[#2563eb] underline-offset-2 hover:underline">danh sách đăng ký của Tour</Link>.</li>
+        <li>Chốt Tour, rồi Mở Tour trước hạn và bấm Khởi hành khi robot sẵn sàng.</li>
+      </ol>
+    </details>
   </section>
 }
