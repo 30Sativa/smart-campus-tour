@@ -402,14 +402,30 @@ describe('Staff versioned POI workflow', () => {
       await waitFor(() => expect(writes()).toEqual(['/api/staff/poi-proposals/proposal-1/submit']))
     })
 
-    it('does not offer saving while a submitted revision waits for its check', async () => {
+    it('locks the fields while a submitted revision waits for its check, and says why up front', async () => {
       serve({ isSubmitted: true })
       renderAt('/staff/manage/pois/proposal-1')
-      expect(await screen.findByText('Đang chờ kỹ thuật kiểm tra.')).toBeInTheDocument()
-      fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Tên khác' } })
-      expect(screen.getByText(/chưa lưu được thay đổi/)).toBeInTheDocument()
+      expect(await screen.findByText('Đang chờ kỹ thuật kiểm tra, chưa sửa được.')).toBeInTheDocument()
+      expect(screen.getByText(/nên chưa sửa được vị trí, camera hay nội dung/)).toBeInTheDocument()
+      // Nothing to type into, so nothing typed is lost to a refused save.
+      expect(screen.getByLabelText('Tên POI')).toHaveAttribute('readonly')
+      expect(screen.getByLabelText('Mục đích')).toHaveAttribute('readonly')
+      expect(screen.getByLabelText('X (m)')).toBeDisabled()
+      expect(screen.getByLabelText('Hướng (độ)')).toBeDisabled()
+      expect(screen.getByLabelText('Bản đồ')).toBeDisabled()
+      for (const radio of screen.getAllByRole('radio')) expect(radio).toBeDisabled()
       expect(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm' })).toBeDisabled()
       expect(screen.getByRole('button', { name: 'Lưu và gửi kiểm lại' })).toBeDisabled()
+      expect(screen.getByText('Kiểm chứng:').querySelector('span')).toHaveTextContent('Chờ kỹ thuật')
+    })
+
+    it('never says a retired POI waits for the technical check', async () => {
+      serve({ isSubmitted: true }, { retiredAt: '2026-11-16T03:00:00Z', canReactivate: true })
+      renderAt('/staff/manage/pois/proposal-1')
+      const strip = await screen.findByRole('region', { name: 'Tình trạng POI' })
+      expect(strip).toHaveTextContent('Kiểm chứng: Không kiểm vì đã ngưng dùng')
+      expect(strip).not.toHaveTextContent('Chờ kỹ thuật')
+      expect(screen.queryByText(/Đang chờ kỹ thuật kiểm tra/)).not.toBeInTheDocument()
     })
   })
 
@@ -436,7 +452,7 @@ describe('Staff versioned POI workflow', () => {
     for (const title of ['Phiên bản POI (3)', 'Kết quả kiểm chứng (2)', 'Lịch sử thuyết minh (0)']) fireEvent.click(within(history).getByText(title))
     const saves = await within(history).findAllByText(/^Bản lưu/)
     expect(saves).toHaveLength(3)
-    expect(saves[0]).toHaveTextContent('Không đạt · so với bản trước: đổi điều hướng: vị trí, camera')
+    expect(saves[0]).toHaveTextContent('Không đạt · so với bản trước: đổi phần cần kiểm lại: vị trí, camera')
     expect(saves[1]).toHaveTextContent(/Đạt · giữ kết quả của bản lưu \d\d\/\d\d \d\d:\d\d · so với bản trước: chỉ đổi nội dung \(tên\)/)
     expect(saves[2]).not.toHaveTextContent('so với bản trước')
 

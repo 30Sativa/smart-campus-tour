@@ -22,5 +22,5 @@ export function revisionChange(previous: PoiRevision, next: PoiRevision): string
     ].filter(Boolean)
     return content.length ? `chỉ đổi nội dung (${content.join(', ')})` : 'chỉ đổi nội dung'
   }
-  return navigation.length ? `đổi điều hướng: ${navigation.join(', ')}` : 'đổi điều hướng'
+  return navigation.length ? `đổi phần cần kiểm lại: ${navigation.join(', ')}` : 'đổi phần cần kiểm lại'
 }

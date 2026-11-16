@@ -104,4 +104,19 @@ describe('ZoomableMap', () => {
     expect(900).toBeGreaterThanOrEqual(y)
     expect(900).toBeLessThanOrEqual(y + height)
   })
+
+  it('zooms in when two fingers spread apart, and lets one finger keep scrolling the page until then', () => {
+    render(<Harness />)
+    expect(svg().style.touchAction).toBe('pan-x pan-y')
+    const opening = viewBox()
+    const finger = (id: number, u: number, v: number) => ({ ...pointerAt(svg(), u, v), pointerId: id, pointerType: 'touch' })
+    fireEvent.pointerDown(svg(), finger(1, 480, 500))
+    fireEvent.pointerDown(svg(), finger(2, 520, 500))
+    fireEvent.pointerMove(svg(), finger(2, 560, 500))
+    expect(viewBox()[2]).toBeLessThan(opening[2])
+    fireEvent.pointerUp(svg(), finger(2, 560, 500))
+    fireEvent.pointerUp(svg(), finger(1, 480, 500))
+    // Once zoomed, a finger pans the map instead of the page.
+    expect(svg().style.touchAction).toBe('none')
+  })
 })

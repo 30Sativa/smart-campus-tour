@@ -7,7 +7,8 @@ using SmartCampus.Application.Common.Models;
 namespace SmartCampus.Application.Features.AuditLogs;
 
 public sealed record AuditLogEntry(long Id, DateTimeOffset OccurredAt, string Action, string EntityType, string EntityId,
-    Guid? ActorUserId, string? ActorName, Guid? TourId, string? TourName, string? RobotCode, string? ResultCode);
+    Guid? ActorUserId, string? ActorName, Guid? TourId, string? TourName, string? RobotCode, string? ResultCode,
+    string? RouteName = null, DateTimeOffset? RouteRevisionSavedAt = null);
 public sealed record AuditLogFilter(string? Action, string? Actor, DateTimeOffset? From, DateTimeOffset? To, int Page, int Size);
 public sealed record ListAuditLogsQuery(AuditLogFilter Filter) : IQuery<PagedResult<AuditLogEntry>>;
 

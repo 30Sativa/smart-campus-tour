@@ -17,16 +17,16 @@ describe('revisionChange', () => {
 
   it('names each navigation field at the server precision', () => {
     // Below the persisted precision (4 decimals for x/y, 6 for yaw) is not a change.
-    expect(revisionChange(base, { ...base, x: 1.2351, navigationFingerprint: 'bb' })).toBe('đổi điều hướng: vị trí')
-    expect(revisionChange(base, { ...base, x: 1.234561, navigationFingerprint: 'bb' })).toBe('đổi điều hướng')
+    expect(revisionChange(base, { ...base, x: 1.2351, navigationFingerprint: 'bb' })).toBe('đổi phần cần kiểm lại: vị trí')
+    expect(revisionChange(base, { ...base, x: 1.234561, navigationFingerprint: 'bb' })).toBe('đổi phần cần kiểm lại')
     expect(revisionChange(base, { ...base, mapVersionId: 'map-2', yaw: 0.2, cameraPreset: 'LEFT', navigationFingerprint: 'bb' }))
-      .toBe('đổi điều hướng: bản đồ, hướng, camera')
+      .toBe('đổi phần cần kiểm lại: bản đồ, hướng, camera')
   })
 
   it('falls back to comparing the fields when a fingerprint is missing', () => {
     const { navigationFingerprint: _omit, ...withoutFingerprint } = base
     void _omit
     expect(revisionChange(withoutFingerprint, { ...withoutFingerprint, name: 'Khác' })).toBe('chỉ đổi nội dung (tên)')
-    expect(revisionChange(withoutFingerprint, { ...withoutFingerprint, y: 3 })).toBe('đổi điều hướng: vị trí')
+    expect(revisionChange(withoutFingerprint, { ...withoutFingerprint, y: 3 })).toBe('đổi phần cần kiểm lại: vị trí')
   })
 })
