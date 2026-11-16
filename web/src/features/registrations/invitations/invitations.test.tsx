@@ -6,6 +6,7 @@ import { useToastStore } from '../../../components/ui/toast-store'
 import { InvitationPanel } from './InvitationPanel'
 import { StudentInvitationPage } from '../../student/invitation/StudentInvitationPage'
 import type { InvitationDetails } from './api'
+import { time } from './viewer-presence'
 
 let client: QueryClient
 const initial: InvitationDetails = { enabled: true, canIssue: false, items: [{
@@ -80,4 +81,57 @@ it('uses only an access code for Student entry and never refreshes/logs out an a
   expect(calls.every(c => !c.path.includes('ABCDE'))).toBe(true)
   expect(useAuthStore.getState().accessToken).toBe('owner-token')
   await act(async () => { client.clear() })
+})
+
+const base = initial.items[0]
+const withPresence: InvitationDetails = { enabled: true, canIssue: false, items: [
+  { ...base, id: 'a', displayName: 'Em An', viewerPresence: 'CONNECTED', firstEnteredAt: '2026-10-20T02:00:00Z', lastSeenAt: '2026-10-20T02:30:00Z', sessionExpiresAt: '2026-10-20T02:40:00Z' },
+  { ...base, id: 'b', displayName: 'Em Bình', viewerPresence: 'DISCONNECTED', firstEnteredAt: '2026-10-20T02:01:00Z', lastSeenAt: '2026-10-20T02:10:00Z', sessionExpiresAt: '2026-10-20T02:20:00Z' },
+  { ...base, id: 'c', displayName: 'Em Chi', viewerPresence: 'LEFT', firstEnteredAt: '2026-10-20T02:02:00Z', lastSeenAt: '2026-10-20T02:15:00Z', sessionExpiresAt: null },
+  { ...base, id: 'd', displayName: 'Em Dũng', viewerPresence: 'NOT_ENTERED', firstEnteredAt: null, lastSeenAt: null, sessionExpiresAt: null },
+  { ...base, id: 'e', displayName: 'Em Én', viewerPresence: 'NOT_ENTERED', firstEnteredAt: null, lastSeenAt: null, sessionExpiresAt: null },
+] }
+const rowOf = (name: string, variant: 'console' | 'representative') =>
+  screen.getByText(name).closest(variant === 'console' ? 'article' : 'tr') as HTMLElement
+
+it.each(['console', 'representative'] as const)('shows viewer presence for each invitation in the %s variant', async variant => {
+  vi.stubGlobal('fetch', vi.fn(async () => response(withPresence)))
+  mount(<InvitationPanel registrationId="group" rowVersion="AAAAAAAAAAE=" tourRowVersion="AAAAAAAAAAI=" variant={variant} />)
+  expect(await screen.findByText('1 đang xem · 1 mất kết nối · 2 chưa vào')).toBeInTheDocument()
+  if (variant === 'representative') expect(screen.getByRole('columnheader', { name: 'Người xem' })).toBeInTheDocument()
+
+  const connected = within(rowOf('Em An', variant))
+  expect(connected.getByText('Đang xem')).toBeInTheDocument()
+  expect(connected.getByText(`Vào lần đầu ${time('2026-10-20T02:00:00Z')}`)).toBeInTheDocument()
+
+  const disconnected = within(rowOf('Em Bình', variant))
+  expect(disconnected.getByText(`Mất kết nối · lần cuối ${time('2026-10-20T02:10:00Z')}`)).toBeInTheDocument()
+  expect(disconnected.getByText(`Cấp mã mới để em vào lại ngay, hoặc đợi tới ${time('2026-10-20T02:20:00Z')}.`)).toBeInTheDocument()
+
+  const left = within(rowOf('Em Chi', variant))
+  expect(left.getByText(`Đã rời · lần cuối ${time('2026-10-20T02:15:00Z')}`)).toBeInTheDocument()
+  expect(left.queryByText(/Cấp mã mới để em/)).not.toBeInTheDocument()
+
+  const notEntered = within(rowOf('Em Dũng', variant))
+  expect(notEntered.getByText('Chưa vào')).toBeInTheDocument()
+  expect(notEntered.queryByText(/Vào lần đầu/)).not.toBeInTheDocument()
+
+  if (variant === 'representative') {
+    expect(connected.getByText('Đang xem')).toHaveClass('rep-badge--ok')
+    expect(disconnected.getByText(/Mất kết nối/)).toHaveClass('rep-badge--warn')
+    expect(left.getByText(/Đã rời/)).toHaveClass('rep-badge--muted')
+    expect(notEntered.getByText('Chưa vào')).toHaveClass('rep-badge--muted')
+    expect(disconnected.getByText(/Mất kết nối/).closest('td')).toHaveAttribute('data-label', 'Người xem')
+  }
+  // The support actions are unchanged by presence.
+  expect(within(rowOf('Em Bình', variant)).getByRole('button', { name: 'Thu hồi và cấp mã mới' })).toBeEnabled()
+})
+
+it.each(['console', 'representative'] as const)('leaves out viewer presence when an older backend omits it (%s)', async variant => {
+  vi.stubGlobal('fetch', vi.fn(async () => response(initial)))
+  mount(<InvitationPanel registrationId="group" rowVersion="AAAAAAAAAAE=" tourRowVersion="AAAAAAAAAAI=" variant={variant} />)
+  expect(await screen.findByText('Phòng A')).toBeInTheDocument()
+  expect(screen.queryByText(/Người xem/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/đang xem ·/)).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Gửi lại email' })).toBeEnabled()
 })

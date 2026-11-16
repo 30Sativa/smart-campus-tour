@@ -352,3 +352,65 @@ it.each([
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
   expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
 })
+
+function conflictResponse(code: string, message: string, fields?: Record<string, string[]>) {
+  return new Response(JSON.stringify({ success: false, message, data: null, errors: { code, ...(fields ? { fields } : {}) } }), { status: 409 })
+}
+const heldMessage = 'Trình duyệt này đã mất kết nối quá 2 phút nên phiên cũ đang bị giữ. Nhờ đại diện hoặc Staff cấp mã mới để vào ngay.'
+
+it('shows the backend sentence and the wait for RECONNECT_WINDOW_EXPIRED on join', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/join')
+    ? conflictResponse('RECONNECT_WINDOW_EXPIRED', heldMessage, { retryAfterSeconds: ['290'] }) : response(null, 401)))
+  mount()
+  await screen.findByLabelText('Mã truy cập')
+  submitCode()
+  expect(await screen.findByRole('alert')).toHaveTextContent(`${heldMessage} Thử lại sau khoảng 5 phút.`)
+})
+
+it('does not repeat the wait when the backend sentence already names it', async () => {
+  const sentence = 'Phiên cũ đang bị giữ. Nhờ đại diện hoặc Staff cấp mã mới để vào ngay, hoặc thử lại sau khoảng 5 phút.'
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/join')
+    ? conflictResponse('RECONNECT_WINDOW_EXPIRED', sentence, { retryAfterSeconds: ['290'] }) : response(null, 401)))
+  mount()
+  await screen.findByLabelText('Mã truy cập')
+  submitCode()
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(sentence)
+  expect(alert.textContent?.match(/thử lại sau/gi)).toHaveLength(1)
+})
+
+it('shows only the backend sentence for RECONNECT_WINDOW_EXPIRED without retryAfterSeconds', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/join')
+    ? conflictResponse('RECONNECT_WINDOW_EXPIRED', heldMessage) : response(null, 401)))
+  mount()
+  await screen.findByLabelText('Mã truy cập')
+  submitCode()
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(heldMessage)
+  expect(alert).not.toHaveTextContent('Thử lại sau')
+})
+
+it('shows the backend sentence for INVITATION_IN_USE', async () => {
+  const sentence = 'Mã này đang được dùng trên một trình duyệt khác. Nhờ đại diện hoặc Staff cấp mã mới nếu đó không phải bạn.'
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/join')
+    ? conflictResponse('INVITATION_IN_USE', sentence) : response(null, 401)))
+  mount()
+  await screen.findByLabelText('Mã truy cập')
+  submitCode()
+  expect(await screen.findByRole('alert')).toHaveTextContent(sentence)
+})
+
+it('stops polling the session after RECONNECT_WINDOW_EXPIRED and waits for the viewer', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    const fetch = vi.fn(async () => conflictResponse('RECONNECT_WINDOW_EXPIRED', heldMessage, { retryAfterSeconds: ['600'] }))
+    vi.stubGlobal('fetch', fetch)
+    mount()
+    expect(await screen.findByText(`${heldMessage} Thử lại sau khoảng 10 phút.`)).toBeVisible()
+    await act(async () => { await vi.advanceTimersByTimeAsync(65_000) })
+    expect(fetchCalls().filter(url => url.endsWith('/session'))).toHaveLength(1)
+    expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
+  } finally {
+    vi.useRealTimers()
+  }
+})
