@@ -735,7 +735,7 @@ describe('Technical Staff API integration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Library' }))
     const detail = within(screen.getByRole('dialog', { name: 'Library' }))
     // Narration is Staff content (ADR-0060): Technical sees its state only, never its text or an edit control.
-    expect(detail.getByText('Chưa có thuyết minh')).toBeInTheDocument()
+    expect(detail.getByText('Chưa có')).toBeInTheDocument()
     expect(detail.getByText('Staff viết và duyệt; không ảnh hưởng kết quả kiểm chứng.')).toBeInTheDocument()
     expect(detail.getByText('x 1, y 2, yaw 0')).toBeInTheDocument()
     expect(detail.getByText('Nhìn phía trước')).toBeInTheDocument()

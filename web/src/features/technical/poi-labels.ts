@@ -2,49 +2,48 @@ import type { StatusTone } from '../../components/ui/status-tone'
 import { headPresetLabel } from './head-camera-preset'
 import type { PoiNarrationSummary, PoiProposal } from './api/technical'
 
+/** The four states of a POI revision's navigation check ("Kiểm chứng"). */
+export type VerificationState = 'DRAFT' | 'WAIT' | 'PASS' | 'FAIL'
+
 /**
- * Staff-facing wording for a POI revision's lifecycle. The API speaks in
- * revisions, submit and PASS/FAIL; the screen speaks in "Phiên bản",
- * "Chưa gửi kiểm", "gửi kiểm chứng" and Đạt/Không đạt.
+ * Staff-facing wording for the navigation check, the one source for the POI list, its filter chips and map pins,
+ * the POI page and its history. The API speaks in submit and PASS/FAIL.
  */
-export function poiStatus(revision: { navigationStatus: string; isSubmitted: boolean }): { label: string; tone: StatusTone } {
-  if (revision.navigationStatus === 'PASS') return { label: 'Đạt', tone: 'ok' }
-  if (revision.navigationStatus === 'FAIL') return { label: 'Không đạt · cần sửa', tone: 'danger' }
-  return revision.isSubmitted ? { label: 'Chờ kiểm chứng', tone: 'warn' } : { label: 'Chưa gửi kiểm', tone: 'muted' }
+export const VERIFICATION: Record<VerificationState, { label: string; tone: StatusTone }> = {
+  DRAFT: { label: 'Chưa gửi', tone: 'muted' },
+  WAIT: { label: 'Chờ kỹ thuật', tone: 'warn' },
+  PASS: { label: 'Đạt', tone: 'ok' },
+  FAIL: { label: 'Không đạt', tone: 'danger' },
 }
+
+/**
+ * The check result comes first. A PASS belongs to the navigation fingerprint, so a revision that only changed its
+ * name or text keeps the PASS without being submitted again, and a route may use it (SaveRouteRevision).
+ */
+export const verificationState = (revision: { navigationStatus: string; isSubmitted: boolean }): VerificationState =>
+  revision.navigationStatus === 'PASS' ? 'PASS' : revision.navigationStatus === 'FAIL' ? 'FAIL' : revision.isSubmitted ? 'WAIT' : 'DRAFT'
+
+export const poiStatus = (revision: { navigationStatus: string; isSubmitted: boolean }) => VERIFICATION[verificationState(revision)]
 
 export const verificationMethodLabel: Record<string, string> = { POSE_CAPTURE: 'Ghi pose trực tiếp trên robot', MANUAL_CHECK: 'Kiểm tra thủ công' }
 
 export const poiImportActionLabel: Record<string, string> = { CREATE: 'Tạo POI mới', NEW_REVISION: 'Thêm phiên bản', NO_CHANGE: 'Không thay đổi' }
 
 /**
- * Where a POI's narration stands, from the proposal's narration summary (ADR-0060). Only an approved
- * version can join a new route revision; a draft waits for a second Staff to approve it.
+ * Where a POI's narration stands ("Thuyết minh"), from the proposal's narration summary (ADR-0060), for the POI
+ * list, the POI page and the route picker. Only an approved version can join a new route revision; a draft waits for
+ * a second Staff to approve it. Inside the narration tab a draft is still called "bản đang soạn".
  */
 export function narrationStatus(summary: PoiNarrationSummary | null | undefined): { label: string; tone: StatusTone; approved: boolean } {
-  if (summary?.approved && summary.draft) return { label: 'Đã duyệt · có bản đang soạn', tone: 'ok', approved: true }
+  if (summary?.approved && summary.draft) return { label: 'Đã duyệt · có bản chờ duyệt', tone: 'ok', approved: true }
   if (summary?.approved) return { label: 'Đã duyệt', tone: 'ok', approved: true }
   if (summary?.draft) return { label: 'Chờ duyệt', tone: 'warn', approved: false }
-  return { label: 'Chưa có thuyết minh', tone: 'muted', approved: false }
+  return { label: 'Chưa có', tone: 'muted', approved: false }
 }
 
 /** A route revision takes a POI only with both a navigation PASS and an approved narration, and not once retired (ADR-0062). */
 export const usableForRoute = (proposal: PoiProposal) =>
   proposal.revision.navigationStatus === 'PASS' && Boolean(proposal.narration?.approved) && !proposal.retiredAt && !proposal.discardedAt
-
-/** The POI page header: the navigation check and the narration, each in its own words. */
-export function navigationHeadline(revision: { navigationStatus: string; isSubmitted: boolean }): { label: string; tone: StatusTone } {
-  if (revision.navigationStatus === 'PASS') return { label: 'Đạt', tone: 'ok' }
-  if (revision.navigationStatus === 'FAIL') return { label: 'Không đạt', tone: 'danger' }
-  return revision.isSubmitted ? { label: 'Chờ kiểm', tone: 'warn' } : { label: 'Chưa gửi kiểm', tone: 'muted' }
-}
-
-export function narrationHeadline(summary: PoiNarrationSummary | null | undefined): { label: string; tone: StatusTone } {
-  if (summary?.approved && summary.draft) return { label: 'Đã duyệt · có bản đang soạn', tone: 'ok' }
-  if (summary?.approved) return { label: 'Đã duyệt', tone: 'ok' }
-  if (summary?.draft) return { label: 'Đang soạn', tone: 'warn' }
-  return { label: 'Chưa có', tone: 'muted' }
-}
 
 /** "Dùng được cho tuyến: …", by the server's rule for SaveRouteRevision (PASS, approved narration, not retired or discarded). */
 export function routeUseLine(proposal: PoiProposal): { usable: boolean; text: string } {

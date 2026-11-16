@@ -159,7 +159,7 @@ describe('POI narration section (ADR-0060)', () => {
     versions = [approvedVersion, version({ revisionNumber: 2, narrationText: 'Nội dung sắp duyệt.', rowVersion: 'rv-2' })]
     renderPage()
     const section = await panel()
-    expect(within(await screen.findByRole('region', { name: 'Tình trạng POI' })).getByText('Đã duyệt · có bản đang soạn')).toBeInTheDocument()
+    expect(within(await screen.findByRole('region', { name: 'Tình trạng POI' })).getByText('Đã duyệt · có bản chờ duyệt')).toBeInTheDocument()
     // The approver reads what changed against the version in use: added words marked, removed words struck.
     const box = within(await section.findByRole('group', { name: 'Duyệt' }))
     const diff = box.getByLabelText('Phần chữ đã đổi')
@@ -230,8 +230,10 @@ describe('POI narration section (ADR-0060)', () => {
     versions = [version({})]
     renderPage()
     const header = within(await screen.findByRole('region', { name: 'Tình trạng POI' }))
-    expect(header.getByText('Đạt')).toBeInTheDocument()
-    expect(header.getByText('Đang soạn')).toBeInTheDocument()
+    // The same axis names and values as the POI list cards (poi-labels.ts).
+    expect(header.getByText('Đạt').parentElement).toHaveTextContent('Kiểm chứng: Đạt')
+    expect(header.getByText('Chờ duyệt').parentElement).toHaveTextContent('Thuyết minh: Chờ duyệt')
+    expect(header.queryByText(/Điều hướng/)).not.toBeInTheDocument()
     expect(header.getByText('Dùng được cho tuyến: Chưa, vì chưa có thuyết minh đã duyệt')).toBeInTheDocument()
   })
 
