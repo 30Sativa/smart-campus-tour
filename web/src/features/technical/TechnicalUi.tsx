@@ -58,7 +58,12 @@ export function ResultToggle({ id, value, onChange, hint }: { id: string; value:
  * The result an observation form will record, worked out from its ticks: every box ticked is Đạt,
  * anything left unticked is Không đạt. Shown beside the save button so the checker sees what is saved.
  */
-export function ComputedResult({ passed }: { passed: boolean }) {
+/**
+ * The result the ticks give. `pending` while no box has been ticked or unticked yet: the form has not been
+ * filled in, so it reads neither Đạt nor Không đạt.
+ */
+export function ComputedResult({ passed, pending = false }: { passed: boolean; pending?: boolean }) {
+  if (pending) return <p role="status" className="flex items-center gap-1.5 text-[13px] font-semibold text-[#64748b]">Kết quả: chưa tick mục nào</p>
   return <p role="status" className="flex items-center gap-1.5 text-[13px] font-semibold text-[#334155]">Kết quả: <ToneBadge tone={passed ? 'ok' : 'danger'}>{passed ? 'Đạt' : 'Không đạt'}</ToneBadge></p>
 }
 

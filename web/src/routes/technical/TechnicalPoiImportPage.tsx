@@ -147,6 +147,8 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
   const [stopped, setStopped] = useState(false)
   const [localized, setLocalized] = useState(false)
   const [cameraConfirmed, setCameraConfirmed] = useState(false)
+  // Until a box is ticked or unticked, the result is neither Đạt nor Không đạt and no reason is asked.
+  const [touched, setTouched] = useState(false)
   const { revision } = proposal
 
   const [reachedLabel, stoppedLabel, localizedLabel, cameraLabel] = poiObservationLabels(revision.cameraPreset)
@@ -158,13 +160,15 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
   ]
   // The result follows the ticks: all four ticked is Đạt, any left unticked is Không đạt and needs a reason.
   const resultCode: 'PASS' | 'FAIL' = checks.every(check => check.checked) ? 'PASS' : 'FAIL'
+  const pending = !touched && checks.every(check => !check.checked)
   const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
   // The server refuses this either way (MAP_NOT_DEPLOYED), so save waits for a fresh robot list that shows a pass on this map.
   const robotElsewhere = selectedRobot && (selectedRobot.latestDeployedMapKey !== revision.mapKey || selectedRobot.latestDeploymentPassed === false)
   const missingToSave = [
     !robotCode && 'chọn robot',
     robotElsewhere && 'robot chưa kiểm tra triển khai đạt trên map này',
-    resultCode === 'FAIL' && !reason.trim() && 'nhập lý do không đạt',
+    pending && 'tick các mục đã kiểm tra',
+    !pending && resultCode === 'FAIL' && !reason.trim() && 'nhập lý do không đạt',
     !evidence.trim() && 'nhập ghi chú bằng chứng',
   ].filter((item): item is string => Boolean(item))
   const errors = verify.error ? poiVerifyErrors(verify.error) : {}
@@ -190,7 +194,7 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
 
   return (
     <Modal open size="lg" title={`Kiểm tra ${revision.name}`} description={`${mapName}, phiên bản POI ${revision.revisionNumber}, đầu camera ${headPresetLabel(revision.cameraPreset)}. Đạt khi cả bốn kiểm tra đều đạt.`} onClose={onClose}
-      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
+      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="poi-verify-form" className="space-y-3.5" onSubmit={submit}>
         <div>
           <RobotPicker id="verify-robot" label="Robot vật lý" mapKey={revision.mapKey} requireReady value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả kiểm chứng." />
@@ -199,9 +203,9 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
         </div>
         <div className="space-y-2">
           <p className="text-xs text-[#64748b]">Tick mục đã đạt. Còn mục chưa tick thì kết quả là Không đạt.</p>
-          {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
+          {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); setTouched(true); changed() }}>{check.label}</CheckRow>)}
         </div>
-        {resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="verify-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này, sửa POI và gửi lại phiên bản mới.</p><input id="verify-reason" aria-invalid={Boolean(errors.reason)} className={`${inputClass} mt-1`} required maxLength={1000} value={reason} onChange={(event) => { setReason(event.target.value); changed() }} />{errors.reason && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.reason}</p>}</div>}
+        {!pending && resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="verify-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này, sửa POI và gửi lại phiên bản mới.</p><input id="verify-reason" aria-invalid={Boolean(errors.reason)} className={`${inputClass} mt-1`} required maxLength={1000} value={reason} onChange={(event) => { setReason(event.target.value); changed() }} />{errors.reason && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.reason}</p>}</div>}
         <div><label className={labelClass} htmlFor="verify-evidence">Ghi chú bằng chứng</label><textarea id="verify-evidence" rows={3} aria-invalid={Boolean(errors.evidenceNote)} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={(event) => { setEvidence(event.target.value); changed() }} />{errors.evidenceNote && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.evidenceNote}</p>}</div>
         {errors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errors.form}</p>}
         <Note>Bản ghi gắn với phiên bản POI {revision.revisionNumber}. Nếu Staff sửa POI trong lúc bạn kiểm tra, máy chủ sẽ từ chối và bạn cần mở lại.</Note>

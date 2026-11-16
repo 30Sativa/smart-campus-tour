@@ -108,6 +108,8 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const [allStopsReached, setAllStopsReached] = useState(false)
   const [safelyStopped, setSafelyStopped] = useState(false)
   const [localizationPassed, setLocalizationPassed] = useState(false)
+  // Until a box is ticked or unticked, the result is neither Đạt nor Không đạt and no reason is asked.
+  const [touched, setTouched] = useState(false)
   const [failureReason, setFailureReason] = useState('')
   const [evidence, setEvidence] = useState('')
   // Stable across retries of the same input, so a lost response cannot record a second run.
@@ -120,6 +122,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   ]
   // The result follows the ticks: all three ticked is Đạt, any left unticked is Không đạt and needs a reason.
   const resultCode: 'PASS' | 'FAIL' = checks.every(check => check.checked) ? 'PASS' : 'FAIL'
+  const pending = !touched && checks.every(check => !check.checked)
   const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
   // The server refuses this either way, so save waits for a fresh robot list showing the robot confirmed and passing on this map.
   const robotNotReady = selectedRobot ? robotNotReadyReason(selectedRobot, route.mapKey) : null
@@ -129,7 +132,8 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
     !robotCode && 'chọn robot',
     robotNotReady && `robot ${robotNotReady}`,
     !staffUserId && 'chọn Staff đi cùng',
-    resultCode === 'FAIL' && !failureReason.trim() && 'nhập lý do không đạt',
+    pending && 'tick các mục đã kiểm tra',
+    !pending && resultCode === 'FAIL' && !failureReason.trim() && 'nhập lý do không đạt',
     !evidence.trim() && 'nhập ghi chú bằng chứng',
   ].filter((item): item is string => Boolean(item))
   const ready = missingToSave.length === 0
@@ -146,7 +150,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
 
   return (
     <Modal open size="lg" title={`Chạy thử ${route.name}`} description={`Phiên bản ${route.revisionNumber} · bản đồ ${route.mapKey} · ${route.stops.length} điểm dừng. Đạt khi cả ba kiểm tra đều đạt.`} onClose={onClose}
-      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
+      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="route-test-form" className="space-y-3.5" onSubmit={submit}>
         <div>
           <RobotPicker id="route-test-robot" label="Robot vật lý" mapKey={route.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} requireReady emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
@@ -164,9 +168,9 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
         {route.expectedDurationSeconds ? <p className="text-xs text-[#64748b]">{expectedDurationText(route.expectedDurationSeconds)}</p> : null}
         <div className="space-y-2">
           <p className="text-xs text-[#64748b]">Tick mục đã đạt. Còn mục chưa tick thì kết quả là Không đạt.</p>
-          {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
+          {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); setTouched(true); changed() }}>{check.label}</CheckRow>)}
         </div>
-        {resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="route-test-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này khi sửa tuyến.</p><input id="route-test-reason" className={`${inputClass} mt-1`} required maxLength={1000} value={failureReason} onChange={event => { setFailureReason(event.target.value); changed() }} /></div>}
+        {!pending && resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="route-test-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này khi sửa tuyến.</p><input id="route-test-reason" className={`${inputClass} mt-1`} required maxLength={1000} value={failureReason} onChange={event => { setFailureReason(event.target.value); changed() }} /></div>}
         <div><label className={labelClass} htmlFor="route-test-evidence">Ghi chú bằng chứng</label><textarea id="route-test-evidence" rows={3} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={event => { setEvidence(event.target.value); changed() }} /></div>
         {errors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errors.form}</p>}
         <Note>Mỗi lần chạy được ghi thêm, không sửa được. Lần chạy mới nhất của cùng cấu hình là kết quả đang áp dụng.</Note>
