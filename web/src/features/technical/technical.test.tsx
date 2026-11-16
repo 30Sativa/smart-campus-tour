@@ -51,7 +51,7 @@ let routeDetail: unknown = null
 let routeRefusal: { status: number; body: unknown } | null = null
 let releaseRefusals: Array<{ status: number; body: unknown }> = []
 let dispatchRefusals: Array<{ status: number; body: unknown }> = []
-const routeFixture = { routeId: 'route-1', revisionId: 'rev-1', revisionNumber: 2, name: 'Tuyến thư viện', mapKey: 'library-v1', stops: [{}, {}], dwellDurationSeconds: 60, verificationStatus: 'NOT_TESTED', isSubmitted: true, testRuns: [], effectiveTestRunId: null, revisionHistory: [] }
+const routeFixture = { routeId: 'route-1', revisionId: 'rev-1', revisionNumber: 2, name: 'Tuyến thư viện', mapKey: 'library-v1', stops: [{}, {}], dwellDurationSeconds: 60, expectedDurationSeconds: 410, verificationStatus: 'NOT_TESTED', isSubmitted: true, testRuns: [], effectiveTestRunId: null, revisionHistory: [] }
 let credentialStatus: RobotCredentialView = { robotCode: 'amr-01', status: 'NOT_ISSUED', issuedAt: null, issuedByUserId: null, issuedByName: null, hint: null, revokedAt: null, revokedByUserId: null, revokedByName: null, rowVersion: 'AAAAAAAAAAA=', history: [] }
 
 const openRobotDetail = async () => fireEvent.click(await screen.findByRole('button', { name: 'Quản lý amr-01' }))
@@ -1013,7 +1013,6 @@ describe('Technical Staff API integration', () => {
     await screen.findByRole('option', { name: 'Lan Staff · lan' })
     fireEvent.change(screen.getByLabelText('Robot vật lý'), { target: { value: 'amr-01' } })
     fireEvent.change(screen.getByLabelText('Staff đi cùng'), { target: { value: 'staff-1' } })
-    fireEvent.change(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)'), { target: { value: '420' } })
     fireEvent.change(screen.getByLabelText('Ghi chú bằng chứng'), { target: { value: 'Đã chạy thử.' } })
   }
   const testRunCalls = () => requests.filter(item => item.url.pathname.endsWith('/test-runs'))
@@ -1044,34 +1043,20 @@ describe('Technical Staff API integration', () => {
     await waitFor(() => expect(testRunCalls()).toHaveLength(1))
     expect(testRunCalls()[0].url.pathname).toBe('/api/technical/routes/route-1/revisions/rev-1/test-runs')
     const body = JSON.parse(String(testRunCalls()[0].init?.body))
-    expect(body).toMatchObject({ robotCode: 'amr-01', participatingStaffUserId: 'staff-1', resultCode: 'PASS', allStopsReached: true, safelyStopped: true, localizationPassed: true, measuredDurationSeconds: 420, failureReason: null, evidenceNote: 'Đã chạy thử.' })
+    expect(body).toMatchObject({ robotCode: 'amr-01', participatingStaffUserId: 'staff-1', resultCode: 'PASS', allStopsReached: true, safelyStopped: true, localizationPassed: true, failureReason: null, evidenceNote: 'Đã chạy thử.' })
+    expect(body.measuredDurationSeconds).toBeUndefined()
     expect(body.requestId).toBeTruthy()
     expect(body.routeName).toBeUndefined()
     expect(body.routeId).toBeUndefined()
     await waitFor(() => expect(useToastStore.getState().toasts.at(-1)?.title).toBe('Đã ghi chạy thử đạt: Tuyến thư viện'))
   })
 
-  it('blocks a total run time that does not exceed the dwell sum, in the server words', async () => {
+  it('asks for no run time and shows the estimated length instead', async () => {
     await openRouteTest()
-    expect(screen.getByText(/Tổng dừng 60 giây, thời gian chạy phải lớn hơn/)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Tổng thời gian chạy/)).not.toBeInTheDocument()
+    expect(screen.getByText('Thời lượng dự kiến: 7 phút (tự tính từ thời gian dừng và quãng đường)')).toBeInTheDocument()
     passAllRouteChecks()
-    fireEvent.change(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)'), { target: { value: '30' } })
-    expect(screen.getByRole('alert')).toHaveTextContent('Tổng thời gian chạy phải lớn hơn tổng thời gian dừng (60 giây).')
-    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)'), { target: { value: '60' } })
-    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)'), { target: { value: '61' } })
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeEnabled()
-  })
-
-  it('shows the server duration refusal under the time field', async () => {
-    routeRefusal = { status: 409, body: { message: 'Tổng thời gian chạy phải lớn hơn tổng thời gian dừng (90 giây).', errors: { code: 'ROUTE_TEST_DURATION_TOO_SHORT', fields: null } } }
-    await openRouteTest()
-    passAllRouteChecks()
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('(90 giây)')
-    expect(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)')).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('closes the dialog and keeps it closed when the saved route moves to the recorded list', async () => {
@@ -1154,6 +1139,7 @@ describe('Technical Staff API integration', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Xem kết quả Tuyến thư viện' }))
     const dialog = within(screen.getByRole('dialog'))
     expect(await dialog.findByText(/Lần một/)).toBeInTheDocument()
+    expect(dialog.queryByText(/đo được/)).not.toBeInTheDocument()
     expect(dialog.getByText(/Lệch điểm 2/)).toBeInTheDocument()
     expect(dialog.getByText('Đang áp dụng')).toBeInTheDocument()
     expect(await dialog.findByText(/Lan Staff/)).toBeInTheDocument()

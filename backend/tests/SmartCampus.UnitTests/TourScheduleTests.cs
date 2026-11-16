@@ -129,18 +129,58 @@ public sealed class TourScheduleTests
         Assert.Contains("Ca sáng bắt đầu 08:15", error.Message);
     }
 
-    [Fact]
-    public void AddedDwellLengthensTheMeasuredRun() =>
-        Assert.Equal(1215, TourSchedule.ExpectedDurationSeconds(1200, [(1, 30)], [(1, 45)]));
+    // Start (0,0) -> stop 1 (3,4) -> stop 2 (3,10): 5 m + 6 m = 11 m of travel and 30 + 45 s of dwell.
+    private static RouteRevision Revision(string endMode, decimal? endX = null, decimal? endY = null) =>
+        new() { StartX = 0m, StartY = 0m, EndMode = endMode, EndX = endX, EndY = endY, EndYaw = endX is null ? null : 0m };
+
+    private static readonly RouteRevisionStop[] TwoStops =
+    [
+        // Given out of order: the estimate follows StopOrder.
+        new() { StopOrder = 2, X = 3m, Y = 10m, DwellSeconds = 45 },
+        new() { StopOrder = 1, X = 3m, Y = 4m, DwellSeconds = 30 },
+    ];
 
     [Fact]
-    public void ShortenedDwellNeverShortensTheMeasuredRun() =>
-        Assert.Equal(1200, TourSchedule.ExpectedDurationSeconds(1200, [(1, 45)], [(1, 10)]));
+    public void Estimate_EndingAtTheLastStop_HasNoFinalLeg() =>
+        // 11 m at 0.25 m/s = 44 s.
+        Assert.Equal(75 + 44, TourSchedule.EstimatedDurationSeconds(Revision("LAST_POI"), TwoStops, 0.25));
 
     [Fact]
-    public void DwellIsComparedStopByStop_NotAsATotal() =>
-        // The total dwell is unchanged, yet stop 2 runs 20 s longer and only that counts.
-        Assert.Equal(1220, TourSchedule.ExpectedDurationSeconds(1200, [(1, 50), (2, 30)], [(1, 30), (2, 50)]));
+    public void Estimate_ReturningToTheStart_AddsTheLegBack() =>
+        // Back from (3,10) to (0,0) is sqrt(109) = 10.44 m, so 21.44 m = 85.76 s, rounded up to 86.
+        Assert.Equal(75 + 86, TourSchedule.EstimatedDurationSeconds(Revision("POSE", 0m, 0m), TwoStops, 0.25));
+
+    [Fact]
+    public void Estimate_EndingAtAPose_AddsTheLegToIt() =>
+        // (3,10) -> (3,14) is 4 m: 15 m = 60 s.
+        Assert.Equal(75 + 60, TourSchedule.EstimatedDurationSeconds(Revision("POSE", 3m, 14m), TwoStops, 0.25));
+
+    [Fact]
+    public void Estimate_FollowsTheConfiguredSpeed() =>
+        Assert.Equal(75 + 11, TourSchedule.EstimatedDurationSeconds(Revision("LAST_POI"), TwoStops, 1.0));
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-0.25)]
+    public void Settings_RefuseASpeedThatIsNotPositive(double speed) =>
+        Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings(TourShiftsFixture.Options, 60, estimatedSpeedMetersPerSecond: speed));
+
+    [Fact]
+    public void Settings_DefaultTheSpeedTo025() =>
+        Assert.Equal(0.25, new TourScheduleSettings(TourShiftsFixture.Options, 60).EstimatedSpeedMetersPerSecond);
+
+    [Fact]
+    public void ALunchShiftRefusesARouteEstimatedOver30Minutes()
+    {
+        var lunch = new TourShiftOnDay(Day, new TourShift("S4", "Ca trưa", new TimeOnly(11, 0), new TimeOnly(12, 0)));
+        // 30 stops of 60 s plus 1 m of travel: 1804 s, more than the 30 minutes a one-hour shift holds.
+        var stops = Enumerable.Range(1, 30).Select(order => new RouteRevisionStop { StopOrder = order, X = 0m, Y = order / 30m, DwellSeconds = 60 }).ToArray();
+        var estimate = TourSchedule.EstimatedDurationSeconds(Revision("LAST_POI"), stops, 0.25);
+        Assert.Equal(1804, estimate);
+        var block = TourSchedule.Evaluate(lunch, LongAgo, new(estimate, estimate), []);
+        Assert.Equal(TourSchedule.RouteTooLongForShift, block!.Code);
+        Assert.Equal("Tuyến cần 30 phút 4 giây, ca này chỉ chứa được 30 phút", block.Message);
+    }
 
     [Fact]
     public void LeadTime_AcceptsExactly72Hours_AndRefuses71Hours59Minutes()
@@ -164,6 +204,14 @@ public sealed class TourScheduleTests
     {
         var deadline = Start.AddMinutes(60);
         Assert.Equal((Start, deadline.AddSeconds(1200).AddMinutes(15)), TourSchedule.QuickTourHold(Start, deadline, 1200));
+    }
+
+    [Fact]
+    public void QuickTourHold_OfAnEstimatedRoute_EndsAtTheDeadlinePlusTheEstimatePlus15Minutes()
+    {
+        var deadline = Start.AddMinutes(30);
+        var estimate = TourSchedule.EstimatedDurationSeconds(Revision("POSE", 0m, 0m), TwoStops, 0.25);
+        Assert.Equal(deadline.AddSeconds(161).AddMinutes(15), TourSchedule.QuickTourHold(Start, deadline, estimate).EndsAt);
     }
 
     [Fact]
@@ -195,7 +243,6 @@ public sealed class TourScheduleTests
         var deadline = now.AddMinutes(60);
         Assert.Null(TourSchedule.EvaluateQuickTour(Settings, now, deadline, Plan, [], []));
 
-        Assert.Equal(TourSchedule.RemeasureRequired, TourSchedule.EvaluateQuickTour(Settings, now, deadline, null, [], [])!.Code);
         Assert.Null(TourSchedule.EvaluateQuickTour(Settings, now, deadline, new(5400, 5400), [], []));
         Assert.Equal(TourSchedule.RouteTooLongForShift, TourSchedule.EvaluateQuickTour(Settings, now, deadline, new(5401, 5401), [], [])!.Code);
 
@@ -234,14 +281,6 @@ public sealed class TourScheduleTests
         Assert.Equal(Start.AddHours(-24), TourSchedule.ReviewClosesAt(Start, isShortNotice: false));
         Assert.Equal(Start, TourSchedule.RegistrationClosesAt(Start, isShortNotice: true));
         Assert.Equal(Start, TourSchedule.ReviewClosesAt(Start, isShortNotice: true));
-    }
-
-    [Fact]
-    public void RunWithoutAgreedBasisBlocksEveryUsableShift()
-    {
-        var block = TourSchedule.Evaluate(MorningOnDay, LongAgo, null, []);
-        Assert.Equal(TourSchedule.RemeasureRequired, block!.Code);
-        Assert.Equal("Cần chạy thử lại tuyến để đo theo định nghĩa mới", block.Message);
     }
 
     [Theory]
@@ -285,7 +324,6 @@ public sealed class TourScheduleTests
 
     [Theory]
     [InlineData(TourSchedule.LeadTimeTooShort, "TOUR_LEAD_TIME_TOO_SHORT")]
-    [InlineData(TourSchedule.RemeasureRequired, "ROUTE_TEST_REMEASURE_REQUIRED")]
     [InlineData(TourSchedule.RouteTooLongForShift, "ROUTE_TOO_LONG_FOR_SHIFT")]
     [InlineData(TourSchedule.ReservationOverlap, "ROBOT_RESERVATION_CONFLICT")]
     public void EveryShiftReasonRefusesCreateWithItsConflictCode(string reason, string code) =>

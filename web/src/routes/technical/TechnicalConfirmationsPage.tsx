@@ -4,12 +4,12 @@ import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../co
 import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
-import { revisionTone } from '../../features/administration/routes/route-messages'
+import { expectedDurationText, revisionTone } from '../../features/administration/routes/route-messages'
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
 import { CheckRow, ComputedResult, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { durationTooShortText, errorText, robotNotReadyReason, routeTestErrors } from '../../features/technical/technical-format'
+import { errorText, robotNotReadyReason, routeTestErrors } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
 import { usePhysicalRobots, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 
@@ -108,7 +108,6 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const [allStopsReached, setAllStopsReached] = useState(false)
   const [safelyStopped, setSafelyStopped] = useState(false)
   const [localizationPassed, setLocalizationPassed] = useState(false)
-  const [duration, setDuration] = useState('')
   const [failureReason, setFailureReason] = useState('')
   const [evidence, setEvidence] = useState('')
   // Stable across retries of the same input, so a lost response cannot record a second run.
@@ -121,11 +120,6 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   ]
   // The result follows the ticks: all three ticked is Đạt, any left unticked is Không đạt and needs a reason.
   const resultCode: 'PASS' | 'FAIL' = checks.every(check => check.checked) ? 'PASS' : 'FAIL'
-  const seconds = Number(duration)
-  const durationValid = Number.isInteger(seconds) && seconds >= 1 && seconds <= 86400
-  // The server refuses a total that does not exceed the dwell sum (ROUTE_TEST_DURATION_TOO_SHORT): it becomes the reservation length.
-  const dwell = route.dwellDurationSeconds
-  const durationTooShort = durationValid && seconds <= dwell
   const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
   // The server refuses this either way, so save waits for a fresh robot list showing the robot confirmed and passing on this map.
   const robotNotReady = selectedRobot ? robotNotReadyReason(selectedRobot, route.mapKey) : null
@@ -135,8 +129,6 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
     !robotCode && 'chọn robot',
     robotNotReady && `robot ${robotNotReady}`,
     !staffUserId && 'chọn Staff đi cùng',
-    !durationValid && 'nhập tổng thời gian chạy',
-    durationTooShort && `thời gian chạy lớn hơn tổng dừng ${dwell} giây`,
     resultCode === 'FAIL' && !failureReason.trim() && 'nhập lý do không đạt',
     !evidence.trim() && 'nhập ghi chú bằng chứng',
   ].filter((item): item is string => Boolean(item))
@@ -147,7 +139,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
     if (!ready || record.isPending) return
     record.mutate({ routeName: route.name, run: {
       routeId: route.routeId, revisionId: route.revisionId, requestId, robotCode, participatingStaffUserId: staffUserId, resultCode,
-      allStopsReached, safelyStopped, localizationPassed, measuredDurationSeconds: seconds,
+      allStopsReached, safelyStopped, localizationPassed,
       failureReason: resultCode === 'FAIL' ? failureReason.trim() : null, evidenceNote: evidence.trim(),
     } }, { onSuccess: onClose })
   }
@@ -169,8 +161,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
           {participants.data?.length === 0 && <p role="status" className="mt-1 text-sm text-[#b23e18]">Chưa có tài khoản Staff đang hoạt động. Cần một Staff đi cùng để ghi kết quả.</p>}
           {errors.staff && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.staff}</p>}
         </div>
-        <div><label className={labelClass} htmlFor="route-test-duration">Tổng thời gian chạy toàn tuyến (giây)</label><input id="route-test-duration" aria-describedby="route-test-duration-hint" aria-invalid={durationTooShort || Boolean(errors.duration)} className={`${inputClass} mt-1`} type="number" required min={1} max={86400} step={1} value={duration} onChange={event => { setDuration(event.target.value); changed() }} /><p id="route-test-duration-hint" className="mt-1 text-xs text-[#64748b]">Tính từ lúc xuất phát đến khi kết thúc, gồm cả thời gian dừng tại các điểm. Tổng dừng {dwell} giây, thời gian chạy phải lớn hơn.</p>
-            {(durationTooShort || errors.duration) && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.duration ?? durationTooShortText(dwell)}</p>}</div>
+        {route.expectedDurationSeconds ? <p className="text-xs text-[#64748b]">{expectedDurationText(route.expectedDurationSeconds)}</p> : null}
         <div className="space-y-2">
           <p className="text-xs text-[#64748b]">Tick mục đã đạt. Còn mục chưa tick thì kết quả là Không đạt.</p>
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
@@ -197,7 +188,7 @@ function RouteResultModal({ route, onRecord, onClose }: { route: VersionedRoute;
         {detail.isError && <div role="alert" className="space-y-2 text-sm text-[#b23e31]"><p>{errorText(detail.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void detail.refetch()}>Tải lại kết quả</button></div>}
         {runs.map(run => <section key={run.id} aria-label={`Lần chạy ${formatDateTime(run.checkedAt)}`} className="rounded-lg border border-[#e2e8f0] p-3 text-[13px] text-[#334155]">
           <div className="flex flex-wrap items-center gap-2"><ToneBadge tone={run.resultCode === 'PASS' ? 'ok' : 'danger'}>{run.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'}</ToneBadge><span className="text-xs text-[#64748b]">{formatDateTime(run.checkedAt)}</span>{run.id === detail.data?.effectiveTestRunId && <ToneBadge tone="info">Đang áp dụng</ToneBadge>}</div>
-          <p className="mt-1.5 text-xs text-[#64748b]">Robot <span className="font-mono">{run.robotCode}</span> · Staff đi cùng: {staffName(run.participatingStaffUserId)} · đo được {run.measuredDurationSeconds} giây{run.measurementBasis ? '' : ' (đo theo định nghĩa cũ, cần chạy thử lại trước khi tạo Tour)'}</p>
+          <p className="mt-1.5 text-xs text-[#64748b]">Robot <span className="font-mono">{run.robotCode}</span> · Staff đi cùng: {staffName(run.participatingStaffUserId)}</p>
           <ul className="mt-2 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-3">{[['Đi đủ các điểm dừng', run.allStopsReached], ['Dừng an toàn', run.safelyStopped], ['Định vị', run.localizationPassed]].map(([label, passed]) => <li key={String(label)}>{passed ? 'Đạt' : 'Chưa đạt'}: {label}</li>)}</ul>
           {run.failureReason && <p className="mt-2"><span className="font-medium">Lý do:</span> {run.failureReason}</p>}
           <p className="mt-2 whitespace-pre-wrap"><span className="font-medium">Bằng chứng:</span> {run.evidenceNote}</p>

@@ -460,7 +460,7 @@ public sealed class TourCapacityAndExpirySqlTests
         Assert.Equal(w.H.Route.RevisionId, queued.RevisionId);
 
         await w.H.Send(new RecordRouteTestRunCommand(w.H.TechnicalId, w.H.Route.RouteId, w.H.Route.RevisionId,
-            new(Guid.NewGuid(), TourReadySqlTests.Robot, w.H.StaffId, "PASS", true, true, true, 260, null, "Chạy lại đạt.")));
+            new(Guid.NewGuid(), TourReadySqlTests.Robot, w.H.StaffId, "PASS", true, true, true, null, "Chạy lại đạt.")));
         Assert.Empty(await w.H.Send(new ListRouteRerunQueueQuery()));
     }
 

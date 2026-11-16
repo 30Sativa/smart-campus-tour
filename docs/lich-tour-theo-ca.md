@@ -4,6 +4,8 @@
 - **Thay thế:** ADR-0035 quyết định 2 (slot chỉ là giờ bắt đầu) và toàn bộ ADR-0036 (Staff gõ giờ trong 08:00–17:00).
   Các quyết định khác của ADR-0034/0035 giữ nguyên: tạo Tour trước ít nhất 72 giờ, đóng đăng ký 48 giờ trước giờ Tour,
   thời lượng lấy từ lần chạy thử PASS (đo cả thời gian dừng) cộng phần dừng tăng thêm.
+- **Cập nhật 16/11/2026:** thời lượng không còn lấy từ số Kỹ thuật nhập khi chạy thử. Nó được **tự tính** từ phiên bản
+  tuyến (mục 4). Form chạy thử bỏ ô "Tổng thời gian chạy toàn tuyến"; chạy thử chỉ chứng minh robot đi được tuyến.
 - **Cách ghi tài liệu:** Đợt này không viết ADR mới. File này là nguồn duy nhất cho các thay đổi bên dưới; từ 07/11/2026
   các tài liệu trên đã trỏ về file này. Chỗ nào còn mâu thuẫn với tài liệu cũ thì theo file này.
 
@@ -67,12 +69,17 @@ Trên form tạo/sửa tuyến:
 - **Thời lượng tối đa trong một ca** = độ dài ca − 15 phút chuẩn bị − 15 phút kết thúc. Ca 2 tiếng thì được 90 phút.
   Con số này tính ra từ ca, không đặt tham số riêng, để hai giá trị không bao giờ lệch nhau.
 - **Mức khuyến nghị** là 60 phút (`Tours:RecommendedMaxMinutes`). Vượt mức này chỉ hiện cảnh báo vàng, không chặn.
-- Giá trị đem so là `ExpectedDurationSeconds` hiện có: số đo của lần chạy thử PASS (đã gồm thời gian dừng),
-  cộng phần dừng tăng thêm.
+- Giá trị đem so là `ExpectedDurationSeconds`, **tự tính** (`TourSchedule.EstimatedDurationSeconds`): tổng thời gian
+  dừng + ⌈quãng đường ÷ `Tours:EstimatedSpeedMetersPerSecond`⌉ (mặc định 0.25 m/s, phải > 0). Quãng đường là tổng các
+  đoạn thẳng điểm bắt đầu → điểm dừng 1 → … → điểm dừng cuối → điểm kết thúc, theo toạ độ đã chụp ở điểm dừng của phiên
+  bản tuyến. `LAST_POI` không có đoạn cuối; `POSE` (kể cả quay về điểm bắt đầu) cộng đoạn tới `EndX/EndY`.
+- Cột `MeasuredDurationSeconds` của `RouteTestRuns` và `TourRobotReservations` vẫn NOT NULL nên nhận cùng giá trị ước
+  tính; `MeasurementBasis` vẫn ghi `TOTAL_WITH_DWELL` cho hợp CHECK nhưng không còn được đọc để xếp lịch. Hai cột này sẽ
+  được dọn ở một phiên bản schema sau.
 
 Kiểm tra ở 3 chỗ:
 1. **Lưu tuyến:** tổng thời gian dừng vượt thời lượng tối đa của ca dài nhất thì trả 409 `ROUTE_TOO_LONG_FOR_SHIFT`.
-2. **Sau khi Kỹ thuật ghi PASS:** kết quả chạy thử vẫn ghi PASS, vì robot đi được tuyến. Nhưng nếu thời lượng vượt mức
+2. **Sau khi Kỹ thuật ghi PASS:** kết quả chạy thử vẫn ghi PASS, vì robot đi được tuyến. Nhưng nếu thời lượng ước tính vượt mức
    tối đa của mọi ca, tuyến hiện nhãn "Quá dài cho 1 ca" ở danh mục tuyến và trang chi tiết, và không xếp lịch được.
    Nếu vượt mức khuyến nghị thì hiện nhãn vàng "Dài hơn 60 phút khuyến nghị".
 3. **Tạo Tour và danh sách ca trống:** ca nào không đủ chỗ cho tuyến thì hiện lý do `ROUTE_TOO_LONG_FOR_SHIFT`.
@@ -238,7 +245,7 @@ Cập nhật sau mỗi phần: đã làm gì, kiểm tra bằng gì, chỗ nào 
   `CustomStartEarliest`, `CustomStartLatest` khỏi settings, `appsettings.json` và DI.
 - `TourSchedule`: giờ bắt đầu Tour của ca (đầu ca + 15'), khung giữ của ca (cả ca), thời lượng tối đa (độ dài ca − 30'),
   `FindShift`/`RequireShift` (409 `TOUR_SLOT_NOT_ALLOWED`, message liệt kê giờ bắt đầu từng ca). Thứ tự trong
-  `Evaluate`: lead time → cần đo lại → `ROUTE_TOO_LONG_FOR_SHIFT` → trùng bất kỳ khung giữ nào trong ca
+  `Evaluate`: lead time → `ROUTE_TOO_LONG_FOR_SHIFT` (từ 16/11/2026 không còn bước "cần đo lại") → trùng bất kỳ khung giữ nào trong ca
   (`RESERVATION_OVERLAP`, có tên Tour). `EnsureUsable` trả `ROUTE_TOO_LONG_FOR_SHIFT` với cùng mã. Đã bỏ `StartRule`,
   `Window`, `OUTSIDE_START_HOURS` và `ROUTE_TOO_LONG_FOR_GAP`.
 - Tạo Tour: `TourRobotReservation.StartsAt/EndsAt` = khung của ca. Khoá theo robot và kiểm lại trên đồng hồ mới sau
@@ -248,8 +255,8 @@ Cập nhật sau mỗi phần: đã làm gì, kiểm tra bằng gì, chỗ nào 
 - Thêm `GET /api/staff/manage/tours/shifts?from=&to=` (role Staff, tối đa 31 ngày), trả các ca đã cấu hình của từng ngày.
 - Lưu tuyến: tổng thời gian dừng vượt thời lượng tối đa của ca dài nhất thì trả 409 `ROUTE_TOO_LONG_FOR_SHIFT`.
 - `RouteRevisionView` thêm `scheduleFit` (`UNKNOWN`/`FITS`/`OVER_RECOMMENDED`/`TOO_LONG_FOR_SHIFT`) và
-  `expectedDurationSeconds`, tách khỏi `EligibilityIssues`. Thời lượng dự kiến lấy từ lần PASS hiệu lực đo theo
-  `TOTAL_WITH_DWELL`, cộng phần dừng tăng thêm, đúng công thức đặt chỗ.
+  `expectedDurationSeconds`, tách khỏi `EligibilityIssues`. Thời lượng dự kiến là ước tính của mục 4, đúng công thức
+  đặt chỗ.
 - Web: form tạo Tour chọn ngày rồi chọn ca dạng nút "Ca sáng · 08:15-09:45 · Giữ robot 08:00-10:00". Ca không dùng được
   thì disable kèm lý do. Phần xem lại hiện thời lượng dự kiến, thời lượng tối đa của ca, và cảnh báo vàng khi vượt mức
   khuyến nghị. Tuyến `TOO_LONG_FOR_SHIFT` bị disable trong danh sách chọn tuyến. Form đọc `?date=&shift=`. Đã bỏ nút

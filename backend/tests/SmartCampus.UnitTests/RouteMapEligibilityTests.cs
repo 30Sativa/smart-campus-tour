@@ -47,7 +47,7 @@ public sealed class RouteMapEligibilityTests
     public async Task Submit_is_rejected_before_receipt_or_audit_when_map_lost_its_passing_check()
     {
         var calls = new List<string>();
-        var handler = new SubmitRouteRevisionHandler(RouteRepository(calls), MapRepository([Check(passed: false)], calls), TimeProvider.System);
+        var handler = new SubmitRouteRevisionHandler(RouteRepository(calls), MapRepository([Check(passed: false)], calls), TourShiftsFixture.Settings, TimeProvider.System);
 
         var error = await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
             new SubmitRouteRevisionCommand(ActorId, Route.Id, Revision.Id, new RouteRevisionRequest(Guid.NewGuid(), 1)), default));
@@ -60,7 +60,7 @@ public sealed class RouteMapEligibilityTests
     public async Task Submit_passes_the_gate_when_the_map_has_a_passing_check()
     {
         var calls = new List<string>();
-        var handler = new SubmitRouteRevisionHandler(RouteRepository(calls), MapRepository([Check(passed: true)], calls), TimeProvider.System);
+        var handler = new SubmitRouteRevisionHandler(RouteRepository(calls), MapRepository([Check(passed: true)], calls), TourShiftsFixture.Settings, TimeProvider.System);
 
         // The stub ends at the next step after the gate, which proves the gate let it through.
         await Assert.ThrowsAsync<NotImplementedException>(() => handler.Handle(

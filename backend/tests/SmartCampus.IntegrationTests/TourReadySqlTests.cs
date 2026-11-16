@@ -296,7 +296,7 @@ public sealed class TourReadySqlTests
                 twoStopsToEndPose ? "POSE" : "LAST_POI", twoStopsToEndPose ? 1.5m : null, twoStopsToEndPose ? 2.5m : null, twoStopsToEndPose ? 0m : null, stops)));
             await Send(new SubmitRouteRevisionCommand(staffId, route.RouteId, route.RevisionId, new(Guid.NewGuid(), 1)));
             Route = await Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
-                new(Guid.NewGuid(), Robot, staffId, "PASS", true, true, true, 260, null, "Chạy thử đạt.")));
+                new(Guid.NewGuid(), Robot, staffId, "PASS", true, true, true, null, "Chạy thử đạt.")));
             TourId = await CreateTour(Start);
         }
 
@@ -330,7 +330,7 @@ public sealed class TourReadySqlTests
         public Task<TourMutationResult> Reopen(ReopenTourRequest request) => Send(new ReopenTourCommand(TourId, staffId, request));
 
         public Task FailRouteTest() => Send(new RecordRouteTestRunCommand(technicalId, Route.RouteId, Route.RevisionId,
-            new(Guid.NewGuid(), Robot, staffId, "FAIL", false, true, true, 260, "Kẹt ở cửa", "Chạy lại không đạt.")));
+            new(Guid.NewGuid(), Robot, staffId, "FAIL", false, true, true, "Kẹt ở cửa", "Chạy lại không đạt.")));
 
         public async Task Deactivate()
         {

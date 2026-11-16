@@ -1,11 +1,14 @@
 import { ApiError, apiErrorDetail } from '../../../api/client'
 import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
-import type { RouteScheduleFit, VersionedRoute } from './versioned-api'
+import type { VersionedRoute } from './versioned-api'
 
 const fitMinutes = (seconds: number) => `${Math.ceil(seconds / 60)} phút`
 
-/** docs/lich-tour-theo-ca.md §4: the words for a route that does not sit comfortably in a shift; null when it fits or is not measured yet. */
+/** The server estimates a route's length (dwell plus travel at a configured speed); nobody types it. */
+export const expectedDurationText = (seconds: number) => `Thời lượng dự kiến: ${fitMinutes(seconds)} (tự tính từ thời gian dừng và quãng đường)`
+
+/** docs/lich-tour-theo-ca.md §4: the words for a route that does not sit comfortably in a shift; null when it fits. */
 export function scheduleFitLabel(route: Pick<VersionedRoute, 'scheduleFit' | 'expectedDurationSeconds'>): { tone: 'danger' | 'warn'; text: string; detail: string } | null {
   const expected = route.expectedDurationSeconds ? `Dự kiến ${fitMinutes(route.expectedDurationSeconds)}` : 'Thời lượng dự kiến'
   if (route.scheduleFit === 'TOO_LONG_FOR_SHIFT')
@@ -25,15 +28,13 @@ export function revisionTone(submitted: boolean, status: string) {
 
 /**
  * A route's state in Staff's words: whether it passed a run, never which revision it is.
- * `scheduleFit` is UNKNOWN on a PASS measured before the current definition, which cannot size a
- * reservation, so that run has to be repeated. Technical screens keep `revisionTone`.
+ * Technical screens keep `revisionTone`.
  */
-export function staffRouteStatus(route: { isSubmitted: boolean; verificationStatus: string; scheduleFit?: RouteScheduleFit }) {
+export function staffRouteStatus(route: { isSubmitted: boolean; verificationStatus: string }) {
   const { chip } = revisionTone(route.isSubmitted, route.verificationStatus)
   if (!route.isSubmitted) return { label: 'Bản nháp', chip }
   if (route.verificationStatus === 'FAIL') return { label: 'Chạy thử không đạt', chip }
   if (route.verificationStatus !== 'PASS') return { label: 'Chờ chạy thử', chip }
-  if (route.scheduleFit === 'UNKNOWN') return { label: 'Cần chạy thử lại', chip: revisionTone(true, 'WAITING').chip }
   return { label: 'Đã chạy thử đạt', chip }
 }
 

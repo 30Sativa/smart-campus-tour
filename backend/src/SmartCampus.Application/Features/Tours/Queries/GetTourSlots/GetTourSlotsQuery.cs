@@ -33,19 +33,19 @@ public sealed class GetTourSlotsQueryHandler(ITourManagementRepository tours, IR
         var robot = await revisions.FindPhysicalRobotAsync(query.RobotCode.Trim(), ct)
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
         await TourTarget.RequireUsableRobotAsync(revisions, robot, revision, ct);
-        var plan = await TourTarget.PlanReservationAsync(revisions, revision.Id, run, ct);
+        var plan = await TourTarget.PlanReservationAsync(revisions, revision, settings, ct);
         var days = TourShiftDays.Expand(settings, query.From, query.To);
-        var holds = plan is null ? [] : await tours.GetActiveReservationsAsync(robot.Id,
+        var holds = await tours.GetActiveReservationsAsync(robot.Id,
             TourSchedule.ShiftWindow(days[0][0].Date, days[0][0].Shift).StartsAt,
             TourSchedule.ShiftWindow(days[^1][^1].Date, days[^1][^1].Shift).EndsAt, ct);
         var active = await blocks.ListActiveAsync(query.From, query.To, ct);
         var now = clock.GetUtcNow();
-        return new(query.RouteRevisionId, robot.RobotCode, plan?.MeasuredDurationSeconds, plan?.ExpectedDurationSeconds,
+        return new(query.RouteRevisionId, robot.RobotCode, plan.MeasuredDurationSeconds, plan.ExpectedDurationSeconds,
             days.Select(day => new TourSlotDay(day[0].Date, day.Select(shift => Slot(shift, now, plan, holds, TourSchedule.BlockOf(active, shift))).ToArray())).ToArray(),
             settings.RecommendedMaxSeconds, settings.MaxCapacity);
     }
 
-    private static TourSlotView Slot(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan, IReadOnlyList<TourReservationHold> holds, TourShiftBlockView? adminBlock)
+    private static TourSlotView Slot(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan plan, IReadOnlyList<TourReservationHold> holds, TourShiftBlockView? adminBlock)
     {
         var start = TourSchedule.TourStart(shift.Date, shift.Shift);
         var block = TourSchedule.Evaluate(shift, now, plan, holds, adminBlock);

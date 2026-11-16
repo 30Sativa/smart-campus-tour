@@ -24,6 +24,8 @@ public sealed class TourScheduleSettings
     public const int DefaultMaxCapacity = 20;
     /// <summary>How long a quick Tour waits to be started when Tours:ShortNoticeMinLeadMinutes is not set (ADR-0053).</summary>
     public const int DefaultShortNoticeMinLeadMinutes = 30;
+    /// <summary>The robot's average travel speed for estimating a route's length when Tours:EstimatedSpeedMetersPerSecond is not set.</summary>
+    public const double DefaultEstimatedSpeedMetersPerSecond = 0.25;
     public const int CapacityCeiling = 40;
     // 15 minutes to prepare, 15 to finish and at least one minute of Tour.
     private static readonly TimeSpan MinShiftLength = TimeSpan.FromMinutes(31);
@@ -39,10 +41,15 @@ public sealed class TourScheduleSettings
     /// Quick Tours are always available; the key keeps its ADR-0050 name, Tours:ShortNoticeMinLeadMinutes.
     /// </summary>
     public TimeSpan ShortNoticeMinLead { get; }
+    /// <summary>Average travel speed used by <see cref="TourSchedule.EstimatedDurationSeconds"/> (Tours:EstimatedSpeedMetersPerSecond).</summary>
+    public double EstimatedSpeedMetersPerSecond { get; }
 
     public TourScheduleSettings(IEnumerable<TourShiftOption>? shifts, int? recommendedMaxMinutes, int? maxCapacity = null,
-        int? shortNoticeMinLeadMinutes = null)
+        int? shortNoticeMinLeadMinutes = null, double? estimatedSpeedMetersPerSecond = null)
     {
+        EstimatedSpeedMetersPerSecond = estimatedSpeedMetersPerSecond ?? DefaultEstimatedSpeedMetersPerSecond;
+        if (!(EstimatedSpeedMetersPerSecond > 0) || double.IsInfinity(EstimatedSpeedMetersPerSecond))
+            throw new InvalidOperationException("Tours:EstimatedSpeedMetersPerSecond must be greater than 0.");
         var minutes = shortNoticeMinLeadMinutes ?? DefaultShortNoticeMinLeadMinutes;
         if (minutes <= 0 || TimeSpan.FromMinutes(minutes) >= TourSchedule.LeadTime)
             throw new InvalidOperationException("Tours:ShortNoticeMinLeadMinutes must be greater than 0 and shorter than the standard lead time.");
@@ -78,6 +85,10 @@ public sealed class TourScheduleSettings
             : throw new InvalidOperationException($"Tours:Shifts {code} has an invalid {key} '{value}'; use HH:mm.");
 }
 
+/// <summary>
+/// The estimated length a reservation is sized with. The schema still has a NOT NULL MeasuredDurationSeconds column;
+/// it receives the same estimate until a later schema version drops it.
+/// </summary>
 public sealed record TourReservationPlan(int MeasuredDurationSeconds, int ExpectedDurationSeconds);
 public sealed record TourReservationHold(string TourName, DateTimeOffset StartsAt, DateTimeOffset EndsAt);
 public sealed record TourSlotBlock(string Code, string Message);
@@ -94,7 +105,6 @@ public static class TourSchedule
     public const string ReservationOverlap = "RESERVATION_OVERLAP";
     public const string RouteTooLongForShift = "ROUTE_TOO_LONG_FOR_SHIFT";
     public const string ShiftBlocked = "SHIFT_BLOCKED";
-    public const string RemeasureRequired = "ROUTE_TEST_REMEASURE_REQUIRED";
 
     public static readonly TimeSpan LeadTime = TimeSpan.FromHours(72);
     public const int RegistrationCloseHours = 48;
@@ -142,13 +152,27 @@ public static class TourSchedule
             $"Giờ bắt đầu không khớp ca nào. Chọn một ca: {string.Join(", ", settings.Shifts.Select(shift => $"{shift.Name} bắt đầu {(shift.Start.Add(ReservationBuffer)):HH\\:mm}"))}.",
             "TOUR_SLOT_NOT_ALLOWED");
 
-    /// <summary>Added dwell lengthens the measured run; shortened dwell never shortens it.</summary>
-    public static int ExpectedDurationSeconds(int measuredSeconds,
-        IEnumerable<(int StopOrder, int DwellSeconds)> testedStops, IEnumerable<(int StopOrder, int DwellSeconds)> targetStops)
+    /// <summary>
+    /// A route's expected length: every stop's dwell plus the straight-line travel start -> stop 1 -> ... -> last stop ->
+    /// end, at <paramref name="speedMetersPerSecond"/>, rounded up to a whole second. LAST_POI has no final leg; a POSE
+    /// end (on the start it is "return to start") adds the leg to EndX/EndY. Stop positions are the revision's snapshot.
+    /// </summary>
+    public static int EstimatedDurationSeconds(RouteRevision revision, IEnumerable<RouteRevisionStop> stops, double speedMetersPerSecond)
     {
-        var tested = testedStops.ToDictionary(stop => stop.StopOrder, stop => stop.DwellSeconds);
-        return measuredSeconds + targetStops.Sum(stop => Math.Max(0, stop.DwellSeconds - tested.GetValueOrDefault(stop.StopOrder)));
+        if (!(speedMetersPerSecond > 0)) throw new ArgumentOutOfRangeException(nameof(speedMetersPerSecond));
+        var ordered = stops.OrderBy(stop => stop.StopOrder).ToArray();
+        var points = new List<(decimal X, decimal Y)> { (revision.StartX, revision.StartY) };
+        points.AddRange(ordered.Select(stop => (stop.X, stop.Y)));
+        if (revision.EndMode == "POSE" && revision.EndX is { } endX && revision.EndY is { } endY) points.Add((endX, endY));
+        double meters = 0;
+        for (var index = 1; index < points.Count; index++)
+            meters += (double)Routes.RouteRuleSettings.Distance(points[index - 1].X, points[index - 1].Y, points[index].X, points[index].Y);
+        var travel = (long)Math.Ceiling(Math.Round(meters / speedMetersPerSecond, 6));
+        return (int)Math.Min(int.MaxValue, ordered.Sum(stop => (long)stop.DwellSeconds) + travel);
     }
+
+    /// <summary>The estimate a test run and a reservation write into their MeasuredDurationSeconds column (CHECK 1..86400).</summary>
+    public static int StoredDurationSeconds(int estimatedSeconds) => Math.Clamp(estimatedSeconds, 1, 86400);
 
     /// <summary>The Admin block closing this shift, if any; a whole-day block wins over one for the shift (docs/lich-tour-theo-ca.md §5).</summary>
     public static TourShiftBlockView? BlockOf(IEnumerable<TourScheduleBlock> activeBlocks, TourShiftOnDay shift)
@@ -163,16 +187,15 @@ public static class TourSchedule
         (SlotStart(date, TimeOnly.MinValue), SlotStart(date.AddDays(1), TimeOnly.MinValue));
 
     /// <summary>
-    /// Null when the shift can be used. Order: lead time, remeasure, length, Admin block, then any hold still in
+    /// Null when the shift can be used. Order: lead time, length, Admin block, then any hold still in
     /// force inside the shift, including an older Tour held at an odd time, such as a quick Tour (ADR-0053).
     /// </summary>
-    public static TourSlotBlock? Evaluate(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan,
+    public static TourSlotBlock? Evaluate(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan plan,
         IReadOnlyCollection<TourReservationHold> holds, TourShiftBlockView? adminBlock = null)
     {
         var start = TourStart(shift.Date, shift.Shift);
         if (start - now < LeadTime)
             return new(LeadTimeTooShort, "Quá gần hiện tại, cần tạo trước ít nhất 72 giờ");
-        if (plan is null) return new(RemeasureRequired, "Cần chạy thử lại tuyến để đo theo định nghĩa mới");
         var max = MaxDurationSeconds(shift.Shift);
         if (plan.ExpectedDurationSeconds > max)
             return new(RouteTooLongForShift, $"Tuyến cần {Minutes(plan.ExpectedDurationSeconds)}, ca này chỉ chứa được {Minutes(max)}");
@@ -220,13 +243,12 @@ public static class TourSchedule
         });
 
     /// <summary>
-    /// Null when a quick Tour can be created now (ADR-0053). Order: remeasure, length (no longer than the longest shift
+    /// Null when a quick Tour can be created now (ADR-0053). Order: length (no longer than the longest shift
     /// holds), Admin block, then any hold of the robot over this Tour's own hold.
     /// </summary>
     public static TourSlotBlock? EvaluateQuickTour(TourScheduleSettings settings, DateTimeOffset now, DateTimeOffset deadline,
-        TourReservationPlan? plan, IReadOnlyCollection<TourReservationHold> holds, IEnumerable<TourScheduleBlock> activeBlocks)
+        TourReservationPlan plan, IReadOnlyCollection<TourReservationHold> holds, IEnumerable<TourScheduleBlock> activeBlocks)
     {
-        if (plan is null) return new(RemeasureRequired, "Cần chạy thử lại tuyến để đo theo định nghĩa mới");
         if (plan.ExpectedDurationSeconds > settings.LongestShiftMaxSeconds)
             return new(RouteTooLongForShift, $"Tuyến cần {Minutes(plan.ExpectedDurationSeconds)}, Tour dài nhất được {Minutes(settings.LongestShiftMaxSeconds)}");
         var (startsAt, endsAt) = QuickTourHold(now, deadline, plan.ExpectedDurationSeconds);
@@ -242,7 +264,6 @@ public static class TourSchedule
         throw new ConflictException(block.Message, block.Code switch
         {
             LeadTimeTooShort => "TOUR_LEAD_TIME_TOO_SHORT",
-            RemeasureRequired => RemeasureRequired,
             RouteTooLongForShift => RouteTooLongForShift,
             ShiftBlocked => ShiftBlocked,
             _ => "ROBOT_RESERVATION_CONFLICT"

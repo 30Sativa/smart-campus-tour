@@ -24,10 +24,9 @@ const tourEnd = (slot: TourSlot) => new Date(new Date(slot.startsAt).getTime() +
 const shiftLabel = (slot: TourSlot) =>
   `${slot.shiftName} · ${slot.time}-${formatTime(tourEnd(slot))} · Giữ robot ${formatTime(slot.reservationStartsAt)}-${formatTime(slot.reservationEndsAt)}`
 
-const RERUN_REASON = 'Cần chạy thử lại'
-/** Why this route cannot be chosen (docs/lich-tour-theo-ca.md §4); null when it can. UNKNOWN is a PASS measured the old way, which cannot size a shift. */
+/** Why this route cannot be chosen (docs/lich-tour-theo-ca.md §4); null when it can. */
 const routeBlockReason = (route: VersionedRoute) =>
-  route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? scheduleFitLabel(route)!.text : route.scheduleFit === 'UNKNOWN' ? RERUN_REASON : null
+  route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? scheduleFitLabel(route)!.text : null
 
 /** A quick Tour holds its robot from now, so a robot another Tour holds over that hold cannot be chosen (create re-checks). */
 const robotPickable = (robot: TourRobotOption, quick: boolean) => robot.usable && !(quick && robot.heldByTourName)
@@ -137,12 +136,12 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
         {routes.isError ? <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh mục tuyến.</span>
           : linkedRouteId && routes.data && !linkedUsable && pickedRouteId === null ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Tuyến vừa mở chưa dùng được để tạo Tour. Chọn tuyến khác.</span>
           : routes.data?.length === 0 ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có tuyến nào chạy thử đạt. Gửi kiểm chứng ở Danh mục tuyến và chờ Kỹ thuật ghi kết quả.</span>
-          : <span className="mt-1 block text-xs text-[#64748b]">Chỉ hiện tuyến đã gửi kiểm chứng và có kết quả chạy thử đạt. Tuyến quá dài cho 1 ca hoặc cần chạy thử lại thì chưa chọn được.</span>}</label>
+          : <span className="mt-1 block text-xs text-[#64748b]">Chỉ hiện tuyến đã gửi kiểm chứng và có kết quả chạy thử đạt. Tuyến quá dài cho 1 ca thì chưa chọn được.</span>}</label>
       {noRouteUsable && <Notice tone="warn">
         <p className="font-semibold">Chưa có tuyến nào dùng được để tạo Tour.</p>
         <ul className="mt-1 list-disc pl-5" aria-label="Lý do từng tuyến">{routes.data!.map(route => {
           const reason = routeBlockReason(route)
-          return <li key={route.revisionId}>{route.name}: {reason}.{reason === RERUN_REASON && ' Nhờ Kỹ thuật ghi một lần chạy mới.'}</li>
+          return <li key={route.revisionId}>{route.name}: {reason}.</li>
         })}</ul>
       </Notice>}
       <label className="block text-sm">Robot<select title="" required aria-label="Robot" className={inputClass} value={robotCode} disabled={!routeRevisionId || robots.isPending} onChange={e => setRobotCode(e.target.value)}>
@@ -197,8 +196,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
         <dl className="mt-3 space-y-2 text-sm">
           <Review label="Ca">{usable.shiftName}</Review>
           <Review label="Bắt đầu">{formatDateTime(usable.startsAt)}</Review>
-          <Review label="Thời lượng dự kiến">{formatDuration(expected!)}
-            {expected !== slots.data.measuredDurationSeconds && <span className="block text-xs text-muted">Chạy thử đo {formatDuration(slots.data.measuredDurationSeconds)}, cộng thêm thời gian dừng đã tăng.</span>}
+          <Review label="Thời lượng dự kiến">{formatDuration(expected!)} (tự tính từ thời gian dừng và quãng đường)
             <span className="block text-xs text-muted">Ca này chứa tối đa {formatDuration(usable.maxDurationSeconds)}.</span></Review>
           <Review label="Giữ robot">{formatTime(usable.reservationStartsAt)} - {formatTime(usable.reservationEndsAt)}</Review>
           <Review label="Đóng đăng ký">{formatDateTime(usable.registrationClosesAt)}</Review>

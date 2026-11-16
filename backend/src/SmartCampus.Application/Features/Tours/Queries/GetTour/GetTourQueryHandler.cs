@@ -32,7 +32,7 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
             await SkipAsync(tour, query.Viewer, ct));
         if (tour.RouteRevisionId is { } revisionId)
         {
-            var revision = await RouteRevisionMapper.Load(revisions, tour.RouteId, revisionId, false, ct);
+            var revision = await RouteRevisionMapper.Load(revisions, tour.RouteId, revisionId, false, ct, settings);
             var target = await repository.GetTargetAsync(tour.Id, ct);
             return new(summary, null, null, tour.FallbackVideoUrl, tour.StartedAt, tour.EndedAt, tour.EndReason,
                 usage, permissions, revision, target.Operator, target.Reservation, execution, actions);
