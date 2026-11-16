@@ -25,4 +25,18 @@ public static class TourAutoCancel
         var lastStart = scheduledStartAt + startLateLimit;
         return reservationEndsAt is { } endsAt && endsAt > lastStart ? endsAt : lastStart;
     }
+
+    /// <summary>
+    /// The Start deadline and the auto-cancel moment of a SCHEDULED/READY Tour, by the same rule Start and the cancel
+    /// worker apply; null in any other state, where neither applies.
+    /// </summary>
+    public static TourSummary WithDeadlines(TourSummary summary, TimeSpan startLateLimit) =>
+        summary.State is "SCHEDULED" or "READY"
+            ? summary with
+            {
+                LatestStartAt = summary.ScheduledStartAt + startLateLimit,
+                AutoCancelAt = HoldEndsAt(summary.ScheduledStartAt,
+                    summary.Reservation is { ReleasedAt: null } active ? active.EndsAt : null, startLateLimit)
+            }
+            : summary with { LatestStartAt = null, AutoCancelAt = null };
 }

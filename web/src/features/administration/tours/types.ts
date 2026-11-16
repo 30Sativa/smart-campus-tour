@@ -20,6 +20,8 @@ export type TourRobotOption = {
   needsInspection?: boolean
   /** Quick form only: the Tour holding this robot over a quick Tour's hold from now, and when that hold ends. */
   heldByTourName?: string | null; heldUntil?: string | null
+  /** Quick form only: the duration, published time and robot hold a quick Tour created now would get. A preview. */
+  quick?: { expectedDurationSeconds: number; startBy: string; holdStartsAt: string; holdEndsAt: string } | null
 }
 export type TourReservation = { robotCode: string; startsAt: string; endsAt: string; measuredDurationSeconds: number; expectedDurationSeconds: number; releasedAt: string | null }
 export type TourSummary = {
@@ -32,6 +34,12 @@ export type TourSummary = {
    * list with READY; there is no 72/48/24-hour schedule (ADR-0050).
    */
   isShortNotice?: boolean
+  /**
+   * Set by the server while the Tour is SCHEDULED or READY, null otherwise; an older server omits them. `latestStartAt`
+   * is the last moment Start is accepted, `autoCancelAt` when the system cancels the Tour and frees the robot if it has
+   * not started. Read them; never recompute them.
+   */
+  latestStartAt?: string | null; autoCancelAt?: string | null
   rowVersion: string; registrationCount: number; invitationCount: number; routeRevisionId: string | null
   /** Seats of the Tour and the rows holding one (BR-26). An older server omits them. */
   capacity?: number; heldSeats?: number

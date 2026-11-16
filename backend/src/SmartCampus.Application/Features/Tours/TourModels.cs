@@ -26,13 +26,19 @@ public static class TourPhases
     public const string Running = "RUNNING";
     public const string Finished = "FINISHED";
 }
+/// <summary>
+/// <see cref="LatestStartAt"/> is the last moment Start is accepted (published time + StartLateLimit);
+/// <see cref="AutoCancelAt"/> is when the system cancels the Tour if it has not started (<see cref="TourAutoCancel.HoldEndsAt"/>).
+/// Both are set by the query handlers while the Tour is SCHEDULED or READY and are null otherwise, so no screen recomputes them.
+/// </summary>
 public sealed record TourSummary(Guid Id, string Name, string? Description, Guid RouteId, string RouteName,
     Guid ActiveRouteId, DateTimeOffset ScheduledStartAt, string State, Guid CreatedByUserId,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string RowVersion,
     int RegistrationCount, int InvitationCount, Guid? RouteRevisionId, TourReservationView? Reservation = null,
     TourExecutionSummary? Execution = null, RouteTestParticipantView? Operator = null,
     IReadOnlyList<ConflictBlocker>? ReadyBlockers = null, int Capacity = 0, int HeldSeats = 0,
-    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false);
+    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false,
+    DateTimeOffset? LatestStartAt = null, DateTimeOffset? AutoCancelAt = null);
 /// <summary>
 /// Read-only situation of a Tour for list rows. <see cref="CommandState"/> is the current leg's GoTo, the command
 /// <c>GetTour</c> shows. <see cref="NeedsReconcile"/> is true while any GoTo of the Tour is UNKNOWN, in any Tour state.

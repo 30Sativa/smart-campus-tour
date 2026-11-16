@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageTourCreatePage from '../../../routes/staff/manage/StaffManageTourCreatePage'
 import StaffManageTourDetailPage from '../../../routes/staff/manage/StaffManageTourDetailPage'
 import { useAuthStore } from '../../../stores/auth-store'
+import { formatTime } from '../../../components/ui/date-time'
 import { countdownText } from './quick-tour'
 import type { TourDetails, TourState } from './types'
 
@@ -101,6 +102,31 @@ describe('sending a new quick Tour to the Representative', () => {
     expect(steps).toBeVisible()
     expect(within(steps).getAllByRole('listitem')).toHaveLength(4)
     expect(within(block).getByRole('link', { name: 'danh sách đăng ký của Tour' })).toHaveAttribute('href', '/staff/manage/registrations?tourId=tour-1')
+  })
+
+  it('before the start time, says the three server moments: start, last start once locked, and the system cancel', async () => {
+    const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString()
+    current = detail('SCHEDULED', { isShortNotice: true, scheduledStartAt: at(30), latestStartAt: at(45), autoCancelAt: at(50) })
+    renderAt('/staff/manage/tours/tour-1')
+    const block = await screen.findByRole('region', { name: 'Gửi cho đại diện' })
+    expect(block).toHaveTextContent(`Bắt đầu trước ${formatTime(at(30))}. Đã chốt thì còn bắt đầu được tới ${formatTime(at(45))}. Chưa bắt đầu thì hệ thống tự huỷ và trả robot lúc ${formatTime(at(50))}.`)
+    expect(block).not.toHaveTextContent(/Hạn bắt đầu lúc|Đã tới hạn/)
+    expect(within(block).getByRole('button', { name: 'Sao chép link' })).toBeInTheDocument()
+    expect(within(block).queryByRole('button', { name: 'Huỷ Tour ngay' })).not.toBeInTheDocument()
+  })
+
+  it('after the start time, withdraws the link, names the system cancel time and offers to cancel now', async () => {
+    const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString()
+    current = detail('SCHEDULED', { isShortNotice: true, scheduledStartAt: at(-3), latestStartAt: at(12), autoCancelAt: at(17) })
+    renderAt('/staff/manage/tours/tour-1')
+    const block = await screen.findByRole('region', { name: 'Gửi cho đại diện' })
+    expect(block).toHaveTextContent(`Đã quá giờ bắt đầu, không chốt được nữa. Hệ thống sẽ tự huỷ lúc ${formatTime(at(17))}, hoặc bạn huỷ ngay.`)
+    expect(within(block).getByRole('timer')).toHaveTextContent(/Tự huỷ sau 1[67]:\d\d/)
+    expect(within(block).queryByLabelText('Link đăng ký cho đại diện')).not.toBeInTheDocument()
+    expect(within(block).queryByRole('button', { name: 'Sao chép link' })).not.toBeInTheDocument()
+    expect(within(block).queryByText('Xem hướng dẫn')).not.toBeInTheDocument()
+    fireEvent.click(within(block).getByRole('button', { name: 'Huỷ Tour ngay' }))
+    expect(await screen.findByRole('dialog', { name: 'Hủy Tour?' })).toBeInTheDocument()
   })
 
   it('gives one line of guidance per state: the share panel for a quick Tour, the registration notice for a Tour on a shift', async () => {
