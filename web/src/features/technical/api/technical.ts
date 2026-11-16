@@ -1,6 +1,6 @@
 import { apiClient } from '../../../api/client'
 import type { ApiResponse } from '../../../api/contracts/shared'
-import type { VersionedRoute } from '../../administration/routes/versioned-api'
+import type { RouteScheduledTour, VersionedRoute } from '../../administration/routes/versioned-api'
 
 export type MapVersion = {
   id: string
@@ -298,6 +298,9 @@ export const technicalApi = {
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/discard`, { method: 'POST', json: { expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
   retirePoiProposal: (proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/retire`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
+  /** SCHEDULED and READY Tours whose route stops at this POI, for the "Ngưng dùng" dialog. Same shape as a route's list. */
+  poiScheduledTours: (proposalId: string) =>
+    apiClient<Envelope<RouteScheduledTour[]>>(`/api/staff/poi-proposals/${proposalId}/scheduled-tours`).then(response => response.data ?? []),
   reactivatePoiProposal: (proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/reactivate`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
   submitPoiProposal: (id: string, proposal: PoiProposal) =>

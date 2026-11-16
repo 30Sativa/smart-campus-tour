@@ -252,6 +252,12 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
     public async Task<ActionResult<BaseResponse<PoiHistoryView>>> GetProposalHistory(Guid id, CancellationToken ct) =>
         Ok(new BaseResponse<PoiHistoryView> { Success = true, Message = "POI proposal history retrieved.", Data = await sender.Send(new GetPoiHistoryQuery(id), ct) });
 
+    [HttpGet("staff/poi-proposals/{id:guid}/scheduled-tours")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<Application.Features.Routes.RouteScheduledTourView>>>> GetProposalScheduledTours(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<Application.Features.Routes.RouteScheduledTourView>> { Success = true, Message = "Scheduled Tours stopping at this POI retrieved.",
+            Data = await sender.Send(new ListPoiScheduledToursQuery(id), ct) });
+
     [HttpPut("staff/poi-proposals/{id:guid}/draft")]
     [Authorize(Roles = ApplicationRoles.Staff)]
     public async Task<ActionResult<BaseResponse<PoiProposalView>>> ReviseProposal(Guid id, [FromBody] CreatePoiRevisionRequest request, CancellationToken ct) =>

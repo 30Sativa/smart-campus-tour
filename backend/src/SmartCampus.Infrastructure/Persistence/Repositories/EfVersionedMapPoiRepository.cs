@@ -282,6 +282,19 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
             .Where(stop => proposalIds.Contains(stop.PoiProposalRevision.ProposalId))
             .Select(stop => stop.PoiProposalRevision.ProposalId).Distinct().ToArrayAsync(cancellationToken)).ToHashSet();
 
+    // The same projection as the route's scheduled-tours list (EfRouteRevisionRepository.ListScheduledToursAsync).
+    public async Task<IReadOnlyList<Application.Features.Routes.RouteScheduledTourView>> ListScheduledToursUsingAsync(Guid proposalId,
+        CancellationToken cancellationToken) =>
+        await dbContext.Tours.AsNoTracking()
+            .Where(tour => (tour.State == "SCHEDULED" || tour.State == "READY") && tour.RouteRevisionId != null &&
+                dbContext.RouteRevisionStops.Any(stop => stop.RouteRevisionId == tour.RouteRevisionId &&
+                    stop.PoiProposalRevision.ProposalId == proposalId))
+            .OrderBy(tour => tour.ScheduledStartAt).ThenBy(tour => tour.Id)
+            .Select(tour => new Application.Features.Routes.RouteScheduledTourView(tour.Id, tour.Name, tour.ScheduledStartAt, tour.State,
+                tour.IsShortNotice ? tour.ScheduledStartAt : tour.ScheduledStartAt.AddHours(-Application.Features.Tours.TourSchedule.RegistrationCloseHours),
+                tour.IsShortNotice))
+            .ToArrayAsync(cancellationToken);
+
     public async Task<IReadOnlyList<PoiProposalRevision>> ListCurrentRevisionsAsync(
         IReadOnlyCollection<Guid> proposalIds, CancellationToken cancellationToken) =>
         await dbContext.PoiProposalRevisions.AsNoTracking()

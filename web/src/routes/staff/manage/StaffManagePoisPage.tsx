@@ -17,7 +17,9 @@ import { rosToImage } from '../../../features/administration/pois/map/occupancy-
 import { fitView } from '../../../features/administration/pois/map/fit-view'
 import { ZoomableMap } from '../../../features/administration/pois/map/ZoomableMap'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
+import { isTouchScreen, mapZoomHint } from '../../../features/administration/pois/map/touch-screen'
 import { effectiveFailRecord, poiStatus, type PoiStatus } from '../../../features/administration/pois/poi-status'
+import { RouteScheduledToursList } from '../../../features/administration/routes/RouteScheduledTours'
 import { useAuthStore } from '../../../stores/auth-store'
 
 type Status = PoiStatus
@@ -229,13 +231,23 @@ function DiscardPoi({ proposal }: { proposal: PoiProposal }) {
 function RetirePoi({ proposal }: { proposal: PoiProposal }) {
   const [open, setOpen] = useState(false)
   const retire = useRetirePoiProposal()
+  // Loaded only while the dialog is open, like "Ngừng sử dụng tuyến" (DeactivateRouteDialog).
+  const tours = useQuery({ queryKey: ['technical', 'poi-scheduled-tours', proposal.id], queryFn: () => technicalApi.poiScheduledTours(proposal.id), enabled: open })
   const close = () => { setOpen(false); retire.reset() }
   return <>
     <button type="button" onClick={() => setOpen(true)} className={buttonClass('secondary', 'sm')}><Archive size={14} aria-hidden="true" />Ngưng dùng</button>
     <ConfirmationDialog open={open} tone="danger" withReason={false} title={`Ngưng dùng ${proposal.revision.name}?`} confirmLabel="Ngưng dùng" busyLabel="Đang lưu…"
       busy={retire.isPending} error={retire.error ? errorText(retire.error) : null} onCancel={close}
       onConfirm={() => retire.mutate(proposal, { onSuccess: () => setOpen(false) })}
-      description="Điểm này đã nằm trong tuyến nên không xoá được. Tuyến và Tour đã lưu không đổi gì và vẫn chạy điểm này. Sau khi ngưng dùng, tuyến mới không chọn được điểm này, và điểm không sửa, gửi kiểm hay đổi thuyết minh được cho tới khi dùng lại." />
+      description="Điểm này đã nằm trong tuyến nên không xoá được. Tuyến và Tour đã lưu không đổi gì và vẫn chạy điểm này. Sau khi ngưng dùng, tuyến mới không chọn được điểm này, và điểm không sửa, gửi kiểm hay đổi thuyết minh được cho tới khi dùng lại.">
+      {tours.isPending ? <p aria-busy="true" className="text-xs text-[#64748b]">Đang tải Tour đã lên lịch…</p>
+        : tours.isError ? <p role="alert" className="text-xs text-[#b23e31]">Không tải được danh sách Tour đã lên lịch. Đóng hộp thoại rồi thử lại.</p>
+        : !tours.data.length ? <p className="text-xs text-[#64748b]">Không có Tour nào đã lên lịch đi qua điểm này.</p>
+        : <div className="text-sm">
+          <p className="font-medium text-[#334155]">{tours.data.length} Tour đã lên lịch đi qua điểm này, vẫn chạy như cũ:</p>
+          <RouteScheduledToursList tours={tours.data} />
+        </div>}
+    </ConfirmationDialog>
   </>
 }
 
@@ -266,6 +278,7 @@ function NoEligibleMap({ maps }: { maps: MapVersionItem[] }) {
 function PoiMap({ proposals, framed, mapVersionId, mapLabel, number, selectedId, onSelect }: { proposals: PoiProposal[]; framed: PoiProposal[]; mapVersionId: string; mapLabel: string; number: Map<string, number>; selectedId?: string; onSelect: (id: string) => void }) {
   const { map, error, retry } = useMapRaster(mapVersionId)
   const frame = useRef<HTMLElement>(null)
+  const [touch] = useState(isTouchScreen)
   if (!mapVersionId) return <section className={`${card} p-6 text-center text-[13px] text-[#718096]`} aria-label="Bản đồ POI">Chưa có bản đồ cho các POI đang lọc.</section>
   if (error) return <section aria-label="Bản đồ POI"><AdminErrorPanel title="Không tải được bản đồ." description={error} onRetry={retry} /></section>
   if (!map) return <section className={`${card} overflow-hidden`} aria-label="Bản đồ POI"><SkeletonRows rows={6} label="Đang tải bản đồ" /></section>
@@ -300,7 +313,7 @@ function PoiMap({ proposals, framed, mapVersionId, mapLabel, number, selectedId,
       </ZoomableMap>
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[#718096]">
         {([[NEUTRAL_PIN, 'Điểm tham quan'], [FAIL_PIN, VERIFICATION.FAIL.label], [SELECTED_PIN, 'Đang chọn']] as const).map(([color, label]) => <span key={label} className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: color }} />{label}</span>)}
-        <span className="ml-auto">Cuộn chuột để phóng to, kéo để di chuyển bản đồ</span>
+        <span className="ml-auto">{mapZoomHint(touch)}</span>
       </div>
     </section>
   )
