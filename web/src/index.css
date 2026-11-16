@@ -36,6 +36,9 @@ html.dark {
    select ignore this block and keep their native list. */
 @supports (appearance: base-select) {
   select, ::picker(select) { appearance: base-select; }
+  /* A base-select is a flex box whose items default to the top edge; centre the
+     value and arrow so a select taller than its text (min-h-10 without py) is not top-heavy. */
+  select { align-items: center; }
   select::picker-icon { color: #64748b; transition: rotate 150ms; }
   select:open::picker-icon { rotate: 180deg; }
   ::picker(select) {

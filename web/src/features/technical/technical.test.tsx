@@ -751,6 +751,16 @@ describe('Technical Staff API integration', () => {
     expect(JSON.parse(String(call.init?.body))).toMatchObject({ expectedRevisionNumber: 1, expectedRowVersion: proposal.rowVersion, resultCode: 'PASS', robotCode: 'amr-01' })
   })
 
+  it('lists POI waiting for verification newest submission first', async () => {
+    const at = (id: string, name: string, submittedAt: string) =>
+      ({ ...queueItem, proposalId: id, revision: { ...queueItem.revision, id: `rev-${id}`, name, submittedAt } })
+    poiQueue = [at('old', 'Cổng cũ', '2026-11-04T07:15:00Z'), at('new', 'Sảnh mới', '2026-11-16T04:24:00Z'), at('mid', 'Thư viện', '2026-11-15T15:40:00Z')]
+    renderPage(<TechnicalPoiImportPage />)
+    await screen.findByText('Sảnh mới')
+    const names = within(screen.getByRole('table')).getAllByRole('row').slice(1).map(row => within(row).getAllByRole('cell')[0].querySelector('span')?.textContent)
+    expect(names).toEqual(['Sảnh mới', 'Thư viện', 'Cổng cũ'])
+  })
+
   const openPoiCheck = async () => {
     renderPage(<TechnicalPoiImportPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))

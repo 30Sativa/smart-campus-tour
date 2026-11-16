@@ -67,7 +67,7 @@ export default function StaffManageRouteFormPage() {
   // An existing route already has every step filled in, so all of them can be opened directly.
   const [furthest, setFurthest] = useState(routeId ? STEPS.length - 1 : 0)
   const [endChoiceOverride, setEndChoice] = useState<EndChoice | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<false | 'save' | 'submit'>(false)
   const [error, setError] = useState<string | null>(null)
   const initialDraft: Draft = source.data ? {
     name: source.data.name, description: source.data.description ?? '', mapVersionId: source.data.mapVersionId,
@@ -192,20 +192,29 @@ export default function StaffManageRouteFormPage() {
     setStopsOverride([])
     setFurthest(0)
   }
-  const save = async (event: FormEvent) => {
-    event.preventDefault()
-    if (step !== STEPS.length - 1) return
+  const save = async (event: FormEvent | null, submit = false) => {
+    event?.preventDefault()
+    if (busy || step !== STEPS.length - 1) return
     if (firstOpen !== -1) { setStep(firstOpen); return }
     const body: VersionedRouteDraft = {
       ...draft, startX: draft.startX!, startY: draft.startY!, startYaw: draft.startYaw!,
       name: draft.name.trim(), description: draft.description.trim() || null, requestId: crypto.randomUUID(),
       expectedCurrentRevision: source.data?.revisionNumber ?? 0, mapVersionId: draft.mapVersionId, stops,
     }
-    setBusy(true); setError(null)
+    setBusy(submit ? 'submit' : 'save'); setError(null)
     try {
       const route = routeId ? await versionedRoutesApi.revise(routeId, body) : await versionedRoutesApi.create(body)
-      if (routeId) notify({ title: `Đã lưu thay đổi cho “${body.name}”; bản mới cần gửi kiểm chứng lại.` })
-      else celebrate({ title: `Đã tạo tuyến “${body.name}”`, detail: `${stops.length} POI trên map đã chọn. Tuyến đang là bản nháp: gửi kiểm chứng để kỹ thuật chạy thử trước khi dùng cho Tour.` })
+      // The draft is saved; a refused submit leaves it as a draft, which the route page can still send.
+      let submitError: string | null = null
+      if (submit) {
+        try { await versionedRoutesApi.submit(route) } catch (cause) { submitError = errorText(cause) }
+      }
+      const submitted = submit && !submitError
+      if (submitError) notify({ tone: 'error', title: `Đã lưu bản nháp “${body.name}” nhưng chưa gửi được kiểm chứng`, detail: `${submitError} Bấm Gửi kiểm chứng tuyến ở trang tuyến để gửi lại.` })
+      else if (routeId) notify({ title: submitted ? `Đã lưu và gửi kiểm chứng “${body.name}”` : `Đã lưu thay đổi cho “${body.name}”; bản mới cần gửi kiểm chứng lại.`, detail: submitted ? 'Chờ kỹ thuật chạy thử. Đây chưa phải kết quả kiểm chứng.' : undefined })
+      else celebrate({ title: `Đã tạo tuyến “${body.name}”`, detail: submitted
+        ? `${stops.length} POI trên map đã chọn. Đã gửi kiểm chứng, chờ kỹ thuật chạy thử trước khi dùng cho Tour.`
+        : `${stops.length} POI trên map đã chọn. Tuyến đang là bản nháp: gửi kiểm chứng để kỹ thuật chạy thử trước khi dùng cho Tour.` })
       navigate(`/staff/manage/routes/${route.routeId}`, { replace: true, ...AFTER_SAVE })
     } catch (cause) { setError(routeSaveError(cause)) }
     finally { setBusy(false) }
@@ -341,11 +350,15 @@ export default function StaffManageRouteFormPage() {
       <div className="flex flex-wrap items-center justify-end gap-2">
         <SaveBlockedHint id="route-step-missing" tone={!last && problemByStep[step] ? 'danger' : 'neutral'} lead={!last && problemByStep[step] ? 'Chưa sang bước tiếp được' : 'Cần'}
           missing={last ? (firstOpen === -1 ? [] : [`hoàn tất bước ${firstOpen + 1}`]) : missingHere} />
+        <Link to={routeId ? `/staff/manage/routes/${routeId}` : '/staff/manage/routes'} className={buttonClass('secondary')}>Hủy bỏ</Link>
         {step > 0 && <button type="button" className={buttonClass('secondary')} onClick={() => goTo(step - 1)}><ChevronLeft size={15} aria-hidden="true" />Quay lại</button>}
         {/* Distinct keys: if React reused the Next button as the submit button, the click that opens
             the review step would finish as a submit and save before anyone reviewed it. */}
         {last
-          ? <button key="save" disabled={busy || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} type="submit" className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Lưu bản nháp'}</button>
+          ? <>
+            <button key="save" disabled={Boolean(busy) || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} type="submit" className={buttonClass('secondary')}>{busy === 'save' ? 'Đang lưu…' : 'Lưu bản nháp'}</button>
+            <button key="submit" type="button" disabled={Boolean(busy) || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} onClick={() => void save(null, true)} className={buttonClass('primary')}>{busy === 'submit' ? 'Đang xử lý…' : 'Lưu và gửi kiểm chứng'}</button>
+          </>
           : <button key="next" type="button" disabled={missingHere.length > 0} aria-describedby={missingHere.length ? 'route-step-missing' : undefined} className={buttonClass('primary')} onClick={() => goTo(step + 1)}>Tiếp<ChevronRight size={15} aria-hidden="true" /></button>}
       </div>
     </form>
