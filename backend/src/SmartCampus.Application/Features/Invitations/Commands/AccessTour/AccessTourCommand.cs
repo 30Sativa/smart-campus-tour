@@ -81,9 +81,7 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
             }
             guard.Clear(codeHash, command.ClientIp);
         }
-        var allowed = InvitationPolicy.CanSend(tour, invitation.RosterRow.Registration, invitation, now) ||
-            tour.State == "CANCELLED" && tour.StartedAt is not null && InvitationPolicy.CanRevoke(tour, invitation.RosterRow.Registration, invitation, now);
-        if (!allowed) throw Invalid();
+        if (!InvitationPolicy.CanEnter(tour, invitation.RosterRow.Registration, invitation, now)) throw Invalid();
         var active = invitation.BrowserSessions.SingleOrDefault(s => s.EndedAt is null);
         string? token = command.SessionToken;
         string? deviceToken = command.DeviceToken;

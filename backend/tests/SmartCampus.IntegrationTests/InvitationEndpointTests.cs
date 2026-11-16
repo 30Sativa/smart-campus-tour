@@ -684,6 +684,37 @@ public sealed class InvitationEndpointTests
     }
 
     [SchemaV11Fact]
+    public async Task ViewerPresence_ClosedTourReportsLeft_ButStartedCancelledFallbackViewerStaysConnected()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var invitation = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0].GetProperty("id").GetGuid();
+        async Task<JsonElement> Item() => (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")
+            .EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == invitation);
+        var join = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitation));
+        Assert.Equal(HttpStatusCode.OK, join.Status);
+        Assert.Equal("CONNECTED", Presence(await Item()));
+
+        // The Tour ended without closing the session: it is no longer enterable, so LEFT, not DISCONNECTED.
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='COMPLETED',StartedAt=SYSDATETIMEOFFSET(),EndedAt=SYSDATETIMEOFFSET();");
+        var item = await Item();
+        Assert.Equal("LEFT", Presence(item));
+        Assert.Null(Time(item, "sessionExpiresAt"));
+        Assert.NotNull(Time(item, "firstEnteredAt"));
+        await using (var db = f.Context())
+            Assert.Equal(1, await db.BrowserSessions.CountAsync(s => s.InvitationId == invitation && s.EndedAt == null));
+
+        // Cancelled after Start: the viewer keeps watching the fallback video on the same session.
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='CANCELLED';");
+        Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "session", cookie: CookieHeader(join.Cookie!))).Status);
+        item = await Item();
+        Assert.Equal("CONNECTED", Presence(item));
+        Assert.NotNull(Time(item, "sessionExpiresAt"));
+    }
+
+    [SchemaV11Fact]
     public async Task ViewerPresence_UsesTheInjectedClockForGraceAndLease()
     {
         await using var f = await Fixture.CreateAsync();

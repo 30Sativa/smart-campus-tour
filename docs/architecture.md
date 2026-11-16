@@ -1737,7 +1737,11 @@ NOT_ENTERED: the invitation never had a session. CONNECTED: an open session
 seen within the two-minute reconnect grace. DISCONNECTED: an open session not
 seen within the grace; the code stays held until `sessionExpiresAt`. LEFT: it
 had a session but none is open (left, idle-expired, revoked or reissued; an
-unclosed session past ExpiresAt counts as LEFT). `firstEnteredAt` survives
+unclosed session past ExpiresAt counts as LEFT). Ending or cancelling a Tour does
+not close sessions, so an open session whose invitation can no longer enter
+(`InvitationPolicy.CanEnter`, the same rule as Student access) reports LEFT with
+null `sessionExpiresAt`; a started-then-cancelled Tour's fallback viewer stays
+CONNECTED. `firstEnteredAt` survives
 reissue. One shared rule beside the reconnect policy computes it. No IP,
 device token or browser detail is returned.
 POST the same path + /issue with requestId (UUID), expectedRowVersion
