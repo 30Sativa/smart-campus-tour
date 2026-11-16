@@ -27,6 +27,9 @@ must not imply approval of all rows. A registration aggregate may summarize
 accepted/pending/rejected state, but it is not the access gate. Viewer accounts
 are not created. Same-browser recovery uses a tour-scoped device token and a
 two-minute reconnect window; IP address alone is not an identity proof.
+Addendum 2026-11-16: a browser past that window while its session is still
+held gets 409 `RECONNECT_WINDOW_EXPIRED` with `retryAfterSeconds`, and GET
+invitations reports per-code viewer presence; the session policy is unchanged.
 
 ## Data and API
 
