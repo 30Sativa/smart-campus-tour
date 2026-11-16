@@ -1,9 +1,10 @@
 import { ApiError, apiErrorDetail } from '../../../api/client'
+import { formatExpectedDuration } from '../../../components/ui/date-time'
 import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
 import type { VersionedRoute } from './versioned-api'
 
-const fitMinutes = (seconds: number) => `${Math.ceil(seconds / 60)} phút`
+const fitMinutes = formatExpectedDuration
 
 /** The server estimates a route's length (dwell plus travel at a configured speed); nobody types it. */
 export const expectedDurationText = (seconds: number) => `Thời lượng dự kiến: ${fitMinutes(seconds)} (tự tính từ thời gian dừng và quãng đường)`

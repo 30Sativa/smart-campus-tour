@@ -10,7 +10,7 @@ import { RobotPicker } from '../../features/technical/RobotPicker'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
 import { CheckRow, ComputedResult, NoneChecked, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { errorText, robotNotReadyReason, routeTestErrors } from '../../features/technical/technical-format'
-import { formatDateTime } from '../../components/ui/date-time'
+import { formatDateTime, formatMinutesSeconds } from '../../components/ui/date-time'
 import { usePhysicalRobots, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 
 type RouteFilter = 'pending' | 'passed' | 'failed'
@@ -75,7 +75,7 @@ export default function TechnicalConfirmationsPage() {
                 {visible.map(({ route, filter: rowFilter }) => <tr key={route.revisionId} className={rowClass}>
                   <td className={tdClass}><span className="font-semibold text-[#0f172a]">{route.name}</span><p className="text-[11.5px] text-[#64748b]">Phiên bản {route.revisionNumber}</p></td>
                   <td className={`${tdClass} font-mono text-xs`}>{route.mapKey}</td>
-                  <td className={`${tdClass} text-xs text-[#64748b]`}>{route.stops.length} điểm · dừng {route.dwellDurationSeconds} giây</td>
+                  <td className={`${tdClass} text-xs text-[#64748b]`}>{route.stops.length} điểm · dừng {formatMinutesSeconds(route.dwellDurationSeconds)}</td>
                   <td className={tdClass}><ToneBadge tone={rowFilter === 'passed' ? 'ok' : rowFilter === 'failed' ? 'danger' : 'warn'}>{revisionTone(true, route.verificationStatus).label}</ToneBadge></td>
                   <td className={`${tdClass} text-right`}>{rowFilter === 'pending'
                     ? <button type="button" className={buttonClass('primary', 'sm')} aria-label={`Ghi kết quả ${route.name}`} onClick={() => setDialog({ view: 'record', route })}>Ghi kết quả</button>
