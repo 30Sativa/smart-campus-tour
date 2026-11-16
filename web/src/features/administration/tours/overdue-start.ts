@@ -16,5 +16,5 @@ export function overdueStartLabel(tour: Pick<TourSummary, 'state' | 'scheduledSt
   if (now <= lastStart) return null
   const holdEnd = tour.autoCancelAt ? new Date(tour.autoCancelAt).getTime()
     : reservation ? Math.max(new Date(reservation.endsAt).getTime(), lastStart) : lastStart
-  return `Quá giờ bắt đầu · tự huỷ lúc ${campusTime(new Date(holdEnd).toISOString())}`
+  return `Quá giờ bắt đầu · tự hủy lúc ${campusTime(new Date(holdEnd).toISOString())}`
 }

@@ -28,7 +28,7 @@ function detail(state: TourDetails['tour']['state'], overrides: Partial<TourDeta
     permissions: { canEditMetadata: false, canChangeScheduleAndRoute: false, canCancel: true, canMarkReady: false, canReopen: state === 'READY', readyBlockers: [] },
     execution: { state, operationalStatus: null, assistanceReason: null, currentStep: null, currentLegId: null, currentLegKind: null,
       currentRevisionStopId: null, lastArrivedRevisionStopId: null, dwellDeadlineAt: null, command: null },
-    allowedActions: { start: { allowed: false, reason: 'Chưa đạt điều kiện Start.', blockedBy: ['commandTransportEnabled'] }, next: { allowed: false, reason: 'Chỉ đi tiếp khi Tour đang chạy bình thường và đang quan sát tại POI.', blockedBy: ['TOUR_STATE_INVALID'] } },
+    allowedActions: { start: { allowed: false, reason: 'Chưa đủ điều kiện mở Tour.', blockedBy: ['commandTransportEnabled'] }, next: { allowed: false, reason: 'Chỉ đi tiếp khi Tour đang chạy bình thường và đang quan sát tại POI.', blockedBy: ['TOUR_STATE_INVALID'] } },
     ...overrides,
   }
 }
@@ -524,10 +524,34 @@ describe('opening from Tour preparation', () => {
 
   it('says why a READY Tour cannot open yet and keeps only the link to its conditions', async () => {
     tour = detail('READY', { allowedActions: { start: { allowed: false, reason: 'no', blockedBy: [] }, next: { allowed: false, reason: 'no', blockedBy: [] },
-      open: { allowed: false, reason: 'Chưa đạt điều kiện Start.', blockedBy: ['robotDispatchEnabled'] } } })
+      open: { allowed: false, reason: 'Chưa đủ điều kiện mở Tour.', blockedBy: ['robotDispatchEnabled'] } } })
     renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)
-    expect(await screen.findByText(/Chưa mở được: Chưa đạt điều kiện Start\. · Robot được bật điều phối/)).toBeInTheDocument()
+    expect(await screen.findByText('Chưa đủ điều kiện mở Tour.')).toBeInTheDocument()
+    const list = screen.getByRole('list', { name: 'Điều kiện mở Tour chưa đạt' })
+    expect(within(list).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Robot amr_01 chưa được bật điều phối: Kỹ thuật cần bật điều phối cho robot.'])
+    expect(screen.queryByText(/Robot được bật điều phối/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Mở Tour$/ })).not.toBeInTheDocument()
+  })
+
+  it('says a robot waiting for an on-site check in one line that blames no other Tour, and what fixes each cause', async () => {
+    tour = detail('READY', { allowedActions: { start: { allowed: false, reason: 'no', blockedBy: [] }, next: { allowed: false, reason: 'no', blockedBy: [] },
+      open: { allowed: false, reason: 'Chưa đủ điều kiện mở Tour.', blockedBy: ['robotNotNeedsInspection', 'robotNotHeldByOtherTour', 'telemetryFresh', 'batteryInfo', 'SOMETHING_NEW'] } } })
+    renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)
+    const list = await screen.findByRole('list', { name: 'Điều kiện mở Tour chưa đạt' })
+    expect(within(list).getAllByRole('listitem').map(item => item.textContent)).toEqual([
+      'Robot amr_01 đang chờ kiểm tra tại chỗ: Kỹ thuật cần kiểm tra và trả robot.',
+      'Robot amr_01 chưa gửi trạng thái gần đây: kiểm tra robot đã bật và kết nối mạng.',
+    ])
+    expect(screen.queryByText(/Tour khác/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Robot không chờ kiểm tra tại chỗ|Robot vừa báo trạng thái/)).not.toBeInTheDocument()
+  })
+
+  it('names another Tour holding the robot only when no on-site check explains it', async () => {
+    tour = detail('READY', { allowedActions: { start: { allowed: false, reason: 'no', blockedBy: [] }, next: { allowed: false, reason: 'no', blockedBy: [] },
+      open: { allowed: false, reason: 'Chưa đủ điều kiện mở Tour.', blockedBy: ['robotNotHeldByOtherTour'] } } })
+    renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)
+    const list = await screen.findByRole('list', { name: 'Điều kiện mở Tour chưa đạt' })
+    expect(within(list).getByText('Robot amr_01 đang bị một Tour khác giữ: chờ Tour đó kết thúc.')).toBeInTheDocument()
   })
 })
 

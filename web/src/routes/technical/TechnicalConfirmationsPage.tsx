@@ -48,7 +48,8 @@ export default function TechnicalConfirmationsPage() {
   const [dialog, setDialog] = useState<Dialog | null>(null)
 
   const rows = useMemo(() => toRows(queue.data ?? [], routes.data?.data ?? []), [queue.data, routes.data])
-  const visible = rows.filter(row => row.filter === filter)
+  // A route Staff stopped using stays listed with its result, below the routes still in use.
+  const visible = rows.filter(row => row.filter === filter).sort((a, b) => Number(a.route.isActive === false) - Number(b.route.isActive === false))
   const count = (value: RouteFilter) => rows.filter(row => row.filter === value).length
   const recordedCount = (value: RouteFilter) => routes.isPending ? '…' : routes.isError ? '-' : count(value)
 
@@ -79,8 +80,9 @@ export default function TechnicalConfirmationsPage() {
                 {visible.map(({ route, filter: rowFilter }) => {
                   const source = resultSource(route)
                   const shared = sharedResultLine(route)
-                  return <tr key={route.revisionId} className={rowClass}>
-                  <td className={tdClass}><span className="font-semibold text-[#0f172a]">{route.name}</span><p className="text-[11.5px] text-[#64748b]">Phiên bản {route.revisionNumber}</p>{shared && <p className="mt-0.5 max-w-md text-[11.5px] text-[#8a5a06]">{shared}</p>}</td>
+                  const retired = route.isActive === false
+                  return <tr key={route.revisionId} className={`${rowClass}${retired ? ' opacity-60' : ''}`}>
+                  <td className={tdClass}><span className="font-semibold text-[#0f172a]">{route.name}</span>{retired && <> <ToneBadge tone="muted">Đã ngừng sử dụng</ToneBadge></>}<p className="text-[11.5px] text-[#64748b]">Phiên bản {route.revisionNumber}</p>{shared && <p className="mt-0.5 max-w-md text-[11.5px] text-[#8a5a06]">{shared}</p>}</td>
                   <td className={`${tdClass} font-mono text-xs`}>{route.mapKey}</td>
                   <td className={`${tdClass} text-xs text-[#64748b]`}>{route.stops.length} điểm · dừng {formatMinutesSeconds(route.dwellDurationSeconds)}</td>
                   <td className={tdClass}><ToneBadge tone={rowFilter === 'passed' ? 'ok' : rowFilter === 'failed' ? 'danger' : 'warn'}>{revisionTone(true, route.verificationStatus).label}</ToneBadge>{source && <p className="mt-1 text-[11.5px] text-[#64748b]">Giữ kết quả từ bản {campusShortStamp(source.createdAt)}</p>}</td>
@@ -161,7 +163,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
 
   return (
     <Modal open size="lg" title={`Chạy thử ${route.name}`} description={`Phiên bản ${route.revisionNumber} · bản đồ ${route.mapKey} · ${route.stops.length} điểm dừng. Đạt khi cả ba kiểm tra đều đạt.`} onClose={onClose}
-      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
+      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} failed={failedCheckNames({ allStopsReached, safelyStopped, localizationPassed })} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="route-test-form" className="space-y-3.5" onSubmit={submit}>
         <div>
           <RobotPicker id="route-test-robot" label="Robot vật lý" mapKey={route.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} requireReady emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />

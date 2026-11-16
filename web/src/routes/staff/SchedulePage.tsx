@@ -210,7 +210,7 @@ export default function SchedulePage() {
           </label>
           <label className="flex min-h-10 items-center gap-2 px-1 text-sm text-[#2d3748]">
             <input type="checkbox" checked={showCancelled} onChange={event => set({ huy: event.target.checked ? '1' : null })} className="size-4 accent-[#2563eb]" />
-            Hiện cả đã huỷ
+            Hiện cả đã hủy
           </label>
         </div>}
 

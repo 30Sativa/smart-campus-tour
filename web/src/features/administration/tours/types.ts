@@ -21,7 +21,7 @@ export type TourRobotOption = {
   /** Quick form only: the Tour holding this robot over a quick Tour's hold from now, and when that hold ends. */
   heldByTourName?: string | null; heldUntil?: string | null
   /** Quick form only: the duration, published time and robot hold a quick Tour created now would get. A preview. */
-  quick?: { expectedDurationSeconds: number; startBy: string; holdStartsAt: string; holdEndsAt: string } | null
+  quick?: { expectedDurationSeconds: number; startBy: string; holdStartsAt: string; holdEndsAt: string; autoCancelAt?: string | null } | null
 }
 export type TourReservation = { robotCode: string; startsAt: string; endsAt: string; measuredDurationSeconds: number; expectedDurationSeconds: number; releasedAt: string | null }
 export type TourSummary = {
@@ -144,5 +144,8 @@ export type TourShift = { code: string; name: string; startsAt: string; endsAt: 
 export type TourShiftTour = { id: string; name: string; scheduledStartAt: string; state: TourState; isShortNotice: boolean; registrationClosesAt: string }
 /** An Admin closure of this shift; `scope` says whether it covers the whole day (docs/lich-tour-theo-ca.md §5). */
 export type TourShiftBlock = { id: string; scope: 'DAY' | 'SHIFT'; reason: string }
-/** `quickTourWaitMinutes`: how long a quick Tour waits to be started (ADR-0053). */
-export type TourShifts = { days: { date: string; shifts: TourShift[]; tours?: TourShiftTour[] | null }[]; recommendedMaxSeconds: number; quickTourWaitMinutes: number }
+/**
+ * `quickTourWaitMinutes`: how long a quick Tour waits to be started (ADR-0053). `estimatedSpeedMetersPerSecond`: the speed the
+ * server estimates a route with (`Tours:EstimatedSpeedMetersPerSecond`), for a draft's estimate in `routes/route-estimate.ts`.
+ */
+export type TourShifts = { days: { date: string; shifts: TourShift[]; tours?: TourShiftTour[] | null }[]; recommendedMaxSeconds: number; quickTourWaitMinutes: number; estimatedSpeedMetersPerSecond?: number }

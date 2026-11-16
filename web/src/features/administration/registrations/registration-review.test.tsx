@@ -119,7 +119,7 @@ describe('Staff registration list', () => {
     registration.summary.tourState = 'CANCELLED'
     renderAt('/staff/manage/registrations', 'all')
     const table = await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })
-    expect(within(table).getByText('Tour đã huỷ')).toBeInTheDocument()
+    expect(within(table).getByText('Tour đã hủy')).toBeInTheDocument()
     expect(table).not.toHaveTextContent('UTC+7')
     expect(screen.getAllByText(/UTC\+7/)).toHaveLength(1)
     const chips = screen.getByRole('group', { name: 'Lọc trạng thái đăng ký' })

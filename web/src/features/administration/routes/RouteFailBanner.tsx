@@ -7,8 +7,9 @@ import type { VersionedRoute } from './versioned-api'
 /**
  * While the result in effect is Không đạt: why, which checks failed, the robot, who went with it, who recorded it and
  * when, like the POI fail banner. A FAIL recorded on another save with the same path says which save it came from.
+ * `nextStep` says what to do in words, so the page keeps one "Sửa tuyến" button (its header).
  */
-export function RouteFailBanner({ route, action }: { route: VersionedRoute; action?: ReactNode }) {
+export function RouteFailBanner({ route, action, nextStep }: { route: VersionedRoute; action?: ReactNode; nextStep?: string }) {
   const run = appliedFail(route)
   if (!run) return null
   const failed = failedCheckNames(run)
@@ -26,6 +27,7 @@ export function RouteFailBanner({ route, action }: { route: VersionedRoute; acti
         </div>}
         <p className="text-xs text-[#a4473d]">Robot {run.robotCode}{people && ` · ${people}`} · ghi lúc {campusShortStamp(run.checkedAt)}</p>
         {source && <p className="text-xs text-[#a4473d]">Lần chạy này ghi trên bản lưu {campusShortStamp(source.createdAt)}, cùng đường đi nên áp dụng cho bản này.</p>}
+        {nextStep && <p className="font-medium">{nextStep}</p>}
       </div>
       {action}
     </div>

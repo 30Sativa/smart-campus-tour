@@ -155,12 +155,12 @@ public sealed class InvitationPrimitiveTests
         // 18:00 UTC on 20/11 is already 21/11 in Asia/Ho_Chi_Minh.
         await new ResendInvitationEmailSender(http, config, new InvitationCodeService(config)).SendTourCancelledAsync(new(Guid.NewGuid(),
             Guid.NewGuid(), Guid.NewGuid(), "rep@example.test", RiskyTour, new DateTimeOffset(2026, 11, 20, 18, 0, 0, TimeSpan.Zero),
-            "Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại."), default);
+            "Buổi tham quan không bắt đầu đúng giờ nên đã bị hủy. Đại học FPT sẽ liên hệ nếu sắp xếp lại."), default);
         var (subject, html, text) = Payload(handler);
-        Assert.Equal($"Buổi tham quan đã bị huỷ: {RiskyTour}, 21/11", subject);
+        Assert.Equal($"Buổi tham quan đã bị hủy: {RiskyTour}, 21/11", subject);
         Assert.Contains("Khoa &lt;CNTT&gt; &amp; &quot;AI&quot;", html); Assert.DoesNotContain("<CNTT>", html);
-        AssertBothBodies(html, text, ["Buổi tham quan đã bị huỷ", RiskyTour, "21/11/2026 01:00",
-            "Lý do: Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại.",
+        AssertBothBodies(html, text, ["Buổi tham quan đã bị hủy", RiskyTour, "21/11/2026 01:00",
+            "Lý do: Buổi tham quan không bắt đầu đúng giờ nên đã bị hủy. Đại học FPT sẽ liên hệ nếu sắp xếp lại.",
             "Các lời mời của buổi này không còn dùng được.", Footer]);
         AssertNoLongDash(subject, html, text);
     }

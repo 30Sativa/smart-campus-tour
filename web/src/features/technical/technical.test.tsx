@@ -1175,6 +1175,37 @@ describe('Technical Staff API integration', () => {
     expect(screen.queryByRole('button', { name: 'Không đạt mục nào' })).not.toBeInTheDocument()
   })
 
+  // D3: beside the computed Không đạt, the unticked items in the words of the saved result.
+  it('names the unticked items beside a computed Không đạt', async () => {
+    await openRouteTest()
+    fireEvent.click(screen.getByLabelText('Robot đi đủ các điểm dừng'))
+    fireEvent.click(screen.getByLabelText('Robot dừng an toàn'))
+    expect(computedResult()).toHaveTextContent('Kết quả: Không đạtKhông đạt ở: định vị')
+    fireEvent.click(screen.getByLabelText('Robot dừng an toàn'))
+    expect(computedResult()).toHaveTextContent('Không đạt ở: dừng an toàn, định vị')
+    fireEvent.click(screen.getByLabelText('Robot dừng an toàn'))
+    fireEvent.click(screen.getByLabelText('Định vị đạt'))
+    expect(computedResult()).toHaveTextContent('Kết quả: Đạt')
+    expect(computedResult()).not.toHaveTextContent('Không đạt ở')
+  })
+
+  // D6: a route Staff stopped using keeps its result, labelled and below the routes in use.
+  it('labels retired routes in the recorded lists and puts them last', async () => {
+    routeCatalog = [
+      { ...routeFixture, routeId: 'route-old', revisionId: 'rev-old', name: 'Tuyến cũ', verificationStatus: 'PASS', isActive: false },
+      { ...routeFixture, verificationStatus: 'PASS', isActive: true },
+    ]
+    renderPage(<TechnicalConfirmationsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Đã đạt\s*2/ }))
+    const rows = (await screen.findAllByRole('row')).slice(1)
+    expect(rows.map(row => within(row).getAllByRole('cell')[0].textContent)).toEqual([
+      expect.stringMatching(/^Tuyến thư viện/), expect.stringMatching(/^Tuyến cũ Đã ngừng sử dụng/),
+    ])
+    expect(within(rows[0]).queryByText('Đã ngừng sử dụng')).not.toBeInTheDocument()
+    expect(rows[1]).toHaveClass('opacity-60')
+    expect(within(rows[1]).getByRole('button', { name: 'Xem kết quả Tuyến cũ' })).toBeInTheDocument()
+  })
+
   it('records Không đạt when a box is left unticked, with the reason required', async () => {
     await openRouteTest()
     fireEvent.click(screen.getByLabelText('Robot dừng an toàn'))

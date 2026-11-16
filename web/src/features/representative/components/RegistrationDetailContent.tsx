@@ -57,7 +57,7 @@ export function RegistrationDetailContent({ registrationId }: { registrationId: 
     {cancelError && !confirm && <Callout tone="danger" title={cancelError} role="alert">Kiểm tra dữ liệu mới trước khi mở lại xác nhận hủy.</Callout>}
     {summary.state === 'REJECTED' && !reviewExpired && <Callout tone="danger" title="Đăng ký bị từ chối">{r.rejectionReason || 'Không có lý do được lưu.'}</Callout>}
     {tourCancelled
-      ? <Callout tone="muted" title="Buổi tham quan đã bị huỷ">{tourCancelReasonText(summary.tourCancelReason) || 'Đại học FPT chưa cung cấp lý do hủy.'}{summary.tourEndedAt && <p>Huỷ lúc {formatDateTime(summary.tourEndedAt)}</p>}</Callout>
+      ? <Callout tone="muted" title="Buổi tham quan đã bị hủy">{tourCancelReasonText(summary.tourCancelReason) || 'Đại học FPT chưa cung cấp lý do hủy.'}{summary.tourEndedAt && <p>Hủy lúc {formatDateTime(summary.tourEndedAt)}</p>}</Callout>
       : isClosedRegistration(summary) && <Callout tone="muted" title={closedNote(summary).badge}>{closedNote(summary).reason}</Callout>}
     <nav className="rep-detail-tabs" aria-label="Chi tiết đăng ký">{tabs.map(item => <Link key={item.id} to={link(item.id)} aria-current={tab === item.id ? 'page' : undefined}>{item.label}</Link>)}</nav>
     {tab === 'info' && <>
@@ -75,7 +75,7 @@ export function RegistrationDetailContent({ registrationId }: { registrationId: 
       </div></Panel>
     </>}
     {tab === 'roster' && <Panel title="Kết quả từng dòng"><RegistrationRows registration={r} emailLink={row => link('email-change', row)} /></Panel>}
-    {tab === 'invitations' && tourCancelled && <Callout tone="muted" title="Buổi đã huỷ, lời mời không còn dùng được." role="status" />}
+    {tab === 'invitations' && tourCancelled && <Callout tone="muted" title="Buổi đã hủy, lời mời không còn dùng được." role="status" />}
     {tab === 'invitations' && !tourCancelled && <div className="rep-invitation-scope"><InvitationPanel registrationId={summary.id} rowVersion={r.rowVersion} tourRowVersion={r.tourRowVersion} variant="representative" /></div>}
     {tab === 'email-change' && <RegistrationEmailChanges registration={r} selectedRow={params.get('row')} refresh={refresh} selectRow={id => { const next = new URLSearchParams(params); next.set('row', id); setParams(next) }} />}
     <ConfirmationDialog open={Boolean(confirm)} title="Hủy đăng ký đoàn?" confirmLabel="Xác nhận hủy" busy={cancel.isPending} onClose={() => setConfirm(null)} onConfirm={() => void onCancel()}>

@@ -78,7 +78,7 @@ function RetirementImpact({ impact }: { impact: MapRetirementImpact }) {
             <li key={route.revisionId}><Link className={linkClass} to="/technical/confirmations">{route.name} · phiên bản {route.revisionNumber}</Link></li>)}</ul>
         </div>}
         {impact.upcomingTours.length > 0 && <div className="mt-2">
-          <p>Tour đã lên lịch hoặc sẵn sàng. Staff cần huỷ hoặc đổi tuyến các Tour này trước:</p>
+          <p>Tour đã lên lịch hoặc sẵn sàng. Staff cần hủy hoặc đổi tuyến các Tour này trước:</p>
           <ul className="mt-1 list-inside list-disc">{impact.upcomingTours.map(tour =>
             <li key={tour.tourId}><Link className={linkClass} to={`/staff/manage/tours/${tour.tourId}`}>{tour.name}</Link> · {formatDateTime(tour.scheduledStartAt)}</li>)}</ul>
         </div>}

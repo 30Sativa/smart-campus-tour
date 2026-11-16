@@ -342,18 +342,18 @@ describe('Staff Tour calendar', () => {
     expect(screen.queryByText('Tour sáng thật')).not.toBeInTheDocument()
   })
 
-  it('hides cancelled Tours by default and keeps "Hiện cả đã huỷ" on the address', async () => {
-    tourRows = [session, { ...evening, state: 'CANCELLED', name: 'Tour đã huỷ cũ' }]
+  it('hides cancelled Tours by default and keeps "Hiện cả đã hủy" on the address', async () => {
+    tourRows = [session, { ...evening, state: 'CANCELLED', name: 'Tour đã hủy cũ' }]
     show('/staff/schedule?date=2099-01-06&view=day')
     await screen.findAllByRole('article')
-    expect(screen.queryByText('Tour đã huỷ cũ')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Hiện cả đã huỷ' }))
-    expect(await screen.findByText('Tour đã huỷ cũ')).toBeInTheDocument()
+    expect(screen.queryByText('Tour đã hủy cũ')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hiện cả đã hủy' }))
+    expect(await screen.findByText('Tour đã hủy cũ')).toBeInTheDocument()
     expect(screen.getByTestId('location').textContent).toContain('huy=1')
     expect(screen.getByTestId('location').textContent).toContain('view=day')
     cleanup()
     show('/staff/schedule?date=2099-01-06&view=day&huy=1')
-    expect(await screen.findByText('Tour đã huỷ cũ')).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: 'Hiện cả đã huỷ' })).toBeChecked()
+    expect(await screen.findByText('Tour đã hủy cũ')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Hiện cả đã hủy' })).toBeChecked()
   })
 })

@@ -417,6 +417,38 @@ public sealed class TourScheduleTests
         Assert.Null(view.Days[0].Shifts[1].Block);
         Assert.Equal(["S1", "S2", "S3"], view.Days[1].Shifts.Select(shift => shift.Code));
         Assert.Equal(3600, view.RecommendedMaxSeconds);
+        Assert.Equal(TourScheduleSettings.DefaultEstimatedSpeedMetersPerSecond, view.EstimatedSpeedMetersPerSecond);
+    }
+
+    [Fact]
+    public async Task ShiftCalendar_CarriesTheConfiguredEstimateSpeed_ForTheRouteFormsDraftEstimate()
+    {
+        var settings = new TourScheduleSettings(TourShiftsFixture.Options, 60, estimatedSpeedMetersPerSecond: 0.4);
+        var view = await new GetTourShiftsQueryHandler(settings, new StubBlocks([])).Handle(new(Day, Day), default);
+        Assert.Equal(0.4, view.EstimatedSpeedMetersPerSecond);
+    }
+
+    // The same numbers are in web/src/features/administration/routes/route-estimate.test.ts, so the route form's draft
+    // estimate and this one cannot drift: (0,0) -> (3,4) -> (3,10), dwell 30 + 45 s; and 29 one-minute stops 5 m apart.
+    [Theory]
+    [InlineData("LAST_POI", null, null, 0.25, 119)]
+    [InlineData("POSE", 0.0, 0.0, 0.25, 161)]
+    [InlineData("POSE", 3.0, 14.0, 0.25, 135)]
+    [InlineData("LAST_POI", null, null, 1.0, 86)]
+    public void Estimate_MatchesTheWebDraftEstimateFixture(string endMode, double? endX, double? endY, double speed, int expected) =>
+        Assert.Equal(expected, TourSchedule.EstimatedDurationSeconds(
+            Revision(endMode, endX is null ? null : (decimal)endX, endY is null ? null : (decimal)endY), TwoStops, speed));
+
+    [Fact]
+    public void Estimate_Of29MinutesDwellAnd145MetresOfTravel_Is39MinutesAndTooLongForALunchShift()
+    {
+        // 29 stops of 60 s on a line 5 m apart, from (0,0): 145 m at 0.25 m/s = 580 s, so 1740 + 580 = 2320 s = 39 min.
+        var stops = Enumerable.Range(1, 29).Select(order => new RouteRevisionStop { StopOrder = order, X = 5m * order, Y = 0m, DwellSeconds = 60 }).ToArray();
+        var estimate = TourSchedule.EstimatedDurationSeconds(Revision("LAST_POI"), stops, 0.25);
+        Assert.Equal(2320, estimate);
+        Assert.Equal(39 * 60, TourSchedule.RoundedDurationSeconds(estimate));
+        var lunch = new TourShift("S4", "Ca trưa", new TimeOnly(11, 0), new TimeOnly(12, 0));
+        Assert.True(estimate > TourSchedule.MaxDurationSeconds(lunch));
     }
 
     private sealed class StubBlocks(IReadOnlyList<TourScheduleBlock> active) : IScheduleBlockRepository

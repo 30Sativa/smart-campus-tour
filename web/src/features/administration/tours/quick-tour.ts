@@ -24,14 +24,15 @@ export const QUICK_TOUR_RULES = {
   },
   deadline: (waitMinutes: number | null | undefined) => ({
     value: waitMinutes != null ? `${waitMinutes} phút sau khi tạo` : 'Theo cấu hình máy chủ',
-    note: 'Chưa bắt đầu trước hạn thì hệ thống tự huỷ Tour và trả robot.',
+    // FleetCommands:StartLateLimitMinutes (15) after the deadline; the cancel worker waits for the hold end (TourAutoCancel.HoldEndsAt).
+    note: 'Đã chốt thì còn bắt đầu muộn tối đa 15 phút sau hạn. Chưa bắt đầu thì hệ thống tự hủy và trả robot khi hết khung giữ robot.',
   }),
   registration: 'Khi Staff chốt Tour hoặc tới hạn bắt đầu',
   /** The facts on the "Tour nhanh" card of step 1. */
   facts: (waitMinutes: number | null | undefined): string[] => [
     'Không chọn ngày, ca: robot được giữ từ lúc tạo',
     'Bắt đầu ngay khi Tour đã chốt, không phải chờ mọi điểm xem vào phòng chờ',
-    waitMinutes != null ? `Chưa bắt đầu sau ${waitMinutes} phút thì tự huỷ` : 'Tự huỷ nếu không bắt đầu kịp',
+    waitMinutes != null ? `Chưa bắt đầu sau ${waitMinutes} phút thì tự hủy` : 'Tự hủy nếu không bắt đầu kịp',
     'Cần ghi lý do',
   ],
 } as const
@@ -57,16 +58,16 @@ export function quickTourDeadline(tour: QuickTourTimes, now: number, time: (iso:
       passed, timerLabel: 'Thời gian còn lại để bắt đầu', chip: left ? `Còn ${left}` : null,
       text: [`Bắt đầu trước ${time(tour.scheduledStartAt)}.`,
         latest && `Đã chốt thì còn bắt đầu được tới ${latest}.`,
-        cancelAt && `Chưa bắt đầu thì hệ thống tự huỷ và trả robot lúc ${cancelAt}.`].filter(Boolean).join(' '),
+        cancelAt && `Chưa bắt đầu thì hệ thống tự hủy và trả robot lúc ${cancelAt}.`].filter(Boolean).join(' '),
     }
   }
   const left = tour.autoCancelAt ? countdownText(tour.autoCancelAt, now) : null
   return {
-    passed, timerLabel: 'Thời gian còn lại tới lúc tự huỷ',
-    chip: left ? `Tự huỷ sau ${left}` : tour.autoCancelAt ? 'Đang tự huỷ' : 'Quá giờ bắt đầu',
+    passed, timerLabel: 'Thời gian còn lại tới lúc tự hủy',
+    chip: left ? `Tự hủy sau ${left}` : tour.autoCancelAt ? 'Đang tự hủy' : 'Quá giờ bắt đầu',
     text: cancelAt
-      ? `Đã quá giờ bắt đầu, không chốt được nữa. Hệ thống sẽ tự huỷ lúc ${cancelAt}, hoặc bạn huỷ ngay.`
-      : 'Đã quá giờ bắt đầu, không chốt được nữa. Hệ thống sẽ tự huỷ, hoặc bạn huỷ ngay.',
+      ? `Đã quá giờ bắt đầu, không chốt được nữa. Hệ thống sẽ tự hủy lúc ${cancelAt}, hoặc bạn hủy ngay.`
+      : 'Đã quá giờ bắt đầu, không chốt được nữa. Hệ thống sẽ tự hủy, hoặc bạn hủy ngay.',
   }
 }
 

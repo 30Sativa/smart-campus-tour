@@ -61,7 +61,7 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         if (tour.State != "READY" || viewer is null)
             return Refused("Chỉ Start được Tour READY.", "tourReady");
         var checks = await preflight.EvaluateAsync(tour, viewer, null, includeConfirmation: false, lockTarget: false, ct, holdAtStart);
-        return checks.CanStart ? new(true, null, []) : new(false, "Chưa đạt điều kiện Start.", checks.BlockedBy);
+        return checks.CanStart ? new(true, null, []) : new(false, "Chưa đủ điều kiện mở Tour.", checks.BlockedBy);
     }
 
     private async Task<TourActionAvailability> NextAsync(Tour tour, Guid? viewer, CancellationToken ct)

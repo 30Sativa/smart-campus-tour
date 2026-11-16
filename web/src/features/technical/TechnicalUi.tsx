@@ -63,9 +63,14 @@ export function ResultToggle({ id, value, onChange, hint }: { id: string; value:
  * The result the ticks give. `pending` while no box has been ticked or unticked yet: the form has not been
  * filled in, so it reads neither Đạt nor Không đạt.
  */
-export function ComputedResult({ passed, pending = false }: { passed: boolean; pending?: boolean }) {
+export function ComputedResult({ passed, pending = false, failed }: {
+  passed: boolean; pending?: boolean
+  /** The unticked items, in the words of the saved result; shown as "Không đạt ở: …" beside a Không đạt. */
+  failed?: string[]
+}) {
   if (pending) return <p role="status" className="flex items-center gap-1.5 text-[13px] font-semibold text-[#64748b]">Kết quả: chưa tick mục nào</p>
-  return <p role="status" className="flex items-center gap-1.5 text-[13px] font-semibold text-[#334155]">Kết quả: <ToneBadge tone={passed ? 'ok' : 'danger'}>{passed ? 'Đạt' : 'Không đạt'}</ToneBadge></p>
+  return <p role="status" className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold text-[#334155]">Kết quả: <ToneBadge tone={passed ? 'ok' : 'danger'}>{passed ? 'Đạt' : 'Không đạt'}</ToneBadge>
+    {!passed && failed?.length ? <span className="text-xs font-normal text-[#b23e31]">Không đạt ở: {failed.join(', ')}</span> : null}</p>
 }
 
 /**

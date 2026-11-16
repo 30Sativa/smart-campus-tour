@@ -1,4 +1,3 @@
-import { Link } from 'react-router'
 import { Notice } from '../AdminUi'
 import { usePoiProposals } from '../../technical/technical-hooks'
 import type { VersionedRoute } from './versioned-api'
@@ -18,7 +17,8 @@ export function NewerPoiRevisionNotice({ route }: { route: VersionedRoute }) {
       ? [stop.name] : []
   })
   if (!names.length) return null
-  return <Notice tone="warn" action={<Link to={`/staff/manage/routes/${route.routeId}/edit`} className="text-sm whitespace-nowrap text-[#2d719e] hover:underline">Sửa tuyến</Link>}>
-    POI {names.join(', ')} có phiên bản mới đã đạt. Sửa tuyến để dùng bản mới. Đổi vị trí, hướng hoặc camera thì tuyến phải chạy thử lại.
+  // No button of its own: the page keeps one "Sửa tuyến" button, in its header.
+  return <Notice tone="warn">
+    POI {names.join(', ')} có phiên bản mới đã đạt. Bấm Sửa tuyến ở đầu trang để dùng bản mới. Đổi vị trí, hướng hoặc camera thì tuyến phải chạy thử lại.
   </Notice>
 }

@@ -41,7 +41,8 @@ public sealed class GetTourShiftsQueryHandler(TourScheduleSettings settings, ISc
                     item.Shift.Start.Add(TourSchedule.ReservationBuffer).ToString("HH\\:mm"), TourSchedule.MaxDurationSeconds(item.Shift),
                     TourSchedule.BlockOf(active, item), Occupying(tours, startsAt, endsAt));
             }).ToArray(), Occupying(tours, dayStart, dayEnd));
-        }).ToArray(), settings.RecommendedMaxSeconds, (int)settings.ShortNoticeMinLead.TotalMinutes);
+        }).ToArray(), settings.RecommendedMaxSeconds, (int)settings.ShortNoticeMinLead.TotalMinutes,
+            settings.EstimatedSpeedMetersPerSecond);
     }
 
     private static TourShiftTourView[]? Occupying(IReadOnlyList<ScheduleBlockingTour>? tours, DateTimeOffset startsAt, DateTimeOffset endsAt) =>

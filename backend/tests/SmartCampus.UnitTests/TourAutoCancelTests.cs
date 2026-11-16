@@ -24,7 +24,7 @@ public sealed class TourAutoCancelTests
 
     [Fact]
     public void SystemCancel_EmailsTheFixedSentence_InsteadOfTheStoredReason() =>
-        Assert.Equal("Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại.",
+        Assert.Equal("Buổi tham quan không bắt đầu đúng giờ nên đã bị hủy. Đại học FPT sẽ liên hệ nếu sắp xếp lại.",
             TourAutoCancel.NoticeReason(null, TourAutoCancel.Reason));
 
     [Theory]

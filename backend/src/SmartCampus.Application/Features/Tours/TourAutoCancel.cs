@@ -7,7 +7,7 @@ public static class TourAutoCancel
     /// <summary>A hold that ended longer ago than this is backlog: cancel it, but an email this late helps nobody.</summary>
     public static readonly TimeSpan NoticeCutoff = TimeSpan.FromHours(24);
     /// <summary>What a representative reads in the cancel email instead of the stored system <see cref="Reason"/>.</summary>
-    public const string EmailReason = "Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại.";
+    public const string EmailReason = "Buổi tham quan không bắt đầu đúng giờ nên đã bị hủy. Đại học FPT sẽ liên hệ nếu sắp xếp lại.";
 
     /// <summary>
     /// The reason a cancel email shows. Only the system cancel (NULL actor with the system reason) is reworded; a Staff

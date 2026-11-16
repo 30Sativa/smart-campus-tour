@@ -56,7 +56,7 @@ public sealed class CreateScheduleBlockCommandHandler(IScheduleBlockRepository b
             : TourSchedule.ShiftWindow(input.Date, settings.Shifts.Single(shift => shift.Code == input.ShiftCode));
         var tours = await blocks.ListToursInWindowAsync(startsAt, endsAt, ct);
         if (tours.Count > 0)
-            throw new ConflictException($"Còn {tours.Count} Tour chưa huỷ trong {(input.ShiftCode is null ? "ngày" : "ca")} này. Staff cần huỷ Tour trước rồi mới khoá được.",
+            throw new ConflictException($"Còn {tours.Count} Tour chưa hủy trong {(input.ShiftCode is null ? "ngày" : "ca")} này. Staff cần hủy Tour trước rồi mới khoá được.",
                 "SHIFT_HAS_TOURS", blockers: tours.Select(tour => new ConflictBlocker(tour.Id.ToString("D"),
                     $"{tour.Name} ({tour.ScheduledStartAt.ToOffset(TimeSpan.FromHours(7)).ToString("HH:mm dd/MM/yyyy", CultureInfo.InvariantCulture)})")).ToArray());
 

@@ -23,7 +23,7 @@ const secondTour: RepresentativeTour = {
 }
 export const cancelledTour: RepresentativeTour = {
   ...openTour, id: CANCELLED_TOUR_ID, name: 'Tham quan Khu thực hành sáng thứ Hai', state: 'CANCELLED', rowVersion: 'rv-cancelled',
-  scheduledStartAt: at(-2 * 24 * 60), register: { allowed: false, reason: 'Buổi tham quan đã huỷ.' },
+  scheduledStartAt: at(-2 * 24 * 60), register: { allowed: false, reason: 'Buổi tham quan đã hủy.' },
   cancelReason: 'Robot cần bảo trì đột xuất.', remainingSeats: 0, registrationClosesAt: at(-3 * 24 * 60),
 }
 
@@ -41,8 +41,8 @@ export const cancelledRegistration: RepresentativeRegistration = {
     { id: 'c-2', rowNumber: 2, rowType: 'SHARED_VIEWING', displayName: 'Phòng chiếu tầng 2', email: 'phongchieu@lqd.edu.vn', className: null, participationState: 'ACCEPTED', canRequestEmailChange: false, canRemove: false },
   ],
   allowedActions: {
-    edit: { allowed: false, reason: 'Buổi tham quan đã huỷ.' }, resubmit: { allowed: false, reason: 'Buổi tham quan đã huỷ.' },
-    cancel: { allowed: false, reason: 'Buổi tham quan đã huỷ.' },
+    edit: { allowed: false, reason: 'Buổi tham quan đã hủy.' }, resubmit: { allowed: false, reason: 'Buổi tham quan đã hủy.' },
+    cancel: { allowed: false, reason: 'Buổi tham quan đã hủy.' },
   },
 }
 

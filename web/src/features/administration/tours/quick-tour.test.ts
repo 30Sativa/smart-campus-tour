@@ -32,8 +32,10 @@ describe('quick Tour rules (ADR-0053, ADR-0054, ADR-0057)', () => {
     expect(QUICK_TOUR_RULES.start.note).toMatch(/^Không cần đăng ký đã duyệt\./)
     expect(QUICK_TOUR_RULES.start.note).not.toMatch(/ít nhất một đăng ký/)
     expect(QUICK_TOUR_RULES.deadline(30).value).toBe('30 phút sau khi tạo')
-    expect(QUICK_TOUR_RULES.deadline(30).note).toMatch(/tự huỷ/)
-    expect(QUICK_TOUR_RULES.facts(45)).toContain('Chưa bắt đầu sau 45 phút thì tự huỷ')
+    // D4: Start stays open 15 minutes after the deadline, and the system cancel waits for the end of the robot hold.
+    expect(QUICK_TOUR_RULES.deadline(30).note).toBe('Đã chốt thì còn bắt đầu muộn tối đa 15 phút sau hạn. Chưa bắt đầu thì hệ thống tự hủy và trả robot khi hết khung giữ robot.')
+    expect(QUICK_TOUR_RULES.deadline(30).note).not.toMatch(/trước hạn thì/)
+    expect(QUICK_TOUR_RULES.facts(45)).toContain('Chưa bắt đầu sau 45 phút thì tự hủy')
   })
 
   it('uses no dash and no English action name', () => {
