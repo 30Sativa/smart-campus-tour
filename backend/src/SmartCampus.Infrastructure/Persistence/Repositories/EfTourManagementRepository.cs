@@ -17,7 +17,7 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     private static readonly Expression<Func<Tour, TourSummary>> Summary = t => new(
         t.Id, t.Name, t.Description, t.RouteId, t.Route.Name, t.ActiveRouteId, t.ScheduledStartAt,
         t.State, t.CreatedByUserId, t.CreatedAt, t.UpdatedAt, Convert.ToBase64String(t.RowVersion),
-        t.GroupRegistrations.Count, t.GroupRegistrations.SelectMany(r => r.RosterRows).Count(row => row.Invitation != null),
+        t.GroupRegistrations.Count, t.GroupRegistrations.SelectMany(r => r.RosterRows).Count(row => row.IsActive && row.Invitation != null),
         t.RouteRevisionId, t.TourRobotReservations.Where(r => r.ReleasedAt == null)
             .Select(r => new TourReservationView(r.Robot.RobotCode, r.StartsAt, r.EndsAt, r.MeasuredDurationSeconds, r.ReleasedAt,
                 r.ExpectedDurationSeconds ?? r.MeasuredDurationSeconds)).FirstOrDefault(),

@@ -86,7 +86,8 @@ public sealed class EfInvitationRepository(ApplicationDbContext context) : IInvi
             .Include(r => r.RosterRows.Where(row => row.IsActive))
             .SingleAsync(r => r.Id == registrationId && (owner == null || r.RepresentativeUserId == owner), ct);
         var invitations = await context.Invitations.AsNoTracking().Include(i => i.RosterRow)
-            .Where(i => i.RosterRow.RegistrationId == registrationId).ToArrayAsync(ct);
+            // A removed roster row keeps its revoked invitation for audit, but it is no longer listed (or counted).
+            .Where(i => i.RosterRow.RegistrationId == registrationId && i.RosterRow.IsActive).ToArrayAsync(ct);
         var ids = invitations.Select(i => i.Id.ToString("D")).ToArray();
         // At most one request and its latest outcome per invitation, regardless of historical resend count.
         var latest = context.AuditLogs.Where(a => a.EntityType == "Invitation" && ids.Contains(a.EntityId) &&

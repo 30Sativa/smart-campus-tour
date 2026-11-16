@@ -14,7 +14,8 @@ public sealed class EfRegistrationReviewRepository(ApplicationDbContext context)
     private static readonly Expression<Func<GroupRegistration, ReviewListItem>> Summary = r =>
         new(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State, r.SchoolName, r.GroupName,
             r.State, r.RosterRows.Count(row => row.IsActive), r.RepresentativeUser.FullName,
-            r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt);
+            r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt,
+            r.RosterRows.Count(row => row.IsActive && row.ParticipationState == RosterParticipationStates.Pending));
 
     public async Task<PagedResult<ReviewListItem>> ListAsync(ReviewListRequest request, CancellationToken ct)
     {
@@ -55,7 +56,8 @@ public sealed class EfRegistrationReviewRepository(ApplicationDbContext context)
         {
             Summary = new ReviewListItem(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State,
                 r.SchoolName, r.GroupName, r.State, r.RosterRows.Count(row => row.IsActive), r.RepresentativeUser.FullName,
-                r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt),
+                r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt,
+                r.RosterRows.Count(row => row.IsActive && row.ParticipationState == RosterParticipationStates.Pending)),
             r.ContactName, r.ContactEmail, r.RowVersion, TourVersion = r.Tour.RowVersion,
             r.RejectionReason, r.ReviewedAt, r.ReviewedByUserId,
             HasInvitations = r.RosterRows.Any(row => row.Invitation != null),
