@@ -43,8 +43,8 @@ describe('Staff narration rehearsal (ADR-0060)', () => {
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><StaffNarrationRehearsalPage /></MemoryRouter></QueryClientProvider>)
     const library = (await screen.findByRole('checkbox', { name: /Thư viện/ })).closest('label')!
     const hall = screen.getByRole('checkbox', { name: /Sảnh/ }).closest('label')!
-    expect(within(library).queryByText('Bản nháp')).not.toBeInTheDocument()
-    expect(within(hall).getByText('Bản nháp')).toBeInTheDocument()
+    expect(within(library).queryByText('Bản đang soạn')).not.toBeInTheDocument()
+    expect(within(hall).getByText('Bản đang soạn')).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: /Bãi xe/ })).not.toBeInTheDocument()
     // Only POIs whose summary has a version are read; the text never comes from the POI revision.
     expect(requested).not.toContain('/api/staff/poi-proposals/p-none/narrations')

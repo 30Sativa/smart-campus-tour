@@ -87,14 +87,14 @@ function useNarrationMutation<T, R>(run: (input: T) => Promise<R>, done: (input:
 }
 
 export const useSavePoiNarrationDraft = () => useNarrationMutation(technicalApi.savePoiNarrationDraft, input => ({
-  title: input.expectedRowVersion ? 'Đã lưu bản nháp thuyết minh' : 'Đã tạo bản nháp thuyết minh',
-  detail: 'Bản nháp cần một Staff khác duyệt trước khi dùng cho tuyến.',
+  title: input.expectedRowVersion ? 'Đã lưu bản đang soạn' : 'Đã tạo bản đang soạn',
+  detail: 'Bản đang soạn cần một Staff khác duyệt trước khi dùng cho tuyến.',
 }))
 export const useApprovePoiNarration = () => useNarrationMutation(technicalApi.approvePoiNarration, () => ({
   title: 'Đã duyệt thuyết minh', detail: 'Tuyến lưu từ bây giờ dùng bản này. Tuyến và Tour đã có giữ nội dung cũ.',
 }))
 export const useDiscardPoiNarration = () => useNarrationMutation(technicalApi.discardPoiNarration, () => ({
-  tone: 'info', title: 'Đã bỏ bản nháp thuyết minh', detail: 'Bản đã duyệt (nếu có) vẫn được dùng.',
+  tone: 'info', title: 'Đã bỏ bản đang soạn', detail: 'Bản đã duyệt (nếu có) vẫn được dùng.',
 }))
 
 export function useRouteTestQueue() {

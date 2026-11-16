@@ -32,7 +32,7 @@ export function apiErrorCode(error: unknown): string | null {
 const narrationConflicts: Record<string, string> = {
   NARRATION_SELF_APPROVAL_FORBIDDEN: 'Bạn là người sửa bản này lần cuối nên không duyệt được. Cần một Staff khác duyệt. Dữ liệu mới nhất đã được tải lại.',
   STALE_VERSION: 'Thuyết minh vừa được người khác thay đổi. Dữ liệu mới nhất đã được tải lại, hãy kiểm tra rồi thử lại.',
-  NARRATION_NOT_DRAFT: 'Bản này không còn là bản nháp, có thể đã được duyệt hoặc bỏ. Dữ liệu mới nhất đã được tải lại.',
+  NARRATION_NOT_DRAFT: 'Bản này không còn là bản đang soạn, có thể đã được duyệt hoặc bỏ. Dữ liệu mới nhất đã được tải lại.',
   POI_PROPOSAL_DISCARDED: 'POI này đã bị xoá khỏi danh sách nên không sửa được thuyết minh.',
   POI_RETIRED: 'POI này đã ngưng dùng nên không sửa được thuyết minh. Dùng lại POI trước.',
   IDEMPOTENCY_CONFLICT: 'Yêu cầu này đã được gửi với nội dung khác. Tải lại trang rồi thử lại.',
