@@ -31,6 +31,10 @@ public sealed class TourRetiredPoiSqlTests
         // The route says so on its current revision, for the route pages and the Tour page alike.
         Assert.Equal(["Thư viện"], (await h.Send(new GetRouteRevisionQuery(h.Route.RouteId, null, false))).RetiredPoiNames);
         Assert.Equal(["Thư viện"], (await h.Detail()).RouteRevision!.RetiredPoiNames);
+        // The route list, which the Tour-create form reads, says so too, so the form can disable the route.
+        var listed = (await h.Send(new ListVersionedRoutesQuery(h.Route.Name, h.Route.MapVersionId, 1, 100, "name"))).Items
+            .Single(item => item.RouteId == h.Route.RouteId);
+        Assert.Equal(["Thư viện"], listed.RetiredPoiNames);
 
         await h.Send(new ReactivatePoiProposalCommand(h.StaffId, poi.Id, new(Guid.NewGuid(), retired.RowVersion)));
         Assert.Empty((await h.Detail()).RouteRevision!.RetiredPoiNames!);
