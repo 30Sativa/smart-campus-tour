@@ -19,6 +19,10 @@ function EmailChangeForm({ registration, row, refresh }: { registration: Represe
   const forbidden = failure?.status === 403 || failure?.status === 404
   const uncertain = Boolean(attempt && failure && (!failure.status || failure.status >= 500))
   const allowed = canRequestRowEmail(registration, row)
+  // What the button still waits for; a refusal, a same-email draft and a stale row each say so on their own.
+  const missing = done || attempt || conflict || forbidden || !allowed || mutation.isPending ? []
+    : [!email.trim() && 'nhập email đề xuất', !consent && 'đánh dấu ô xác nhận'].filter((item): item is string => Boolean(item))
+  const missingId = `email-change-missing-${row.id}`
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (done || conflict || forbidden || mutation.isPending || (!uncertain && (!allowed || !consent))) return
@@ -46,8 +50,9 @@ function EmailChangeForm({ registration, row, refresh }: { registration: Represe
       {Object.entries(failure.fieldErrors).map(([field, text]) => <p key={field}>{text}</p>)}
     </Callout>}
     {!allowed && !attempt && <Callout tone="muted" title="Dòng này hiện không cho phép yêu cầu đổi email">Tải lại để kiểm tra quyền và trạng thái mới nhất.</Callout>}
+    {missing.length > 0 && <p id={missingId} className="rep-hint">Cần: {missing.join(', ')}.</p>}
     <div className="rep-inline-actions">
-      {!done && <button type="submit" className={repButton('primary')} disabled={mutation.isPending || conflict || forbidden || (!uncertain && (!allowed || !consent || !email.trim() || email.trim().toLowerCase() === row.email.trim().toLowerCase()))}>{mutation.isPending ? 'Đang gửi…' : uncertain ? 'Thử lại cùng yêu cầu' : 'Gửi yêu cầu duyệt'}</button>}
+      {!done && <button type="submit" className={repButton('primary')} aria-describedby={missing.length ? missingId : undefined} disabled={mutation.isPending || conflict || forbidden || (!uncertain && (!allowed || !consent || !email.trim() || email.trim().toLowerCase() === row.email.trim().toLowerCase()))}>{mutation.isPending ? 'Đang gửi…' : uncertain ? 'Thử lại cùng yêu cầu' : 'Gửi yêu cầu duyệt'}</button>}
       {(conflict || forbidden || (attempt && !uncertain && !done)) && <button type="button" className={repButton('secondary')} disabled={mutation.isPending} onClick={() => void refresh()}>Tải lại dữ liệu và bắt đầu lại</button>}
     </div>
   </form>
