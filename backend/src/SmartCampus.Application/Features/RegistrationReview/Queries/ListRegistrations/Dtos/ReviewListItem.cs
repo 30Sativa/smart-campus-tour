@@ -2,4 +2,6 @@ namespace SmartCampus.Application.Features.RegistrationReview.Queries.ListRegist
 
 public sealed record ReviewListItem(Guid Id, Guid TourId, string TourName, DateTimeOffset TourScheduledStartAt,
     string TourState, string SchoolName, string GroupName, string State, int RowCount,
-    string RepresentativeName, DateTimeOffset SubmittedAt, DateTimeOffset UpdatedAt);
+    string RepresentativeName, DateTimeOffset SubmittedAt, DateTimeOffset UpdatedAt,
+    // Active roster rows still waiting for a Staff row decision (PENDING); removed rows are never counted.
+    int PendingRowCount);
