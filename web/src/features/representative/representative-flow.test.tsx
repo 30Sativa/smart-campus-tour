@@ -165,24 +165,24 @@ describe('Representative real HTTP contract', () => {
   it('dates a cancelled Tour only when the server says when', async () => {
     registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: 'Robot bảo trì', tourEndedAt: '2026-10-19T02:30:00Z' }
     renderAt('/dai-dien/dang-ky/registration')
-    expect(await screen.findByText('Huỷ lúc 19/10/2026 09:30')).toBeInTheDocument()
+    expect(await screen.findByText('Hủy lúc 19/10/2026 09:30')).toBeInTheDocument()
   })
 
   it('prints no cancel time when the server sent none', async () => {
     registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: 'Robot bảo trì', tourEndedAt: null }
     renderAt('/dai-dien/dang-ky/registration')
-    expect(await screen.findByText('Buổi tham quan đã bị huỷ')).toBeInTheDocument()
-    expect(screen.queryByText(/Huỷ lúc/)).toBeNull()
+    expect(await screen.findByText('Buổi tham quan đã bị hủy')).toBeInTheDocument()
+    expect(screen.queryByText(/Hủy lúc/)).toBeNull()
   })
 
   const systemCancel = 'Không bắt đầu trong khung giờ, hệ thống tự huỷ.'
-  const friendlyCancel = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại.'
+  const friendlyCancel = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị hủy. Đại học FPT sẽ liên hệ nếu sắp xếp lại.'
 
   it('shows a cancelled Tour as cancelled, with no actions, deadline or lock message', async () => {
     registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: systemCancel }
     registration.allowedActions = { edit: { allowed: false, reason: 'Tour đã khóa đăng ký' }, resubmit: { allowed: false, reason: 'Tour đã khóa đăng ký' }, cancel: { allowed: false, reason: 'Tour đã khóa đăng ký' } }
     renderAt('/dai-dien/dang-ky/registration')
-    expect(await screen.findByText('Buổi tham quan đã bị huỷ')).toBeInTheDocument()
+    expect(await screen.findByText('Buổi tham quan đã bị hủy')).toBeInTheDocument()
     expect(screen.getAllByText(friendlyCancel).length).toBeGreaterThan(0)
     expect(screen.queryByText(systemCancel)).toBeNull()
     expect(screen.queryByText('Hạn đăng ký và thêm dòng')).toBeNull()

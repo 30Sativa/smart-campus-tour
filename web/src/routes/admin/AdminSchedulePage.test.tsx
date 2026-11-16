@@ -115,7 +115,7 @@ describe('Admin operating calendar', () => {
     expect(screen.getAllByText('1 Tour')).toHaveLength(2)
     fireEvent.click(screen.getByRole('button', { name: `Khoá Ca sáng ${date}, có 1 Tour` }))
     const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveTextContent('Staff cần huỷ Tour trước')
+    expect(dialog).toHaveTextContent('Staff cần hủy Tour trước')
     const listed = within(within(dialog).getByRole('list', { name: 'Tour đang chiếm chỗ' })).getByRole('listitem')
     expect(listed).toHaveTextContent('Tour sáng thứ Hai')
     expect(listed).toHaveTextContent('05/01/2099 08:15')
@@ -134,7 +134,7 @@ describe('Admin operating calendar', () => {
   })
 
   it('names the Tours in the way when the shift still has some, and keeps the dialog open', async () => {
-    refusal = { status: 409, body: { success: false, message: 'Còn 1 Tour chưa huỷ trong ca này. Staff cần huỷ Tour trước rồi mới khoá được.',
+    refusal = { status: 409, body: { success: false, message: 'Còn 1 Tour chưa hủy trong ca này. Staff cần hủy Tour trước rồi mới khoá được.',
       errors: { code: 'SHIFT_HAS_TOURS', blockers: [{ code: 'tour-1', message: 'Tour sáng thứ Bảy (08:15 05/01/2099)' }] } } }
     show()
     await screen.findByRole('table', { name: 'Lịch vận hành' })
@@ -142,7 +142,7 @@ describe('Admin operating calendar', () => {
     const dialog = screen.getByRole('dialog')
     fireEvent.change(within(dialog).getByLabelText(/Lý do khoá/), { target: { value: 'Bảo trì' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Khoá' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Staff cần huỷ Tour trước')
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Staff cần hủy Tour trước')
     expect(within(within(dialog).getByRole('list', { name: 'Tour đang chiếm chỗ' })).getByText('Tour sáng thứ Bảy (08:15 05/01/2099)')).toBeInTheDocument()
     // Retrying the same content reuses the request id.
     const first = writes[0].body.requestId

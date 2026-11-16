@@ -110,7 +110,7 @@ export default function AdminSchedulePage() {
     {target && <ConfirmationDialog key={`${target.kind}:${target.date}:${target.shift?.code ?? 'day'}`} open
       title={target.kind === 'close' ? `Khoá ${targetName(target)}` : `Gỡ khoá ${targetName(target)}`}
       description={target.kind === 'remove' ? <>Staff lại tạo được Tour vào đây. Lý do đang khoá: {target.block.reason}</>
-        : occupying.length > 0 ? `Còn ${occupying.length} Tour chưa huỷ ở đây. Staff cần huỷ Tour trước rồi mới khoá được.`
+        : occupying.length > 0 ? `Còn ${occupying.length} Tour chưa hủy ở đây. Staff cần hủy Tour trước rồi mới khoá được.`
         : 'Staff sẽ không tạo được Tour vào đây và thấy lý do bạn nhập.'}
       confirmLabel={target.kind === 'close' ? 'Khoá' : 'Gỡ khoá'} busyLabel="Đang lưu…" busy={mutation.isPending}
       confirmDisabled={occupying.length > 0} reasonDisabled={occupying.length > 0}

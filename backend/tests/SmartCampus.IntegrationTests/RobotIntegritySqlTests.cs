@@ -125,6 +125,9 @@ public sealed class RobotIntegritySqlTests
             Assert.Equal(TourSchedule.ReservationBuffer, preview.HoldEndsAt - preview.StartBy - TimeSpan.FromSeconds(TourSchedule.RoundedDurationSeconds(preview.ExpectedDurationSeconds)));
             Assert.True(preview.HoldStartsAt < preview.StartBy);
             Assert.InRange(preview.HoldEndsAt - made.EndsAt, TimeSpan.Zero, TimeSpan.FromMinutes(2));
+            // The quick form names the auto-cancel moment by the rule the cancel worker applies (TourAutoCancel.HoldEndsAt).
+            Assert.Equal(TourAutoCancel.HoldEndsAt(preview.StartBy, preview.HoldEndsAt, TimeSpan.FromMinutes(15)), preview.AutoCancelAt);
+            Assert.True(preview.AutoCancelAt >= preview.StartBy + TimeSpan.FromMinutes(15));
         }
         // The shift form judges its hold per shift through the slots API, so the plain list names no holder and no preview.
         var plain = Assert.Single(await h.TourRobots(tested), robot => robot.RobotCode == First);

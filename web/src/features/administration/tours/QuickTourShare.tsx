@@ -35,17 +35,19 @@ export function QuickTourShare({ tour, onCancel }: {
 
   return <section className={`${panelClass} mb-3 p-4`} aria-labelledby={`share-${tour.id}`}>
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <h2 id={`share-${tour.id}`} className="text-[15px] font-semibold text-[#0f172a]">Gửi cho đại diện</h2>
+      <h2 id={`share-${tour.id}`} className="text-[15px] font-semibold text-[#0f172a]">Link đăng ký cho đại diện</h2>
       {deadline.chip && <p role="timer" aria-label={deadline.timerLabel} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold tabular-nums ${deadline.passed ? 'bg-[#fef2f2] text-[#9d3428]' : 'bg-[#fffaf0] text-[#7d5310]'}`}>
         <Timer size={15} aria-hidden="true" />{deadline.chip}
       </p>}
     </div>
+    {/* Once the start has passed there is no link to send, so the explanation goes with it. */}
+    {!deadline.passed && <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#334155]">Tour nhanh chỉ mở khoảng 30 phút nên gửi thẳng link này cho đại diện để họ đăng ký đoàn. Sau khi bạn duyệt, người xem nhận email lời mời riêng. Đoàn đã có mặt và không cần đăng ký thì bỏ qua bước này.</p>}
     <p className="mt-1 text-[13px] leading-5 text-muted">{deadline.text}</p>
     {deadline.passed
-      ? onCancel && <div className="mt-3"><button type="button" onClick={onCancel} className={buttonClass('danger', 'sm')}>Huỷ Tour ngay</button></div>
+      ? onCancel && <div className="mt-3"><button type="button" onClick={onCancel} className={buttonClass('danger', 'sm')}>Hủy Tour ngay</button></div>
       : <>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <label className="sr-only" htmlFor={`share-link-${tour.id}`}>Link đăng ký cho đại diện</label>
+          <label className="sr-only" htmlFor={`share-link-${tour.id}`}>Link để sao chép</label>
           <input ref={input} id={`share-link-${tour.id}`} readOnly value={link} onFocus={event => event.currentTarget.select()} className={`${inputClass} font-mono text-[13px]`} />
           <button type="button" onClick={copyLink} className={`${buttonClass('primary', 'sm')} shrink-0`}><Copy size={15} aria-hidden="true" />{copy === 'copied' ? 'Đã sao chép' : 'Sao chép link'}</button>
         </div>

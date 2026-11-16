@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
-import { expectedDurationText, failedCheckNames, passedAt, routeAvailabilityError, saveResultText, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
+import { expectedDurationText, failedCheckNames, historyResultSource, passedAt, routeAvailabilityError, saveResultText, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
 import { RouteFailBanner } from '../../../features/administration/routes/RouteFailBanner'
 import { campusShortDate, campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
@@ -109,10 +109,11 @@ export default function StaffManageRouteDetailsPage() {
     <PageHeader eyebrow="Tuyến" title={value.name} description={statusLine(value, retiredPoi)} action={<div className="flex max-w-sm flex-col items-end gap-1.5"><div className="flex flex-wrap justify-end gap-2"><Link className={buttonClass('secondary')} to={`/staff/manage/routes/${value.routeId}/edit`}>Sửa tuyến</Link>{value.isActive && isCurrentRevision && <button type="button" className={buttonClass('secondary')} onClick={() => { availability.reset(); setDeactivating(value) }}>Ngừng sử dụng</button>}{!value.isSubmitted && isCurrentRevision && <button className={buttonClass('primary')} disabled={!canSubmit} onClick={() => void submitMutation.mutateAsync(value).catch(() => undefined)}>{submitMutation.isPending ? 'Đang gửi…' : 'Gửi kiểm chứng tuyến'}</button>}</div><p className="text-right text-xs text-[#64748b]">Lưu sẽ tạo bản mới. Chỉ đổi thời gian dừng hoặc thuyết minh thì bản mới giữ kết quả chạy thử; đổi điểm dừng, thứ tự, điểm đầu hoặc điểm cuối thì cần chạy thử lại. Tour đã tạo vẫn dùng bản cũ.</p></div>} />
     <div className="mb-4 space-y-2">
       {!isCurrentRevision && <Notice tone="warn">{viewedAt ? `Đây là bản lưu ${campusShortStamp(viewedAt)}, chỉ xem được.` : 'Đây là bản lưu cũ, chỉ xem được.'}</Notice>}
-      <RouteFailBanner route={value} action={isCurrentRevision ? <Link to={`/staff/manage/routes/${value.routeId}/edit`} className={buttonClass('secondary', 'sm')}>Sửa tuyến</Link> : undefined} />
+      {/* One "Sửa tuyến" button, in the header: the banner and the notice below only say what to do. */}
+      <RouteFailBanner route={value} nextStep={isCurrentRevision ? 'Bấm Sửa tuyến ở đầu trang để sửa chỗ không đạt, rồi gửi chạy thử lại.' : undefined} />
       {isCurrentRevision && <NewerPoiRevisionNotice route={value} />}
-      {retiredPoi && <Notice tone="warn" action={<Link to={`/staff/manage/routes/${value.routeId}/edit`} className="text-sm whitespace-nowrap text-[#2d719e] hover:underline">Sửa tuyến</Link>}>
-        Tuyến có POI đã ngưng dùng: {value.retiredPoiNames!.join(', ')}. Không tạo được Tour mới trên phiên bản này; Tour đã tạo vẫn chạy như cũ. Lưu phiên bản mới không có POI này, hoặc dùng lại POI.
+      {retiredPoi && <Notice tone="warn">
+        Tuyến có POI đã ngưng dùng: {value.retiredPoiNames!.join(', ')}. Không tạo được Tour mới trên phiên bản này; Tour đã tạo vẫn chạy như cũ. Bấm Sửa tuyến ở đầu trang để lưu phiên bản mới không có POI này, hoặc dùng lại POI.
       </Notice>}
       {notice && <div role={submitMutation.isSuccess ? 'status' : undefined}><Note tone={notice.tone}><div className="flex flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 flex-1">{notice.text}</p>
@@ -154,7 +155,9 @@ export default function StaffManageRouteDetailsPage() {
       <summary className="cursor-pointer font-semibold">Lịch sử thay đổi</summary>
       <ol className="mt-2 space-y-2">{value.revisionHistory.map(revision => {
         const viewing = revision.revisionId === value.revisionId
-        const text = `Bản lưu ${campusShortStamp(revision.createdAt)} · ${staffRouteStatus(viewing ? value : revision).label}`
+        // A result recorded on another save with the same path names that run, so the row does not read as its own run.
+        const from = historyResultSource(viewing ? value : revision, value.testRuns, value.revisionHistory)
+        const text = `Bản lưu ${campusShortStamp(revision.createdAt)} · ${staffRouteStatus(viewing ? value : revision).label}${from ? ` (${from})` : ''}`
         // With the history, testRuns holds every run of the route; each is listed under the save it was recorded on.
         const runs = value.testRuns.filter(run => run.routeRevisionId === revision.revisionId).sort((a, b) => a.checkedAt.localeCompare(b.checkedAt))
         return <li key={revision.revisionId} className="text-sm">

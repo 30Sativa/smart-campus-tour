@@ -5,7 +5,7 @@ namespace SmartCampus.Infrastructure.Integrations.Invitations;
 
 internal static class TourCancelEmailTemplate
 {
-    internal const string Heading = "Buổi tham quan đã bị huỷ";
+    internal const string Heading = "Buổi tham quan đã bị hủy";
 
     internal static string Subject(TourCancelEmail email) =>
         $"{Heading}: {email.TourName}, {EmailCopy.VietnamTime(email.ScheduledStartAt, "dd/MM")}";

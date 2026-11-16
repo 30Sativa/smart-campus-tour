@@ -3,6 +3,7 @@ using MediatR;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
 
@@ -20,9 +21,11 @@ public sealed record TourRobotOption(string RobotCode, string? DisplayName, bool
 
 /// <summary>
 /// The quick Tour create would make at this moment (B12), by the rule create applies: <see cref="StartBy"/> is its published
-/// time, the robot is held from <see cref="HoldStartsAt"/> to <see cref="HoldEndsAt"/>. A preview; create decides again.
+/// time, the robot is held from <see cref="HoldStartsAt"/> to <see cref="HoldEndsAt"/>. <see cref="AutoCancelAt"/> is when the
+/// system would cancel it unstarted and free the robot (TourAutoCancel.HoldEndsAt, as tour.autoCancelAt). A preview; create decides again.
 /// </summary>
-public sealed record QuickTourPreview(int ExpectedDurationSeconds, DateTimeOffset StartBy, DateTimeOffset HoldStartsAt, DateTimeOffset HoldEndsAt);
+public sealed record QuickTourPreview(int ExpectedDurationSeconds, DateTimeOffset StartBy, DateTimeOffset HoldStartsAt, DateTimeOffset HoldEndsAt,
+    DateTimeOffset AutoCancelAt);
 
 /// <summary>
 /// The Tour form's robot list, judged by the same rule as create and the slots API. <paramref name="Quick"/> also names the
@@ -36,7 +39,8 @@ public sealed class ListTourRobotsQueryValidator : AbstractValidator<ListTourRob
 }
 
 public sealed class ListTourRobotsQueryHandler(IRouteRevisionRepository revisions, IPhysicalRobotRepository robots,
-    IMapVersionRepository maps, ITourManagementRepository tours, TourScheduleSettings settings, TimeProvider clock)
+    IMapVersionRepository maps, ITourManagementRepository tours, TourScheduleSettings settings, FleetCommandSettings fleet,
+    TimeProvider clock)
     : IRequestHandler<ListTourRobotsQuery, IReadOnlyList<TourRobotOption>>
 {
     public async Task<IReadOnlyList<TourRobotOption>> Handle(ListTourRobotsQuery query, CancellationToken ct)
@@ -73,6 +77,6 @@ public sealed class ListTourRobotsQueryHandler(IRouteRevisionRepository revision
         var now = clock.GetUtcNow();
         var startBy = TourSchedule.QuickTourDeadline(now, settings.ShortNoticeMinLead);
         var (startsAt, endsAt) = TourSchedule.QuickTourHold(now, startBy, plan.ExpectedDurationSeconds);
-        return new(plan.ExpectedDurationSeconds, startBy, startsAt, endsAt);
+        return new(plan.ExpectedDurationSeconds, startBy, startsAt, endsAt, TourAutoCancel.HoldEndsAt(startBy, endsAt, fleet.StartLateLimit));
     }
 }

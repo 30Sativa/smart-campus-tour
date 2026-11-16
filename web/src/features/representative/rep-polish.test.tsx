@@ -87,11 +87,11 @@ describe('empty messages (item 1)', () => {
 })
 
 describe('registration of a cancelled Tour (item 2)', () => {
-  it('carries one neutral "Buổi đã huỷ" label and no approval label', async () => {
+  it('carries one neutral "Buổi đã hủy" label and no approval label', async () => {
     vi.mocked(representativeApi.registration).mockResolvedValue(detail({ tourState: 'CANCELLED', tourCancelReason: systemCancel }))
     renderAt('/dai-dien/dang-ky/record')
     const header = (await screen.findByRole('heading', { name: 'Buổi thư viện', level: 1 })).closest('header')!
-    expect(within(header).getByText('Buổi đã huỷ')).toHaveClass('rep-badge--muted')
+    expect(within(header).getByText('Buổi đã hủy')).toHaveClass('rep-badge--muted')
     expect(within(header).queryByText('Có dòng đã duyệt')).toBeNull()
     expect(within(header).queryByText('Đã hủy')).toBeNull()
     expect(within(header).getByText('Đoàn 10A1, Trường kiểm thử')).toBeInTheDocument()
@@ -100,7 +100,7 @@ describe('registration of a cancelled Tour (item 2)', () => {
     const invitations = vi.spyOn(invitationsApi, 'get')
     vi.mocked(representativeApi.registration).mockResolvedValue(detail({ tourState: 'CANCELLED', tourCancelReason: systemCancel }))
     renderAt('/dai-dien/dang-ky/record?tab=invitations')
-    expect(await screen.findByText('Buổi đã huỷ, lời mời không còn dùng được.')).toBeInTheDocument()
+    expect(await screen.findByText('Buổi đã hủy, lời mời không còn dùng được.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Gửi lại email' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Thu hồi và cấp mã mới' })).toBeNull()
     expect(screen.queryByText('Thao tác khác')).toBeNull()
@@ -110,7 +110,7 @@ describe('registration of a cancelled Tour (item 2)', () => {
     renderAt('/dai-dien/dang-ky/record')
     const header = (await screen.findByRole('heading', { name: 'Buổi thư viện', level: 1 })).closest('header')!
     expect(within(header).getByText('Có dòng đã duyệt')).toBeInTheDocument()
-    expect(within(header).queryByText('Buổi đã huỷ')).toBeNull()
+    expect(within(header).queryByText('Buổi đã hủy')).toBeNull()
   })
 })
 
@@ -143,13 +143,13 @@ describe('recent activity (item 5)', () => {
   it('gathers ended registrations of the same kind into one line linking to the Đã hủy tab', () => {
     const items = groupRecentActivity([summary('a'), noStart('b'), noStart('c'), summary('d', { state: 'CANCELLED' }), noStart('e')])
     expect(items.map(item => item.kind === 'group' ? item.label : item.registration.id))
-      .toEqual(['a', '3 buổi bị huỷ vì không bắt đầu đúng giờ', 'd'])
+      .toEqual(['a', '3 buổi bị hủy vì không bắt đầu đúng giờ', 'd'])
     expect(items[1]).toMatchObject({ to: '/dai-dien/dang-ky?nhom=da-huy' })
   })
   it('shows the gathered line on the overview', async () => {
     vi.mocked(representativeApi.registrations).mockResolvedValue(paged([noStart('b'), noStart('c')]))
     renderAt('/dai-dien')
-    expect(await screen.findByText('2 buổi bị huỷ vì không bắt đầu đúng giờ')).toBeInTheDocument()
+    expect(await screen.findByText('2 buổi bị hủy vì không bắt đầu đúng giờ')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Xem các đăng ký đã hủy' })).toHaveAttribute('href', CLOSED_REGISTRATIONS_URL)
   })
 })

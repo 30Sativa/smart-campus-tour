@@ -107,13 +107,14 @@ export type ClosedNote = { badge: string; tone: 'muted' | 'danger'; by: string; 
 
 /**
  * The text stored when the system cancels a Tour that never started. Must stay identical to
- * `TourAutoCancel.Reason` in backend/src/SmartCampus.Application/Features/Tours/TourAutoCancel.cs.
+ * `TourAutoCancel.Reason` in backend/src/SmartCampus.Application/Features/Tours/TourAutoCancel.cs. It is a stored
+ * value matched by text, so it keeps the older "huỷ" spelling the rest of the UI no longer uses.
  */
 const SYSTEM_NO_START_REASON = 'Không bắt đầu trong khung giờ, hệ thống tự huỷ.'
-const SYSTEM_NO_START_TEXT = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại.'
+const SYSTEM_NO_START_TEXT = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị hủy. Đại học FPT sẽ liên hệ nếu sắp xếp lại.'
 
 /** The one neutral label a registration of a cancelled Tour carries. */
-export const TOUR_CANCELLED_LABEL = 'Buổi đã huỷ'
+export const TOUR_CANCELLED_LABEL = 'Buổi đã hủy'
 
 export const isSystemNoStart = (reason?: string | null) => reason?.trim() === SYSTEM_NO_START_REASON
 

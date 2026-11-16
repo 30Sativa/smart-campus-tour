@@ -12,15 +12,15 @@ describe('overdueStartLabel', () => {
 
   it('names the end of the robot hold once the Start window has closed', () => {
     expect(overdueStartLabel({ state: 'READY', scheduledStartAt: start }, hold, at('2026-11-07T01:31:00.000Z')))
-      .toBe('Quá giờ bắt đầu · tự huỷ lúc 10:00')
+      .toBe('Quá giờ bắt đầu · tự hủy lúc 10:00')
     expect(overdueStartLabel({ state: 'SCHEDULED', scheduledStartAt: start }, null, at('2026-11-07T01:31:00.000Z')))
-      .toBe('Quá giờ bắt đầu · tự huỷ lúc 08:30')
+      .toBe('Quá giờ bắt đầu · tự hủy lúc 08:30')
   })
 
   it('reads the moments the server sends instead of its own rule', () => {
     const tour = { state: 'SCHEDULED' as const, scheduledStartAt: start, latestStartAt: '2026-11-07T01:20:00.000Z', autoCancelAt: '2026-11-07T01:25:00.000Z' }
     expect(overdueStartLabel(tour, hold, at('2026-11-07T01:20:00.000Z'))).toBeNull()
-    expect(overdueStartLabel(tour, hold, at('2026-11-07T01:21:00.000Z'))).toBe('Quá giờ bắt đầu · tự huỷ lúc 08:25')
+    expect(overdueStartLabel(tour, hold, at('2026-11-07T01:21:00.000Z'))).toBe('Quá giờ bắt đầu · tự hủy lúc 08:25')
   })
 
   it('never labels a Tour that started or ended', () => {

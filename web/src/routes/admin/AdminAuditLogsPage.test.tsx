@@ -48,7 +48,7 @@ describe('system audit log', () => {
   it('words a system auto-cancel without showing its result code', async () => {
     rows = [{ ...entry, actorUserId: null, actorName: null, resultCode: 'SYSTEM_NO_START' }]
     show()
-    expect(await screen.findByText('Tự huỷ: không bắt đầu đúng giờ')).toBeInTheDocument()
+    expect(await screen.findByText('Tự hủy: không bắt đầu đúng giờ')).toBeInTheDocument()
     expect(screen.getByText('Hệ thống')).toBeInTheDocument()
     expect(screen.queryByText('SYSTEM_NO_START')).not.toBeInTheDocument()
   })

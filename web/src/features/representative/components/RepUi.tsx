@@ -46,7 +46,7 @@ export function InfoList({ items, columns = 2 }: { items: Array<{ label: string;
 function SoftBadge({ label, tone, size = 'sm' }: { label: string; tone: StatusTone; size?: 'sm' | 'md' }) {
   return <span className={`rep-badge rep-badge--${tone}${size === 'md' ? ' rep-badge--md' : ''}`}>{label}</span>
 }
-/** A registration of a cancelled Tour carries one neutral "Buổi đã huỷ", never an approval colour. */
+/** A registration of a cancelled Tour carries one neutral "Buổi đã hủy", never an approval colour. */
 export function RegistrationStatusBadge({ state, rejectionReason, tourState, size }: { state: RegistrationState; rejectionReason?: string | null; tourState?: TourState; size?: 'sm' | 'md' }) {
   if (tourState === 'CANCELLED' && state !== 'CANCELLED') return <SoftBadge label={TOUR_CANCELLED_LABEL} tone="muted" size={size} />
   if (isReviewExpired({ state, rejectionReason })) return <SoftBadge label={REVIEW_EXPIRED_LABEL} tone="muted" size={size} />

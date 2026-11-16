@@ -77,8 +77,14 @@ public sealed record TourShiftBlockView(Guid Id, string Scope, string Reason);
 public static class ScheduleBlockScope { public const string Day = "DAY"; public const string Shift = "SHIFT"; }
 /// <summary><see cref="Tours"/>: as on <see cref="TourShiftView"/>, for closing the whole day.</summary>
 public sealed record TourShiftDay(DateOnly Date, IReadOnlyList<TourShiftView> Shifts, IReadOnlyList<TourShiftTourView>? Tours = null);
-/// <summary><see cref="QuickTourWaitMinutes"/>: how long a quick Tour waits to be started (ADR-0053).</summary>
-public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds, int QuickTourWaitMinutes);
+/// <summary>
+/// <see cref="QuickTourWaitMinutes"/>: how long a quick Tour waits to be started (ADR-0053).
+/// <see cref="EstimatedSpeedMetersPerSecond"/>: the speed <see cref="TourSchedule.EstimatedDurationSeconds"/> uses
+/// (Tours:EstimatedSpeedMetersPerSecond), so the route form estimates an unsaved draft by the same rule
+/// (web/src/features/administration/routes/route-estimate.ts).
+/// </summary>
+public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds, int QuickTourWaitMinutes,
+    double EstimatedSpeedMetersPerSecond = TourScheduleSettings.DefaultEstimatedSpeedMetersPerSecond);
 public sealed record TourTargetView(RouteTestParticipantView? Operator, TourReservationView? Reservation);
 /// <summary>A Tour scheduled from a revision has null Route/ActiveRoute and carries RouteRevision instead.</summary>
 public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDetails? ActiveRoute,

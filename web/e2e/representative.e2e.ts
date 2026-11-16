@@ -47,6 +47,6 @@ test('representative: 3-step registration with Excel import', async ({ page }) =
 test('representative: cancelled-session profile', async ({ page }) => {
   await signIn(page)
   await page.goto(`/dai-dien/dang-ky/${CANCELLED_REGISTRATION_ID}`)
-  await expect(page.getByText('Buổi tham quan đã bị huỷ')).toBeVisible()
+  await expect(page.getByText('Buổi tham quan đã bị hủy')).toBeVisible()
   await capturePage(page, 'rep', 'cancelled-profile', { title: cancelledTour.name })
 })

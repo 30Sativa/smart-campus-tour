@@ -22,7 +22,9 @@ import { useRouteScheduledTours } from '../../../features/administration/routes/
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
 import { RouteMap } from '../../../features/administration/routes/RouteMap'
 import { ShiftLengthWarning } from '../../../features/administration/routes/ShiftLengthWarning'
-import { formatMinutesSeconds } from '../../../components/ui/date-time'
+import { campusDateKey, formatExpectedDuration, formatMinutesSeconds } from '../../../components/ui/date-time'
+import { estimatedRouteSeconds } from '../../../features/administration/routes/route-estimate'
+import { useTourShifts } from '../../../features/administration/tours/hooks'
 import { UnsavedChangesGuard } from '../../../features/administration/UnsavedChangesGuard'
 import { AFTER_SAVE } from '../../../features/administration/after-save'
 import { clearanceMessage, poseClearance, yawDegrees } from '../../../features/administration/pois/map/occupancy-grid'
@@ -159,6 +161,16 @@ export default function StaffManageRouteFormPage() {
   // A stop kept from the edited revision whose POI was retired since; Staff removes it or reactivates the POI.
   const retiredStops = stopPois.filter(poi => poi.proposal?.retiredAt).map(poi => poi.name)
   const totalDwell = stops.reduce((sum, stop) => sum + (Number.isFinite(stop.dwellSeconds) ? stop.dwellSeconds : 0), 0)
+  // The estimate the server will store on Save (TourSchedule.EstimatedDurationSeconds), at the server's own speed, so the
+  // review step warns about a shift the route page would also name. Unknown while a stop's position or the speed is missing.
+  const [today] = useState(() => campusDateKey(Date.now()))
+  const shiftsToday = useTourShifts(today, today, step === STEPS.length - 1)
+  const stopPoints = stops.map(stop => { const poi = stopPoi(stop.poiRevisionId); return poi ? { x: poi.x, y: poi.y, dwellSeconds: stop.dwellSeconds } : null })
+  const estimate = stopPoints.every(point => point !== null) && placed(startPose)
+    ? estimatedRouteSeconds({ x: startPose.x!, y: startPose.y! }, stopPoints.filter(point => point !== null),
+      draft.endMode === 'POSE' && draft.endX != null && draft.endY != null ? { x: draft.endX, y: draft.endY } : null,
+      shiftsToday.data?.estimatedSpeedMetersPerSecond)
+    : null
 
   const missingByStep: string[][] = [
     [!draft.name.trim() && 'nhập tên tuyến', !draft.mapVersionId && 'chọn bản đồ', mapNotReady && 'chọn bản đồ còn đạt kiểm tra kỹ thuật'],
@@ -354,8 +366,11 @@ export default function StaffManageRouteFormPage() {
             <p aria-label="Lộ trình robot đi">{['Bắt đầu', ...stops.map((stop, index) => `${index + 1}. ${poiName(stop.poiRevisionId)}`),
               endChoice === 'LAST_POI' ? 'Kết thúc tại điểm dừng cuối' : endChoice === 'START' ? 'Kết thúc tại điểm bắt đầu' : 'Kết thúc'].join(' → ')}</p>
             <p className="mt-1">Tổng thời gian dừng: <span className="font-semibold">{durationText(totalDwell)}</span></p>
-            <p className="mt-1 text-xs text-[#64748b]">Thời lượng dự kiến được tự tính khi lưu, từ thời gian dừng và quãng đường.</p>
-            <ShiftLengthWarning expectedSeconds={totalDwell} />
+            {estimate != null
+              ? <p className="mt-1">Thời lượng dự kiến khoảng <span className="font-semibold">{formatExpectedDuration(estimate)}</span>
+                <span className="block text-xs text-[#64748b]">Tính từ thời gian dừng và quãng đường robot đi.</span></p>
+              : <p className="mt-1 text-xs text-[#64748b]">{shiftsToday.isPending ? 'Đang tính thời lượng dự kiến…' : 'Chưa tính được thời lượng dự kiến. Hệ thống sẽ tính khi lưu.'}</p>}
+            <ShiftLengthWarning expectedSeconds={estimate} />
           </ReviewRow>
         </dl>
         {pathChange && <div className="mt-3"><Notice tone={keepsResult && keptPass ? 'success' : 'warn'}>

@@ -277,6 +277,7 @@ describe('live Tour management', () => {
     const failed = { id: 'run-9', routeRevisionId: 'revision-3', resultCode: 'FAIL', allStopsReached: false, safelyStopped: true, localizationPassed: true,
       failureReason: 'Kẹt ở cửa', checkedAt: '2026-11-16T12:09:00Z', robotCode: 'amr-01' }
     currentRevision = { ...TESTED, revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'FAIL',
+      sharedResultRevisions: [{ revisionId: 'revision-2', revisionNumber: 3, createdAt: '2026-11-16T08:00:00Z', scheduledTours: [] }],
       revisionHistory: [{ revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'FAIL', createdAt: '2026-11-16T09:00:00Z' }] }
     api(tour({ ...versionedTour, routeRevision: { ...TESTED, verificationStatus: 'FAIL', effectiveTestRunId: 'run-9', testRuns: [failed] } as unknown as TourDetails['routeRevision'] }))
     renderAt('/staff/manage/tours/tour-1')
@@ -284,6 +285,29 @@ describe('live Tour management', () => {
     expect(screen.queryByText(/Tuyến đã chạy thử đạt ngày/)).not.toBeInTheDocument()
     expect(await screen.findByText(/bản đó đang có kết quả chạy thử không đạt/)).toBeInTheDocument()
     expect(screen.queryByText(/Tour này vẫn chạy bản đã chọn lúc tạo/)).not.toBeInTheDocument()
+    // Same path: the newer save shares the FAIL, so a pass on this path is the fix, not a new Tour.
+    expect(screen.getByText(/Khi Kỹ thuật ghi một lần chạy đạt cho đường đi này, Tour chốt được lại, không cần tạo lại Tour\./)).toBeInTheDocument()
+    expect(screen.queryByText(/hủy Tour và tạo lại|hủy Tour rồi tạo lại/)).not.toBeInTheDocument()
+  })
+
+  it('on a failed Tour save, advises recreating only when the newer save has another path and passed', async () => {
+    const failed = { id: 'run-9', routeRevisionId: 'revision-2', resultCode: 'FAIL', allStopsReached: false, safelyStopped: true, localizationPassed: true,
+      failureReason: 'Kẹt ở cửa', checkedAt: '2026-11-16T12:09:00Z', robotCode: 'amr-01' }
+    const failedTour = tour({ ...versionedTour, routeRevision: { ...TESTED, verificationStatus: 'FAIL', effectiveTestRunId: 'run-9', testRuns: [failed] } as unknown as TourDetails['routeRevision'] })
+    currentRevision = { ...TESTED, revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'PASS', sharedResultRevisions: [],
+      revisionHistory: [{ revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'PASS', createdAt: '2026-11-16T09:00:00Z' }] }
+    api(failedTour)
+    const view = renderAt('/staff/manage/tours/tour-1')
+    expect(await screen.findByText(/Bản mới có đường đi khác và đã chạy thử đạt: muốn Tour đi theo bản mới, hủy Tour rồi tạo lại\./)).toBeInTheDocument()
+    view.unmount()
+
+    // Another path that has not passed yet: recreating would not help, the Tour's own path needs a pass.
+    currentRevision = { ...TESTED, revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'NOT_TESTED', sharedResultRevisions: [],
+      revisionHistory: [{ revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'NOT_TESTED', createdAt: '2026-11-16T09:00:00Z' }] }
+    api(failedTour)
+    renderAt('/staff/manage/tours/tour-1')
+    expect(await screen.findByText(/Khi Kỹ thuật ghi một lần chạy đạt cho đường đi của bản Tour đang dùng, Tour chốt được lại, không cần tạo lại Tour\./)).toBeInTheDocument()
+    expect(screen.queryByText(/hủy Tour và tạo lại|hủy Tour rồi tạo lại/)).not.toBeInTheDocument()
   })
 
   it('does not advise recreating the Tour on a newer save that also has a retired POI', async () => {
@@ -335,7 +359,7 @@ describe('live Tour management', () => {
     api()
     renderAt('/staff/manage/tours/new?route=revision-2')
     expect(screen.queryByLabelText('Tên Tour')).not.toBeInTheDocument()
-    expect(await screen.findByText('Chưa bắt đầu sau 60 phút thì tự huỷ')).toBeInTheDocument()
+    expect(await screen.findByText('Chưa bắt đầu sau 60 phút thì tự hủy')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Tour nhanh/ }))
     expect(await screen.findByLabelText(/Lý do tạo gấp/)).toBeInTheDocument()
     // A quick Tour has no date or shift (ADR-0053).
@@ -413,7 +437,7 @@ describe('live Tour management', () => {
   })
 
   it('previews the expected duration and robot hold the server would give a quick Tour created now (B12)', async () => {
-    const quick = { expectedDurationSeconds: 1260, startBy: '2099-01-03T01:30:00.000Z', holdStartsAt: '2099-01-03T01:00:00.000Z', holdEndsAt: '2099-01-03T02:06:00.000Z' }
+    const quick = { expectedDurationSeconds: 1260, startBy: '2099-01-03T01:30:00.000Z', holdStartsAt: '2099-01-03T01:00:00.000Z', holdEndsAt: '2099-01-03T02:06:00.000Z', autoCancelAt: '2099-01-03T02:06:00.000Z' }
     robotRows = [{ ...BASE_ROBOTS[0], quick }]
     api()
     renderAt('/staff/manage/tours/new?kind=quick')
@@ -423,6 +447,10 @@ describe('live Tour management', () => {
     fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
     expect(await how.findByText(`${formatDuration(1260)} (tự tính từ thời gian dừng và quãng đường)`)).toBeInTheDocument()
     expect(how.getByText(`Bắt đầu trước ${formatTime(quick.startBy)}, giữ robot ${formatTime(quick.holdStartsAt)} - ${formatTime(quick.holdEndsAt)}`, { exact: false })).toBeInTheDocument()
+    // D4: the auto-cancel moment is the server's (quick.autoCancelAt), and the deadline note says Start may still come 15 minutes late.
+    expect(how.getByText(`Chưa bắt đầu thì tự hủy lúc ${formatTime(quick.autoCancelAt)}.`)).toBeInTheDocument()
+    expect(how.getByText('Đã chốt thì còn bắt đầu muộn tối đa 15 phút sau hạn. Chưa bắt đầu thì hệ thống tự hủy và trả robot khi hết khung giữ robot.')).toBeInTheDocument()
+    expect(how.queryByText(/trước hạn thì hệ thống tự/)).not.toBeInTheDocument()
   })
 
   it('opens the quick form from an old ?kind=short link', async () => {
@@ -448,7 +476,7 @@ describe('live Tour management', () => {
     fireEvent.change(screen.getByLabelText(/Lý do tạo gấp/), { target: { value: 'Trình diễn cho đoàn khách.' } })
     expect(screen.queryByText(/^Cần:/)).not.toBeInTheDocument()
     // The Tour keeps its own fallback video (group H removed only the POI one); the label says when it is used.
-    fireEvent.change(screen.getByLabelText('Video dự phòng khi Tour bị huỷ giữa chừng (không bắt buộc)'), { target: { value: 'https://cdn.example/tour.mp4' } })
+    fireEvent.change(screen.getByLabelText('Video dự phòng khi Tour bị hủy giữa chừng (không bắt buộc)'), { target: { value: 'https://cdn.example/tour.mp4' } })
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
     await waitFor(() => expect(writes).toHaveLength(1))
     expect(useToastStore.getState().toasts.at(-1)).toMatchObject({ title: 'Đã tạo Tour “Tour trình diễn”', detail: 'Robot đã được giữ.' })

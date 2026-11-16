@@ -80,7 +80,7 @@ public sealed class RetireMapVersionCommandHandler(IMapVersionRepository reposit
                     .ToArray());
         if (impact.UpcomingTours.Count > 0)
             throw new ConflictException(
-                "Còn Tour đã lên lịch hoặc sẵn sàng dùng tuyến trên phiên bản này. Huỷ hoặc đổi tuyến các Tour đó trước.",
+                "Còn Tour đã lên lịch hoặc sẵn sàng dùng tuyến trên phiên bản này. Hủy hoặc đổi tuyến các Tour đó trước.",
                 MapRetirementCodes.UpcomingTours,
                 blockers: impact.UpcomingTours.Select(tour => new ConflictBlocker("TOUR", tour.Name)).ToArray());
 

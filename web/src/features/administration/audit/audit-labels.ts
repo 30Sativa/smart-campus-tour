@@ -102,7 +102,7 @@ const RESULT_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'dang
   SUCCESS: { label: 'Thành công', tone: 'ok' }, OK: { label: 'Thành công', tone: 'ok' }, PASS: { label: 'Đạt', tone: 'ok' },
   FAIL: { label: 'Không đạt', tone: 'danger' }, FAILED: { label: 'Thất bại', tone: 'danger' },
   ACCEPTED: { label: 'Đã gửi', tone: 'ok' }, PENDING: { label: 'Đang chờ', tone: 'muted' }, UNKNOWN: { label: 'Chưa rõ kết quả', tone: 'warn' },
-  SYSTEM: { label: 'Tự động', tone: 'muted' }, SYSTEM_NO_START: { label: 'Tự huỷ: không bắt đầu đúng giờ', tone: 'warn' },
+  SYSTEM: { label: 'Tự động', tone: 'muted' }, SYSTEM_NO_START: { label: 'Tự hủy: không bắt đầu đúng giờ', tone: 'warn' },
   DRAFT: { label: 'Đã lưu, chưa gửi', tone: 'muted' }, SUBMITTED: { label: 'Đã gửi', tone: 'muted' }, IMPORTED: { label: 'Đã nhập', tone: 'ok' },
   DISCARDED: { label: 'Đã bỏ', tone: 'muted' }, APPROVED: { label: 'Đã duyệt', tone: 'ok' },
 }

@@ -3,7 +3,7 @@ import { formatExpectedDuration } from '../../../components/ui/date-time'
 import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
 import type { RouteScheduledTour, RouteSharedResultRevision, RouteTestRun, VersionedRoute } from './versioned-api'
-import { campusShortStamp } from '../tours/tour-calendar'
+import { campusShortDate, campusShortStamp, campusTime } from '../tours/tour-calendar'
 
 const fitMinutes = formatExpectedDuration
 
@@ -59,6 +59,25 @@ export function resultSource(route: AppliedRunRoute & Pick<VersionedRoute, 'revi
   const run = appliedRun(route)
   if (!run || run.routeRevisionId === route.revisionId) return undefined
   return route.sharedResultRevisions?.find(item => item.revisionId === run.routeRevisionId)
+}
+
+/**
+ * "theo lần chạy 16/11 19:09 trên bản lưu 18:51" for a history row whose Đạt/Không đạt comes from a run recorded on
+ * another save with the same path (ADR-0023 addendum). The save shows only its time when it is the same day as the run.
+ * Null when the row has no applied result, the run was recorded on this save, or the data does not name the run's save.
+ */
+export function historyResultSource(
+  revision: { revisionId: string; verificationStatus: string; effectiveTestRunId: string | null },
+  testRuns: Pick<RouteTestRun, 'id' | 'routeRevisionId' | 'checkedAt'>[],
+  history: { revisionId: string; createdAt: string }[],
+): string | null {
+  if (!['PASS', 'FAIL'].includes(revision.verificationStatus) || !revision.effectiveTestRunId) return null
+  const run = testRuns.find(item => item.id === revision.effectiveTestRunId)
+  if (!run || run.routeRevisionId === revision.revisionId) return null
+  const save = history.find(item => item.revisionId === run.routeRevisionId)
+  if (!save) return null
+  const saveStamp = campusShortDate(save.createdAt) === campusShortDate(run.checkedAt) ? campusTime(save.createdAt) : campusShortStamp(save.createdAt)
+  return `theo lần chạy ${campusShortStamp(run.checkedAt)} trên bản lưu ${saveStamp}`
 }
 
 /** The checks a run did not pass, in the words of the record form. */

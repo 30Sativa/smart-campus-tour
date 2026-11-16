@@ -6,8 +6,8 @@ import type { ClosedKind } from './rep-format'
 export const CLOSED_REGISTRATIONS_URL = `/dai-dien/dang-ky?nhom=${REGISTRATION_GROUPS.find(group => group.group === 'closed')!.slug}`
 
 const GROUP_LABEL: Record<ClosedKind, (count: number) => string> = {
-  'tour-no-start': count => `${count} buổi bị huỷ vì không bắt đầu đúng giờ`,
-  'tour-cancelled': count => `${count} buổi bị Đại học FPT huỷ`,
+  'tour-no-start': count => `${count} buổi bị hủy vì không bắt đầu đúng giờ`,
+  'tour-cancelled': count => `${count} buổi bị Đại học FPT hủy`,
   'self-cancelled': count => `${count} đăng ký bạn đã hủy`,
   'review-expired': count => `${count} đăng ký hết hạn duyệt`,
   rejected: count => `${count} đăng ký bị từ chối`,
@@ -19,7 +19,7 @@ export type RecentActivityItem =
 
 /**
  * "Hoạt động gần đây": ended registrations that ended the same way are read as one line, such as
- * "3 buổi bị huỷ vì không bắt đầu đúng giờ", linking to the "Đã hủy" tab. A kind seen once stays a
+ * "3 buổi bị hủy vì không bắt đầu đúng giờ", linking to the "Đã hủy" tab. A kind seen once stays a
  * normal card. A gathered line takes the place of its newest record, so the list keeps its order.
  */
 export function groupRecentActivity(registrations: readonly RegistrationSummary[]): RecentActivityItem[] {

@@ -44,6 +44,8 @@ let currentRoute = structuredClone(route)
 let scheduledTours: unknown[] = []
 let clearanceMeters: number | undefined
 let createFailure: Response | null = null
+// GET .../tours/shifts for the review step's estimate; null data until a test sets it.
+let tourShifts: unknown = null
 
 function renderAt(path: string, client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
@@ -69,6 +71,7 @@ describe('Staff versioned Route workflow', () => {
     clearanceMeters = undefined
     createFailure = null
     scheduledTours = []
+    tourShifts = null
     useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'staff-token', user: { userId: 'staff-1', username: 'staff', role: 'Staff' } })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://localhost'); requests.push({ url, init })
@@ -79,6 +82,7 @@ describe('Staff versioned Route workflow', () => {
       if (url.pathname === '/api/staff/routes' && init?.method === 'POST') return createFailure ?? response(route)
       if (url.pathname === '/api/routes/route-1/revisions') return response(currentRoute)
       if (url.pathname === '/api/staff/routes/route-1/scheduled-tours') return response(scheduledTours)
+      if (url.pathname === '/api/staff/manage/tours/shifts') return response(tourShifts)
       if (url.pathname === '/api/staff/routes/route-1/revisions/route-rev-1/submit') {
         await new Promise(resolve => setTimeout(resolve, 40))
         if (submissionFailure) return new Response(JSON.stringify(submissionFailureBody ?? { message: submissionFailure === 409 ? 'Revision đã cũ.' : 'Lỗi máy chủ.' }), { status: submissionFailure })
@@ -321,8 +325,8 @@ describe('Staff versioned Route workflow', () => {
       currentRoute = { ...route, stops: [oldStop('poi-rev-pass-old', 'p-pass', 'Old entrance', 9.8), oldStop('poi-rev-hall-old', 'p-hall', 'Old hall', 11.4), oldStop('poi-rev-pending-old', 'p-pending', 'Old pending', 12)] } as typeof route
       renderAt('/staff/manage/routes/route-1')
       const notice = (await screen.findByText(/có phiên bản mới đã đạt/)).closest('[role="alert"]')!
-      expect(notice).toHaveTextContent('POI Old entrance, Old hall có phiên bản mới đã đạt. Sửa tuyến để dùng bản mới. Đổi vị trí, hướng hoặc camera thì tuyến phải chạy thử lại.')
-      expect(within(notice as HTMLElement).getByRole('link', { name: 'Sửa tuyến' })).toHaveAttribute('href', '/staff/manage/routes/route-1/edit')
+      expect(notice).toHaveTextContent('POI Old entrance, Old hall có phiên bản mới đã đạt. Bấm Sửa tuyến ở đầu trang để dùng bản mới. Đổi vị trí, hướng hoặc camera thì tuyến phải chạy thử lại.')
+      expect(within(notice as HTMLElement).queryByRole('link', { name: 'Sửa tuyến' })).not.toBeInTheDocument()
     })
 
     it('says nothing about newer POI revisions on an older, read-only route revision', async () => {
@@ -408,9 +412,24 @@ describe('Staff versioned Route workflow', () => {
     expect(review.getByText('Quay về điểm bắt đầu')).toBeInTheDocument()
     expect(review.getByLabelText('Lộ trình robot đi')).toHaveTextContent('Bắt đầu → 1. Verified entrance → 2. Verified hall → Kết thúc tại điểm bắt đầu')
     expect(review.getByText('5 phút 30 giây')).toBeInTheDocument()
-    expect(review.getByText('Thời lượng dự kiến được tự tính khi lưu, từ thời gian dừng và quãng đường.')).toBeInTheDocument()
+    // Without the server's speed the estimate is not guessed.
+    expect(await review.findByText('Chưa tính được thời lượng dự kiến. Hệ thống sẽ tính khi lưu.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Quay lại/ }))
     expect(screen.getByRole('button', { name: /Bước 3/ })).toHaveAttribute('aria-current', 'step')
+  })
+
+  // D2: the review step estimates as the server will (dwell plus travel at its speed), not from dwell alone.
+  it('shows the expected length with travel and warns about a shift the dwell alone would fit', async () => {
+    const shift = { code: 'S9', name: 'Ca ngắn', startsAt: '2099-01-01T01:00:00Z', endsAt: '2099-01-01T01:31:00Z', tourStartsAt: '2099-01-01T01:15:00Z', time: '08:15', maxDurationSeconds: 60, block: null }
+    tourShifts = { days: [{ date: '2099-01-01', shifts: [shift] }], recommendedMaxSeconds: 3600, quickTourWaitMinutes: 30, estimatedSpeedMetersPerSecond: 0.25 }
+    await fillNewRoute()
+    const review = within(screen.getByRole('region', { name: 'Xem lại và lưu' }))
+    // Dwell 30 + 30 s (1 minute, fits Ca ngắn); parking -> entrance -> hall is 2.4 m = 10 s, so 70 s reads 2 minutes.
+    expect(review.getByText('1 phút')).toBeInTheDocument()
+    expect(await review.findByText('2 phút')).toBeInTheDocument()
+    expect(review.getByText(/Thời lượng dự kiến khoảng/)).toHaveTextContent('Thời lượng dự kiến khoảng 2 phút')
+    expect(await review.findByText('Dài hơn Ca ngắn (1 phút): không tạo được Tour ở Ca ngắn')).toBeInTheDocument()
+    expect(review.queryByText(/tự tính khi lưu/)).not.toBeInTheDocument()
   })
 
   it('lets a kept start skip the clearance check, as the server does, but flags a newly placed one', async () => {
@@ -536,13 +555,37 @@ describe('Staff versioned Route workflow', () => {
     expect(within(banner).getByText('Lý do: Kẹt ở cửa')).toBeInTheDocument()
     expect(within(within(banner).getByRole('list', { name: 'Mục không đạt' })).getAllByRole('listitem').map(item => item.textContent)).toEqual(['đi đủ điểm dừng', 'định vị'])
     expect(within(banner).getByText('Robot amr-01 · Staff đi cùng Lan Staff · ghi bởi Kỹ thuật Minh · ghi lúc 16/11 19:09')).toBeInTheDocument()
-    expect(within(banner).getByRole('link', { name: 'Sửa tuyến' })).toHaveAttribute('href', '/staff/manage/routes/route-1/edit')
+    // D7: one "Sửa tuyến" button, in the header; the banner and the retired-POI notice only say what to do.
+    expect(within(banner).queryByRole('link', { name: 'Sửa tuyến' })).not.toBeInTheDocument()
+    expect(within(banner).getByText('Bấm Sửa tuyến ở đầu trang để sửa chỗ không đạt, rồi gửi chạy thử lại.')).toBeInTheDocument()
+    expect(screen.getByText(/Tuyến có POI đã ngưng dùng: Verified hall\..*Bấm Sửa tuyến ở đầu trang để lưu phiên bản mới không có POI này, hoặc dùng lại POI\./)).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Sửa tuyến' })).toHaveLength(1)
+    expect(screen.getByRole('link', { name: 'Sửa tuyến' })).toHaveAttribute('href', '/staff/manage/routes/route-1/edit')
     // B6: the run is in the change history under its save.
     expect(screen.getByText(/Chạy thử 16\/11 19:09 · Không đạt · robot amr-01/)).toBeInTheDocument()
     page.unmount()
 
     renderAt('/staff/manage/routes/route-1/edit')
     expect(within(await screen.findByRole('region', { name: 'Kết quả chạy thử không đạt' })).getByText('Lý do: Kẹt ở cửa')).toBeInTheDocument()
+  })
+
+  // D5: a save whose result comes from a run recorded on another save with the same path names that run in the history.
+  it('names the run and save behind a history row whose result was recorded on another save', async () => {
+    const fail = { id: 'run-9', routeRevisionId: 'route-rev-1', robotCode: 'amr-01', checkedByUserId: 'tech-1', participatingStaffUserId: 'staff-1', resultCode: 'FAIL', allStopsReached: true, safelyStopped: true, localizationPassed: false, measuredDurationSeconds: 600, failureReason: 'Lệch', evidenceNote: 'ok', checkedAt: '2026-11-16T12:09:00Z', measurementBasis: 'TOTAL_WITH_DWELL' }
+    const pass = { ...fail, id: 'run-pass', resultCode: 'PASS', localizationPassed: true, failureReason: null, checkedAt: '2026-11-17T02:00:00Z' }
+    const first = { ...route.revisionHistory[0], isSubmitted: true, verificationStatus: 'FAIL', effectiveTestRunId: 'run-9', createdAt: '2026-11-16T11:51:00Z' }
+    const second = { ...first, revisionId: 'route-rev-2', revisionNumber: 2, createdAt: '2026-11-16T05:23:00Z' }
+    const third = { ...first, revisionId: 'route-rev-3', revisionNumber: 3, verificationStatus: 'PASS', effectiveTestRunId: 'run-pass', createdAt: '2026-11-17T01:00:00Z' }
+    currentRoute = { ...currentRoute, revisionId: 'route-rev-2', revisionNumber: 2, isSubmitted: true, verificationStatus: 'FAIL', effectiveTestRunId: 'run-9', testRuns: [fail, pass], revisionHistory: [third, second, first] } as unknown as typeof route
+    renderAt('/staff/manage/routes/route-1?revisionId=route-rev-2')
+    await screen.findByRole('region', { name: 'Kết quả chạy thử không đạt' })
+    const history = within(screen.getByText('Lịch sử thay đổi').closest('details')!)
+    // Same day as the run: the save gives only its time.
+    expect(history.getByText('Bản lưu 16/11 12:23 · Chạy thử không đạt (theo lần chạy 16/11 19:09 trên bản lưu 18:51) (đang xem)')).toBeInTheDocument()
+    // The save the run was recorded on reads plainly.
+    expect(history.getByRole('link', { name: 'Bản lưu 16/11 18:51 · Chạy thử không đạt' })).toBeInTheDocument()
+    // Another day: the save gives its date too.
+    expect(history.getByRole('link', { name: 'Bản lưu 17/11 08:00 · Đã chạy thử đạt (theo lần chạy 17/11 09:00 trên bản lưu 16/11 18:51)' })).toBeInTheDocument()
   })
 
   it('labels a route too long for one shift in red and one over the recommendation in amber', async () => {
