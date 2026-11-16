@@ -84,6 +84,13 @@ export const hasScheduledToursOnPath = (route: Pick<VersionedRoute, 'sharedResul
   Boolean(route.scheduledTours?.length || route.sharedResultRevisions?.some(save => save.scheduledTours.length))
 
 /**
+ * "x phút y giây". `formatDuration` in components/ui/date-time.ts drops the seconds above a minute, which hides a 15 s
+ * dwell change, so route screens keep this one until the shared formatter covers it.
+ */
+export const dwellText = (seconds: number) =>
+  seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
+
+/**
  * What a save means for its run, after Staff saved or submitted it: it keeps the result of its path (only dwell or
  * narration changed), it needs a new run, or it is not submitted yet.
  */

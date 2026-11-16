@@ -90,6 +90,8 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const today = campusDay(new Date())
   // Only for the wait shown to Staff; the server sets the quick Tour's latest Start when it creates it.
   const waitMinutes = useTourShifts(today, today, quick).data?.quickTourWaitMinutes
+  // B12: the server's preview of the quick Tour create would make now; the same for every robot of the route.
+  const quickPreview = quick ? (robots.data?.find(robot => robot.robotCode === robotCode) ?? robots.data?.[0])?.quick : null
   const maps = useMapVersions()
   const selected = routes.data?.find(route => route.revisionId === routeRevisionId)
   const selectedArea = maps.data?.find(item => item.map.id === selected?.mapVersionId)?.map.areaName
@@ -208,6 +210,11 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
           <Review label="Giữ robot">{QUICK_TOUR_RULES.hold.value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.hold.note}</span></Review>
           <Review label="Bắt đầu">{QUICK_TOUR_RULES.start.value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.start.note}</span></Review>
           <Review label="Hạn bắt đầu">{QUICK_TOUR_RULES.deadline(waitMinutes).value}<span className="block text-xs text-muted">{QUICK_TOUR_RULES.deadline(waitMinutes).note}</span></Review>
+          {quickPreview && <>
+            <Review label="Thời lượng dự kiến">{formatExpectedDuration(quickPreview.expectedDurationSeconds)} (tự tính từ thời gian dừng và quãng đường)</Review>
+            <Review label="Nếu tạo lúc này">Bắt đầu trước {formatTime(quickPreview.startBy)}, giữ robot {formatTime(quickPreview.holdStartsAt)} - {formatTime(quickPreview.holdEndsAt)}
+              <span className="block text-xs text-muted">Giờ chính xác được tính lại lúc bấm Tạo Tour.</span></Review>
+          </>}
           <Review label="Đóng đăng ký">{QUICK_TOUR_RULES.registration}</Review>
           <Review label="Sức chứa">{capacity} chỗ</Review>
         </dl>

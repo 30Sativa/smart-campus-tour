@@ -39,6 +39,37 @@ export const QUICK_TOUR_RULES = {
 /** Where a Representative opens a Tour to register a group (`/dai-dien/buoi/:tourId` in app/router). */
 export const representativeTourPath = (tourId: string) => `/dai-dien/buoi/${encodeURIComponent(tourId)}`
 
+type QuickTourTimes = { scheduledStartAt: string; latestStartAt?: string | null; autoCancelAt?: string | null }
+
+/**
+ * What the share panel of a SCHEDULED quick Tour says (A3). Before the published start the Representative link is
+ * still worth sending; after it the Tour can no longer be locked, so the link goes and Staff can only wait for the
+ * system cancel or cancel now. `latestStartAt`/`autoCancelAt` come from the server (the rule Start and the cancel
+ * worker apply); a sentence whose time the server did not send is left out rather than guessed.
+ */
+export function quickTourDeadline(tour: QuickTourTimes, now: number, time: (iso: string) => string) {
+  const passed = now >= new Date(tour.scheduledStartAt).getTime()
+  const latest = tour.latestStartAt ? time(tour.latestStartAt) : null
+  const cancelAt = tour.autoCancelAt ? time(tour.autoCancelAt) : null
+  if (!passed) {
+    const left = countdownText(tour.scheduledStartAt, now)
+    return {
+      passed, timerLabel: 'Thời gian còn lại để bắt đầu', chip: left ? `Còn ${left}` : null,
+      text: [`Bắt đầu trước ${time(tour.scheduledStartAt)}.`,
+        latest && `Đã chốt thì còn bắt đầu được tới ${latest}.`,
+        cancelAt && `Chưa bắt đầu thì hệ thống tự huỷ và trả robot lúc ${cancelAt}.`].filter(Boolean).join(' '),
+    }
+  }
+  const left = tour.autoCancelAt ? countdownText(tour.autoCancelAt, now) : null
+  return {
+    passed, timerLabel: 'Thời gian còn lại tới lúc tự huỷ',
+    chip: left ? `Tự huỷ sau ${left}` : tour.autoCancelAt ? 'Đang tự huỷ' : 'Quá giờ bắt đầu',
+    text: cancelAt
+      ? `Đã quá giờ bắt đầu, không chốt được nữa. Hệ thống sẽ tự huỷ lúc ${cancelAt}, hoặc bạn huỷ ngay.`
+      : 'Đã quá giờ bắt đầu, không chốt được nữa. Hệ thống sẽ tự huỷ, hoặc bạn huỷ ngay.',
+  }
+}
+
 /** "28:41" until the deadline; null once it has passed. */
 export function countdownText(deadline: string, now: number): string | null {
   const left = Math.floor((new Date(deadline).getTime() - now) / 1000)

@@ -61,7 +61,7 @@ export default function StaffManageTourDetailPage() {
       action={permissions.canEditMetadata ? <Link to={`/staff/manage/tours/${tour.id}/edit`} className={buttonClass('secondary')}>Sửa</Link> : undefined} />
     <TourReadyPanel detail={data} />
     {/* One line of guidance per state: a new quick Tour's share panel says what to do next, so the registration notice is for a Tour on a shift. */}
-    {tour.isShortNotice && tour.state === 'SCHEDULED' && <QuickTourShare tour={tour} />}
+    {tour.isShortNotice && tour.state === 'SCHEDULED' && <QuickTourShare tour={tour} onCancel={permissions.canCancel ? () => { cancel.reset(); setConfirming(true) } : undefined} />}
     {tour.state === 'SCHEDULED' && !tour.isShortNotice && <div className="mb-3"><Notice tone="info">{isRegistrationClosed(tour, now) ? 'Đã đóng đăng ký, Đại diện trường không thêm đoàn mới được nữa. Duyệt nốt đơn còn chờ ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.' : 'Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.'}</Notice></div>}
     {overdue && <div className="mb-3"><Notice tone="warn">{overdue}. Hệ thống tự huỷ Tour không được bắt đầu trong khung giờ.</Notice></div>}
 

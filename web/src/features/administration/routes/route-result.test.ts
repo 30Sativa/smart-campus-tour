@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { appliedFail, failedCheckNames, passedAt, resultSource, revisionTone, routeChanges, saveResultText, sharedResultLine, staffRouteStatus, type RoutePathShape } from './route-messages'
+import { appliedFail, dwellText, failedCheckNames, passedAt, resultSource, revisionTone, routeChanges, saveResultText, sharedResultLine, staffRouteStatus, type RoutePathShape } from './route-messages'
 import type { RouteTestRun, VersionedRoute } from './versioned-api'
 
 const run = (over: Partial<RouteTestRun>): RouteTestRun => ({
@@ -54,5 +55,11 @@ describe('what a save means for its run (B1)', () => {
     expect(saveResultText({ isSubmitted: true, verificationStatus: 'PASS' })).toMatch(/giữ kết quả chạy thử đạt/)
     expect(saveResultText({ isSubmitted: true, verificationStatus: 'NOT_TESTED' })).toMatch(/cần Kỹ thuật chạy thử lại/)
     expect(saveResultText({ isSubmitted: false, verificationStatus: 'PASS' })).toMatch(/^Chưa gửi kiểm chứng/)
+  })
+
+  it('prints dwell totals in minutes and seconds', () => {
+    expect(dwellText(1800)).toBe('30 phút')
+    expect(dwellText(75)).toBe('1 phút 15 giây')
+    expect(dwellText(45)).toBe('45 giây')
   })
 })
