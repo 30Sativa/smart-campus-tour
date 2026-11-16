@@ -1724,6 +1724,17 @@ Staff or owner Representative GET /api/registrations/{registrationId}/invitation
 returns enabled/canIssue and items with approved row identity, version, expiry,
 revocation, latest email status and action gates. Codes/hashes/ciphertext/session
 credentials are never returned. Staff has organization-wide support; a Representative can access only their own group's invitations; Admin is denied.
+Each item also carries viewer presence (since 2026-11-16): `viewerPresence`
+`NOT_ENTERED | CONNECTED | DISCONNECTED | LEFT`, `firstEnteredAt`, `lastSeenAt`
+(most recent session) and `sessionExpiresAt` (open session only, else null).
+A session is open while EndedAt is null and ExpiresAt is in the future.
+NOT_ENTERED: the invitation never had a session. CONNECTED: an open session
+seen within the two-minute reconnect grace. DISCONNECTED: an open session not
+seen within the grace; the code stays held until `sessionExpiresAt`. LEFT: it
+had a session but none is open (left, idle-expired, revoked or reissued; an
+unclosed session past ExpiresAt counts as LEFT). `firstEnteredAt` survives
+reissue. One shared rule beside the reconnect policy computes it. No IP,
+device token or browser detail is returned.
 POST the same path + /issue with requestId (UUID), expectedRowVersion
 (registration), expectedTourRowVersion to fill missing invitations of previously
 approved groups. POST + /{invitationId}/resend, /reissue or /revoke with requestId
@@ -1756,14 +1767,22 @@ The per-Tour cookie is HttpOnly, Secure, SameSite=None and scoped to that API
 path; SQL stores only its HMAC. Exact browser-origin checks protect cookie
 mutations. Join is limited to 60 requests/minute/IP. A shared Tour lock and SQL
 filtered UNIQUE enforce one active session; expired sessions close before INSERT.
-The same cookie/tabs reuse it; competing browsers get 409 INVITATION_IN_USE.
+The same cookie/tabs reuse it; competing browsers get 409 INVITATION_IN_USE
+(message tells the viewer to ask the Representative or Staff for a new code;
+no hint whether the other browser is still connected).
 Wrong-Tour/invalid/expired/revoked access gets a generic 401. Heartbeats retain the
 session for configured SessionIdleMinutes (default 10), bounded by invitation
 expiry. Reconnect/heartbeat is a separate two-minute grace from the active
 session's `LastSeenAt`: both the session and device cookies may be presented,
 or a matching device cookie alone may recover that browser by rotating the
 session token. A stale session cookie does not bypass the grace, and the
-10-minute idle lease does not enlarge it. The Tour-scoped device token is a
+10-minute idle lease does not enlarge it. When the code matched (after the
+lock) or the session/device cookie matched but that browser's grace has passed
+while its session is still open, the response is 409
+`RECONNECT_WINDOW_EXPIRED` (since 2026-11-16; was the generic 401) with
+`errors.fields.retryAfterSeconds` (string array, like `remainingSeats`) = seconds until that session's ExpiresAt; the viewer
+asks for a new code or retries after it. Every other refusal keeps the generic
+401. The Tour-scoped device token is a
 browser credential, never an IP-derived identity. First successful entry
 records INVITATION_ENTERED once per invitation.
 

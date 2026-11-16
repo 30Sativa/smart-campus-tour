@@ -119,9 +119,15 @@ và `pendingEmail`. Dòng đã nhận giữ nguyên ID, mã và phiên khi dòng
 chờ. Web sẽ bỏ hộp thoại Staff sửa email trực tiếp (`EmailCorrectionDialog`)
 khi luồng yêu cầu/duyệt có API.
 
-**Phiên người xem:** vào lại cùng thiết bị trong 2 phút trả về đúng chỗ; thiết
-bị thứ hai nhận 409 `SESSION_IN_USE` (web đã có câu thông báo cho 409). Giới
-hạn nhập sai mã: 429 kèm `retryAfterSeconds`.
+**Phiên người xem:** vào lại cùng thiết bị trong 2 phút trả về đúng chỗ; trình
+duyệt thứ hai nhận 409 `INVITATION_IN_USE` (backend dùng mã này, không phải
+`SESSION_IN_USE`). Cùng trình duyệt nhưng mất kết nối quá 2 phút khi phiên cũ
+còn hạn nhận 409 `RECONNECT_WINDOW_EXPIRED` kèm `errors.fields.retryAfterSeconds` (string array, like `remainingSeats`) (số
+giây tới khi phiên cũ hết hạn); các trường hợp khác vẫn là 401 chung. GET
+`/api/registrations/{registrationId}/invitations` trả thêm cho mỗi mã
+`viewerPresence` (`NOT_ENTERED | CONNECTED | DISCONNECTED | LEFT`),
+`firstEnteredAt`, `lastSeenAt`, `sessionExpiresAt`; ý nghĩa ở
+`docs/architecture.md`. Giới hạn nhập sai mã: 429 kèm `retryAfterSeconds`.
 
 ## W5. Nội dung đã duyệt, hỏi đáp, media
 
