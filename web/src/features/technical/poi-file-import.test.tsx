@@ -108,7 +108,7 @@ describe('Technical POI file import', () => {
     expect(rows[1]).toHaveTextContent('POI_02')
     expect(rows[1]).toHaveTextContent('Tầng 6 · floor6 · phiên bản 2')
     expect(rows[1]).toHaveTextContent('Chờ kiểm chứng')
-    expect(rows[1]).toHaveTextContent('Chưa có thuyết minh')
+    expect(rows[1]).toHaveTextContent('Chưa có')
     expect(rows[2]).toHaveTextContent('Đạt · Ghi pose trực tiếp trên robot')
     expect(rows[2]).toHaveTextContent('Đã duyệt')
     expect(list.queryByText('Tạo tay')).not.toBeInTheDocument()
