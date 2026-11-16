@@ -1,8 +1,12 @@
 import type { StatusTone } from '../../../components/ui/status-tone'
 import type { InvitationItem, ViewerPresence } from './api'
 
-/** Same clock as the rest of the invitation panel: Vietnam time, whatever the browser's zone. */
-export const time = (stamp: string) => new Date(stamp).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+/** "22/11/2026 08:15": Vietnam time whatever the browser's zone, date first, no seconds. */
+export const time = (stamp: string) => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit',
+    year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(stamp)).map(part => [part.type, part.value]))
+  return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`
+}
 
 const tone: Record<ViewerPresence, StatusTone> = { NOT_ENTERED: 'muted', CONNECTED: 'ok', DISCONNECTED: 'warn', LEFT: 'muted' }
 
@@ -23,10 +27,10 @@ export function viewerPresence(item: InvitationItem): PresenceView | null {
   return { state, label, tone: tone[state], hint, ...(item.firstEnteredAt ? { firstEntered: `Vào lần đầu ${time(item.firstEnteredAt)}` } : {}) }
 }
 
-/** "{a} đang xem · {b} mất kết nối · {c} chưa vào", or null when no item carries presence. */
+/** "{a} đang xem · {b} mất kết nối · {c} đã rời · {d} chưa vào", or null when no item carries presence. */
 export function presenceSummary(items: InvitationItem[]): string | null {
   const states = items.map(viewerPresence).filter((view): view is PresenceView => view !== null).map(view => view.state)
   if (states.length === 0) return null
   const count = (state: ViewerPresence) => states.filter(value => value === state).length
-  return `${count('CONNECTED')} đang xem · ${count('DISCONNECTED')} mất kết nối · ${count('NOT_ENTERED')} chưa vào`
+  return `${count('CONNECTED')} đang xem · ${count('DISCONNECTED')} mất kết nối · ${count('LEFT')} đã rời · ${count('NOT_ENTERED')} chưa vào`
 }
