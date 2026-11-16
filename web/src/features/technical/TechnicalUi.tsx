@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import { Check, CircleCheck, CircleX, Eye } from 'lucide-react'
 import { toneClass, type StatusTone } from '../../components/ui/status-tone'
 import { labelClass } from '../../components/ui/ui-classes'
@@ -65,6 +66,19 @@ export function ResultToggle({ id, value, onChange, hint }: { id: string; value:
 export function ComputedResult({ passed, pending = false }: { passed: boolean; pending?: boolean }) {
   if (pending) return <p role="status" className="flex items-center gap-1.5 text-[13px] font-semibold text-[#64748b]">Kết quả: chưa tick mục nào</p>
   return <p role="status" className="flex items-center gap-1.5 text-[13px] font-semibold text-[#334155]">Kết quả: <ToneBadge tone={passed ? 'ok' : 'danger'}>{passed ? 'Đạt' : 'Không đạt'}</ToneBadge></p>
+}
+
+/**
+ * Shown under the boxes while the form is still `pending`: records that the robot passed none of them,
+ * so the checker does not have to tick and untick a box to reach Không đạt. `onNone` marks the form
+ * touched; the reason field that then appears (`reasonId`) takes focus.
+ */
+export function NoneChecked({ reasonId, onNone }: { reasonId: string; onNone: () => void }) {
+  const choose = () => {
+    flushSync(onNone)
+    document.getElementById(reasonId)?.focus()
+  }
+  return <button type="button" onClick={choose} className="rounded-md px-1 text-xs font-semibold text-[#b23e31] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">Không đạt mục nào</button>
 }
 
 export type SetupStep ={ label: string; done: boolean; hint: string; action?: ReactNode }

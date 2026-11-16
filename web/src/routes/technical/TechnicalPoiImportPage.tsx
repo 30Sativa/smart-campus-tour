@@ -6,7 +6,7 @@ import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
-import { CheckRow, ComputedResult, DetailFact, Note, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
+import { CheckRow, ComputedResult, NoneChecked, DetailFact, Note, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
 import { mapVersionLabel, narrationStatus, poiObservationLabels, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { headPresetLabel } from '../../features/technical/head-camera-preset'
 import { errorText, poiVerifyErrors } from '../../features/technical/technical-format'
@@ -204,6 +204,7 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
         <div className="space-y-2">
           <p className="text-xs text-[#64748b]">Tick mục đã đạt. Còn mục chưa tick thì kết quả là Không đạt.</p>
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); setTouched(true); changed() }}>{check.label}</CheckRow>)}
+          {pending && <NoneChecked reasonId="verify-reason" onNone={() => { setTouched(true); changed() }} />}
         </div>
         {!pending && resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="verify-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này, sửa POI và gửi lại phiên bản mới.</p><input id="verify-reason" aria-invalid={Boolean(errors.reason)} className={`${inputClass} mt-1`} required maxLength={1000} value={reason} onChange={(event) => { setReason(event.target.value); changed() }} />{errors.reason && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.reason}</p>}</div>}
         <div><label className={labelClass} htmlFor="verify-evidence">Ghi chú bằng chứng</label><textarea id="verify-evidence" rows={3} aria-invalid={Boolean(errors.evidenceNote)} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={(event) => { setEvidence(event.target.value); changed() }} />{errors.evidenceNote && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.evidenceNote}</p>}</div>
