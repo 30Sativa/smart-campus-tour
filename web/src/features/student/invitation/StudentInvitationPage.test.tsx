@@ -414,3 +414,37 @@ it('stops polling the session after RECONNECT_WINDOW_EXPIRED and waits for the v
     vi.useRealTimers()
   }
 })
+
+const SESSION_ENDED = 'Phiên xem đã kết thúc vì mã đã bị thu hồi hoặc thay bằng mã mới. Kiểm tra email mới nhất hoặc liên hệ đại diện đoàn.'
+
+it('says why the room closed when a session this tab held is refused with 401', async () => {
+  let revoked = false
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : revoked ? response(null, 401) : response()))
+  mount()
+  await screen.findByText('Bạn đã vào phòng chờ')
+  revoked = true
+  await act(async () => { await client.refetchQueries({ queryKey: key }) })
+  expect(await screen.findByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.getByRole('alert')).toHaveTextContent(SESSION_ENDED)
+})
+
+it('stays silent about the 401 of a first visit without a session', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => response(null, 401)))
+  mount()
+  expect(await screen.findByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByText(SESSION_ENDED)).toBeNull()
+  expect(screen.getByText(/Mỗi lời mời dùng trên một trình duyệt;/)).toBeInTheDocument()
+})
+
+it.each([
+  [(4 * 24 + 9) * 3_600_000 + 5 * 60_000 + 30_000, 'Còn 4 ngày 9 giờ'],
+  [2 * 3_600_000 + 5 * 60_000 + 30_000, /^2:05:(29|30)$/],
+])('shows the waiting-room countdown in days at 24 h or more and as h:mm:ss below', async (ahead, label) => {
+  const start = new Date(Date.now() + (ahead as number)).toISOString()
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response({ ...info, scheduledStartAt: start })))
+  mount()
+  const timer = await screen.findByRole('timer')
+  expect(timer.querySelector('b')!.textContent).toMatch(typeof label === 'string' ? new RegExp(`^${label}$`) : label)
+  if (typeof label === 'string') expect(timer).toHaveAccessibleName(`${label} tới giờ bắt đầu`)
+})

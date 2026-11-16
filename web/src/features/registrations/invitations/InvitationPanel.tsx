@@ -19,6 +19,14 @@ function message(error: unknown): string {
   }
   return 'Không xác nhận được kết quả. Thử lại cùng yêu cầu hoặc tải lại danh sách.'
 }
+/** Per-row action names, so a screen reader hears which row a button acts on. */
+const actionName = { resend: 'Gửi lại email cho', reissue: 'Thu hồi và cấp mã mới cho', revoke: 'Thu hồi mã của' } as const
+/** The dialog names the row and its email, shown in full as in the list. */
+function dialogTitle(operation: InvitationWrite['operation'] | undefined, item: InvitationItem | null) {
+  if (operation === 'issue' || !operation) return 'Cấp và gửi lời mời?'
+  return item ? `${actionName[operation]} ${item.displayName} (${item.email})?`
+    : operation === 'resend' ? 'Gửi lại email?' : operation === 'reissue' ? 'Thu hồi và cấp mã mới?' : 'Thu hồi mã?'
+}
 function RepPresence({ item }: { item: InvitationItem }) {
   const view = viewerPresence(item)
   return view && <div className="rep-table-cell"><span className={`rep-badge rep-badge--${view.tone}`}>{view.label}</span>
@@ -39,10 +47,12 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion, va
   const mutation = useMutation({ mutationFn: (write: InvitationWrite) => invitationsApi.write(registrationId, write),
     onSuccess: () => client.invalidateQueries({ queryKey: key }) })
   const [choice, setChoice] = useState<InvitationWrite | null>(null)
+  const [target, setTarget] = useState<InvitationItem | null>(null)
   // Null when the backend predates viewer presence: the "Người xem" parts are then left out entirely.
   const summary = query.data ? presenceSummary(query.data.items) : null
   const choose = (operation: InvitationWrite['operation'], item?: InvitationItem) => {
     mutation.reset()
+    setTarget(item ?? null)
     setChoice({ operation, invitationId: item?.id, requestId: crypto.randomUUID(),
       expectedRowVersion: item?.rowVersion ?? rowVersion, ...(item ? {} : { expectedTourRowVersion: tourRowVersion }) })
   }
@@ -66,11 +76,11 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion, va
         <td data-label="Hiệu lực mã"><div className="rep-table-cell"><span className={`rep-badge rep-badge--${item.revokedAt || new Date(item.expiresAt) <= new Date() ? 'muted' : 'ok'}`}>{item.revokedAt ? 'Đã thu hồi mã' : new Date(item.expiresAt) <= new Date() ? 'Mã đã hết hạn' : 'Mã còn hiệu lực'}</span><p className="rep-hint num">Hạn: {time(item.expiresAt)}</p></div></td>
         <td data-label="Email lời mời"><span className={`rep-badge rep-badge--${item.emailStatus === 'FAILED' ? 'danger' : item.emailStatus === 'ACCEPTED' ? 'info' : 'muted'}`}>{statusLabel[item.emailStatus] ?? 'Chưa biết kết quả'}</span></td>
         {summary && <td data-label="Người xem"><RepPresence item={item} /></td>}
-        <td data-label="Thao tác"><div className="rep-stack"><button type="button" className={repButton('secondary', 'sm')} disabled={!item.canSend || mutation.isPending || query.isFetching} onClick={() => choose('resend', item)}>Gửi lại email</button><details className="rep-invitation-more"><summary>Thao tác khác</summary><div className="rep-stack"><button type="button" className={repButton('secondary', 'sm')} disabled={!item.canReissue || mutation.isPending || query.isFetching} onClick={() => choose('reissue', item)}>Thu hồi và cấp mã mới</button><button type="button" className={repButton('danger', 'sm')} disabled={!item.canRevoke || mutation.isPending || query.isFetching} onClick={() => choose('revoke', item)}>Thu hồi mã</button></div></details></div></td>
+        <td data-label="Thao tác"><div className="rep-stack"><button type="button" className={repButton('secondary', 'sm')} disabled={!item.canSend || mutation.isPending || query.isFetching} aria-label={`${actionName.resend} ${item.displayName}`} onClick={() => choose('resend', item)}>Gửi lại email</button><details className="rep-invitation-more"><summary>Thao tác khác</summary><div className="rep-stack"><button type="button" className={repButton('secondary', 'sm')} disabled={!item.canReissue || mutation.isPending || query.isFetching} aria-label={`${actionName.reissue} ${item.displayName}`} onClick={() => choose('reissue', item)}>Thu hồi và cấp mã mới</button><button type="button" className={repButton('danger', 'sm')} disabled={!item.canRevoke || mutation.isPending || query.isFetching} aria-label={`${actionName.revoke} ${item.displayName}`} onClick={() => choose('revoke', item)}>Thu hồi mã</button></div></details></div></td>
       </tr>)}</tbody></table></div>}
       {query.data.items.length > 0 && <p className="rep-hint">Gửi lại giữ nguyên mã và phiên đang xem. Cấp mã mới ngắt phiên cũ, giữ nguyên hạn. Dịch vụ chấp nhận gửi chưa xác nhận người nhận đã nhận thư.</p>}
     </>}
-    <RepConfirmationDialog open={choice !== null} title={choice?.operation === 'issue' ? 'Cấp và gửi lời mời?' : choice?.operation === 'resend' ? 'Gửi lại email?' : choice?.operation === 'reissue' ? 'Thu hồi và cấp mã mới?' : 'Thu hồi mã?'}
+    <RepConfirmationDialog open={choice !== null} title={dialogTitle(choice?.operation, target)}
       confirmLabel={choice?.operation === 'resend' ? 'Gửi lại' : choice?.operation === 'issue' ? 'Cấp và gửi' : 'Xác nhận thu hồi'} busy={mutation.isPending} onConfirm={submit} onClose={() => { if (!mutation.isPending) setChoice(null) }}>
       <p>{choice?.operation === 'issue' ? 'Các dòng đã được chấp nhận và đủ điều kiện sẽ nhận lời mời riêng gồm lịch, link Tour và mã truy cập.' : choice?.operation === 'resend' ? 'Gửi cùng mã hiện hành tới email đã duyệt; phiên đang xem được giữ nguyên.' : choice?.operation === 'reissue' ? 'Mã và mọi phiên cũ sẽ bị thu hồi ngay. Mã mới giữ nguyên hạn; gửi email lỗi không khôi phục mã cũ.' : 'Mã và mọi phiên đang dùng lời mời này sẽ ngừng hiệu lực.'}</p>
       {mutation.isError && <p className="rep-error-message" role="alert">{message(mutation.error)}</p>}
@@ -98,14 +108,14 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion, va
           <ConsolePresence item={item} />
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <button className={buttonClass('secondary', 'sm')} disabled={!item.canSend || mutation.isPending || query.isFetching} onClick={() => choose('resend', item)}>Gửi lại email</button>
-          <button className={buttonClass('secondary', 'sm')} disabled={!item.canReissue || mutation.isPending || query.isFetching} onClick={() => choose('reissue', item)}>Thu hồi và cấp mã mới</button>
-          <button className={buttonClass('danger', 'sm')} disabled={!item.canRevoke || mutation.isPending || query.isFetching} onClick={() => choose('revoke', item)}>Thu hồi mã</button>
+          <button className={buttonClass('secondary', 'sm')} disabled={!item.canSend || mutation.isPending || query.isFetching} aria-label={`${actionName.resend} ${item.displayName}`} onClick={() => choose('resend', item)}>Gửi lại email</button>
+          <button className={buttonClass('secondary', 'sm')} disabled={!item.canReissue || mutation.isPending || query.isFetching} aria-label={`${actionName.reissue} ${item.displayName}`} onClick={() => choose('reissue', item)}>Thu hồi và cấp mã mới</button>
+          <button className={buttonClass('danger', 'sm')} disabled={!item.canRevoke || mutation.isPending || query.isFetching} aria-label={`${actionName.revoke} ${item.displayName}`} onClick={() => choose('revoke', item)}>Thu hồi mã</button>
         </div>
       </article>)}</div>
       {query.data.items.length > 0 && <p className="mt-3 text-xs text-slate-500">Gửi lại giữ nguyên mã và phiên đang xem. Cấp mã mới ngắt phiên cũ, giữ nguyên hạn. Dịch vụ chấp nhận gửi chưa xác nhận người nhận đã nhận thư.</p>}
     </>}
-    <ConfirmationDialog open={choice !== null} title={choice?.operation === 'issue' ? 'Cấp và gửi lời mời?' : choice?.operation === 'resend' ? 'Gửi lại email?' : choice?.operation === 'reissue' ? 'Thu hồi và cấp mã mới?' : 'Thu hồi mã?'}
+    <ConfirmationDialog open={choice !== null} title={dialogTitle(choice?.operation, target)}
       description={choice?.operation === 'issue' ? 'Mỗi dòng đã duyệt sẽ nhận một email riêng gồm lịch, link Tour và mã truy cập.' : choice?.operation === 'resend' ? 'Gửi cùng mã hiện hành tới email đã duyệt; phiên đang xem được giữ nguyên.' : choice?.operation === 'reissue' ? 'Mã và mọi phiên cũ sẽ bị thu hồi ngay. Mã mới giữ nguyên hạn; gửi email lỗi không khôi phục mã cũ.' : 'Mã và mọi phiên đang dùng lời mời này sẽ ngừng hiệu lực.'}
       confirmLabel={choice?.operation === 'resend' ? 'Gửi lại' : choice?.operation === 'issue' ? 'Cấp và gửi' : 'Xác nhận thu hồi'}
       withReason={false}
