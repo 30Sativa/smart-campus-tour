@@ -30,7 +30,15 @@ public sealed record RouteRevisionStopView(Guid Id, Guid PoiRevisionId, Guid Sou
 public sealed record RouteTestRunView(Guid Id, Guid RouteRevisionId, Guid MapVersionId, string MapPackageSha256,
     string RobotCode, Guid CheckedByUserId, Guid ParticipatingStaffUserId, string ResultCode,
     bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed, int MeasuredDurationSeconds,
-    string? FailureReason, string EvidenceNote, DateTimeOffset CheckedAt, string? MeasurementBasis);
+    string? FailureReason, string EvidenceNote, DateTimeOffset CheckedAt, string? MeasurementBasis,
+    // Names for the Staff fail banner; null for a deleted account or a view built before the names were read.
+    string? CheckedByName = null, string? ParticipatingStaffName = null);
+/// <summary>
+/// Another submitted save of the same route with the same path (map, start, end, stop POIs and order, head steps): the
+/// newest run on any of them is their applied result (ADR-0023 addendum), so recording one changes them all.
+/// </summary>
+public sealed record RouteSharedResultRevisionView(Guid RevisionId, int RevisionNumber, DateTimeOffset CreatedAt,
+    IReadOnlyList<RouteScheduledTourView> ScheduledTours);
 /// <summary>What a route test measured. A run without a basis predates ADR-0035 and cannot size a reservation.</summary>
 public static class RouteMeasurementBasis { public const string TotalWithDwell = "TOTAL_WITH_DWELL"; }
 public sealed record RouteTestParticipantView(Guid UserId, string FullName, string Username);
@@ -48,11 +56,14 @@ public sealed record RouteRevisionView(Guid RouteId, Guid RevisionId, int Revisi
     // docs/lich-tour-theo-ca.md §4: kept apart from EligibilityIssues, which READY reads as stale POI evidence.
     string ScheduleFit = "UNKNOWN", int? ExpectedDurationSeconds = null,
     // ADR-0062: names of the stops whose POI is retired or discarded now. A new Tour is refused on such a revision.
-    IReadOnlyList<string>? RetiredPoiNames = null);
+    IReadOnlyList<string>? RetiredPoiNames = null,
+    // ADR-0023 addendum: the other submitted saves the applied result also covers, and the Tours still to run on this save.
+    IReadOnlyList<RouteSharedResultRevisionView>? SharedResultRevisions = null,
+    IReadOnlyList<RouteScheduledTourView>? ScheduledTours = null);
 public sealed record RouteAvailabilityRequest(Guid RequestId, string ExpectedRowVersion);
 /// <summary>A SCHEDULED or READY Tour on the route; the close of registration lets Staff screens label a quick Tour right.</summary>
 public sealed record RouteScheduledTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State,
-    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false);
+    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false, Guid? RouteRevisionId = null);
 public sealed record RouteAvailabilityResult(Guid RouteId, bool IsActive, IReadOnlyList<RouteScheduledTourView> ScheduledTours);
 
 public sealed record RoutePoiRevisionEvidence(PoiProposalRevision Revision, PoiVerificationRecord Verification);

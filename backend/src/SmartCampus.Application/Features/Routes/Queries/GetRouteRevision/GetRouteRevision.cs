@@ -64,18 +64,35 @@ internal static class RouteRevisionMapper
         var duration = "INCOMPLETE_CONTENT_AUDIO_DATA";
         var dwell = stops.Sum(s => s.DwellSeconds);
         var dtoRuns = new List<RouteTestRunView>(runs.Count);
+        var names = new Dictionary<Guid, string?>();
+        async Task<string?> NameAsync(Guid userId)
+        {
+            if (!names.TryGetValue(userId, out var name)) names[userId] = name = (await repo.FindUserAsync(userId, ct))?.FullName;
+            return name;
+        }
         foreach (var r in runs)
             dtoRuns.Add(new RouteTestRunView(r.Id, r.RouteRevisionId, r.MapVersionId,
                 Convert.ToHexString(r.MapPackageSha256).ToLowerInvariant(),
                 await repo.GetRobotCodeAsync(r.RobotId, ct) ?? "", r.CheckedByUserId,
                 r.ParticipatingStaffUserId, r.ResultCode, r.AllStopsReached, r.SafelyStopped, r.LocalizationPassed,
-                r.MeasuredDurationSeconds, r.FailureReason, r.EvidenceNote, r.CheckedAt, r.MeasurementBasis));
+                r.MeasuredDurationSeconds, r.FailureReason, r.EvidenceNote, r.CheckedAt, r.MeasurementBasis,
+                await NameAsync(r.CheckedByUserId), await NameAsync(r.ParticipatingStaffUserId)));
         var revisionRecords = await repo.GetRevisionsAsync(route.Id, submittedOnly: false, ct);
+        // Cross-save application (ADR-0023 addendum): every submitted save with this path shares the result recorded on any of them.
+        var scheduledTours = await repo.ListScheduledToursAsync(route.Id, ct);
+        var shared = new List<RouteSharedResultRevisionView>();
         var summaries = new List<RouteRevisionSummaryView>();
-        foreach (var historical in revisionRecords.Where(r => history || r.Id == revision.Id).OrderBy(r => r.RevisionNumber))
+        foreach (var historical in revisionRecords.OrderBy(r => r.RevisionNumber))
         {
+            var isSummary = history || historical.Id == revision.Id;
+            var isSibling = historical.Id != revision.Id && (await repo.GetSubmissionsAsync(historical.Id, ct)).Count > 0;
+            if (!isSummary && !isSibling) continue;
             var historicalStops = await repo.GetStopsAsync(historical.Id, ct);
             var historicalNavigation = RouteNavigationConfigurationFactory.FromRevision(historical, historicalStops);
+            if (isSibling && RouteNavigationConfigurationFactory.SameNavigation(historicalNavigation, targetNavigation))
+                shared.Add(new RouteSharedResultRevisionView(historical.Id, historical.RevisionNumber, historical.CreatedAt,
+                    scheduledTours.Where(tour => tour.RouteRevisionId == historical.Id).ToArray()));
+            if (!isSummary) continue;
             var historicalRuns = routeRuns.Where(run => run.RouteRevision is not null &&
                 RouteNavigationConfigurationFactory.SameNavigation(
                     RouteNavigationConfigurationFactory.FromRevision(run.RouteRevision, run.RouteRevision.RouteRevisionStops.ToArray()), historicalNavigation))
@@ -96,6 +113,7 @@ internal static class RouteRevisionMapper
                 s.CameraPreset, s.NarrationText, s.FallbackVideoUrl,
                 proposalByStop.TryGetValue(s.Id, out var proposalId) ? proposalId : null)).ToArray(), dtoRuns, summaries, eligibilityIssues,
             route.IsOpenForNewTours, LegacyRouteRevision.For(route), schedule is null ? Tours.RouteScheduleFit.Unknown
-                : Tours.TourSchedule.ScheduleFit(schedule, expected), expected, retiredPoiNames);
+                : Tours.TourSchedule.ScheduleFit(schedule, expected), expected, retiredPoiNames, shared,
+            scheduledTours.Where(tour => tour.RouteRevisionId == revision.Id).ToArray());
     }
 }

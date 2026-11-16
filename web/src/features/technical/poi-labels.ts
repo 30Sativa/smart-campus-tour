@@ -50,7 +50,7 @@ export function routeUseLine(proposal: PoiProposal): { usable: boolean; text: st
   if (proposal.discardedAt) return { usable: false, text: 'Không, POI đã bị xoá khỏi danh sách' }
   if (proposal.retiredAt) return { usable: false, text: 'Chưa, vì POI đã ngưng dùng' }
   const reasons = [
-    proposal.revision.navigationStatus !== 'PASS' && 'điều hướng chưa đạt kiểm chứng',
+    proposal.revision.navigationStatus !== 'PASS' && 'vị trí chưa đạt kiểm chứng',
     !proposal.narration?.approved && 'chưa có thuyết minh đã duyệt',
   ].filter(Boolean)
   return reasons.length ? { usable: false, text: `Chưa, vì ${reasons.join(' và ')}` } : { usable: true, text: 'Có' }

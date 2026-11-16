@@ -272,6 +272,28 @@ describe('live Tour management', () => {
     expect(screen.getByRole('link', { name: 'Xem bản Tour đang dùng' })).toHaveAttribute('href', '/staff/manage/routes/route-2?revisionId=revision-2')
   })
 
+  it('follows the applied result of the Tour\'s save: a FAIL recorded on a newer save with the same path is shown in red', async () => {
+    const failed = { id: 'run-9', routeRevisionId: 'revision-3', resultCode: 'FAIL', allStopsReached: false, safelyStopped: true, localizationPassed: true,
+      failureReason: 'Kẹt ở cửa', checkedAt: '2026-11-16T12:09:00Z', robotCode: 'amr-01' }
+    currentRevision = { ...TESTED, revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'FAIL',
+      revisionHistory: [{ revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'FAIL', createdAt: '2026-11-16T09:00:00Z' }] }
+    api(tour({ ...versionedTour, routeRevision: { ...TESTED, verificationStatus: 'FAIL', effectiveTestRunId: 'run-9', testRuns: [failed] } as unknown as TourDetails['routeRevision'] }))
+    renderAt('/staff/manage/tours/tour-1')
+    expect(await screen.findByText(/Đường đi của Tour này vừa chạy thử không đạt lúc 19:09 16\/11 \(lý do: Kẹt ở cửa\)\. Tour không chốt và không bắt đầu được cho tới khi Kỹ thuật ghi một lần chạy đạt\./)).toBeInTheDocument()
+    expect(screen.queryByText(/Tuyến đã chạy thử đạt ngày/)).not.toBeInTheDocument()
+    expect(await screen.findByText(/bản đó đang có kết quả chạy thử không đạt/)).toBeInTheDocument()
+    expect(screen.queryByText(/Tour này vẫn chạy bản đã chọn lúc tạo/)).not.toBeInTheDocument()
+  })
+
+  it('does not advise recreating the Tour on a newer save that also has a retired POI', async () => {
+    currentRevision = { ...TESTED, revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'PASS', retiredPoiNames: ['Thư viện'],
+      revisionHistory: [{ revisionId: 'revision-3', revisionNumber: 4, isSubmitted: true, verificationStatus: 'PASS', createdAt: '2099-01-02T08:32:00Z' }] }
+    api(versionedTour)
+    renderAt('/staff/manage/tours/tour-1')
+    expect(await screen.findByText(/Bản mới cũng có POI đã ngưng dùng nên chưa tạo lại Tour theo bản này được\. Dùng lại POI, hoặc lưu một bản tuyến không có POI đó/)).toBeInTheDocument()
+    expect(screen.queryByText(/hủy Tour rồi tạo lại\./)).not.toBeInTheDocument()
+  })
+
   it('creates a SCHEDULED Tour from an active Route with its revision and an idempotency key', async () => {
     const writes = api()
     renderAt('/staff/manage/tours/new?kind=normal')

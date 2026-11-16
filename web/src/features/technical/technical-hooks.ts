@@ -115,6 +115,11 @@ export function useRouteRevision(routeId: string, revisionId: string) {
   return useQuery({ queryKey: [...keys.routeTests, 'detail', revisionId], queryFn: () => versionedRoutesApi.get(routeId, revisionId) })
 }
 
+/** The save before the one being tested, to show what changed; nothing is read until its id is known. */
+export function usePreviousRevision(routeId: string, revisionId: string | undefined) {
+  return useQuery({ queryKey: [...keys.routeTests, 'detail', revisionId], queryFn: () => versionedRoutesApi.get(routeId, revisionId), enabled: Boolean(revisionId) })
+}
+
 export function useRouteTestParticipants() {
   return useQuery({ queryKey: [...keys.routeTests, 'participants'], queryFn: technicalApi.listRouteTestParticipants })
 }

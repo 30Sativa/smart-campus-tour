@@ -16,6 +16,8 @@ import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { usePoiProposals } from '../../../features/technical/technical-hooks'
 import { versionedRoutesApi, type VersionedRouteDraft } from '../../../features/administration/routes/versioned-api'
 import { RouteScheduledToursList } from '../../../features/administration/routes/RouteScheduledTours'
+import { RouteFailBanner } from '../../../features/administration/routes/RouteFailBanner'
+import { routeChanges, saveResultText } from '../../../features/administration/routes/route-messages'
 import { useRouteScheduledTours } from '../../../features/administration/routes/hooks'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
 import { RouteMap } from '../../../features/administration/routes/RouteMap'
@@ -206,15 +208,19 @@ export default function StaffManageRouteFormPage() {
       const route = routeId ? await versionedRoutesApi.revise(routeId, body) : await versionedRoutesApi.create(body)
       // The draft is saved; a refused submit leaves it as a draft, which the route page can still send.
       let submitError: string | null = null
+      let saved = route
       if (submit) {
-        try { await versionedRoutesApi.submit(route) } catch (cause) { submitError = errorText(cause) }
+        try { saved = await versionedRoutesApi.submit(route) } catch (cause) { submitError = errorText(cause) }
       }
       const submitted = submit && !submitError
-      if (submitError) notify({ tone: 'error', title: `Đã lưu bản nháp “${body.name}” nhưng chưa gửi được kiểm chứng`, detail: `${submitError} Bấm Gửi kiểm chứng tuyến ở trang tuyến để gửi lại.` })
-      else if (routeId) notify({ title: submitted ? `Đã lưu và gửi kiểm chứng “${body.name}”` : `Đã lưu thay đổi cho “${body.name}”; bản mới cần gửi kiểm chứng lại.`, detail: submitted ? 'Chờ kỹ thuật chạy thử. Đây chưa phải kết quả kiểm chứng.' : undefined })
+      // A save that changed only dwell or narration carries its path's result (ADR-0023 addendum); the toast says which case it is.
+      const outcome = saveResultText({ isSubmitted: true, verificationStatus: saved.verificationStatus })
+      if (submitError) notify({ tone: 'error', title: `Đã lưu “${body.name}” nhưng chưa gửi được kiểm chứng`, detail: `${submitError} Bấm Gửi kiểm chứng tuyến ở trang tuyến để gửi lại.` })
+      else if (routeId) notify({ title: submitted ? `Đã lưu và gửi kiểm chứng “${body.name}”` : `Đã lưu “${body.name}”, chưa gửi kiểm chứng`,
+        detail: submitted ? outcome : `${outcome} Bấm Gửi kiểm chứng tuyến ở trang tuyến để dùng bản này.` })
       else celebrate({ title: `Đã tạo tuyến “${body.name}”`, detail: submitted
         ? `${stops.length} POI trên map đã chọn. Đã gửi kiểm chứng, chờ kỹ thuật chạy thử trước khi dùng cho Tour.`
-        : `${stops.length} POI trên map đã chọn. Tuyến đang là bản nháp: gửi kiểm chứng để kỹ thuật chạy thử trước khi dùng cho Tour.` })
+        : `${stops.length} POI trên map đã chọn. Tuyến chưa gửi kiểm chứng: gửi để kỹ thuật chạy thử trước khi dùng cho Tour.` })
       navigate(`/staff/manage/routes/${route.routeId}`, { replace: true, ...AFTER_SAVE })
     } catch (cause) { setError(routeSaveError(cause)) }
     finally { setBusy(false) }
@@ -223,11 +229,17 @@ export default function StaffManageRouteFormPage() {
   if (source.error || proposals.error || maps.error) return <AdminPage><p role="alert" className="p-4 text-sm text-red-700">Không tải được tuyến, POI đã kiểm chứng hoặc map.</p></AdminPage>
 
   const last = step === STEPS.length - 1
+  // B1: whether this save keeps the result of the edited one, needs a new run, or starts with none.
+  const pathChange = source.data ? routeChanges(source.data, { ...draft, mapVersionId: draft.mapVersionId, startX: draft.startX ?? NaN, startY: draft.startY ?? NaN, startYaw: draft.startYaw ?? NaN, stops }) : null
+  const keptPass = source.data?.verificationStatus === 'PASS'
+  const keptResultText = keptPass ? 'chạy thử đạt, không cần chạy lại' : 'chạy thử không đạt. Muốn hết không đạt, sửa đường đi rồi gửi lại'
+  const keepsResult = Boolean(source.data?.isSubmitted && pathChange && !pathChange.pathChanged && ['PASS', 'FAIL'].includes(source.data.verificationStatus))
   const missingHere = missingByStep[step]
   return <AdminPage>
     <UnsavedChangesGuard when={changed && !busy} />
     <Link to="/staff/manage/routes" className="mb-3 inline-flex text-sm text-[#2d719e]">← Danh sách tuyến</Link>
     <PageHeader eyebrow="Tuyến" title={routeId ? 'Sửa tuyến' : 'Tạo tuyến'} description="Tuyến gắn với đúng một bản đồ và chỉ gồm các POI đã đạt kiểm chứng, có thuyết minh đã duyệt, trên bản đồ đó." />
+    {source.data && <div className="mb-4"><RouteFailBanner route={source.data} /></div>}
     <div className="mb-4"><Notice>Lưu xong, gửi kiểm chứng để Kỹ thuật chạy thử toàn tuyến. Chỉ tuyến chạy thử đạt mới dùng được để tạo Tour.</Notice></div>
     {scheduledTours.data && scheduledTours.data.length > 0 && <div className="mb-4"><Notice tone="warn">
       <p>{scheduledTours.data.length} Tour đã lên lịch trên tuyến này vẫn chạy bản đã chọn lúc tạo, không tự đổi theo bản bạn sắp lưu. Muốn Tour đi theo bản mới, chờ bản mới chạy thử đạt rồi hủy Tour và tạo lại.</p>
@@ -344,6 +356,12 @@ export default function StaffManageRouteFormPage() {
             <p className="mt-1 text-xs text-[#64748b]">Thời lượng dự kiến được tự tính khi lưu, từ thời gian dừng và quãng đường.</p>
           </ReviewRow>
         </dl>
+        {pathChange && <div className="mt-3"><Notice tone={keepsResult && keptPass ? 'success' : 'warn'}>
+          {!pathChange.changes.length ? 'Chưa thay đổi gì so với bản đang dùng.'
+            : keepsResult ? `Chỉ ${pathChange.changes.join(', ')}: đường đi không đổi nên bản mới giữ kết quả ${keptResultText}.`
+            : pathChange.pathChanged ? `Bản mới ${pathChange.changes.join(', ')}: đường đi đã đổi nên cần gửi kiểm chứng và chờ Kỹ thuật chạy thử lại trước khi tạo Tour.`
+            : `Bản mới ${pathChange.changes.join(', ')}. Bản đang dùng chưa có kết quả chạy thử, nên vẫn cần gửi kiểm chứng và chạy thử.`}
+        </Notice></div>}
         {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
       </section>}
 
@@ -356,7 +374,7 @@ export default function StaffManageRouteFormPage() {
             the review step would finish as a submit and save before anyone reviewed it. */}
         {last
           ? <>
-            <button key="save" disabled={Boolean(busy) || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} type="submit" className={buttonClass('secondary')}>{busy === 'save' ? 'Đang lưu…' : 'Lưu bản nháp'}</button>
+            <button key="save" disabled={Boolean(busy) || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} type="submit" className={buttonClass('secondary')}>{busy === 'save' ? 'Đang lưu…' : 'Lưu, chưa gửi kiểm chứng'}</button>
             <button key="submit" type="button" disabled={Boolean(busy) || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} onClick={() => void save(null, true)} className={buttonClass('primary')}>{busy === 'submit' ? 'Đang xử lý…' : 'Lưu và gửi kiểm chứng'}</button>
           </>
           : <button key="next" type="button" disabled={missingHere.length > 0} aria-describedby={missingHere.length ? 'route-step-missing' : undefined} className={buttonClass('primary')} onClick={() => goTo(step + 1)}>Tiếp<ChevronRight size={15} aria-hidden="true" /></button>}

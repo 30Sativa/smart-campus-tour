@@ -45,7 +45,7 @@ describe('staffMapLabels', () => {
 
 describe('staffRouteStatus', () => {
   it.each([
-    [{ isSubmitted: false, verificationStatus: 'NOT_CHECKED' }, 'Bản nháp'],
+    [{ isSubmitted: false, verificationStatus: 'NOT_CHECKED' }, 'Chưa gửi kiểm chứng'],
     [{ isSubmitted: true, verificationStatus: 'NOT_CHECKED' }, 'Chờ chạy thử'],
     [{ isSubmitted: true, verificationStatus: 'FAIL' }, 'Chạy thử không đạt'],
     [{ isSubmitted: true, verificationStatus: 'PASS' }, 'Đã chạy thử đạt'],

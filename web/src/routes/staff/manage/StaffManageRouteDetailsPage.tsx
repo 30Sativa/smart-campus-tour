@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
-import { expectedDurationText, passedAt, routeAvailabilityError, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
+import { dwellText, expectedDurationText, failedCheckNames, passedAt, routeAvailabilityError, saveResultText, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
+import { RouteFailBanner } from '../../../features/administration/routes/RouteFailBanner'
 import { campusShortDate, campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
 import { versionedRoutesApi, type VersionedRoute } from '../../../features/administration/routes/versioned-api'
@@ -36,18 +37,19 @@ type RouteNotice = { tone: 'info' | 'warn' | 'ok'; text: string; createTour?: bo
  * create still checks the map, robot and slot. `durationStatus` is not used, because the server
  * always reports it as incomplete and it no longer decides scheduling.
  */
-function routeNotice(route: VersionedRoute, hasUnverifiedPoi: boolean): RouteNotice {
+function routeNotice(route: VersionedRoute, hasUnverifiedPoi: boolean): RouteNotice | null {
   if (!route.isActive) return { tone: 'warn', text: 'Tuyến đang ngừng sử dụng nên chưa tạo được Tour mới. Mở lại tuyến để dùng.', reopen: true }
   if (!route.isSubmitted) return hasUnverifiedPoi
     ? { tone: 'warn', text: 'Chưa gửi kiểm chứng được vì có POI không còn kết quả đạt. Staff sửa tuyến để chỉ dùng các POI đã đạt.' }
-    : { tone: 'info', text: 'Đây là bản nháp. Staff kiểm tra lại các điểm dừng rồi bấm Gửi kiểm chứng tuyến để Kỹ thuật chạy thử.' }
-  if (route.verificationStatus === 'FAIL') return { tone: 'warn', text: 'Kỹ thuật ghi nhận chạy thử không đạt. Staff sửa tuyến rồi gửi kiểm chứng lại.' }
+    : { tone: 'info', text: 'Bản này chưa gửi kiểm chứng. Staff kiểm tra lại các điểm dừng rồi bấm Gửi kiểm chứng tuyến để Kỹ thuật chạy thử.' }
+  // The fail banner says why and what to do.
+  if (route.verificationStatus === 'FAIL') return null
   if (route.verificationStatus !== 'PASS') return { tone: 'info', text: 'Đã gửi kiểm chứng. Đang chờ Kỹ thuật chạy thử toàn tuyến trên robot và ghi kết quả.' }
   if (route.scheduleFit === 'TOO_LONG_FOR_SHIFT') return { tone: 'warn', text: `Chưa tạo được Tour: ${scheduleFitLabel(route)!.detail} Staff sửa tuyến cho ngắn hơn rồi gửi chạy thử lại.` }
   return { tone: 'ok', text: 'Dùng được để tạo Tour. Khi tạo, hệ thống còn kiểm tra bản đồ, robot và ca.', createTour: true }
 }
 
-const formatDuration =(seconds: number) => seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
+const formatDuration = dwellText
 
 /**
  * The one line under the title: the route's state, with the day of the run that passed it. A passed current revision
@@ -68,8 +70,8 @@ export default function StaffManageRouteDetailsPage() {
   const route = useQuery({ queryKey: ['versioned-routes', routeId, revisionId], queryFn: () => versionedRoutesApi.get(routeId!, revisionId), enabled: Boolean(routeId) })
   const value = route.data
   const submitMutation = useMutation({ mutationFn: versionedRoutesApi.submit,
-    onSuccess: (_, submitted) => {
-      notify({ title: `Đã gửi kiểm chứng tuyến “${submitted.name}”`, detail: 'Chờ kỹ thuật chạy thử. Đây chưa phải kết quả kiểm chứng và chưa tạo được Tour.' })
+    onSuccess: (result, submitted) => {
+      notify({ title: `Đã gửi kiểm chứng tuyến “${submitted.name}”`, detail: saveResultText(result) })
       return client.invalidateQueries({ queryKey: ['versioned-routes'], refetchType: 'all' })
     } })
   const maps = useMapVersions()
@@ -102,9 +104,10 @@ export default function StaffManageRouteDetailsPage() {
   const status = staffRouteStatus(value)
   return <AdminPage>
     <Link to="/staff/manage/routes" className="mb-3 inline-flex text-sm text-[#2d719e]">← Danh sách tuyến</Link>
-    <PageHeader eyebrow="Tuyến" title={value.name} description={statusLine(value, retiredPoi)} action={<div className="flex max-w-sm flex-col items-end gap-1.5"><div className="flex flex-wrap justify-end gap-2"><Link className={buttonClass('secondary')} to={`/staff/manage/routes/${value.routeId}/edit`}>Sửa tuyến</Link>{value.isActive && isCurrentRevision && <button type="button" className={buttonClass('secondary')} onClick={() => { availability.reset(); setDeactivating(value) }}>Ngừng sử dụng</button>}{!value.isSubmitted && isCurrentRevision && <button className={buttonClass('primary')} disabled={!canSubmit} onClick={() => void submitMutation.mutateAsync(value).catch(() => undefined)}>{submitMutation.isPending ? 'Đang gửi…' : 'Gửi kiểm chứng tuyến'}</button>}</div><p className="text-right text-xs text-[#64748b]">Lưu sẽ tạo bản mới; bản mới cần gửi kiểm chứng và chạy thử lại. Tour đã tạo vẫn dùng bản cũ.</p></div>} />
+    <PageHeader eyebrow="Tuyến" title={value.name} description={statusLine(value, retiredPoi)} action={<div className="flex max-w-sm flex-col items-end gap-1.5"><div className="flex flex-wrap justify-end gap-2"><Link className={buttonClass('secondary')} to={`/staff/manage/routes/${value.routeId}/edit`}>Sửa tuyến</Link>{value.isActive && isCurrentRevision && <button type="button" className={buttonClass('secondary')} onClick={() => { availability.reset(); setDeactivating(value) }}>Ngừng sử dụng</button>}{!value.isSubmitted && isCurrentRevision && <button className={buttonClass('primary')} disabled={!canSubmit} onClick={() => void submitMutation.mutateAsync(value).catch(() => undefined)}>{submitMutation.isPending ? 'Đang gửi…' : 'Gửi kiểm chứng tuyến'}</button>}</div><p className="text-right text-xs text-[#64748b]">Lưu sẽ tạo bản mới. Chỉ đổi thời gian dừng hoặc thuyết minh thì bản mới giữ kết quả chạy thử; đổi điểm dừng, thứ tự, điểm đầu hoặc điểm cuối thì cần chạy thử lại. Tour đã tạo vẫn dùng bản cũ.</p></div>} />
     <div className="mb-4 space-y-2">
       {!isCurrentRevision && <Notice tone="warn">{viewedAt ? `Đây là bản lưu ${campusShortStamp(viewedAt)}, chỉ xem được.` : 'Đây là bản lưu cũ, chỉ xem được.'}</Notice>}
+      <RouteFailBanner route={value} action={isCurrentRevision ? <Link to={`/staff/manage/routes/${value.routeId}/edit`} className={buttonClass('secondary', 'sm')}>Sửa tuyến</Link> : undefined} />
       {isCurrentRevision && <NewerPoiRevisionNotice route={value} />}
       {retiredPoi && <Notice tone="warn" action={<Link to={`/staff/manage/routes/${value.routeId}/edit`} className="text-sm whitespace-nowrap text-[#2d719e] hover:underline">Sửa tuyến</Link>}>
         Tuyến có POI đã ngưng dùng: {value.retiredPoiNames!.join(', ')}. Không tạo được Tour mới trên phiên bản này; Tour đã tạo vẫn chạy như cũ. Lưu phiên bản mới không có POI này, hoặc dùng lại POI.
@@ -149,8 +152,15 @@ export default function StaffManageRouteDetailsPage() {
       <ol className="mt-2 space-y-2">{value.revisionHistory.map(revision => {
         const viewing = revision.revisionId === value.revisionId
         const text = `Bản lưu ${campusShortStamp(revision.createdAt)} · ${staffRouteStatus(viewing ? value : revision).label}`
+        // With the history, testRuns holds every run of the route; each is listed under the save it was recorded on.
+        const runs = value.testRuns.filter(run => run.routeRevisionId === revision.revisionId).sort((a, b) => a.checkedAt.localeCompare(b.checkedAt))
         return <li key={revision.revisionId} className="text-sm">
           {viewing ? <span className="font-medium">{text} (đang xem)</span> : <Link className="text-[#2d719e]" to={`/staff/manage/routes/${value.routeId}?revisionId=${revision.revisionId}`}>{text}</Link>}
+          {runs.length > 0 && <ul aria-label={`Lần chạy thử bản lưu ${campusShortStamp(revision.createdAt)}`} className="mt-1 ml-4 space-y-0.5 text-xs text-[#475569]">{runs.map(run => {
+            const failed = failedCheckNames(run)
+            return <li key={run.id}>Chạy thử {campusShortStamp(run.checkedAt)} · {run.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'} · robot {run.robotCode}
+              {run.resultCode === 'FAIL' && `${failed.length ? ` · không đạt ở: ${failed.join(', ')}` : ''} · lý do: ${run.failureReason?.trim() || 'không ghi'}`}</li>
+          })}</ul>}
         </li>
       })}</ol>
     </details>

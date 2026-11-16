@@ -63,7 +63,7 @@ internal static class TourTarget
         var view = await RouteRevisionMapper.Load(revisions, revision.RouteId, revision.Id, false, ct);
         var run = view.VerificationStatus == "PASS" ? view.TestRuns.SingleOrDefault(item => item.Id == view.EffectiveTestRunId) : null;
         if (run is null)
-            throw new ConflictException("Phiên bản tuyến chưa có kết quả chạy thử đạt.", "ROUTE_TEST_PASS_REQUIRED");
+            throw new ConflictException(RouteTestPassRequiredMessage(view), "ROUTE_TEST_PASS_REQUIRED");
         if (view.EligibilityIssues.Count > 0)
             throw new ConflictException("Có POI trong tuyến không còn kết quả đạt.", "POI_VERIFICATION_STALE");
         var map = await maps.FindMapVersionAsync(revision.MapVersionId, includePackage: false, ct)
@@ -71,6 +71,20 @@ internal static class TourTarget
         if (lockTarget) await maps.LockMapPreparationStateAsync(map.Id, ct);
         (await MapPreparationEligibility.LoadAsync(maps, map, ct)).EnsureCanUse();
         return run;
+    }
+
+    /// <summary>
+    /// Why the revision has no applied PASS. A FAIL may have been recorded on another save with the same path (ADR-0023
+    /// addendum), so the message names the run itself rather than "this revision".
+    /// </summary>
+    internal static string RouteTestPassRequiredMessage(RouteRevisionView view)
+    {
+        if (view.VerificationStatus != "FAIL" || view.TestRuns.SingleOrDefault(item => item.Id == view.EffectiveTestRunId) is not { } failed)
+            return "Phiên bản tuyến chưa có kết quả chạy thử đạt.";
+        var at = failed.CheckedAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(failed.FailureReason)
+            ? $"Lần chạy thử mới nhất của đường đi này không đạt ({at})."
+            : $"Lần chạy thử mới nhất của đường đi này không đạt ({at}: lý do {failed.FailureReason}).";
     }
 
     /// <summary>Null when this robot can run the revision. Create, slots and the robot list all ask here.</summary>

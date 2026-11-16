@@ -1,7 +1,8 @@
 import { ApiError, apiErrorDetail } from '../../../api/client'
 import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
-import type { VersionedRoute } from './versioned-api'
+import type { RouteScheduledTour, RouteSharedResultRevision, RouteTestRun, VersionedRoute } from './versioned-api'
+import { campusShortStamp } from '../tours/tour-calendar'
 
 const fitMinutes = (seconds: number) => `${Math.ceil(seconds / 60)} phút`
 
@@ -18,12 +19,12 @@ export function scheduleFitLabel(route: Pick<VersionedRoute, 'scheduleFit' | 'ex
   return null
 }
 
-/** A revision's state as words and colour: draft, submitted and waiting, passed, failed. */
+/** A revision's state as words and colour: not submitted, submitted and not run, passed, failed. */
 export function revisionTone(submitted: boolean, status: string) {
-  if (!submitted) return { label: 'Bản nháp', chip: 'border-[#dbe6f4] bg-[#f6f9fd] text-[#5d7085]' }
-  if (status === 'PASS') return { label: 'Đã kiểm chứng', chip: 'border-[#cde9dc] bg-[#effbf5] text-[#1f7a55]' }
-  if (status === 'FAIL') return { label: 'Không đạt', chip: 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]' }
-  return { label: 'Chờ kiểm chứng', chip: 'border-[#f0d89f] bg-[#fff8e6] text-[#8a5a06]' }
+  if (!submitted) return { label: 'Chưa gửi kiểm chứng', chip: 'border-[#dbe6f4] bg-[#f6f9fd] text-[#5d7085]' }
+  if (status === 'PASS') return { label: 'Chạy thử đạt', chip: 'border-[#cde9dc] bg-[#effbf5] text-[#1f7a55]' }
+  if (status === 'FAIL') return { label: 'Chạy thử không đạt', chip: 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]' }
+  return { label: 'Chưa chạy thử', chip: 'border-[#f0d89f] bg-[#fff8e6] text-[#8a5a06]' }
 }
 
 /**
@@ -32,15 +33,72 @@ export function revisionTone(submitted: boolean, status: string) {
  */
 export function staffRouteStatus(route: { isSubmitted: boolean; verificationStatus: string }) {
   const { chip } = revisionTone(route.isSubmitted, route.verificationStatus)
-  if (!route.isSubmitted) return { label: 'Bản nháp', chip }
+  if (!route.isSubmitted) return { label: 'Chưa gửi kiểm chứng', chip }
   if (route.verificationStatus === 'FAIL') return { label: 'Chạy thử không đạt', chip }
   if (route.verificationStatus !== 'PASS') return { label: 'Chờ chạy thử', chip }
   return { label: 'Đã chạy thử đạt', chip }
 }
 
-/** When the run behind this revision's PASS was recorded; undefined when the data does not say. */
-export const passedAt = (route: Pick<VersionedRoute, 'effectiveTestRunId' | 'testRuns'>) =>
-  route.testRuns?.find(run => run.id === route.effectiveTestRunId)?.checkedAt
+type AppliedRunRoute = Pick<VersionedRoute, 'effectiveTestRunId' | 'testRuns'>
+
+/** The run whose result this revision carries now: the newest run of its path, maybe recorded on another save. */
+export const appliedRun = (route: AppliedRunRoute): RouteTestRun | undefined =>
+  route.testRuns?.find(run => run.id === route.effectiveTestRunId)
+
+/** When the run behind this revision's PASS was recorded; undefined when it has no applied PASS or the data does not say. */
+export const passedAt = (route: AppliedRunRoute & Pick<VersionedRoute, 'verificationStatus'>) =>
+  route.verificationStatus === 'PASS' ? appliedRun(route)?.checkedAt : undefined
+
+/** The applied run when it is a FAIL; undefined otherwise. */
+export const appliedFail = (route: AppliedRunRoute & Pick<VersionedRoute, 'verificationStatus'>) =>
+  route.verificationStatus === 'FAIL' ? appliedRun(route) : undefined
+
+/** The other save whose run this revision carries, when the result was recorded there (ADR-0023 addendum). */
+export function resultSource(route: AppliedRunRoute & Pick<VersionedRoute, 'revisionId' | 'sharedResultRevisions'>): RouteSharedResultRevision | undefined {
+  const run = appliedRun(route)
+  if (!run || run.routeRevisionId === route.revisionId) return undefined
+  return route.sharedResultRevisions?.find(item => item.revisionId === run.routeRevisionId)
+}
+
+/** The checks a run did not pass, in the words of the record form. */
+export const failedCheckNames = (run: Pick<RouteTestRun, 'allStopsReached' | 'safelyStopped' | 'localizationPassed'>) =>
+  [!run.allStopsReached && 'đi đủ điểm dừng', !run.safelyStopped && 'dừng an toàn', !run.localizationPassed && 'định vị']
+    .filter((item): item is string => Boolean(item))
+
+const tourLine = (tour: RouteScheduledTour) => `${tour.name} · ${campusShortStamp(tour.scheduledStartAt)}`
+
+/**
+ * "Kết quả này áp dụng cho cả: bản lưu 16/11 12:23 (1 Tour đã lên lịch: …)". Null when no other save shares the path.
+ * A result is recorded per path, not per save, so Technical sees which Tours it also decides.
+ */
+export function sharedResultLine(route: Pick<VersionedRoute, 'sharedResultRevisions'>): string | null {
+  const saves = route.sharedResultRevisions ?? []
+  if (!saves.length) return null
+  return `Kết quả này áp dụng cho cả: ${saves.map(save => `bản lưu ${campusShortStamp(save.createdAt)}${save.scheduledTours.length
+    ? ` (${save.scheduledTours.length} Tour đã lên lịch: ${save.scheduledTours.map(tourLine).join('; ')})` : ''}`).join(', ')}`
+}
+
+/** Whether a FAIL here stops Tours: those on this save or on a save sharing its path. */
+export const hasScheduledToursOnPath = (route: Pick<VersionedRoute, 'sharedResultRevisions' | 'scheduledTours'>) =>
+  Boolean(route.scheduledTours?.length || route.sharedResultRevisions?.some(save => save.scheduledTours.length))
+
+/**
+ * "x phút y giây". `formatDuration` in components/ui/date-time.ts drops the seconds above a minute, which hides a 15 s
+ * dwell change, so route screens keep this one until the shared formatter covers it.
+ */
+export const dwellText = (seconds: number) =>
+  seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
+
+/**
+ * What a save means for its run, after Staff saved or submitted it: it keeps the result of its path (only dwell or
+ * narration changed), it needs a new run, or it is not submitted yet.
+ */
+export function saveResultText(route: Pick<VersionedRoute, 'isSubmitted' | 'verificationStatus'>): string {
+  if (!route.isSubmitted) return 'Chưa gửi kiểm chứng. Bấm Gửi kiểm chứng tuyến để Kỹ thuật chạy thử.'
+  if (route.verificationStatus === 'PASS') return 'Đường đi không đổi nên giữ kết quả chạy thử đạt. Dùng được để tạo Tour.'
+  if (route.verificationStatus === 'FAIL') return 'Đường đi không đổi nên giữ kết quả chạy thử không đạt. Sửa đường đi rồi gửi lại.'
+  return 'Đường đi đã đổi nên cần Kỹ thuật chạy thử lại. Chưa tạo được Tour cho tới khi chạy thử đạt.'
+}
 
 const ISSUES: Record<string, string> = {
   MAP_REQUIRED: 'Chưa có map và frame.', START_POSE_INVALID: 'Pose bắt đầu không hợp lệ.',
@@ -93,4 +151,34 @@ export function stopIssue(stop: StopDraft): string | null {
   if (stop.headSteps.some(h => !(h.holdSeconds > 0))) return 'Nhập thời gian giữ lớn hơn 0 cho mọi góc nhìn.'
   const total = stop.headSteps.reduce((sum, h) => sum + h.holdSeconds, 0)
   return total > stop.dwellSeconds ? `Tổng góc nhìn ${total}s vượt thời gian dừng ${stop.dwellSeconds}s.` : null
+}
+
+/** What a save's run depends on, from a saved revision or a form draft. */
+export type RoutePathShape = Pick<VersionedRoute, 'mapVersionId' | 'startX' | 'startY' | 'startYaw' | 'endMode' | 'endX' | 'endY' | 'endYaw'> & {
+  stops: Array<{ poiRevisionId: string; dwellSeconds: number; headSteps: Array<{ preset: string; holdSeconds: number }> }>
+}
+
+/**
+ * How `current` differs from `previous`, in Staff's words, and whether the path changed. The server decides by the POI
+ * position, not the POI save, so a stop moved to a newer POI save with the same position still keeps the result there;
+ * this compares POI saves and may say "cần chạy lại" where the server keeps it.
+ */
+export function routeChanges(previous: RoutePathShape, current: RoutePathShape): { changes: string[]; pathChanged: boolean } {
+  const before = previous.stops.map(stop => stop.poiRevisionId)
+  const after = current.stops.map(stop => stop.poiRevisionId)
+  const path: string[] = []
+  if (previous.mapVersionId !== current.mapVersionId) path.push('đổi bản đồ')
+  const added = after.filter(id => !before.includes(id)).length
+  const removed = before.filter(id => !after.includes(id)).length
+  if (added) path.push(`thêm ${added} điểm dừng`)
+  if (removed) path.push(`bớt ${removed} điểm dừng`)
+  const kept = after.filter(id => before.includes(id))
+  if (kept.join() !== before.filter(id => after.includes(id)).join()) path.push('đổi thứ tự điểm dừng')
+  if (previous.startX !== current.startX || previous.startY !== current.startY || previous.startYaw !== current.startYaw) path.push('đổi điểm bắt đầu')
+  if (previous.endMode !== current.endMode || previous.endX !== current.endX || previous.endY !== current.endY || previous.endYaw !== current.endYaw) path.push('đổi điểm kết thúc')
+  const byId = new Map(previous.stops.map(stop => [stop.poiRevisionId, stop]))
+  const heads = (steps: RoutePathShape['stops'][number]['headSteps']) => steps.map(step => `${step.preset}:${step.holdSeconds}`).join()
+  if (current.stops.some(stop => byId.has(stop.poiRevisionId) && heads(byId.get(stop.poiRevisionId)!.headSteps) !== heads(stop.headSteps))) path.push('đổi góc nhìn camera')
+  const dwell = current.stops.filter(stop => byId.has(stop.poiRevisionId) && byId.get(stop.poiRevisionId)!.dwellSeconds !== stop.dwellSeconds).length
+  return { changes: [...path, ...(dwell ? [`đổi thời gian dừng ${dwell} điểm`] : [])], pathChanged: path.length > 0 }
 }

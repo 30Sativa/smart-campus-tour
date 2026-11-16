@@ -6,7 +6,8 @@ import { formatDate, formatDateTime, formatDuration, formatTime } from '../../..
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { notify } from '../../../components/ui/toast-store'
 import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
-import { passedAt } from '../../../features/administration/routes/route-messages'
+import { appliedFail, passedAt } from '../../../features/administration/routes/route-messages'
+import { campusShortDate, campusTime } from '../../../features/administration/tours/tour-calendar'
 import { NewerRevisionNotice } from '../../../features/administration/routes/NewerRevisionNotice'
 import { mapAreaName } from '../../../features/administration/map-labels'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
@@ -38,7 +39,11 @@ export default function StaffManageTourDetailPage() {
   if (detail.isError) return <AdminPage><AdminErrorPanel title={tourError(detail.error)} onRetry={() => void detail.refetch()} /></AdminPage>
   if (!data) return <AdminPage><SkeletonRows rows={5} label="Đang tải Tour" /></AdminPage>
   const { tour, route, routeRevision, operator, reservation, permissions } = data
-  const routePassedAt = routeRevision && passedAt(routeRevision)
+  const upcoming = tour.state === 'SCHEDULED' || tour.state === 'READY'
+  // The applied result of the Tour's save, which a run on another save with the same path can change (ADR-0023 addendum).
+  // An ended Tour does not show it as current.
+  const routePassedAt = routeRevision && (upcoming || tour.state === 'RUNNING') ? passedAt(routeRevision) : undefined
+  const routeFail = routeRevision && upcoming ? appliedFail(routeRevision) : undefined
   const overdue = overdueStartLabel(tour, reservation, now)
 
   const confirmCancel = async (reason: string) => {
@@ -86,7 +91,10 @@ export default function StaffManageTourDetailPage() {
         <h2 className="text-[15px] font-semibold">Tuyến: {routeRevision.name}</h2>
         <Link to={`/staff/manage/routes/${routeRevision.routeId}?revisionId=${routeRevision.revisionId}`} className="text-sm text-[#2d719e]">Xem bản Tour đang dùng</Link>
       </div>
-      {(tour.state === 'SCHEDULED' || tour.state === 'READY') && <NewerRevisionNotice routeId={routeRevision.routeId} revisionId={routeRevision.revisionId} />}
+      {routeFail && <div className="mt-2"><Notice tone="danger">
+        Đường đi của Tour này vừa chạy thử không đạt lúc {campusTime(routeFail.checkedAt)} {campusShortDate(routeFail.checkedAt)}{routeFail.failureReason?.trim() ? ` (lý do: ${routeFail.failureReason.trim()})` : ''}. Tour không chốt và không bắt đầu được cho tới khi Kỹ thuật ghi một lần chạy đạt.
+      </Notice></div>}
+      {upcoming && <NewerRevisionNotice routeId={routeRevision.routeId} revisionId={routeRevision.revisionId} tourRevisionFailed={Boolean(routeFail)} />}
       {/* ADR-0062: a retired POI blocks new Tours only; this one still goes READY and starts. */}
       {(tour.state === 'SCHEDULED' || tour.state === 'READY') && Boolean(routeRevision.retiredPoiNames?.length) && <div className="mt-2"><Notice tone="warn">Tuyến của Tour này có POI đã ngưng dùng: {routeRevision.retiredPoiNames!.join(', ')}.</Notice></div>}
       <p className="mt-1 text-sm text-muted">{routePassedAt && `Tuyến đã chạy thử đạt ngày ${formatDate(routePassedAt)} · `}{routeRevision.stops.length} điểm dừng</p>
