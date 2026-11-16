@@ -147,12 +147,6 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
           : linkedRouteId && routes.data && !linkedUsable && pickedRouteId === null ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Tuyến vừa mở chưa dùng được để tạo Tour. Chọn tuyến khác.</span>
           : routes.data?.length === 0 ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có tuyến nào chạy thử đạt. Gửi kiểm chứng ở Danh mục tuyến và chờ Kỹ thuật ghi kết quả.</span>
           : <span className="mt-1 block text-xs text-[#64748b]">Chỉ hiện tuyến đã gửi kiểm chứng và có kết quả chạy thử đạt. Tuyến quá dài cho 1 ca thì chưa chọn được.</span>}</label>
-      {noRouteUsable && <Notice tone="warn">
-        <p className="font-semibold">Chưa có tuyến nào dùng được để tạo Tour.</p>
-        <ul className="mt-1 list-disc pl-5" aria-label="Lý do từng tuyến">{routes.data!.map(route => {
-          const reason = routeBlockReason(route)
-          return <li key={route.revisionId}>{route.name}: {reason}.</li>
-          : <span className="mt-1 block text-xs text-[#64748b]">Chỉ hiện tuyến đã gửi kiểm chứng và có kết quả chạy thử đạt. Tuyến quá dài cho 1 ca hoặc cần chạy thử lại thì chưa chọn được.</span>}</label>
       {linkedRetired.length > 0 && <Notice tone="warn" action={<Link to={`/staff/manage/routes/${linkedRoute!.routeId}`} className="text-sm whitespace-nowrap text-[#2d719e] hover:underline">Xem tuyến</Link>}>
         Tuyến vừa mở ({linkedRoute!.name}) có POI đã ngưng dùng: {linkedRetired.join(', ')}. Không tạo được Tour mới trên tuyến này. Lưu phiên bản tuyến mới không có POI này, hoặc dùng lại POI; hoặc chọn tuyến khác.
       </Notice>}
@@ -160,7 +154,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
         <p className="font-semibold">Chưa có tuyến nào dùng được để tạo Tour.</p>
         <ul className="mt-1 list-disc pl-5" aria-label="Lý do từng tuyến">{routes.data!.map(route => {
           const reason = pickBlockReason(route)
-          return <li key={route.revisionId}>{route.name}: {reason}.{reason === RERUN_REASON && ' Nhờ Kỹ thuật ghi một lần chạy mới.'}</li>
+          return <li key={route.revisionId}>{route.name}: {reason}.</li>
         })}</ul>
       </Notice>}
       <label className="block text-sm">Robot<select title="" required aria-label="Robot" className={inputClass} value={robotCode} disabled={!routeRevisionId || robots.isPending} onChange={e => setRobotCode(e.target.value)}>
