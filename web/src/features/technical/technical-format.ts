@@ -42,7 +42,7 @@ const narrationConflicts: Record<string, string> = {
 export function narrationErrorText(error: unknown): { text: string; reload: boolean } {
   const code = apiErrorCode(error)
   if (code && narrationConflicts[code]) return { text: narrationConflicts[code], reload: code !== 'IDEMPOTENCY_CONFLICT' }
-  if (error instanceof ApiError && error.status === 400) return { text: 'Thuyết minh cần 1 đến 4000 ký tự; video dự phòng phải là đường dẫn HTTPS.', reload: false }
+  if (error instanceof ApiError && error.status === 400) return { text: 'Thuyết minh cần 1 đến 4000 ký tự.', reload: false }
   return { text: errorText(error), reload: false }
 }
 

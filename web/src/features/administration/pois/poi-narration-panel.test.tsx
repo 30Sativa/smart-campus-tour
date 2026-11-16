@@ -97,7 +97,7 @@ describe('POI narration section (ADR-0060)', () => {
     expect(sent.requestId).toBeTruthy()
   })
 
-  it('edits a draft with its row version, refuses a non-HTTPS video and discards after a confirmation', async () => {
+  it('edits a draft with its row version, offers no video field and discards after a confirmation', async () => {
     versions = [version({ narrationText: 'Bản nháp cũ.', rowVersion: 'rv-draft' })]
     renderPage()
     const section = await panel()
@@ -105,13 +105,12 @@ describe('POI narration section (ADR-0060)', () => {
     expect(text).toHaveValue('Bản nháp cũ.')
     expect(section.getByText(/Sửa lần cuối bởi Lan lúc/)).toBeInTheDocument()
     fireEvent.change(text, { target: { value: 'Bản nháp mới.' } })
-    fireEvent.change(section.getByLabelText(/Video dự phòng HTTPS/), { target: { value: 'http://video' } })
-    expect(section.getByText('Video dự phòng phải là đường dẫn HTTPS.')).toBeInTheDocument()
-    expect(section.getByRole('button', { name: 'Lưu bản đang soạn' })).toBeDisabled()
-    fireEvent.change(section.getByLabelText(/Video dự phòng HTTPS/), { target: { value: 'https://cdn.example/v.mp4' } })
+    // A POI narration has no fallback video any more (group H); only the Tour keeps one.
+    expect(section.queryByLabelText(/Video dự phòng/)).not.toBeInTheDocument()
+    expect(section.queryByText('Tùy chọn')).not.toBeInTheDocument()
     fireEvent.click(section.getByRole('button', { name: 'Lưu bản đang soạn' }))
     await waitFor(() => expect(writes('/narrations/draft')).toHaveLength(1))
-    expect(body('/narrations/draft')).toMatchObject({ expectedRowVersion: 'rv-draft', narrationText: 'Bản nháp mới.', fallbackVideoUrl: 'https://cdn.example/v.mp4' })
+    expect(body('/narrations/draft')).toMatchObject({ expectedRowVersion: 'rv-draft', narrationText: 'Bản nháp mới.', fallbackVideoUrl: null })
 
     fireEvent.click(section.getByRole('button', { name: 'Bỏ bản này' }))
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Bỏ bản này' }))
@@ -132,6 +131,18 @@ describe('POI narration section (ADR-0060)', () => {
     await waitFor(() => expect(writes('/narrations/draft')).toHaveLength(1))
     expect(body('/narrations/draft')).toMatchObject({ narrationText: 'Bản đã duyệt.' })
     expect(body('/narrations/draft')).not.toHaveProperty('expectedRowVersion')
+  })
+
+  it('never shows a video an older narration still holds, nor sends one when it is copied', async () => {
+    versions = [{ ...approvedVersion, fallbackVideoUrl: 'https://cdn.example/legacy.mp4' }]
+    renderPage()
+    const section = await panel()
+    expect(await section.findByText('Bản đã duyệt.')).toBeInTheDocument()
+    expect(section.queryByText(/Video dự phòng|legacy\.mp4/)).not.toBeInTheDocument()
+    fireEvent.click(section.getByRole('button', { name: 'Soạn phiên bản mới' }))
+    fireEvent.click(section.getByRole('button', { name: 'Lưu bản đang soạn' }))
+    await waitFor(() => expect(writes('/narrations/draft')).toHaveLength(1))
+    expect(body('/narrations/draft')).toMatchObject({ fallbackVideoUrl: null })
   })
 
   it('gives the draft’s last editor no Approve button and says who approves', async () => {

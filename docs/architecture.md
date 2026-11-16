@@ -752,8 +752,11 @@ not discarded:
   `{ requestId, expectedRowVersion?, narrationText, fallbackVideoUrl? }` creates
   the draft when there is none (`expectedRowVersion` absent) or edits the current
   draft in place (`expectedRowVersion` required); a mismatch either way is 409
-  `STALE_VERSION`. Text is trimmed, 1–4000 characters; the video is an optional
-  HTTPS URL up to 2048 characters (400 otherwise).
+  `STALE_VERSION`. Text is trimmed, 1–4000 characters. `fallbackVideoUrl` is
+  still accepted but ignored (stored NULL); a route revision copies no video to
+  its stops either. The columns `PoiNarrationRevisions.FallbackVideoUrl` and
+  `RouteRevisionStops.FallbackVideoUrl` remain until a later schema drops them.
+  The only fallback video students see is the Tour's own `fallbackVideoUrl`.
 - `POST /api/staff/poi-proposals/{id}/narrations/{revisionNumber}/approve` and
   `/discard` (Staff) with `{ requestId, expectedRowVersion }`. Approving needs an
   approver other than the draft's last editor (409

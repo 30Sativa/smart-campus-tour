@@ -126,6 +126,26 @@ public sealed class RobotIntegritySqlTests
     }
 
     [SchemaV11Fact]
+    public async Task SavingARoute_CopiesNoNarrationVideoToItsStops_AndATourKeepsItsOwnVideo()
+    {
+        await using var h = await Harness.Create();
+        var tested = await h.TestedRoute();
+        // Narration saved before group H may still hold a video; a route saved now must not carry it to its stops.
+        await h.SetLegacyNarrationVideo("https://video.example.test/legacy");
+        var resaved = await h.Send(new SaveRouteRevisionCommand(h.StaffId, tested.RouteId, new(Guid.NewGuid(), tested.RevisionNumber, tested.Name, null,
+            tested.MapVersionId, tested.StartX, tested.StartY, tested.StartYaw, tested.EndMode, null, null, null,
+            tested.Stops.Select(stop => new RouteRevisionStopInput(stop.PoiRevisionId, stop.DwellSeconds + 5, [.. stop.HeadSteps])).ToArray())));
+        Assert.All(resaved.Stops, stop => Assert.Null(stop.FallbackVideoUrl));
+        Assert.All(await h.StopVideos(resaved.RevisionId), Assert.Null);
+
+        const string tourVideo = "https://video.example.test/tour";
+        var start = new DateTimeOffset(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)).ToDateTime(new TimeOnly(8, 15)), TimeSpan.FromHours(7));
+        var created = await h.Send(new CreateTourCommand(h.StaffId, new(Guid.NewGuid(),
+            new("Tour có video", null, tested.RevisionId, First, h.OperatorId, start, tourVideo, 20))));
+        Assert.Equal(tourVideo, await h.TourVideo(created.Id));
+    }
+
+    [SchemaV11Fact]
     public async Task UnconfirmedRobot_IsBlockedEverywhere()
     {
         await using var h = await Harness.Create();
@@ -444,6 +464,25 @@ public sealed class RobotIntegritySqlTests
 
         public Guid StaffId => staffId;
         public Guid OperatorId => operatorId;
+
+        public async Task SetLegacyNarrationVideo(string url)
+        {
+            await using var db = Context();
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE dbo.PoiNarrationRevisions SET FallbackVideoUrl = {url}");
+        }
+
+        public async Task<string?[]> StopVideos(Guid revisionId)
+        {
+            await using var db = Context();
+            return await db.RouteRevisionStops.AsNoTracking().Where(stop => stop.RouteRevisionId == revisionId)
+                .Select(stop => stop.FallbackVideoUrl).ToArrayAsync();
+        }
+
+        public async Task<string?> TourVideo(Guid tourId)
+        {
+            await using var db = Context();
+            return await db.Tours.AsNoTracking().Where(tour => tour.Id == tourId).Select(tour => tour.FallbackVideoUrl).SingleAsync();
+        }
 
         public async Task SetNeedsInspection(string code)
         {
