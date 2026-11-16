@@ -604,6 +604,24 @@ describe('READY and Reopen on Tour preparation', () => {
     expect(writes[0]).toMatchObject({ path: '/api/staff/manage/tours/tour-1/ready', body: { expectedRowVersion: 'AAAAAAAAB9E=' } })
   })
 
+  it('warns, without blocking, that READY before the deadline closes registration early; a quick Tour gets no warning', async () => {
+    const permissions = { canEditMetadata: true, canChangeScheduleAndRoute: true, canCancel: true, canMarkReady: true, canReopen: false, readyBlockers: [] }
+    const base = detail('SCHEDULED', { permissions })
+    // Registration closes 19/11/2099 08:15 in Vietnam; one of twenty seats is free.
+    const early = { ...base.tour, scheduledStartAt: '2099-11-21T01:15:00Z', registrationClosesAt: '2099-11-19T01:15:00Z', capacity: 20, heldSeats: 19 }
+    tour = { ...base, tour: early }
+    const view = renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Chốt Tour/ }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('Hạn đăng ký là 19/11/2099 08:15 và Tour còn 1 chỗ. Chốt bây giờ sẽ đóng đăng ký sớm: trường khác không đăng ký thêm được. Có thể mở lại trước giờ bắt đầu.')
+    expect(within(dialog).getByRole('button', { name: 'Chốt Tour' })).toBeEnabled()
+    view.unmount()
+    tour = { ...base, tour: { ...early, isShortNotice: true } }
+    renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Chốt Tour/ }))
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('Hạn đăng ký')
+  })
+
   it('reopens a READY Tour only with a reason, and links to the pre-start check', async () => {
     tour = detail('READY')
     renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)

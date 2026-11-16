@@ -9,6 +9,7 @@ import { operationRefusal } from '../../staff/operations/operation-errors'
 import { checkInfo, INFO_CHECKS } from '../../staff/operations/operation-labels'
 import { useOpenTour } from '../../staff/operations/hooks'
 import { useMarkTourReady, useReopenTour, useRequestId } from './hooks'
+import { earlyReadyWarning } from './tour-messages'
 import type { TourDetails } from './types'
 
 /**
@@ -83,6 +84,8 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
       navigate(`/staff/live/${tour.id}`)
     }, () => undefined)
   }
+  // Read when the dialog opens: the warning is about that moment, not a live clock.
+  const [earlyWarning, setEarlyWarning] = useState<string | null>(null)
   const blockers = permissions.readyBlockers ?? []
   const supported = permissions.canMarkReady !== undefined
 
@@ -117,7 +120,7 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
             <h2 className="text-[15px] font-semibold text-[#0f172a]">Chốt Tour</h2>
             <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Chốt khóa đăng ký và cấu hình để chuẩn bị bắt đầu.</p>
           </div>
-          {supported && <button type="button" className={buttonClass('primary', 'sm')} disabled={!permissions.canMarkReady} onClick={() => { markReady.reset(); setDialog('ready') }}
+          {supported && <button type="button" className={buttonClass('primary', 'sm')} disabled={!permissions.canMarkReady} onClick={() => { markReady.reset(); setEarlyWarning(earlyReadyWarning(tour, Date.now())); setDialog('ready') }}
             aria-describedby={`ready-state-${tour.id}`}><Lock size={15} aria-hidden="true" />Chốt Tour</button>}
         </div>
         <div id={`ready-state-${tour.id}`} className="mt-3">
@@ -153,7 +156,10 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
       </div>}
 
       <ConfirmationDialog open={dialog === 'ready'} title="Chốt Tour?" confirmLabel="Chốt Tour" withReason={false} busyLabel="Đang chốt…"
-        description="Đại diện trường không còn tạo, sửa hay hủy đăng ký; Staff không duyệt dòng đăng ký và không sửa thông tin Tour. Lời mời và truy cập của học sinh vẫn hoạt động. Có thể mở lại khi Tour chưa bắt đầu."
+        description={<>
+          <p>Đại diện trường không còn tạo, sửa hay hủy đăng ký; Staff không duyệt dòng đăng ký và không sửa thông tin Tour. Lời mời và truy cập của học sinh vẫn hoạt động. Có thể mở lại khi Tour chưa bắt đầu.</p>
+          {earlyWarning && <p className="mt-2 font-semibold text-[#7d5310]">{earlyWarning}</p>}
+        </>}
         busy={markReady.isPending} error={markReady.isError ? refusalText(markReady.error) : null}
         onCancel={() => { if (!markReady.isPending) setDialog(null) }} onConfirm={() => void confirmReady()} />
       <ConfirmationDialog open={dialog === 'reopen'} title="Mở lại Tour?" confirmLabel="Mở lại" requireReason reasonLabel="Lý do mở lại" busyLabel="Đang mở lại…"

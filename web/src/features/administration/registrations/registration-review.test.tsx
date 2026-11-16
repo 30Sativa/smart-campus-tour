@@ -27,6 +27,7 @@ let clients: QueryClient[]
 let emailChanges: StaffEmailChange[]
 let emailDecisions: { id: string; action: string; input: EmailChangeDecisionInput }[]
 let emailChangeExpired: boolean
+let invitationsEnabled: boolean
 const emailChange = (overrides: Partial<StaffEmailChange> = {}): StaffEmailChange => ({
   id: 'change-1', registrationId: 'registration', rowId: 'row', rowNumber: 4, currentEmail: 'room@example.com', proposedEmail: 'new@example.com',
   state: 'PENDING', requestedByUserId: 'rep', createdAt: '2026-10-09T03:00:00Z', reviewedAt: null, reviewedByUserId: null, reviewReason: null,
@@ -48,13 +49,13 @@ function renderAt(path = '/staff/manage/registrations/pending?review=registratio
 beforeEach(() => {
   useToastStore.setState({ toasts: [] })
   clients = []; requests = []; decisions = []; unexpectedMutations = []; registration = structuredClone(initial); failure = null
-  emailChanges = []; emailDecisions = []; emailChangeExpired = false
+  emailChanges = []; emailDecisions = []; emailChangeExpired = false; invitationsEnabled = false
   useAuthStore.getState().setAuth('staff-token', { userId: 'sql-staff', username: 'staff', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
     expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer staff-token')
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
     if (url.pathname === '/api/registrations/registration/invitations')
-      return response({ enabled: false, canIssue: false, items: [] })
+      return response({ enabled: invitationsEnabled, canIssue: false, items: [] })
     if (url.pathname.startsWith('/api/staff/manage/roster-email-change-requests')) {
       if (options?.method !== 'POST') { expect(url.searchParams.get('state')).toBe('PENDING'); return response(structuredClone(emailChanges)) }
       const [, id, action] = /\/([^/]+)\/(accept|reject)$/.exec(url.pathname)!
@@ -131,6 +132,20 @@ describe('Staff registration list', () => {
     renderAt('/staff/manage/registrations', 'all')
     expect(within(await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })).getByText('Tour đã kết thúc')).toBeInTheDocument()
   })
+
+  it('shows the rows still pending instead of "Đã duyệt" for an approved registration (B4)', async () => {
+    registration.summary.state = 'APPROVED'; registration.summary.pendingRowCount = 2
+    renderAt('/staff/manage/registrations', 'all')
+    const table = await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })
+    expect(within(table).getByText('Còn 2 dòng chờ duyệt')).toBeInTheDocument()
+    expect(within(table).queryByText('Đã duyệt')).not.toBeInTheDocument()
+  })
+
+  it('says "Đã duyệt" once no row is pending', async () => {
+    registration.summary.state = 'APPROVED'; registration.summary.pendingRowCount = 0
+    renderAt('/staff/manage/registrations', 'all')
+    expect(within(await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })).getByText('Đã duyệt')).toBeInTheDocument()
+  })
 })
 
 describe('Staff registration review boundary', () => {
@@ -182,6 +197,27 @@ describe('Staff registration review boundary', () => {
     expect(screen.queryByText(/Mã đoàn:/)).not.toBeInTheDocument()
   })
 
+  it('says an accepted row gets its code and email while invitation support is on, and that no email goes while it is off', async () => {
+    invitationsEnabled = true
+    const view = renderAt('/staff/manage/registrations?review=registration', 'all')
+    await waitFor(() => expect(view.getQueryData<{ enabled: boolean }>(['registration-invitations', 'sql-staff', 'registration'])?.enabled).toBe(true))
+    fireEvent.click(await screen.findByRole('button', { name: 'Chấp nhận Phòng A' }))
+    const on = await screen.findByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })
+    expect(on).toHaveTextContent('Chỉ dòng này được chấp nhận. Dòng được chấp nhận sẽ tự nhận mã và email lời mời.')
+    expect(on).not.toHaveTextContent('xử lý riêng')
+    fireEvent.click(within(on).getByRole('button', { name: 'Quay lại' }))
+    invitationsEnabled = false
+    await act(() => view.refetchQueries({ queryKey: ['registration-invitations'] }))
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp nhận Phòng A' }))
+    expect(await screen.findByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })).toHaveTextContent('Hỗ trợ lời mời đang tắt nên chưa gửi email.')
+  })
+
+  it('names the row on its own Chấp nhận and Từ chối buttons', async () => {
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    expect(await screen.findByRole('button', { name: 'Chấp nhận Phòng A' })).toHaveAttribute('aria-label', 'Chấp nhận Phòng A')
+    expect(screen.getByRole('button', { name: 'Từ chối Phòng A' })).toHaveAttribute('aria-label', 'Từ chối Phòng A')
+  })
+
   it('keeps a mixed ACCEPTED/PENDING registration in the pending queue and reviews only its pending row', async () => {
     registration = structuredClone(initial)
     registration.summary.state = 'APPROVED'
@@ -192,6 +228,10 @@ describe('Staff registration review boundary', () => {
     renderAt()
     expect(await screen.findByRole('button', { name: 'Chấp nhận Thiết bị B' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Chấp nhận Phòng A' })).not.toBeInTheDocument()
+    // APPROVED on the server, but a row still waits: the drawer does not say "Đã duyệt" yet.
+    const drawer = screen.getByRole('dialog')
+    expect(within(drawer).getByText('Còn 1 dòng chờ duyệt')).toBeInTheDocument()
+    expect(within(drawer).queryByText('Đã duyệt')).not.toBeInTheDocument()
     expect(requests.some(url => url.searchParams.get('state') === 'SUBMITTED')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Chấp nhận Thiết bị B' }))
     fireEvent.click(within(await screen.findByRole('dialog', { name: 'Chấp nhận dòng Thiết bị B?' })).getByRole('button', { name: 'Chấp nhận dòng' }))

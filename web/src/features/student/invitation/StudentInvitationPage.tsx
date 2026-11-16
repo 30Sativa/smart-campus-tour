@@ -24,7 +24,8 @@ async function access(tourId: string, action: string, code?: string, signal?: Ab
   })).data
 }
 const RECONNECT_WINDOW_EXPIRED = 'RECONNECT_WINDOW_EXPIRED'
-const IN_USE_FALLBACK = 'Lời mời đang được dùng trên browser khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
+const SESSION_ENDED = 'Phiên xem đã kết thúc vì mã đã bị thu hồi hoặc thay bằng mã mới. Kiểm tra email mới nhất hoặc liên hệ đại diện đoàn.'
+const IN_USE_FALLBACK = 'Lời mời đang được dùng trên trình duyệt khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
 /** A 409's code, message and `errors.fields.retryAfterSeconds` (docs/architecture.md §3.2.3). */
 function conflict(error: ApiError): { code?: string; message?: string; retryAfterSeconds?: number } {
   try {
@@ -82,12 +83,13 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const key = ['student-invitation', tourId]
   const [code, setCode] = useState('')
   const [left, setLeft] = useState(false)
+  const [hadSession, setHadSession] = useState(false)
   const join = useMutation({ mutationFn: () => access(tourId, 'join', code),
     onMutate: () => client.cancelQueries({ queryKey: key }),
     onSuccess: info => { setCode(''); setLeft(false); client.setQueryData(key, info) } })
   const leave = useMutation({ mutationFn: () => access(tourId, 'leave'),
     onMutate: () => client.cancelQueries({ queryKey: key }),
-    onSuccess: () => { setLeft(true); client.setQueryData(key, null); join.reset() } })
+    onSuccess: () => { setLeft(true); setHadSession(false); client.setQueryData(key, null); join.reset() } })
   const sessionEnabled = !left && !join.isPending && !leave.isPending
   // A heartbeat begun before join/leave must not overwrite the mutation's committed state.
   const session = useQuery({ queryKey: key, queryFn: ({ signal }) => access(tourId, 'session', undefined, signal),
@@ -128,6 +130,9 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   }
   const accessDenied = session.isError && session.error instanceof ApiError && [401, 403, 409].includes(session.error.status)
   const info = left || accessDenied ? null : session.data
+  // A first visit has no cookie and gets a silent 401; a 401 after this tab held a session means the code was revoked or reissued.
+  if (info && !hadSession) setHadSession(true)
+  const ended = hadSession && !left && session.isError && session.error instanceof ApiError && session.error.status === 401
   // Route and progress; a failure only hides the stops, the session above stays the access authority.
   const view = useQuery({ queryKey: ['student-tour-view', tourId], queryFn: ({ signal }) => getStudentTourView(tourId, signal),
     retry: false, enabled: !!info && !leave.isPending, refetchInterval: info?.tourState === 'RUNNING' ? 5000 : 30000 })
@@ -158,13 +163,14 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         </div>}
         <form onSubmit={event => { event.preventDefault(); join.mutate() }}>
           <div className="st-entry-form-heading"><Mail size={24} aria-hidden="true" /><h2 id="student-access-title">Nhập mã truy cập</h2></div>
-          <p>Sao chép mã trong email lời mời. Mỗi lời mời dùng trên một browser; không cần tài khoản học sinh.</p>
+          <p>Sao chép mã trong email lời mời. Mỗi lời mời dùng trên một trình duyệt; không cần tài khoản học sinh.</p>
           <label htmlFor="invitation-code">Mã truy cập</label>
           <div className="st-entry-code-field"><KeyRound size={18} aria-hidden="true" />
           <input id="invitation-code" autoComplete="off" maxLength={64} value={code} disabled={join.isPending} onChange={event => setCode(event.target.value)}
             aria-invalid={join.isError} aria-describedby={join.isError ? 'invitation-code-error' : undefined} required />
           </div>
           {join.isError && <p id="invitation-code-error" role="alert" className="st-session-error">{accessError(join.error)}</p>}
+          {ended && <p role="alert" className="st-session-error">{SESSION_ENDED}</p>}
           {session.isError && !unchecked && !(session.error instanceof ApiError && session.error.status === 401) && <p role="alert" className="st-session-error">{accessError(session.error)}</p>}
           <button className="st-btn st-invitation-submit" aria-busy={join.isPending} disabled={join.isPending || !code.trim()}>{ENTER_TOUR_LABEL}</button>
           <p className="st-invitation-note"><LifeBuoy size={18} aria-hidden="true" /><span>Mất email hoặc mã đang bị dùng? Liên hệ đại diện đoàn để gửi lại hoặc cấp mã mới.</span></p>

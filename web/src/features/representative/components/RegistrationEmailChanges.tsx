@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import type { RepresentativeRegistration, RepresentativeRosterRow, RosterEmailChangeInput } from '../api/types'
 import { useRepEmailChanges, useRequestRepEmailChange } from '../representative-hooks'
 import { formatDateTime, readRepError } from '../rep-format'
@@ -11,6 +11,7 @@ function EmailChangeForm({ registration, row, refresh }: { registration: Represe
   const [snapshot] = useState({ expectedTourRowVersion: registration.tourRowVersion, expectedRegistrationRowVersion: registration.rowVersion, expectedRowVersion: row.rowVersion! })
   const [email, setEmail] = useState('')
   const [consent, setConsent] = useState(false)
+  const consentId = useId()
   const [attempt, setAttempt] = useState<RosterEmailChangeInput | null>(null)
   const [done, setDone] = useState(false)
   const mutation = useRequestRepEmailChange()
@@ -43,7 +44,7 @@ function EmailChangeForm({ registration, row, refresh }: { registration: Represe
     <p className="rep-hint">Email hiện tại tiếp tục có hiệu lực trong khi chờ duyệt hoặc nếu yêu cầu bị từ chối. Chỉ sau khi Staff chấp thuận, email mới được áp dụng.</p>
     <label className="rep-field"><span>Email đề xuất</span><input className="rep-input" type="email" required maxLength={254} autoComplete="email" value={email} disabled={Boolean(attempt) || done} onChange={event => setEmail(event.target.value)} /></label>
     {!attempt && email.trim().toLowerCase() === row.email.trim().toLowerCase() && <p className="rep-hint">Email đề xuất phải khác email hiện tại.</p>}
-    <label className="rep-consent"><input type="checkbox" checked={consent} disabled={Boolean(attempt) || done} onChange={event => setConsent(event.target.checked)} /><span>Tôi xác nhận có quyền cung cấp thông tin đăng ký và email lời mời trong danh sách này.</span></label>
+    <label className="rep-consent"><input type="checkbox" aria-labelledby={consentId} checked={consent} disabled={Boolean(attempt) || done} onChange={event => setConsent(event.target.checked)} /><span id={consentId}>Tôi xác nhận có quyền cung cấp thông tin đăng ký và email lời mời trong danh sách này.</span></label>
     {done && <Callout tone="ok" title="Đã gửi yêu cầu, chờ Staff duyệt" role="status">Email hiện tại chưa thay đổi.</Callout>}
     {failure && <Callout tone="danger" title={uncertain ? 'Chưa xác nhận được kết quả gửi' : failure.message} role="alert">
       {uncertain ? 'Thử lại giữ nguyên mã yêu cầu, email đề xuất và phiên bản của lần gửi trước.' : conflict ? 'Tải lại dữ liệu và bắt đầu lại trước khi gửi yêu cầu mới.' : null}

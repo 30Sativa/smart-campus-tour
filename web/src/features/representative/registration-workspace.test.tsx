@@ -85,6 +85,7 @@ describe('Representative registration workspace HTTP behavior', () => {
     expect(screen.getByRole('button', { name: 'Gửi yêu cầu duyệt' })).toHaveAccessibleDescription('Cần: nhập email đề xuất, đánh dấu ô xác nhận.')
     fireEvent.change(email, { target: { value: 'new@example.test' } })
     expect(screen.getByText('Cần: đánh dấu ô xác nhận.')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Tôi xác nhận có quyền cung cấp thông tin đăng ký và email lời mời trong danh sách này.' })).toHaveAttribute('aria-labelledby')
     fireEvent.click(screen.getByRole('checkbox', { name: /Tôi xác nhận/ }))
     expect(screen.queryByText(/^Cần:/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu duyệt' }))

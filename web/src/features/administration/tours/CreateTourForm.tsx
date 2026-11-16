@@ -290,8 +290,12 @@ function TourKindChooser({ onPick }: { onPick: (kind: TourKind) => void }) {
 const slotClass = (chosen: boolean, available: boolean) =>
   `rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] disabled:cursor-not-allowed ${chosen ? 'border-[#2563eb] bg-[#eff6ff]' : available ? 'border-[#e2e8f0] bg-white hover:border-[#93b4ef]' : 'border-[#eef1f4] bg-[#f8fafc] text-[#64748b]'}`
 
+/** "Ca sáng 08:15–09:45, còn trống": the shift, its Tour time and whether it can be picked, read as one name. */
+const shiftAccessibleName = (slot: TourSlot) =>
+  `${slot.shiftName} ${slot.time}–${formatTime(tourEnd(slot))}, ${slot.available ? 'còn trống' : slot.reason ?? 'không dùng được'}`
+
 function ShiftButton({ slot, chosen, onPick }: { slot: TourSlot; chosen: boolean; onPick: () => void }) {
-  return <button type="button" disabled={!slot.available} aria-pressed={chosen} onClick={onPick} className={slotClass(chosen, slot.available)}>
+  return <button type="button" disabled={!slot.available} aria-pressed={chosen} aria-label={shiftAccessibleName(slot)} onClick={onPick} className={slotClass(chosen, slot.available)}>
     <span className="block font-semibold tabular-nums">{shiftLabel(slot)}</span>
     <span className="block text-xs">{slot.available ? 'Còn trống' : slot.reason}</span>
   </button>

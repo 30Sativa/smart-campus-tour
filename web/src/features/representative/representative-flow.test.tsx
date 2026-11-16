@@ -304,8 +304,19 @@ describe('Representative real HTTP contract', () => {
     expect(await screen.findByRole('table', { name: 'Danh sách lời mời' })).toHaveTextContent('Phòng A')
     expect(screen.getByText('Đã chấp nhận')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: 'Thông tin' }))
-    expect(await screen.findByRole('button', { name: 'Sửa và gửi lại' })).toBeDisabled()
+    // A locked approved record is not a resubmission: the button stays "Sửa đăng ký" with the lock reason.
+    expect(await screen.findByRole('button', { name: 'Sửa đăng ký' })).toBeDisabled()
+    expect(screen.getAllByText('Chức năng sau duyệt chưa được triển khai.').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Sửa và gửi lại' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Sửa/ })).not.toBeInTheDocument()
+  })
+  it('keeps "Sửa đăng ký" with its lock reason after the Tour is READY', async () => {
+    registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'READY' }
+    registration.allowedActions = { edit: { allowed: false, reason: 'Buổi đã sẵn sàng, đăng ký bị khóa.' }, resubmit: { allowed: false, reason: 'Chỉ gửi lại khi bị từ chối.' }, cancel: { allowed: false, reason: 'Buổi đã sẵn sàng.' } }
+    renderAt('/dai-dien/dang-ky/registration')
+    expect(await screen.findByRole('button', { name: 'Sửa đăng ký' })).toBeDisabled()
+    expect(screen.getByText('Buổi đã sẵn sàng, đăng ký bị khóa.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sửa và gửi lại' })).not.toBeInTheDocument()
   })
   it('surfaces an API error without replacing it with mock data', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => response(null, 503, { message: 'Unavailable' })))
