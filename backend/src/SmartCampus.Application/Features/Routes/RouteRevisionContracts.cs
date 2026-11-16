@@ -13,7 +13,7 @@ public sealed record RouteRevisionRequest(Guid RequestId, int ExpectedCurrentRev
 public sealed record RouteRunRequest(
     Guid RequestId, string RobotCode, Guid ParticipatingStaffUserId,
     string ResultCode, bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed,
-    int MeasuredDurationSeconds, string? FailureReason, string EvidenceNote);
+    string? FailureReason, string EvidenceNote);
 
 /// <summary>One stop of a revision. <c>Id</c> is the <c>RouteRevisionStops.Id</c> that a Tour's execution stop ids name.</summary>
 public sealed record RouteRevisionStopView(Guid Id, Guid PoiRevisionId, Guid SourcePoiVerificationRecordId,
@@ -22,6 +22,11 @@ public sealed record RouteRevisionStopView(Guid Id, Guid PoiRevisionId, Guid Sou
     string? NarrationText = null, string? FallbackVideoUrl = null,
     // ADR-0061: the POI the stop's revision belongs to, so a reader can find that POI's newer revisions.
     Guid? PoiProposalId = null);
+/// <summary>
+/// One recorded run. Since nobody types a duration, <c>MeasuredDurationSeconds</c> holds the estimate stored when it was
+/// recorded (older runs keep what was typed); screens no longer show it. It and <c>MeasurementBasis</c> go with the columns
+/// in a later schema version.
+/// </summary>
 public sealed record RouteTestRunView(Guid Id, Guid RouteRevisionId, Guid MapVersionId, string MapPackageSha256,
     string RobotCode, Guid CheckedByUserId, Guid ParticipatingStaffUserId, string ResultCode,
     bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed, int MeasuredDurationSeconds,

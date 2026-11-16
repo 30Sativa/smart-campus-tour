@@ -341,7 +341,7 @@ export default function StaffManageRouteFormPage() {
             <p aria-label="Lộ trình robot đi">{['Bắt đầu', ...stops.map((stop, index) => `${index + 1}. ${poiName(stop.poiRevisionId)}`),
               endChoice === 'LAST_POI' ? 'Kết thúc tại điểm dừng cuối' : endChoice === 'START' ? 'Kết thúc tại điểm bắt đầu' : 'Kết thúc'].join(' → ')}</p>
             <p className="mt-1">Tổng thời gian dừng: <span className="font-semibold">{durationText(totalDwell)}</span></p>
-            <p className="mt-1 text-xs text-[#64748b]">Thời lượng thật chốt sau khi Kỹ thuật chạy thử.</p>
+            <p className="mt-1 text-xs text-[#64748b]">Thời lượng dự kiến được tự tính khi lưu, từ thời gian dừng và quãng đường.</p>
           </ReviewRow>
         </dl>
         {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}

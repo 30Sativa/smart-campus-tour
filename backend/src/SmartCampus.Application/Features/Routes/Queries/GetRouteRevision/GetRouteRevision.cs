@@ -24,7 +24,10 @@ public sealed class GetRouteRevisionHandler(IRouteRevisionRepository repo, Tours
 
 internal static class RouteRevisionMapper
 {
-    /// <summary>Without <paramref name="schedule"/> the view reports ScheduleFit UNKNOWN; screens that show the label pass it.</summary>
+    /// <summary>
+    /// Without <paramref name="schedule"/> the view reports ScheduleFit UNKNOWN and no expected length; every handler that
+    /// returns the view to a screen passes it.
+    /// </summary>
     public static async Task<RouteRevisionView> Load(IRouteRevisionRepository repo, Guid routeId, Guid revisionId, bool history, CancellationToken ct,
         Tours.TourScheduleSettings? schedule = null)
     {
@@ -56,7 +59,8 @@ internal static class RouteRevisionMapper
             .OrderBy(r => r.CheckedAt).ThenBy(r => r.Id).ToArray();
         var runs = history ? routeRuns : effectiveConfigurationRuns;
         var effective = effectiveConfigurationRuns.LastOrDefault();
-        var expected = ExpectedDuration(effective, stops);
+        int? expected = schedule is null ? null
+            : Tours.TourSchedule.EstimatedDurationSeconds(revision, stops, schedule.EstimatedSpeedMetersPerSecond);
         var duration = "INCOMPLETE_CONTENT_AUDIO_DATA";
         var dwell = stops.Sum(s => s.DwellSeconds);
         var dtoRuns = new List<RouteTestRunView>(runs.Count);
@@ -94,11 +98,4 @@ internal static class RouteRevisionMapper
             route.IsOpenForNewTours, LegacyRouteRevision.For(route), schedule is null ? Tours.RouteScheduleFit.Unknown
                 : Tours.TourSchedule.ScheduleFit(schedule, expected), expected, retiredPoiNames);
     }
-
-    /// <summary>The effective PASS measured with dwell, plus any dwell added since (the same sum a reservation uses).</summary>
-    private static int? ExpectedDuration(RouteTestRun? effective, IReadOnlyList<RouteRevisionStop> stops) =>
-        effective is { ResultCode: "PASS", MeasurementBasis: RouteMeasurementBasis.TotalWithDwell, RouteRevision: { } tested }
-            ? Tours.TourSchedule.ExpectedDurationSeconds(effective.MeasuredDurationSeconds,
-                tested.RouteRevisionStops.Select(stop => (stop.StopOrder, stop.DwellSeconds)), stops.Select(stop => (stop.StopOrder, stop.DwellSeconds)))
-            : null;
 }

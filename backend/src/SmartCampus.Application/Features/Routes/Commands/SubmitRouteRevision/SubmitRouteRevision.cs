@@ -21,7 +21,8 @@ public sealed class SubmitRouteRevisionValidator : AbstractValidator<SubmitRoute
     }
 }
 
-public sealed class SubmitRouteRevisionHandler(IRouteRevisionRepository repo, IMapVersionRepository mapRepository, TimeProvider clock)
+public sealed class SubmitRouteRevisionHandler(IRouteRevisionRepository repo, IMapVersionRepository mapRepository,
+    Tours.TourScheduleSettings schedule, TimeProvider clock)
     : IRequestHandler<SubmitRouteRevisionCommand, RouteRevisionView>
 {
     public async Task<RouteRevisionView> Handle(SubmitRouteRevisionCommand c, CancellationToken ct)
@@ -33,7 +34,7 @@ public sealed class SubmitRouteRevisionHandler(IRouteRevisionRepository repo, IM
         if (prior is not null)
         {
             SaveRouteRevisionHandler.EnsureHash(prior.RequestHash, hash);
-            return await RouteRevisionMapper.Load(repo, c.RouteId, c.RevisionId, true, ct);
+            return await RouteRevisionMapper.Load(repo, c.RouteId, c.RevisionId, true, ct, schedule);
         }
         var route = await repo.LockRouteAsync(c.RouteId, ct) ?? throw new NotFoundException("Versioned route", c.RouteId);
         var current = await repo.GetCurrentRevisionAsync(route.Id, ct);
@@ -51,7 +52,7 @@ public sealed class SubmitRouteRevisionHandler(IRouteRevisionRepository repo, IM
             RequestId = request.RequestId, RequestHash = hash, SubmittedByUserId = c.ActorUserId, SubmittedAt = now });
         repo.AddAudit(new AuditLog { ActorUserId = c.ActorUserId, Action = "ROUTE_REVISION_SUBMITTED", EntityType = "RouteRevision",
             EntityId = current.Id.ToString("D"), ResultCode = "SUBMITTED", OccurredAt = now });
-        var view = await RouteRevisionMapper.Load(repo, route.Id, current.Id, true, ct);
+        var view = await RouteRevisionMapper.Load(repo, route.Id, current.Id, true, ct, schedule);
         return view with { IsSubmitted = true };
     }
     internal static async Task EnsurePoisStillPass(IRouteRevisionRepository repo, Guid revisionId, CancellationToken ct)

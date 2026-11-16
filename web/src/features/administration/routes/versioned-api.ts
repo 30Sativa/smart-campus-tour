@@ -4,8 +4,9 @@ import type { ApiResponse, PagedApiResponse } from '../../../api/contracts/share
 export type RouteTestRun = {
   id: string; routeRevisionId: string; robotCode: string; checkedByUserId: string; participatingStaffUserId: string
   resultCode: 'PASS' | 'FAIL'; allStopsReached: boolean; safelyStopped: boolean; localizationPassed: boolean
+  /** The estimate stored when the run was recorded (older runs: what was typed). Not shown; dropped with the column later. */
   measuredDurationSeconds: number; failureReason: string | null; evidenceNote: string; checkedAt: string
-  /** Null for a run from before the measurement definition; it cannot size a reservation. */
+  /** Null for a run from before ADR-0035. No longer read: the length is estimated from the revision. */
   measurementBasis: string | null
 }
 export type RouteScheduleFit = 'UNKNOWN' | 'FITS' | 'OVER_RECOMMENDED' | 'TOO_LONG_FOR_SHIFT'

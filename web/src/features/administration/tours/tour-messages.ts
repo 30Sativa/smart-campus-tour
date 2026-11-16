@@ -38,7 +38,6 @@ const CONFLICTS: Record<string, string> = {
   TOUR_SLOT_NOT_ALLOWED: 'Giờ bắt đầu không khớp ca nào. Chọn lại một ca.',
   SHIFT_BLOCKED: 'Ca này vừa bị Admin khoá. Chọn ca hoặc ngày khác.',
   ROUTE_TOO_LONG_FOR_SHIFT:'Tuyến dài hơn thời lượng tối đa của ca. Chọn tuyến ngắn hơn hoặc giảm thời gian dừng.',
-  ROUTE_TEST_REMEASURE_REQUIRED: 'Cần chạy thử lại tuyến để đo theo định nghĩa mới. Nhờ Kỹ thuật ghi lại kết quả chạy thử.',
   OPERATOR_REQUIRED: 'Người vận hành phải là tài khoản Staff đang hoạt động. Chọn lại người vận hành.',
   ROUTE_TEST_PASS_REQUIRED: 'Phiên bản tuyến này không còn kết quả chạy thử đạt. Tải lại trang rồi chọn tuyến khác.',
   ROUTE_NOT_SUBMITTED: 'Phiên bản tuyến này chưa được gửi kiểm chứng.',

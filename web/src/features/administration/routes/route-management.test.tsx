@@ -408,7 +408,7 @@ describe('Staff versioned Route workflow', () => {
     expect(review.getByText('Quay về điểm bắt đầu')).toBeInTheDocument()
     expect(review.getByLabelText('Lộ trình robot đi')).toHaveTextContent('Bắt đầu → 1. Verified entrance → 2. Verified hall → Kết thúc tại điểm bắt đầu')
     expect(review.getByText('5 phút 30 giây')).toBeInTheDocument()
-    expect(review.getByText('Thời lượng thật chốt sau khi Kỹ thuật chạy thử.')).toBeInTheDocument()
+    expect(review.getByText('Thời lượng dự kiến được tự tính khi lưu, từ thời gian dừng và quãng đường.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Quay lại/ }))
     expect(screen.getByRole('button', { name: /Bước 3/ })).toHaveAttribute('aria-current', 'step')
   })
@@ -485,18 +485,20 @@ describe('Staff versioned Route workflow', () => {
 
   it('says when a tested route can start a Tour, and why not otherwise', async () => {
     const run = { id: 'run-1', routeRevisionId: 'route-rev-1', robotCode: 'amr-01', checkedByUserId: 'tech-1', participatingStaffUserId: 'staff-1', resultCode: 'PASS', allStopsReached: true, safelyStopped: true, localizationPassed: true, measuredDurationSeconds: 600, failureReason: null, evidenceNote: 'ok', checkedAt: '2026-10-28T10:00:00Z', measurementBasis: 'TOTAL_WITH_DWELL' }
-    const tested = { ...currentRoute, isSubmitted: true, verificationStatus: 'PASS', effectiveTestRunId: 'run-1', testRuns: [run] }
+    const tested = { ...currentRoute, isSubmitted: true, verificationStatus: 'PASS', effectiveTestRunId: 'run-1', testRuns: [run], scheduleFit: 'FITS' as const, expectedDurationSeconds: 1500 }
     currentRoute = tested
     const ready = renderAt('/staff/manage/routes/route-1')
     expect(await screen.findByText(/Dùng được để tạo Tour/)).toBeInTheDocument()
+    expect(screen.getByText('Thời lượng dự kiến: 25 phút (tự tính từ thời gian dừng và quãng đường)')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Tạo Tour' })).toHaveAttribute('href', '/staff/manage/tours/new?route=route-rev-1')
     expect(screen.queryByText(/Chưa xếp lịch/)).not.toBeInTheDocument()
     ready.unmount()
 
+    // A PASS recorded before ADR-0035 no longer matters: the length is estimated from the revision.
     currentRoute = { ...tested, testRuns: [{ ...run, measurementBasis: null }] }
     const old = renderAt('/staff/manage/routes/route-1')
-    expect(await screen.findByText(/đo theo định nghĩa cũ/)).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Tạo Tour' })).not.toBeInTheDocument()
+    expect(await screen.findByText(/Dùng được để tạo Tour/)).toBeInTheDocument()
+    expect(screen.queryByText(/Cần chạy thử lại/)).not.toBeInTheDocument()
     old.unmount()
 
     currentRoute = { ...tested, isActive: false }

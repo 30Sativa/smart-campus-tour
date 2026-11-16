@@ -164,11 +164,12 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         revision.Route = route!;
         repo.Add(revision);
         var stopIds = new Guid[i.Stops.Count];
+        var stopRows = new RouteRevisionStop[i.Stops.Count];
         for (var index = 0; index < i.Stops.Count; index++)
         {
             var selected = byId[i.Stops[index].PoiRevisionId];
             stopIds[index] = Guid.NewGuid();
-            repo.Add(new RouteRevisionStop { Id = stopIds[index], RouteRevisionId = revision.Id, RouteRevision = revision,
+            repo.Add(stopRows[index] = new RouteRevisionStop { Id = stopIds[index], RouteRevisionId = revision.Id, RouteRevision = revision,
                 PoiProposalRevisionId = selected.Revision.Id, SourcePoiVerificationRecordId = selected.Verification.Id,
                 MapVersionId = map.Id, PoiNavigationFingerprint = selected.Revision.NavigationFingerprint,
                 StopOrder = index + 1, DwellSeconds = i.Stops[index].DwellSeconds,
@@ -188,11 +189,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             inheritedRun.ParticipatingStaffUserId, inheritedRun.ResultCode, inheritedRun.AllStopsReached,
             inheritedRun.SafelyStopped, inheritedRun.LocalizationPassed, inheritedRun.MeasuredDurationSeconds,
             inheritedRun.FailureReason, inheritedRun.EvidenceNote, inheritedRun.CheckedAt, inheritedRun.MeasurementBasis)];
-        // A dwell-only change inherits the PASS; its length then follows like a reservation's (docs/lich-tour-theo-ca.md §4).
-        int? expected = inheritedRun is { ResultCode: "PASS", MeasurementBasis: RouteMeasurementBasis.TotalWithDwell, RouteRevision: { } tested }
-            ? Tours.TourSchedule.ExpectedDurationSeconds(inheritedRun.MeasuredDurationSeconds,
-                tested.RouteRevisionStops.Select(stop => (stop.StopOrder, stop.DwellSeconds)), i.Stops.Select((stop, index) => (index + 1, stop.DwellSeconds)))
-            : null;
+        // docs/lich-tour-theo-ca.md §4: estimated from dwell and the stop positions, the same sum a reservation uses.
+        var expected = Tours.TourSchedule.EstimatedDurationSeconds(revision, stopRows, schedule.EstimatedSpeedMetersPerSecond);
         return new RouteRevisionView(routeId, revision.Id, number, revision.Name, revision.Description, map.Id, map.MapKey,
             Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), revision.StartX, revision.StartY, revision.StartYaw,
             revision.EndMode, revision.EndX, revision.EndY, revision.EndYaw,

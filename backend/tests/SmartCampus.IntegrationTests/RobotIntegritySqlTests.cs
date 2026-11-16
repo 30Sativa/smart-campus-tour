@@ -427,12 +427,12 @@ public sealed class RobotIntegritySqlTests
                 stops)));
             await Send(new SubmitRouteRevisionCommand(staffId, route.RouteId, route.RevisionId, new(Guid.NewGuid(), 1)));
             return await Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
-                new(Guid.NewGuid(), First, staffId, "PASS", true, true, true, 260, null, "Chạy thử đạt.")));
+                new(Guid.NewGuid(), First, staffId, "PASS", true, true, true, null, "Chạy thử đạt.")));
         }
 
         public Task<RouteRevisionView> RecordRouteTest(RouteRevisionView route, string robot) =>
             Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
-                new(Guid.NewGuid(), robot, staffId, "PASS", true, true, true, 260, null, "Chạy thử lại.")));
+                new(Guid.NewGuid(), robot, staffId, "PASS", true, true, true, null, "Chạy thử lại.")));
 
         public async Task<Guid> CreateTour(RouteRevisionView route, string robot)
         {

@@ -355,7 +355,7 @@ public sealed class MapRetirementSqlTests
         {
             var route = await SubmittedRoute();
             return await Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
-                new(Guid.NewGuid(), First, staffId, "PASS", true, true, true, 260, null, "Chạy thử đạt.")));
+                new(Guid.NewGuid(), First, staffId, "PASS", true, true, true, null, "Chạy thử đạt.")));
         }
 
         public async Task<RouteRevisionView> SaveRoute(Guid? routeId, int expectedRevision, Guid mapVersionId, RouteRevisionView source)

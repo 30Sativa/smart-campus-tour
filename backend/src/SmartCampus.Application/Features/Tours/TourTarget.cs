@@ -99,16 +99,16 @@ internal static class TourTarget
             throw new ConflictException(reason, "ROBOT_NOT_READY_FOR_ROUTE");
     }
 
-    /// <summary>Null when the effective run predates the measurement definition, so it cannot size a reservation.</summary>
-    public static async Task<TourReservationPlan?> PlanReservationAsync(IRouteRevisionRepository revisions, Guid revisionId,
-        RouteTestRunView run, CancellationToken ct)
+    /// <summary>
+    /// The reservation length, estimated from the revision's own dwell and stop positions; the test run only proves the
+    /// route can be driven, it no longer sizes the hold.
+    /// </summary>
+    public static async Task<TourReservationPlan> PlanReservationAsync(IRouteRevisionRepository revisions, RouteRevision revision,
+        TourScheduleSettings settings, CancellationToken ct)
     {
-        if (run.MeasurementBasis != RouteMeasurementBasis.TotalWithDwell) return null;
-        // The run may belong to an earlier revision with the same navigation and different dwell.
-        var tested = await revisions.GetStopsAsync(run.RouteRevisionId, ct);
-        var target = await revisions.GetStopsAsync(revisionId, ct);
-        return new(run.MeasuredDurationSeconds, TourSchedule.ExpectedDurationSeconds(run.MeasuredDurationSeconds,
-            tested.Select(stop => (stop.StopOrder, stop.DwellSeconds)), target.Select(stop => (stop.StopOrder, stop.DwellSeconds))));
+        var estimate = TourSchedule.EstimatedDurationSeconds(revision, await revisions.GetStopsAsync(revision.Id, ct),
+            settings.EstimatedSpeedMetersPerSecond);
+        return new(TourSchedule.StoredDurationSeconds(estimate), estimate);
     }
 
     public static async Task RequireOperatorAsync(IRouteRevisionRepository revisions, Guid userId, CancellationToken ct)

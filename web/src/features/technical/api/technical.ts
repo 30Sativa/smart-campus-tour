@@ -215,7 +215,7 @@ export type RouteTestParticipant = { userId: string; fullName: string; username:
 export type RouteTestRunInput = {
   routeId: string; revisionId: string; requestId: string; robotCode: string; participatingStaffUserId: string
   resultCode: 'PASS' | 'FAIL'; allStopsReached: boolean; safelyStopped: boolean; localizationPassed: boolean
-  measuredDurationSeconds: number; failureReason: string | null; evidenceNote: string
+  failureReason: string | null; evidenceNote: string
 }
 
 type Envelope<T> = ApiResponse<T>

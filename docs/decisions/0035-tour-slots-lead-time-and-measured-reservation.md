@@ -4,6 +4,7 @@
 - **Amends:** ADR-0034 decision 1 (reservation length) and its known limitation about dwell-only revisions. Every other ADR-0034 decision stays in force.
 - **Amended by:** ADR-0036 (decision 2: a typed start inside configured hours), itself superseded.
 - **Amended by** `docs/lich-tour-theo-ca.md` (07/11/2026). Replaced: decision 2 (slots) by fixed shifts; the robot hold [start−15, start+expected+15] in decision 4 by holding the whole shift; in decision 5, the reason `ROUTE_TOO_LONG_FOR_GAP` is gone and `ROUTE_TOO_LONG_FOR_SHIFT` and `SHIFT_BLOCKED` are added. Unchanged: decision 1 (72-hour lead time), decision 3 (what a test measures), the `expected` formula in decision 4, and decision 6 (concurrency).
+- **Amended by** `docs/lich-tour-theo-ca.md` §4 (16/11/2026, owner request). Replaced: decision 3 (what a test measures) and the `expected` formula in decision 4. Nobody types a duration; the expected length is estimated from the revision (dwell plus straight-line travel at `Tours:EstimatedSpeedMetersPerSecond`). `ROUTE_TEST_REMEASURE_REQUIRED` is no longer returned. No schema change: `MeasuredDurationSeconds`/`MeasurementBasis` keep receiving valid values until a later schema version drops them.
 - **Related:** ADR-0023 (versioned routes), ADR-0024, ADR-0026 (registration).
 
 ## Context

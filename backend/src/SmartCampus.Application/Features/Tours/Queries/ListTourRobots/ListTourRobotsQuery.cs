@@ -4,6 +4,7 @@ using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Routes;
+using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Tours.Queries.ListTourRobots;
 
@@ -58,10 +59,10 @@ public sealed class ListTourRobotsQueryHandler(IRouteRevisionRepository revision
     /// </summary>
     private async Task<(DateTimeOffset StartsAt, DateTimeOffset EndsAt)?> QuickHoldAsync(Guid revisionId, CancellationToken ct)
     {
-        RouteTestRunView run;
-        try { (_, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, revisionId, lockTarget: false, ct); }
+        RouteRevision revision;
+        try { (revision, _) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, revisionId, lockTarget: false, ct); }
         catch (ConflictException) { return null; }
-        if (await TourTarget.PlanReservationAsync(revisions, revisionId, run, ct) is not { } plan) return null;
+        var plan = await TourTarget.PlanReservationAsync(revisions, revision, settings, ct);
         var now = clock.GetUtcNow();
         return TourSchedule.QuickTourHold(now, TourSchedule.QuickTourDeadline(now, settings.ShortNoticeMinLead), plan.ExpectedDurationSeconds);
     }

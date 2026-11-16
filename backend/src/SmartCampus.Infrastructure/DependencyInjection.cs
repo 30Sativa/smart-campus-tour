@@ -117,7 +117,7 @@ public static class DependencyInjection
             configuration.GetValue<decimal?>("Routes:MinStopSeparationMeters")));
         services.AddSingleton(_ => new TourScheduleSettings(configuration.GetSection("Tours:Shifts").Get<TourShiftOption[]>(),
             configuration.GetValue<int?>("Tours:RecommendedMaxMinutes"), configuration.GetValue<int?>("Tours:MaxCapacity"),
-            configuration.GetValue<int?>("Tours:ShortNoticeMinLeadMinutes")));
+            configuration.GetValue<int?>("Tours:ShortNoticeMinLeadMinutes"), configuration.GetValue<double?>("Tours:EstimatedSpeedMetersPerSecond")));
 
         services.AddScoped<IAuditLogReader, EfAuditLogReader>();
         services.AddScoped<IStaffNotificationReader, EfStaffNotificationReader>();

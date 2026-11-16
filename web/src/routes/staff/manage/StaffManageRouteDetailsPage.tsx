@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
-import { passedAt, routeAvailabilityError, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
+import { expectedDurationText, passedAt, routeAvailabilityError, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
 import { campusShortDate, campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
 import { versionedRoutesApi, type VersionedRoute } from '../../../features/administration/routes/versioned-api'
@@ -32,7 +32,7 @@ type RouteNotice = { tone: 'info' | 'warn' | 'ok'; text: string; createTour?: bo
 
 /**
  * The one thing this revision waits for, and who does it, in the order Tour create checks it
- * (ADR-0037 availability, ADR-0034 effective PASS, ADR-0035 measurement basis). Guidance only:
+ * (ADR-0037 availability, ADR-0034 effective PASS, docs/lich-tour-theo-ca.md §4 estimated length). Guidance only:
  * create still checks the map, robot and slot. `durationStatus` is not used, because the server
  * always reports it as incomplete and it no longer decides scheduling.
  */
@@ -43,9 +43,6 @@ function routeNotice(route: VersionedRoute, hasUnverifiedPoi: boolean): RouteNot
     : { tone: 'info', text: 'Đây là bản nháp. Staff kiểm tra lại các điểm dừng rồi bấm Gửi kiểm chứng tuyến để Kỹ thuật chạy thử.' }
   if (route.verificationStatus === 'FAIL') return { tone: 'warn', text: 'Kỹ thuật ghi nhận chạy thử không đạt. Staff sửa tuyến rồi gửi kiểm chứng lại.' }
   if (route.verificationStatus !== 'PASS') return { tone: 'info', text: 'Đã gửi kiểm chứng. Đang chờ Kỹ thuật chạy thử toàn tuyến trên robot và ghi kết quả.' }
-  const effective = route.testRuns.find(run => run.id === route.effectiveTestRunId)
-  if ((effective && !effective.measurementBasis) || route.scheduleFit === 'UNKNOWN')
-    return { tone: 'warn', text: 'Cần chạy thử lại: lần chạy thử đạt được đo theo định nghĩa cũ. Kỹ thuật cần chạy thử lại toàn tuyến trước khi tạo được Tour.' }
   if (route.scheduleFit === 'TOO_LONG_FOR_SHIFT') return { tone: 'warn', text: `Chưa tạo được Tour: ${scheduleFitLabel(route)!.detail} Staff sửa tuyến cho ngắn hơn rồi gửi chạy thử lại.` }
   return { tone: 'ok', text: 'Dùng được để tạo Tour. Khi tạo, hệ thống còn kiểm tra bản đồ, robot và ca.', createTour: true }
 }
@@ -128,6 +125,7 @@ export default function StaffManageRouteDetailsPage() {
         <div><dt className="text-xs text-[#64748b]">Số điểm dừng</dt><dd className="mt-0.5">{value.stops.length}</dd></div>
         <div><dt className="text-xs text-[#64748b]">Tổng thời gian dừng</dt><dd className="mt-0.5">{formatDuration(value.dwellDurationSeconds)}</dd></div>
       </dl>
+      {value.expectedDurationSeconds ? <p className="mt-3 text-[13px] text-[#334155]">{expectedDurationText(value.expectedDurationSeconds)}</p> : null}
     </section>
     <section className={`${panelClass} mt-4 p-4`} aria-label="Các điểm dừng">
       <h2 className="font-semibold">Các điểm dừng</h2>

@@ -365,7 +365,7 @@ public sealed class SchemaV11Tests
         async Task RejectParticipant(Guid userId)
         {
             var error = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new RecordRouteTestRunCommand(technicalStaffId, draft1.RouteId, draft1.RevisionId,
-                new(Guid.NewGuid(), "physical_1", userId, "FAIL", false, true, true, 240,
+                new(Guid.NewGuid(), "physical_1", userId, "FAIL", false, true, true,
                     "Invalid participant.", "Expected participant account rejection."))));
             Assert.Equal("STAFF_PARTICIPANT_REQUIRED", error.Code);
         }
@@ -429,14 +429,14 @@ public sealed class SchemaV11Tests
         await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), mapB.Id,
             new(Guid.NewGuid(), "physical_1", mapB.PackageSha256, true, true, "Manual check after deploying map B.")));
         var mapMismatch = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new RecordRouteTestRunCommand(technicalStaffId, draft1.RouteId, draft1.RevisionId,
-            new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true, 240,
+            new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true,
                 "Map A was not deployed.", "Expected rejection while map B is current."))));
         Assert.Equal("MAP_NOT_CURRENTLY_DEPLOYED", mapMismatch.Code);
         await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
             new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manual check after restoring map A.")));
 
         var failed = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, draft1.RouteId, draft1.RevisionId,
-                new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true, 240,
+                new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true,
                 "Did not arrive at the stop.", "Human-observed failed whole-route run.")));
         Assert.Equal("FAIL", failed.VerificationStatus);
 
@@ -448,11 +448,20 @@ public sealed class SchemaV11Tests
         await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), draft2.RouteId, draft2.RevisionId,
             new(Guid.NewGuid(), 2)));
         var passed = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, draft2.RouteId, draft2.RevisionId,
-                new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true, 260,
+                new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true,
                 null, "Human-observed successful whole-route run.")));
         Assert.Equal("PASS", passed.VerificationStatus);
         Assert.Equal("INCOMPLETE_CONTENT_AUDIO_DATA", passed.DurationStatus);
         Assert.Equal(60, passed.DwellDurationSeconds);
+        // Nobody types a duration: it is the dwell plus the straight-line travel at Tours:EstimatedSpeedMetersPerSecond.
+        static int Estimate(RouteRevisionView view) => TourSchedule.EstimatedDurationSeconds(
+            new RouteRevision { StartX = view.StartX, StartY = view.StartY, EndMode = view.EndMode, EndX = view.EndX, EndY = view.EndY },
+            view.Stops.Select(stop => new RouteRevisionStop { StopOrder = stop.StopOrder, DwellSeconds = stop.DwellSeconds, X = stop.X, Y = stop.Y }),
+            TourScheduleSettings.DefaultEstimatedSpeedMetersPerSecond);
+        var estimated = Estimate(passed);
+        Assert.True(estimated > 60);
+        Assert.Equal(estimated, passed.ExpectedDurationSeconds);
+        Assert.Equal(estimated, await db.ScalarAsync<int>($"SELECT MeasuredDurationSeconds FROM dbo.RouteTestRuns WHERE Id='{passed.EffectiveTestRunId:D}';"));
 
         var tourActor = Guid.Parse(Id(2));
         var tourStart = TourSlot(4, "S1");
@@ -472,10 +481,10 @@ public sealed class SchemaV11Tests
         Assert.Equal(draft2.RevisionId, tourDetail.RouteRevision!.RevisionId);
         Assert.Equal(participatingStaffId, tourDetail.Operator!.UserId);
         Assert.Equal("physical_1", tourDetail.Reservation!.RobotCode);
-        // The hold is the whole 08:00-10:00 shift, not the measured run plus buffers.
+        // The hold is the whole 08:00-10:00 shift, not the estimated run plus buffers.
         Assert.Equal(tourStart.AddMinutes(-15), tourDetail.Reservation.StartsAt);
         Assert.Equal(tourStart.AddMinutes(105), tourDetail.Reservation.EndsAt);
-        Assert.Equal(260, tourDetail.Reservation.ExpectedDurationSeconds);
+        Assert.Equal(estimated, tourDetail.Reservation.ExpectedDurationSeconds);
         Assert.Equal(new[] { "Library", "Lab" }, (await scope.ServiceProvider.GetRequiredService<IStudentTourViewReader>().LoadAsync(tour.Id, default))!.Stops.Select(stop => stop.Name));
         await sender.Send(new CancelTourCommand(tour.Id, tourActor, new(Guid.NewGuid(), tourDetail.Tour.RowVersion, "Rescheduling")));
         Assert.NotNull((await sender.Send(new GetTourQuery(tour.Id))).Reservation!.ReleasedAt);
@@ -495,6 +504,7 @@ public sealed class SchemaV11Tests
             new(Guid.NewGuid(), 3)));
 
         // ADR-0035: the slot list and create share one calculation, so each refusal matches.
+        // The column keeps a value its CHECK allows until a later schema drops it; nothing reads it any more.
         Assert.Equal(RouteMeasurementBasis.TotalWithDwell, passed.TestRuns.Single(run => run.Id == passed.EffectiveTestRunId).MeasurementBasis);
         async Task<string> Refused(CreateTourRequest request) =>
             (await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new CreateTourCommand(tourActor, request)))).Code;
@@ -504,15 +514,17 @@ public sealed class SchemaV11Tests
             return (await sender.Send(new GetTourSlotsQuery(dwellOnly.RevisionId, "physical_1", date, date))).Days.Single().Slots.Single(slot => slot.StartsAt == start);
         }
 
-        // The dwell-only revision adds 15 s to the 260 s measured on revision 2.
+        // The dwell-only revision adds 15 s to the estimate of revision 2; the run it inherits does not size it.
         var dwellStart = TourSlot(5, "S1");
+        Assert.Equal(estimated + 15, Estimate(dwellOnly));
+        Assert.Equal(estimated + 15, dwellOnly.ExpectedDurationSeconds);
         var dwellTour = await sender.Send(new CreateTourCommand(tourActor, NewTour(dwellStart, dwellOnly.RevisionId)));
         var dwellReservation = (await sender.Send(new GetTourQuery(dwellTour.Id))).Reservation!;
-        Assert.Equal(260, dwellReservation.MeasuredDurationSeconds);
-        Assert.Equal(275, dwellReservation.ExpectedDurationSeconds);
+        Assert.Equal(estimated + 15, dwellReservation.MeasuredDurationSeconds);
+        Assert.Equal(estimated + 15, dwellReservation.ExpectedDurationSeconds);
         Assert.Equal(dwellStart.AddMinutes(105), dwellReservation.EndsAt);
         Assert.Equal(dwellStart.AddHours(-48), (await SlotOf(dwellStart)).RegistrationClosesAt);
-        Assert.Equal(("FITS", 275), (await sender.Send(new GetRouteRevisionQuery(dwellOnly.RouteId, dwellOnly.RevisionId, false))) is var fit
+        Assert.Equal(("FITS", estimated + 15), (await sender.Send(new GetRouteRevisionQuery(dwellOnly.RouteId, dwellOnly.RevisionId, false))) is var fit
             ? (fit.ScheduleFit, fit.ExpectedDurationSeconds!.Value) : default);
 
         var overlap = await SlotOf(dwellStart);
@@ -567,36 +579,41 @@ public sealed class SchemaV11Tests
         Assert.Equal("ROBOT_RESERVATION_CONFLICT", Assert.Single(outcomes.OfType<string>()));
         Assert.Equal(1, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.TourRobotReservations WHERE StartsAt='{contested.AddMinutes(-15):O}' AND ReleasedAt IS NULL;"));
 
-        // docs/lich-tour-theo-ca.md §4: a PASS over the 90 minutes a shift holds stays PASS, but fits no shift.
+        // docs/lich-tour-theo-ca.md §4: a route estimated over the 90 minutes a shift holds stays PASS, but fits no shift.
+        // The API keeps dwell to 300 s a stop, so the stored dwell is raised directly to stand in for a long route.
+        string DwellUpdate(int first, int second) =>
+            $"UPDATE dbo.RouteRevisionStops SET DwellSeconds = CASE StopOrder WHEN 1 THEN {first} ELSE {second} END WHERE RouteRevisionId='{dwellOnly.RevisionId:D}';";
+        await db.ExecuteAsync(DwellUpdate(3600, 1800));
         var tooLong = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, dwellOnly.RouteId, dwellOnly.RevisionId,
-            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true, 5401,
-                null, "Whole-route measurement including dwell.")));
-        Assert.Equal(("PASS", "TOO_LONG_FOR_SHIFT", 5401), (tooLong.VerificationStatus, tooLong.ScheduleFit, tooLong.ExpectedDurationSeconds!.Value));
+            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true,
+                null, "Whole-route run with the long dwell.")));
+        Assert.Equal(("PASS", "TOO_LONG_FOR_SHIFT", Estimate(tooLong)), (tooLong.VerificationStatus, tooLong.ScheduleFit, tooLong.ExpectedDurationSeconds!.Value));
+        Assert.True(tooLong.ExpectedDurationSeconds > 5400);
         Assert.DoesNotContain(tooLong.EligibilityIssues, issue => issue.Contains("SHIFT"));
         var noShift = await SlotOf(TourSlot(6, "S1"));
         Assert.Equal("ROUTE_TOO_LONG_FOR_SHIFT", noShift.ReasonCode);
-        Assert.Equal("Tuyến cần 90 phút 1 giây, ca này chỉ chứa được 90 phút", noShift.Reason);
+        Assert.StartsWith("Tuyến cần 9", noShift.Reason);
+        Assert.EndsWith(", ca này chỉ chứa được 90 phút", noShift.Reason);
         Assert.Equal("ROUTE_TOO_LONG_FOR_SHIFT", await Refused(NewTour(TourSlot(6, "S1"), dwellOnly.RevisionId)));
 
         // Over the 60 minutes recommended is only a warning: the Tour is still created.
+        await db.ExecuteAsync(DwellUpdate(3600, 30));
         var longRun = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, dwellOnly.RouteId, dwellOnly.RevisionId,
-            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true, 4000,
-                null, "Longer whole-route measurement including dwell.")));
+            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true,
+                null, "Whole-route run with the longer dwell.")));
         Assert.Equal("OVER_RECOMMENDED", longRun.ScheduleFit);
         Assert.Equal("OVER_RECOMMENDED", Assert.Single((await sender.Send(new ListVersionedRoutesQuery("Dwell adjustment only", map.Id, 1, 10, "name"))).Items).ScheduleFit);
         Assert.NotEqual(Guid.Empty, (await sender.Send(new CreateTourCommand(tourActor, NewTour(TourSlot(6, "S1"), dwellOnly.RevisionId)))).Id);
 
-        // A run from before the definition cannot size a reservation, however good its result.
+        // A run from before ADR-0035 no longer matters: the length comes from the revision, so it still schedules.
         await db.ExecuteAsync($"UPDATE dbo.RouteTestRuns SET MeasurementBasis=NULL WHERE Id='{longRun.EffectiveTestRunId:D}';");
-        Assert.Equal("UNKNOWN", (await sender.Send(new GetRouteRevisionQuery(dwellOnly.RouteId, dwellOnly.RevisionId, false))).ScheduleFit);
-        var remeasure = await SlotOf(TourSlot(7, "S1"));
-        Assert.Equal("ROUTE_TEST_REMEASURE_REQUIRED", remeasure.ReasonCode);
-        Assert.Equal("Cần chạy thử lại tuyến để đo theo định nghĩa mới", remeasure.Reason);
-        Assert.Equal("ROUTE_TEST_REMEASURE_REQUIRED", await Refused(NewTour(TourSlot(7, "S1"), dwellOnly.RevisionId)));
+        Assert.Equal("OVER_RECOMMENDED", (await sender.Send(new GetRouteRevisionQuery(dwellOnly.RouteId, dwellOnly.RevisionId, false))).ScheduleFit);
+        Assert.True((await SlotOf(TourSlot(7, "S1"))).Available);
         await db.ExecuteAsync($"UPDATE dbo.RouteTestRuns SET MeasurementBasis='TOTAL_WITH_DWELL' WHERE Id='{longRun.EffectiveTestRunId:D}';");
+        await db.ExecuteAsync(DwellUpdate(45, 30));
 
         var newerFail = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, dwellOnly.RouteId, dwellOnly.RevisionId,
-            new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true, 270,
+            new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true,
                 "The revised dwell configuration was observed with a route failure.", "Newer run for unchanged navigation.")));
         Assert.Equal("FAIL", newerFail.VerificationStatus);
 

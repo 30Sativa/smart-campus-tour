@@ -117,7 +117,7 @@ export type TourListQuery = {
   search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number
   operator?: 'me'; needsReconcile?: boolean; readyBlockers?: boolean
 }
-export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_SHIFT' | 'SHIFT_BLOCKED' | 'ROUTE_TEST_REMEASURE_REQUIRED'
+export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_SHIFT' | 'SHIFT_BLOCKED'
 /** One shift of one day (docs/lich-tour-theo-ca.md §3): `time` is the Tour start, the reservation is the whole shift. */
 export type TourSlot = {
   time: string; startsAt: string; available: boolean; reasonCode: TourSlotReason | null; reason: string | null

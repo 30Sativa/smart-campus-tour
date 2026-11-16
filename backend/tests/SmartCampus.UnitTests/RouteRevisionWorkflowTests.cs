@@ -93,10 +93,10 @@ public sealed class RouteRevisionWorkflowTests
     }
 
     [Fact]
-    public void RouteTestPassRequiresWholeRouteObservationsAndMeasuredTime()
+    public void RouteTestPassRequiresWholeRouteObservations_AndNoTypedDuration()
     {
         var request = new RouteRunRequest(Guid.NewGuid(), "physical", Guid.NewGuid(), "PASS",
-            false, true, true, 60, null, "manual evidence");
+            false, true, true, null, "manual evidence");
         var command = new RecordRouteTestRunCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), request);
         Assert.False(new RecordRouteTestRunValidator().Validate(command).IsValid);
         Assert.True(new RecordRouteTestRunValidator().Validate(command with
@@ -109,31 +109,12 @@ public sealed class RouteRevisionWorkflowTests
     public void FailRequiresExplicitReasonAndAFailedObservation()
     {
         var request = new RouteRunRequest(Guid.NewGuid(), "physical", Guid.NewGuid(), "FAIL",
-            true, true, true, 60, null, "manual evidence");
+            true, true, true, null, "manual evidence");
         var command = new RecordRouteTestRunCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), request);
         Assert.False(new RecordRouteTestRunValidator().Validate(command).IsValid);
         Assert.True(new RecordRouteTestRunValidator().Validate(command with
         {
             Request = request with { FailureReason = "Localization drift", LocalizationPassed = false }
         }).IsValid);
-    }
-
-    [Theory]
-    [InlineData(30)]
-    [InlineData(59)]
-    [InlineData(60)]
-    public void RouteTestRun_RefusesATotalNotLongerThanTheDwellSum(int measured)
-    {
-        RouteRevisionStop[] stops = [new() { DwellSeconds = 30 }, new() { DwellSeconds = 30 }];
-        var error = Assert.Throws<ConflictException>(() => RecordRouteTestRunHandler.EnsureLongerThanDwell(measured, stops));
-        Assert.Equal("ROUTE_TEST_DURATION_TOO_SHORT", error.Code);
-        Assert.Equal("Tổng thời gian chạy phải lớn hơn tổng thời gian dừng (60 giây).", error.Message);
-    }
-
-    [Fact]
-    public void RouteTestRun_AcceptsATotalLongerThanTheDwellSum()
-    {
-        RouteRevisionStop[] stops = [new() { DwellSeconds = 30 }, new() { DwellSeconds = 30 }];
-        RecordRouteTestRunHandler.EnsureLongerThanDwell(61, stops);
     }
 }
