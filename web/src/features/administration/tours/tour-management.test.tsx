@@ -61,6 +61,11 @@ let expectedSeconds = 1320
 let refuseCreate: string | null = null
 let refuseMessage = 'x'
 let shortNoticeMinutes = 30
+const BASE_ROBOTS = [
+  { robotCode: 'amr-01', displayName: 'AMR 01', usable: true, blockReason: null },
+  { robotCode: 'amr-02', displayName: 'AMR 02', usable: false, blockReason: 'Robot chưa xác nhận kết nối.' },
+]
+let robotRows: Record<string, unknown>[] = BASE_ROBOTS
 /** What `/api/routes/route-2/revisions` returns as the route's current revision. */
 let currentRevision: Record<string, unknown> = { ...TESTED, revisionHistory: [] }
 
@@ -81,10 +86,7 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
     }
     if (path === '/api/routes/route-2/revisions') return Promise.resolve(json({ success: true, data: currentRevision }))
     if (path === '/api/routes') return Promise.resolve(json({ data: testedRoutes, pagination: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 } }))
-    if (path === '/api/staff/manage/tours/robots') return Promise.resolve(json({ success: true, data: [
-      { robotCode: 'amr-01', displayName: 'AMR 01', usable: true, blockReason: null },
-      { robotCode: 'amr-02', displayName: 'AMR 02', usable: false, blockReason: 'Robot chưa xác nhận kết nối.' },
-    ] }))
+    if (path === '/api/staff/manage/tours/robots') return Promise.resolve(json({ success: true, data: robotRows }))
     if (path === '/api/staff/manage/tours/operators') return Promise.resolve(json({ success: true, data: [{ userId: 'staff-1', fullName: 'Lan Staff', username: 'lan' }] }))
     if (path === '/api/staff/manage/routes') return Promise.resolve(json({ data: [ROUTE], pagination: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 } }))
     if (path === '/api/staff/manage/routes/route-1') return Promise.resolve(json({ success: true, data: ROUTE }))
@@ -101,7 +103,7 @@ function renderAt(path: string) {
     <Route path="/staff/manage/tours/:tourId/edit" element={<StaffManageTourEditPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
-beforeEach(() => { slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null; refuseMessage = 'x'; shortNoticeMinutes = 30; currentRevision = { ...TESTED, revisionHistory: [] } })
+beforeEach(() => { robotRows = BASE_ROBOTS; slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null; refuseMessage = 'x'; shortNoticeMinutes = 30; currentRevision = { ...TESTED, revisionHistory: [] } })
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
@@ -294,6 +296,50 @@ describe('live Tour management', () => {
     expect(await screen.findByLabelText('Tên Tour')).toBeInTheDocument()
     expect(screen.getByLabelText(/Ngày tổ chức/)).toBeInTheDocument()
     expect(screen.queryByLabelText(/Lý do tạo gấp/)).not.toBeInTheDocument()
+  })
+
+  it('marks a robot waiting for its on-site check but still lets it be chosen, in both forms', async () => {
+    robotRows = [...BASE_ROBOTS, { robotCode: 'amr-03', displayName: 'AMR 03', usable: true, blockReason: null, needsInspection: true }]
+    api()
+    for (const kind of ['normal', 'quick']) {
+      const view = renderAt(`/staff/manage/tours/new?kind=${kind}`)
+      await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })
+      fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
+      expect(await screen.findByRole('option', { name: 'AMR 03 · amr-03 (chờ kiểm tra tại chỗ, phải trả robot trước khi bắt đầu)' })).toBeEnabled()
+      view.unmount()
+    }
+  })
+
+  it('disables a robot another Tour holds over the quick hold, and the clash never mentions a shift', async () => {
+    robotRows = [{ ...BASE_ROBOTS[0], heldByTourName: 'Trình diễn sáng', heldUntil: '2099-01-03T03:30:00.000Z' },
+      { robotCode: 'amr-05', displayName: 'AMR 05', usable: true, blockReason: null }]
+    const requested: URL[] = []
+    api()
+    const fetchTours = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input, init) => { requested.push(new URL(String(input), 'http://localhost')); return fetchTours(input, init) })
+    renderAt('/staff/manage/tours/new?kind=quick')
+    await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })
+    fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
+    expect(await screen.findByRole('option', { name: /^AMR 01 · amr-01 \(đang giữ cho Tour Trình diễn sáng tới \d{2}:\d{2}\)$/ })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'AMR 05 · amr-05' })).toBeEnabled()
+    expect(requested.find(url => url.pathname === '/api/staff/manage/tours/robots')?.searchParams.get('quick')).toBe('true')
+
+    const refusal = new ApiError(409, JSON.stringify({ message: 'x', errors: { code: 'ROBOT_RESERVATION_CONFLICT' } }))
+    expect(tourError(refusal, { quick: true })).toBe('Robot đang được giữ cho Tour khác trong khoảng thời gian này. Chọn robot khác.')
+    expect(tourError(refusal, { quick: true })).not.toMatch(/(^|\s)ca(\s|$)/i)
+  })
+
+  it('says the quick hold clash in its own words when create is refused', async () => {
+    const writes = api()
+    renderAt('/staff/manage/tours/new?kind=quick')
+    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour trùng' } })
+    await chooseTarget()
+    fireEvent.change(screen.getByLabelText(/Lý do tạo gấp/), { target: { value: 'Đoàn khách.' } })
+    refuseCreate = 'ROBOT_RESERVATION_CONFLICT'
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
+    expect(await screen.findByText('Robot đang được giữ cho Tour khác trong khoảng thời gian này. Chọn robot khác.')).toBeInTheDocument()
+    expect(screen.queryByText(/trong ca này/)).not.toBeInTheDocument()
+    expect(writes).toHaveLength(1)
   })
 
   it('opens the quick form from an old ?kind=short link', async () => {

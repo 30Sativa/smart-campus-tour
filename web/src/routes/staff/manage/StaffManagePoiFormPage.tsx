@@ -15,7 +15,7 @@ import { headPresetProblem } from '../../../features/technical/head-camera-prese
 import { HeadCameraPresetField } from '../../../features/administration/pois/HeadCameraPresetField'
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
-import { clearanceMessage, poseClearance } from '../../../features/administration/pois/map/occupancy-grid'
+import { clearanceMessage, poseClearance, quantizeMeters, yawFromDegrees } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 import { UnsavedChangesGuard } from '../../../features/administration/UnsavedChangesGuard'
 import { AFTER_SAVE } from '../../../features/administration/after-save'
@@ -262,7 +262,7 @@ export default function StaffManagePoiFormPage() {
         </dl>
         <details className="group mt-3 rounded-xl border border-[#e2e8f0] text-sm">
           <summary className={`flex cursor-pointer list-none items-center gap-2 rounded-xl px-3.5 py-2.5 font-medium text-[#2d3748] [&::-webkit-details-marker]:hidden ${focus}`}><ChevronRight size={15} aria-hidden="true" className="text-[#718096] transition-transform group-open:rotate-90" />Nhập tọa độ thủ công <span className="font-normal text-[#718096]">(không bắt buộc){placed && yawDeg != null ? ` · ${yawDeg}°` : ''}</span></summary>
-          <div className="grid gap-3 border-t border-[#e2e8f0] p-3.5 sm:grid-cols-3"><PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x })} /><PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y })} /><PoseNumberField label="Hướng (độ)" value={yawDeg} disabled={locked} change={deg => update({ yaw: deg == null ? null : deg * Math.PI / 180 })} /></div>
+          <div className="grid gap-3 border-t border-[#e2e8f0] p-3.5 sm:grid-cols-3"><PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x: x == null ? null : quantizeMeters(x) })} /><PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y: y == null ? null : quantizeMeters(y) })} /><PoseNumberField label="Hướng (độ)" value={yawDeg} disabled={locked} change={deg => update({ yaw: deg == null ? null : yawFromDegrees(deg) })} /></div>
         </details>
         <div className="mt-5 space-y-2 border-t border-[#e2e8f0] pt-5">
           <h2 className="text-lg font-bold text-[#2d3748]">Camera & tư liệu</h2>

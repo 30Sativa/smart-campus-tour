@@ -78,6 +78,25 @@ describe('Staff versioned POI workflow', () => {
     expect(requests.some(r => r.url.pathname === '/api/maps/versions/map-v1/package')).toBe(true)
   })
 
+  it('rounds a heading typed in degrees to the stored radian precision, so the POI saves', async () => {
+    renderAt('/staff/manage/pois/new')
+    fireEvent.change(await screen.findByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+    const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn vị trí' }))
+    fireEvent.pointerDown(svg, pointerAt(svg, 0.5, 0.5))
+    fireEvent.pointerDown(svg, pointerAt(svg, 1.5, 0.5))
+    fireEvent.change(screen.getByLabelText('X (m)'), { target: { value: '10.123456' } })
+    fireEvent.change(screen.getByLabelText('Hướng (độ)'), { target: { value: '93' } })
+    fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Library entry' } })
+    fireEvent.change(screen.getByLabelText('Mục đích'), { target: { value: 'Entrance' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu POI (chưa gửi kiểm)' }))
+    await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/poi-proposals' && r.init?.method === 'POST')).toBe(true))
+    const create = requests.find(r => r.url.pathname === '/api/staff/poi-proposals' && r.init?.method === 'POST')!
+    const { draft } = JSON.parse(String(create.init?.body))
+    expect(draft.yaw).toBe(1.623156)
+    expect(draft.x).toBe(10.1235)
+  })
+
   it('groups the camera angle with the robot pose and keeps the content fields in their own card', async () => {
     renderAt('/staff/manage/pois/new')
     const camera = await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })

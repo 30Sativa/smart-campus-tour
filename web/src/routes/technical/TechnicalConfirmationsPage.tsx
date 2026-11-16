@@ -9,7 +9,7 @@ import type { VersionedRoute } from '../../features/administration/routes/versio
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
 import { CheckRow, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { errorText, robotNotReadyReason, routeTestErrors } from '../../features/technical/technical-format'
+import { durationTooShortText, errorText, robotNotReadyReason, routeTestErrors } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
 import { usePhysicalRobots, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 
@@ -126,6 +126,9 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const failBlocked = resultCode === 'FAIL' && missing.length === 0
   const seconds = Number(duration)
   const durationValid = Number.isInteger(seconds) && seconds >= 1 && seconds <= 86400
+  // The server refuses a total that does not exceed the dwell sum (ROUTE_TEST_DURATION_TOO_SHORT): it becomes the reservation length.
+  const dwell = route.dwellDurationSeconds
+  const durationTooShort = durationValid && seconds <= dwell
   const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
   // The server refuses this either way, so save waits for a fresh robot list showing the robot confirmed and passing on this map.
   const robotNotReady = selectedRobot ? robotNotReadyReason(selectedRobot, route.mapKey) : null
@@ -137,6 +140,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
     robotNotReady && `robot ${robotNotReady}`,
     !staffUserId && 'chọn Staff đi cùng',
     !durationValid && 'nhập tổng thời gian chạy',
+    durationTooShort && `thời gian chạy lớn hơn tổng dừng ${dwell} giây`,
     passBlocked && 'tick đủ ba mục để ghi Đạt',
     failBlocked && 'bỏ tick mục không đạt',
     resultCode === 'FAIL' && !failureReason.trim() && 'nhập lý do không đạt',
@@ -173,7 +177,8 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <ResultToggle id="route-test-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này khi sửa tuyến." />
-          <div><label className={labelClass} htmlFor="route-test-duration">Tổng thời gian chạy toàn tuyến (giây)</label><input id="route-test-duration" className={`${inputClass} mt-1`} type="number" required min={1} max={86400} step={1} value={duration} onChange={event => { setDuration(event.target.value); changed() }} /><p className="mt-1 text-xs text-[#64748b]">Tính từ lúc xuất phát đến khi kết thúc, gồm cả thời gian dừng tại các điểm.</p></div>
+          <div><label className={labelClass} htmlFor="route-test-duration">Tổng thời gian chạy toàn tuyến (giây)</label><input id="route-test-duration" aria-describedby="route-test-duration-hint" aria-invalid={durationTooShort || Boolean(errors.duration)} className={`${inputClass} mt-1`} type="number" required min={1} max={86400} step={1} value={duration} onChange={event => { setDuration(event.target.value); changed() }} /><p id="route-test-duration-hint" className="mt-1 text-xs text-[#64748b]">Tính từ lúc xuất phát đến khi kết thúc, gồm cả thời gian dừng tại các điểm. Tổng dừng {dwell} giây, thời gian chạy phải lớn hơn.</p>
+            {(durationTooShort || errors.duration) && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.duration ?? durationTooShortText(dwell)}</p>}</div>
         </div>
         <div className="space-y-2">
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}

@@ -105,6 +105,27 @@ public sealed class RobotIntegritySqlTests
     }
 
     [SchemaV11Fact]
+    public async Task FormList_NamesTheTourHoldingTheRobotForAQuickTour_AndFlagsAPendingInspection()
+    {
+        await using var h = await Harness.Create();
+        var tested = await h.TestedRoute();
+        await h.Send(new CreateTourCommand(h.StaffId, new(Guid.NewGuid(),
+            new("Tour nhanh đầu", null, tested.RevisionId, First, h.OperatorId, null, null, 20, "Đoàn khách."))));
+
+        var quick = Assert.Single(await h.Send(new ListTourRobotsQuery(tested.RevisionId, Quick: true)), robot => robot.RobotCode == First);
+        Assert.True(quick.Usable);
+        Assert.Equal("Tour nhanh đầu", quick.HeldByTourName);
+        Assert.NotNull(quick.HeldUntil);
+        // The shift form judges its hold per shift through the slots API, so the plain list names no holder.
+        Assert.Null(Assert.Single(await h.TourRobots(tested), robot => robot.RobotCode == First).HeldByTourName);
+
+        await h.SetNeedsInspection(First);
+        var held = Assert.Single(await h.TourRobots(tested), robot => robot.RobotCode == First);
+        Assert.True(held.NeedsInspection);
+        Assert.True(held.Usable);
+    }
+
+    [SchemaV11Fact]
     public async Task UnconfirmedRobot_IsBlockedEverywhere()
     {
         await using var h = await Harness.Create();
@@ -419,6 +440,17 @@ public sealed class RobotIntegritySqlTests
             var option = Assert.Single(await TourRobots(route), item => item.RobotCode == robot);
             Assert.False(option.Usable);
             Assert.Equal(reason, option.BlockReason);
+        }
+
+        public Guid StaffId => staffId;
+        public Guid OperatorId => operatorId;
+
+        public async Task SetNeedsInspection(string code)
+        {
+            await using var db = Context();
+            var robot = await db.Robots.SingleAsync(item => item.RobotCode == code);
+            robot.NeedsInspection = true;
+            await db.SaveChangesAsync();
         }
 
         private async Task AddRobot(string code)

@@ -1,5 +1,7 @@
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Common.Authentication;
+using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.UnitTests;
 
@@ -116,4 +118,22 @@ public sealed class RouteRevisionWorkflowTests
         }).IsValid);
     }
 
+    [Theory]
+    [InlineData(30)]
+    [InlineData(59)]
+    [InlineData(60)]
+    public void RouteTestRun_RefusesATotalNotLongerThanTheDwellSum(int measured)
+    {
+        RouteRevisionStop[] stops = [new() { DwellSeconds = 30 }, new() { DwellSeconds = 30 }];
+        var error = Assert.Throws<ConflictException>(() => RecordRouteTestRunHandler.EnsureLongerThanDwell(measured, stops));
+        Assert.Equal("ROUTE_TEST_DURATION_TOO_SHORT", error.Code);
+        Assert.Equal("Tổng thời gian chạy phải lớn hơn tổng thời gian dừng (60 giây).", error.Message);
+    }
+
+    [Fact]
+    public void RouteTestRun_AcceptsATotalLongerThanTheDwellSum()
+    {
+        RouteRevisionStop[] stops = [new() { DwellSeconds = 30 }, new() { DwellSeconds = 30 }];
+        RecordRouteTestRunHandler.EnsureLongerThanDwell(61, stops);
+    }
 }

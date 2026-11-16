@@ -64,9 +64,9 @@ public sealed class RecordPoiVerificationCommandHandler(
         if (await verificationRepository.FindVerificationAsync(revision.Id, cancellationToken) is not null)
             throw new ConflictException("A technical result already exists for this immutable POI revision.");
         if (resultCode == "PASS" && !(request.Reached && request.Stopped && request.LocalizationPassed && request.CameraPresetConfirmed))
-            throw new ValidationException("A passing result requires reach, stop, localization and camera-preset confirmation.");
+            throw new ValidationException("Đạt cần đủ cả bốn mục: tới đúng POI, dừng đúng vị trí, định vị đạt và đầu camera làm đúng.");
         if (resultCode == "FAIL" && (reason is null || (request.Reached && request.Stopped && request.LocalizationPassed && request.CameraPresetConfirmed)))
-            throw new ValidationException("A rejected result requires a reason and at least one failed observation.");
+            throw new ValidationException("Không đạt cần lý do và ít nhất một mục chưa đạt.");
 
         var robot = await mapRepository.FindPhysicalRobotAsync(request.RobotCode.Trim(), cancellationToken)
             ?? throw new NotFoundException("Physical robot", request.RobotCode.Trim());

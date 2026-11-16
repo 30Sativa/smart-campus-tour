@@ -66,6 +66,8 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
         if (revision.RouteId != route.Id || await repo.GetSubmissionsAsync(revision.Id, ct) is not { Count: > 0 })
             throw new ConflictException("Only a submitted route revision can be tested.", "ROUTE_NOT_SUBMITTED");
         await SubmitRouteRevisionHandler.EnsurePoisStillPass(repo, revision.Id, ct);
+        var stops = await repo.GetStopsAsync(revision.Id, ct);
+        EnsureLongerThanDwell(q.MeasuredDurationSeconds, stops);
         var staff = await repo.FindUserAsync(q.ParticipatingStaffUserId, ct);
         if (staff is null || !staff.IsActive ||
             !ApplicationRoles.TryResolve(staff.UserRoles.Select(r => r.Role), out var participantRole) ||
@@ -87,8 +89,7 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
             throw new ConflictException("The robot's latest deployment check must match the exact map version and checksum in this revision.", "MAP_NOT_CURRENTLY_DEPLOYED");
         var now = clock.GetUtcNow();
         var routeRuns = await repo.GetTestRunsForRouteAsync(route.Id, ct);
-        var targetNavigation = RouteNavigationConfigurationFactory.FromRevision(revision,
-            await repo.GetStopsAsync(revision.Id, ct));
+        var targetNavigation = RouteNavigationConfigurationFactory.FromRevision(revision, stops);
         var latestForConfiguration = routeRuns.Where(run => run.RouteRevision is not null &&
             RouteNavigationConfigurationFactory.SameNavigation(
                 RouteNavigationConfigurationFactory.FromRevision(run.RouteRevision, run.RouteRevision.RouteRevisionStops.ToArray()), targetNavigation))
@@ -115,5 +116,18 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
         int? expected = result == "PASS" ? run.MeasuredDurationSeconds : null;
         return view with { VerificationStatus = result, EffectiveTestRunId = run.Id, TestRuns = [.. view.TestRuns, testView],
             ScheduleFit = Tours.TourSchedule.ScheduleFit(schedule, expected), ExpectedDurationSeconds = expected };
+    }
+
+    public const string DurationTooShortCode = "ROUTE_TEST_DURATION_TOO_SHORT";
+
+    /// <summary>
+    /// The measured total includes every dwell, and it becomes the Tour's reservation length, so a total that does not
+    /// exceed the dwell sum cannot be a real run. Applies to PASS and FAIL alike.
+    /// </summary>
+    public static void EnsureLongerThanDwell(int measuredSeconds, IReadOnlyCollection<RouteRevisionStop> stops)
+    {
+        var dwell = stops.Sum(stop => (long)stop.DwellSeconds);
+        if (measuredSeconds <= dwell)
+            throw new ConflictException($"Tổng thời gian chạy phải lớn hơn tổng thời gian dừng ({dwell} giây).", DurationTooShortCode);
     }
 }

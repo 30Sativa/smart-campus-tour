@@ -14,7 +14,7 @@ import { campusDay } from './tour-calendar'
 import { tourError } from './tour-messages'
 import type { VersionedRoute } from '../routes/versioned-api'
 import { QUICK_TOUR_RULES, tourKindOf, type TourKind } from './quick-tour'
-import type { CreateTourInput, TourSlot } from './types'
+import type { CreateTourInput, TourRobotOption, TourSlot } from './types'
 
 const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/
 /** When a shift's Tour must have ended: its start plus the most the shift holds. */
@@ -27,6 +27,17 @@ const RERUN_REASON = 'Cần chạy thử lại'
 /** Why this route cannot be chosen (docs/lich-tour-theo-ca.md §4); null when it can. UNKNOWN is a PASS measured the old way, which cannot size a shift. */
 const routeBlockReason = (route: VersionedRoute) =>
   route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? scheduleFitLabel(route)!.text : route.scheduleFit === 'UNKNOWN' ? RERUN_REASON : null
+
+/** A quick Tour holds its robot from now, so a robot another Tour holds over that hold cannot be chosen (create re-checks). */
+const robotPickable = (robot: TourRobotOption, quick: boolean) => robot.usable && !(quick && robot.heldByTourName)
+/**
+ * Why an option is off, or what it still needs. A robot waiting for its on-site check stays pickable: it may be
+ * released before the Tour starts, and only Start refuses it (robotNotNeedsInspection).
+ */
+const robotNote = (robot: TourRobotOption, quick: boolean) =>
+  robot.blockReason ? ` (${robot.blockReason})`
+    : quick && robot.heldByTourName ? ` (đang giữ cho Tour ${robot.heldByTourName}${robot.heldUntil ? ` tới ${formatTime(robot.heldUntil)}` : ''})`
+    : robot.needsInspection ? ' (chờ kiểm tra tại chỗ, phải trả robot trước khi bắt đầu)' : ''
 
 type CreateTourFormProps = {
   busy: boolean; error: string | null
@@ -64,7 +75,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const linkedUsable = linkedRoute != null && routeBlockReason(linkedRoute) === null
   const routeRevisionId = pickedRouteId ?? (linkedUsable ? linkedRoute.revisionId : '')
   const noRouteUsable = Boolean(routes.data?.length) && routes.data!.every(route => routeBlockReason(route) !== null)
-  const robots = useTourRobots(routeRevisionId)
+  const robots = useTourRobots(routeRevisionId, quick)
   const operators = useTourOperators()
   const operatorUserId = pickedOperatorId ?? (signedIn && operators.data?.some(person => person.userId === signedIn) ? signedIn : '')
   const slots = useTourSlots(routeRevisionId, robotCode, date, !quick)
@@ -128,11 +139,11 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
       </Notice>}
       <label className="block text-sm">Robot<select title="" required aria-label="Robot" className={inputClass} value={robotCode} disabled={!routeRevisionId || robots.isPending} onChange={e => setRobotCode(e.target.value)}>
         <option value="">Chọn robot vật lý</option>
-        {robots.data?.map(robot => <option key={robot.robotCode} value={robot.robotCode} disabled={!robot.usable}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}{robot.blockReason ? ` (${robot.blockReason})` : ''}</option>)}
+        {robots.data?.map(robot => <option key={robot.robotCode} value={robot.robotCode} disabled={!robotPickable(robot, quick)}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}{robotNote(robot, quick)}</option>)}
       </select>
         {robots.isError ? <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh sách robot.</span>
           : !routeRevisionId ? <span className="mt-1 block text-xs text-[#64748b]">Chọn tuyến trước để biết robot nào chạy được.</span>
-          : robots.data && !robots.data.some(robot => robot.usable) && <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có robot nào sẵn sàng cho tuyến này.</span>}</label>
+          : robots.data && !robots.data.some(robot => robotPickable(robot, quick)) && <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có robot nào sẵn sàng cho tuyến này.</span>}</label>
       <label className="block text-sm">Người vận hành<select title="" required aria-label="Người vận hành" className={inputClass} value={operatorUserId} disabled={operators.isPending} onChange={e => setPickedOperatorId(e.target.value)}>
         <option value="">Chọn Staff</option>
         {operators.data?.map(person => <option key={person.userId} value={person.userId}>{person.fullName} · {person.username}</option>)}

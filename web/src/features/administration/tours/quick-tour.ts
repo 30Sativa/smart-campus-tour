@@ -19,7 +19,8 @@ export const QUICK_TOUR_RULES = {
   hold: { value: 'Từ lúc bấm Tạo Tour', note: 'Robot đang bận cho Tour khác thì không tạo được.' },
   start: {
     value: 'Ngay khi Tour đã chốt',
-    note: 'Cần ít nhất một đăng ký đã duyệt và robot đạt mọi điều kiện. Không phải chờ mọi điểm xem vào phòng chờ: trang kiểm tra chỉ cảnh báo số điểm xem còn thiếu.',
+    // TourStartPreflight: a quick Tour starts without any accepted registration (IsShortNotice || HasAcceptedRows).
+    note: 'Không cần đăng ký đã duyệt. Robot phải đạt mọi điều kiện. Không phải chờ mọi điểm xem vào phòng chờ: trang kiểm tra chỉ cảnh báo số điểm xem còn thiếu.',
   },
   deadline: (waitMinutes: number | null | undefined) => ({
     value: waitMinutes != null ? `${waitMinutes} phút sau khi tạo` : 'Theo cấu hình máy chủ',

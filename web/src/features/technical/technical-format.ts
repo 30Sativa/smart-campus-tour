@@ -1,4 +1,4 @@
-import { ApiError } from '../../api/client'
+import { ApiError, apiErrorDetail } from '../../api/client'
 import type { PhysicalRobotConnectionStatus, PhysicalRobotOption } from './api/technical'
 
 export const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => ({
@@ -9,6 +9,8 @@ export const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => 
 })[status]
 
 export function errorText(error: unknown) {
+  const detail = apiErrorDetail(error)
+  if (detail) return detail
   if (error instanceof ApiError && error.body) {
     try {
       const payload = JSON.parse(error.body) as { message?: unknown }
@@ -96,6 +98,8 @@ export function poiVerifyErrors(error: unknown): PoiVerifyErrors {
   }
   if (error.status === 404 && message.toLowerCase().includes('robot')) return { robotCode: 'Robot này không còn trong danh sách đã đăng ký. Chọn robot khác.' }
   if (error.status !== 400) return { form: errorText(error) }
+  const detail = apiErrorDetail(error)
+  if (detail) return { form: detail }
   const mapped: PoiVerifyErrors = {}
   for (const field of Object.keys(errors).map(name => name.toLowerCase())) {
     if (field.includes('robotcode')) mapped.robotCode = 'Chọn robot vật lý đã kiểm tra.'
@@ -105,7 +109,10 @@ export function poiVerifyErrors(error: unknown): PoiVerifyErrors {
   return Object.keys(mapped).length ? mapped : { form: 'Máy chủ từ chối kết quả này. Đạt cần đủ cả bốn mục; Không đạt cần lý do và ít nhất một mục chưa đạt.' }
 }
 
-export type RouteTestErrors = { robotCode?: string; staff?: string; form?: string }
+export type RouteTestErrors = { robotCode?: string; staff?: string; duration?: string; form?: string }
+
+/** The server's ROUTE_TEST_DURATION_TOO_SHORT text, so the client blocks with the same words before sending. */
+export const durationTooShortText = (dwellSeconds: number) => `Tổng thời gian chạy phải lớn hơn tổng thời gian dừng (${dwellSeconds} giây).`
 
 const routeTestConflicts: Record<string, RouteTestErrors> = {
   ROBOT_CONNECTION_UNCONFIRMED: { robotCode: 'Robot này chưa xác nhận kết nối. Chạy bridge Fleet Sync bằng khóa hiện tại, bấm Cập nhật trạng thái rồi thử lại.' },
@@ -123,8 +130,11 @@ export function routeTestErrors(error: unknown): RouteTestErrors {
   try { payload = JSON.parse(error.body) as typeof payload } catch { /* Non-JSON responses use the text below. */ }
   const errors = typeof payload.errors === 'object' && payload.errors !== null ? payload.errors as { code?: unknown } : {}
   if (typeof errors.code === 'string' && routeTestConflicts[errors.code]) return routeTestConflicts[errors.code]
+  // The server's text names the dwell sum it compared against.
+  if (errors.code === 'ROUTE_TEST_DURATION_TOO_SHORT')
+    return { duration: typeof payload.message === 'string' && payload.message.trim() ? payload.message : 'Tổng thời gian chạy phải lớn hơn tổng thời gian dừng.' }
   if (error.status === 404 && typeof payload.message === 'string' && payload.message.toLowerCase().includes('robot')) return { robotCode: 'Robot này không còn trong danh sách đã đăng ký. Chọn robot khác.' }
-  if (error.status === 400) return { form: 'Máy chủ từ chối kết quả này. Đạt cần đủ cả ba mục; Không đạt cần lý do và ít nhất một mục chưa đạt.' }
+  if (error.status === 400) return { form: apiErrorDetail(error) ?? 'Máy chủ từ chối kết quả này. Đạt cần đủ cả ba mục; Không đạt cần lý do và ít nhất một mục chưa đạt.' }
   return { form: errorText(error) }
 }
 

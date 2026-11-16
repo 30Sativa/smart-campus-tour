@@ -45,7 +45,9 @@ public sealed record RouteRevisionView(Guid RouteId, Guid RevisionId, int Revisi
     // ADR-0062: names of the stops whose POI is retired or discarded now. A new Tour is refused on such a revision.
     IReadOnlyList<string>? RetiredPoiNames = null);
 public sealed record RouteAvailabilityRequest(Guid RequestId, string ExpectedRowVersion);
-public sealed record RouteScheduledTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State);
+/// <summary>A SCHEDULED or READY Tour on the route; the close of registration lets Staff screens label a quick Tour right.</summary>
+public sealed record RouteScheduledTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State,
+    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false);
 public sealed record RouteAvailabilityResult(Guid RouteId, bool IsActive, IReadOnlyList<RouteScheduledTourView> ScheduledTours);
 
 public sealed record RoutePoiRevisionEvidence(PoiProposalRevision Revision, PoiVerificationRecord Verification);

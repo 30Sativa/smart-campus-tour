@@ -36,7 +36,7 @@ internal static class PoiProposalRules
         if (draft.X != decimal.Round(draft.X, 4) || draft.Y != decimal.Round(draft.Y, 4) ||
             draft.Yaw != decimal.Round(draft.Yaw, 6) || draft.X is < -999999.9999m or > 999999.9999m ||
             draft.Y is < -999999.9999m or > 999999.9999m)
-            throw new ValidationException("POI coordinates must fit the persisted meter/radian precision.");
+            throw new ValidationException("Tọa độ POI vượt độ chính xác cho phép (X, Y 4 số lẻ; hướng 6 số lẻ radian).");
     }
 
     /// <summary>The robot's newest check across all maps must be a pass on this exact version and package.</summary>

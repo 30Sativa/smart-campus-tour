@@ -34,7 +34,12 @@ export type VersionedRouteDraft = {
   stops: Array<{ poiRevisionId: string; dwellSeconds: number; headSteps: Array<{ preset: 'FRONT' | 'LEFT' | 'RIGHT'; holdSeconds: number }> }>
 }
 
-export type RouteScheduledTour = { id: string; name: string; scheduledStartAt: string; state: 'SCHEDULED' | 'READY' }
+export type RouteScheduledTour = {
+  id: string; name: string; scheduledStartAt: string; state: 'SCHEDULED' | 'READY'
+  /** When registration closes; an older server omits it, see `registrationClosesAtOf`. */
+  registrationClosesAt?: string | null
+  isShortNotice?: boolean
+}
 export type RouteAvailabilityResult = { routeId: string; isActive: boolean; scheduledTours: RouteScheduledTour[] }
 
 export const versionedRoutesApi = {

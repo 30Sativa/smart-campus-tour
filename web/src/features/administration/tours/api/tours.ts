@@ -20,7 +20,7 @@ export const toursApi = {
   },
   get: (id: string) => apiClient<ApiResponse<TourDetails>>(`/api/staff/manage/tours/${id}`).then(r => r.data!),
   operators: () => apiClient<ApiResponse<TourOperator[]>>('/api/staff/manage/tours/operators').then(r => r.data ?? []),
-  robots: (routeRevisionId: string) => apiClient<ApiResponse<TourRobotOption[]>>(`/api/staff/manage/tours/robots?routeRevisionId=${encodeURIComponent(routeRevisionId)}`).then(r => r.data ?? []),
+  robots: (routeRevisionId: string, quick = false) => apiClient<ApiResponse<TourRobotOption[]>>(`/api/staff/manage/tours/robots?routeRevisionId=${encodeURIComponent(routeRevisionId)}${quick ? '&quick=true' : ''}`).then(r => r.data ?? []),
   slots: (routeRevisionId: string, robotCode: string, from: string, to: string) =>
     apiClient<ApiResponse<TourSlots>>(`/api/staff/manage/tours/slots?${new URLSearchParams({ routeRevisionId, robotCode, from, to })}`).then(r => r.data!),
   shifts: (from: string, to: string) =>

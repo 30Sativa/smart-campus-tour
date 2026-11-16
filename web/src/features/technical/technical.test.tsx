@@ -1048,6 +1048,31 @@ describe('Technical Staff API integration', () => {
     await waitFor(() => expect(useToastStore.getState().toasts.at(-1)?.title).toBe('Đã ghi chạy thử đạt: Tuyến thư viện'))
   })
 
+  it('blocks a total run time that does not exceed the dwell sum, in the server words', async () => {
+    await openRouteTest()
+    expect(screen.getByText(/Tổng dừng 60 giây, thời gian chạy phải lớn hơn/)).toBeInTheDocument()
+    chooseResult('Đạt')
+    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Định vị đạt']) fireEvent.click(screen.getByLabelText(label))
+    fireEvent.change(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)'), { target: { value: '30' } })
+    expect(screen.getByRole('alert')).toHaveTextContent('Tổng thời gian chạy phải lớn hơn tổng thời gian dừng (60 giây).')
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)'), { target: { value: '60' } })
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)'), { target: { value: '61' } })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeEnabled()
+  })
+
+  it('shows the server duration refusal under the time field', async () => {
+    routeRefusal = { status: 409, body: { message: 'Tổng thời gian chạy phải lớn hơn tổng thời gian dừng (90 giây).', errors: { code: 'ROUTE_TEST_DURATION_TOO_SHORT', fields: null } } }
+    await openRouteTest()
+    chooseResult('Đạt')
+    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Định vị đạt']) fireEvent.click(screen.getByLabelText(label))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('(90 giây)')
+    expect(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)')).toHaveAttribute('aria-invalid', 'true')
+  })
+
   it('closes the dialog and keeps it closed when the saved route moves to the recorded list', async () => {
     await openRouteTest()
     chooseResult('Đạt')

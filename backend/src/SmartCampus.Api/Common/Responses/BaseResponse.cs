@@ -15,5 +15,10 @@ namespace SmartCampus.Api.Common.Responses
 
         [JsonPropertyOrder(4)]
         public object? Errors { get; init; }
+
+        /// <summary>A refusal's own explanation when it names no field, e.g. a rule checked in a handler.</summary>
+        [JsonPropertyOrder(5)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Detail { get; init; }
     }
 }

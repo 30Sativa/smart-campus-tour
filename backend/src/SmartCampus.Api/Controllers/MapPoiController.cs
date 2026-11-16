@@ -35,7 +35,7 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         using var output = new MemoryStream((int)package.Length);
         await input.CopyToAsync(output, ct);
         if (output.Length != package.Length || output.Length > MapPackageValidator.MaxPackageBytes)
-            throw new FluentValidation.ValidationException("The uploaded map package exceeded its declared or supported size.");
+            throw new FluentValidation.ValidationException("Gói bản đồ tải lên vượt kích thước khai báo hoặc kích thước cho phép.");
         var result = await sender.Send(new CreateMapVersionCommand(User.GetRequiredUserId(),
             new(areaKey, areaName, requestId, output.ToArray())), ct);
         return Ok(new BaseResponse<MapVersionView> { Success = true, Message = "Map package validated and versioned.", Data = result });

@@ -35,6 +35,6 @@ export default function StaffManageTourCreatePage() {
     <PageHeader eyebrow="Chuẩn bị Tour" title="Tạo Tour" description={quick
       ? QUICK_TOUR_RULES.pageDescription
       : 'Tour mới ở trạng thái Đang nhận đăng ký: giữ chỗ robot nhưng không tự chạy khi tới giờ. Sau khi tạo, đại diện trường thấy Tour và có thể đăng ký đoàn.'} />
-    <CreateTourForm busy={create.isPending} error={create.isError ? tourError(create.error) : null} onSubmit={submit} />
+    <CreateTourForm busy={create.isPending} error={create.isError ? tourError(create.error, { quick }) : null} onSubmit={submit} />
   </AdminPage>
 }

@@ -17,6 +17,14 @@ describe('the SCHEDULED label by time', () => {
     expect(tourStateLabel(tour, at('2026-11-09T00:00:00.000Z'))).toBe('Đã đóng đăng ký')
   })
 
+  it('keeps a quick Tour open until its latest Start: the 48 hour fallback is only for a Tour on a shift', () => {
+    // Created 30 minutes before its latest Start, so the shift rule would already call it closed.
+    const quick = { ...scheduled, isShortNotice: true }
+    expect(tourStateLabel(quick, at('2026-11-10T01:30:00.000Z'))).toBe('Đang nhận đăng ký')
+    expect(tourStateLabel(quick, at('2026-11-10T02:00:00.000Z'))).toBe('Đã đóng đăng ký')
+    expect(tourStateLabel({ ...quick, registrationClosesAt: START }, at('2026-11-10T01:30:00.000Z'))).toBe('Đang nhận đăng ký')
+  })
+
   it('never changes the label of any other state', () => {
     const late = at('2026-11-10T00:00:00.000Z')
     expect(tourStateLabel({ state: 'READY', scheduledStartAt: START }, late)).toBe('Đã chốt')

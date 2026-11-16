@@ -26,9 +26,11 @@ describe('quick Tour rules (ADR-0053, ADR-0054, ADR-0057)', () => {
     expect(QUICK_TOUR_RULES.start.note).toMatch(/chỉ cảnh báo/)
   })
 
-  it('keeps the rules that still hold: hold from creation, an accepted row, the deadline and automatic cancel', () => {
+  it('keeps the rules that still hold: hold from creation, no accepted row needed, the deadline and automatic cancel', () => {
     expect(QUICK_TOUR_RULES.hold.value).toMatch(/Từ lúc bấm Tạo Tour/)
-    expect(QUICK_TOUR_RULES.start.note).toMatch(/ít nhất một đăng ký đã duyệt/)
+    // TourStartPreflight: IsShortNotice || HasAcceptedRows, so a quick Tour needs no accepted registration.
+    expect(QUICK_TOUR_RULES.start.note).toMatch(/^Không cần đăng ký đã duyệt\./)
+    expect(QUICK_TOUR_RULES.start.note).not.toMatch(/ít nhất một đăng ký/)
     expect(QUICK_TOUR_RULES.deadline(30).value).toBe('30 phút sau khi tạo')
     expect(QUICK_TOUR_RULES.deadline(30).note).toMatch(/tự huỷ/)
     expect(QUICK_TOUR_RULES.facts(45)).toContain('Chưa bắt đầu sau 45 phút thì tự huỷ')

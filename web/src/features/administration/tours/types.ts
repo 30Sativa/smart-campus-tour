@@ -14,7 +14,13 @@ export type CreateTourInput = {
   shortNoticeReason?: string | null
 }
 export type TourOperator = { userId: string; fullName: string; username: string }
-export type TourRobotOption = { robotCode: string; displayName: string | null; usable: boolean; blockReason: string | null }
+export type TourRobotOption = {
+  robotCode: string; displayName: string | null; usable: boolean; blockReason: string | null
+  /** Waits for an on-site check (ADR-0043 D13): create accepts it, Start refuses it until Technical Staff releases it. */
+  needsInspection?: boolean
+  /** Quick form only: the Tour holding this robot over a quick Tour's hold from now, and when that hold ends. */
+  heldByTourName?: string | null; heldUntil?: string | null
+}
 export type TourReservation = { robotCode: string; startsAt: string; endsAt: string; measuredDurationSeconds: number; expectedDurationSeconds: number; releasedAt: string | null }
 export type TourSummary = {
   id: string; name: string; description: string | null; routeId: string; routeName: string; activeRouteId: string
