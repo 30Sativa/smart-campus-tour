@@ -43,6 +43,10 @@ public sealed class LoginCommandHandler(
 
         var role = ApplicationRoles.Resolve(user.UserRoles.Select(userRole => userRole.Role));
         var now = timeProvider.GetUtcNow();
+        // One session per account: a new login revokes every earlier refresh token under the User lock.
+        foreach (var previous in await authRepository.ListUnrevokedRefreshTokensAsync(user.Id, cancellationToken))
+            previous.RevokedAt = now;
+
         var refreshToken = authTokenService.CreateRefreshToken();
         var refreshExpiresAt = now.Add(RefreshTokenLifetime);
 

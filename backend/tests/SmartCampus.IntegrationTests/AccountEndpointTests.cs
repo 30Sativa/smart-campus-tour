@@ -757,7 +757,8 @@ public sealed class AccountEndpointTests
             using var document = JsonDocument.Parse(await stale.Content.ReadAsStringAsync());
             Assert.Equal("STALE_VERSION", document.RootElement.GetProperty("errors").GetProperty("code").GetString());
         }
-        using (var stillValid = await RefreshAsync(host.Client, firstSession.Cookie))
+        // secondSession is the live one: logging in again already revoked firstSession (one session per account).
+        using (var stillValid = await RefreshAsync(host.Client, secondSession.Cookie))
             Assert.Equal(HttpStatusCode.OK, stillValid.StatusCode);
 
         // Admin targets (including the caller), non-Admin callers, weak passwords and unknown fields are refused.
