@@ -176,7 +176,7 @@ export const railItems: RailItem[] = [
     id: 'navigation',
     title: 'Điều hướng tự hành',
     body: 'Robot tự dựng bản đồ khuôn viên rồi tính đường đi tối ưu bằng SLAM, Nav2 và costmap.',
-    image: '/images/autonomous robot.avif',
+    image: '/images/autonomous-robot.avif',
     alt: 'Robot AMR điều hướng trên lối đi trong khuôn viên',
   },
   {

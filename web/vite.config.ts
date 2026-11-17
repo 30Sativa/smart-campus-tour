@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { readFileSync } from 'node:fs'
 
 type ModuleGraph = { getModuleInfo(id: string): { code: string | null; importedIds: readonly string[]; importers: readonly string[]; dynamicImporters: readonly string[] } | null }
@@ -63,13 +63,45 @@ function consoleChunkName() {
   }
 }
 
+// '/images/…' at the start of a string, CSS url() or srcset entry, so a path such as 'public/images/' is left alone.
+const PUBLIC_IMAGE = /(["'`(\s,])\/images\//g
+
+/**
+ * With VITE_CLOUDINARY_CLOUD_NAME set in the build environment, a build serves the pictures of `public/images/` from
+ * Cloudinary instead of this site: every '/images/<path>' in the app code, its CSS and index.html becomes
+ * https://res.cloudinary.com/<cloud>/image/upload/f_auto,q_auto/smartcampus/images/<path>, so each browser gets the
+ * lightest format (AVIF/WebP) at automatic quality; the extension stays as the fallback format. The files must be
+ * uploaded first with `npm run images:upload`, which gives each the public ID `smartcampus/images/<path without
+ * extension>`. Unset (dev server, tests, CI) keeps the local files. Videos stay in `public/videos/`: the `<source>`
+ * codecs strings in IntroVideo.tsx must match those exact files.
+ */
+function cloudinaryImages(): Plugin {
+  let base = ''
+  const rewrite = (code: string) => code.replace(PUBLIC_IMAGE, `$1${base}`)
+  return {
+    name: 'cloudinary-images',
+    apply: 'build',
+    enforce: 'pre',
+    configResolved(config) {
+      const cloudName = config.env.VITE_CLOUDINARY_CLOUD_NAME
+      base = cloudName ? `https://res.cloudinary.com/${cloudName}/image/upload/f_auto,q_auto/smartcampus/images/` : ''
+    },
+    transform(code, id) {
+      if (!base || !/[\\/]src[\\/].*\.(tsx?|css)($|\?)/.test(id) || !code.includes('/images/')) return null
+      return { code: rewrite(code), map: null }
+    },
+    // Before Vite's own HTML pass, which swaps public paths in srcset attributes for placeholders.
+    transformIndexHtml: { order: 'pre', handler: (html) => (base ? rewrite(html) : html) },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   // Optional trusted local certificate for invitation email/browser tests.
   server: process.env.LOCAL_HTTPS_PFX ? {
     https: { pfx: readFileSync(process.env.LOCAL_HTTPS_PFX), passphrase: process.env.LOCAL_HTTPS_PASSWORD },
   } : undefined,
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), cloudinaryImages()],
   build: {
     rolldownOptions: {
       output: {

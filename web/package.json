@@ -12,7 +12,9 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "model:optimize": "node scripts/optimize-twin-model.mjs",
+    "images:upload": "node scripts/upload-images-to-cloudinary.mjs"
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.11",
