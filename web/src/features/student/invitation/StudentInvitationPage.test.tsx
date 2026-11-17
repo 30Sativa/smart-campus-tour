@@ -445,7 +445,7 @@ it('keeps the end screen when the session check of a RUNNING Tour turns into 409
   expect(fetchCalls().some(url => url.endsWith('/leave'))).toBe(false)
 })
 
-it('shows the cancelled end screen when a waiting room gets TOUR_ENDED CANCELLED, and stops checking', async () => {
+it('says a never-started Tour was called off when a waiting room gets TOUR_ENDED CANCELLED, and stops checking', async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
   try {
     let ended = false
@@ -455,7 +455,10 @@ it('shows the cancelled end screen when a waiting room gets TOUR_ENDED CANCELLED
     await screen.findByText('Bạn đã vào phòng chờ')
     ended = true
     await act(async () => { await client.refetchQueries({ queryKey: key }) })
-    expect(await screen.findByRole('heading', { name: 'Buổi tham quan đã kết thúc sớm' })).toBeVisible()
+    // It never ran, so it was cancelled, not ended early (a Tour cancelled mid-way keeps "kết thúc sớm").
+    expect(await screen.findByRole('heading', { name: 'Buổi tham quan đã bị hủy' })).toBeVisible()
+    expect(screen.getByText('Buổi tham quan đã bị hủy trước khi bắt đầu. Liên hệ đại diện đoàn nếu cần biết thêm.')).toBeVisible()
+    expect(screen.queryByText(/kết thúc sớm/)).toBeNull()
     const checks = () => fetchCalls().filter(url => url.endsWith('/session')).length
     const before = checks()
     await act(async () => { await vi.advanceTimersByTimeAsync(65_000) })

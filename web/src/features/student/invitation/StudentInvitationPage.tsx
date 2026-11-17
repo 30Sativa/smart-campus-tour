@@ -237,7 +237,9 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
     </>
   } else if (snapshot.tourState === 'Completed' || snapshot.tourState === 'Cancelled') {
     body = <>
+      {/* The session answers 200 CANCELLED only for a Tour that started (fallback video); TOUR_ENDED CANCELLED means it never ran. */}
       <StudentEndScreen snapshot={snapshot} name="bạn" meta={`${info.tourName}, ${formatDateTime(info.scheduledStartAt)}`}
+        neverStarted={endedBy?.tourState === 'CANCELLED'}
         onLeave={leave.isPending ? undefined : () => finished ? exitSession() : leave.mutate()} />
       <div className="st-ctn st-invitation-status">{status}</div>
     </>
