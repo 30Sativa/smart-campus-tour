@@ -11,6 +11,9 @@ install(
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
+  # Skip only the copyright linter: no robot package carries the full licence
+  # boilerplate it requires. The other ament_lint_common linters still run.
+  set(ament_cmake_copyright_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
