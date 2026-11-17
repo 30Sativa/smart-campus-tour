@@ -125,8 +125,10 @@ def test_shipped_topic_config_matches_navigation_rviz_needs():
     assert down['/tf_static'].depth >= 10, 'one sample per static TF publisher'
     assert '/robot_01/global_costmap/costmap' not in down, 'optional: 2.8 MB at 1 Hz'
     assert not any('initialpose' in t for t in down)
-    down = fx.load_config(TOPICS, 'robot_01', enable=['global_costmap/costmap'])
+    assert '/robot_01/camera/depth/points' not in down, 'optional: ~0.3 MB at ~20 Hz'
+    down = fx.load_config(TOPICS, 'robot_01', enable=['global_costmap/costmap', 'camera/depth/points'])
     assert down['/robot_01/global_costmap/costmap'].snapshot_period >= 5
+    assert down['/robot_01/camera/depth/points'].snapshot_period >= 2
 
 
 def test_config_rejects_typos(tmp_path):

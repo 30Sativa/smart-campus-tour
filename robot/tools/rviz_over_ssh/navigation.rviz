@@ -66,6 +66,26 @@ Visualization Manager:
     Color Transformer: FlatColor
     Color: 255; 255; 0
     Value: true
+  - Class: rviz_default_plugins/PointCloud2
+    Name: Astra depth (rviz-over-ssh -e camera/depth/points)
+    Enabled: false
+    Topic:
+      Value: camera/depth/points
+      Depth: 1
+      History Policy: Keep Last
+      Durability Policy: Volatile
+      Reliability Policy: Reliable
+    Size (m): 0.02
+    Decay Time: 0
+    Style: Points
+    Position Transformer: XYZ
+    Color Transformer: AxisColor
+    Axis: Z
+    Use Fixed Frame: true
+    Autocompute Value Bounds: false
+    Min Value: 0.0
+    Max Value: 1.2
+    Value: false
   - Class: rviz_common/Group
     Name: Sonar - display only
     Enabled: true

@@ -38,6 +38,8 @@ robot/tools/rviz_over_ssh/rviz-over-ssh <user>@<ip-robot>
   `LAPTOP_ROS_DOMAIN_ID` (mặc định 42). Script tự bỏ `ROS_DISCOVERY_SERVER`.
 - Cần global costmap thì thêm `-e global_costmap/costmap`: nhận một snapshot
   mỗi 10 s (khoảng 2.8 MB mỗi lần).
+- Xem cloud của Astra depth (khi robot chạy `robot nav --camera`): thêm `-e camera/depth/points`, rồi bật
+  display "Astra depth" (đang tắt sẵn). Mỗi 2 s nhận một cloud, khoảng 0.3 MB, tô màu theo độ cao 0–1.2 m.
 - Muốn tự mở `rviz2` thì dùng `--no-rviz`.
 
 ## Những gì thấy và làm được

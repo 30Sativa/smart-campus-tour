@@ -125,6 +125,8 @@ def run_launch_probe(robot_id):
         assert (camera[2]['depth_width'], camera[2]['depth_height'],
                 camera[2]['depth_fps']) == (160, 120, 30)
         assert camera[2]['use_uvc_camera'] is False
+        # rigid mount: the camera-internal TF goes once to /tf_static, not on /tf at 10 Hz
+        assert camera[2]['publish_tf'] is True and camera[2]['tf_publish_rate'] == 0.0
         [mount] = [entry for entry in nodes if entry[0] == 'tf2_ros']
         assert (mount[2]['frame-id'], mount[2]['child-frame-id']) == ('base_link', 'camera_link')
         assert [float(mount[2][k]) for k in ('x', 'y', 'z', 'roll', 'pitch', 'yaw')] == [

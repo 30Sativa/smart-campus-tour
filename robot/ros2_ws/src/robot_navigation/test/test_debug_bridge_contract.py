@@ -24,7 +24,7 @@ NEVER_WRITE = ['/robot_01/cmd_vel', '/cmd_vel', '/robot_01/cmd_vel_nav', '/robot
                '/robot_01/x/debug/initialpose', '/robot_01/map']
 NEVER_READ = ['/robot_01/cmd_vel', '/robot_01/cmd_vel_nav', '/rosout', '/parameter_events',
               '/robot_01/initialpose', '/robot_01/debug/initialpose_status',
-              '/robot_01/navigate_to_pose/_action/feedback', '/robot_01/camera/depth/points',
+              '/robot_01/navigate_to_pose/_action/feedback',
               '/robot_01/scan_raw', '/robot_01/imu/data', '/robot_01/scanx', '/robot_01/a/scan']
 
 
@@ -74,6 +74,14 @@ def test_every_fox2ros_topic_is_exposed_by_the_robot():
             topic = d['name'] if d['name'].startswith('/') else f'{ns}/{d["name"]}'
             assert matches(allowed, topic), f'{topic} is in fox2ros_topics.yaml but not exposed'
     assert set(cfg) == {'downlink'}, 'laptop -> robot only through initialpose_guard'
+
+
+def test_depth_cloud_reaches_a_viewer_only_as_an_optional_snapshot():
+    # ~0.3 MB at ~20 Hz: exposed for --enable camera/depth/points, one cloud every >= 2 s
+    assert matches(params()['topic_whitelist'], '/robot_01/camera/depth/points')
+    with open(FOX2ROS_TOPICS) as f:
+        [cloud] = [d for d in yaml.safe_load(f)['downlink'] if d['name'] == 'camera/depth/points']
+    assert cloud['optional'] is True and cloud['snapshot_period'] >= 2.0
 
 
 def test_send_buffer_fits_the_largest_message():

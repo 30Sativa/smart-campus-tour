@@ -59,7 +59,11 @@ LAUNCH_ARGS = [
     ('uvc_flip', 'false', 'Flip the RGB image.'),
     ('connection_delay', '100', 'Milliseconds to wait after opening the device.'),
     ('publish_tf', 'true', 'Publish the camera-internal TF tree.'),
-    ('tf_publish_rate', '10.0', 'Rate for the camera-internal TF tree.'),
+    # 0 = the driver sends camera_link -> depth/color/optical frames once on /tf_static
+    # (ob_camera_node.cpp). A rate > 0 re-sends them on /tf from a thread, and a cloud
+    # stamped just after the last sample is dropped by the costmap's message filter
+    # (5 drops per nav session on 14/11) and blinks in RViz. The mount is rigid.
+    ('tf_publish_rate', '0.0', 'Hz for the camera-internal TF on /tf; 0 = once on /tf_static.'),
     ('color_info_url', '',
      'file:// URL of the RGB intrinsics produced by camera_calibration.  Until '
      'this is set, color/camera_info carries the factory guess, not a '

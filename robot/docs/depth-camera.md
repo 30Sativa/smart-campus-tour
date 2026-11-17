@@ -1,12 +1,49 @@
 # Depth camera (Astra Pro) trong local costmap
 
-Trạng thái 14/11/2026:
+Trạng thái 17/11/2026 (mục 0 là bản tóm tắt cho demo):
 - Code và kiểm thử offline đã xong.
+- Chưa có lượt nav nào trên robot với V3 hoặc chế độ camera T = 4 s.
 - Đã chạy cùng Nav2 trên robot hai lượt START → POI_01 → START, chế độ cũ T = 1 s:
   - lượt 15:43 là mốc: 165 s, 0 recovery;
   - lượt 15:04 có 6 recovery do người đi sát robot.
 - Chế độ camera với RPP T = 4 s (mục 6) mới chỉ **kiểm offline**. Nghiệm thu theo mục 7.
 - Mặc định **tắt**: `robot nav` không bật camera nếu không có `--camera` hoặc `ENABLE_CAMERA=true`.
+
+## 0. Tóm tắt cho demo: camera làm được gì, đã chứng minh tới đâu
+
+Ba việc khác nhau, không được coi là một:
+
+| Mức | Nội dung | Trạng thái |
+|---|---|---|
+| 1. Camera **phát hiện** | Cloud 160×120, ~20–28 Hz, đúng TF (cao 0.273 m), thấy vật 0.08–0.73 m cao ở 0.6–1.1 m trước mũi | **Đã đo trên robot** (đứng yên và trong 2 lượt tuyến). Mục 3–4 |
+| 2. Nav2 **đánh dấu** | `depth_obstacle_layer` trong local costmap; lọc sàn, vật cao, vật quá gần | **Offline**: `costmap_check.py`. **Trên robot**: vết depth có thật trên tuyến, kể cả chân người. Mục 5 |
+| 3. Robot **phản ứng** | RPP dừng trước vật thấp và đứng chờ | **T = 1 s: không giữ được lệnh dừng** (đã chứng minh offline). **T = 4 s, chỉ khi bật camera**: dừng ở 0.6–0.7 m và đứng chờ, mới **offline**. Cần nghiệm thu mục 7 |
+
+**Giá trị cho đồ án:**
+- Robot dừng **và chờ** trước vật thấp hơn mặt quét LiDAR (0.47 m) khi vật còn cách ≥ 0.75 m:
+  hộp, ghế đẩu, túi, chân người.
+- Với người đứng chắn đường, robot dự kiến dừng sớm hơn: khoảng 0.7–0.8 m thay vì 0.1–0.3 m như lượt
+  thử 16:50 (offline; LiDAR cũng dùng chung tầm kiểm 0.8 m khi bật camera).
+- Trên RViz thấy được cloud depth cạnh scan LiDAR và costmap, nên giải thích được bằng hình
+  (mục 1, "Xem trên RViz").
+
+**Quyết định phạm vi:**
+
+| Làm | Không làm (và lý do) |
+|---|---|
+| Driver chỉ depth, 160×120 (CPU ~5 %) | Nhận diện người bằng RGB/AI: thêm stream RGB và một model trên J5005 vốn đã sát CPU; robot cũng không có hành vi nào cần tới nó ngoài việc dừng, mà việc đó đã có |
+| Mount CAD, TF tĩnh của driver | Đi vòng tránh vật thấp: phải đưa depth vào global costmap (đổi ADR-0001); để sau demo |
+| Chế độ camera: RPP T = 4 s | VoxelLayer: không đổi kết quả của T = 1, và để lại nhiều vết sót hơn |
+| V3: không có hai nguồn lệnh | Collision Monitor: chặn robot xoay ở START trong cả hai lượt replay |
+| Xem cloud trên RViz qua SSH, bật khi cần | Định kỳ xoá costmap: làm quên vật đang trong vùng mù |
+| Công cụ nghiệm thu `stop_check.py` | Sonar: đang tắt, vị trí lắp chưa đo |
+
+**Giới hạn phải nói rõ khi demo:**
+- Vật **xuất hiện** gần hơn khoảng 0.6–0.75 m (ví dụ ai đó đặt chân ngay trước mũi) thì camera
+  không thấy: vùng mù của Astra nằm ngay mép trước robot.
+- Vật thấp hơn 8 cm không thấy.
+- Robot dừng chờ chứ không đi vòng. Vật không được dọn thì chặng báo lỗi sau vòng recovery.
+- Vết depth của người đi ngang có thể còn lại, gây một lần dừng 1–2 s (mục 6.3).
 
 ## 1. Kiến trúc
 
@@ -36,6 +73,14 @@ Astra Pro depth (cao ~0.27 m) ─ /robot_01/camera/depth/points ► depth_obstac
   - chỉ đánh dấu ở khoảng 0.60–3.00 m tính từ camera;
   - `footprint_clearing_enabled` (mặc định bật) xoá vết nằm dưới thân robot;
   - inflation 0.60 m.
+
+### Xem trên RViz
+
+- Trên laptop: `rviz-over-ssh -e camera/depth/points <user>@<ip>`, rồi bật display "Astra depth"
+  (đang tắt sẵn; tô màu theo độ cao 0–1.2 m).
+- Mỗi 2 s một cloud (~0.3 MB) để không chiếm đường truyền. Xem `robot/tools/rviz_over_ssh/README.md`.
+- Driver gửi TF nội bộ của camera **một lần trên `/tf_static`** (`tf_publish_rate` 0). Trước đây nó
+  gửi lại liên tục trên `/tf` ở 10 Hz, làm cloud thỉnh thoảng bị bỏ và nhấp nháy trên RViz.
 
 ### Bật / tắt
 
@@ -217,8 +262,11 @@ Mốc so sánh là lượt **15:43** (`route_154345`): 165 s, 0 recovery. Mỗi 
 **Rollback** ở mọi bước: `robot nav --no-camera`, và `NAV2_PARAMS=nav2_params_v2.yaml`.
 
 0. **Chuẩn bị.**
-   - Stage runtime từ commit có V3 và chế độ camera. Dùng profile thử
-     `~/.config/sct-robot/runtime-camera-test.env` trỏ tới runtime đó, như lần 14/11.
+   - Stage runtime từ `main` **sau khi** PR sửa launcher (`fix/claude/launcher-merge-repair`) và PR
+     TF tĩnh + RViz depth (`feature/claude/depth-camera-tf-viz`) đã merge. Launcher trên `main` từ
+     PR #318 tới lúc đó không parse được.
+   - Dùng profile thử `~/.config/sct-robot/runtime-v3-test.env`, trỏ `SCT_OVERLAY` và
+     `NAV2_PARAMS` (đường dẫn tuyệt đối tới `nav2_params_v3.yaml`) vào runtime đó.
    - Trước mỗi lượt kiểm `uptime`, load nên dưới khoảng 8, và **không** build/test trên MiniPC.
 1. **V3, camera tắt.** Đặt `NAV2_PARAMS` là đường dẫn tuyệt đối tới `nav2_params_v3.yaml` trong
    runtime. Chạy `run_route.sh` hai lượt.
@@ -228,6 +276,8 @@ Mốc so sánh là lượt **15:43** (`route_154345`): 165 s, 0 recovery. Mỗi 
      0.30 m ở z = 0.30 ± 0.02.
    - Sàn trống 2 phút: không có vết depth.
    - Log có dòng `camera mode: RPP max_allowed_time_to_collision_up_to_carrot 4.0`.
+   - RViz qua SSH với `-e camera/depth/points`: cloud của hộp hiện ra, scan LiDAR thì không có;
+     TF camera không nhấp nháy.
    - Rút USB: Nav2 vẫn chạy.
 3. **Hộp xốp** (cần đồng ý; có người cầm E-stop; hộp mềm cao khoảng 12 cm, đặt giữa đường thẳng,
    cách robot ≥ 2 m). Cho robot chạy tới một goal phía sau hộp, camera bật.
