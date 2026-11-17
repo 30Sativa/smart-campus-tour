@@ -617,6 +617,12 @@ describe('READY and Reopen on Tour preparation', () => {
     expect(within(dialog).getByRole('button', { name: 'Chốt Tour' })).toBeEnabled()
     view.unmount()
     tour = { ...base, tour: { ...early, isShortNotice: true } }
+    const quick = renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Chốt Tour/ }))
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('Hạn đăng ký')
+    quick.unmount()
+    // Past the deadline registration is already closed, so free seats alone do not warn.
+    tour = { ...base, tour: { ...early, scheduledStartAt: '2020-11-21T01:15:00Z', registrationClosesAt: '2020-11-19T01:15:00Z' } }
     renderAt('/staff/manage/tours/tour-1', '/staff/manage/tours/:tourId', <StaffManageTourDetailPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Chốt Tour/ }))
     expect(screen.getByRole('dialog')).not.toHaveTextContent('Hạn đăng ký')

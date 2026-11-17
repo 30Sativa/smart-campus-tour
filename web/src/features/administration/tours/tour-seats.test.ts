@@ -31,10 +31,11 @@ describe('earlyReadyWarning', () => {
   it('says the deadline and the seats left when a Tour on a shift is closed early', () => {
     expect(earlyReadyWarning(tour, before)).toBe('Hạn đăng ký là 19/11/2026 08:15 và Tour còn 1 chỗ. Chốt bây giờ sẽ đóng đăng ký sớm: trường khác không đăng ký thêm được. Có thể mở lại trước giờ bắt đầu.')
   })
-  it('still warns after the deadline while seats are free', () => {
-    expect(earlyReadyWarning(tour, after)).toMatch(/^Hạn đăng ký là 19\/11\/2026 08:15 và Tour còn 1 chỗ\./)
+  it('still warns before the deadline with no seat free, leaving the seats out', () => {
+    expect(earlyReadyWarning({ ...tour, heldSeats: 20 }, before)).toBe('Hạn đăng ký là 19/11/2026 08:15. Chốt bây giờ sẽ đóng đăng ký sớm: trường khác không đăng ký thêm được. Có thể mở lại trước giờ bắt đầu.')
   })
-  it('stays silent after the deadline with no seat free, and for a quick Tour', () => {
+  it('stays silent after the deadline, seats free or not, and for a quick Tour', () => {
+    expect(earlyReadyWarning(tour, after)).toBeNull()
     expect(earlyReadyWarning({ ...tour, heldSeats: 20 }, after)).toBeNull()
     expect(earlyReadyWarning({ ...tour, isShortNotice: true }, before)).toBeNull()
   })

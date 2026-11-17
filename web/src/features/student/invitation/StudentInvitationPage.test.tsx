@@ -415,7 +415,32 @@ it('stops polling the session after RECONNECT_WINDOW_EXPIRED and waits for the v
   }
 })
 
-const SESSION_ENDED = 'Phiên xem đã kết thúc vì mã đã bị thu hồi hoặc thay bằng mã mới. Kiểm tra email mới nhất hoặc liên hệ đại diện đoàn.'
+const SESSION_ENDED = 'Phiên xem đã kết thúc. Mã có thể đã bị thu hồi hoặc thay bằng mã mới; kiểm tra email mới nhất rồi nhập lại mã, hoặc liên hệ đại diện đoàn.'
+
+it('keeps the end screen when a Tour seen COMPLETED then closes its session with 401', async () => {
+  let phase: 'running' | 'completed' | 'closed' = 'running'
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view)
+    : phase === 'closed' ? response(null, 401) : response({ ...info, tourState: phase === 'running' ? 'RUNNING' : 'COMPLETED' })))
+  mount()
+  await screen.findByRole('heading', { name: 'Buổi tham quan đang diễn ra', level: 2 })
+  phase = 'completed'
+  await act(async () => { await client.refetchQueries({ queryKey: key }) })
+  expect(await screen.findByRole('heading', { name: 'Hoàn thành chuyến tham quan!' })).toBeVisible()
+  phase = 'closed'
+  await act(async () => { await client.refetchQueries({ queryKey: key }) })
+  // Query notifications are batched on a timer: let the 401 reach the page before judging it.
+  await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+  expect(screen.getByRole('heading', { name: 'Hoàn thành chuyến tham quan!' })).toBeVisible()
+  expect(screen.queryByLabelText('Mã truy cập')).not.toBeInTheDocument()
+  expect(screen.queryByText(SESSION_ENDED)).toBeNull()
+  expect(screen.queryByText(/Đang mất kết nối/)).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Kiểm tra lại phiên' })).toBeNull()
+  // Leaving the ended Tour needs no server call: its session is already gone.
+  fireEvent.click(screen.getAllByRole('button', { name: 'Thoát phiên' })[0])
+  expect(await screen.findByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(fetchCalls().some(url => url.endsWith('/leave'))).toBe(false)
+})
 
 it('says why the room closed when a session this tab held is refused with 401', async () => {
   let revoked = false

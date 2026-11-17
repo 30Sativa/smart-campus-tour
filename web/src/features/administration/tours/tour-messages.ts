@@ -81,16 +81,17 @@ export function seatsLabel(tour: { capacity?: number; heldSeats?: number }): str
 }
 
 /**
- * The READY confirmation's warning for a Tour on a shift that is closed before its registration deadline or with seats
- * still free: READY closes registration early. Null for a quick Tour, whose list Staff closes with READY anyway, and
- * when neither holds. Display only: READY is not blocked.
+ * The READY confirmation's warning for a Tour on a shift that is closed before its registration deadline: READY closes
+ * registration early. The seats still free join the sentence when there are any. Null once the deadline has passed
+ * (registration is already closed, seats free or not) and for a quick Tour, whose list Staff closes with READY anyway.
+ * Display only: READY is not blocked.
  */
 export function earlyReadyWarning(tour: TourTiming & { capacity?: number; heldSeats?: number }, now: number): string | null {
   if (tour.isShortNotice) return null
   const closesAt = registrationClosesAtOf(tour)
+  if (now >= closesAt) return null
   const left = seatsLeft(tour)
-  if (now >= closesAt && !left) return null
-  const seats = left == null ? '' : ` và Tour còn ${left} chỗ`
+  const seats = left ? ` và Tour còn ${left} chỗ` : ''
   return `Hạn đăng ký là ${formatDateTime(closesAt)}${seats}. Chốt bây giờ sẽ đóng đăng ký sớm: trường khác không đăng ký thêm được. Có thể mở lại trước giờ bắt đầu.`
 }
 
