@@ -552,6 +552,24 @@ describe('Staff versioned Route workflow', () => {
     expect(body.name).toBe('Library tour mới')
   })
 
+  // F2: a kept failed run clears by fixing the path, or by Technical passing the same path when the path was not the cause.
+  it('names both ways out of a kept failed run, on step 4 and in the toast', async () => {
+    savedAfterNarration({ isSubmitted: true, verificationStatus: 'FAIL' })
+    renderAt('/staff/manage/routes/route-1/edit')
+    await screen.findByLabelText('Tên tuyến')
+    fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Mô tả mới' } })
+    fireEvent.click(screen.getByRole('button', { name: /Bước 4/ }))
+    expect(screen.getByText('Chỉ đổi mô tả: đường đi không đổi nên bản mới giữ kết quả chạy thử không đạt. Nếu lỗi do đường đi thì sửa đường đi rồi gửi lại; nếu không thì nhờ Kỹ thuật chạy lại cùng đường đi.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }))
+    await waitFor(() => expect(useToastStore.getState().toasts.at(-1)?.detail).toMatch(/^Đường đi không đổi nên giữ kết quả chạy thử không đạt\. Nếu lỗi do đường đi thì sửa rồi gửi lại; nếu không, nhờ Kỹ thuật chạy lại\./))
+  })
+
+  // F1: the route page lists what keeps the run and what needs a new one, matching routeChanges.
+  it('says on the route page which edits keep the run result', async () => {
+    renderAt('/staff/manage/routes/route-1')
+    expect(await screen.findByText(/Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh thì bản mới giữ kết quả chạy thử\. Đổi bản đồ, điểm dừng, thứ tự, góc nhìn camera, điểm đầu hoặc điểm cuối thì cần chạy thử lại\./)).toBeInTheDocument()
+  })
+
   // ADR-0060: saving again is how a route takes narration approved after its save, so that is not "nothing changed".
   it('lets an otherwise unchanged route be saved again to take newly approved narration, keeping the passed run', async () => {
     currentRoute = { ...currentRoute, isSubmitted: true, verificationStatus: 'PASS' }

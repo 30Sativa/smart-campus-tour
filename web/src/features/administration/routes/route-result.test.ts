@@ -66,6 +66,7 @@ describe('what a save means for its run (B1)', () => {
 
   it('words the toast for each case', () => {
     expect(saveResultText({ isSubmitted: true, verificationStatus: 'PASS' })).toMatch(/giữ kết quả chạy thử đạt/)
+    expect(saveResultText({ isSubmitted: true, verificationStatus: 'FAIL' })).toMatch(/không đạt\. Nếu lỗi do đường đi thì sửa rồi gửi lại; nếu không, nhờ Kỹ thuật chạy lại\.$/)
     expect(saveResultText({ isSubmitted: true, verificationStatus: 'NOT_TESTED' })).toMatch(/cần Kỹ thuật chạy thử lại/)
     expect(saveResultText({ isSubmitted: false, verificationStatus: 'PASS' })).toMatch(/^Chưa gửi kiểm chứng/)
   })

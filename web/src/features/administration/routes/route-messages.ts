@@ -116,7 +116,7 @@ export const dwellText = (seconds: number) =>
 export function saveResultText(route: Pick<VersionedRoute, 'isSubmitted' | 'verificationStatus'>): string {
   if (!route.isSubmitted) return 'Chưa gửi kiểm chứng. Bấm Gửi kiểm chứng tuyến để Kỹ thuật chạy thử.'
   if (route.verificationStatus === 'PASS') return 'Đường đi không đổi nên giữ kết quả chạy thử đạt. Dùng được để tạo Tour.'
-  if (route.verificationStatus === 'FAIL') return 'Đường đi không đổi nên giữ kết quả chạy thử không đạt. Sửa đường đi rồi gửi lại.'
+  if (route.verificationStatus === 'FAIL') return 'Đường đi không đổi nên giữ kết quả chạy thử không đạt. Nếu lỗi do đường đi thì sửa rồi gửi lại; nếu không, nhờ Kỹ thuật chạy lại.'
   return 'Đường đi đã đổi nên cần Kỹ thuật chạy thử lại. Chưa tạo được Tour cho tới khi chạy thử đạt.'
 }
 

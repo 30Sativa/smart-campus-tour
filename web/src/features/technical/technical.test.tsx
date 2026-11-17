@@ -1098,7 +1098,14 @@ describe('Technical Staff API integration', () => {
     // Each check is named by its text, not by the checkbox value "on".
     fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Robot dừng an toàn' }))
     expect(within(dialog).getByText('Các Tour này sẽ không chốt và không bắt đầu được cho tới khi có lần chạy đạt.')).toBeInTheDocument()
-    expect(within(dialog).getByText(/Chỉ đổi thời gian dừng hoặc thuyết minh thì giữ kết quả\./)).toBeInTheDocument()
+    expect(within(dialog).getByText(/Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh thì giữ kết quả\./)).toBeInTheDocument()
+  })
+
+  // F1: the page's two notes match routeChanges: camera angles change the path, name and description do not.
+  it('says which edits keep the path\'s result and which need a new run', async () => {
+    renderPage(<TechnicalConfirmationsPage />)
+    expect(await screen.findByText(/đổi thứ tự điểm dừng, đổi góc nhìn camera, điểm đầu, điểm cuối hoặc bản đồ\) thì bản mới cần chạy thử lại\./)).toBeInTheDocument()
+    expect(screen.getByText('Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh')).toBeInTheDocument()
   })
 
   it('lists a save that carries its path\'s PASS with the passed ones, not with saves never run', async () => {
