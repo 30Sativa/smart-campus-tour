@@ -39,7 +39,9 @@ export function TourSeatsAndOperatorPanel({ detail }: { detail: TourDetails }) {
     {permissions.canChangeCapacity && <form onSubmit={saveSeats} className="space-y-2">
       {capacity.isError && <Notice tone="danger">{tourError(capacity.error)}</Notice>}
       <label className="block text-sm">Sức chứa<input required type="number" min={minSeats} max={permissions.maxCapacity} step={1} className={inputClass} value={seats} onChange={event => { capacity.reset(); setSeats(event.target.value) }} />
-        <span className="mt-1 block text-xs text-[#64748b]">{seatsLabel(tour)}. Không giảm được xuống dưới số chỗ đang được giữ.</span></label>
+        <span className="mt-1 block text-xs text-[#64748b]">{seatsLabel(tour)}. Không giảm được xuống dưới số chỗ đang được giữ.</span>
+        {/* READY closed registration: a new capacity only matters once the Tour is reopened. */}
+        {tour.state === 'READY' && <span className="mt-1 block text-xs text-[#64748b]">Sức chứa chỉ có tác dụng khi mở lại Tour để nhận đăng ký.</span>}</label>
       <button type="submit" disabled={capacity.isPending || Number(seats) === tour.capacity} className={buttonClass('secondary', 'sm')}>{capacity.isPending ? 'Đang lưu…' : 'Lưu sức chứa'}</button>
     </form>}
     {permissions.canChangeOperator && <div className="space-y-2">
