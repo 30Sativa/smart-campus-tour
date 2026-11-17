@@ -6,6 +6,7 @@ using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Invitations.Commands.AccessTour;
@@ -41,6 +42,24 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
             ReconnectWindowExpiredCode,
             new Dictionary<string, string[]> { ["retryAfterSeconds"] = [seconds.ToString(CultureInfo.InvariantCulture)] });
     }
+    public const string TourEndedCode = "TOUR_ENDED";
+
+    /// <summary>The Tour this browser was invited to is over: COMPLETED, or CANCELLED before it ever ran. Grants nothing.</summary>
+    private static ConflictException TourEnded(string state) => new(
+        state == "COMPLETED" ? "Buổi tham quan đã kết thúc." : "Buổi tham quan đã bị hủy.",
+        TourEndedCode,
+        new Dictionary<string, string[]> { ["tourState"] = [state] });
+
+    /// <summary>
+    /// Whether a refused request still proved it holds this invitation, as RECONNECT_WINDOW_EXPIRED requires: the current
+    /// code, an open session or an open session's device token, on an invitation that was not revoked or removed.
+    /// </summary>
+    private static bool ProvesInvitation(Invitation invitation, bool codeMatched, BrowserSession? current, byte[]? deviceHash) =>
+        invitation.RevokedAt is null && invitation.RosterRow.IsActive &&
+        invitation.RosterRow.ParticipationState == RosterParticipationStates.Accepted &&
+        (codeMatched || current is not null || deviceHash is not null && invitation.BrowserSessions.Any(s =>
+            s.EndedAt is null && s.DeviceTokenHash is not null && CryptographicOperations.FixedTimeEquals(s.DeviceTokenHash, deviceHash)));
+
     public async Task<StudentAccessResult> Handle(AccessTourCommand command, CancellationToken ct)
     {
         if (!settings.Enabled) throw Invalid();
@@ -81,7 +100,13 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
             }
             guard.Clear(codeHash, command.ClientIp);
         }
-        if (!InvitationPolicy.CanEnter(tour, invitation.RosterRow.Registration, invitation, now)) throw Invalid();
+        if (!InvitationPolicy.CanEnter(tour, invitation.RosterRow.Registration, invitation, now))
+        {
+            // A proven holder of a Tour that is over is told so instead of being handed the generic 401.
+            var ended = tour.State == "COMPLETED" || tour.State == "CANCELLED" && tour.StartedAt is null;
+            if (ended && ProvesInvitation(invitation, codeHash is not null, current, deviceHash)) throw TourEnded(tour.State);
+            throw Invalid();
+        }
         var active = invitation.BrowserSessions.SingleOrDefault(s => s.EndedAt is null);
         string? token = command.SessionToken;
         string? deviceToken = command.DeviceToken;

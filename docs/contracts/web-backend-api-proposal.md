@@ -123,7 +123,13 @@ khi luồng yêu cầu/duyệt có API.
 duyệt thứ hai nhận 409 `INVITATION_IN_USE` (backend dùng mã này, không phải
 `SESSION_IN_USE`). Cùng trình duyệt nhưng mất kết nối quá 2 phút khi phiên cũ
 còn hạn nhận 409 `RECONNECT_WINDOW_EXPIRED` kèm `errors.fields.retryAfterSeconds` (string array, like `remainingSeats`) (số
-giây tới khi phiên cũ hết hạn); các trường hợp khác vẫn là 401 chung. GET
+giây tới khi phiên cũ hết hạn). Tour đã COMPLETED, hoặc CANCELLED khi chưa từng
+chạy, mà yêu cầu vẫn chứng minh được lời mời (mã đúng, cookie của phiên đang mở
+hoặc cookie thiết bị của phiên đang mở; lời mời chưa thu hồi) nhận 409
+`TOUR_ENDED` kèm `errors.fields.tourState` (string array: `COMPLETED` hoặc
+`CANCELLED`) và câu "Buổi tham quan đã kết thúc." / "Buổi tham quan đã bị
+hủy."; không mở lại quyền xem, không đặt cookie. Tour CANCELLED sau khi đã chạy
+vẫn trả 200 (video dự phòng). Các trường hợp khác vẫn là 401 chung. GET
 `/api/registrations/{registrationId}/invitations` trả thêm cho mỗi mã
 `viewerPresence` (`NOT_ENTERED | CONNECTED | DISCONNECTED | LEFT`),
 `firstEnteredAt`, `lastSeenAt`, `sessionExpiresAt`; ý nghĩa ở

@@ -1797,7 +1797,18 @@ lock) or the session/device cookie matched but that browser's grace has passed
 while its session is still open, the response is 409
 `RECONNECT_WINDOW_EXPIRED` (since 2026-11-16; was the generic 401) with
 `errors.fields.retryAfterSeconds` (string array, like `remainingSeats`) = seconds until that session's ExpiresAt; the viewer
-asks for a new code or retries after it. Every other refusal keeps the generic
+asks for a new code or retries after it. When the Tour is not enterable because
+it is COMPLETED, or CANCELLED without ever starting (`StartedAt` null), and the
+request proved this invitation the same way (the current code after the lock,
+the cookie of an open session, or the device cookie of an open session) on an
+invitation that is not revoked and whose roster row is still active and
+accepted, join/session answer 409 `TOUR_ENDED` (since 2026-11-17; was the
+generic 401) with `errors.fields.tourState` (string array, like
+`retryAfterSeconds`) = `COMPLETED` or `CANCELLED` and the message "Buổi tham
+quan đã kết thúc." / "Buổi tham quan đã bị hủy.". It grants nothing: no session
+is created or extended, no cookie is set, and entry rules (`CanEnter`) are
+unchanged; a Tour CANCELLED after Start still answers 200 for the fallback
+video. Every other refusal keeps the generic
 401. The Tour-scoped device token is a
 browser credential, never an IP-derived identity. First successful entry
 records INVITATION_ENTERED once per invitation.
