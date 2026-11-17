@@ -393,6 +393,17 @@ backend mỗi 5 giây cho từng người đang xem và cắt người không c�
 bị thu hồi, Tour kết thúc, lease Staff hết hạn). Backend không trả lời thì không ai mới vào
 xem được, người đang xem vẫn xem tiếp.
 
+**Video dự phòng (ADR-0063).** Video dự phòng của Tour cũng đi qua relay này, trên path
+`fallback-<tourId>`, với cùng luật token và reaper. Staff tải video lên Cloudinary (dạng
+`authenticated`, chỉ mở được bằng link có chữ ký mà chỉ backend tạo được). Khi người xem đầu
+tiên có token mở path đó, MediaMTX chạy `mediamtx-relay-fallback`: script hỏi backend
+`/api/internal/stream-relay/fallback-source` (kèm khoá relay) lấy link đã ký, rồi `ffmpeg`
+phát lặp lên RTSP chỉ nghe ở `127.0.0.1:8554` (backend cũng kiểm quyền phát: user
+`fallback`, mật khẩu là khoá relay). Không ai xem trong 10 giây thì MediaMTX tắt ffmpeg.
+Hình được Cloudinary chuyển sẵn sang H.264 Baseline nên ffmpeg chỉ chép hình, chỉ đổi tiếng
+sang Opus (rất ít CPU). Học sinh không bao giờ thấy địa chỉ video. API cần thêm
+`Cloudinary__CloudName`, `Cloudinary__ApiKey`, `Cloudinary__ApiSecret` (installer in nhắc).
+
 Không mã hoá lại ở đâu cả nên NUC và EC2 gần như không tốn CPU. Chi phí là băng
 thông ra của EC2: mỗi người xem nhận đúng `QUEST_VIDEO_BITRATE`. Ở 2 Mbit/s,
 40 học sinh x 1 giờ khoảng 36 GB; AWS miễn phí 100 GB ra Internet mỗi tháng.
@@ -468,6 +479,8 @@ production không còn đọc biến này), rồi Redeploy. Trang lấy địa c
 | Trình duyệt báo lỗi chứng chỉ | chứng chỉ không đúng tên `stream.fptcampustour.cloud` |
 | `quest-relay-push` bị từ chối sau khi cài lại relay | API chưa có `QuestRelay__PublishUser`/`QuestRelay__PublishPasswordSha256`, hoặc API đang không chạy (relay hỏi API cả khi NUC phát) |
 | Trang học sinh "Mất tín hiệu", log relay `authentication failed` | API trả 401: thiếu hoặc sai `QuestRelay__Key`; hoặc `QuestRelay__RobotCode` không phải robot của Tour |
+| "Chưa mở được video dự phòng", log relay `no fallback video for fallback-…` | Tour không RUNNING, chưa tải video lên, hoặc API thiếu `Cloudinary__*` |
+| Video dự phòng mở được nhưng đen hoặc báo lỗi ngay sau khi tải lên | Cloudinary còn đang chuẩn bị bản 720p (vài phút sau khi tải lên); thử lại sau |
 | Log reaper `recheck ... answered 401` | `reaper.env` và `api.env` khác khoá: chạy lại install-relay.sh rồi chép lại dòng `QuestRelay__Key` |
 
 Chưa đưa qua relay: đàm thoại staff (`quest-mic`, `staff-mic`) và

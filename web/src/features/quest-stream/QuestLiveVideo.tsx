@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LoaderCircle, Maximize2, Minimize2, Pause, Play, RotateCcw, VideoOff } from 'lucide-react'
 import { DEV_QUEST_SOURCE, type QuestSource } from './stream-access'
 import { usePageVisible } from './use-page-visible'
@@ -27,6 +27,8 @@ type QuestLiveVideoProps = {
   /** Replaces the "no signal" hint, e.g. while the robot is still switching its camera on. */
   offlineHint?: string
   className?: string
+  /** Drawn over the picture inside the frame, so it stays on screen in fullscreen too (e.g. the robot's status). */
+  overlay?: ReactNode
 }
 
 /** iOS Safari has no element fullscreen; its <video> can still go fullscreen on its own. */
@@ -44,7 +46,7 @@ const PAUSED_BADGE = { label: 'Tạm dừng', className: 'bg-white/85 text-[#475
  * It can also fill the screen (button, double-click; Esc leaves), keeping the
  * status badge and controls on top of the picture.
  */
-export function QuestLiveVideo({ source = DEV_QUEST_SOURCE, label, offlineHint, className = '' }: QuestLiveVideoProps) {
+export function QuestLiveVideo({ source = DEV_QUEST_SOURCE, label, offlineHint, className = '', overlay }: QuestLiveVideoProps) {
   const frameRef = useRef<HTMLElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [paused, setPaused] = useState(false)
@@ -127,6 +129,8 @@ export function QuestLiveVideo({ source = DEV_QUEST_SOURCE, label, offlineHint, 
           </div>
         </div>
       )}
+
+      {overlay}
 
       <figcaption className="absolute top-3 left-3 flex items-center gap-2">
         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold backdrop-blur ${badge.className}`}>

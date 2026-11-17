@@ -29,4 +29,14 @@ public sealed class StudentTourController(ISender sender, IConfiguration configu
         Response.Headers.CacheControl = "no-store";
         return Ok(new BaseResponse<StreamAccess> { Success = true, Message = "OK", Data = access });
     }
+
+    /// <summary>ADR-0063: the relay URL and a short-lived token for the Tour's fallback video, while the Tour runs.</summary>
+    [HttpGet("fallback-access")]
+    public async Task<ActionResult<BaseResponse<StreamAccess>>> FallbackAccess(Guid tourId, CancellationToken ct)
+    {
+        StudentSessionCookie.EnsureAllowedOrigin(Request, configuration);
+        var access = await sender.Send(new GetStudentFallbackAccessQuery(tourId, Request.Cookies[StudentSessionCookie.Name(tourId)]), ct);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new BaseResponse<StreamAccess> { Success = true, Message = "OK", Data = access });
+    }
 }

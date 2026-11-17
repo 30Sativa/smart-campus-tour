@@ -10,6 +10,7 @@ import { mapAreaName } from '../map-labels'
 import { useMapVersions } from '../../technical/technical-hooks'
 import { SaveBlockedHint } from '../../technical/TechnicalUi'
 import type { TourInput } from './types'
+import { FallbackVideoField } from './FallbackVideoField'
 
 const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
 
@@ -76,7 +77,7 @@ export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = f
         {options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
       </select>
         <span className="mt-1 block text-xs text-[#64748b]">{routes.isError ? 'Không tải được danh mục tuyến.' : 'Danh sách này chỉ có tuyến kiểu cũ.'}</span></label>}
-      <label className="block text-sm">Video dự phòng khi Tour bị hủy giữa chừng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
+      <FallbackVideoField value={video} onChange={setVideo} disabled={busy} />
       {fixedStops ? <Notice tone="info">Muốn đổi lịch, tuyến hoặc robot, hãy hủy Tour rồi tạo lại; ở đây chỉ sửa được tên, mô tả và video.</Notice>
         : scheduleLocked && <Notice tone="info">Tour đã có đăng ký hoặc lịch sử nên lịch và tuyến bị khóa; chỉ sửa được tên, mô tả và video.</Notice>}
       <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:items-center sm:justify-end">

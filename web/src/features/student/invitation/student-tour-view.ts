@@ -14,7 +14,8 @@ export type StudentTourInfo = {
   scheduledStartAt: string
   invitationExpiresAt: string
   rowType: string
-  fallbackVideoUrl: string | null
+  /** The Tour has a fallback video. Its address never reaches the browser: it plays through the relay (ADR-0063). */
+  hasFallbackVideo: boolean
 }
 
 export type StudentTourStop = {
@@ -49,11 +50,6 @@ export async function getStudentTourView(tourId: string, signal?: AbortSignal): 
 
 const TOUR_STATES: Record<string, TourState> = {
   SCHEDULED: 'Scheduled', READY: 'Ready', RUNNING: 'Running', COMPLETED: 'Completed', CANCELLED: 'Cancelled',
-}
-
-/** A playable video file; other links (a video page, a playlist) open in a new tab instead. */
-export function isVideoFile(url: string | null | undefined): url is string {
-  return !!url && /^(https:\/\/|\/(?!\/))[^\s]*\.(mp4|webm)(\?[^\s]*)?$/i.test(url.trim())
 }
 
 function stepOf(progress: StudentTourProgress): StudentOperationalStep {
@@ -138,7 +134,8 @@ export function buildLiveSnapshot(info: StudentTourInfo, view: StudentTourView |
     pois,
     robotPose: { x: 0, y: 0, heading: 0, isStale: true, lastUpdatedAt: '' },
     step,
-    videoStreamUrl: isVideoFile(info.fallbackVideoUrl) ? info.fallbackVideoUrl.trim() : '',
+    // ADR-0063: the fallback video plays through the relay (useStudentFallbackAccess), never from a stored URL.
+    videoStreamUrl: '',
     narration: atStop
       ? {
         poiId: atStop.poiId,

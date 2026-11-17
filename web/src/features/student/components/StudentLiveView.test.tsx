@@ -8,7 +8,7 @@ import { buildLiveSnapshot } from '../invitation/student-tour-view'
 vi.mock('./StudentVideoPlayer', () => ({ StudentVideoPlayer: () => <div>Hình ảnh buổi tham quan</div> }))
 
 const snapshot = buildLiveSnapshot({ tourId: 'tour', tourName: 'Buổi tham quan', tourState: 'RUNNING',
-  scheduledStartAt: '2026-11-05T08:00:00Z', invitationExpiresAt: '2026-11-06T08:00:00Z', rowType: 'INDIVIDUAL', fallbackVideoUrl: null }, {
+  scheduledStartAt: '2026-11-05T08:00:00Z', invitationExpiresAt: '2026-11-06T08:00:00Z', rowType: 'INDIVIDUAL', hasFallbackVideo: false }, {
   stops: [{ order: 1, poiId: 'library', name: 'Thư viện', description: 'Không gian học tập.', narrationText: null, audioUrl: null, narrationSeconds: null, dwellSeconds: 60 }],
   progress: { step: 'OBSERVING', currentPoiId: 'library', lastArrivedPoiId: 'library', needsAssistance: false, isHeld: false },
 })

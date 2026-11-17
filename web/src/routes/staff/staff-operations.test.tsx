@@ -470,7 +470,8 @@ describe('demo flow on the live console', () => {
   it('pauses a running leg behind one confirmation, then says it waits for the robot to stop', async () => {
     tour = demo({}, { pause: allow })
     renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: /Tạm dừng/ }))
+    // Exact name: the camera card's own "Tạm dừng hình" button sits on the same page.
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm dừng' }))
     confirm('Tạm dừng')
     await waitFor(() => expect(writes).toHaveLength(1))
     expect(writes[0]).toMatchObject({ path: '/api/staff/manage/tours/tour-1/pause', body: { expectedRowVersion: 'AAAAAAAAB9E=' } })

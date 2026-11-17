@@ -8,11 +8,10 @@ import { StudentWaitingRoom } from '../components/StudentWaitingRoom'
 import { StudentLiveView } from '../components/StudentLiveView'
 import { StudentEndScreen } from '../components/StudentEndScreen'
 import { LiveStudentAiAssistant } from '../components/LiveStudentAiAssistant'
-import { FALLBACK_BADGE } from '../components/StudentVideoPlayer'
-import { useStudentStreamAccess } from '../../quest-stream/stream-access'
+import { useStudentFallbackAccess, useStudentStreamAccess } from '../../quest-stream/stream-access'
 import { formatDateTime } from '../../../components/ui/date-time'
 import { ENTER_TOUR_LABEL } from './invitation-labels'
-import { buildLiveSnapshot, getStudentTourView, isVideoFile, type StudentTourInfo } from './student-tour-view'
+import { buildLiveSnapshot, getStudentTourView, type StudentTourInfo } from './student-tour-view'
 import '../student.css'
 import '../student-expedition.css'
 import './invitation.css'
@@ -77,13 +76,6 @@ export const SESSION_CHECK_RUNNING_MS = 5000
 export const SESSION_CHECK_WATCHDOG_MS = 8000
 /** Cancelled, offline or server-side failures say nothing about the invitation itself. */
 const uncheckedError = (error: unknown) => !(error instanceof ApiError) || error.status >= 500
-
-function FallbackVideoLink({ url }: { url: string | null }) {
-  if (!url) return null
-  return <p className="st-invitation-fallback">
-    <a href={url} target="_blank" rel="noreferrer">Xem video giới thiệu (không phải trực tiếp)</a>
-  </p>
-}
 
 /**
  * Invited Student page for a SQL Tour (docs/architecture.md §3.2.3, §7.1): access-code entry, then the same
@@ -164,9 +156,10 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const shared = info?.rowType === 'SHARED_VIEWING'
   const sessionLabel = shared ? 'Màn hình xem chung' : 'Phiên lời mời cá nhân'
   const snapshot = info ? buildLiveSnapshot(info, view.data) : null
-  const fallback = info?.fallbackVideoUrl ?? null
   // ADR-0055: the relay URL and a short token, renewed while the Tour runs; refused once access ends.
   const quest = useStudentStreamAccess(tourId, snapshot?.tourState === 'Running' && !leave.isPending)
+  // ADR-0063: the fallback video's token, held while the Tour runs so the player switches as soon as the live picture is lost.
+  const fallback = useStudentFallbackAccess(tourId, snapshot?.tourState === 'Running' && !!info?.hasFallbackVideo && !leave.isPending)
   const status = <>
     {leave.isError && <p role="alert" className="st-session-error">{accessError(leave.error)}</p>}
     {info && session.isError && !finished && <p role="alert" className="st-session-error">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên có thể hết hạn trong thời gian mất kết nối; kết nối lại để kiểm tra.</p>}
@@ -221,23 +214,23 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
       <StudentLiveView
         snapshot={snapshot}
         quest={quest}
+        fallback={fallback}
         showMap={false}
         idleTitle="Buổi tham quan đang diễn ra"
         narrationIdleText={snapshot.step === 'in_progress'
           ? 'Thuyết minh sẽ hiện khi robot tới từng điểm dừng. Trong lúc chờ, bạn xem thẻ Lộ trình hoặc hỏi Trợ lý AI nhé.'
           : undefined}
         video={{
-          badge: snapshot.videoStreamUrl ? FALLBACK_BADGE : undefined,
           emptyMessage: 'Livestream chưa được kết nối cho buổi này. Bạn vẫn có thể theo dõi lộ trình và hỏi Trợ lý AI.',
         }}
-        notice={!isVideoFile(fallback) && <FallbackVideoLink url={fallback} />}
         ai={<LiveStudentAiAssistant tourId={tourId} shared={shared} poiName={snapshot.currentPoi?.title} />}
       />
       <div className="st-ctn st-invitation-status">{status}</div>
     </>
   } else if (snapshot.tourState === 'Completed' || snapshot.tourState === 'Cancelled') {
     body = <>
-      {/* The session answers 200 CANCELLED only for a Tour that started (fallback video); TOUR_ENDED CANCELLED means it never ran. */}
+      {/* The session answers 200 CANCELLED only for a Tour that started (End Early); TOUR_ENDED CANCELLED means it never ran.
+          Neither plays anything: after End Early only the result remains (FR-48, ADR-0063). */}
       <StudentEndScreen snapshot={snapshot} name="bạn" meta={`${info.tourName}, ${formatDateTime(info.scheduledStartAt)}`}
         neverStarted={endedBy?.tourState === 'CANCELLED'}
         onLeave={leave.isPending ? undefined : () => finished ? exitSession() : leave.mutate()} />

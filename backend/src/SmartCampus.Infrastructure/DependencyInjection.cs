@@ -90,6 +90,9 @@ public static class DependencyInjection
             configuration["QuestRelay:PublishUser"], configuration["QuestRelay:PublishPasswordSha256"],
             configuration["QuestRelay:Path"], configuration.GetValue<int?>("QuestRelay:TokenSeconds") ?? 120));
         services.AddScoped<IStreamEntitlementReader, EfStreamEntitlementReader>();
+        // ADR-0063: Tour fallback videos live on Cloudinary as authenticated assets; unset Cloudinary signs no upload.
+        services.AddSingleton(new SmartCampus.Application.Features.FallbackVideo.CloudinarySettings(
+            configuration["Cloudinary:CloudName"], configuration["Cloudinary:ApiKey"], configuration["Cloudinary:ApiSecret"]));
         services.AddScoped<StreamEntitlement>();
         services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
         services.AddSingleton<JwtTokenSettings>();

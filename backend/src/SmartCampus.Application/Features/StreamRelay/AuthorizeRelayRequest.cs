@@ -28,6 +28,8 @@ public sealed class AuthorizeRelayRequestHandler(StreamRelaySettings settings, S
     {
         if (!settings.Enabled || !SameSecret(request.RelayKey, settings.Key!))
             return RelayDecision.UnknownCaller;
+        if (FallbackPaths.TryParse(request.Path, out var tourId))
+            return await FallbackAsync(request, tourId, ct);
         if (!string.Equals(request.Path, settings.Path, StringComparison.Ordinal))
             return RelayDecision.Deny;
         if (request.Recheck)
@@ -38,6 +40,25 @@ public sealed class AuthorizeRelayRequestHandler(StreamRelaySettings settings, S
             "publish" => PublisherMatches(request.User, request.Password) ? RelayDecision.Allow : RelayDecision.Deny,
             // The browser sends the token in the WHEP URL, so the reaper can see it later in the session's query.
             "read" => await entitlement.TokenMayReadAsync(StreamTokens.FromQuery(request.Query) ?? request.Token,
+                ignoreExpiry: false, ct) ? RelayDecision.Allow : RelayDecision.Deny,
+            _ => RelayDecision.Deny,
+        };
+    }
+
+    /// <summary>
+    /// ADR-0063: <c>fallback-{tourId}</c> is published only by the relay host's own on-demand ffmpeg, which knows the
+    /// relay key, and read only with a fallback token of a session of that Tour while it runs.
+    /// </summary>
+    private async Task<RelayDecision> FallbackAsync(AuthorizeRelayRequest request, Guid tourId, CancellationToken ct)
+    {
+        if (request.Recheck)
+            return await entitlement.TokenMayReadFallbackAsync(StreamTokens.FromQuery(request.Query), tourId, ignoreExpiry: true, ct)
+                ? RelayDecision.Allow : RelayDecision.Deny;
+        return request.Action switch
+        {
+            "publish" => SameSecret(request.User, FallbackPaths.PublishUser) & SameSecret(request.Password, settings.Key!)
+                ? RelayDecision.Allow : RelayDecision.Deny,
+            "read" => await entitlement.TokenMayReadFallbackAsync(StreamTokens.FromQuery(request.Query) ?? request.Token, tourId,
                 ignoreExpiry: false, ct) ? RelayDecision.Allow : RelayDecision.Deny,
             _ => RelayDecision.Deny,
         };

@@ -63,7 +63,7 @@ export default function StaffNarrationRehearsalPage() {
   const current = phase ? stops[phase.index] : undefined
   const snapshot = buildLiveSnapshot(
     { tourId: 'rehearsal', tourName: 'Chạy thử thuyết minh', tourState: 'RUNNING', scheduledStartAt: new Date().toISOString(),
-      invitationExpiresAt: '', rowType: 'INDIVIDUAL', fallbackVideoUrl: null },
+      invitationExpiresAt: '', rowType: 'INDIVIDUAL', hasFallbackVideo: false },
     { stops, progress: phase && current ? {
       step: phase.at === 'stop' ? 'OBSERVING' : 'NAVIGATING',
       currentPoiId: current.poiId,

@@ -116,7 +116,7 @@ describe('head alignment before Start (ADR-0045 HOME)', () => {
   // Regression: the merge of PR #321 with main kept both the old Start panel and the new opening, which did not compile.
   it('keeps the head re-home under the camera of the opening page, next to Mở Tour, with no leftover Start panel', async () => {
     renderPage()
-    const camera = await screen.findByRole('region', { name: 'Hình camera' })
+    const camera = await screen.findByRole('region', { name: 'Camera và robot' })
     expect(within(camera).getByRole('button', { name: 'Tự canh chỉnh đầu camera' })).toBeInTheDocument()
     expect(within(screen.getByRole('region', { name: 'Mở Tour' })).getByRole('button', { name: /Mở Tour/ })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Bắt đầu Tour' })).not.toBeInTheDocument()

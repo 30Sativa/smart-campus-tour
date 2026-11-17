@@ -16,6 +16,7 @@ import { tourError } from './tour-messages'
 import type { VersionedRoute } from '../routes/versioned-api'
 import { QUICK_TOUR_RULES, tourKindOf, type TourKind } from './quick-tour'
 import type { CreateTourInput, TourRobotOption, TourSlot } from './types'
+import { FallbackVideoField } from './FallbackVideoField'
 
 const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/
 /** When a shift's Tour must have ended: its start plus the most the shift holds. */
@@ -195,7 +196,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
           aria-invalid={capacityProblem ? true : undefined} aria-describedby={capacityProblem ? 'create-tour-capacity-error' : undefined} />
         {capacityProblem && <span id="create-tour-capacity-error" role="alert" className="mt-1 block text-xs text-[#b23e31]">Sức chứa phải từ 1 đến {maxCapacity} chỗ.</span>}
         <span className="mt-1 block text-xs text-[#64748b]">Số dòng đăng ký tối đa của cả Tour. Mỗi điểm xem chung tính là 1 chỗ.</span></label>
-      <label className="block text-sm">Video dự phòng khi Tour bị hủy giữa chừng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
+      <FallbackVideoField value={video} onChange={setVideo} disabled={busy} />
       <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:items-center sm:justify-end">
         <SaveBlockedHint id="create-tour-missing" tone="neutral" lead="Cần" missing={busy ? [] : missing} />
         <Link to="/staff/schedule" className={buttonClass('secondary')}>Hủy bỏ</Link>

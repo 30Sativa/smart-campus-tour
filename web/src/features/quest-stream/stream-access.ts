@@ -40,16 +40,12 @@ export function renewDelayMs(expiresAt: string, now = Date.now()): number {
 /** While the page may not watch yet (409), ask again this often: the Tour may start or get its robot. */
 export const NOT_AVAILABLE_RETRY_MS = 15_000
 
-/**
- * The Student page's relay source: `GET /api/student/tours/{id}/stream-access` with the session cookie, renewed
- * before it expires. A refused renewal (session revoked, Tour ended, another robot) gives null, which closes the
- * player. In a dev build without that answer, the LAN URL is used instead.
- */
-export function useStudentStreamAccess(tourId: string, enabled: boolean): QuestSource | null {
+/** One relay source the Student page asks for with its session cookie, renewed before the token expires. */
+function useStudentRelayAccess(tourId: string, endpoint: 'stream-access' | 'fallback-access', enabled: boolean): QuestSource | null {
   const query = useQuery({
-    queryKey: ['student-stream-access', tourId],
+    queryKey: ['student-' + endpoint, tourId],
     queryFn: ({ signal }) =>
-      apiClient<ApiResponse<StreamAccess>>(`/api/student/tours/${encodeURIComponent(tourId)}/stream-access`, {
+      apiClient<ApiResponse<StreamAccess>>(`/api/student/tours/${encodeURIComponent(tourId)}/${endpoint}`, {
         credentials: 'include', auth: false, signal,
       }).then(response => response?.data ?? null),
     enabled,
@@ -58,6 +54,25 @@ export function useStudentStreamAccess(tourId: string, enabled: boolean): QuestS
   })
   if (!enabled) return null
   // After a failed renewal React Query keeps the old data; the old token must not be used again.
-  const source = query.isError ? null : toQuestSource(query.data)
-  return source ?? DEV_QUEST_SOURCE
+  return query.isError ? null : toQuestSource(query.data)
+}
+
+/**
+ * The Student page's relay source: `GET /api/student/tours/{id}/stream-access` with the session cookie, renewed
+ * before it expires. A refused renewal (session revoked, Tour ended, another robot) gives null, which closes the
+ * player. In a dev build without that answer, the LAN URL is used instead.
+ */
+export function useStudentStreamAccess(tourId: string, enabled: boolean): QuestSource | null {
+  const source = useStudentRelayAccess(tourId, 'stream-access', enabled)
+  return enabled ? source ?? DEV_QUEST_SOURCE : null
+}
+
+/**
+ * ADR-0063: the Tour's fallback video on the same relay (`fallback-{tourId}`), with its own token from
+ * `GET /api/student/tours/{id}/fallback-access`. The page holds it while the Tour runs so the player can switch the
+ * moment the live picture is lost; a refused renewal (End Early, revoked session) gives null and closes the video,
+ * and the relay's reaper cuts an open one within about 5 s. There is no dev fallback.
+ */
+export function useStudentFallbackAccess(tourId: string, enabled: boolean): QuestSource | null {
+  return useStudentRelayAccess(tourId, 'fallback-access', enabled)
 }

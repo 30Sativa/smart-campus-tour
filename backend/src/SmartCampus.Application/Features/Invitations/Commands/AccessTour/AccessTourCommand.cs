@@ -11,8 +11,12 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Invitations.Commands.AccessTour;
 
+/// <summary>
+/// <paramref name="HasFallbackVideo"/>: the Tour has a fallback video. Its address never reaches the browser (ADR-0063):
+/// while the Tour runs the page asks <c>fallback-access</c> for a relay token instead.
+/// </summary>
 public sealed record StudentTourInfo(Guid TourId, string TourName, string TourState, DateTimeOffset ScheduledStartAt,
-    DateTimeOffset InvitationExpiresAt, string RowType, string? FallbackVideoUrl);
+    DateTimeOffset InvitationExpiresAt, string RowType, bool HasFallbackVideo);
 public sealed record StudentAccessResult(StudentTourInfo? Info, string? Token, string? DeviceToken);
 public sealed record AccessTourCommand(Guid TourId, string Operation, string? AccessCode, string? SessionToken,
     string? DeviceToken, string? ClientIp = null)
@@ -148,6 +152,6 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
         active.ExpiresAt = now.AddMinutes(settings.SessionIdleMinutes) < invitation.ExpiresAt
             ? now.AddMinutes(settings.SessionIdleMinutes) : invitation.ExpiresAt;
         return new(new(tour.Id, tour.Name, tour.State, tour.ScheduledStartAt, invitation.ExpiresAt, invitation.RosterRow.RowType,
-            tour.State == "CANCELLED" && tour.StartedAt is not null ? tour.FallbackVideoUrl : null), token, deviceToken);
+            tour.FallbackVideoUrl is not null), token, deviceToken);
     }
 }
