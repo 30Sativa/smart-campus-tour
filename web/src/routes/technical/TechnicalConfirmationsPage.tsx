@@ -99,8 +99,8 @@ export default function TechnicalConfirmationsPage() {
       </section>
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <Note tone="danger"><b>Đổi đường đi</b> (thêm, bớt, đổi thứ tự điểm dừng, đổi điểm đầu, điểm cuối hoặc bản đồ) thì bản mới cần chạy thử lại.</Note>
-        <Note tone="ok"><b>Chỉ đổi thời gian dừng hoặc thuyết minh</b> thì giữ kết quả chạy thử của đường đi, không cần chạy lại.</Note>
+        <Note tone="danger"><b>Đổi đường đi</b> (thêm, bớt, đổi thứ tự điểm dừng, đổi góc nhìn camera, điểm đầu, điểm cuối hoặc bản đồ) thì bản mới cần chạy thử lại.</Note>
+        <Note tone="ok"><b>Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh</b> thì giữ kết quả chạy thử của đường đi, không cần chạy lại.</Note>
       </div>
 
       {dialog?.view === 'record' && <RecordRouteTestModal key={dialog.route.revisionId} route={dialog.route} onClose={() => setDialog(null)} />}
@@ -193,7 +193,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
         {!pending && resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="route-test-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này khi sửa tuyến.</p><input id="route-test-reason" className={`${inputClass} mt-1`} required maxLength={1000} value={failureReason} onChange={event => { setFailureReason(event.target.value); changed() }} /></div>}
         <div><label className={labelClass} htmlFor="route-test-evidence">Ghi chú bằng chứng</label><textarea id="route-test-evidence" rows={3} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={event => { setEvidence(event.target.value); changed() }} /></div>
         {errors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errors.form}</p>}
-        <Note>Mỗi lần chạy được ghi thêm, không sửa được. Lần chạy mới nhất của cùng đường đi là kết quả đang áp dụng, cho mọi bản lưu có đường đi này. Chỉ đổi thời gian dừng hoặc thuyết minh thì giữ kết quả.</Note>
+        <Note>Mỗi lần chạy được ghi thêm, không sửa được. Lần chạy mới nhất của cùng đường đi là kết quả đang áp dụng, cho mọi bản lưu có đường đi này. Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh thì giữ kết quả.</Note>
       </form>
     </Modal>
   )

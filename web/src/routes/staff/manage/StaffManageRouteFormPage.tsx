@@ -253,7 +253,7 @@ export default function StaffManageRouteFormPage() {
   }).length : 0
   const pathChange = draftChange && newNarration ? { ...draftChange, changes: [...draftChange.changes, `cập nhật thuyết minh mới duyệt ${newNarration} điểm`] } : draftChange
   const keptPass = source.data?.verificationStatus === 'PASS'
-  const keptResultText = keptPass ? 'chạy thử đạt, không cần chạy lại' : 'chạy thử không đạt. Muốn hết không đạt, sửa đường đi rồi gửi lại'
+  const keptResultText = keptPass ? 'chạy thử đạt, không cần chạy lại' : 'chạy thử không đạt. Nếu lỗi do đường đi thì sửa đường đi rồi gửi lại; nếu không thì nhờ Kỹ thuật chạy lại cùng đường đi'
   const keepsResult = Boolean(source.data?.isSubmitted && pathChange && !pathChange.pathChanged && ['PASS', 'FAIL'].includes(source.data.verificationStatus))
   // E1: an edit that changes nothing would only save a copy of the revision in use; a new route has nothing to compare.
   const unchanged = Boolean(pathChange && !pathChange.changes.length)
