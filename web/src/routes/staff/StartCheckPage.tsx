@@ -6,7 +6,6 @@ import { buttonClass } from '../../components/ui/ui-classes'
 import { formatDate, formatTime } from '../../components/ui/date-time'
 import { useRequestId } from '../../features/administration/tours/hooks'
 import type { TourStartChecks } from '../../features/administration/tours/types'
-import { QuestLiveVideo } from '../../features/quest-stream/QuestLiveVideo'
 import { DEV_QUEST_SOURCE, toQuestSource } from '../../features/quest-stream/stream-access'
 import { cameraLeaseHint, useCameraLease } from '../../features/quest-stream/camera-lease'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
@@ -14,7 +13,7 @@ import { isTourStale, useOpenTour, useOperationTour, useStartChecks } from '../.
 import { useNow } from '../../features/staff/use-now'
 import { blockerOwner, checkCountText, checkCounts, checkVerdict, opensAtText } from '../../features/staff/operations/operation-labels'
 import { operationRefusal } from '../../features/staff/operations/operation-errors'
-import { RobotStatusCard, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
+import { CameraRobotCard, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { BlockerList, CheckGroups } from '../../features/staff/operations/StartCheckList'
 import { TourStepper } from '../../features/staff/operations/TourStepper'
 import { HeadHomeButton } from '../../features/staff/operations/live/HeadHomeButton'
@@ -109,8 +108,16 @@ export default function StartCheckPage() {
   return (
     <StaffPage wide>
       {header}
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      {/* Phương án J: the camera with the robot's status drawn on it leads the left column, the reasons it cannot open
+          follow; Mở Tour, the full list and the route stay in the right column. */}
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-4">
+          <section className={panelClass} aria-label="Camera và robot">
+            <CameraRobotCard robotCode={reservation?.robotCode} cameraSource={cameraSource}
+              offlineHint={cameraLeaseHint(cameraLease.data, cameraLease.isError)}
+              noCameraText={cameraLease.isPending ? 'Đang xin quyền xem camera…' : 'Máy chủ chưa cấp luồng camera cho robot này.'}
+              actions={<HeadHomeButton tourId={summary.id} isOperator={!notOperator} operatorName={operator?.fullName} />} />
+          </section>
           {!result ? <section className={`${panelClass} p-4`}>{checks.isError ? <ErrorPanel error={checks.error} onRetry={() => void checks.refetch()} /> : <LoadingPanel label="Đang tải điều kiện mở Tour…" />}</section>
             : <>
               {stale && <p role="alert" className="flex items-start gap-2 rounded-xl border border-[#f1dcb0] bg-[#fffaf0] px-4 py-3 text-[13px] leading-5 font-semibold text-[#7d5310]">
@@ -132,15 +139,6 @@ export default function StartCheckPage() {
                   <BlockerList checks={result.checks} blockedBy={blockedBy} opensAt={opensAt} now={now} />
                 </div>}
               </section>
-              {/* Folded by default: the verdict and "Cần xử lý" answer the question; the full list is for looking closer. */}
-              <details className={`${panelClass} group/all`} aria-label="Toàn bộ điều kiện">
-                <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] [&::-webkit-details-marker]:hidden">
-                  <span className="flex-1 text-[14px] font-semibold text-[#0f172a]">Toàn bộ điều kiện</span>
-                  <span className="text-xs font-semibold tabular-nums text-muted">{checkCountText(counts)}</span>
-                  <ChevronDown size={16} aria-hidden="true" className="text-muted transition-transform duration-150 group-open/all:rotate-180 motion-reduce:transition-none" />
-                </summary>
-                <div className="border-t border-[#f1f5f9] px-3 py-1.5"><CheckGroups checks={result.checks} blockedBy={blockedBy} now={now} /></div>
-              </details>
             </>}
         </div>
 
@@ -155,19 +153,15 @@ export default function StartCheckPage() {
               {refusal && <p role="alert" className="mt-2 text-xs leading-5 font-semibold text-[#9d3428]">{refusal.message}</p>}
             </div>
           </section>
-          <section className={panelClass} aria-label="Hình camera">
-            <PanelHead title="Hình camera" />
-            <div className="p-3">{cameraSource ? <QuestLiveVideo source={cameraSource} label={reservation?.robotCode}
-              offlineHint={cameraLeaseHint(cameraLease.data, cameraLease.isError)} />
-              : <p className="text-[13px] leading-5 text-muted">{cameraLease.isPending && ready
-                ? 'Đang xin quyền xem camera…'
-                : 'Máy chủ chưa cấp luồng camera cho robot này.'}</p>}</div>
-            {/* Re-align the head against its stops while the robot waits at the start, then check the picture. */}
-            <div className="border-t border-[#f1f5f9] p-3">
-              <HeadHomeButton tourId={summary.id} isOperator={!notOperator} operatorName={operator?.fullName} />
-            </div>
-          </section>
-          <section className={panelClass} aria-label="Robot"><RobotStatusCard robotCode={reservation?.robotCode} /></section>
+          {/* Folded by default: the verdict and "Cần xử lý" answer the question; the full list is for looking closer. */}
+          {result && <details className={`${panelClass} group/all`} aria-label="Toàn bộ điều kiện">
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] [&::-webkit-details-marker]:hidden">
+              <span className="flex-1 text-[14px] font-semibold text-[#0f172a]">Toàn bộ điều kiện</span>
+              <span className="text-xs font-semibold tabular-nums text-muted">{checkCountText(counts)}</span>
+              <ChevronDown size={16} aria-hidden="true" className="text-muted transition-transform duration-150 group-open/all:rotate-180 motion-reduce:transition-none" />
+            </summary>
+            <div className="border-t border-[#f1f5f9] px-3 py-1.5"><CheckGroups checks={result.checks} blockedBy={blockedBy} now={now} /></div>
+          </details>}
           <section className={panelClass} aria-label="Tuyến của Tour">
             <PanelHead title="Tuyến" description={`${summary.registrationCount} đoàn đăng ký · ${summary.invitationCount} lời mời`} />
             <div className="px-4 py-2"><RouteStopList detail={detail} /></div>

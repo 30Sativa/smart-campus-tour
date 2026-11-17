@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildLiveSnapshot, isVideoFile, type StudentTourInfo, type StudentTourProgress, type StudentTourView } from './student-tour-view'
+import { buildLiveSnapshot, type StudentTourInfo, type StudentTourProgress, type StudentTourView } from './student-tour-view'
 
 const info: StudentTourInfo = { tourId: 't', tourName: 'Tour', tourState: 'RUNNING', scheduledStartAt: '2026-10-20T02:00:00Z',
-  invitationExpiresAt: '2026-10-21T02:00:00Z', rowType: 'INDIVIDUAL', fallbackVideoUrl: null }
+  invitationExpiresAt: '2026-10-21T02:00:00Z', rowType: 'INDIVIDUAL', hasFallbackVideo: false }
 const stop = (order: number, poiId: string, name: string) =>
   ({ order, poiId, name, description: `${name} mô tả`, narrationText: `${name} thuyết minh`, audioUrl: null, narrationSeconds: null, dwellSeconds: 60 })
 const stops = [stop(2, 'b', 'B'), stop(1, 'a', 'A'), stop(3, 'c', 'C')]
@@ -55,11 +55,7 @@ describe('buildLiveSnapshot', () => {
     expect(buildLiveSnapshot(info, {} as StudentTourView).pois).toEqual([])
   })
 
-  it('plays only a fallback video file inline', () => {
-    expect(buildLiveSnapshot({ ...info, fallbackVideoUrl: 'https://cdn.example.edu/tour.mp4' }, null).videoStreamUrl).toBe('https://cdn.example.edu/tour.mp4')
-    expect(buildLiveSnapshot({ ...info, fallbackVideoUrl: 'https://youtube.com/watch?v=x' }, null).videoStreamUrl).toBe('')
-    expect(isVideoFile('/videos/a.webm')).toBe(true)
-    expect(isVideoFile('//evil.example/a.mp4')).toBe(false)
-    expect(isVideoFile('http://cdn.example.edu/a.mp4')).toBe(false)
+  it('never plays a stored fallback address: the fallback video comes from the relay (ADR-0063)', () => {
+    expect(buildLiveSnapshot({ ...info, tourState: 'RUNNING', hasFallbackVideo: true }, null).videoStreamUrl).toBe('')
   })
 })

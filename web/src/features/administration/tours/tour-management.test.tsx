@@ -479,14 +479,15 @@ describe('live Tour management', () => {
 
     fireEvent.change(screen.getByLabelText(/Lý do tạo gấp/), { target: { value: 'Trình diễn cho đoàn khách.' } })
     expect(screen.queryByText(/^Cần:/)).not.toBeInTheDocument()
-    // The Tour keeps its own fallback video (group H removed only the POI one); the label says when it is used.
-    fireEvent.change(screen.getByLabelText('Video dự phòng khi Tour bị hủy giữa chừng (không bắt buộc)'), { target: { value: 'https://cdn.example/tour.mp4' } })
+    // The Tour keeps its own fallback video (group H removed only the POI one); the title says when it is used and
+    // it is uploaded, not typed (ADR-0063, covered in fallback-video.test.tsx).
+    expect(screen.getByRole('group', { name: 'Video dự phòng khi mất hình trực tiếp (không bắt buộc)' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
     await waitFor(() => expect(writes).toHaveLength(1))
     expect(useToastStore.getState().toasts.at(-1)).toMatchObject({ title: 'Đã tạo Tour “Tour trình diễn”', detail: 'Robot đã được giữ.' })
     expect(writes[0]).toMatchObject({ method: 'POST', path: '/api/staff/manage/tours', body: {
       configuration: { name: 'Tour trình diễn', routeRevisionId: 'revision-2', robotCode: 'amr-01', operatorUserId: 'staff-1', capacity: 20,
-        scheduledStartAt: null, shortNoticeReason: 'Trình diễn cho đoàn khách.', fallbackVideoUrl: 'https://cdn.example/tour.mp4' } } })
+        scheduledStartAt: null, shortNoticeReason: 'Trình diễn cho đoàn khách.', fallbackVideoUrl: null } } })
   })
 
   it('picks the day and shift from the calendar link and warns when the route is over the recommended length', async () => {

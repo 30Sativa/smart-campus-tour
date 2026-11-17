@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react'
-import { Bot, ChevronDown, TriangleAlert } from 'lucide-react'
+import { Bot, ChevronDown, TriangleAlert, VideoOff } from 'lucide-react'
 import { PanelHead } from '../../../components/ui/ConsolePrimitives'
+import { QuestLiveVideo } from '../../quest-stream/QuestLiveVideo'
+import type { QuestSource } from '../../quest-stream/stream-access'
 import { dotClass, toneClass, type StatusTone } from '../../../components/ui/status-tone'
 import {
   headsetCommandError, headsetControl, headsetSummary, useHeadsetCommand, useRobotHeadset,
@@ -268,6 +270,109 @@ export function RobotStatusCard({ robotCode }: { robotCode: string | null | unde
             </dl>
           </details>
         </>}
+    </div>
+  </>
+}
+
+/** One reading on the camera picture: a dark frosted pill with a tone dot, readable over any frame. */
+function HudPill({ tone, children }: { tone?: StatusTone; children: ReactNode }) {
+  return <li className="inline-flex items-center gap-1.5 rounded-full bg-[#0f172a]/65 px-2.5 py-1 text-[12px] font-semibold whitespace-nowrap text-white backdrop-blur">
+    {tone && <span className={`size-1.5 shrink-0 rounded-full ${dotClass[tone]}`} aria-hidden="true" />}
+    {children}
+  </li>
+}
+const hudFlag = (value: boolean | null, yes: string, no: string, unreported: string) => (value === null ? unreported : value ? yes : no)
+
+/**
+ * The Mở Tour page's "Camera & robot" card (phương án J): the robot's camera with its latest report drawn on the
+ * picture, like a dashcam. Top: where it is and any fault it reports; bottom: the six readings as pills. Below sm the
+ * picture is too small to carry them, so the readings drop under it as tiles. Under the picture stay the head and
+ * headset buttons (`actions`) and, folded, the source, exact report age and position. The overlay is inside the video
+ * frame, so it stays on screen in fullscreen.
+ */
+export function CameraRobotCard({ robotCode, cameraSource, offlineHint, noCameraText, actions }: {
+  robotCode: string | null | undefined
+  cameraSource: QuestSource | null
+  offlineHint?: string
+  /** Shown in the frame when the server gave no camera stream. */
+  noCameraText: string
+  /** Buttons under the picture, e.g. re-aligning the head. */
+  actions?: ReactNode
+}) {
+  const connection = useFleetConnection(store => store.state)
+  const { robot, receivedAt } = useFleetRobot(robotCode)
+  const maps = useMapVersions()
+  const headset = useRobotHeadset(robotCode)
+  const now = useNow(1000)
+  const link = connection === 'connected' ? null
+    : connection === 'disconnected' ? 'Mất kết nối với máy chủ, đang thử kết nối lại. Số liệu robot có thể đã cũ.'
+    : 'Đang kết nối tới máy chủ.'
+  const age = robot ? telemetryAge(robot, receivedAt, now) : null
+  const chip = robot && age !== null
+    ? <ToneBadge tone={robot.syncFresh ? 'ok' : 'warn'}>Báo cáo {reportAge(age, now)}</ToneBadge>
+    : undefined
+  const quest = headsetSummary(headset.data, headset.isError)
+  const mapName = robot ? mapAreaName(maps.data, { mapKey: robot.mapKey }) : null
+  const readings: Array<{ label: string; text: string; pill: string; tone?: StatusTone }> = robot ? [
+    { label: 'Thực thi', text: EXECUTION_STATUS[robot.executionStatus] ?? 'Trạng thái khác', pill: EXECUTION_STATUS[robot.executionStatus] ?? 'Trạng thái khác',
+      tone: robot.executionStatus === 'IDLE' ? 'ok' : robot.executionStatus === 'NAVIGATING' ? 'info' : 'muted' },
+    { label: 'Định vị', text: tileFlag(robot.localized, 'Đã định vị', 'Chưa định vị'), pill: hudFlag(robot.localized, 'Đã định vị', 'Chưa định vị', 'Định vị: chưa báo'), tone: flagTone(robot.localized) },
+    { label: 'Sẵn sàng di chuyển', text: tileFlag(robot.motionReady, 'Sẵn sàng', 'Chưa sẵn sàng'), pill: hudFlag(robot.motionReady, 'Sẵn sàng di chuyển', 'Chưa sẵn sàng di chuyển', 'Di chuyển: chưa báo'), tone: flagTone(robot.motionReady) },
+    { label: 'Pin', text: robot.batteryPercent == null ? 'Chưa báo' : `${robot.batteryPercent.toFixed(0)}%`, pill: robot.batteryPercent == null ? 'Pin: chưa báo' : `Pin ${robot.batteryPercent.toFixed(0)}%`, tone: batteryTone(robot.batteryPercent) },
+    { label: 'Bản đồ', text: mapName ?? (maps.isSuccess ? 'Chưa có trong danh sách' : '-'), pill: `Bản đồ ${mapName ?? (maps.isSuccess ? 'lạ' : '-')}` },
+    { label: 'Kính Quest', text: quest.text, pill: `Kính: ${quest.text}`, tone: quest.tone },
+  ] : [{ label: 'Kính Quest', text: quest.text, pill: `Kính: ${quest.text}`, tone: quest.tone }]
+  const fault = !robot || !(robot.faultCode || robot.needsCheck) ? null
+    : [robot.faultCode && robotFaultText(robot.faultCode), robot.needsCheck && 'Robot đang chờ kiểm tra tại chỗ.'].filter(Boolean).join('. ')
+  const pose = robot?.pose ? `x ${robot.pose.x.toFixed(2)} · y ${robot.pose.y.toFixed(2)} m${robot.poseFresh ? '' : ', đã cũ'}` : null
+
+  const overlay = <>
+    {pose && <span className={`absolute top-3 right-3 hidden rounded-full bg-[#0f172a]/65 px-2.5 py-1 text-[11px] font-semibold tabular-nums backdrop-blur sm:inline-flex ${robot?.poseFresh ? 'text-white' : 'text-[#fcd34d]'}`}>{pose}</span>}
+    {fault && <div role="alert" className="absolute top-12 right-3 left-3 hidden items-start gap-2 rounded-xl bg-[#b23e31]/90 px-3 py-2 text-[12.5px] leading-[1.4] font-semibold text-white backdrop-blur sm:flex">
+      <TriangleAlert size={15} className="mt-px shrink-0" aria-hidden="true" />
+      <span className="min-w-0">{fault}</span>
+    </div>}
+    {robotCode && <ul aria-label="Trạng thái robot" className="absolute bottom-3 left-3 right-24 hidden flex-wrap gap-1.5 sm:flex">
+      {!robot && <HudPill tone="muted">Robot chưa gửi báo cáo</HudPill>}
+      {readings.map(item => <HudPill key={item.label} tone={item.tone}>{item.pill}</HudPill>)}
+    </ul>}
+  </>
+  const label = robot ? `${robot.name} · ${robot.id}` : robotCode
+
+  return <>
+    <PanelHead title="Camera & robot" action={chip} />
+    <div className="space-y-3 p-3">
+      {link && <p role="status" className="rounded-lg bg-[#fffaf0] px-3 py-2 text-xs font-semibold text-[#7d5310]">{link}</p>}
+      {!robotCode && <p className="px-1 text-[13px] text-[#64748b]">Tour chưa giữ robot nào.</p>}
+      {cameraSource
+        ? <QuestLiveVideo source={cameraSource} label={label} offlineHint={offlineHint} overlay={overlay} />
+        : <figure className="relative grid aspect-video w-full place-items-center overflow-hidden rounded-2xl bg-[#1c1c1c] p-4 text-center text-[#c6c7cc]">
+          <div><VideoOff size={28} className="mx-auto text-[#74777d]" aria-hidden="true" /><p className="mt-3 text-sm font-semibold">Chưa có hình camera</p><p className="mt-1 text-xs text-[#8e9096]">{noCameraText}</p></div>
+          {label && <figcaption className="absolute top-3 left-3 rounded-full bg-[#1c1c1c]/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">{label}</figcaption>}
+          {overlay}
+        </figure>}
+      {/* Below sm the fault and the pills would cover the picture: they sit under it instead. */}
+      {fault && <p className="flex items-start gap-2 rounded-xl border border-[#f5c8c2] bg-[#fff1ef] px-3 py-2 text-[12.5px] leading-[1.45] font-semibold text-[#9d3428] sm:hidden">
+        <TriangleAlert size={15} className="mt-px shrink-0" aria-hidden="true" />{fault}</p>}
+      {robotCode && <dl className="grid grid-cols-2 gap-2 sm:hidden">
+        {readings.map(item => <StatusTile key={item.label} label={item.label} value={item.text} tone={item.tone} />)}
+      </dl>}
+      {(actions || robotCode) && <div className="flex flex-wrap items-start gap-x-4 gap-y-2 px-1">
+        {actions && <div className="min-w-0">{actions}</div>}
+        {robotCode && <dl className="min-w-0 flex-1"><HeadsetRow robotCode={robotCode} controlsOnly /></dl>}
+      </div>}
+      {robot && <details className="group/robot px-1">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] [&::-webkit-details-marker]:hidden">
+          <span className="text-[#64748b]">Nguồn, vị trí và thời điểm báo của robot</span>
+          <span className="inline-flex items-center gap-1 font-semibold text-[#2d719e]">Xem chi tiết<ChevronDown size={14} aria-hidden="true" className="transition-transform duration-150 group-open/robot:rotate-180 motion-reduce:transition-none" /></span>
+        </summary>
+        <dl className="mt-2 divide-y divide-[#f1f5f9] border-t border-[#f1f5f9]">
+          <Row label="Robot">{robot.name} <span className="font-mono text-xs text-[#64748b]">{robot.id}</span></Row>
+          <Row label="Nguồn">{SOURCE[robot.source] ?? 'Nguồn khác'}</Row>
+          <Row label="Báo cáo gần nhất"><span className={robot.syncFresh ? '' : 'text-[#b45309]'}>{reportAge(age ?? 0, now)}{robot.syncFresh ? '' : ', đã cũ'}</span></Row>
+          <Row label="Vị trí">{robot.pose ? <span className={robot.poseFresh ? '' : 'text-[#b45309]'}>x {robot.pose.x.toFixed(2)}, y {robot.pose.y.toFixed(2)} m{robot.poseFresh ? '' : ', đã cũ'}</span> : 'Robot chưa báo'}</Row>
+        </dl>
+      </details>}
     </div>
   </>
 }

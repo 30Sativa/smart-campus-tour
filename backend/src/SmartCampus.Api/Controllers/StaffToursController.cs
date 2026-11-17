@@ -8,6 +8,7 @@ using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Api.Common.Requests;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
+using SmartCampus.Application.Features.FallbackVideo;
 using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.FleetHead.Commands.SendHeadCommand;
 using SmartCampus.Application.Features.FleetHead.Commands.SetTourHeadMode;
@@ -82,6 +83,12 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     public async Task<IActionResult> Shifts([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct) =>
         Ok(new BaseResponse<TourShiftsView> { Success = true, Message = "Tour shifts retrieved.",
             Data = await sender.Send(new GetTourShiftsQuery(from, to), ct) });
+
+    /// <summary>ADR-0063: signs one direct upload of a new fallback video to Cloudinary.</summary>
+    [HttpPost("fallback-video-upload")]
+    public async Task<IActionResult> SignFallbackVideoUpload(CancellationToken ct) =>
+        Ok(new BaseResponse<FallbackVideoUpload> { Success = true, Message = "Fallback video upload signed.",
+            Data = await sender.Send(new GetFallbackVideoUploadQuery(), ct) });
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>

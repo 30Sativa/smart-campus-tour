@@ -30,6 +30,20 @@ public sealed class StreamRelayController(ISender sender) : ControllerBase
         Answer(await sender.Send(new AuthorizeRelayRequest(key, "read", request.Path, null, null, null, request.Query,
             Recheck: true), ct));
 
+    /// <summary>
+    /// ADR-0063: the relay host's on-demand publisher asks what to play for <c>fallback-{tourId}</c>. 200 with the signed
+    /// source URL as plain text, 403 when there is none (not RUNNING, no uploaded video), 401 for a wrong key.
+    /// </summary>
+    [HttpGet("fallback-source")]
+    public async Task<IActionResult> FallbackSource([FromQuery] string? key, [FromQuery] string? path, CancellationToken ct)
+    {
+        var source = await sender.Send(new GetFallbackVideoSourceQuery(key, path), ct);
+        if (source.Decision != RelayDecision.Allow)
+            return Answer(source.Decision);
+        Response.Headers.CacheControl = "no-store";
+        return Content(source.Url!, "text/plain");
+    }
+
     private IActionResult Answer(RelayDecision decision)
     {
         Response.Headers.CacheControl = "no-store";

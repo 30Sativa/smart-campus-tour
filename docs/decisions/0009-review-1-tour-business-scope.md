@@ -65,6 +65,8 @@ Học sinh được mở link, nhập mã (hoặc khôi phục session hợp l�
 
 ### 6. Video dự phòng
 
+> Cập nhật 17/11/2026: phần xem tiếp video sau End Early được thay bằng [ADR-0063](0063-fallback-video-through-the-relay.md) theo SRS v0.2 FR-48 (sau End Early chỉ còn kết quả). Video dự phòng chỉ phát khi Tour RUNNING mà mất hình trực tiếp, qua relay có token.
+
 Khi RUNNING mà live lỗi, được xem video dự phòng có nhãn ghi sẵn; không làm giả pose hay kết quả robot. Sau kết thúc, chỉ Tour **đã Start rồi End Early** (CANCELLED) được xem tiếp video tới hạn lời mời, với quyền chưa bị thu hồi. COMPLETED và hủy trước Start không có quyền này. Không mở lại live/AI. Robot chưa xác nhận dừng không được giải phóng cho Tour khác.
 
 Sau End Early/lỗi cần kiểm tra, Staff dùng “Xác nhận robot sẵn sàng” sau kiểm tra thực tế. Backend chỉ giải phóng khi Tour cũ đã terminal, nhiệm vụ/lệnh cũ được đối soát là kết thúc/hủy, robot đã dừng, trạng thái còn mới và đủ điều kiện sẵn sàng; thiếu bằng chứng thì giữ khóa và báo lý do. Ghi audit và xử lý xác nhận lặp nhất quán. Giải phóng không chạy lại Tour cũ hoặc tự Start buổi mới; Tour mới phải qua đầy đủ điều kiện Start. Đây là làm rõ bước release đã có trong `docs/architecture.md` §3.2, chưa xác nhận code/phần cứng đã thực hiện.

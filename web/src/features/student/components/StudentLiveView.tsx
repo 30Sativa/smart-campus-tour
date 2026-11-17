@@ -30,6 +30,8 @@ interface StudentLiveViewProps {
   notice?: ReactNode
   /** The live relay URL and token (ADR-0055). Omitted = the dev-only LAN URL; null = no live stream. */
   quest?: QuestSource | null
+  /** ADR-0063: the Tour's fallback video on the relay, played while the live picture is lost. */
+  fallback?: QuestSource | null
 }
 
 const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
@@ -44,7 +46,7 @@ const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
  * On phones those panels stack in the same reading order.
  * Every tab stays mounted so the AI conversation survives a tab switch.
  */
-export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narrationIdleText, video, notice, quest }: StudentLiveViewProps) {
+export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narrationIdleText, video, notice, quest, fallback }: StudentLiveViewProps) {
   const tabs = showMap ? TABS : TABS.filter((t) => t.key !== 'map')
   const storedTab = useStudentStore((s) => s.activeTab)
   const tab = tabs.some((t) => t.key === storedTab) ? storedTab : tabs[0].key
@@ -84,7 +86,7 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
         <div className="st-e-main">
           <div className={`st-x-stage st-tone-${statusDisplay.tone}${snapshot.step === 'navigating' || snapshot.step === 'returning' ? ' is-moving' : ''}`}>
             <StudentVideoPlayer streamUrl={snapshot.videoStreamUrl || undefined} statusLabel={stopLabel}
-              badge={video?.badge} emptyMessage={video?.emptyMessage} {...(quest === undefined ? {} : { quest })}
+              badge={video?.badge} emptyMessage={video?.emptyMessage} {...(quest === undefined ? {} : { quest })} fallback={fallback}
               onReplayNarration={snapshot.narration ? voice.replay : undefined} />
             {/* Keep the current stop readable below the picture and its controls. */}
             <div className="st-x-caption" aria-live="polite">

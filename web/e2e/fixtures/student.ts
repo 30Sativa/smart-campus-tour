@@ -11,8 +11,8 @@ export const runningTour: StudentTourInfo = {
   scheduledStartAt: at(-20),
   invitationExpiresAt: at(240),
   rowType: 'INDIVIDUAL',
-  // A short local clip stands in for the relay: the e2e run has no WebRTC source.
-  fallbackVideoUrl: '/videos/robot-intro-720.mp4',
+  // The e2e run has no relay (WebRTC); a fallback video would play only through it (ADR-0063).
+  hasFallbackVideo: false,
 }
 
 export const runningView: StudentTourView = {
@@ -48,7 +48,7 @@ export const hangingSessionHandlers: Handler[] = [
 export const runningHandlers: Handler[] = [
   { method: 'POST', path: `${base}/session`, reply: { json: ok(runningTour) } },
   { method: 'GET', path: `${base}/view`, reply: { json: ok(runningView) } },
-  // No relay in e2e: the page may not watch the live stream, so the fallback clip plays.
+  // No relay in e2e: the page may not watch the live stream, so the player shows its poster.
   { method: 'GET', path: `${base}/stream-access`, reply: { status: 409, json: { success: false, message: 'Stream not available', data: null, errors: { code: 'STREAM_NOT_AVAILABLE' } } } },
   {
     method: 'POST', path: `${base}/questions`,

@@ -17,7 +17,6 @@
 .st .st-session-unchecked .st-session-retry { margin-top: 0; }
 .st .st-invitation-status { padding-bottom: 24px; }
 .st .st-invitation-status:empty { display: none; }
-.st .st-invitation-fallback a { display: inline-flex; align-items: center; min-height: 44px; color: var(--st-green); font-size: var(--st-font-sm); text-decoration: underline; }
 .st .st-entry-message { padding-block: 40px; }
 .st .st-entry-message h1 { font-size: var(--st-font-title); margin-bottom: 12px; }
 .st .st-entry-message p { color: var(--st-secondary); font-size: var(--st-font-md); max-width: 65ch; line-height: 1.8; }

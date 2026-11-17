@@ -166,6 +166,98 @@ public sealed class StreamRelayTests
         Assert.Null(other.Stream);
     }
 
+    // --- ADR-0063: the Tour's fallback video on the relay path fallback-{tourId} -------------------------------------
+
+    private static readonly Guid TourId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+    private static readonly string FallbackPath = "fallback-aaaaaaaabbbbccccddddeeeeeeeeeeee";
+
+    [Fact]
+    public void FallbackPath_IsOnlyTheExactFormTheBackendMakes()
+    {
+        Assert.Equal(FallbackPath, FallbackPaths.For(TourId));
+        Assert.True(FallbackPaths.TryParse(FallbackPath, out var parsed));
+        Assert.Equal(TourId, parsed);
+        Assert.False(FallbackPaths.TryParse("fallback-AAAAAAAABBBBCCCCDDDDEEEEEEEEEEEE", out _));
+        Assert.False(FallbackPaths.TryParse("fallback-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", out _));
+        Assert.False(FallbackPaths.TryParse("fallback-", out _));
+        Assert.False(FallbackPaths.TryParse("quest", out _));
+        Assert.False(FallbackPaths.TryParse(null, out _));
+    }
+
+    [Fact]
+    public async Task FallbackPublish_NeedsTheRelayHostsOwnPublisher()
+    {
+        var relay = Relay();
+        Assert.Equal(RelayDecision.Allow, await relay.Ask("publish", path: FallbackPath, user: FallbackPaths.PublishUser, password: Key));
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("publish", path: FallbackPath, user: FallbackPaths.PublishUser, password: "wrong"));
+        // The NUC's credentials publish the camera only.
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("publish", path: FallbackPath, user: "nuc", password: PublishPassword));
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("publish", user: FallbackPaths.PublishUser, password: Key));
+        Assert.Equal(RelayDecision.UnknownCaller, await relay.Ask("publish", key: "wrong", path: FallbackPath, user: FallbackPaths.PublishUser, password: Key));
+    }
+
+    [Fact]
+    public async Task FallbackRead_FollowsTheSessionsFallbackEntitlement_AndTheReaperCutsItWhenItEnds()
+    {
+        var relay = Relay();
+        var access = relay.Entitlement.IssueFallback(Session, TourId);
+        Assert.Equal("https://stream.example.test:8889/" + FallbackPath + "/whep", access.WhepUrl);
+        Assert.Equal(StreamTokenKinds.Fallback, StreamTokens.Read(relay.Settings, access.Token)!.Kind);
+
+        relay.Reader.FallbackEntitled = true;
+        Assert.Equal(RelayDecision.Allow, await relay.Ask("read", path: FallbackPath, query: "token=" + access.Token));
+        Assert.Equal((Session, TourId), relay.Reader.LastFallbackAsked);
+
+        relay.Clock.Now = Now.AddSeconds(120);
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", path: FallbackPath, query: "token=" + access.Token));
+        Assert.Equal(RelayDecision.Allow, await relay.Ask("read", path: FallbackPath, query: "token=" + access.Token, recheck: true));
+
+        // End Early, a revoked session or a finished Tour: the next recheck (every 5 s) kicks the viewer.
+        relay.Reader.FallbackEntitled = false;
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", path: FallbackPath, query: "token=" + access.Token, recheck: true));
+    }
+
+    [Fact]
+    public async Task LiveAndFallbackTokens_OpenOnlyTheirOwnPath()
+    {
+        var relay = Relay();
+        relay.Reader.Entitled = true;
+        relay.Reader.FallbackEntitled = true;
+        var live = relay.Entitlement.Issue(StreamTokenKinds.Student, Session).Token;
+        var fallback = relay.Entitlement.IssueFallback(Session, TourId).Token;
+
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", path: FallbackPath, query: "token=" + live));
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", query: "token=" + fallback));
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", query: "token=" + fallback, recheck: true));
+    }
+
+    [Fact]
+    public async Task FallbackSource_IsTheSignedUploadedVideoOfARunningTour_ForTheRelayOnly()
+    {
+        var reader = new FakeReader();
+        var cloudinary = new SmartCampus.Application.Features.FallbackVideo.CloudinarySettings("demo-cloud", "123456", "secret");
+        var handler = new GetFallbackVideoSourceQueryHandler(Settings(), cloudinary, reader);
+        var publicId = "smartcampus/tours/fallback/0123456789abcdef0123456789abcdef";
+
+        reader.RunningFallbackVideo = $"https://res.cloudinary.com/demo-cloud/video/authenticated/{publicId}.mp4";
+        var source = await handler.Handle(new(Key, FallbackPath), default);
+        Assert.Equal(RelayDecision.Allow, source.Decision);
+        Assert.StartsWith("https://res.cloudinary.com/demo-cloud/video/authenticated/s--", source.Url);
+        Assert.EndsWith("--/c_limit,h_720,w_1280,vc_h264:baseline:3.1,ki_2.0/" + publicId + ".mp4", source.Url);
+
+        Assert.Equal(RelayDecision.UnknownCaller, (await handler.Handle(new("wrong", FallbackPath), default)).Decision);
+        Assert.Equal(RelayDecision.Deny, (await handler.Handle(new(Key, "quest"), default)).Decision);
+        // An address someone typed, another cloud, or no RUNNING Tour: nothing to play.
+        reader.RunningFallbackVideo = "https://example.test/video.mp4";
+        Assert.Equal(RelayDecision.Deny, (await handler.Handle(new(Key, FallbackPath), default)).Decision);
+        reader.RunningFallbackVideo = $"https://res.cloudinary.com/other-cloud/video/authenticated/{publicId}.mp4";
+        Assert.Equal(RelayDecision.Deny, (await handler.Handle(new(Key, FallbackPath), default)).Decision);
+        reader.RunningFallbackVideo = null;
+        Assert.Equal(RelayDecision.Deny, (await handler.Handle(new(Key, FallbackPath), default)).Decision);
+        var withoutCloudinary = new GetFallbackVideoSourceQueryHandler(Settings(), new SmartCampus.Application.Features.FallbackVideo.CloudinarySettings(), reader);
+        Assert.Equal(RelayDecision.Deny, (await withoutCloudinary.Handle(new(Key, FallbackPath), default)).Decision);
+    }
+
     private static StreamEntitlement Entitlement(StreamRelaySettings settings, TimeProvider clock, FakeReader? reader = null, FakeStore? store = null) =>
         new(settings, reader ?? new FakeReader(), store ?? new FakeStore(), clock);
 
@@ -207,6 +299,18 @@ public sealed class StreamRelayTests
             LastAsked = (sessionId, robotCode);
             return Task.FromResult(Entitled);
         }
+
+        public bool FallbackEntitled { get; set; }
+        public (Guid Session, Guid Tour)? LastFallbackAsked { get; private set; }
+        public string? RunningFallbackVideo { get; set; }
+
+        public Task<bool> StudentSessionMayWatchFallbackAsync(Guid sessionId, Guid tourId, DateTimeOffset now, CancellationToken ct)
+        {
+            LastFallbackAsked = (sessionId, tourId);
+            return Task.FromResult(FallbackEntitled);
+        }
+
+        public Task<string?> RunningTourFallbackVideoAsync(Guid tourId, CancellationToken ct) => Task.FromResult(RunningFallbackVideo);
     }
 
     private sealed class FakeRobots(RobotCameraFacts? facts) : IRobotCameraReader

@@ -22,7 +22,7 @@ const view = { stops: [
   { order: 2, poiId: 'p2', name: 'AI Lab', description: null, narrationText: null, audioUrl: null, narrationSeconds: null, dwellSeconds: 60 },
 ], progress: null }
 const info = { tourId, tourName: 'Tour được mời', tourState: 'SCHEDULED', scheduledStartAt: '2026-10-20T02:00:00Z',
-  invitationExpiresAt: '2026-10-21T02:00:00Z', rowType: 'INDIVIDUAL', fallbackVideoUrl: null }
+  invitationExpiresAt: '2026-10-21T02:00:00Z', rowType: 'INDIVIDUAL', hasFallbackVideo: false }
 let client: QueryClient
 function response(data: unknown = info, status = 200) {
   return new Response(JSON.stringify({ success: status === 200, data }), { status })
@@ -250,11 +250,18 @@ it('stops live playback within 10 s after the invitation is revoked or reissued'
   vi.useFakeTimers({ shouldAdvanceTime: true })
   try {
     let revoked = false
-    const running = { ...info, tourState: 'RUNNING', fallbackVideoUrl: '/videos/home.mp4' }
+    const running = { ...info, tourState: 'RUNNING', hasFallbackVideo: true }
+    // No live picture for this Tour; its fallback video plays through the relay with its own token (ADR-0063).
+    const fallbackAccess = { whepUrl: `https://relay.test:8889/fallback-${tourId.replaceAll('-', '')}/whep`, token: 'f',
+      expiresAt: new Date(Date.now() + 120_000).toISOString() }
     vi.stubGlobal('fetch', vi.fn(async (url: string) =>
-      url.endsWith('/view') ? response(view) : revoked ? response(null, 401) : response(running)))
+      url.endsWith('/view') ? response(view)
+        : url.endsWith('/stream-access') ? response(null, 409)
+          : url.endsWith('/fallback-access') ? (revoked ? response(null, 401) : response(fallbackAccess))
+            : revoked ? response(null, 401) : response(running)))
     const { container } = mount()
     await screen.findByText('Video dự phòng · chế độ suy giảm')
+    expect(screen.getByLabelText('Video dự phòng')).not.toHaveAttribute('src')
     expect(container.querySelector('video')).not.toBeNull()
 
     revoked = true
@@ -267,10 +274,20 @@ it('stops live playback within 10 s after the invitation is revoked or reissued'
 })
 
 it('offers no fallback video in the waiting room (fallback is a running-Tour degraded mode)', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response({ ...info, fallbackVideoUrl: 'https://example.com/fallback' })))
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response({ ...info, hasFallbackVideo: true })))
   mount()
   expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
-  expect(screen.queryByRole('link', { name: /video dự phòng/i })).toBeNull()
+  expect(screen.queryByLabelText('Video dự phòng')).toBeNull()
+  expect(fetchCalls().some(url => url.includes('/fallback-access'))).toBe(false)
+})
+
+it('asks for the fallback token only while a Tour with a fallback video runs', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view)
+    : url.endsWith('-access') ? response(null, 409) : response({ ...info, tourState: 'RUNNING', hasFallbackVideo: false })))
+  mount()
+  expect(await screen.findByRole('heading', { name: 'Buổi tham quan đang diễn ra' })).toBeVisible()
+  await waitFor(() => expect(fetchCalls().some(url => url.includes('/stream-access'))).toBe(true))
+  expect(fetchCalls().some(url => url.includes('/fallback-access'))).toBe(false)
 })
 
 it('shows the code form first so a phone sees it before the photo and introduction', async () => {

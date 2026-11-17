@@ -43,6 +43,8 @@ export type WhepOptions = {
   iceGatheringTimeoutMs?: number
   /** A 'disconnected' connection gets this long to recover by itself. */
   disconnectGraceMs?: number
+  /** Also receive audio (ADR-0063: a Tour's fallback video has sound; the Quest camera has none). */
+  audio?: boolean
 }
 
 /**
@@ -115,8 +117,15 @@ export async function startWhep(whepUrl: string, video: HTMLVideoElement, option
   }
 
   pc.addTransceiver('video', { direction: 'recvonly' })
+  if (options.audio) pc.addTransceiver('audio', { direction: 'recvonly' })
   pc.addEventListener('track', (event) => {
-    video.srcObject = event.streams[0] ?? new MediaStream([event.track])
+    const stream = event.streams[0]
+    // Without a stream id, a second track (the audio) joins the first one's stream instead of replacing it.
+    if (!stream && video.srcObject && typeof (video.srcObject as MediaStream).addTrack === 'function') {
+      (video.srcObject as MediaStream).addTrack(event.track)
+      return
+    }
+    video.srcObject = stream ?? new MediaStream([event.track])
   })
   pc.addEventListener('connectionstatechange', () => {
     const state = pc.connectionState

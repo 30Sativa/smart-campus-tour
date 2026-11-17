@@ -18,6 +18,7 @@ import { TourReadyPanel } from '../../../features/administration/tours/TourReady
 import { TourSeatsAndOperatorPanel } from '../../../features/administration/tours/TourSeatsAndOperatorPanel'
 import { QuickTourShare } from '../../../features/administration/tours/QuickTourShare'
 import { TourStepper } from '../../../features/staff/operations/TourStepper'
+import { isUploadedFallbackVideo } from '../../../features/administration/tours/api/fallback-video'
 
 const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
 const slotText = (value: string) => `${formatDate(value, { weekday: 'short' })} ${formatTime(value)}`
@@ -76,7 +77,8 @@ export default function StaffManageTourDetailPage() {
         {reservation && <Item label="Robot" value={reservation.robotCode} />}
         {reservation && <Item label={reservation.releasedAt ? 'Đã trả chỗ robot' : 'Giữ chỗ robot'} value={`${formatDateTime(reservation.startsAt)} tới ${formatDateTime(reservation.endsAt)}`} />}
         {operator && <Item label="Người vận hành" value={operator.fullName} />}
-        {data.fallbackVideoUrl && <Item label="Video dự phòng" value={data.fallbackVideoUrl} />}
+        {data.fallbackVideoUrl && <Item label="Video dự phòng" value={isUploadedFallbackVideo(data.fallbackVideoUrl)
+          ? 'Đã tải lên (phát qua relay khi mất hình trực tiếp)' : `${data.fallbackVideoUrl} (không phát cho học sinh; hãy tải video lên)`} />}
         {data.startedAt && <Item label="Bắt đầu" value={formatDateTime(data.startedAt)} />}
         {data.endedAt && <Item label="Kết thúc" value={formatDateTime(data.endedAt)} />}
         {data.endReason && <Item label="Lý do kết thúc" value={data.endReason} />}

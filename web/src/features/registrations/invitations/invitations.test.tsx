@@ -65,7 +65,7 @@ it('uses only an access code for Student entry and never refreshes/logs out an a
     calls.push({ path, options })
     expect(new Headers(options?.headers).get('Authorization')).toBeNull()
     expect(options?.credentials).toBe('include')
-    if (path.endsWith('/join')) { joined = true; return response({ tourId: 'tour', tourName: 'Tour được mời', tourState: 'SCHEDULED', scheduledStartAt: '2026-10-20T02:00:00Z', invitationExpiresAt: '2026-10-21T02:00:00Z', rowType: 'SHARED_VIEWING', fallbackVideoUrl: null }) }
+    if (path.endsWith('/join')) { joined = true; return response({ tourId: 'tour', tourName: 'Tour được mời', tourState: 'SCHEDULED', scheduledStartAt: '2026-10-20T02:00:00Z', invitationExpiresAt: '2026-10-21T02:00:00Z', rowType: 'SHARED_VIEWING', hasFallbackVideo: false }) }
     return response(null, 401)
   }))
   mount(<StudentInvitationPage tourId="tour" />)

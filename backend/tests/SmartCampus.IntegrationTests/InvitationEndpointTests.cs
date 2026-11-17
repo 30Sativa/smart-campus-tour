@@ -1027,6 +1027,97 @@ public sealed class InvitationEndpointTests
         Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "recheck", new { path = "quest", query = "token=" + token }));
     }
 
+    private static async Task<(HttpStatusCode Status, JsonElement Body)> FallbackAccessAsync(HttpClient client, Guid tour, string? cookie)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/student/tours/{tour}/fallback-access");
+        if (cookie is not null) request.Headers.Add("Cookie", cookie);
+        using var response = await client.SendAsync(request);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return (response.StatusCode, json.RootElement.Clone());
+    }
+
+    private static async Task<(HttpStatusCode Status, string Body)> FallbackSourceAsync(HttpClient client, string path, string key = RelayKey)
+    {
+        using var response = await client.GetAsync($"/api/internal/stream-relay/fallback-source?key={key}&path={path}");
+        return (response.StatusCode, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>ADR-0063: the Tour's fallback video plays only through the relay, under the same session rules as live.</summary>
+    [SchemaV11Fact]
+    public async Task FallbackAccess_OnlyWhileTheTourRuns_AndTheRelayAndItsSourceFollowIt()
+    {
+        await using var f = await Fixture.CreateAsync();
+        var settings = Settings().ToDictionary(p => p.Key, p => p.Value);
+        settings["QuestRelay__WhepUrl"] = "https://stream.example.test:8889/quest/whep";
+        settings["QuestRelay__RobotCode"] = "amr_stream";
+        settings["QuestRelay__Key"] = RelayKey;
+        settings["QuestRelay__PublishUser"] = "nuc";
+        settings["QuestRelay__PublishPasswordSha256"] = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData("nuc-pass"u8));
+        settings["Cloudinary__CloudName"] = "demo-cloud";
+        settings["Cloudinary__ApiKey"] = "123456789012345";
+        settings["Cloudinary__ApiSecret"] = "integration-cloudinary-secret";
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, settings);
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
+        var invitationId = item.GetProperty("id").GetGuid();
+        var join = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitationId));
+        var cookie = CookieHeader(join.Cookie!);
+        var path = "fallback-" + f.TourId.ToString("N");
+        const string publicId = "smartcampus/tours/fallback/0123456789abcdef0123456789abcdef";
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await FallbackAccessAsync(host.Client, f.TourId, null)).Status);
+        // RUNNING without a fallback video: nothing to hand out or to play.
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='RUNNING',StartedAt=SYSDATETIMEOFFSET(),FallbackVideoUrl=NULL;");
+        var none = await FallbackAccessAsync(host.Client, f.TourId, cookie);
+        Assert.Equal(HttpStatusCode.Conflict, none.Status);
+        Assert.Equal("FALLBACK_NOT_AVAILABLE", none.Body.GetProperty("errors").GetProperty("code").GetString());
+        Assert.Equal(HttpStatusCode.Forbidden, (await FallbackSourceAsync(host.Client, path)).Status);
+
+        await f.Database.ExecuteAsync($"UPDATE dbo.Tours SET FallbackVideoUrl='https://res.cloudinary.com/demo-cloud/video/authenticated/{publicId}.mp4';");
+        // The session tells the page there is a fallback video, never where it is.
+        var session = await AccessAsync(host.Client, f.TourId, "session", null, cookie);
+        Assert.True(session.Body.GetProperty("data").GetProperty("hasFallbackVideo").GetBoolean());
+        Assert.False(session.Body.GetProperty("data").TryGetProperty("fallbackVideoUrl", out _));
+
+        var running = await FallbackAccessAsync(host.Client, f.TourId, cookie);
+        Assert.Equal(HttpStatusCode.OK, running.Status);
+        var data = running.Body.GetProperty("data");
+        Assert.Equal($"https://stream.example.test:8889/{path}/whep", data.GetProperty("whepUrl").GetString());
+        var token = data.GetProperty("token").GetString()!;
+
+        object Read(string readPath, string? query) => new { action = "read", path = readPath, protocol = "webrtc", query, user = "", password = "", token = "" };
+        Assert.Equal(HttpStatusCode.NoContent, await RelayAsync(host.Client, "auth", Read(path, "token=" + token)));
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "auth", Read(path, null)));
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "auth", Read("quest", "token=" + token)));
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "auth", Read("fallback-" + Guid.NewGuid().ToString("N"), "token=" + token)));
+        Assert.Equal(HttpStatusCode.NoContent, await RelayAsync(host.Client, "auth",
+            new { action = "publish", path, protocol = "rtsp", user = "fallback", password = RelayKey }));
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "auth",
+            new { action = "publish", path, protocol = "srt", user = "nuc", password = "nuc-pass" }));
+
+        var source = await FallbackSourceAsync(host.Client, path);
+        Assert.Equal(HttpStatusCode.OK, source.Status);
+        Assert.StartsWith("https://res.cloudinary.com/demo-cloud/video/authenticated/s--", source.Body);
+        Assert.EndsWith($"/{publicId}.mp4", source.Body);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await FallbackSourceAsync(host.Client, path, "wrong-key")).Status);
+
+        // End Early: no new token, the relay refuses the old one, the reaper is told to kick, and there is nothing to play.
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='CANCELLED',EndedAt=SYSDATETIMEOFFSET();");
+        Assert.Equal(HttpStatusCode.Conflict, (await FallbackAccessAsync(host.Client, f.TourId, cookie)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "auth", Read(path, "token=" + token)));
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "recheck", new { path, query = "token=" + token }));
+        Assert.Equal(HttpStatusCode.Forbidden, (await FallbackSourceAsync(host.Client, path)).Status);
+
+        // Back to RUNNING, then a revoked invitation: 401, and the open fallback is cut at the next recheck.
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='RUNNING',EndedAt=NULL;");
+        Assert.Equal(HttpStatusCode.NoContent, await RelayAsync(host.Client, "recheck", new { path, query = "token=" + token }));
+        var current = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitationId}/revoke", Write(current, Guid.NewGuid()))).Status);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await FallbackAccessAsync(host.Client, f.TourId, cookie)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "recheck", new { path, query = "token=" + token }));
+    }
+
     [SchemaV11Fact]
     public async Task StreamAccess_WithoutARelayConfigured_HandsOutNothing()
     {

@@ -39,6 +39,8 @@ export function useWhepStream(
   whepUrl: string | null,
   enabled = true,
   token?: string | null,
+  /** Also receive audio (ADR-0063 fallback video). Playback still starts muted, as autoplay requires. */
+  audio = false,
 ) {
   const tokenRef = useRef(token)
   useEffect(() => {
@@ -138,6 +140,7 @@ export function useWhepStream(
         const s = await startWhep(withToken(whepUrl, tokenRef.current), video, {
           iceServers: QUEST_ICE_SERVERS,
           signal: controller.signal,
+          audio,
           onDisconnect: () => {
             if (current === s) scheduleReconnect('offline')
           },
@@ -170,7 +173,7 @@ export function useWhepStream(
       video.removeEventListener('playing', onPlaying)
       teardown()
     }
-  }, [videoRef, whepUrl, key])
+  }, [videoRef, whepUrl, key, audio])
 
   return { status, retry }
 }

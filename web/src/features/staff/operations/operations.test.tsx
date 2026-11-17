@@ -9,7 +9,7 @@ import type { RunningTour } from './hooks'
 import { useFleetConnection, useFleetTelemetrySync, type FleetRobot } from './fleet-telemetry'
 import { operationRefusal } from './operation-errors'
 import { checkVerdict } from './operation-labels'
-import { RobotStatusCard, RobotTelemetryPanel } from './OperationParts'
+import { CameraRobotCard, RobotStatusCard, RobotTelemetryPanel } from './OperationParts'
 
 type Handler = (...args: unknown[]) => void
 const hub = vi.hoisted(() => ({
@@ -190,6 +190,31 @@ describe('compact robot card on the pre-start check', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.getAllByText(/^Báo cáo .*trước$/)[0]).toBeInTheDocument()
     // Source and exact report age stay folded under "Xem chi tiết".
+    expect(screen.getByText('Báo cáo gần nhất').closest('details')).not.toHaveAttribute('open')
+  })
+})
+
+describe('camera & robot card of the opening page', () => {
+  function CameraProbe() {
+    useFleetTelemetrySync()
+    return <CameraRobotCard robotCode="amr_01" cameraSource={null} noCameraText="Máy chủ chưa cấp luồng camera." actions={<button type="button">Tự canh chỉnh</button>} />
+  }
+
+  it('draws the readings on the picture, puts the fault on top and keeps the source folded', async () => {
+    useAuthStore.getState().setAuth('jwt-1', { userId: 'u', username: 'lan', role: 'Staff' })
+    render(<QueryClientProvider client={new QueryClient()}><CameraProbe /></QueryClientProvider>)
+    expect(await screen.findByText('Robot chưa gửi báo cáo')).toBeInTheDocument()
+    act(() => hub.handlers.get('FleetUpdated')?.([{ ...ROBOT, localized: false, batteryPercent: 15, faultCode: 'MOTOR_LINK_LOST', syncFresh: false }]))
+
+    const pills = await screen.findByRole('list', { name: 'Trạng thái robot' })
+    expect(within(pills).getByText('Đang rảnh')).toBeInTheDocument()
+    expect(within(pills).getByText('Chưa định vị')).toBeInTheDocument()
+    expect(within(pills).getByText('Pin 15%')).toBeInTheDocument()
+    expect(within(pills).getByText('Di chuyển: chưa báo')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByText('Chưa có hình camera')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tự canh chỉnh' })).toBeInTheDocument()
+    expect(screen.getAllByText(/^Báo cáo .*trước$/)[0]).toBeInTheDocument()
     expect(screen.getByText('Báo cáo gần nhất').closest('details')).not.toHaveAttribute('open')
   })
 })

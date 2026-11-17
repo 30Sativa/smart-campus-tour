@@ -29,6 +29,11 @@ interface StudentVideoPlayerProps {
   emptyMessage?: string
   /** The live relay URL and token from the API (ADR-0055); null = no live stream. Defaults to the dev-only LAN URL. */
   quest?: QuestSource | null
+  /**
+   * ADR-0063: the Tour's fallback video on the relay, with its own token. Played (labelled as degraded mode, live
+   * audio muted) while the live picture is lost or missing, until the live picture plays again.
+   */
+  fallback?: QuestSource | null
 }
 
 export const FALLBACK_BADGE = 'Video dự phòng · chế độ suy giảm'
@@ -48,8 +53,10 @@ export function StudentVideoPlayer({
   badge,
   emptyMessage,
   quest = DEV_QUEST_SOURCE,
+  fallback = null,
 }: StudentVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const fallbackRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showAutoplayOverlay, setShowAutoplayOverlay] = useState(false)
@@ -68,17 +75,42 @@ export function StudentVideoPlayer({
   const questUrl = quest?.whepUrl ?? null
   const sampleVideo = !questUrl && streamUrl?.startsWith('/videos/')
   const { status: questStatus, retry: retryQuest } = useWhepStream(videoRef, questUrl, active && !livePaused && visible, quest?.token)
+  // Lost until the live picture plays again: the reconnect attempts in between ("connecting") must not make the
+  // fallback video flicker on and off.
+  const [liveLost, setLiveLost] = useState(false)
+  const lostNow = questStatus === 'live' ? false : questStatus === 'offline' || questStatus === 'error' ? true : liveLost
+  if (lostNow !== liveLost) setLiveLost(lostNow)
   // SRS v1.9: when the live stream is lost, viewers get the Tour's fallback
   // video, labelled as a degraded mode, while the live stream keeps reconnecting.
-  const degraded = Boolean(questUrl && streamUrl && (questStatus === 'offline' || questStatus === 'error'))
+  // ADR-0063: a Tour's fallback video comes from the relay (`fallback`); a plain `streamUrl` is the demo pages' sample.
+  const fallbackUrl = fallback?.whepUrl ?? null
+  const relayFallback = Boolean(fallbackUrl && (!questUrl || lostNow) && !(questUrl && livePaused))
+  const { status: fallbackStatus } = useWhepStream(fallbackRef, relayFallback ? fallbackUrl : null, active && visible, fallback?.token, true)
+  const degraded = relayFallback || Boolean(questUrl && streamUrl && lostNow)
   const paused = Boolean(questUrl && livePaused)
   const questWaiting = questUrl && !paused && questStatus !== 'live' && !degraded ? questStatus : null
-  const noSource = !questUrl && !streamUrl
+  const fallbackWaiting = relayFallback && fallbackStatus !== 'live' ? fallbackStatus : null
+  const noSource = !questUrl && !streamUrl && !fallbackUrl
 
   // SRS v0.2: during fallback the live audio is muted; the fallback video carries the sound.
   useEffect(() => {
     if (degraded && videoRef.current) videoRef.current.muted = true
   }, [degraded])
+
+  // The relay fallback starts muted (autoplay); once it plays it follows the viewer's sound setting. A browser that
+  // refuses sound without a click keeps it muted and offers the unmute button.
+  useEffect(() => {
+    const video = fallbackRef.current
+    if (!video || fallbackStatus !== 'live') return
+    video.muted = audioMuted
+    if (!audioMuted && video.paused) {
+      video.play()?.catch(() => {
+        video.muted = true
+        void video.play()?.catch(() => {})
+        setShowAutoplayOverlay(true)
+      })
+    }
+  }, [audioMuted, fallbackStatus])
 
   useEffect(() => {
     const video = videoRef.current
@@ -112,8 +144,9 @@ export function StudentVideoPlayer({
     const nextMuted = !audioMuted
     setAudioMuted(nextMuted)
     if (videoRef.current) {
-      videoRef.current.muted = nextMuted
+      videoRef.current.muted = nextMuted || degraded
     }
+    if (fallbackRef.current) fallbackRef.current.muted = nextMuted
     if (!nextMuted) {
       setShowAutoplayOverlay(false)
     }
@@ -123,7 +156,11 @@ export function StudentVideoPlayer({
     setAudioMuted(false)
     setShowAutoplayOverlay(false)
     if (videoRef.current) {
-      videoRef.current.muted = false
+      videoRef.current.muted = degraded
+    }
+    if (fallbackRef.current) {
+      fallbackRef.current.muted = false
+      void fallbackRef.current.play()?.catch(() => {})
     }
   }
 
@@ -147,7 +184,17 @@ export function StudentVideoPlayer({
         autoPlay
         muted={audioMuted || degraded}
       />
-      {degraded && (
+      {relayFallback ? (
+        <video
+          ref={fallbackRef}
+          aria-label="Video dự phòng"
+          poster="/images/student-campus.png"
+          className="st-video__fallback"
+          playsInline
+          autoPlay
+          muted={audioMuted}
+        />
+      ) : degraded && (
         <video
           src={streamUrl}
           aria-label="Video dự phòng"
@@ -192,6 +239,14 @@ export function StudentVideoPlayer({
               <span className="st-btn__ic" aria-hidden="true"><RotateCcw size={16} /></span>
             </button>
           )}
+        </div>
+      )}
+
+      {fallbackWaiting && fallbackWaiting !== 'idle' && (
+        <div className="st-video__overlay" role="status">
+          <p>{fallbackWaiting === 'connecting'
+            ? 'Mất hình trực tiếp. Đang mở video dự phòng…'
+            : 'Mất hình trực tiếp và chưa mở được video dự phòng. Đang thử lại…'}</p>
         </div>
       )}
 
