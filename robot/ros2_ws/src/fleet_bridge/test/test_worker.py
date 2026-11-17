@@ -599,10 +599,17 @@ class FleetSyncWorkerStateTests(unittest.TestCase):
                 self.assertNotIn('create_publisher', source, module.name)
             self.assertNotIn('cmd_vel', source, module.name)
             self.assertNotIn('cancel_all', source, module.name)
-            # ADR-0049: the bridge can never clear the latch that protects against it.
-            self.assertNotIn('motion_inhibit_reset', source, module.name)
+            # ADR-0049 addendum: only the command path in node.py reaches mode_manager's reset, and only to send a
+            # backend GoTo (motion_gate_reset.py); no other module can clear the latch that protects against it.
+            if module.name != 'node.py':
+                self.assertNotIn("'motion_inhibit_reset'", source, module.name)
             if module.name not in ('nav2.py', 'head_ros.py'):
                 self.assertNotIn('ActionClient', source, module.name)
+        self.assertEqual(1, node_source.count("'motion_inhibit_reset'"))
+        self.assertIn("prepare=self._create_gate_reset().prepare", node_source)
+        from fleet_bridge.readiness import RESETTABLE_LATCHES
+        # An emergency stop latch is never cleared from here.
+        self.assertEqual({'LATCHED:BOOT', 'LATCHED:PERMIT_LOST'}, set(RESETTABLE_LATCHES))
         self.assertIn('spin_until_worker_fatal', node_source)
         self.assertNotIn('rclpy.spin(', node_source)
 

@@ -105,6 +105,62 @@ public sealed class RobotIntegritySqlTests
     }
 
     [SchemaV11Fact]
+    public async Task FormList_NamesTheTourHoldingTheRobotForAQuickTour_AndFlagsAPendingInspection()
+    {
+        await using var h = await Harness.Create();
+        var tested = await h.TestedRoute();
+        await h.Send(new CreateTourCommand(h.StaffId, new(Guid.NewGuid(),
+            new("Tour nhanh đầu", null, tested.RevisionId, First, h.OperatorId, null, null, 20, "Đoàn khách."))));
+
+        var quick = Assert.Single(await h.Send(new ListTourRobotsQuery(tested.RevisionId, Quick: true)), robot => robot.RobotCode == First);
+        Assert.True(quick.Usable);
+        Assert.Equal("Tour nhanh đầu", quick.HeldByTourName);
+        Assert.NotNull(quick.HeldUntil);
+        // B12: the quick form previews the duration and hold create would take now, matching the Tour just created.
+        var preview = Assert.IsType<QuickTourPreview>(quick.Quick);
+        await using (var db = h.Context())
+        {
+            var made = await db.TourRobotReservations.AsNoTracking().SingleAsync(r => r.Tour.Name == "Tour nhanh đầu");
+            Assert.Equal(made.ExpectedDurationSeconds ?? made.MeasuredDurationSeconds, preview.ExpectedDurationSeconds);
+            Assert.Equal(TourSchedule.ReservationBuffer, preview.HoldEndsAt - preview.StartBy - TimeSpan.FromSeconds(TourSchedule.RoundedDurationSeconds(preview.ExpectedDurationSeconds)));
+            Assert.True(preview.HoldStartsAt < preview.StartBy);
+            Assert.InRange(preview.HoldEndsAt - made.EndsAt, TimeSpan.Zero, TimeSpan.FromMinutes(2));
+            // The quick form names the auto-cancel moment by the rule the cancel worker applies (TourAutoCancel.HoldEndsAt).
+            Assert.Equal(TourAutoCancel.HoldEndsAt(preview.StartBy, preview.HoldEndsAt, TimeSpan.FromMinutes(15)), preview.AutoCancelAt);
+            Assert.True(preview.AutoCancelAt >= preview.StartBy + TimeSpan.FromMinutes(15));
+        }
+        // The shift form judges its hold per shift through the slots API, so the plain list names no holder and no preview.
+        var plain = Assert.Single(await h.TourRobots(tested), robot => robot.RobotCode == First);
+        Assert.Null(plain.HeldByTourName);
+        Assert.Null(plain.Quick);
+
+        await h.SetNeedsInspection(First);
+        var held = Assert.Single(await h.TourRobots(tested), robot => robot.RobotCode == First);
+        Assert.True(held.NeedsInspection);
+        Assert.True(held.Usable);
+    }
+
+    [SchemaV11Fact]
+    public async Task SavingARoute_CopiesNoNarrationVideoToItsStops_AndATourKeepsItsOwnVideo()
+    {
+        await using var h = await Harness.Create();
+        var tested = await h.TestedRoute();
+        // Narration saved before group H may still hold a video; a route saved now must not carry it to its stops.
+        await h.SetLegacyNarrationVideo("https://video.example.test/legacy");
+        var resaved = await h.Send(new SaveRouteRevisionCommand(h.StaffId, tested.RouteId, new(Guid.NewGuid(), tested.RevisionNumber, tested.Name, null,
+            tested.MapVersionId, tested.StartX, tested.StartY, tested.StartYaw, tested.EndMode, null, null, null,
+            tested.Stops.Select(stop => new RouteRevisionStopInput(stop.PoiRevisionId, stop.DwellSeconds + 5, [.. stop.HeadSteps])).ToArray())));
+        Assert.All(resaved.Stops, stop => Assert.Null(stop.FallbackVideoUrl));
+        Assert.All(await h.StopVideos(resaved.RevisionId), Assert.Null);
+
+        const string tourVideo = "https://video.example.test/tour";
+        var start = new DateTimeOffset(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)).ToDateTime(new TimeOnly(8, 15)), TimeSpan.FromHours(7));
+        var created = await h.Send(new CreateTourCommand(h.StaffId, new(Guid.NewGuid(),
+            new("Tour có video", null, tested.RevisionId, First, h.OperatorId, start, tourVideo, 20))));
+        Assert.Equal(tourVideo, await h.TourVideo(created.Id));
+    }
+
+    [SchemaV11Fact]
     public async Task UnconfirmedRobot_IsBlockedEverywhere()
     {
         await using var h = await Harness.Create();
@@ -376,21 +432,22 @@ public sealed class RobotIntegritySqlTests
             var stops = new List<RouteRevisionStopInput>();
             foreach (var (name, x) in new[] { ("Thư viện", 1.5m), ("Phòng lab", 2.5m) })
             {
-                var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(pilotMap.Id, name, "Tham quan", null, x, 1.5m, 0m, "FRONT", "Đây là điểm tham quan."))));
+                var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(pilotMap.Id, name, "Tham quan", null, x, 1.5m, 0m, "FRONT"))));
                 var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));
                 await Send(new RecordPoiVerificationCommand(technicalId, proposal.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, First, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+                await NarrationSeed.ApproveAsync(Send, staffId, technicalId, proposal.Id);
                 stops.Add(new(proposal.Revision.Id, 30, [new("FRONT", 30)]));
             }
             var route = await Send(new SaveRouteRevisionCommand(staffId, null, new(Guid.NewGuid(), 0, "Tuyến robot", null, pilotMap.Id, 2.5m, 2.5m, 0m, "LAST_POI", null, null, null,
                 stops)));
             await Send(new SubmitRouteRevisionCommand(staffId, route.RouteId, route.RevisionId, new(Guid.NewGuid(), 1)));
             return await Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
-                new(Guid.NewGuid(), First, staffId, "PASS", true, true, true, 260, null, "Chạy thử đạt.")));
+                new(Guid.NewGuid(), First, staffId, "PASS", true, true, true, null, "Chạy thử đạt.")));
         }
 
         public Task<RouteRevisionView> RecordRouteTest(RouteRevisionView route, string robot) =>
             Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
-                new(Guid.NewGuid(), robot, staffId, "PASS", true, true, true, 260, null, "Chạy thử lại.")));
+                new(Guid.NewGuid(), robot, staffId, "PASS", true, true, true, null, "Chạy thử lại.")));
 
         public async Task<Guid> CreateTour(RouteRevisionView route, string robot)
         {
@@ -418,6 +475,36 @@ public sealed class RobotIntegritySqlTests
             var option = Assert.Single(await TourRobots(route), item => item.RobotCode == robot);
             Assert.False(option.Usable);
             Assert.Equal(reason, option.BlockReason);
+        }
+
+        public Guid StaffId => staffId;
+        public Guid OperatorId => operatorId;
+
+        public async Task SetLegacyNarrationVideo(string url)
+        {
+            await using var db = Context();
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE dbo.PoiNarrationRevisions SET FallbackVideoUrl = {url}");
+        }
+
+        public async Task<string?[]> StopVideos(Guid revisionId)
+        {
+            await using var db = Context();
+            return await db.RouteRevisionStops.AsNoTracking().Where(stop => stop.RouteRevisionId == revisionId)
+                .Select(stop => stop.FallbackVideoUrl).ToArrayAsync();
+        }
+
+        public async Task<string?> TourVideo(Guid tourId)
+        {
+            await using var db = Context();
+            return await db.Tours.AsNoTracking().Where(tour => tour.Id == tourId).Select(tour => tour.FallbackVideoUrl).SingleAsync();
+        }
+
+        public async Task SetNeedsInspection(string code)
+        {
+            await using var db = Context();
+            var robot = await db.Robots.SingleAsync(item => item.RobotCode == code);
+            robot.NeedsInspection = true;
+            await db.SaveChangesAsync();
         }
 
         private async Task AddRobot(string code)

@@ -352,3 +352,170 @@ it.each([
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
   expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
 })
+
+function conflictResponse(code: string, message: string, fields?: Record<string, string[]>) {
+  return new Response(JSON.stringify({ success: false, message, data: null, errors: { code, ...(fields ? { fields } : {}) } }), { status: 409 })
+}
+const heldMessage = 'Trình duyệt này đã mất kết nối quá 2 phút nên phiên cũ đang bị giữ. Nhờ đại diện hoặc Staff cấp mã mới để vào ngay.'
+
+it('shows the backend sentence and the wait for RECONNECT_WINDOW_EXPIRED on join', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/join')
+    ? conflictResponse('RECONNECT_WINDOW_EXPIRED', heldMessage, { retryAfterSeconds: ['290'] }) : response(null, 401)))
+  mount()
+  await screen.findByLabelText('Mã truy cập')
+  submitCode()
+  expect(await screen.findByRole('alert')).toHaveTextContent(`${heldMessage} Thử lại sau khoảng 5 phút.`)
+})
+
+it('does not repeat the wait when the backend sentence already names it', async () => {
+  const sentence = 'Phiên cũ đang bị giữ. Nhờ đại diện hoặc Staff cấp mã mới để vào ngay, hoặc thử lại sau khoảng 5 phút.'
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/join')
+    ? conflictResponse('RECONNECT_WINDOW_EXPIRED', sentence, { retryAfterSeconds: ['290'] }) : response(null, 401)))
+  mount()
+  await screen.findByLabelText('Mã truy cập')
+  submitCode()
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(sentence)
+  expect(alert.textContent?.match(/thử lại sau/gi)).toHaveLength(1)
+})
+
+it('shows only the backend sentence for RECONNECT_WINDOW_EXPIRED without retryAfterSeconds', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/join')
+    ? conflictResponse('RECONNECT_WINDOW_EXPIRED', heldMessage) : response(null, 401)))
+  mount()
+  await screen.findByLabelText('Mã truy cập')
+  submitCode()
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(heldMessage)
+  expect(alert).not.toHaveTextContent('Thử lại sau')
+})
+
+it('shows the backend sentence for INVITATION_IN_USE', async () => {
+  const sentence = 'Mã này đang được dùng trên một trình duyệt khác. Nhờ đại diện hoặc Staff cấp mã mới nếu đó không phải bạn.'
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/join')
+    ? conflictResponse('INVITATION_IN_USE', sentence) : response(null, 401)))
+  mount()
+  await screen.findByLabelText('Mã truy cập')
+  submitCode()
+  expect(await screen.findByRole('alert')).toHaveTextContent(sentence)
+})
+
+it('stops polling the session after RECONNECT_WINDOW_EXPIRED and waits for the viewer', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    const fetch = vi.fn(async () => conflictResponse('RECONNECT_WINDOW_EXPIRED', heldMessage, { retryAfterSeconds: ['600'] }))
+    vi.stubGlobal('fetch', fetch)
+    mount()
+    expect(await screen.findByText(`${heldMessage} Thử lại sau khoảng 10 phút.`)).toBeVisible()
+    await act(async () => { await vi.advanceTimersByTimeAsync(65_000) })
+    expect(fetchCalls().filter(url => url.endsWith('/session'))).toHaveLength(1)
+    expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+const SESSION_ENDED = 'Phiên xem đã kết thúc. Mã có thể đã bị thu hồi hoặc thay bằng mã mới; kiểm tra email mới nhất rồi nhập lại mã, hoặc liên hệ đại diện đoàn.'
+
+/** The backend's 409 for a proven viewer of a Tour that is over (docs/architecture.md, AccessTour). */
+function tourEndedReply(tourState: 'COMPLETED' | 'CANCELLED') {
+  return new Response(JSON.stringify({ success: false,
+    message: tourState === 'COMPLETED' ? 'Buổi tham quan đã kết thúc.' : 'Buổi tham quan đã bị hủy.',
+    errors: { code: 'TOUR_ENDED', fields: { tourState: [tourState] } } }), { status: 409 })
+}
+
+it('keeps the end screen when the session check of a RUNNING Tour turns into 409 TOUR_ENDED', async () => {
+  // The real backend never answers 200 COMPLETED: it goes from 200 RUNNING straight to 409 TOUR_ENDED.
+  let ended = false
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view)
+    : ended ? tourEndedReply('COMPLETED') : response({ ...info, tourState: 'RUNNING' })))
+  mount()
+  await screen.findByRole('heading', { name: 'Buổi tham quan đang diễn ra', level: 2 })
+  ended = true
+  await act(async () => { await client.refetchQueries({ queryKey: key }) })
+  expect(await screen.findByRole('heading', { name: 'Hoàn thành chuyến tham quan!' })).toBeVisible()
+  expect(screen.queryByLabelText('Mã truy cập')).not.toBeInTheDocument()
+  expect(screen.queryByText(SESSION_ENDED)).toBeNull()
+  expect(screen.queryByText(/Đang mất kết nối/)).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Kiểm tra lại phiên' })).toBeNull()
+  // Leaving the ended Tour needs no server call: its session is already gone.
+  fireEvent.click(screen.getAllByRole('button', { name: 'Thoát phiên' })[0])
+  expect(await screen.findByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(fetchCalls().some(url => url.endsWith('/leave'))).toBe(false)
+})
+
+it('says a never-started Tour was called off when a waiting room gets TOUR_ENDED CANCELLED, and stops checking', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    let ended = false
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view)
+      : ended ? tourEndedReply('CANCELLED') : response()))
+    mount()
+    await screen.findByText('Bạn đã vào phòng chờ')
+    ended = true
+    await act(async () => { await client.refetchQueries({ queryKey: key }) })
+    // It never ran, so it was cancelled, not ended early (a Tour cancelled mid-way keeps "kết thúc sớm").
+    expect(await screen.findByRole('heading', { name: 'Buổi tham quan đã bị hủy' })).toBeVisible()
+    expect(screen.getByText('Buổi tham quan đã bị hủy trước khi bắt đầu. Liên hệ đại diện đoàn nếu cần biết thêm.')).toBeVisible()
+    expect(screen.queryByText(/kết thúc sớm/)).toBeNull()
+    const checks = () => fetchCalls().filter(url => url.endsWith('/session')).length
+    const before = checks()
+    await act(async () => { await vi.advanceTimersByTimeAsync(65_000) })
+    expect(checks()).toBe(before)
+    expect(screen.queryByText(SESSION_ENDED)).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('says the Tour has ended on the code form when a first join gets 409 TOUR_ENDED', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/join') ? tourEndedReply('COMPLETED') : response(null, 401)))
+  mount()
+  await screen.findByLabelText('Mã truy cập')
+  submitCode()
+  expect(await screen.findByRole('alert')).toHaveTextContent('Buổi tham quan đã kết thúc.')
+  expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.queryByText(SESSION_ENDED)).toBeNull()
+})
+
+it('says the Tour has ended, not that the code was revoked, when a reload finds TOUR_ENDED with nothing known', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => tourEndedReply('COMPLETED')))
+  mount()
+  expect(await screen.findByRole('alert')).toHaveTextContent('Buổi tham quan đã kết thúc.')
+  expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.queryByText(SESSION_ENDED)).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Kiểm tra lại phiên' })).toBeNull()
+})
+
+it('says why the room closed when a session this tab held is refused with 401', async () => {
+  let revoked = false
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : revoked ? response(null, 401) : response()))
+  mount()
+  await screen.findByText('Bạn đã vào phòng chờ')
+  revoked = true
+  await act(async () => { await client.refetchQueries({ queryKey: key }) })
+  expect(await screen.findByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.getByRole('alert')).toHaveTextContent(SESSION_ENDED)
+})
+
+it('stays silent about the 401 of a first visit without a session', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => response(null, 401)))
+  mount()
+  expect(await screen.findByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByText(SESSION_ENDED)).toBeNull()
+  expect(screen.getByText(/Mỗi lời mời dùng trên một trình duyệt;/)).toBeInTheDocument()
+})
+
+it.each([
+  [(4 * 24 + 9) * 3_600_000 + 5 * 60_000 + 30_000, 'Còn 4 ngày 9 giờ'],
+  [2 * 3_600_000 + 5 * 60_000 + 30_000, /^2:05:(29|30)$/],
+])('shows the waiting-room countdown in days at 24 h or more and as h:mm:ss below', async (ahead, label) => {
+  const start = new Date(Date.now() + (ahead as number)).toISOString()
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response({ ...info, scheduledStartAt: start })))
+  mount()
+  const timer = await screen.findByRole('timer')
+  expect(timer.querySelector('b')!.textContent).toMatch(typeof label === 'string' ? new RegExp(`^${label}$`) : label)
+  if (typeof label === 'string') expect(timer).toHaveAccessibleName(`${label} tới giờ bắt đầu`)
+})

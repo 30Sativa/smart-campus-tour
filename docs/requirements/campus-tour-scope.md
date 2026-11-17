@@ -110,7 +110,14 @@ eligible. READY/RUNNING references cannot be edited in place. Content-only
 edits do not automatically invalidate navigation; duration/dwell are recomputed.
 
 Staff approves narration text, uploads externally produced audio (and applicable
-lip-sync assets), Q&A bank entries and fallback video. Before Start, approved
+lip-sync assets), Q&A bank entries and fallback video.
+*Implemented for narration text and fallback video (ADR-0060, backend):* narration
+belongs to the POI, not to a POI navigation revision, and can be written after the
+technical check. A draft is edited in place; a Staff other than its last editor
+approves it, and a newer approval supersedes the older one. That second-reader rule
+is a design proposal of ADR-0060, not an SRS requirement. A route revision accepts
+only POIs with approved narration and snapshots it; existing route revisions and
+Tours keep their copy. Withdrawing an approved narration, Q&A bank and audio remain open. Before Start, approved
 narration is delivered to the Quest guide and receipt checked (FR-50).
 At POI arrival, apply the checked camera preset before the guide cue.
 Manual Staff camera control is outside target. *Proposed revision (ADR-0045,

@@ -26,7 +26,10 @@ describe('patrol demo controls', () => {
     fireEvent.change(screen.getByLabelText('Tốc độ phát'), { target: { value: '10' } })
     fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
     act(() => vi.advanceTimersByTime(1000))
-    expect(screen.getByText('12s tuần tra')).toBeInTheDocument()
+    // React sees the patrol at most 4 times a second; pausing shows exactly where it stands.
+    fireEvent.click(screen.getByRole('button', { name: 'Tạm dừng' }))
+    expect(screen.getByText('12s tuần tra · tạm dừng')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
     const visible = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true)
     const background = screen.getByTestId('demo-scene').textContent
     act(() => vi.advanceTimersByTime(5000))

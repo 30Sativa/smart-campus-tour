@@ -29,6 +29,7 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
   } },
   { label: 'Vận hành Tour', actions: {
     TOUR_STARTED: 'Bắt đầu Tour', TOUR_NEXT: 'Sang điểm dừng tiếp theo', TOUR_LEG_RETRIED: 'Thử lại chặng di chuyển',
+    TOUR_PAUSE: 'Tạm dừng chặng di chuyển', TOUR_SKIP: 'Bỏ qua điểm dừng',
     COMMAND_RECONCILED: 'Đóng lệnh robot chưa rõ kết quả', TOUR_ENDED_EARLY: 'Kết thúc Tour sớm', TOUR_COMPLETED: 'Hoàn thành Tour',
     ROBOT_DISPATCH_CHANGED: 'Cho phép hoặc dừng điều phối robot', ROBOT_INSPECTION_RELEASED: 'Xác nhận robot an toàn sau kiểm tra',
   } },
@@ -66,14 +67,22 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
     ROUTE_TEST_PASSED: 'Chạy thử tuyến đạt', ROUTE_TEST_FAILED: 'Chạy thử tuyến không đạt',
     ROUTE_DEACTIVATED: 'Ngừng sử dụng tuyến', ROUTE_ACTIVATED: 'Mở lại tuyến',
   } },
+  // The old POI list (backend `Features/Pois`, before versioned POIs). Its own group and wording, so its on/off
+  // switch never reads like the versioned POI's "Ngưng dùng POI" / "Dùng lại POI" in the filter.
+  { label: 'POI danh sách cũ', actions: {
+    POI_CREATED: 'Tạo POI (danh sách cũ)', POI_UPDATED: 'Sửa POI (danh sách cũ)',
+    POI_ACTIVATED: 'Bật lại POI (danh sách cũ)', POI_DEACTIVATED: 'Tắt POI (danh sách cũ)',
+  } },
   { label: 'POI', actions: {
-    POI_CREATED: 'Tạo POI', POI_UPDATED: 'Sửa POI', POI_ACTIVATED: 'Mở lại POI', POI_DEACTIVATED: 'Ngừng dùng POI',
     POI_PROPOSAL_CREATED: 'Tạo đề xuất POI', POI_PROPOSAL_REVISION_CREATED: 'Tạo phiên bản POI', POI_PROPOSAL_SUBMITTED: 'Gửi kiểm chứng POI',
-    POI_PROPOSAL_DISCARDED: 'Bỏ đề xuất POI', POI_TECHNICAL_VERIFIED: 'Kiểm chứng POI đạt', POI_TECHNICAL_REJECTED: 'Kiểm chứng POI không đạt',
+    POI_PROPOSAL_DISCARDED: 'Bỏ đề xuất POI', POI_PROPOSAL_RETIRED: 'Ngưng dùng POI', POI_PROPOSAL_REACTIVATED: 'Dùng lại POI', POI_TECHNICAL_VERIFIED: 'Kiểm chứng POI đạt', POI_TECHNICAL_REJECTED: 'Kiểm chứng POI không đạt',
     POI_POSE_IMPORT_COMPLETED: 'Nhập POI từ file', POI_POSE_CAPTURE_VERIFIED: 'Ghi nhận vị trí trực tiếp trên robot',
+    POI_NARRATION_DRAFT_CREATED: 'Viết bản thuyết minh đang soạn', POI_NARRATION_DRAFT_EDITED: 'Sửa bản thuyết minh đang soạn',
+    POI_NARRATION_APPROVED: 'Duyệt thuyết minh', POI_NARRATION_DISCARDED: 'Bỏ bản thuyết minh đang soạn',
   } },
   { label: 'Bản đồ và robot', actions: {
     MAP_VERSION_UPLOADED: 'Tải lên bản đồ', MAP_DEPLOYMENT_CHECK_RECORDED: 'Ghi kiểm tra bản đồ',
+    MAP_VERSION_RETIRED: 'Ngừng sử dụng phiên bản bản đồ', MAP_VERSION_REOPENED: 'Mở lại phiên bản bản đồ',
     PHYSICAL_ROBOT_REGISTERED: 'Đăng ký robot', ROBOT_DEACTIVATED: 'Ngừng dùng robot', ROBOT_ACTIVATED: 'Mở lại robot',
     ROBOT_MAP_ASSIGNED: 'Gán bản đồ cho robot', ROBOT_MAP_CLEARED: 'Gỡ bản đồ khỏi robot',
     ROBOT_CREDENTIAL_ISSUED: 'Cấp khóa robot', ROBOT_CREDENTIAL_ROTATED: 'Cấp lại khóa robot', ROBOT_CREDENTIAL_REVOKED: 'Thu hồi khóa robot',
@@ -86,22 +95,35 @@ export const STUDENT_INVITATION_ACTIONS: ReadonlySet<string> = new Set(['INVITAT
 const ACTION_LABELS: Record<string, string> = Object.assign({}, ...AUDIT_ACTION_GROUPS.map(group => group.actions))
 const ENTITY_LABELS: Record<string, string> = {
   User: 'Tài khoản', Tour: 'Tour', GroupRegistration: 'Đăng ký đoàn', RosterRow: 'Dòng danh sách', RosterEmailChangeRequest: 'Yêu cầu đổi email',
-  Invitation: 'Lời mời', Route: 'Tuyến', RouteRevision: 'Phiên bản tuyến', Poi: 'POI', PoiProposal: 'POI', PoiProposalRevision: 'Phiên bản POI',
+  Invitation: 'Lời mời', Route: 'Tuyến', RouteRevision: 'Phiên bản tuyến', Poi: 'POI', PoiProposal: 'POI', PoiProposalRevision: 'Phiên bản POI', PoiNarrationRevision: 'Thuyết minh POI',
   MapVersion: 'Bản đồ', Robot: 'Robot', PoiImport: 'Nhập POI', TourScheduleBlock: 'Khoá lịch',
 }
 const RESULT_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'danger' | 'muted' }> = {
   SUCCESS: { label: 'Thành công', tone: 'ok' }, OK: { label: 'Thành công', tone: 'ok' }, PASS: { label: 'Đạt', tone: 'ok' },
   FAIL: { label: 'Không đạt', tone: 'danger' }, FAILED: { label: 'Thất bại', tone: 'danger' },
   ACCEPTED: { label: 'Đã gửi', tone: 'ok' }, PENDING: { label: 'Đang chờ', tone: 'muted' }, UNKNOWN: { label: 'Chưa rõ kết quả', tone: 'warn' },
-  SYSTEM: { label: 'Tự động', tone: 'muted' }, SYSTEM_NO_START: { label: 'Tự huỷ: không bắt đầu đúng giờ', tone: 'warn' },
-  DRAFT: { label: 'Bản nháp', tone: 'muted' }, SUBMITTED: { label: 'Đã gửi', tone: 'muted' }, IMPORTED: { label: 'Đã nhập', tone: 'ok' },
-  DISCARDED: { label: 'Đã bỏ', tone: 'muted' },
+  SYSTEM: { label: 'Tự động', tone: 'muted' }, SYSTEM_NO_START: { label: 'Tự hủy: không bắt đầu đúng giờ', tone: 'warn' },
+  DRAFT: { label: 'Đã lưu, chưa gửi', tone: 'muted' }, SUBMITTED: { label: 'Đã gửi', tone: 'muted' }, IMPORTED: { label: 'Đã nhập', tone: 'ok' },
+  DISCARDED: { label: 'Đã bỏ', tone: 'muted' }, APPROVED: { label: 'Đã duyệt', tone: 'ok' },
 }
 
 export const auditActionLabel = (action: string) => ACTION_LABELS[action] ?? 'Thao tác khác'
 export const isKnownAuditAction = (action: string) => Object.hasOwn(ACTION_LABELS, action)
 export const auditEntityLabel = (entityType: string) => ENTITY_LABELS[entityType] ?? 'Đối tượng khác'
 export const auditResult = (resultCode: string | null) => (resultCode ? RESULT_LABELS[resultCode] : undefined) ?? null
-/** Who did it: the account's name; a student's invitation step when there is no account; otherwise the system. */
-export const auditActorLabel = (entry: Pick<AuditLogEntry, 'action' | 'actorName'>) =>
-  entry.actorName ?? (STUDENT_INVITATION_ACTIONS.has(entry.action) ? 'Học sinh (lời mời)' : 'Hệ thống')
+/**
+ * Who did it: the system for its own auto-cancel (`SYSTEM_NO_START`), whatever the row carries; otherwise the account's
+ * name; a student's invitation step when there is no account; otherwise the system.
+ */
+export const auditActorLabel = (entry: Pick<AuditLogEntry, 'action' | 'actorName'> & { resultCode?: string | null }) =>
+  entry.resultCode === 'SYSTEM_NO_START' ? 'Hệ thống'
+    : entry.actorName ?? (STUDENT_INVITATION_ACTIONS.has(entry.action) ? 'Học sinh (lời mời)' : 'Hệ thống')
+
+/**
+ * What a row is about, under its kind: a route row names the route (and for a revision, such as a test run, when that
+ * revision was saved), so it never reads as the robot that ran it; otherwise the Tour, then the robot.
+ */
+export function auditTargetLabel(entry: Pick<AuditLogEntry, 'tourName' | 'robotCode' | 'routeName' | 'routeRevisionSavedAt'>, formatTime: (iso: string) => string): string | null {
+  if (entry.routeName) return entry.routeRevisionSavedAt ? `${entry.routeName} · bản lưu ${formatTime(entry.routeRevisionSavedAt)}` : entry.routeName
+  return entry.tourName ?? entry.robotCode
+}

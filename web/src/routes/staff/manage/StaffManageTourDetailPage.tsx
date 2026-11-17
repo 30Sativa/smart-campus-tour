@@ -2,11 +2,12 @@ import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
-import { formatDate, formatDateTime, formatDuration, formatTime } from '../../../components/ui/date-time'
+import { formatDate, formatDateTime, formatMinutesSeconds, formatTime } from '../../../components/ui/date-time'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { notify } from '../../../components/ui/toast-store'
 import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
-import { passedAt } from '../../../features/administration/routes/route-messages'
+import { appliedFail, passedAt } from '../../../features/administration/routes/route-messages'
+import { campusShortDate, campusTime } from '../../../features/administration/tours/tour-calendar'
 import { NewerRevisionNotice } from '../../../features/administration/routes/NewerRevisionNotice'
 import { mapAreaName } from '../../../features/administration/map-labels'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
@@ -38,7 +39,11 @@ export default function StaffManageTourDetailPage() {
   if (detail.isError) return <AdminPage><AdminErrorPanel title={tourError(detail.error)} onRetry={() => void detail.refetch()} /></AdminPage>
   if (!data) return <AdminPage><SkeletonRows rows={5} label="Đang tải Tour" /></AdminPage>
   const { tour, route, routeRevision, operator, reservation, permissions } = data
-  const routePassedAt = routeRevision && passedAt(routeRevision)
+  const upcoming = tour.state === 'SCHEDULED' || tour.state === 'READY'
+  // The applied result of the Tour's save, which a run on another save with the same path can change (ADR-0023 addendum).
+  // An ended Tour does not show it as current.
+  const routePassedAt = routeRevision && (upcoming || tour.state === 'RUNNING') ? passedAt(routeRevision) : undefined
+  const routeFail = routeRevision && upcoming ? appliedFail(routeRevision) : undefined
   const overdue = overdueStartLabel(tour, reservation, now)
 
   const confirmCancel = async (reason: string) => {
@@ -55,9 +60,10 @@ export default function StaffManageTourDetailPage() {
     <PageHeader eyebrow={`Tour · ${tourStateLabel(tour, now)}`} title={tour.name} description={tour.description ?? 'Chưa có mô tả.'}
       action={permissions.canEditMetadata ? <Link to={`/staff/manage/tours/${tour.id}/edit`} className={buttonClass('secondary')}>Sửa</Link> : undefined} />
     <TourReadyPanel detail={data} />
-    {tour.isShortNotice && tour.state === 'SCHEDULED' && <QuickTourShare tour={tour} />}
-    {tour.state === 'SCHEDULED' && <div className="mb-3"><Notice tone="info">{isRegistrationClosed(tour, now) ? 'Đã đóng đăng ký, Đại diện trường không thêm đoàn mới được nữa. Duyệt nốt đơn còn chờ ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.' : 'Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.'}</Notice></div>}
-    {overdue && <div className="mb-3"><Notice tone="warn">{overdue}. Hệ thống tự huỷ Tour không được bắt đầu trong khung giờ.</Notice></div>}
+    {/* One line of guidance per state: a new quick Tour's share panel says what to do next, so the registration notice is for a Tour on a shift. */}
+    {tour.isShortNotice && tour.state === 'SCHEDULED' && <QuickTourShare tour={tour} onCancel={permissions.canCancel ? () => { cancel.reset(); setConfirming(true) } : undefined} />}
+    {tour.state === 'SCHEDULED' && !tour.isShortNotice && <div className="mb-3"><Notice tone="info">{isRegistrationClosed(tour, now) ? 'Đã đóng đăng ký, Đại diện trường không thêm đoàn mới được nữa. Duyệt nốt đơn còn chờ ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.' : 'Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.'}</Notice></div>}
+    {overdue && <div className="mb-3"><Notice tone="warn">{overdue}. Hệ thống tự hủy Tour không được bắt đầu trong khung giờ.</Notice></div>}
 
     <section className={`${panelClass} p-4`} aria-label="Thông tin Tour">
       <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -85,11 +91,16 @@ export default function StaffManageTourDetailPage() {
         <h2 className="text-[15px] font-semibold">Tuyến: {routeRevision.name}</h2>
         <Link to={`/staff/manage/routes/${routeRevision.routeId}?revisionId=${routeRevision.revisionId}`} className="text-sm text-[#2d719e]">Xem bản Tour đang dùng</Link>
       </div>
-      {(tour.state === 'SCHEDULED' || tour.state === 'READY') && <NewerRevisionNotice routeId={routeRevision.routeId} revisionId={routeRevision.revisionId} />}
+      {routeFail && <div className="mt-2"><Notice tone="danger">
+        Đường đi của Tour này vừa chạy thử không đạt lúc {campusTime(routeFail.checkedAt)} {campusShortDate(routeFail.checkedAt)}{routeFail.failureReason?.trim() ? ` (lý do: ${routeFail.failureReason.trim()})` : ''}. Tour không chốt và không bắt đầu được cho tới khi Kỹ thuật ghi một lần chạy đạt.
+      </Notice></div>}
+      {upcoming && <NewerRevisionNotice routeId={routeRevision.routeId} revisionId={routeRevision.revisionId} tourRevisionFailed={Boolean(routeFail)} />}
+      {/* ADR-0062: a retired POI blocks new Tours only; this one still goes READY and starts. */}
+      {(tour.state === 'SCHEDULED' || tour.state === 'READY') && Boolean(routeRevision.retiredPoiNames?.length) && <div className="mt-2"><Notice tone="warn">Tuyến của Tour này có POI đã ngưng dùng: {routeRevision.retiredPoiNames!.join(', ')}.</Notice></div>}
       <p className="mt-1 text-sm text-muted">{routePassedAt && `Tuyến đã chạy thử đạt ngày ${formatDate(routePassedAt)} · `}{routeRevision.stops.length} điểm dừng</p>
       <ol className="mt-3 divide-y divide-[#e2e8f0]">{routeRevision.stops.map(stop => <li key={stop.poiRevisionId} className="py-2.5 text-sm">
         <span className="font-medium">{stop.stopOrder}. {stop.name}</span>
-        <span className="block text-xs text-muted">Dừng {formatDuration(stop.dwellSeconds)}</span>
+        <span className="block text-xs text-muted">Dừng {formatMinutesSeconds(stop.dwellSeconds)}</span>
       </li>)}</ol>
     </section>}
 
@@ -101,7 +112,7 @@ export default function StaffManageTourDetailPage() {
       <p className="mt-1 text-sm text-[#64748b]">{mapAreaName(maps.data, { mapKey: route.mapKey }) ?? '-'} · {route.stops.length} điểm dừng</p>
       <ol className="mt-3 divide-y divide-[#e2e8f0]">{route.stops.map(stop => <li key={stop.id} className="py-2.5 text-sm">
         <span className="font-medium">{stop.stopOrder}. {stop.poiName}</span>
-        <span className="block text-xs text-muted">Dừng {formatDuration(stop.dwellSeconds)} · nhìn {stop.headSteps.map(h => `${HEAD_LABEL[h.preset]} ${formatDuration(h.holdSeconds)}`).join(', ')}</span>
+        <span className="block text-xs text-muted">Dừng {formatMinutesSeconds(stop.dwellSeconds)} · nhìn {stop.headSteps.map(h => `${HEAD_LABEL[h.preset]} ${formatMinutesSeconds(h.holdSeconds)}`).join(', ')}</span>
       </li>)}</ol>
     </section>}
 

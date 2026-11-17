@@ -1,0 +1,23 @@
+# pose_bootstrap node (robot/docs/auto-initial-pose.md). Per-map settings (homes, search
+# regions, score thresholds) are NOT here: they live next to the map, <map>.pose_bootstrap.yaml.
+/**/pose_bootstrap:
+  ros__parameters:
+    state_dir: "~/.local/state/sct-robot/pose_bootstrap"   # last pose per map content hash
+    global_frame: map
+    base_frame: base_footprint
+    run_on_start: true          # one attempt when Nav2 is up; then only <ns>/pose_bootstrap/relocalize
+    start_delay: 3.0            # s after map, scan and AMCL are available
+    scans_to_average: 3         # taken while the robot is confirmed stationary
+    still_window: 1.0           # s, odom below the speeds below for the whole window
+    max_linear_speed: 0.02
+    max_angular_speed: 0.05
+    nomotion_updates: 5         # AMCL request_nomotion_update calls after the pose is set
+    converge_timeout: 10.0
+    accept_cov_xy: 0.09         # LOCALIZED only below these AMCL variances (fleet_bridge uses
+    accept_cov_yaw: 0.05        # the same limits for "localized")
+    agree_xy: 0.30              # and when AMCL stays this close to the published pose
+    agree_yaw_deg: 10.0
+    initial_cov_xy: 0.04        # variance sent with the pose (RViz sends 0.25 / 0.0685)
+    initial_cov_yaw: 0.02
+    save_period: 5.0
+    save_min_move: 0.2

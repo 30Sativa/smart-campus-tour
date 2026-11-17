@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import { Check, CircleCheck, CircleX, Eye } from 'lucide-react'
 import { toneClass, type StatusTone } from '../../components/ui/status-tone'
 import { labelClass } from '../../components/ui/ui-classes'
@@ -54,7 +55,38 @@ export function ResultToggle({ id, value, onChange, hint }: { id: string; value:
   )
 }
 
-export type SetupStep = { label: string; done: boolean; hint: string; action?: ReactNode }
+/**
+ * The result an observation form will record, worked out from its ticks: every box ticked is Đạt,
+ * anything left unticked is Không đạt. Shown beside the save button so the checker sees what is saved.
+ */
+/**
+ * The result the ticks give. `pending` while no box has been ticked or unticked yet: the form has not been
+ * filled in, so it reads neither Đạt nor Không đạt.
+ */
+export function ComputedResult({ passed, pending = false, failed }: {
+  passed: boolean; pending?: boolean
+  /** The unticked items, in the words of the saved result; shown as "Không đạt ở: …" beside a Không đạt. */
+  failed?: string[]
+}) {
+  if (pending) return <p role="status" className="flex items-center gap-1.5 text-[13px] font-semibold text-[#64748b]">Kết quả: chưa tick mục nào</p>
+  return <p role="status" className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold text-[#334155]">Kết quả: <ToneBadge tone={passed ? 'ok' : 'danger'}>{passed ? 'Đạt' : 'Không đạt'}</ToneBadge>
+    {!passed && failed?.length ? <span className="text-xs font-normal text-[#b23e31]">Không đạt ở: {failed.join(', ')}</span> : null}</p>
+}
+
+/**
+ * Shown under the boxes while the form is still `pending`: records that the robot passed none of them,
+ * so the checker does not have to tick and untick a box to reach Không đạt. `onNone` marks the form
+ * touched; the reason field that then appears (`reasonId`) takes focus.
+ */
+export function NoneChecked({ reasonId, onNone }: { reasonId: string; onNone: () => void }) {
+  const choose = () => {
+    flushSync(onNone)
+    document.getElementById(reasonId)?.focus()
+  }
+  return <button type="button" onClick={choose} className="rounded-md px-1 text-xs font-semibold text-[#b23e31] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">Không đạt mục nào</button>
+}
+
+export type SetupStep ={ label: string; done: boolean; hint: string; action?: ReactNode }
 
 /**
  * A numbered list of steps that can span days and happen partly off the web, so it is a
@@ -105,10 +137,12 @@ export function SaveBlockedHint({ id, missing, lead = 'Chưa lưu được', ton
 }
 
 export function CheckRow({ checked, onChange, children }: { checked: boolean; onChange: (value: boolean) => void; children: ReactNode }) {
+  // Named by its text explicitly: some assistive tools read a wrapped checkbox by its value, "on".
+  const textId = useId()
   return (
     <label className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg border border-[#e2e8f0] px-3 text-[13px] text-[#334155] transition-colors hover:bg-[#fafcfe] has-[:checked]:border-[#cde9dc] has-[:checked]:bg-[#effbf5]">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="size-4 accent-[#1f7a55]" />
-      {children}
+      <input type="checkbox" aria-labelledby={textId} checked={checked} onChange={(event) => onChange(event.target.checked)} className="size-4 accent-[#1f7a55]" />
+      <span id={textId}>{children}</span>
     </label>
   )
 }

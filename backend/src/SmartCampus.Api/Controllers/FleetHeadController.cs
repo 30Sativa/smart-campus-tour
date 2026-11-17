@@ -8,6 +8,7 @@ using SmartCampus.Api.Hubs;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Features.FleetHead;
 using SmartCampus.Application.Features.FleetHead.Commands.PollHeadCommands;
+using SmartCampus.Application.Features.FleetHead.Queries.GetRobotHeadPois;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -17,7 +18,10 @@ public static class FleetHeadRateLimit
     public const string Policy = "FleetHead";
 }
 
-/// <summary>docs/contracts/fleet-head/v1 (ADR-0045): the robot long-polls the Operator's head commands.</summary>
+/// <summary>
+/// docs/contracts/fleet-head/v1 (ADR-0045): the robot long-polls the Operator's head commands, and reads its POIs with
+/// their camera presets so it can turn the head by itself when Nav2 reaches one.
+/// </summary>
 [ApiController]
 [Route("api/fleet/head/v1")]
 [Authorize(AuthenticationSchemes = FleetRobotAuthentication.Scheme)]
@@ -47,6 +51,25 @@ public sealed class FleetHeadController(ISender sender) : ControllerBase
             Success = true,
             Message = batch.Commands.Count == 0 ? "No head command." : "Head commands.",
             Data = new FleetHeadPollResponse(batch.Epoch, batch.Commands.Select(Wire).ToArray())
+        });
+    }
+
+    /// <summary>The robot's POIs and camera presets, and whether it may turn the head by itself (<c>autoMotion</c>).</summary>
+    [HttpGet("pois")]
+    [EnableRateLimiting(FleetHeadRateLimit.Policy)]
+    public async Task<ActionResult<BaseResponse<RobotHeadPois>>> Pois(CancellationToken ct)
+    {
+        var pois = await sender.Send(new GetRobotHeadPoisQuery(RobotCode()), ct);
+        return Ok(new BaseResponse<RobotHeadPois>
+        {
+            Success = true,
+            Message = pois.Source switch
+            {
+                RobotHeadPoiSources.Tour => "POIs of the running Tour.",
+                RobotHeadPoiSources.Map => "Verified POIs on the robot's map.",
+                _ => "No POIs for this robot."
+            },
+            Data = pois
         });
     }
 

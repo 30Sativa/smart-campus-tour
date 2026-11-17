@@ -14,11 +14,17 @@ public sealed class GetPoiHistoryQueryHandler(IPoiProposalRepository proposalRep
         var revisions = await proposalRepository.ListRevisionsAsync(query.Id, ct);
         // History needs one bulk check read; revisions are projected in memory to keep query count bounded.
         var checks = await verificationRepository.ListVerificationRecordsAsync([query.Id], ct);
-        var latestByRevision = checks.GroupBy(check => check.ProposalRevisionId)
-            .ToDictionary(group => group.Key, group => group.OrderByDescending(check => check.CheckedAt).ThenByDescending(check => check.Id).First());
+        // The same rule as ListPoiProposalsQuery and PoiProposalReadModelLoader: a revision's status is the effective
+        // result for its navigation fingerprint (newest revision, then newest check), so a content-only save shows the
+        // PASS it kept instead of "not checked", and verificationSourceRevisionId names the save that was checked.
+        var effectiveByFingerprint = checks
+            .GroupBy(check => Convert.ToHexString(check.NavigationFingerprint))
+            .ToDictionary(group => group.Key, group => group
+                .OrderByDescending(check => check.ProposalRevision.RevisionNumber)
+                .ThenByDescending(check => check.CheckedAt).ThenByDescending(check => check.Id).First());
         var revisionViews = revisions.Select(revision =>
             PoiProposalReadModelLoader.ToRevisionView(revision, revision.PoiProposalSubmission,
-                latestByRevision.GetValueOrDefault(revision.Id))).ToArray();
+                effectiveByFingerprint.GetValueOrDefault(Convert.ToHexString(revision.NavigationFingerprint)))).ToArray();
         return new(query.Id, revisionViews, checks.Select(MapPoiReadModelMapper.ToVerificationView).ToArray());
     }
 }

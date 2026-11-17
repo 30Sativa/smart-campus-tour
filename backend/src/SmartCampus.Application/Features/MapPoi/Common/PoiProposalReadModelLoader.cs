@@ -16,7 +16,7 @@ internal static class PoiProposalReadModelLoader
         revision.MapVersion.MapKey, revision.Name, revision.Purpose, revision.Description, revision.X, revision.Y,
         revision.Yaw, revision.CameraPreset, Convert.ToHexString(revision.NavigationFingerprint).ToLowerInvariant(),
         revision.CreatedByUserId, revision.CreatedAt, submission is not null, submission?.SubmittedAt,
-        verification?.ResultCode ?? "NOT_CHECKED", revision.NarrationText, revision.FallbackVideoUrl,
+        verification?.ResultCode ?? "NOT_CHECKED",
         verification?.ProposalRevisionId, verification?.VerificationMethod);
 
     public static async Task<PoiProposalView> LoadAsync(
@@ -32,11 +32,18 @@ internal static class PoiProposalReadModelLoader
             revision.X, revision.Y, revision.Yaw, revision.CameraPreset,
             Convert.ToHexString(revision.NavigationFingerprint).ToLowerInvariant(), revision.CreatedByUserId,
             revision.CreatedAt, submitted is not null, submitted?.SubmittedAt,
-            verification?.ResultCode ?? "NOT_CHECKED", revision.NarrationText, revision.FallbackVideoUrl,
+            verification?.ResultCode ?? "NOT_CHECKED",
             verification?.ProposalRevisionId, verification?.VerificationMethod);
         var results = await verificationRepository.ListVerificationRecordsAsync([proposal.Id], cancellationToken);
-        return new PoiProposalView(proposal.Id, proposal.CurrentRevision,
-            Convert.ToBase64String(proposal.RowVersion), proposal.CreatedAt, proposal.UpdatedAt, view, proposal.SourcePoiId,
-            proposal.DiscardedAt is null && PoiProposalRules.CanDiscard(results), proposal.DiscardedAt);
+        var narrations = await proposalRepository.ListCurrentNarrationsAsync([proposal.Id], cancellationToken);
+        var usedInRoute = (await proposalRepository.ListProposalsUsedInRoutesAsync([proposal.Id], cancellationToken))
+            .Contains(proposal.Id);
+        return ToProposalView(proposal, view, PoiProposalRules.HasPass(results), usedInRoute, PoiNarrationRules.Summary(narrations));
     }
+
+    public static PoiProposalView ToProposalView(PoiProposal proposal, PoiRevisionView revision, bool hasPass, bool usedInRoute,
+        PoiNarrationSummary narration) => new(proposal.Id, proposal.CurrentRevision,
+        Convert.ToBase64String(proposal.RowVersion), proposal.CreatedAt, proposal.UpdatedAt, revision, proposal.SourcePoiId,
+        PoiProposalRules.CanDiscard(proposal, usedInRoute), proposal.DiscardedAt, narration,
+        PoiProposalRules.CanRetire(proposal, hasPass, usedInRoute), proposal.RetiredAt, PoiProposalRules.CanReactivate(proposal));
 }

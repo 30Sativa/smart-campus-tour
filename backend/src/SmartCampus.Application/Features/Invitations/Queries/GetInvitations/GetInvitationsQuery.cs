@@ -20,11 +20,18 @@ public sealed class GetInvitationsQueryHandler(IInvitationRepository repository,
             var result = latest is null ? null : read.Audits.LastOrDefault(a => a.CorrelationId == latest.CorrelationId && a.Action == InvitationAudit.Result);
             var send = settings.Enabled && InvitationPolicy.CanSend(read.Tour, read.Registration, i, now);
             var cooldown = latest is null || latest.OccurredAt.AddSeconds(60) <= now;
+            var sessions = read.Sessions.GetValueOrDefault(i.Id);
+            // EndedAt IS NULL but past ExpiresAt (idle close not run yet) is not open: it reports LEFT.
+            // Ending or cancelling a Tour does not close its sessions; once the viewer can no longer enter, report LEFT.
+            var open = sessions?.UnendedExpiresAt is { } leaseEnd && ViewerReconnectPolicy.IsOpen(null, leaseEnd, now) &&
+                InvitationPolicy.CanEnter(read.Tour, read.Registration, i, now);
             return new InvitationItem(i.Id, i.RosterRow.RowNumber, i.RosterRow.RowType, i.RosterRow.DisplayName, i.RosterRow.Email,
                 Convert.ToBase64String(i.RowVersion), i.AccessVersion, i.ExpiresAt, i.RevokedAt,
                 result?.ResultCode ?? (latest is null ? "NOT_REQUESTED" : "PENDING"), latest?.OccurredAt,
                 send && cooldown, settings.Enabled && cooldown && InvitationPolicy.CanReissue(read.Tour, read.Registration, i, now),
-                settings.Enabled && InvitationPolicy.CanRevoke(read.Tour, read.Registration, i, now));
+                settings.Enabled && InvitationPolicy.CanRevoke(read.Tour, read.Registration, i, now),
+                ViewerReconnectPolicy.Presence(sessions is not null, open, sessions?.UnendedLastSeenAt, now),
+                sessions?.FirstEnteredAt, sessions?.LastSeenAt, open ? sessions!.UnendedExpiresAt : null);
         }).ToArray();
         var missing = read.Registration.RosterRows.Any(r => r.IsActive &&
             r.ParticipationState == RosterParticipationStates.Accepted && read.Invitations.All(i => i.RosterRowId != r.Id));

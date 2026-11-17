@@ -1,6 +1,6 @@
 import { apiClient } from '../../../api/client'
 import type { ApiResponse } from '../../../api/contracts/shared'
-import type { VersionedRoute } from '../../administration/routes/versioned-api'
+import type { RouteScheduledTour, VersionedRoute } from '../../administration/routes/versioned-api'
 
 export type MapVersion = {
   id: string
@@ -23,6 +23,25 @@ export type MapVersion = {
   frameId: string
   validationStatus: string
   uploadedAt: string
+  /** ADR-0041: a retired version stays readable but takes no new work. Older fixtures may omit these. */
+  status?: MapVersionStatus
+  retiredAt?: string | null
+  retiredByName?: string | null
+  retirementReason?: string | null
+  /** Opaque version the retire call echoes back. */
+  rowVersion?: string
+}
+
+export type MapVersionStatus = 'ACTIVE' | 'RETIRED'
+
+/** What retiring a version touches or is blocked by; nothing listed is changed (ADR-0041). */
+export type MapRetirementImpact = {
+  mapVersionId: string
+  routes: { routeId: string; name: string; isActive: boolean }[]
+  assignedRobots: { robotId: string; robotCode: string }[]
+  pendingPois: { proposalId: string; name: string; revisionNumber: number }[]
+  pendingRoutes: { routeId: string; revisionId: string; name: string; revisionNumber: number }[]
+  upcomingTours: { tourId: string; name: string; scheduledStartAt: string; state: string }[]
 }
 
 export type RobotAffectedTour = { tourId: string; name: string; scheduledStartAt: string; state: string }
@@ -112,12 +131,12 @@ export type PoiRevision = {
   name: string
   purpose: string
   description: string | null
-  narrationText: string | null
-  fallbackVideoUrl: string | null
   x: number
   y: number
   yaw: number
   cameraPreset: string
+  /** Hex of the server's navigation fingerprint; equal fingerprints keep the technical result. */
+  navigationFingerprint?: string
   createdAt: string
   isSubmitted: boolean
   submittedAt: string | null
@@ -132,10 +151,36 @@ export type PoiProposal = {
   rowVersion: string
   revision: PoiRevision
   sourcePoiId?: string | null
-  /** No revision ever passed, so Staff may discard it (ADR-0051). */
+  /** No route revision uses any revision of it, so Staff may discard it (ADR-0051, amended by ADR-0062). */
   canDiscard?: boolean
   discardedAt?: string | null
+  /** Passed once and a route uses it, so it cannot be discarded but may be retired ("Ngưng dùng", ADR-0062). */
+  canRetire?: boolean
+  /** Set while the POI is retired: no new work, and new routes cannot choose it. Saved routes and Tours are unchanged. */
+  retiredAt?: string | null
+  canReactivate?: boolean
+  /** The current approved and draft narration versions (ADR-0060); the text itself is in the narration list. */
+  narration?: PoiNarrationSummary | null
 }
+
+export type PoiNarrationSummary = {
+  approved: { revisionNumber: number; approvedByUserId: string; approvedByName: string; approvedAt: string } | null
+  draft: { revisionNumber: number; lastEditedByUserId: string; lastEditedByName: string; lastEditedAt: string; rowVersion: string } | null
+}
+
+export type PoiNarrationState = 'DRAFT' | 'APPROVED' | 'SUPERSEDED' | 'DISCARDED'
+
+/** One narration version of a POI (ADR-0060, docs/architecture.md). */
+export type PoiNarrationRevision = {
+  id: string; proposalId: string; revisionNumber: number; state: PoiNarrationState
+  narrationText: string; fallbackVideoUrl: string | null
+  createdByUserId: string; createdByName: string; createdAt: string
+  lastEditedByUserId: string; lastEditedByName: string; lastEditedAt: string
+  approvedByUserId: string | null; approvedByName: string | null; approvedAt: string | null
+  rowVersion: string
+}
+
+export type NarrationVersionRef = { proposalId: string; revisionNumber: number; expectedRowVersion: string }
 
 export type PoiVerificationQueueItem = { proposalId: string; currentRevision: number; rowVersion: string; revision: PoiRevision; sourcePoiId?: string | null }
 export type PoiVerification = {
@@ -170,14 +215,22 @@ export type RouteTestParticipant = { userId: string; fullName: string; username:
 export type RouteTestRunInput = {
   routeId: string; revisionId: string; requestId: string; robotCode: string; participatingStaffUserId: string
   resultCode: 'PASS' | 'FAIL'; allStopsReached: boolean; safelyStopped: boolean; localizationPassed: boolean
-  measuredDurationSeconds: number; failureReason: string | null; evidenceNote: string
+  failureReason: string | null; evidenceNote: string
 }
 
 type Envelope<T> = ApiResponse<T>
 
 export const technicalApi = {
   listMaps: () => apiClient<Envelope<MapVersionItem[]>>('/api/maps/versions').then(response => response.data ?? []),
+  /** Map Management only: every picker uses listMaps, which leaves retired versions out (ADR-0041). */
+  listAllMaps: () => apiClient<Envelope<MapVersionItem[]>>('/api/maps/versions?includeRetired=true&take=100').then(response => response.data ?? []),
   getMap: (id: string) => apiClient<Envelope<MapVersionItem>>(`/api/maps/versions/${id}`).then(response => response.data!),
+  getMapRetirementImpact: (id: string) =>
+    apiClient<Envelope<MapRetirementImpact>>(`/api/technical/map-versions/${id}/retirement-impact`).then(response => response.data!),
+  retireMap: ({ map, reason }: { map: MapVersion; reason: string }) =>
+    apiClient<Envelope<MapVersion>>(`/api/technical/map-versions/${map.id}/retire`, { method: 'POST', json: { reason, expectedRowVersion: map.rowVersion ?? '' } }).then(response => response.data!),
+  reopenMap: (map: MapVersion) =>
+    apiClient<Envelope<MapVersion>>(`/api/technical/map-versions/${map.id}/reopen`, { method: 'POST', json: { expectedRowVersion: map.rowVersion ?? null } }).then(response => response.data!),
   listMapAreas: () => apiClient<Envelope<MapAreaOption[]>>('/api/technical/map-areas').then(response => response.data ?? []),
   listPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots').then(response => response.data ?? []),
   listAllPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots?includeDeactivated=true').then(response => response.data ?? []),
@@ -237,14 +290,29 @@ export const technicalApi = {
   getPoiProposal: (id: string) => apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}`).then(response => response.data!),
   getPoiHistory: (id: string) => apiClient<Envelope<{ proposalId: string; revisions: PoiRevision[]; verificationRecords: PoiVerification[] }>>(`/api/staff/poi-proposals/${id}/history`).then(response => response.data!),
   listPoiVerificationQueue: (mapVersionId?: string) => apiClient<Envelope<PoiVerificationQueueItem[]>>(`/api/technical/poi-verifications${mapVersionId ? `?mapVersionId=${encodeURIComponent(mapVersionId)}` : ''}`).then(response => response.data ?? []),
-  createPoiProposal: (draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string; narrationText: string; fallbackVideoUrl: string | null }) =>
+  createPoiProposal: (draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string }) =>
     apiClient<Envelope<PoiProposal>>('/api/staff/poi-proposals', { method: 'POST', json: { requestId: crypto.randomUUID(), draft } }).then(response => response.data!),
-  revisePoiProposal: (id: string, current: PoiProposal, draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string; narrationText: string; fallbackVideoUrl: string | null }) =>
+  revisePoiProposal: (id: string, current: PoiProposal, draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string }) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/draft`, { method: 'PUT', json: { requestId: crypto.randomUUID(), expectedCurrentRevision: current.currentRevision, expectedRowVersion: current.rowVersion, draft } }).then(response => response.data!),
   discardPoiProposal: (proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/discard`, { method: 'POST', json: { expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
+  retirePoiProposal: (proposal: PoiProposal) =>
+    apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/retire`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
+  /** SCHEDULED and READY Tours whose route stops at this POI, for the "Ngưng dùng" dialog. Same shape as a route's list. */
+  poiScheduledTours: (proposalId: string) =>
+    apiClient<Envelope<RouteScheduledTour[]>>(`/api/staff/poi-proposals/${proposalId}/scheduled-tours`).then(response => response.data ?? []),
+  reactivatePoiProposal: (proposal: PoiProposal) =>
+    apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${proposal.id}/reactivate`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
   submitPoiProposal: (id: string, proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/submit`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
+  listPoiNarrations: (proposalId: string) => apiClient<Envelope<PoiNarrationRevision[]>>(`/api/staff/poi-proposals/${proposalId}/narrations`).then(response => response.data ?? []),
+  /** Creates the draft when `expectedRowVersion` is absent, otherwise edits the current draft in place. */
+  savePoiNarrationDraft: ({ proposalId, ...body }: { proposalId: string; expectedRowVersion?: string; narrationText: string; fallbackVideoUrl: string | null }) =>
+    apiClient<Envelope<PoiNarrationRevision>>(`/api/staff/poi-proposals/${proposalId}/narrations/draft`, { method: 'PUT', json: { requestId: crypto.randomUUID(), ...body } }).then(response => response.data!),
+  approvePoiNarration: ({ proposalId, revisionNumber, expectedRowVersion }: NarrationVersionRef) =>
+    apiClient<Envelope<PoiNarrationRevision>>(`/api/staff/poi-proposals/${proposalId}/narrations/${revisionNumber}/approve`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRowVersion } }).then(response => response.data!),
+  discardPoiNarration: ({ proposalId, revisionNumber, expectedRowVersion }: NarrationVersionRef) =>
+    apiClient<Envelope<PoiNarrationRevision>>(`/api/staff/poi-proposals/${proposalId}/narrations/${revisionNumber}/discard`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRowVersion } }).then(response => response.data!),
   listRouteTestQueue: () => apiClient<Envelope<VersionedRoute[]>>('/api/technical/route-verifications/queue').then(response => response.data ?? []),
   listRouteRerunQueue: () => apiClient<Envelope<VersionedRoute[]>>('/api/technical/route-verifications/rerun-queue').then(response => response.data ?? []),
   listRouteTestParticipants: () => apiClient<Envelope<RouteTestParticipant[]>>('/api/technical/route-verifications/participants').then(response => response.data ?? []),

@@ -20,7 +20,10 @@ const requests: URL[] = []
 let failRegistrations = false
 let packageFailure: Response | null = null
 let discardResponse: Response | null = null
+/** Verification records the POI history endpoint returns, which carry a FAIL reason. */
+let historyRecords: unknown[] = []
 const discardBodies: unknown[] = []
+const lifecycleCalls: Array<{ path: string; body: { requestId: string; expectedRowVersion: string } }> = []
 /** An uploaded package: 10x20 cells of 0.5m with the map origin at (-1, -2). */
 const packageZip = (width: number) => zipSync({
   'map.yaml': strToU8('image: map.pgm\nmode: trinary\nresolution: 0.5\norigin: [-1, -2, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.25\n'),
@@ -28,7 +31,7 @@ const packageZip = (width: number) => zipSync({
 })
 const mapVersion = (id: string, mapKey: string, currentlyDeployedOn: unknown[], areaName = mapKey) => ({ map: { id, mapKey, frameId: 'map', imageFileName: 'map.pgm', packageSha256: 'a'.repeat(64), areaName, areaKey: mapKey.replace(/-v\d+$/, ''), versionNumber: 1 }, currentlyDeployedOn })
 const proposal = (id: string, mapVersionId: string, mapKey: string, name: string): PoiProposal => ({
-  id, currentRevision: 1, rowVersion: 'version', revision: { id: `${id}-rev`, revisionNumber: 1, mapVersionId, mapKey, name, purpose: 'Tham quan', description: null, narrationText: null, fallbackVideoUrl: null,
+  id, currentRevision: 1, rowVersion: 'version', revision: { id: `${id}-rev`, revisionNumber: 1, mapVersionId, mapKey, name, purpose: 'Tham quan', description: null,
     x: 0, y: 0, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-30T00:00:00Z', isSubmitted: true, submittedAt: '2026-10-30T00:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: null },
 })
 let proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), proposal('poi-b', 'map-b', 'test123-v2', 'Điểm B')]
@@ -45,10 +48,18 @@ function show(element: React.ReactNode, path = '/staff/manage') {
 }
 beforeEach(() => {
   requests.length = 0; failRegistrations = false; packageFailure = null; proposals = standardProposals; mapVersions = standardMaps
-  discardResponse = null; discardBodies.length = 0
+  discardResponse = null; discardBodies.length = 0; lifecycleCalls.length = 0; historyRecords = []
   useAuthStore.getState().setAuth('test-token', { userId: 'staff-ui', username: 'staff', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
+    if (url.pathname.endsWith('/retire') || url.pathname.endsWith('/reactivate')) {
+      lifecycleCalls.push({ path: url.pathname, body: JSON.parse(String(init?.body)) })
+      const retire = url.pathname.endsWith('/retire')
+      proposals = proposals.map(item => url.pathname.includes(`/${item.id}/`)
+        ? { ...item, retiredAt: retire ? '2026-11-15T05:00:00Z' : null, canRetire: !retire, canReactivate: retire } : item)
+      return respond(proposals.find(item => url.pathname.includes(`/${item.id}/`)))
+    }
+    if (url.pathname.endsWith('/scheduled-tours')) return respond([{ id: 'tour-1', name: 'Tour sáng thứ Hai', scheduledStartAt: '2026-11-23T01:15:00Z', state: 'SCHEDULED', registrationClosesAt: '2026-11-21T01:15:00Z' }])
     if (url.pathname.endsWith('/discard')) {
       discardBodies.push(JSON.parse(String(init?.body)))
       if (discardResponse) return discardResponse
@@ -56,6 +67,10 @@ beforeEach(() => {
       return respond({ ...standardProposals[0], discardedAt: '2026-11-09T05:00:00Z', canDiscard: false })
     }
     if (url.pathname === '/api/staff/poi-proposals') return respond(proposals)
+    if (url.pathname.endsWith('/history')) {
+      const item = proposals.find(entry => url.pathname.includes(`/${entry.id}/`))
+      return respond({ proposalId: item?.id, revisions: item ? [item.revision] : [], verificationRecords: historyRecords })
+    }
     if (url.pathname === '/api/maps/versions') return respond(mapVersions)
     if (url.pathname === '/api/maps/versions/map-old') return respond(mapVersion('map-old', 'retired-v1', []))
     if (url.pathname.endsWith('/package')) return packageFailure?.clone() ?? new Response(packageZip(url.pathname.includes('map-b') ? 40 : 10))
@@ -99,7 +114,9 @@ describe('staff preparation UI', () => {
     proposals = [...standardProposals,
       { ...draft, revision: { ...draft.revision, isSubmitted: false, navigationStatus: null } },
       { ...failed, revision: { ...failed.revision, navigationStatus: 'FAIL' } },
-      { ...waiting, revision: { ...waiting.revision, navigationStatus: null } }] as PoiProposal[]
+      { ...waiting, revision: { ...waiting.revision, navigationStatus: null } },
+      // A retired POI takes no new work (ADR-0062), so it is neither Staff's nor Technical's.
+      { ...failed, id: 'poi-f', retiredAt: '2026-11-15T05:00:00Z', revision: { ...failed.revision, navigationStatus: 'FAIL' } }] as PoiProposal[]
     show(<WorkQueue urgent={false} />)
     const section = screen.getByRole('group', { name: 'POI cần hoàn thiện' })
     await waitFor(() => expect(within(section).getByRole('heading')).toHaveTextContent(/POI cần hoàn thiện\s*2/))
@@ -197,27 +214,119 @@ describe('staff preparation UI', () => {
     expect(requests.some(url => url.pathname.endsWith('/package'))).toBe(false)
   })
 
-  it('marks imported POIs that still need narration and names how they were verified', async () => {
-    const imported = proposal('poi-c', 'map-a', 'test123-v1', 'POI 02')
+  // ADR-0060 replaced the "imported POI needs narration" badge (read from revision.narrationText) with the
+  // narration summary every proposal now carries, so each row says where its narration stands.
+  // Every card names both axes in the same words as the POI page (poi-labels.ts), plus the route line.
+  it('names the check and the narration on every card, with the route line and no check method', async () => {
+    const approved = { revisionNumber: 1, approvedByUserId: 'u2', approvedByName: 'Lan', approvedAt: '2026-11-15T02:00:00Z' }
+    const draft = { revisionNumber: 2, lastEditedByUserId: 'u1', lastEditedByName: 'An', lastEditedAt: '2026-11-15T03:00:00Z', rowVersion: 'n2' }
+    const withNarration = (id: string, name: string, narration: PoiProposal['narration'], method?: 'POSE_CAPTURE' | 'MANUAL_CHECK') => {
+      const item = proposal(id, 'map-a', 'test123-v1', name)
+      return { ...item, narration, revision: { ...item.revision, verificationMethod: method ?? null } }
+    }
+    const waiting = withNarration('poi-d', 'Thư viện', { approved: null, draft }, 'MANUAL_CHECK')
     proposals = [
-      { ...imported, sourcePoiId: 'POI_02', revision: { ...imported.revision, verificationMethod: 'POSE_CAPTURE' } },
-      { ...proposal('poi-d', 'map-a', 'test123-v1', 'Thư viện'), sourcePoiId: 'POI_03', revision: { ...imported.revision, id: 'poi-d-rev', name: 'Thư viện', narrationText: 'Đây là thư viện.', verificationMethod: 'MANUAL_CHECK' } },
+      withNarration('poi-c', 'POI 02', null, 'POSE_CAPTURE'),
+      { ...waiting, revision: { ...waiting.revision, navigationStatus: 'NOT_TESTED' } },
+      withNarration('poi-e', 'Sảnh', { approved, draft: null }),
+      withNarration('poi-f', 'Căng tin', { approved, draft }),
     ]
     show(<StaffManagePoisPage />, '/staff/manage/pois')
-    expect(await screen.findAllByText('POI 02')).not.toHaveLength(0)
-    expect(screen.getAllByText('Cần bổ sung nội dung thuyết minh')).toHaveLength(1)
-    const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
-    expect(within(within(list).getByRole('button', { name: 'Chọn POI 02' })).getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
-    expect(within(within(list).getByRole('button', { name: 'Chọn Thư viện' })).getByText('Kiểm tra thủ công')).toBeInTheDocument()
+    const list = await screen.findByRole('region', { name: 'Danh sách đề xuất POI' })
+    const row = async (name: string) => within(await within(list).findByRole('button', { name: `Chọn ${name}` }))
+    expect((await row('POI 02')).getByText('Kiểm chứng: Đạt')).toBeInTheDocument()
+    expect((await row('POI 02')).getByText('Thuyết minh: Chưa có')).toBeInTheDocument()
+    expect((await row('POI 02')).getByText('Dùng được cho tuyến: Chưa, vì chưa có thuyết minh đã duyệt')).toBeInTheDocument()
+    expect((await row('Thư viện')).getByText('Kiểm chứng: Chờ kỹ thuật')).toBeInTheDocument()
+    expect((await row('Thư viện')).getByText('Thuyết minh: Chờ duyệt')).toBeInTheDocument()
+    expect((await row('Sảnh')).getByText('Thuyết minh: Đã duyệt')).toBeInTheDocument()
+    expect((await row('Sảnh')).getByText('Dùng được cho tuyến: Có')).toBeInTheDocument()
+    expect((await row('Căng tin')).getByText('Thuyết minh: Đã duyệt · có bản chờ duyệt')).toBeInTheDocument()
+    // The check method is the POI page's detail, not the card's.
+    expect(within(list).queryByText('Ghi pose trực tiếp trên robot')).not.toBeInTheDocument()
+    expect(within(list).queryByText('Kiểm tra thủ công')).not.toBeInTheDocument()
+    // The filter chips and the map pins use the same check words.
+    for (const label of ['Chưa gửi', 'Chờ kỹ thuật', 'Đạt', 'Không đạt']) expect(screen.getByRole('button', { name: new RegExp(`^${label}\\s*\\d+$`) })).toBeInTheDocument()
+    const map = await screen.findByRole('img', { name: /với 4 POI/ })
+    expect(within(map).getByRole('button', { name: /Thư viện, Kiểm chứng: Chờ kỹ thuật, Thuyết minh: Chờ duyệt/ })).toBeInTheDocument()
   })
 
-  it('asks Staff to add narration first for a POI imported from a pose file', async () => {
-    const imported = proposal('poi-a', 'map-a', 'test123-v1', 'POI 02')
-    proposals = [{ ...imported, sourcePoiId: 'POI_02', revision: { ...imported.revision, navigationStatus: 'NOT_TESTED', narrationText: null } } as PoiProposal]
+  it('lists both missing steps of an unsent POI whose narration waits for approval', async () => {
+    const draft = proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A')
+    const narrationDraft = { revisionNumber: 1, lastEditedByUserId: 'u1', lastEditedByName: 'An', lastEditedAt: '2026-11-15T03:00:00Z', rowVersion: 'n1' }
+    proposals = [{ ...draft, narration: { approved: null, draft: narrationDraft }, revision: { ...draft.revision, isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_TESTED' } }]
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
-    expect(chosen).toHaveTextContent('Nhập từ tệp ghi pose trên robot. Đặt tên và viết thuyết minh để dùng được trong tuyến. Kỹ thuật vẫn đang kiểm tra vị trí.')
-    expect(within(chosen).getByRole('link', { name: 'Bổ sung thuyết minh' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
+    const steps = within(within(chosen).getByRole('list', { name: 'Việc còn thiếu' })).getAllByRole('listitem')
+    expect(steps).toHaveLength(2)
+    expect(steps[0]).toHaveTextContent('Chưa gửi kiểm chứng.')
+    expect(within(steps[0]).getByRole('link', { name: 'Gửi kiểm chứng' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
+    expect(steps[1]).toHaveTextContent('Thuyết minh chờ duyệt.')
+    expect(steps[1]).not.toHaveTextContent('chờ một Staff khác duyệt')
+    expect(within(steps[1]).getByRole('link', { name: 'Mở thuyết minh' })).toHaveAttribute('href', '/staff/manage/pois/poi-a?tab=thuyet-minh')
+    // Each line has its own action, so no extra "Xem đề xuất".
+    expect(within(chosen).getAllByRole('link')).toHaveLength(2)
+    expect(screen.queryByText('test123-v1', { selector: 'span' })).not.toBeInTheDocument()
+  })
+
+  it('tells the last editor of a waiting narration that another Staff has to approve it', async () => {
+    const passed = proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A')
+    const narrationDraft = { revisionNumber: 1, lastEditedByUserId: 'staff-ui', lastEditedByName: 'Tôi', lastEditedAt: '2026-11-15T03:00:00Z', rowVersion: 'n1' }
+    proposals = [{ ...passed, narration: { approved: null, draft: narrationDraft } }]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
+    expect(within(chosen).getByRole('listitem')).toHaveTextContent('Thuyết minh chờ duyệt, chờ một Staff khác duyệt.')
+  })
+
+  it('shows the reason of a failed check on the card, with one action to the position tab', async () => {
+    const failed = proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A')
+    const approved = { revisionNumber: 1, approvedByUserId: 'u2', approvedByName: 'Lan', approvedAt: '2026-11-15T02:00:00Z' }
+    proposals = [{ ...failed, narration: { approved, draft: null }, revision: { ...failed.revision, navigationStatus: 'FAIL' } }]
+    historyRecords = [{ id: 'check-1', proposalId: 'poi-a', proposalRevisionId: 'poi-a-rev', revisionNumber: 1, mapVersionId: 'map-a', mapKey: 'test123-v1', robotCode: 'amr-01', resultCode: 'FAIL',
+      reached: true, stopped: false, localizationPassed: true, cameraPresetConfirmed: true, reason: 'Robot dừng lệch 30 cm', evidenceNote: '', checkedByUserId: 't1', checkedAt: '2026-11-15T04:00:00Z', verificationMethod: 'MANUAL_CHECK', sourceFileSha256: null }]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
+    const steps = within(within(chosen).getByRole('list', { name: 'Việc còn thiếu' })).getAllByRole('listitem')
+    expect(steps).toHaveLength(1)
+    expect(steps[0]).toHaveTextContent('Kiểm chứng không đạt.')
+    expect(await within(steps[0]).findByText('Lý do: Robot dừng lệch 30 cm')).toBeInTheDocument()
+    expect(within(steps[0]).getByRole('link', { name: 'Xem lý do và sửa' })).toHaveAttribute('href', '/staff/manage/pois/poi-a?tab=vi-tri')
+    expect(within(screen.getByRole('button', { name: 'Chọn Điểm A' })).getByText('Kiểm chứng: Không đạt')).toBeInTheDocument()
+  })
+
+  it('says a passed POI with an approved narration is ready for a route', async () => {
+    const passed = proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A')
+    proposals = [{ ...passed, narration: { approved: { revisionNumber: 1, approvedByUserId: 'u2', approvedByName: 'Lan', approvedAt: '2026-11-15T02:00:00Z' }, draft: null } }]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
+    expect(chosen).toHaveTextContent('Dùng được khi tạo tuyến.')
+    expect(within(chosen).queryByRole('list', { name: 'Việc còn thiếu' })).not.toBeInTheDocument()
+    expect(within(chosen).getByRole('link', { name: 'Xem đề xuất' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
+  })
+
+  it('shows one "Ngưng dùng" chip instead of both statuses for a retired POI', async () => {
+    proposals = [{ ...proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), retiredAt: '2026-11-15T05:00:00Z', canReactivate: true }]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const row = within(await screen.findByRole('button', { name: 'Chọn Điểm A' }))
+    expect(row.getByText('Ngưng dùng')).toBeInTheDocument()
+    expect(row.queryByText(/^Kiểm chứng:/)).not.toBeInTheDocument()
+    expect(row.queryByText(/^Thuyết minh:/)).not.toBeInTheDocument()
+    expect(row.getByText('Dùng được cho tuyến: Chưa, vì POI đã ngưng dùng')).toBeInTheDocument()
+    const chosen = screen.getByRole('region', { name: 'Điểm đang chọn' })
+    expect(within(chosen).queryByRole('list', { name: 'Việc còn thiếu' })).not.toBeInTheDocument()
+    expect(chosen).toHaveTextContent('Đã ngưng dùng.')
+  })
+
+  // POI E in production: Technical listed it as passed while this list said "Bản nháp". Renaming a passed POI
+  // makes an unsubmitted revision that keeps the PASS of its unchanged navigation fingerprint.
+  it('lists an unsubmitted revision that kept its PASS as passed, not as a draft', async () => {
+    const renamed = proposal('poi-a', 'map-a', 'test123-v1', 'E')
+    proposals = [{ ...renamed, revision: { ...renamed.revision, isSubmitted: false, submittedAt: null, navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-a-rev-1' } }]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const list = await screen.findByRole('region', { name: 'Danh sách đề xuất POI' })
+    const row = within(await within(list).findByRole('button', { name: 'Chọn E' }))
+    expect(row.getByText('Kiểm chứng: Đạt')).toBeInTheDocument()
+    expect(row.queryByText('Bản nháp')).not.toBeInTheDocument()
   })
 
   it('draws the chosen pin on top of another pin at the same spot', async () => {
@@ -232,10 +341,10 @@ describe('staff preparation UI', () => {
 
   it('keeps the map frame when a status tab hides some points', async () => {
     const draft = proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C')
-    proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), { ...draft, revision: { ...draft.revision, x: 3, y: 6, isSubmitted: false, submittedAt: null } } as PoiProposal]
+    proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), { ...draft, revision: { ...draft.revision, x: 3, y: 6, isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_CHECKED' } } as PoiProposal]
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     const before = (await screen.findByRole('img', { name: /với 2 POI/ })).getAttribute('viewBox')
-    fireEvent.click(screen.getByRole('button', { name: /^Bản nháp/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Chưa gửi\s*\d/ }))
     const after = await screen.findByRole('img', { name: /với 1 POI/ })
     expect(after.getAttribute('viewBox')).toBe(before)
   })
@@ -256,17 +365,6 @@ describe('staff preparation UI', () => {
     expect(within(rowOf('Điểm A')).getByRole('region', { name: 'Điểm đang chọn' })).toBeInTheDocument()
   })
 
-  it('tells Staff the next step for the chosen POI, with one action and no map key noise', async () => {
-    const draft = proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A')
-    proposals = [{ ...draft, revision: { ...draft.revision, isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_TESTED' } } as PoiProposal]
-    show(<StaffManagePoisPage />, '/staff/manage/pois')
-    const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
-    expect(chosen).toHaveTextContent('Chưa gửi kiểm chứng. Hoàn tất nội dung rồi gửi để kỹ thuật viên kiểm tra trên robot.')
-    expect(within(chosen).getAllByRole('link')).toHaveLength(1)
-    expect(within(chosen).getByRole('link', { name: 'Mở để gửi kiểm chứng' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
-    expect(screen.queryByText('test123-v1', { selector: 'span' })).not.toBeInTheDocument()
-  })
-
   it('offers to remove only a POI the server says never passed, and removes it after confirmation', async () => {
     const draft = proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A')
     proposals = [{ ...draft, canDiscard: true, rowVersion: 'rv-a', revision: { ...draft.revision, isSubmitted: true, navigationStatus: 'NOT_TESTED' } } as PoiProposal,
@@ -282,6 +380,45 @@ describe('staff preparation UI', () => {
     expect(await screen.findByRole('button', { name: 'Chọn Điểm C' })).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Chọn Điểm A' })).not.toBeInTheDocument())
     expect(within(screen.getByRole('region', { name: 'Điểm đang chọn' })).queryByRole('button', { name: 'Xoá điểm' })).not.toBeInTheDocument()
+  })
+
+  it('offers delete, retire or reactivate exactly as the server flags say (ADR-0062)', async () => {
+    const used = { ...proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), rowVersion: 'rv-a', canDiscard: false, canRetire: true }
+    const free = { ...proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C'), canDiscard: true, canRetire: false }
+    proposals = [used, free]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    let chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
+    expect(within(chosen).queryByRole('button', { name: 'Xoá điểm' })).not.toBeInTheDocument()
+    expect(within(chosen).queryByRole('button', { name: 'Dùng lại' })).not.toBeInTheDocument()
+    fireEvent.click(within(chosen).getByRole('button', { name: 'Ngưng dùng' }))
+    const dialog = screen.getByRole('dialog', { name: 'Ngưng dùng Điểm A?' })
+    expect(dialog).toHaveTextContent('Tuyến và Tour đã lưu không đổi gì')
+    expect(dialog).toHaveTextContent('tuyến mới không chọn được điểm này')
+    // Like "Ngừng sử dụng tuyến": the Tours that stop here, each a link, before deciding.
+    expect(await within(dialog).findByText('1 Tour đã lên lịch đi qua điểm này, vẫn chạy như cũ:')).toBeInTheDocument()
+    expect(within(dialog).getByRole('link', { name: 'Tour sáng thứ Hai' })).toHaveAttribute('href', '/staff/manage/tours/tour-1')
+    expect(requests.some(request => request.pathname === '/api/staff/poi-proposals/poi-a/scheduled-tours')).toBe(true)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ngưng dùng' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(lifecycleCalls).toEqual([{ path: '/api/staff/poi-proposals/poi-a/retire', body: { requestId: expect.any(String), expectedRowVersion: 'rv-a' } }])
+
+    // The retired POI carries its own label, filter and "Dùng lại".
+    const row = await screen.findByRole('button', { name: 'Chọn Điểm A' })
+    await waitFor(() => expect(within(row).getByText('Ngưng dùng')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /^Ngưng dùng\s*1$/ }))
+    const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
+    expect(within(list).getByText('Điểm A')).toBeInTheDocument()
+    expect(within(list).queryByText('Điểm C')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Đạt\s*\d/ }))
+    expect(within(list).queryByText('Điểm A')).not.toBeInTheDocument()
+    expect(within(list).getByText('Điểm C')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Điểm đang chọn' })).getByRole('button', { name: 'Xoá điểm' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Ngưng dùng\s*1$/ }))
+    chosen = screen.getByRole('region', { name: 'Điểm đang chọn' })
+    expect(chosen).toHaveTextContent('tuyến mới không chọn được')
+    fireEvent.click(within(chosen).getByRole('button', { name: 'Dùng lại' }))
+    await waitFor(() => expect(lifecycleCalls.at(-1)?.path).toBe('/api/staff/poi-proposals/poi-a/reactivate'))
   })
 
   it('keeps a refused removal in the dialog with the server reason', async () => {

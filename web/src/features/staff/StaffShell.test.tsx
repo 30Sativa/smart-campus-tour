@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAuthStore } from '../../stores/auth-store'
 import { PageHeader } from '../../components/ui/ConsolePrimitives'
 import StaffShell from './StaffShell'
-import { REGISTRATIONS_NAV_PATH, STAFF_NAV, activeNavPath } from './staff-nav'
+import { REGISTRATIONS_NAV_PATH, STAFF_NAV, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
 import { useTourOriginStore } from './operations/tour-origin'
 
 function renderShell(role = 'Staff', path = '/staff') {
@@ -37,6 +37,15 @@ describe('StaffShell on every page', () => {
     expect(screen.getByText(/^Cập nhật trực tiếp: /)).toBeInTheDocument()
     expect(screen.queryByText(/^Kênh robot/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Telemetry:/)).not.toBeInTheDocument()
+  })
+
+  it('lists Digital Twin in Vận hành right after Điều hành trực tiếp', () => {
+    const operations = STAFF_NAV_SECTIONS.find(section => section.label === 'Vận hành')!.items.map(item => item.path)
+    expect(operations.indexOf('/staff/digital-twin')).toBe(operations.indexOf('/staff/live') + 1)
+    renderShell()
+    const nav = screen.getByRole('navigation', { name: 'Điều hướng vận hành' })
+    expect(within(nav).getByRole('link', { name: /Digital Twin/ })).toHaveAttribute('href', '/staff/digital-twin')
+    expect(activeNavPath('/staff/digital-twin')).toBe('/staff/digital-twin')
   })
 
   it('opens registrations on the pending queue its badge counts, and lights it for both views', () => {

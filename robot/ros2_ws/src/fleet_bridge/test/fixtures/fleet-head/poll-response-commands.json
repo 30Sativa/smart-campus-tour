@@ -9,7 +9,8 @@
       { "seq": 44, "kind": "STOP", "issuedAt": "2026-11-05T12:00:01.000Z" },
       { "seq": 45, "kind": "ANGLE", "issuedAt": "2026-11-05T12:00:01.200Z", "panDeg": 0, "tiltDeg": 0 },
       { "seq": 46, "kind": "SWEEP", "issuedAt": "2026-11-05T12:00:02.000Z" },
-      { "seq": 47, "kind": "SWEEP", "issuedAt": "2026-11-05T12:00:30.000Z", "sweepDeg": 90 }
+      { "seq": 47, "kind": "SWEEP", "issuedAt": "2026-11-05T12:00:30.000Z", "sweepDeg": 90 },
+      { "seq": 48, "kind": "HOME", "issuedAt": "2026-11-05T12:01:00.000Z" }
     ]
   },
   "errors": null

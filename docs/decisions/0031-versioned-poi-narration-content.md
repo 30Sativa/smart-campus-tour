@@ -3,6 +3,7 @@
 - Status: owner-authorized Part 1 of the versioned POI → Route → Tour sequence
 - Date: 2026-10-29
 - Related: ADR-0021, ADR-0023, ADR-0024
+- Partially superseded by ADR-0060 (where narration is stored and when it is required)
 
 ## Decision
 

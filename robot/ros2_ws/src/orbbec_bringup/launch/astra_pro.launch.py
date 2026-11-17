@@ -125,7 +125,9 @@ def _launch_setup(context, *args, **kwargs):
         'depth_registration': _as_bool(val('depth_registration')),
         'color_depth_synchronization': _as_bool(val('color_depth_synchronization')),
 
-        'use_uvc_camera': True,
+        # The RGB half is a separate UVC device; opening it when color is off still decoded
+        # 640x480@30 MJPEG and doubled the driver's CPU (23 % -> 12 % of a J5005 core, 14/11).
+        'use_uvc_camera': _as_bool(val('enable_color')),
         'uvc_vendor_id': _as_int(val('uvc_vendor_id')),
         'uvc_product_id': _as_int(val('uvc_product_id')),
         'uvc_camera_format': val('uvc_camera_format'),
@@ -137,7 +139,7 @@ def _launch_setup(context, *args, **kwargs):
         'enable_publish_extrinsic': False,
         'enable_d2c_viewer': False,
 
-        'oni_log_level': 'verbose',
+        'oni_log_level': 'warning',
         'oni_log_to_console': False,
         'oni_log_to_file': False,
     }

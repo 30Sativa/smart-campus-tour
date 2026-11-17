@@ -17,11 +17,15 @@ from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
 from unique_identifier_msgs.msg import UUID
 
+CANCELLED_BEFORE_START = 'CANCELLED_BEFORE_START'
+
 
 class Nav2Navigator:
-    def __init__(self, node, drain_period_sec: float = 0.05, on_goal_id=None):
+    def __init__(self, node, drain_period_sec: float = 0.05, on_goal_id=None, prepare=None):
         self._node = node
         self._on_goal_id = on_goal_id or (lambda goal_id: None)
+        # Runs before each goal: `prepare(done)` calls `done(None)` to send it or `done(reason)` to refuse it.
+        self._prepare = prepare or (lambda done: done(None))
         self._client = ActionClient(node, NavigateToPose, 'navigate_to_pose')
         self._work: queue.SimpleQueue = queue.SimpleQueue()
         self._handle = None
@@ -48,6 +52,19 @@ class Nav2Navigator:
     def _send(self, x, y, yaw, frame_id, on_response, on_result) -> None:
         self._handle = None
         self._cancel_pending = False
+
+        def prepared(refusal: str | None) -> None:
+            if refusal is not None:
+                on_response(False, refusal)
+            elif self._cancel_pending:
+                # The leg was cancelled while the gate was being cleared: no goal is ever sent for it.
+                on_response(False, CANCELLED_BEFORE_START)
+            else:
+                self._send_now(x, y, yaw, frame_id, on_response, on_result)
+
+        self._prepare(prepared)
+
+    def _send_now(self, x, y, yaw, frame_id, on_response, on_result) -> None:
         if not self._client.server_is_ready():
             on_response(False, 'NAV2_UNAVAILABLE')
             return

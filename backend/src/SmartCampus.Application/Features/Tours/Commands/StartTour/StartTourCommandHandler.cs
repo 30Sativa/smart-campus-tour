@@ -13,16 +13,22 @@ namespace SmartCampus.Application.Features.Tours.Commands.StartTour;
 /// The Start sequence of ADR-0042 §5 in one transaction: every preflight check under the locks, claim the robot, READY to
 /// RUNNING, the first GoTo as PENDING, events and the receipt. Nothing is sent; the robot pulls the command. With
 /// FleetCommands:Enabled = false it refuses without writing, and a refused command throws so nothing commits.
+/// With <see cref="StartTourRequest.HoldAtStart"/> it opens the Tour at <c>INITIALIZING</c> and creates no command:
+/// the first leg is the Operator's Next, after the camera, map and robot were checked on the opened Tour.
 /// </summary>
 public sealed class StartTourCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
     IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, TimeProvider clock,
     ILogger<StartTourCommandHandler> logger) : IRequestHandler<StartTourCommand, TourMutationResult>
 {
     public const string EarlyStartReason = "EARLY_START";
+    /// <summary>Kept apart in the receipt fingerprint, so a held and a departing Start never replay each other.</summary>
+    public const string HoldAtStartReason = "HOLD_AT_START";
 
     public async Task<TourMutationResult> Handle(StartTourCommand command, CancellationToken ct)
     {
-        var fingerprint = TourRequestReceipt.Fingerprint(TourLifecycleEvents.Started, command.Id, command.Request.Confirmation);
+        var hold = command.Request.HoldAtStart;
+        var fingerprint = TourRequestReceipt.Fingerprint(TourLifecycleEvents.Started, command.Id,
+            hold ? null : command.Request.Confirmation, reason: hold ? HoldAtStartReason : null);
         var replay = await TourRequestReceipt.ReplayAsync(repository, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Started, command.Id, fingerprint, ct);
         if (replay.HasValue) return new(replay.Value);
@@ -32,7 +38,7 @@ public sealed class StartTourCommandHandler(ITourManagementRepository repository
             throw new ForbiddenException("Chỉ người vận hành được giao cho Tour mới Start được.");
         RowVersionToken.EnsureCurrent(tour.RowVersion, command.Request.ExpectedRowVersion);
         var result = await preflight.EvaluateAsync(tour, null, command.Request.Confirmation,
-            includeConfirmation: true, lockTarget: true, ct);
+            includeConfirmation: !hold, lockTarget: true, ct, holdAtStart: hold);
         if (result.BlockedBy.Count > 0) throw Refused(tour, command.Actor, result);
 
         // Every check passed, so the Tour has its revision, map and reservation.
@@ -59,7 +65,8 @@ public sealed class StartTourCommandHandler(ITourManagementRepository repository
             ReasonNote = viewers is null ? null
                 : $"Start sớm {(int)Math.Ceiling(early.TotalSeconds)} giây trước giờ bắt đầu; {viewers.Joined}/{viewers.Accepted} điểm xem đã vào phòng chờ."
         });
-        TourLegDispatch.Begin(repository, settings, tour, reservation.RobotId, map, TourLegTarget.To(first), command.Actor, now);
+        if (hold) tour.WaitAtStart(now);
+        else TourLegDispatch.Begin(repository, settings, tour, reservation.RobotId, map, TourLegTarget.To(first), command.Actor, now);
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Started, fingerprint, now, "state");
         return new(tour.Id);

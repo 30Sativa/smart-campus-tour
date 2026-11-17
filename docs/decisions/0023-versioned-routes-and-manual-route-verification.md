@@ -24,3 +24,28 @@ Database First schema v1.3 retains the v1.2 snapshot and adds `patches/upgrade-v
 This slice covers fixed route authoring/revision, submit, human whole-route test evidence, and history only. It does not implement branch variants/requests, scheduling/reservation/READY, Start/End Early, robot commands, project POI YAML import, approval of new narration/audio, frontend, or physical-test execution. Approved content/audio duration is not available from the current versioned POI contract; the API reports `INCOMPLETE_CONTENT_AUDIO_DATA` and dwell subtotal separately rather than claiming a total duration. Branch policy/cutoff, YAML/frame mapping and command transport retain their existing pending status. The feature records human evidence; PASS is not autonomous proof or Tour readiness.
 
 Diagrams requiring a member update: ERD (Route authoring discriminator and four v1.3 evidence tables), route preparation/revision sequence, and Route verification status flow. Diagram redraw/review remains pending; this ADR does not claim diagrams changed.
+
+## Addendum (16/11/2026): one result per path, shown on every save that shares it
+
+The rule above is kept: the newest run of a navigation configuration (the path: map and checksum, start and end poses,
+ordered POI navigation fingerprints, camera presets, head steps) is the applied result of every revision with that
+configuration, whichever revision it was recorded on. A FAIL recorded on a newer save that changed only dwell therefore
+also makes the older save FAIL, and the Tours created on the older save (ADR-0034) can no longer be marked READY or
+started until a PASS is recorded for that path. The real-environment test of workflow A on 16/11/2026 showed that
+nobody was told this. The rule is not changed; what each reader sees is:
+
+- `RouteRevisionView.SharedResultRevisions` lists the other submitted revisions with the same configuration and the
+  SCHEDULED/READY Tours on each (`RouteScheduledTourView.RouteRevisionId` names the revision a Tour runs);
+  `RouteRevisionView.ScheduledTours` lists those on the revision itself. The Technical record form names those saves and
+  Tours before saving, and warns on FAIL that the Tours will not lock or start until a passing run.
+- `RouteTestRunView` carries `CheckedByName` and `ParticipatingStaffName`, so the Staff route page and edit form show
+  the applied FAIL (reason, failed checks, robot, accompanying Staff, recorder, time) and the save it was recorded on.
+- `GET /api/technical/route-verifications/queue` lists only submitted revisions with no applied result. A revision that
+  carries its path's PASS or FAIL is listed with that result instead of waiting with never-run revisions; the Technical
+  dashboard count follows the queue.
+- The READY blocker and the Start preflight check `revisionStillSchedulable` keep code `ROUTE_TEST_PASS_REQUIRED`; when
+  the applied result is a FAIL its message names that run: "Lần chạy thử mới nhất của đường đi này không đạt (dd/MM HH:mm:
+  lý do …)." The Tour page follows the applied result of the Tour's revision, so it no longer says the route passed
+  once a FAIL applies.
+
+Additive response fields only; no schema change, no route or request change.

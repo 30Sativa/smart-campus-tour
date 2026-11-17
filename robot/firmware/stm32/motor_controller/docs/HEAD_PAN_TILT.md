@@ -45,20 +45,20 @@ Phát xung: xung STEP cao 1 tick (100 µs), thấp ít nhất 1 tick, nên trầ
 và có thêm 1 tick (≥ 100 µs) giữa lúc đổi DIR và cạnh STEP kế tiếp (DRV8825
 cần 650 ns).
 
-## Thông số (`head_core.h`, 05/11/2026)
+## Thông số (`head_core.h`, 14/11/2026)
 
 | Macro | Giá trị | Ý nghĩa |
 |---|---|---|
 | `HEAD_MOTOR_STEPS_PER_REV` | 200 | Motor 1,8°/bước |
-| `HEAD_MICROSTEP` | 1 | Phải khớp jumper M0–M2 trên đế DRV8825. Không jumper = 1 (bước đủ); M2 cao = 16 |
-| `HEAD_PAN_GEAR_RATIO`, `HEAD_TILT_GEAR_RATIO` | 3,0 / 1,0 | PAN hộp số 3:1, TILT gắn trực tiếp |
+| `HEAD_MICROSTEP` | 4 | Phải khớp chân M0–M2 của cả hai DRV8825. Hiện tại 1/4: M0 thấp, M1 cao, M2 thấp. Không jumper = 1 (bước đủ); M2 cao = 16 |
+| `HEAD_PAN_GEAR_RATIO`, `HEAD_TILT_GEAR_RATIO` | 3,0 / 5,0 | PAN hộp số hành tinh 3:1, TILT hộp số hành tinh 5:1 (đủ lực giữ đầu + Quest 3 ~2 kg ở ±18°) |
 | `HEAD_PAN_HOME_DIR`, `HEAD_TILT_HOME_DIR` | −1 / −1 | Chiều tới vật cản: PAN quay phải, TILT cúi xuống |
 | `HEAD_PAN_HOME_SEEK_CDEG`, `HEAD_TILT_HOME_SEEK_CDEG` | 19000 / 4400 | Quãng quay tìm vật cản. PAN 190°; TILT 44° (từ ngửa cao nhất ~20° tới vật cản cúi 20° là 40°, dư 4°) |
-| `HEAD_PAN_HOME_OFFSET_CDEG`, `HEAD_TILT_HOME_OFFSET_CDEG` | 17400 / 2000 | Từ cạnh vật cản về 0°: PAN quay trái 174°, TILT ngửa 20° (11 bước = 19,8°). **Núm hiệu chỉnh**: HOME xong mà đầu chưa thẳng thì sửa số này |
-| `HEAD_HOME_SPEED_DPS` | 20 °/s | Tốc độ khi tìm vật cản (PAN 33 bước/s, TILT 11 bước/s) |
+| `HEAD_PAN_HOME_OFFSET_CDEG`, `HEAD_TILT_HOME_OFFSET_CDEG` | 17400 / 2000 | Từ cạnh vật cản về 0°: PAN quay trái 174°, TILT ngửa 20° (55,6 bước đủ, làm tròn tới vi bước 0,09°). **Núm hiệu chỉnh**: HOME xong mà đầu chưa thẳng thì sửa số này |
+| `HEAD_HOME_SPEED_DPS` | 20 °/s | Tốc độ khi tìm vật cản (PAN 133 xung/s, TILT 222 xung/s ở vi bước 1/4) |
 | `HEAD_HOME_SETTLE_MS` | 200 | Đứng yên tại vật cản cho rotor hết rung trước khi đặt mốc |
 | `HEAD_HOME_PHASE_ALIGN` | 1 | Kết thúc seek ở cùng pha điện của driver để mốc 0 lặp lại (xem dưới) |
-| `HEAD_PAN_LIMIT_CDEG`, `HEAD_TILT_LIMIT_CDEG` | 17000 / 1800 | Giới hạn mềm: PAN ±170° (cách vật cản 4°), TILT ±18° (10 bước, cách vật cản cúi 1 bước) |
+| `HEAD_PAN_LIMIT_CDEG`, `HEAD_TILT_LIMIT_CDEG` | 17000 / 1800 | Giới hạn mềm: PAN ±170° (cách vật cản 4°), TILT ±18° (50 bước đủ, cách vật cản cúi 2°). Không mở tới 27°: motor cần ~0,39 N·m, 93% lực |
 | `HEAD_JOG_SPEED_DPS` | 30 °/s | Tốc độ khi nhấn/giữ nút |
 | `HEAD_JOG_TIMEOUT_MS` | 300 | Deadman của JOG |
 | `HEAD_MAX_SPEED_DPS` | 60 °/s | Tốc độ trục ra |
@@ -66,9 +66,9 @@ cần 650 ns).
 | `HEAD_PAN_DIR_INVERT`, `HEAD_TILT_DIR_INVERT` | 0 | Đảo nếu quay ngược quy ước |
 
 Quy ước: PAN dương = quay trái (nhìn từ trên xuống, ngược chiều kim đồng hồ),
-TILT dương = ngửa lên. Bước đủ: PAN 1,667 bước/độ (0,6°/bước), TILT 0,556
-bước/độ (1,8°/bước); tối đa 100 / 33 bước/s ở 60°/s. Góc lệnh làm tròn tới
-bước gần nhất.
+TILT dương = ngửa lên. Bước đủ tại trục ra: PAN 0,6°, TILT 0,36°. Ở vi bước
+1/4: PAN 6,67 xung/độ (0,15°/xung), TILT 11,1 xung/độ (0,09°/xung); tối đa
+400 / 667 xung/s ở 60°/s. Góc lệnh làm tròn tới vi bước gần nhất.
 
 ## Lấy mốc bằng vật cản (HOME)
 
@@ -91,7 +91,7 @@ robot tắt. Muốn HOME được từ mọi vị trí thì đặt `HEAD_PAN_HOM
 **Tránh mất góc:**
 - Không có cảm biến, nên khi ép vào vật cản rồi dừng, rotor nằm ở điểm cân
   bằng của pha điện cuối, cách vật cản dưới 2 bước đủ. Pha cuối mà ngẫu nhiên
-  thì mốc 0 lệch ngẫu nhiên tới ±2 bước (PAN ±1,2°, TILT ±3,6°).
+  thì mốc 0 lệch ngẫu nhiên tới ±2 bước đủ (PAN ±1,2°, TILT ±0,72°).
   `HEAD_HOME_PHASE_ALIGN` cố định pha cuối, nên mốc 0 **lặp lại đúng một vị
   trí** mỗi lần HOME. Phần lệch còn lại là hằng số: hiệu chỉnh một lần bằng
   `HOME_OFFSET`.
@@ -104,10 +104,12 @@ robot tắt. Muốn HOME được từ mọi vị trí thì đặt `HEAD_PAN_HOM
   nhỏ.
 - Ép nhẹ vào vật cản dưới 2 bước đủ (ví dụ TILT ở −18° khi mốc lệch về phía
   vật cản) không làm mất bước: rotor quay lại đúng chỗ khi rời vật cản.
-- Chạy bước đủ dễ rung cộng hưởng và mất bước hơn vi bước, nhất là ở tốc độ
-  thấp (PAN ở 60°/s là 100 bước/s). Nếu PAN rung hoặc lệch mốc sau nhiều lần qua lại thì
-  cắm jumper 1/16 (M2 cao) và đặt `HEAD_MICROSTEP` 16, hoặc giảm
-  `HEAD_MAX_SPEED_DPS`.
+- Độ rơ hộp số TILT 5:1 cũng nằm trong hằng số HOME. Qua hộp số, lực ép vào
+  vật cản lớn gấp ~5 lần (~2 N·m), nên seek TILT chỉ dư 4° và chạy chậm.
+- Từ 14/11/2026 cả hai trục chạy vi bước 1/4 (êm hơn bước đủ). Còn ồn thì xem
+  mục "Giảm tiếng ồn" bên dưới. Tăng vi bước lên 1/16 thì TILT ở 60°/s cần
+  2667 xung/s, gần trần `HEAD_MAX_STEP_HZ` 4000 và xung bị lượng tử theo tick
+  100 µs (rung hơn), nên phải tăng `HEAD_TICK_HZ` hoặc giảm tốc độ.
 
 Kiểm bằng hai mô phỏng trong `tests/test_head_core.c`. Mô phỏng 1: vật cản
 hai cạnh, mỗi bước đẩy vào vật cản bị mất; xuất phát PAN 0°, +12°, −90°,
@@ -122,14 +124,38 @@ hạn mềm không mất góc. Tắt `HEAD_HOME_PHASE_ALIGN` thì mốc không c
 | Thao tác | Lệnh host gửi |
 |---|---|
 | Nhấn ◀ / ▶ một lần | `HEAD,<seq>,STEP,1,0` / `HEAD,<seq>,STEP,-1,0` (PAN 0,6°) |
-| Nhấn ▲ / ▼ một lần | `HEAD,<seq>,STEP,0,1` / `HEAD,<seq>,STEP,0,-1` (TILT 1,8°) |
+| Nhấn ▲ / ▼ một lần | `HEAD,<seq>,STEP,0,1` / `HEAD,<seq>,STEP,0,-1` (TILT 0,36°) |
 | Giữ nút | `HEAD,<seq>,JOG,±1,0` hoặc `JOG,0,±1`, gửi lại mỗi 100 ms |
 | Nhả nút | `HEAD,<seq>,JOG,0,0` (mất lệnh này thì deadman 300 ms tự dừng) |
 | Về giữa | `HEAD,<seq>,0,0` |
 
-"Một bước" = một bước đủ của motor (1,8°) = `HEAD_MICROSTEP` xung. Đổi bằng số `n`
+"Một bước" = một bước đủ của motor (1,8° tại motor; PAN 0,6°, TILT 0,36° tại trục ra) = `HEAD_MICROSTEP` xung. Đổi bằng số `n`
 trong `STEP` nếu muốn mỗi lần nhấn quay nhiều hơn. Phân biệt nhấn và giữ
 (ví dụ giữ > 250 ms) là việc của giao diện / host.
+
+## Giảm tiếng ồn
+
+Theo thứ tự hiệu quả trên mỗi đồng bỏ ra:
+
+1. **Chỉnh dòng (Vref) cho đúng.** DRV8825 (Rsense 0,1 Ω): I = 2 × Vref. Đặt
+   khoảng 70% dòng định mức ghi trên nhãn motor. Dòng thừa làm motor rung,
+   kêu và nóng. TILT có hộp số 5:1 nên thường không cần dòng tối đa.
+2. **Thay DRV8825 bằng TMC2208/TMC2209 (StealthChop).** Cắm được vào cùng đế
+   STEP/DIR/EN, nội suy lên 256 vi bước nên gần như im lặng ở tốc độ thấp.
+   Chú ý: TMC2208 chỉ có MS1/MS2 (MS1 thấp, MS2 cao = 1/4; cả hai thấp = 1/8;
+   TMC2209 dùng bảng khác), Vref tính theo công thức của module, và cắm đúng
+   chiều theo nhãn. Đổi xong vẫn giữ `HEAD_MICROSTEP` khớp chế độ đã chọn.
+3. **Cách ly rung cơ khí.** Đệm cao su NEMA17 giữa motor và khung, không bắt
+   motor thẳng vào tấm nhựa/nhôm mỏng (tấm mỏng thành "loa"). Siết vít hộp số,
+   tra mỡ hộp số hành tinh.
+4. **Tránh dải tốc độ cộng hưởng.** NEMA17 thường cộng hưởng quanh 100–200 bước
+   đủ/s. PAN 30°/s = 150 bước đủ/s nằm trong dải này; nếu nghe kêu to ở một
+   tốc độ cụ thể thì đổi `HEAD_JOG_SPEED_DPS` (ví dụ 25 hoặc 40) và
+   `HEAD_MAX_SPEED_DPS`.
+5. **Gia tốc mềm hơn.** Giảm `HEAD_ACCEL_DPS2` (120 → 80) để bớt tiếng "cụp"
+   lúc khởi động và dừng.
+6. **Nguồn VMOT 12–24 V ổn định, tụ 100 µF sát chân VMOT** của mỗi driver.
+   Thiếu tụ thì dòng chopper dao động và kêu rít.
 
 ## Giao thức
 

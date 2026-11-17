@@ -22,23 +22,23 @@ describe('Tour history', () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
   it('opens the first tab with Tours, so only cancelled Tours are not hidden behind an empty tab', async () => {
-    rows = { COMPLETED: [], CANCELLED: [row('c1', 'Tour đã huỷ', 'CANCELLED')] }
+    rows = { COMPLETED: [], CANCELLED: [row('c1', 'Tour đã hủy', 'CANCELLED')] }
     show()
-    expect(await screen.findByRole('link', { name: 'Tour đã huỷ' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Tour đã hủy' })).toBeInTheDocument()
     expect(screen.queryByText('Chưa có tour nào trong lịch sử.')).not.toBeInTheDocument()
   })
 
   it('opens the finished tab when it has Tours', async () => {
-    rows = { COMPLETED: [row('d1', 'Tour xong', 'COMPLETED')], CANCELLED: [row('c1', 'Tour đã huỷ', 'CANCELLED')] }
+    rows = { COMPLETED: [row('d1', 'Tour xong', 'COMPLETED')], CANCELLED: [row('c1', 'Tour đã hủy', 'CANCELLED')] }
     show()
     expect(await screen.findByRole('link', { name: 'Tour xong' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Tour đã huỷ' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Tour đã hủy' })).not.toBeInTheDocument()
   })
 
   it('stays on the tab Staff clicks, even an empty one', async () => {
-    rows = { COMPLETED: [], CANCELLED: [row('c1', 'Tour đã huỷ', 'CANCELLED')] }
+    rows = { COMPLETED: [], CANCELLED: [row('c1', 'Tour đã hủy', 'CANCELLED')] }
     show()
-    await screen.findByRole('link', { name: 'Tour đã huỷ' })
+    await screen.findByRole('link', { name: 'Tour đã hủy' })
     fireEvent.click(screen.getByRole('button', { name: 'Đã kết thúc' }))
     await waitFor(() => expect(screen.getByText('Chưa có tour nào trong lịch sử.')).toBeInTheDocument())
   })

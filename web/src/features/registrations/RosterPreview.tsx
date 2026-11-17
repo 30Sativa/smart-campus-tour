@@ -33,7 +33,7 @@ export function RosterPreview<T extends RosterRow>({ rows, label = 'Danh sách l
           <thead className={representative ? undefined : 'sticky top-0 bg-[#f8fafc]'}>
             <tr className={representative ? undefined : 'text-xs text-[#64748b]'}>
               {rowSelect && <th scope="col" className="w-10 py-2.5 pl-4"><span className="sr-only">Chọn</span></th>}
-              <th scope="col" className="w-16 px-4 py-2.5 font-medium">STT</th>
+              <th scope="col" className="w-24 px-4 py-2.5 font-medium">Dòng trong tệp</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Họ tên</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Loại dòng</th><th scope="col" className="px-4 py-2.5 font-medium">Email</th>
               <th scope="col" className="w-32 px-4 py-2.5 font-medium">Lớp</th>
@@ -44,7 +44,7 @@ export function RosterPreview<T extends RosterRow>({ rows, label = 'Danh sách l
             {shown.map(({ row, n }) => (
               <tr key={n} style={representative ? { '--i': n } as React.CSSProperties : undefined}>
                 {rowSelect && <td data-label="Chọn" className="py-2.5 pl-4">{rowSelect(row)}</td>}
-                <td data-label="STT" className={representative ? 'rep-muted num' : 'px-4 py-2.5 text-[#94a3b8] tabular-nums'}>{row.rowNumber}</td>
+                <td data-label="Dòng trong tệp" className={representative ? 'rep-muted num' : 'px-4 py-2.5 text-[#94a3b8] tabular-nums'}>{row.rowNumber}</td>
                 <td data-label="Họ tên" className={representative ? 'font-semibold' : 'px-4 py-2.5 font-medium text-[#0f172a]'}><div>{row.displayName}</div></td>
                 <td data-label="Loại dòng" className={representative ? undefined : 'px-4 py-2.5'}><div><span className={representative ? `rep-row-type ${row.rowType === 'INDIVIDUAL' ? 'rep-row-type--ind' : 'rep-row-type--shared'}` : undefined}>{row.rowType === 'INDIVIDUAL' ? 'Cá nhân' : 'Điểm xem chung'}</span></div></td><td data-label="Email" className={representative ? undefined : 'px-4 py-2.5'}><div>{row.email}</div></td>
                 <td data-label="Lớp" className={representative ? undefined : 'px-4 py-2.5 text-[#334155]'}><div>{row.className || <span className={representative ? 'rep-muted' : 'text-[#94a3b8]'}>-</span>}</div></td>

@@ -22,6 +22,10 @@ public sealed class CreateScheduleBlockCommandValidator : AbstractValidator<Crea
         RuleFor(c => c.Request.Reason).Must(reason => !string.IsNullOrWhiteSpace(reason)).WithMessage("Nhập lý do khoá.").MaximumLength(500);
         RuleFor(c => c.Request.ShiftCode).Must(code => code is null || settings.Shifts.Any(shift => shift.Code == code))
             .WithMessage("Ca này không có trong cấu hình.");
+        // A shift still running may be closed (any Tour in it refuses the block); one already over shows "Đã qua" and is refused.
+        RuleFor(c => c.Request).Must(input => settings.Shifts.SingleOrDefault(shift => shift.Code == input.ShiftCode) is not { } shift
+                || TourSchedule.ShiftWindow(input.Date, shift).EndsAt > clock.GetUtcNow())
+            .WithMessage("Ca này đã kết thúc, không khoá được nữa.");
     }
 }
 
@@ -52,7 +56,7 @@ public sealed class CreateScheduleBlockCommandHandler(IScheduleBlockRepository b
             : TourSchedule.ShiftWindow(input.Date, settings.Shifts.Single(shift => shift.Code == input.ShiftCode));
         var tours = await blocks.ListToursInWindowAsync(startsAt, endsAt, ct);
         if (tours.Count > 0)
-            throw new ConflictException($"Còn {tours.Count} Tour chưa huỷ trong {(input.ShiftCode is null ? "ngày" : "ca")} này. Staff cần huỷ Tour trước rồi mới khoá được.",
+            throw new ConflictException($"Còn {tours.Count} Tour chưa hủy trong {(input.ShiftCode is null ? "ngày" : "ca")} này. Staff cần hủy Tour trước rồi mới khoá được.",
                 "SHIFT_HAS_TOURS", blockers: tours.Select(tour => new ConflictBlocker(tour.Id.ToString("D"),
                     $"{tour.Name} ({tour.ScheduledStartAt.ToOffset(TimeSpan.FromHours(7)).ToString("HH:mm dd/MM/yyyy", CultureInfo.InvariantCulture)})")).ToArray());
 

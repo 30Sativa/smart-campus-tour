@@ -1,4 +1,4 @@
-import { ApiError } from '../../api/client'
+import { ApiError, apiErrorDetail } from '../../api/client'
 import type { PhysicalRobotConnectionStatus, PhysicalRobotOption } from './api/technical'
 
 export const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => ({
@@ -9,6 +9,8 @@ export const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => 
 })[status]
 
 export function errorText(error: unknown) {
+  const detail = apiErrorDetail(error)
+  if (detail) return detail
   if (error instanceof ApiError && error.body) {
     try {
       const payload = JSON.parse(error.body) as { message?: unknown }
@@ -16,6 +18,32 @@ export function errorText(error: unknown) {
     } catch { /* Non-JSON responses use the transport error below. */ }
   }
   return error instanceof Error ? error.message : 'Không lưu được. Thử lại.'
+}
+
+/** The `errors.code` of a refused request, when the backend sent one. */
+export function apiErrorCode(error: unknown): string | null {
+  if (!(error instanceof ApiError) || !error.body) return null
+  try {
+    const code = (JSON.parse(error.body) as { errors?: { code?: unknown } }).errors?.code
+    return typeof code === 'string' ? code : null
+  } catch { return null }
+}
+
+const narrationConflicts: Record<string, string> = {
+  NARRATION_SELF_APPROVAL_FORBIDDEN: 'Bạn là người sửa bản này lần cuối nên không duyệt được. Cần một Staff khác duyệt. Dữ liệu mới nhất đã được tải lại.',
+  STALE_VERSION: 'Thuyết minh vừa được người khác thay đổi. Dữ liệu mới nhất đã được tải lại, hãy kiểm tra rồi thử lại.',
+  NARRATION_NOT_DRAFT: 'Bản này không còn là bản đang soạn, có thể đã được duyệt hoặc bỏ. Dữ liệu mới nhất đã được tải lại.',
+  POI_PROPOSAL_DISCARDED: 'POI này đã bị xoá khỏi danh sách nên không sửa được thuyết minh.',
+  POI_RETIRED: 'POI này đã ngưng dùng nên không sửa được thuyết minh. Dùng lại POI trước.',
+  IDEMPOTENCY_CONFLICT: 'Yêu cầu này đã được gửi với nội dung khác. Tải lại trang rồi thử lại.',
+}
+
+/** Vietnamese text for a refused narration write, and whether the page should reload its data. */
+export function narrationErrorText(error: unknown): { text: string; reload: boolean } {
+  const code = apiErrorCode(error)
+  if (code && narrationConflicts[code]) return { text: narrationConflicts[code], reload: code !== 'IDEMPOTENCY_CONFLICT' }
+  if (error instanceof ApiError && error.status === 400) return { text: 'Thuyết minh cần 1 đến 4000 ký tự.', reload: false }
+  return { text: errorText(error), reload: false }
 }
 
 export function mapUploadFieldErrors(error: unknown): { areaKey?: string; areaName?: string; package?: string; form?: string } {
@@ -49,7 +77,7 @@ export type PoiVerifyErrors = { robotCode?: string; reason?: string; evidenceNot
 
 const poiVerifyConflicts: Record<string, PoiVerifyErrors> = {
   MAP_NOT_DEPLOYED: { robotCode: 'Robot này chưa có kiểm tra triển khai đạt mới nhất trên đúng phiên bản map của POI. Ghi kết quả kiểm tra map cho robot trước rồi thử lại.' },
-  STALE_VERSION: { form: 'POI vừa được Staff thay đổi. Đóng cửa sổ này và mở lại để kiểm tra revision mới nhất.' },
+  STALE_VERSION: { form: 'POI vừa được Staff thay đổi. Đóng cửa sổ này và mở lại để kiểm tra phiên bản mới nhất.' },
   IDEMPOTENCY_CONFLICT: { form: 'Yêu cầu này đã được gửi với nội dung khác. Đóng cửa sổ này và mở lại.' },
 }
 
@@ -66,10 +94,12 @@ export function poiVerifyErrors(error: unknown): PoiVerifyErrors {
   const errors = typeof payload.errors === 'object' && payload.errors !== null ? payload.errors as Record<string, unknown> : {}
   if (error.status === 409) {
     if (typeof errors.code === 'string' && poiVerifyConflicts[errors.code]) return poiVerifyConflicts[errors.code]
-    if (message.includes('already exists')) return { form: 'Revision này đã có kết quả kiểm chứng. Đóng cửa sổ này để tải lại danh sách.' }
+    if (message.includes('already exists')) return { form: 'Phiên bản POI này đã có kết quả kiểm chứng. Đóng cửa sổ này để tải lại danh sách.' }
   }
   if (error.status === 404 && message.toLowerCase().includes('robot')) return { robotCode: 'Robot này không còn trong danh sách đã đăng ký. Chọn robot khác.' }
   if (error.status !== 400) return { form: errorText(error) }
+  const detail = apiErrorDetail(error)
+  if (detail) return { form: detail }
   const mapped: PoiVerifyErrors = {}
   for (const field of Object.keys(errors).map(name => name.toLowerCase())) {
     if (field.includes('robotcode')) mapped.robotCode = 'Chọn robot vật lý đã kiểm tra.'
@@ -98,7 +128,7 @@ export function routeTestErrors(error: unknown): RouteTestErrors {
   const errors = typeof payload.errors === 'object' && payload.errors !== null ? payload.errors as { code?: unknown } : {}
   if (typeof errors.code === 'string' && routeTestConflicts[errors.code]) return routeTestConflicts[errors.code]
   if (error.status === 404 && typeof payload.message === 'string' && payload.message.toLowerCase().includes('robot')) return { robotCode: 'Robot này không còn trong danh sách đã đăng ký. Chọn robot khác.' }
-  if (error.status === 400) return { form: 'Máy chủ từ chối kết quả này. Đạt cần đủ cả ba mục; Không đạt cần lý do và ít nhất một mục chưa đạt.' }
+  if (error.status === 400) return { form: apiErrorDetail(error) ?? 'Máy chủ từ chối kết quả này. Đạt cần đủ cả ba mục; Không đạt cần lý do và ít nhất một mục chưa đạt.' }
   return { form: errorText(error) }
 }
 

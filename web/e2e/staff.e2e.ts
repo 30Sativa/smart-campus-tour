@@ -20,7 +20,7 @@ test('staff: schedule', async ({ page }) => {
   await capturePage(page, 'staff', 'schedule', { title: 'Lịch Tour' })
 })
 
-test('staff: quick Tour create, then "Gửi cho đại diện"', async ({ page }) => {
+test('staff: quick Tour create, then "Link đăng ký cho đại diện"', async ({ page }) => {
   const api = await signIn(page)
   await page.goto('/staff/manage/tours/new?kind=quick')
   await heading(page, 'Tạo Tour')
@@ -34,16 +34,18 @@ test('staff: quick Tour create, then "Gửi cho đại diện"', async ({ page }
   await page.getByRole('button', { name: 'Tạo Tour' }).click()
   await expect(page).toHaveURL(new RegExp(`/staff/manage/tours/${QUICK_ID}$`))
   expect(api.requests.some((line) => line === 'POST /api/staff/manage/tours')).toBe(true)
-  await expect(page.getByRole('heading', { name: 'Gửi cho đại diện' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Link đăng ký cho đại diện' })).toBeVisible()
   await capturePage(page, 'staff', 'quick-tour-share', { title: 'Tour nhanh đón đoàn khách' })
 })
 
 test('staff: start check', async ({ page }) => {
   await signIn(page)
   await page.goto(`/staff/tours/${READY_ID}/start`)
-  await expect(page.getByRole('button', { name: /Bắt đầu Tour/ })).toBeVisible()
+  // ADR-0059: this page opens the Tour without moving the robot; the departure is on the live console.
+  await expect(page.getByRole('button', { name: /Mở Tour/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tự canh chỉnh đầu camera' })).toBeVisible()
   // Brief WS-0 item 3: the start check page names itself, not the Tour.
-  await capturePage(page, 'staff', 'start-check', { title: 'Kiểm tra trước khi bắt đầu' })
+  await capturePage(page, 'staff', 'start-check', { title: 'Mở Tour' })
 })
 
 test('staff: live console while RUNNING', async ({ page }) => {

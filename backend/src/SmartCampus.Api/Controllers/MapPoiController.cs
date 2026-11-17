@@ -35,7 +35,7 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         using var output = new MemoryStream((int)package.Length);
         await input.CopyToAsync(output, ct);
         if (output.Length != package.Length || output.Length > MapPackageValidator.MaxPackageBytes)
-            throw new FluentValidation.ValidationException("The uploaded map package exceeded its declared or supported size.");
+            throw new FluentValidation.ValidationException("Gói bản đồ tải lên vượt kích thước khai báo hoặc kích thước cho phép.");
         var result = await sender.Send(new CreateMapVersionCommand(User.GetRequiredUserId(),
             new(areaKey, areaName, requestId, output.ToArray())), ct);
         return Ok(new BaseResponse<MapVersionView> { Success = true, Message = "Map package validated and versioned.", Data = result });
@@ -179,9 +179,9 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
     [HttpGet("maps/versions")]
     [Authorize(Roles = StaffAndTechnical)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<MapVersionListItem>>>> ListMaps(
-        [FromQuery] string? areaKey, [FromQuery] int take = 50, CancellationToken ct = default) =>
+        [FromQuery] string? areaKey, [FromQuery] int take = 50, [FromQuery] bool includeRetired = false, CancellationToken ct = default) =>
         Ok(new BaseResponse<IReadOnlyList<MapVersionListItem>> { Success = true, Message = "Map versions retrieved.",
-            Data = await sender.Send(new ListMapVersionsQuery(areaKey, take), ct) });
+            Data = await sender.Send(new ListMapVersionsQuery(areaKey, take, includeRetired), ct) });
 
     [HttpGet("maps/versions/{id:guid}")]
     [Authorize(Roles = StaffAndTechnical)]
@@ -203,6 +203,26 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         Guid id, [FromBody] RecordMapDeploymentRequest request, CancellationToken ct) =>
         Ok(new BaseResponse<MapDeploymentCheckView> { Success = true, Message = "Deployment check recorded.",
             Data = await sender.Send(new RecordMapDeploymentCommand(User.GetRequiredUserId(), id, request), ct) });
+
+    [HttpGet("technical/map-versions/{id:guid}/retirement-impact")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<MapRetirementImpact>>> GetMapRetirementImpact(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<MapRetirementImpact> { Success = true, Message = "Map retirement impact retrieved.",
+            Data = await sender.Send(new GetMapRetirementImpactQuery(id), ct) });
+
+    [HttpPost("technical/map-versions/{id:guid}/retire")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<MapVersionView>>> RetireMapVersion(
+        Guid id, [FromBody] RetireMapVersionRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<MapVersionView> { Success = true, Message = "Map version retired; its history is kept.",
+            Data = await sender.Send(new RetireMapVersionCommand(User.GetRequiredUserId(), id, request), ct) });
+
+    [HttpPost("technical/map-versions/{id:guid}/reopen")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<MapVersionView>>> ReopenMapVersion(
+        Guid id, [FromBody] ReopenMapVersionRequest? request, CancellationToken ct) =>
+        Ok(new BaseResponse<MapVersionView> { Success = true, Message = "Map version reopened.",
+            Data = await sender.Send(new ReopenMapVersionCommand(User.GetRequiredUserId(), id, request ?? new(null)), ct) });
 
     [HttpGet("technical/map-versions/{id:guid}/deployment-checks")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
@@ -232,6 +252,12 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
     public async Task<ActionResult<BaseResponse<PoiHistoryView>>> GetProposalHistory(Guid id, CancellationToken ct) =>
         Ok(new BaseResponse<PoiHistoryView> { Success = true, Message = "POI proposal history retrieved.", Data = await sender.Send(new GetPoiHistoryQuery(id), ct) });
 
+    [HttpGet("staff/poi-proposals/{id:guid}/scheduled-tours")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<Application.Features.Routes.RouteScheduledTourView>>>> GetProposalScheduledTours(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<Application.Features.Routes.RouteScheduledTourView>> { Success = true, Message = "Scheduled Tours stopping at this POI retrieved.",
+            Data = await sender.Send(new ListPoiScheduledToursQuery(id), ct) });
+
     [HttpPut("staff/poi-proposals/{id:guid}/draft")]
     [Authorize(Roles = ApplicationRoles.Staff)]
     public async Task<ActionResult<BaseResponse<PoiProposalView>>> ReviseProposal(Guid id, [FromBody] CreatePoiRevisionRequest request, CancellationToken ct) =>
@@ -249,6 +275,45 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
     public async Task<ActionResult<BaseResponse<PoiProposalView>>> DiscardProposal(Guid id, [FromBody] DiscardPoiProposalRequest request, CancellationToken ct) =>
         Ok(new BaseResponse<PoiProposalView> { Success = true, Message = "POI proposal discarded; its history is kept.",
             Data = await sender.Send(new DiscardPoiProposalCommand(User.GetRequiredUserId(), id, request), ct) });
+
+    [HttpPost("staff/poi-proposals/{id:guid}/retire")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiProposalView>>> RetireProposal(Guid id, [FromBody] ChangePoiProposalLifecycleRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiProposalView> { Success = true, Message = "POI retired; saved routes and Tours are unchanged.",
+            Data = await sender.Send(new RetirePoiProposalCommand(User.GetRequiredUserId(), id, request), ct) });
+
+    [HttpPost("staff/poi-proposals/{id:guid}/reactivate")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiProposalView>>> ReactivateProposal(Guid id, [FromBody] ChangePoiProposalLifecycleRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiProposalView> { Success = true, Message = "POI reactivated.",
+            Data = await sender.Send(new ReactivatePoiProposalCommand(User.GetRequiredUserId(), id, request), ct) });
+
+    [HttpGet("staff/poi-proposals/{id:guid}/narrations")]
+    [Authorize(Roles = StaffAndTechnical)]
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<PoiNarrationRevisionView>>>> ListNarrations(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<PoiNarrationRevisionView>> { Success = true, Message = "POI narration versions retrieved.",
+            Data = await sender.Send(new ListPoiNarrationsQuery(id), ct) });
+
+    [HttpPut("staff/poi-proposals/{id:guid}/narrations/draft")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiNarrationRevisionView>>> SaveNarrationDraft(
+        Guid id, [FromBody] SavePoiNarrationDraftRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiNarrationRevisionView> { Success = true, Message = "POI narration draft saved.",
+            Data = await sender.Send(new SavePoiNarrationDraftCommand(User.GetRequiredUserId(), id, request), ct) });
+
+    [HttpPost("staff/poi-proposals/{id:guid}/narrations/{revisionNumber:int}/approve")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiNarrationRevisionView>>> ApproveNarration(
+        Guid id, int revisionNumber, [FromBody] ChangePoiNarrationRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiNarrationRevisionView> { Success = true, Message = "POI narration approved.",
+            Data = await sender.Send(new ApprovePoiNarrationCommand(User.GetRequiredUserId(), id, revisionNumber, request), ct) });
+
+    [HttpPost("staff/poi-proposals/{id:guid}/narrations/{revisionNumber:int}/discard")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<PoiNarrationRevisionView>>> DiscardNarration(
+        Guid id, int revisionNumber, [FromBody] ChangePoiNarrationRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiNarrationRevisionView> { Success = true, Message = "POI narration draft discarded; it is kept as history.",
+            Data = await sender.Send(new DiscardPoiNarrationCommand(User.GetRequiredUserId(), id, revisionNumber, request), ct) });
 
     [HttpGet("technical/poi-verifications")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]

@@ -89,7 +89,8 @@ export function rowsToRoster(fileName: string, rows: SheetRow[]): ImportResult {
   }
   if (issues.length) return fail(fileName, ...issues)
   const roster: RosterRow[] = []
-  const emails = new Set<string>()
+  /** Email → the file row where it first appeared, so a duplicate names that row. */
+  const emails = new Map<string, number>()
   const numbers = new Set<number>()
   let skippedBlank = 0
   for (const row of rows.slice(headerAt + 1)) {
@@ -103,8 +104,8 @@ export function rowsToRoster(fileName: string, rows: SheetRow[]): ImportResult {
     else if (displayName.length > NAME_MAX) issue('HoTen', `Tên dài quá ${NAME_MAX} ký tự.`)
     if (className.length > CLASS_MAX) issue('Lop', `Lớp dài quá ${CLASS_MAX} ký tự.`)
     if (!/^[^\s@]+@[^\s@]+$/.test(email) || email.length > 254) issue('Email', 'Email thiếu hoặc sai định dạng.')
-    else if (emails.has(email)) issue('Email', 'Email bị trùng trong danh sách.')
-    emails.add(email)
+    else if (emails.has(email)) issue('Email', `Email trùng với dòng ${emails.get(email)}.`)
+    if (!emails.has(email)) emails.set(email, row.rowNumber)
     if (type !== 'CA_NHAN' && type !== 'DIEM_XEM_CHUNG') issue('LoaiDong', 'Chỉ nhận CA_NHAN hoặc DIEM_XEM_CHUNG.')
     if (!Number.isInteger(row.rowNumber) || row.rowNumber < 1 || row.rowNumber > 1048576 || numbers.has(row.rowNumber)) issue(null, 'Số dòng không hợp lệ hoặc bị trùng.')
     numbers.add(row.rowNumber)

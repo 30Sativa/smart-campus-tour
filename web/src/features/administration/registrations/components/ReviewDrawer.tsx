@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ConfirmationDialog } from '../../../../components/ui/ConfirmationDialog'
 import { notify } from '../../../../components/ui/toast-store'
 import { Field } from '../../../../components/ui/ConsolePrimitives'
@@ -12,6 +13,8 @@ import { reviewError } from '../errors'
 import { reviewTime } from '../presentation'
 import { ReviewStateBadge } from './ReviewStateBadge'
 import { InvitationPanel } from '../../../registrations/invitations/InvitationPanel'
+import { invitationsApi } from '../../../registrations/invitations/api'
+import { useAuthStore } from '../../../../stores/auth-store'
 import { EmailChangeDialog, EmailChangeRequests, type EmailChangeReview } from './EmailChangeRequests'
 
 type Decision = { action: 'accept' | 'reject'; rows: ReviewRosterRow[] }
@@ -32,6 +35,12 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
   const [chosenTab, setChosenTab] = useState<Tab | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const reg = query.data
+  // Same key as InvitationPanel, so the two share one read. Only `enabled` is used here: accepting a row issues its
+  // code and queues its email only while invitation support is on (backend ReviewRosterRowCommand).
+  const owner = useAuthStore(s => s.user?.userId)
+  const invitations = useQuery({ queryKey: ['registration-invitations', owner, id], queryFn: ({ signal }) => invitationsApi.get(id, signal),
+    enabled: Boolean(owner), retry: false })
+  const acceptNote = invitations.data?.enabled === false ? 'Hỗ trợ lời mời đang tắt nên chưa gửi email.' : 'Dòng được chấp nhận sẽ tự nhận mã và email lời mời.'
   const error = mutation.isError ? reviewError(mutation.error) : null
   const canWrite = !needsReload && !snapshotRefreshing && !query.isFetching && !query.isError && !mutation.isPending && !progress
   const reload = async () => {
@@ -107,7 +116,7 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
       {error && <Notice tone="danger">{error.message}{error.fields.length > 0 && <ul className="mt-2 list-disc pl-5">{[...new Set(error.fields)].map(value => <li key={value}>{value}</li>)}</ul>}</Notice>}
       {reg && !query.isError && <div className="mt-1 space-y-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#475569]">
-          <ReviewStateBadge state={reg.summary.state} />
+          <ReviewStateBadge state={reg.summary.state} pendingRows={count('PENDING')} />
           <span>{count('PENDING')} chờ duyệt · {count('ACCEPTED')} đã chấp nhận · {count('REJECTED')} đã từ chối</span>
         </div>
         {reg.rejectionReason && <Notice tone="danger">Lý do từ chối: {reg.rejectionReason}</Notice>}
@@ -147,8 +156,8 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
                 <p className="font-medium whitespace-nowrap text-slate-700">{rowState[row.participationState]}</p>
                 {row.reviewReason && <p className="text-xs text-slate-500">{row.reviewReason}</p>}
                 {row.participationState === 'PENDING' && (row.canApprove && row.canReject
-                  ? <div className="flex gap-2"><button className={buttonClass('primary', 'sm')} disabled={!canWrite} onClick={() => setConfirm({ action: 'accept', rows: [row] })}>Chấp nhận <span className="sr-only">{row.displayName}</span></button>
-                    <button className={buttonClass('danger', 'sm')} disabled={!canWrite} onClick={() => setConfirm({ action: 'reject', rows: [row] })}>Từ chối <span className="sr-only">{row.displayName}</span></button></div>
+                  ? <div className="flex gap-2"><button className={buttonClass('primary', 'sm')} aria-label={`Chấp nhận ${row.displayName}`} disabled={!canWrite} onClick={() => setConfirm({ action: 'accept', rows: [row] })}>Chấp nhận <span className="sr-only">{row.displayName}</span></button>
+                    <button className={buttonClass('danger', 'sm')} aria-label={`Từ chối ${row.displayName}`} disabled={!canWrite} onClick={() => setConfirm({ action: 'reject', rows: [row] })}>Từ chối <span className="sr-only">{row.displayName}</span></button></div>
                   : <p className="text-xs text-slate-500">{needsReload ? 'Cần tải lại dữ liệu.' : reg.summary.tourState !== 'SCHEDULED' ? 'Tour không mở xét duyệt.' : 'Không có quyền xét duyệt dòng này.'}</p>)}
               </div>} />
             <button className={buttonClass('secondary', 'sm')} disabled={!canWrite} onClick={() => void reload()}>Tải lại đăng ký</button>
@@ -158,8 +167,8 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
     {reg && confirm && <ConfirmationDialog key={`${id}-${confirm.action}-${confirm.rows.map(row => row.id).join()}`} open
       title={`${confirm.action === 'reject' ? 'Từ chối' : 'Chấp nhận'} ${bulk ? `${confirm.rows.length} dòng đã chọn` : `dòng ${confirm.rows[0].displayName}`}?`}
       description={bulk
-        ? <>{names}. {confirm.action === 'reject' ? 'Các dòng này dùng chung lý do bên dưới và đại diện sẽ thấy lý do để sửa thông tin.' : 'Mỗi dòng được lưu thành một quyết định riêng. Việc phát hành lời mời và gửi email được xử lý riêng.'}</>
-        : confirm.action === 'reject' ? 'Chỉ dòng này bị từ chối. Đại diện sẽ thấy lý do để sửa thông tin.' : 'Chỉ dòng này được chấp nhận. Việc phát hành lời mời và gửi email được xử lý riêng.'}
+        ? <>{names}. {confirm.action === 'reject' ? 'Các dòng này dùng chung lý do bên dưới và đại diện sẽ thấy lý do để sửa thông tin.' : `Mỗi dòng được lưu thành một quyết định riêng. ${acceptNote}`}</>
+        : confirm.action === 'reject' ? 'Chỉ dòng này bị từ chối. Đại diện sẽ thấy lý do để sửa thông tin.' : `Chỉ dòng này được chấp nhận. ${acceptNote}`}
       confirmLabel={`${confirm.action === 'reject' ? 'Từ chối' : 'Chấp nhận'} ${bulk ? `${confirm.rows.length} dòng` : 'dòng'}`} busyLabel={bulk && progress ? `Đang lưu ${progress.done}/${progress.total}…` : 'Đang lưu…'} tone={confirm.action === 'reject' ? 'danger' : 'default'}
       withReason={confirm.action === 'reject'} requireReason reasonLabel="Lý do từ chối" reasonPlaceholder="Nêu thông tin cần đại diện sửa." busy={mutation.isPending || progress !== null}
       error={error?.message} onConfirm={reason => void decide(reason)} onCancel={() => { if (!mutation.isPending && !progress) setConfirm(null) }} />}

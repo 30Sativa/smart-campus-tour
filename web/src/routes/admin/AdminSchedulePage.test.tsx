@@ -5,10 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminSchedulePage from './AdminSchedulePage'
 
 type Block = { id: string; scope: 'DAY' | 'SHIFT'; reason: string } | null
+type Tour = { id: string; name: string; scheduledStartAt: string; state: string; isShortNotice: boolean; registrationClosesAt: string }
 const shift = (date: string, code: string, name: string, open: string, close: string, block: Block) => ({
   code, name, startsAt: `${date}T${open}:00Z`, endsAt: `${date}T${close}:00Z`, tourStartsAt: `${date}T${open}:00Z`, time: '', maxDurationSeconds: 5400, block,
+  tours: tours[date]?.[code] ?? [],
 })
 let blocks: Record<string, { S1: Block; S2: Block }> = {}
+let tours: Record<string, Record<string, Tour[]>> = {}
 let refusal: { status: number; body: unknown } | null = null
 let writes: Array<{ path: string; body: Record<string, unknown> }> = []
 
@@ -21,7 +24,7 @@ function days(from: string) {
     return { date: key, shifts: [
       shift(key, 'S1', 'Ca sáng', '01:00', '03:00', blocks[key]?.S1 ?? null),
       shift(key, 'S2', 'Ca chiều 1', '06:00', '08:00', blocks[key]?.S2 ?? null),
-    ] }
+    ], tours: Object.values(tours[key] ?? {}).flat() }
   })
 }
 const firstDate = () => new URL(String(vi.mocked(fetch).mock.calls[0][0]), 'http://localhost').searchParams.get('from')!
@@ -33,6 +36,7 @@ describe('Admin operating calendar', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2099-01-05T02:00:00Z'))
     blocks = {}
+    tours = {}
     refusal = null
     writes = []
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -102,8 +106,35 @@ describe('Admin operating calendar', () => {
     expect(writes[0].body).toMatchObject({ date, shiftCode: null, reason: 'Nghỉ lễ' })
   })
 
+  it('counts the Tours in a shift and the day, and lists them before any reason is typed, with Khoá disabled', async () => {
+    // Monday 09:00 in Vietnam: Ca sáng (08:00-10:00) is running and still offers Khoá; its Tour blocks it.
+    const date = '2099-01-05'
+    tours = { [date]: { S1: [{ id: 'tour-1', name: 'Tour sáng thứ Hai', scheduledStartAt: `${date}T01:15:00Z`, state: 'RUNNING', isShortNotice: false, registrationClosesAt: '2099-01-03T01:15:00Z' }] } }
+    show()
+    await screen.findByRole('table', { name: 'Lịch vận hành' })
+    expect(screen.getAllByText('1 Tour')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: `Khoá Ca sáng ${date}, có 1 Tour` }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('Staff cần hủy Tour trước')
+    const listed = within(within(dialog).getByRole('list', { name: 'Tour đang chiếm chỗ' })).getByRole('listitem')
+    expect(listed).toHaveTextContent('Tour sáng thứ Hai')
+    expect(listed).toHaveTextContent('05/01/2099 08:15')
+    expect(listed).toHaveTextContent('Đang diễn ra')
+    expect(within(dialog).getByLabelText(/Lý do khoá/)).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: 'Khoá' })).toBeDisabled()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Quay lại' }))
+
+    // The other shift of that day is free; the whole day is not.
+    fireEvent.click(screen.getByRole('button', { name: `Khoá Ca chiều 1 ${date}` }))
+    expect(within(screen.getByRole('dialog')).queryByRole('list', { name: 'Tour đang chiếm chỗ' })).not.toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Quay lại' }))
+    fireEvent.click(screen.getByRole('button', { name: `Khoá cả ngày ${date}, có 1 Tour` }))
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Khoá' })).toBeDisabled()
+    expect(writes).toHaveLength(0)
+  })
+
   it('names the Tours in the way when the shift still has some, and keeps the dialog open', async () => {
-    refusal = { status: 409, body: { success: false, message: 'Còn 1 Tour chưa huỷ trong ca này. Staff cần huỷ Tour trước rồi mới khoá được.',
+    refusal = { status: 409, body: { success: false, message: 'Còn 1 Tour chưa hủy trong ca này. Staff cần hủy Tour trước rồi mới khoá được.',
       errors: { code: 'SHIFT_HAS_TOURS', blockers: [{ code: 'tour-1', message: 'Tour sáng thứ Bảy (08:15 05/01/2099)' }] } } }
     show()
     await screen.findByRole('table', { name: 'Lịch vận hành' })
@@ -111,7 +142,7 @@ describe('Admin operating calendar', () => {
     const dialog = screen.getByRole('dialog')
     fireEvent.change(within(dialog).getByLabelText(/Lý do khoá/), { target: { value: 'Bảo trì' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Khoá' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Staff cần huỷ Tour trước')
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Staff cần hủy Tour trước')
     expect(within(within(dialog).getByRole('list', { name: 'Tour đang chiếm chỗ' })).getByText('Tour sáng thứ Bảy (08:15 05/01/2099)')).toBeInTheDocument()
     // Retrying the same content reuses the request id.
     const first = writes[0].body.requestId

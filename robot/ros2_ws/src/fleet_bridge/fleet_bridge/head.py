@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
-KINDS = frozenset({'STEP', 'JOG', 'STOP', 'ANGLE', 'SWEEP'})
+KINDS = frozenset({'STEP', 'JOG', 'STOP', 'ANGLE', 'SWEEP', 'HOME'})
 DEFAULT_JOG_TTL_SEC = 0.6
 MAX_STEPS = 20
 MIN_SWEEP_DEG, MAX_SWEEP_DEG = 10, 170
@@ -43,6 +43,7 @@ class HeadActuator(Protocol):
     def stop(self) -> None: ...
     def angle(self, pan_deg: float, tilt_deg: float) -> None: ...
     def sweep(self, amplitude_deg: float) -> None: ...   # 0 = the robot's default
+    def home(self) -> None: ...                          # find the mechanical stops, then back to 0/0
 
 
 def _int(value, low: int, high: int, name: str) -> int:
@@ -167,6 +168,10 @@ class HeadCommandApplier:
             # Xoay tu dong o POI: stm32_bridge chay ca luot (trai -> phai -> ve cho cu); lenh tay sau do se huy no.
             self._release()
             self._actuator.sweep(float(command.sweep_deg or 0))
+        elif command.kind == 'HOME':
+            # Staff "Tu canh chinh dau" (truoc khi bat dau Tour): stm32_bridge head/set MODE_HOME, ~15 s.
+            self._release()
+            self._actuator.home()
 
     def _release(self) -> None:
         if self._jog is not None:

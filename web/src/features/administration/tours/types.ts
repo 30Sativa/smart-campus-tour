@@ -14,7 +14,15 @@ export type CreateTourInput = {
   shortNoticeReason?: string | null
 }
 export type TourOperator = { userId: string; fullName: string; username: string }
-export type TourRobotOption = { robotCode: string; displayName: string | null; usable: boolean; blockReason: string | null }
+export type TourRobotOption = {
+  robotCode: string; displayName: string | null; usable: boolean; blockReason: string | null
+  /** Waits for an on-site check (ADR-0043 D13): create accepts it, Start refuses it until Technical Staff releases it. */
+  needsInspection?: boolean
+  /** Quick form only: the Tour holding this robot over a quick Tour's hold from now, and when that hold ends. */
+  heldByTourName?: string | null; heldUntil?: string | null
+  /** Quick form only: the duration, published time and robot hold a quick Tour created now would get. A preview. */
+  quick?: { expectedDurationSeconds: number; startBy: string; holdStartsAt: string; holdEndsAt: string; autoCancelAt?: string | null } | null
+}
 export type TourReservation = { robotCode: string; startsAt: string; endsAt: string; measuredDurationSeconds: number; expectedDurationSeconds: number; releasedAt: string | null }
 export type TourSummary = {
   id: string; name: string; description: string | null; routeId: string; routeName: string; activeRouteId: string
@@ -26,6 +34,12 @@ export type TourSummary = {
    * list with READY; there is no 72/48/24-hour schedule (ADR-0050).
    */
   isShortNotice?: boolean
+  /**
+   * Set by the server while the Tour is SCHEDULED or READY, null otherwise; an older server omits them. `latestStartAt`
+   * is the last moment Start is accepted, `autoCancelAt` when the system cancels the Tour and frees the robot if it has
+   * not started. Read them; never recompute them.
+   */
+  latestStartAt?: string | null; autoCancelAt?: string | null
   rowVersion: string; registrationCount: number; invitationCount: number; routeRevisionId: string | null
   /** Seats of the Tour and the rows holding one (BR-26). An older server omits them. */
   capacity?: number; heldSeats?: number
@@ -66,21 +80,26 @@ export type TourDetails = {
 }
 /** One failing READY condition, in the backend's words. */
 export type TourBlocker = { code: string; message: string }
-export type TourOperationalStatus = 'NORMAL' | 'NEEDS_ASSISTANCE'
-export type TourStep = 'NAVIGATING' | 'OBSERVING' | 'RETURNING_TO_END'
+/** `PAUSED`: the Operator paused a leg and the robot reported it ended; the robot stands still on purpose. */
+export type TourOperationalStatus = 'NORMAL' | 'NEEDS_ASSISTANCE' | 'PAUSED'
+/** `INITIALIZING`: opened and waiting at the start for the Operator to depart. */
+export type TourStep = 'INITIALIZING' | 'NAVIGATING' | 'OBSERVING' | 'RETURNING_TO_END'
 export type TourLegKind = 'TO_POI' | 'TO_END'
 /** ADR-0042 §3 command lifecycle, persisted on `RobotCommands.State`. */
 export type RobotCommandState = 'PENDING' | 'DELIVERED' | 'ACCEPTED' | 'ARRIVED' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'REJECTED' | 'UNKNOWN' | 'RECONCILED'
-export type TourCommand = { id: string; kind: 'GoTo' | 'Cancel'; state: RobotCommandState; outcome: string | null; reasonCode: string | null }
+/** `cancelRequested`: the Operator paused this leg and the robot has not reported its end yet. */
+export type TourCommand = { id: string; kind: 'GoTo' | 'Cancel'; state: RobotCommandState; outcome: string | null; reasonCode: string | null; cancelRequested?: boolean }
 export type TourExecution = {
   state: TourState; operationalStatus: TourOperationalStatus | null; assistanceReason: string | null; currentStep: TourStep | null
   currentLegId: string | null; currentLegKind: TourLegKind | null
   /** `RouteRevisionStops.Id`, matching `routeRevision.stops[].id` (absent from older servers, which leaves the stops unmarked). */
   currentRevisionStopId: string | null; lastArrivedRevisionStopId: string | null
-  /** Display only: the Tour never leaves a POI by itself (ADR-0043 D12). */
+  /** When the planned stop at the POI ends; the Tour leaves by itself only with `autoAdvance.enabled`. */
   dwellDeadlineAt: string | null
   /** The command of the current leg, if any. */
   command: TourCommand | null
+  /** The Operator's automatic departure switch; `blockedReason` says why this stop's attempt did not leave. */
+  autoAdvance?: { enabled: boolean; blockedReason: string | null } | null
 }
 /** `blockedBy` holds Start check ids, or a state reason code. */
 export type TourActionAvailability = { allowed: boolean; reason: string | null; blockedBy: string[] }
@@ -88,6 +107,8 @@ export type TourActionAvailability = { allowed: boolean; reason: string | null; 
 export type TourAllowedActions = {
   start: TourActionAvailability; next: TourActionAvailability
   endEarly?: TourActionAvailability; retryLeg?: TourActionAvailability; reconcile?: TourActionAvailability
+  /** Start without the first leg; `pause` stops the current leg; `skip` skips the POI the robot would go to next. */
+  open?: TourActionAvailability; pause?: TourActionAvailability; skip?: TourActionAvailability
 }
 export type TourStartCheck = { id: string; passed: boolean; source: string; detail: string }
 /** `canStart` belongs to the caller: false for any Staff who is not the Tour's Operator. */
@@ -104,7 +125,7 @@ export type TourListQuery = {
   search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number
   operator?: 'me'; needsReconcile?: boolean; readyBlockers?: boolean
 }
-export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_SHIFT' | 'SHIFT_BLOCKED' | 'ROUTE_TEST_REMEASURE_REQUIRED'
+export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_SHIFT' | 'SHIFT_BLOCKED'
 /** One shift of one day (docs/lich-tour-theo-ca.md §3): `time` is the Tour start, the reservation is the whole shift. */
 export type TourSlot = {
   time: string; startsAt: string; available: boolean; reasonCode: TourSlotReason | null; reason: string | null
@@ -118,8 +139,13 @@ export type TourSlots = {
   maxCapacity?: number
 }
 /** A configured shift on one day, for the calendar before a route or robot is chosen. */
-export type TourShift = { code: string; name: string; startsAt: string; endsAt: string; tourStartsAt: string; time: string; maxDurationSeconds: number; block: TourShiftBlock | null }
+/** `tours`: only the Admin schedule receives it, listing the Tours not cancelled that stop the shift or day being closed. */
+export type TourShift = { code: string; name: string; startsAt: string; endsAt: string; tourStartsAt: string; time: string; maxDurationSeconds: number; block: TourShiftBlock | null; tours?: TourShiftTour[] | null }
+export type TourShiftTour = { id: string; name: string; scheduledStartAt: string; state: TourState; isShortNotice: boolean; registrationClosesAt: string }
 /** An Admin closure of this shift; `scope` says whether it covers the whole day (docs/lich-tour-theo-ca.md §5). */
 export type TourShiftBlock = { id: string; scope: 'DAY' | 'SHIFT'; reason: string }
-/** `quickTourWaitMinutes`: how long a quick Tour waits to be started (ADR-0053). */
-export type TourShifts = { days: { date: string; shifts: TourShift[] }[]; recommendedMaxSeconds: number; quickTourWaitMinutes: number }
+/**
+ * `quickTourWaitMinutes`: how long a quick Tour waits to be started (ADR-0053). `estimatedSpeedMetersPerSecond`: the speed the
+ * server estimates a route with (`Tours:EstimatedSpeedMetersPerSecond`), for a draft's estimate in `routes/route-estimate.ts`.
+ */
+export type TourShifts = { days: { date: string; shifts: TourShift[]; tours?: TourShiftTour[] | null }[]; recommendedMaxSeconds: number; quickTourWaitMinutes: number; estimatedSpeedMetersPerSecond?: number }

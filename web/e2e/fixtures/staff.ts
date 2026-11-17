@@ -188,7 +188,8 @@ export function staffHandlers(): Handler[] {
     { method: 'GET', path: '/api/staff/manage/tours/operators', reply: { json: ok([ME, OTHER]) } },
     { method: 'GET', path: /^\/api\/staff\/manage\/tours\/robots\?/, reply: { json: ok(robots) } },
     { method: 'GET', path: /^\/api\/staff\/manage\/tours\/shifts\?/, reply: { json: ok(shifts) } },
-    { method: 'GET', path: /^\/api\/staff\/manage\/tours\/[^/]+\/start-checks$/, reply: { json: ok(startChecks) } },
+    // The opening page asks `?holdAtStart=true` (ADR-0059); the path is matched with its query.
+    { method: 'GET', path: /^\/api\/staff\/manage\/tours\/[^/]+\/start-checks(\?.*)?$/, reply: { json: ok(startChecks) } },
     { method: 'GET', path: /^\/api\/staff\/manage\/tours\/[^/]+\/head$/, reply: { json: ok(headStatus) } },
     { method: 'POST', path: /^\/api\/staff\/manage\/tours\/[^/]+\/head-commands$/, reply: { json: ok({ seq: 1, robotCode: ROBOT, issuedAt: NOW.toISOString() }) } },
     {

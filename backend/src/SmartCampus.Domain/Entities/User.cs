@@ -35,11 +35,21 @@ public partial class User
 
     public virtual ICollection<MapDeploymentCheck> MapDeploymentChecks { get; set; } = new List<MapDeploymentCheck>();
 
-    public virtual ICollection<MapVersion> MapVersions { get; set; } = new List<MapVersion>();
+    public virtual ICollection<MapVersion> MapVersionRetiredByUsers { get; set; } = new List<MapVersion>();
+
+    public virtual ICollection<MapVersion> MapVersionUploadedByUsers { get; set; } = new List<MapVersion>();
 
     public virtual ICollection<Robot> MapAssignedRobots { get; set; } = new List<Robot>();
 
     public virtual ICollection<PoiImportReceipt> PoiImportReceipts { get; set; } = new List<PoiImportReceipt>();
+
+    public virtual ICollection<PoiNarrationRequestReceipt> PoiNarrationRequestReceipts { get; set; } = new List<PoiNarrationRequestReceipt>();
+
+    public virtual ICollection<PoiNarrationRevision> PoiNarrationRevisionApprovedByUsers { get; set; } = new List<PoiNarrationRevision>();
+
+    public virtual ICollection<PoiNarrationRevision> PoiNarrationRevisionCreatedByUsers { get; set; } = new List<PoiNarrationRevision>();
+
+    public virtual ICollection<PoiNarrationRevision> PoiNarrationRevisionLastEditedByUsers { get; set; } = new List<PoiNarrationRevision>();
 
     public virtual ICollection<PoiProposalRevision> PoiProposalRevisions { get; set; } = new List<PoiProposalRevision>();
 
@@ -48,6 +58,8 @@ public partial class User
     public virtual ICollection<PoiProposal> PoiProposalCreatedByUsers { get; set; } = new List<PoiProposal>();
 
     public virtual ICollection<PoiProposal> PoiProposalDiscardedByUsers { get; set; } = new List<PoiProposal>();
+
+    public virtual ICollection<PoiProposal> PoiProposalRetiredByUsers { get; set; } = new List<PoiProposal>();
 
     public virtual ICollection<PoiVerificationRecord> PoiVerificationRecords { get; set; } = new List<PoiVerificationRecord>();
 

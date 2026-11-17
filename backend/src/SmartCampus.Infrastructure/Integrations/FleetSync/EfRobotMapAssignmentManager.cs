@@ -32,6 +32,8 @@ public sealed class EfRobotMapAssignmentManager(ApplicationDbContext db, TimePro
         var targetArea = mapVersionId is null ? null : await db.MapVersions.AsNoTracking()
             .Where(m => m.Id == mapVersionId).Select(m => m.AreaKey).SingleOrDefaultAsync(cancellationToken);
         if (targetArea is not null) await LockAreaAsync(targetArea, cancellationToken);
+        // The lock map retirement takes (ADR-0041): a version cannot be retired between this check and the assignment.
+        if (targetArea is not null) await LockMapPreparationAsync(mapVersionId!.Value, cancellationToken);
 
         var robot = await db.Robots.Include(r => r.AssignedMapVersion).ThenInclude(m => m!.AreaKeyNavigation)
             .Include(r => r.MapAssignedByUser)
@@ -72,6 +74,7 @@ public sealed class EfRobotMapAssignmentManager(ApplicationDbContext db, TimePro
             target = await db.MapVersions.Include(m => m.AreaKeyNavigation)
                 .SingleOrDefaultAsync(m => m.Id == mapVersionId && m.ValidationStatus == "VALID", cancellationToken);
             if (target is null) throw new NotFoundException("Valid map version", mapVersionId);
+            if (target.RetiredAt is not null) throw new ConflictException(MapRetirement.RetiredMessage, MapRetirement.RetiredCode);
             if (await AreaHolderAsync(target.AreaKey, robot.Id, cancellationToken) is { } holder)
                 throw AreaTaken(target, holder);
         }
@@ -120,6 +123,17 @@ public sealed class EfRobotMapAssignmentManager(ApplicationDbContext db, TimePro
                 .Where(u => u.Id == actorUserId).Select(u => u.FullName).SingleAsync(cancellationToken)),
             Convert.ToBase64String(robot.RowVersion),
             await RobotTourImpact.ListAsync(db, robot.Id, target?.Id, cancellationToken));
+    }
+
+    private Task LockMapPreparationAsync(Guid mapVersionId, CancellationToken cancellationToken)
+    {
+        var resource = $"map-poi:map-preparation:{mapVersionId:D}";
+        return db.Database.ExecuteSqlInterpolatedAsync($"""
+            DECLARE @lockResult int;
+            EXEC @lockResult = sys.sp_getapplock @Resource = {resource}, @LockMode = N'Exclusive',
+                @LockOwner = N'Transaction', @LockTimeout = 10000;
+            IF @lockResult < 0 THROW 51023, 'Could not acquire map preparation state lock.', 1;
+            """, cancellationToken);
     }
 
     // The unique index is the final guard; this lock makes the usual loser read the holder's name.

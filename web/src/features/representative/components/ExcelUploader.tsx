@@ -1,28 +1,38 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { CheckCircle2, CircleAlert, Download } from 'lucide-react'
 import { repButton } from '../rep-classes'
 import { ROSTER_MAX_ROWS, TEMPLATE_FILE_NAME, downloadBytes, importRosterFile, rosterTemplateBytes } from '../roster-import'
 import type { ImportResult } from '../roster-import'
 import type { RepresentativeRosterRow } from '../api/types'
-import { matchRosterIdentities, rosterReplacement } from '../registration-roster'
+import { matchRosterIdentities, rosterFieldChanges, rosterReplacement } from '../registration-roster'
+import type { RosterFieldChange } from '../registration-roster'
 import { RosterPreview } from '../../registrations/RosterPreview'
 import { HoopDrop } from './HoopDrop'
 
 export type AcceptedRoster = Extract<ImportResult, { ok: true }>
+const FIELD_LABEL: Record<RosterFieldChange['field'], string> = { rowType: 'Loại dòng', displayName: 'Tên', className: 'Lớp' }
+const fieldValue = (change: RosterFieldChange, value: string | null) =>
+  change.field === 'rowType' ? value === 'INDIVIDUAL' ? 'Cá nhân' : 'Điểm xem chung' : value?.trim() || 'không có'
+
 type Phase = { kind: 'idle' } | { kind: 'validating'; fileName: string } |
   { kind: 'invalid'; result: Extract<ImportResult, { ok: false }> } | { kind: 'valid'; result: AcceptedRoster }
 
-export function ExcelUploader({ accepted, onAccept, inUse, error, existingRows = [], canAddRows = true }: {
+export function ExcelUploader({ accepted, onAccept, onDiscard, inUse, error, existingRows = [], canAddRows = true, seatsForGroup = null }: {
   accepted: AcceptedRoster | null
   onAccept: (roster: AcceptedRoster) => void
+  /** The Representative dropped the file they had just chosen. */
+  onDiscard?: () => void
   inUse?: { count: number } | null
   error?: string
   existingRows?: RepresentativeRosterRow[]
   canAddRows?: boolean
+  /** Seats this group may fill (Tour seats left plus seats its rows already hold); null when unknown. */
+  seatsForGroup?: number | null
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [reviewedAccepted, setReviewedAccepted] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const reviewLabelId = useId()
   const request = useRef(0)
   const read = async (file: File) => {
     const revision = ++request.current
@@ -39,6 +49,8 @@ export function ExcelUploader({ accepted, onAccept, inUse, error, existingRows =
   const replacement = phase.kind === 'valid' && existingRows.length
     ? rosterReplacement(existingRows, matchRosterIdentities(phase.result.rows, existingRows)) : null
   const additionBlocked = phase.kind === 'valid' && !canAddRows && (replacement ? replacement.added.length > 0 : phase.result.rows.length > 0)
+  // UX only, as at Tiếp tục: the server recounts seats under the Tour lock.
+  const overSeats = phase.kind === 'valid' && seatsForGroup != null && phase.result.rows.length > seatsForGroup
   const blocked = additionBlocked || Boolean(replacement?.issues.length) || Boolean(replacement?.acceptedAffected && !reviewedAccepted)
   return <div className="rep-upload rep-stack">
     <div className="rep-upload-spec">
@@ -62,20 +74,22 @@ export function ExcelUploader({ accepted, onAccept, inUse, error, existingRows =
       <button type="button" className={repButton('ghost')} onClick={() => setPhase({ kind: 'idle' })}>Đóng lỗi</button>
     </div>}
     {phase.kind === 'valid' && <div className="rep-stack">
-      <div className="rep-file-head"><CheckCircle2 size={20} aria-hidden="true" /><div><p className="rep-file-name">{phase.result.fileName}</p><p className="rep-file-note">Tệp hợp lệ: {phase.result.rows.length} dòng lời mời, {phase.result.withClass} dòng có lớp, bỏ qua {phase.result.skippedBlank} dòng trống. Kiểm tra rồi xác nhận để dùng.</p></div></div>
+      <div className="rep-file-head">{overSeats ? <CircleAlert size={20} aria-hidden="true" /> : <CheckCircle2 size={20} aria-hidden="true" />}<div><p className="rep-file-name">{phase.result.fileName}</p><p className="rep-file-note">{overSeats
+        ? `Tệp đúng định dạng nhưng có ${phase.result.rows.length} dòng, Tour chỉ còn ${seatsForGroup} chỗ cho đoàn của bạn. Bớt dòng rồi chọn lại tệp.`
+        : `Tệp hợp lệ: ${phase.result.rows.length} dòng lời mời, ${phase.result.withClass} dòng có lớp, bỏ qua ${phase.result.skippedBlank} dòng trống. Kiểm tra rồi xác nhận để dùng.`}</p></div></div>
       <RosterPreview rows={phase.result.rows} label="Xem trước danh sách" variant="representative" />
       {replacement && <section className="rep-diff" aria-label="Thay đổi danh sách">
         <h3>Thay đổi so với hồ sơ hiện tại</h3>
         <p>Giữ nguyên {replacement.unchanged.length} dòng, cập nhật {replacement.changed.length} dòng, thêm {replacement.added.length} dòng, loại {replacement.removed.length} dòng.</p>
-        {replacement.changed.map(({ before, after }) => <div className="rep-diff-item" key={before.id}><strong>Cập nhật {before.displayName}</strong><p>{before.displayName} → {after.displayName}; lớp {before.className || 'không có'} → {after.className || 'không có'}. {before.rowNumber !== after.rowNumber ? 'Thay vị trí dòng trong tệp. ' : ''}Giữ định danh dòng và email {before.email}.</p></div>)}
+        {replacement.changed.map(({ before, after }) => <div className="rep-diff-item" key={before.id}><strong>Cập nhật {before.displayName}</strong><p>{rosterFieldChanges(before, after).map(change => `${FIELD_LABEL[change.field]}: ${fieldValue(change, change.before)} → ${fieldValue(change, change.after)}`).join('; ')}. Giữ định danh dòng và email {before.email}.</p></div>)}
         {replacement.added.map(row => <div className="rep-diff-item" key={row.email}><strong>Thêm {row.displayName}</strong><p>{row.email}. Dòng mới chờ Staff duyệt.</p></div>)}
         {replacement.removed.map(row => <div className="rep-diff-item" key={row.id ?? row.email}><strong>Loại {row.displayName}</strong><p>{row.email}. Lời mời bị thu hồi và phiên truy cập hiện có sẽ đóng khi lưu.</p></div>)}
         {replacement.issues.length > 0 && <ul className="rep-error-list" role="alert">{replacement.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
-        {replacement.acceptedAffected && <label className="rep-consent"><input type="checkbox" checked={reviewedAccepted} onChange={event => setReviewedAccepted(event.target.checked)} />Tôi đã kiểm tra thay đổi trên dòng đã chấp nhận và hiểu việc loại dòng sẽ thu hồi quyền truy cập của dòng đó.</label>}
+        {replacement.acceptedAffected && <label className="rep-consent"><input type="checkbox" aria-labelledby={reviewLabelId} checked={reviewedAccepted} onChange={event => setReviewedAccepted(event.target.checked)} /><span id={reviewLabelId}>Tôi đã kiểm tra thay đổi trên dòng đã chấp nhận và hiểu việc loại dòng sẽ thu hồi quyền truy cập của dòng đó.</span></label>}
       </section>}
       {additionBlocked && <p className="rep-error-message" role="alert">Đã qua hạn thêm điểm xem mới 48 giờ trước giờ bắt đầu. Bạn vẫn có thể cập nhật hoặc loại dòng hiện tại theo quyền của hồ sơ.</p>}
       {keptCount > 0 && <p className="rep-file-warn">Xác nhận thay toàn bộ danh sách trong bản nháp; không ghép hai tệp. Dòng khớp email giữ định danh và quyền truy cập hiện tại. Thay đổi chỉ được gửi khi lưu đăng ký.</p>}
-      <div className="rep-file-actions"><button type="button" className={repButton('secondary')} onClick={() => setPhase({ kind: 'idle' })}>Bỏ tệp vừa chọn</button>
+      <div className="rep-file-actions"><button type="button" className={repButton('secondary')} onClick={() => { setPhase({ kind: 'idle' }); onDiscard?.() }}>Bỏ tệp vừa chọn</button>
         <button type="button" className={repButton('dark')} disabled={blocked} onClick={() => { onAccept(phase.result); setPhase({ kind: 'idle' }) }}>Xác nhận sử dụng danh sách này</button>
       </div>
     </div>}

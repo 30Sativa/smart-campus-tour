@@ -74,7 +74,10 @@ public static class DependencyInjection
             (configuration.GetValue<string?>("FleetHead:DefaultMode") ?? HeadModes.Auto).Trim().ToUpperInvariant()));
         services.AddSingleton<IHeadCommandChannel, InMemoryHeadCommandChannel>();
         services.AddSingleton<ITourHeadModeStore, InMemoryTourHeadModeStore>();
+        // The Operator's automatic departure switch per Tour, in memory like the head mode: a restart leaves every Tour manual.
+        services.AddSingleton<SmartCampus.Application.Common.Abstractions.Tours.ITourAutoAdvanceStore, SmartCampus.Application.Features.Tours.InMemoryTourAutoAdvanceStore>();
         services.AddScoped<ITourHeadControlReader, EfTourHeadControlReader>();
+        services.AddScoped<IRobotHeadPoiReader, EfRobotHeadPoiReader>();
         // ADR-0052: the Quest camera runs only while a Tour runs or a Staff page holds a lease. In memory, like head control.
         services.AddSingleton(new FleetCameraSettings(configuration.GetValue<int?>("FleetCamera:LeaseSeconds") ?? 120,
             configuration.GetValue<int?>("FleetCamera:PollSeconds") ?? 5,
@@ -114,7 +117,7 @@ public static class DependencyInjection
             configuration.GetValue<decimal?>("Routes:MinStopSeparationMeters")));
         services.AddSingleton(_ => new TourScheduleSettings(configuration.GetSection("Tours:Shifts").Get<TourShiftOption[]>(),
             configuration.GetValue<int?>("Tours:RecommendedMaxMinutes"), configuration.GetValue<int?>("Tours:MaxCapacity"),
-            configuration.GetValue<int?>("Tours:ShortNoticeMinLeadMinutes")));
+            configuration.GetValue<int?>("Tours:ShortNoticeMinLeadMinutes"), configuration.GetValue<double?>("Tours:EstimatedSpeedMetersPerSecond")));
 
         services.AddScoped<IAuditLogReader, EfAuditLogReader>();
         services.AddScoped<IStaffNotificationReader, EfStaffNotificationReader>();

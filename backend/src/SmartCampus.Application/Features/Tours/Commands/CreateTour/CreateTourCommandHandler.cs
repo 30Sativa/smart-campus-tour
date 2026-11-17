@@ -37,7 +37,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         var robot = await revisions.FindPhysicalRobotAsync(input.RobotCode, ct)
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
         await TourTarget.RequireUsableRobotAsync(revisions, robot, revision, ct);
-        var plan = await TourTarget.PlanReservationAsync(revisions, revision.Id, run, ct);
+        var plan = await TourTarget.PlanReservationAsync(revisions, revision, settings, ct);
 
         // Admin takes these same date locks to close a day or shift, so a block and a new Tour cannot pass each other.
         DateTimeOffset now, scheduledStartAt, startsAt, endsAt;
@@ -65,7 +65,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
             var activeBlocks = await blocks.ListActiveAsync(dates[0], dates[^1], ct);
             now = clock.GetUtcNow();
             scheduledStartAt = TourSchedule.QuickTourDeadline(now, wait);
-            (startsAt, endsAt) = plan is null ? (now, scheduledStartAt) : TourSchedule.QuickTourHold(now, scheduledStartAt, plan.ExpectedDurationSeconds);
+            (startsAt, endsAt) = TourSchedule.QuickTourHold(now, scheduledStartAt, plan.ExpectedDurationSeconds);
             TourSchedule.EnsureUsable(TourSchedule.EvaluateQuickTour(settings, now, scheduledStartAt, plan,
                 await repository.GetActiveReservationsAsync(robot.Id, startsAt, endsAt, ct), activeBlocks));
         }
@@ -88,7 +88,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         repository.Add(new TourRobotReservation
         {
             Id = Guid.NewGuid(), TourId = tour.Id, RobotId = robot.Id, RouteTestRunId = run.Id,
-            MeasuredDurationSeconds = plan!.MeasuredDurationSeconds, ExpectedDurationSeconds = plan.ExpectedDurationSeconds,
+            MeasuredDurationSeconds = plan.MeasuredDurationSeconds, ExpectedDurationSeconds = plan.ExpectedDurationSeconds,
             StartsAt = startsAt, EndsAt = endsAt,
             ReservedByUserId = command.Actor, ReservedAt = now
         });

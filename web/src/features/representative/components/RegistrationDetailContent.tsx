@@ -44,7 +44,9 @@ export function RegistrationDetailContent({ registrationId }: { registrationId: 
   const summary = { ...r.summary, rejectionReason: r.rejectionReason ?? r.summary.rejectionReason }
   const reviewExpired = isReviewExpired(summary)
   const tourCancelled = summary.tourState === 'CANCELLED'
-  const edit = r.allowedActions.edit.allowed ? r.allowedActions.edit : r.allowedActions.resubmit
+  // Resubmission is the rejected/cancelled path; any other locked record (READY included) is still an edit.
+  const resubmitMode = !r.allowedActions.edit.allowed && (r.allowedActions.resubmit.allowed || summary.state === 'REJECTED' || summary.state === 'CANCELLED')
+  const edit = resubmitMode ? r.allowedActions.resubmit : r.allowedActions.edit
   return <div className="rep-stack">
     <RepPageHeader title={summary.tourName} description={[groupLine(summary), summary.schoolName].filter(Boolean).join(', ')}
       badges={tourCancelled ? <RegistrationStatusBadge state={summary.state} tourState={summary.tourState} /> : <><RegistrationStatusBadge state={summary.state} rejectionReason={summary.rejectionReason} /><TourStateBadge state={summary.tourState} /></>} />
@@ -57,7 +59,7 @@ export function RegistrationDetailContent({ registrationId }: { registrationId: 
     {cancelError && !confirm && <Callout tone="danger" title={cancelError} role="alert">Kiểm tra dữ liệu mới trước khi mở lại xác nhận hủy.</Callout>}
     {summary.state === 'REJECTED' && !reviewExpired && <Callout tone="danger" title="Đăng ký bị từ chối">{r.rejectionReason || 'Không có lý do được lưu.'}</Callout>}
     {tourCancelled
-      ? <Callout tone="muted" title="Buổi tham quan đã bị huỷ">{tourCancelReasonText(summary.tourCancelReason) || 'Đại học FPT chưa cung cấp lý do hủy.'}{summary.tourEndedAt && <p>Huỷ lúc {formatDateTime(summary.tourEndedAt)}</p>}</Callout>
+      ? <Callout tone="muted" title="Buổi tham quan đã bị hủy">{tourCancelReasonText(summary.tourCancelReason) || 'Đại học FPT chưa cung cấp lý do hủy.'}{summary.tourEndedAt && <p>Hủy lúc {formatDateTime(summary.tourEndedAt)}</p>}</Callout>
       : isClosedRegistration(summary) && <Callout tone="muted" title={closedNote(summary).badge}>{closedNote(summary).reason}</Callout>}
     <nav className="rep-detail-tabs" aria-label="Chi tiết đăng ký">{tabs.map(item => <Link key={item.id} to={link(item.id)} aria-current={tab === item.id ? 'page' : undefined}>{item.label}</Link>)}</nav>
     {tab === 'info' && <>
@@ -69,13 +71,13 @@ export function RegistrationDetailContent({ registrationId }: { registrationId: 
       ]} /></Panel>
       <p className="rep-hint">Mỗi dòng được duyệt riêng. <Link to={link('roster')} className="rep-text-link">Xem kết quả từng dòng</Link></p>
       <Panel title="Thao tác"><div className="rep-inline-actions">
-        {!tourCancelled && !reviewExpired && <GatedAction gate={edit} label={r.allowedActions.edit.allowed ? 'Sửa đăng ký' : 'Sửa và gửi lại'} to={`/dai-dien/dang-ky/${summary.id}/sua?${params}`} kind="secondary" />}
+        {!tourCancelled && !reviewExpired && <GatedAction gate={edit} label={resubmitMode ? 'Sửa và gửi lại' : 'Sửa đăng ký'} to={`/dai-dien/dang-ky/${summary.id}/sua?${params}`} kind="secondary" />}
         {!tourCancelled && <GatedAction gate={r.allowedActions.cancel} label="Hủy đăng ký" kind="danger" onClick={() => { setCancelConflict(false); setCancelError(null); setConfirm(r) }} />}
         <Link to={`/dai-dien/buoi/${summary.tourId}`} className={repButton('secondary')}>Xem buổi tham quan</Link>
       </div></Panel>
     </>}
     {tab === 'roster' && <Panel title="Kết quả từng dòng"><RegistrationRows registration={r} emailLink={row => link('email-change', row)} /></Panel>}
-    {tab === 'invitations' && tourCancelled && <Callout tone="muted" title="Buổi đã huỷ, lời mời không còn dùng được." role="status" />}
+    {tab === 'invitations' && tourCancelled && <Callout tone="muted" title="Buổi đã hủy, lời mời không còn dùng được." role="status" />}
     {tab === 'invitations' && !tourCancelled && <div className="rep-invitation-scope"><InvitationPanel registrationId={summary.id} rowVersion={r.rowVersion} tourRowVersion={r.tourRowVersion} variant="representative" /></div>}
     {tab === 'email-change' && <RegistrationEmailChanges registration={r} selectedRow={params.get('row')} refresh={refresh} selectRow={id => { const next = new URLSearchParams(params); next.set('row', id); setParams(next) }} />}
     <ConfirmationDialog open={Boolean(confirm)} title="Hủy đăng ký đoàn?" confirmLabel="Xác nhận hủy" busy={cancel.isPending} onClose={() => setConfirm(null)} onConfirm={() => void onCancel()}>

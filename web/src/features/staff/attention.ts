@@ -21,7 +21,7 @@ export function tourAction(tour: Pick<TourOperation, 'id' | 'state' | 'operation
   const detail = `/staff/tours/${tour.id}`
   switch (tour.state) {
     case 'Ready':
-      return { label: 'Kiểm tra & bắt đầu', to: `${detail}/start`, kind: 'primary' }
+      return { label: 'Mở Tour', to: `${detail}/start`, kind: 'primary' }
     case 'Running':
       return tour.operationalStatus === 'NeedsAssistance'
         ? { label: 'Xử lý hỗ trợ', to: `/staff/live/${tour.id}`, kind: 'primary' }
@@ -107,7 +107,7 @@ export function buildAttentionQueue({ tours, robots }: { tours: TourOperation[];
     } else if (tour.state === 'Running' && tour.progress?.hold) {
       items.push({ id: `tour:${tour.id}`, tone: 'info', subject, headline: 'Đang giữ tại POI', detail: 'Bấm Đi tiếp khi muốn rời điểm.', to: `/staff/live/${tour.id}`, toLabel: 'Điều hành', rank: 3 })
     } else if (tour.state === 'Ready' && start - now <= DUE_MS) {
-      items.push({ id: `tour:${tour.id}`, tone: start < now ? 'warn' : 'info', subject, headline: start < now ? 'Đã tới giờ, chưa bắt đầu' : 'Sắp tới giờ bắt đầu', detail: tour.allowedActions.start.allowed ? 'Đủ điều kiện kiểm tra để bắt đầu.' : tour.allowedActions.start.reason ?? undefined, since: tour.scheduledAt, to: `/staff/tours/${tour.id}/start`, toLabel: 'Kiểm tra & bắt đầu', rank: 2 })
+      items.push({ id: `tour:${tour.id}`, tone: start < now ? 'warn' : 'info', subject, headline: start < now ? 'Đã tới giờ, chưa bắt đầu' : 'Sắp tới giờ bắt đầu', detail: tour.allowedActions.start.allowed ? 'Đủ điều kiện để mở Tour.' : tour.allowedActions.start.reason ?? undefined, since: tour.scheduledAt, to: `/staff/tours/${tour.id}/start`, toLabel: 'Mở Tour', rank: 2 })
     } else if (tour.state === 'Scheduled' && start - now <= SOON_MS) {
       items.push({ id: `tour:${tour.id}`, tone: 'warn', subject, headline: 'Chưa chốt buổi', detail: tour.readyBlockers.join(' · ') || undefined, since: tour.scheduledAt, to: `/staff/tours/${tour.id}`, toLabel: 'Xem chi tiết', rank: 4 })
     }

@@ -12,8 +12,13 @@ public static class HeadCommandKinds
     /// <c>sweepDeg</c> per side, otherwise the robot's default (135°).
     /// </summary>
     public const string Sweep = "SWEEP";
+    /// <summary>
+    /// Re-home against the mechanical stops (stm32_bridge <c>head/set</c> MODE_HOME): PAN and TILT find their stop, then
+    /// return to 0/0. About 15 s. Also allowed while the Tour is READY, so Staff can align the head before Start.
+    /// </summary>
+    public const string Home = "HOME";
 
-    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { Step, Jog, Stop, Angle, Sweep };
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { Step, Jog, Stop, Angle, Sweep, Home };
 }
 
 /// <summary>

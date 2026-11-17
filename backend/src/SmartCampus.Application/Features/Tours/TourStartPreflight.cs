@@ -43,9 +43,12 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
     /// <paramref name="confirmation"/> adds the four on-site checks (Start only). With <paramref name="lockTarget"/> the
     /// caller holds the Tour root lock, and the map preparation, robot deployment and robot reservation locks are
     /// taken in the order READY and Tour create use, held through the end of the transaction.
+    /// <paramref name="holdAtStart"/> evaluates opening the Tour without its first leg: whether the robot is localized and
+    /// ready to move is shown, not required, because the Operator checks and fixes it before departing, where the
+    /// movement checks and the on-site confirmations apply.
     /// </summary>
     public async Task<TourStartChecks> EvaluateAsync(Tour tour, Guid? viewer, TourStartConfirmation? confirmation,
-        bool includeConfirmation, bool lockTarget, CancellationToken ct)
+        bool includeConfirmation, bool lockTarget, CancellationToken ct, bool holdAtStart = false)
     {
         // CK_Tours_VersionedTarget_Complete keeps RouteRevisionId and OperatorUserId null together.
         var revision = tour.RouteRevisionId is { } revisionId && tour.OperatorUserId is not null
@@ -66,7 +69,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         var incident = robot is not null && await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, null, ct);
         var openCommand = robot is not null && await repository.HasOpenCommandAsync(robot.Id, ct);
         var pending = await registrations.HasPendingDecisionsAsync(tour.Id, ct);
-        var accepted = !pending && await registrations.HasAcceptedRowsAsync(tour.Id, ct);
+        var accepted = !pending && (tour.IsShortNotice || await registrations.HasAcceptedRowsAsync(tour.Id, ct));
         var snapshot = robot is null ? null
             : telemetry.GetLatest().FirstOrDefault(item => string.Equals(item.Robot.RobotCode, robot.RobotCode, StringComparison.Ordinal));
         // Read after every lock, so a wait cannot carry the Tour out of its window unnoticed.
@@ -119,7 +122,8 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
             list.Skip("noPendingDecisions", "DB", [HasAcceptedRowsCheck]);
         else
             list.Add(HasAcceptedRowsCheck, "DB", accepted,
-                accepted ? "Tour có dòng đăng ký đã được duyệt." : TourReadiness.NoAcceptedRowsMessage);
+                tour.IsShortNotice ? TourReadiness.QuickTourNeedsNoRowMessage
+                : accepted ? "Tour có dòng đăng ký đã được duyệt." : TourReadiness.NoAcceptedRowsMessage);
 
         // ADR-0057 (amends ADR-0050 decision 2): before the published time the waiting room is shown, never blocks.
         if (now >= tour.ScheduledStartAt)
@@ -138,18 +142,12 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         {
             AddIncident(list, incident);
             AddOpenCommand(list, openCommand);
-            EvaluateTelemetry(list, snapshot, map, now);
+            EvaluateTelemetry(list, snapshot, map, now, readinessShownOnly: holdAtStart);
         }
 
         AddConsole(list, tour);
 
-        if (includeConfirmation)
-        {
-            Confirm(list, "robotPlaced", confirmation?.RobotPlaced);
-            Confirm(list, "areaClear", confirmation?.AreaClear);
-            Confirm(list, "attendantPresent", confirmation?.AttendantPresent);
-            Confirm(list, "previewChecked", confirmation?.PreviewChecked);
-        }
+        if (includeConfirmation) AddConfirmations(list, confirmation);
 
         AddTransport(list);
         // D3: battery is shown, never blocks.
@@ -163,7 +161,10 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
     /// the Start-only rows (READY, window, reservation, revision, map assignment, robot not held) no longer say anything:
     /// a later route test FAIL or a closed window must not strand a running Tour. Anything about the robot now stays.
     /// </summary>
-    public async Task<TourStartChecks> EvaluateMovementAsync(Tour tour, Robot robot, MapVersion map, CancellationToken ct)
+    /// <paramref name="confirmation"/> adds the four on-site checks: the departure of a Tour opened with
+    /// <c>holdAtStart</c> asks for them there instead of at Start.
+    public async Task<TourStartChecks> EvaluateMovementAsync(Tour tour, Robot robot, MapVersion map, CancellationToken ct,
+        TourStartConfirmation? confirmation = null, bool includeConfirmation = false)
     {
         // This Tour's own assistance is what Retry resolves, so it is not an incident against its own new command.
         var incident = await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, tour.Id, ct);
@@ -178,6 +179,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         EvaluateTelemetry(list, telemetry.GetLatest().FirstOrDefault(item =>
             string.Equals(item.Robot.RobotCode, robot.RobotCode, StringComparison.Ordinal)), map, clock.GetUtcNow());
         AddConsole(list, tour);
+        if (includeConfirmation) AddConfirmations(list, confirmation);
         AddTransport(list);
         return list.Result();
     }
@@ -235,7 +237,8 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         return now >= earliest && now <= latest;
     }
 
-    private void EvaluateTelemetry(Checklist list, FleetTelemetrySnapshot? snapshot, MapVersion? map, DateTimeOffset now)
+    private void EvaluateTelemetry(Checklist list, FleetTelemetrySnapshot? snapshot, MapVersion? map, DateTimeOffset now,
+        bool readinessShownOnly = false)
     {
         var age = snapshot is null ? (TimeSpan?)null : now - snapshot.ReceivedAt;
         var fresh = age is { } value && value <= settings.MaxTelemetryAge;
@@ -259,12 +262,29 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         }
         list.Add("executionIdle", "TELEMETRY", report.Status == "IDLE",
             report.Status == "IDLE" ? "Robot đang rảnh." : $"Robot đang {report.Status}, chưa rảnh.");
+        if (readinessShownOnly)
+        {
+            list.Info("robotLocalized", "TELEMETRY", Shown(report.Localized, "Robot đã định vị.", "Robot báo chưa định vị."));
+            list.Info("motionReady", "TELEMETRY", Shown(report.MotionReady, "Robot sẵn sàng di chuyển.", "Robot báo chưa sẵn sàng di chuyển."));
+            return;
+        }
         Reported(list, "robotLocalized", report.Localized, "Robot đã định vị.", "Robot báo chưa định vị.");
         Reported(list, "motionReady", report.MotionReady, "Robot sẵn sàng di chuyển.", "Robot báo chưa sẵn sàng di chuyển.");
     }
 
+    private static string Shown(bool? value, string yes, string no) =>
+        $"{(value is null ? "Robot chưa báo." : value.Value ? yes : no)} Kiểm tra trước khi khởi hành; chưa chặn mở Tour.";
+
     private static void Reported(Checklist list, string id, bool? value, string yes, string no) =>
         list.Add(id, "TELEMETRY", value == true, value is null ? "Robot chưa báo." : value.Value ? yes : no);
+
+    private static void AddConfirmations(Checklist list, TourStartConfirmation? confirmation)
+    {
+        Confirm(list, "robotPlaced", confirmation?.RobotPlaced);
+        Confirm(list, "areaClear", confirmation?.AreaClear);
+        Confirm(list, "attendantPresent", confirmation?.AttendantPresent);
+        Confirm(list, "previewChecked", confirmation?.PreviewChecked);
+    }
 
     private static void Confirm(Checklist list, string id, bool? value) =>
         list.Add(id, "OPERATOR_CONFIRMATION", value == true,

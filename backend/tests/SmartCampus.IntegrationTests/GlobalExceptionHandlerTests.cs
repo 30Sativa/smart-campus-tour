@@ -53,6 +53,33 @@ public sealed class GlobalExceptionHandlerTests
     }
 
     [Fact]
+    public async Task TryHandleAsync_ValidationExceptionWithoutFieldFailures_PutsItsMessageInDetail()
+    {
+        var context = CreateHttpContext();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+        const string message = "Tọa độ POI vượt độ chính xác cho phép (X, Y 4 số lẻ; hướng 6 số lẻ radian).";
+
+        await handler.TryHandleAsync(context, new ValidationException(message), CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        using var response = await ReadResponseAsync(context);
+        Assert.Equal(message, response.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_ValidationExceptionWithFieldFailures_HasNoDetail()
+    {
+        var context = CreateHttpContext();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+
+        await handler.TryHandleAsync(context, new ValidationException([new ValidationFailure("Page", "Page must be at least 1.")]),
+            CancellationToken.None);
+
+        using var response = await ReadResponseAsync(context);
+        Assert.False(response.RootElement.TryGetProperty("detail", out _));
+    }
+
+    [Fact]
     public async Task TryHandleAsync_ValidationException_ReturnsErrorsByField()
     {
         var context = CreateHttpContext();

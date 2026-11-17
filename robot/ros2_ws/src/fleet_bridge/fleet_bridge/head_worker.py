@@ -13,6 +13,7 @@ from typing import Optional
 
 from .head import HeadCommandApplier, parse_head_poll_response
 from .http_client import FleetSyncHttpClient, HttpResponse, TransportFailure
+from .poi_head import PoiHeadDirector, parse_pois_response
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,9 @@ class FleetHeadHttpClient(FleetSyncHttpClient):
 
     def poll(self, body: str) -> HttpResponse:
         return self._post(f'{self.url}/poll', body)
+
+    def pois(self) -> HttpResponse:
+        return self._get(f'{self.url}/pois')
 
 
 def head_url_from_sync_url(sync_url: str) -> str:
@@ -110,6 +114,67 @@ class FleetHeadWorker:
     def _delay(self) -> float:
         base = min(self.config.retry_max_sec, self.config.retry_initial_sec * (2 ** (self._failures - 1)))
         return max(self.config.retry_initial_sec, base * (0.75 + 0.5 * self.random_source()))
+
+    def _note(self, message: str) -> None:
+        if message != self._last_log:
+            self._last_log = message
+            self.on_log(message)
+
+
+class PoiListWorker:
+    """Refreshes the POI list and the autoMotion switch every `period_sec`; a failed refresh keeps the last list."""
+
+    def __init__(self, transport: object, director: PoiHeadDirector, period_sec: float = 5.0, on_log=None,
+                 stop_event: threading.Event | None = None, wait=None):
+        if period_sec <= 0:
+            raise ValueError('period_sec must be positive')
+        self.transport = transport
+        self.director = director
+        self.period_sec = period_sec
+        self.on_log = on_log or (lambda message: None)
+        self.stop_event = stop_event or threading.Event()
+        self.wait = wait or self.stop_event.wait
+        self._thread: threading.Thread | None = None
+        self._last_log: str | None = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            raise RuntimeError('POI list worker already started')
+        self._thread = threading.Thread(target=self.run, name='fleet-head-pois', daemon=True)
+        self._thread.start()
+
+    def stop(self, join_timeout_sec: float = 3.0) -> None:
+        self.stop_event.set()
+        if self._thread is not None:
+            self._thread.join(join_timeout_sec)
+
+    def run(self) -> None:
+        while not self.stop_event.is_set():
+            try:
+                self.run_once()
+            except Exception as error:  # noqa: BLE001 - a dead thread would freeze the POI list silently
+                self._note(f'POI list loop error ({type(error).__name__}).')
+            if self.wait(self.period_sec):
+                return
+
+    def run_once(self) -> bool:
+        try:
+            response = self.transport.pois()
+        except (TransportFailure, http.client.HTTPException, OSError, TimeoutError) as error:
+            kind = getattr(error, 'kind', type(error).__name__)
+            self._note(f'POI list fetch failed ({kind}); keeping the last list.')
+            return False
+        if response.status != 200:
+            self._note(f'POI list refused: {_code(response)}; keeping the last list.')
+            return False
+        try:
+            snapshot = parse_pois_response(response.body)
+        except ValueError as error:
+            self._note(f'POI list ignored: {error}.')
+            return False
+        self.director.set_snapshot(snapshot)
+        self._last_log = None
+        return True
 
     def _note(self, message: str) -> None:
         if message != self._last_log:

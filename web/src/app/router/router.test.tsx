@@ -196,6 +196,21 @@ describe('route table', () => {
       expect(await screen.findByRole('heading', { name: /^Tổng quan$/, level: 1 })).toBeInTheDocument()
     })
 
+    it('opens the Digital Twin for Staff with the simulation off', async () => {
+      signIn('Staff')
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 404 })))
+      const router = renderAt('/staff/digital-twin?robot=amr_01')
+      await settled(router, '/staff/digital-twin')
+      expect(await screen.findByRole('heading', { name: 'Digital Twin', level: 1 }, { timeout: 15_000 })).toBeInTheDocument()
+      expect(screen.getByRole('switch', { name: 'Robot mô phỏng' })).not.toBeChecked()
+    })
+
+    it.each(['Representative', 'TechnicalStaff'])('keeps %s out of the Digital Twin', async role => {
+      signIn(role)
+      const router = renderAt('/staff/digital-twin')
+      await waitFor(() => expect(router.state.location.pathname).not.toBe('/staff/digital-twin'))
+    })
+
     it('keeps Admin out of the Staff workspace', async () => {
       signIn('Admin')
       const router = renderAt('/staff')

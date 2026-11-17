@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { AUDIT_ACTION_GROUPS, auditActionLabel, auditActorLabel, isKnownAuditAction } from './audit-labels'
+import { AUDIT_ACTION_GROUPS, auditActionLabel, auditActorLabel, auditTargetLabel, isKnownAuditAction } from './audit-labels'
 import { backendSourceExists, scanBackendAuditActions } from './backend-audit-codes'
 
 const backend = resolve(process.cwd(), '../backend/src')
@@ -37,5 +37,29 @@ describe('audit action labels', () => {
     expect(auditActorLabel({ action: 'TOUR_CANCELLED', actorName: null })).toBe('Hệ thống')
     expect(auditActorLabel({ action: 'INVITATION_ENTERED', actorName: 'Lan' })).toBe('Lan')
     expect(isKnownAuditAction('constructor')).toBe(false)
+  })
+})
+
+describe('audit filter wording', () => {
+  it('never offers two actions with the same or near-same name in the filter', () => {
+    const labels = AUDIT_ACTION_GROUPS.flatMap(group => Object.values(group.actions))
+    // "Ngừng" and "Ngưng" read as the same word, so compare without tone marks.
+    const plain = labels.map(label => label.normalize('NFD').replace(/\p{Mn}/gu, '').replace(/đ/g, 'd').toLowerCase())
+    expect(new Set(plain).size).toBe(plain.length)
+    expect(auditActionLabel('POI_PROPOSAL_RETIRED')).toBe('Ngưng dùng POI')
+    expect(auditActionLabel('POI_DEACTIVATED')).toBe('Tắt POI (danh sách cũ)')
+  })
+
+  it('names the system for its auto-cancel even when the row carries an account', () => {
+    expect(auditActorLabel({ action: 'TOUR_CANCELLED', actorName: 'Lan', resultCode: 'SYSTEM_NO_START' })).toBe('Hệ thống')
+    expect(auditActorLabel({ action: 'TOUR_CANCELLED', actorName: 'Lan', resultCode: 'SUCCESS' })).toBe('Lan')
+  })
+
+  it('names a route row by its route and save time, not by the robot', () => {
+    const at = (iso: string) => `@${iso}`
+    expect(auditTargetLabel({ tourName: null, robotCode: 'amr_01', routeName: 'Tuyến thư viện', routeRevisionSavedAt: '2026-11-16T01:00:00Z' }, at))
+      .toBe('Tuyến thư viện · bản lưu @2026-11-16T01:00:00Z')
+    expect(auditTargetLabel({ tourName: null, robotCode: 'amr_01', routeName: 'Tuyến thư viện', routeRevisionSavedAt: null }, at)).toBe('Tuyến thư viện')
+    expect(auditTargetLabel({ tourName: null, robotCode: 'amr_01' }, at)).toBe('amr_01')
   })
 })

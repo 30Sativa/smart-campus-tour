@@ -24,7 +24,10 @@ public sealed class GetRouteRevisionHandler(IRouteRevisionRepository repo, Tours
 
 internal static class RouteRevisionMapper
 {
-    /// <summary>Without <paramref name="schedule"/> the view reports ScheduleFit UNKNOWN; screens that show the label pass it.</summary>
+    /// <summary>
+    /// Without <paramref name="schedule"/> the view reports ScheduleFit UNKNOWN and no expected length; every handler that
+    /// returns the view to a screen passes it.
+    /// </summary>
     public static async Task<RouteRevisionView> Load(IRouteRevisionRepository repo, Guid routeId, Guid revisionId, bool history, CancellationToken ct,
         Tours.TourScheduleSettings? schedule = null)
     {
@@ -33,14 +36,20 @@ internal static class RouteRevisionMapper
         var map = await repo.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Map version", revision.MapVersionId);
         var stops = await repo.GetStopsAsync(revision.Id, ct);
         var eligibilityIssues = new List<string>();
+        var proposalByStop = new Dictionary<Guid, Guid>();
         foreach (var stop in stops)
         {
             var poi = await repo.FindPoiRevisionAsync(stop.PoiProposalRevisionId, ct);
+            if (poi is not null) proposalByStop[stop.Id] = poi.ProposalId;
             var source = await repo.FindPoiVerificationAsync(stop.SourcePoiVerificationRecordId, ct);
             var latestPoiResult = poi is null ? null : await repo.GetEffectivePoiVerificationAsync(poi.ProposalId, poi.NavigationFingerprint, ct);
             if (poi is null || source is null || source.ResultCode != "PASS" || latestPoiResult is null || latestPoiResult.ResultCode != "PASS")
                 eligibilityIssues.Add($"POI_VERIFICATION_REQUIRED:{stop.PoiProposalRevisionId:D}");
         }
+        var unusable = (await repo.FindPoiProposalsAsync(proposalByStop.Values.Distinct().ToArray(), ct))
+            .Where(p => p.RetiredAt is not null || p.DiscardedAt is not null).Select(p => p.Id).ToHashSet();
+        var retiredPoiNames = stops.Where(s => proposalByStop.TryGetValue(s.Id, out var id) && unusable.Contains(id))
+            .OrderBy(s => s.StopOrder).Select(s => s.Name).ToArray();
         var submissions = await repo.GetSubmissionsAsync(revision.Id, ct);
         var targetNavigation = RouteNavigationConfigurationFactory.FromRevision(revision, stops);
         var routeRuns = await repo.GetTestRunsForRouteAsync(route.Id, ct);
@@ -50,22 +59,40 @@ internal static class RouteRevisionMapper
             .OrderBy(r => r.CheckedAt).ThenBy(r => r.Id).ToArray();
         var runs = history ? routeRuns : effectiveConfigurationRuns;
         var effective = effectiveConfigurationRuns.LastOrDefault();
-        var expected = ExpectedDuration(effective, stops);
+        int? expected = schedule is null ? null
+            : Tours.TourSchedule.EstimatedDurationSeconds(revision, stops, schedule.EstimatedSpeedMetersPerSecond);
         var duration = "INCOMPLETE_CONTENT_AUDIO_DATA";
         var dwell = stops.Sum(s => s.DwellSeconds);
         var dtoRuns = new List<RouteTestRunView>(runs.Count);
+        var names = new Dictionary<Guid, string?>();
+        async Task<string?> NameAsync(Guid userId)
+        {
+            if (!names.TryGetValue(userId, out var name)) names[userId] = name = (await repo.FindUserAsync(userId, ct))?.FullName;
+            return name;
+        }
         foreach (var r in runs)
             dtoRuns.Add(new RouteTestRunView(r.Id, r.RouteRevisionId, r.MapVersionId,
                 Convert.ToHexString(r.MapPackageSha256).ToLowerInvariant(),
                 await repo.GetRobotCodeAsync(r.RobotId, ct) ?? "", r.CheckedByUserId,
                 r.ParticipatingStaffUserId, r.ResultCode, r.AllStopsReached, r.SafelyStopped, r.LocalizationPassed,
-                r.MeasuredDurationSeconds, r.FailureReason, r.EvidenceNote, r.CheckedAt, r.MeasurementBasis));
+                r.MeasuredDurationSeconds, r.FailureReason, r.EvidenceNote, r.CheckedAt, r.MeasurementBasis,
+                await NameAsync(r.CheckedByUserId), await NameAsync(r.ParticipatingStaffUserId)));
         var revisionRecords = await repo.GetRevisionsAsync(route.Id, submittedOnly: false, ct);
+        // Cross-save application (ADR-0023 addendum): every submitted save with this path shares the result recorded on any of them.
+        var scheduledTours = await repo.ListScheduledToursAsync(route.Id, ct);
+        var shared = new List<RouteSharedResultRevisionView>();
         var summaries = new List<RouteRevisionSummaryView>();
-        foreach (var historical in revisionRecords.Where(r => history || r.Id == revision.Id).OrderBy(r => r.RevisionNumber))
+        foreach (var historical in revisionRecords.OrderBy(r => r.RevisionNumber))
         {
+            var isSummary = history || historical.Id == revision.Id;
+            var isSibling = historical.Id != revision.Id && (await repo.GetSubmissionsAsync(historical.Id, ct)).Count > 0;
+            if (!isSummary && !isSibling) continue;
             var historicalStops = await repo.GetStopsAsync(historical.Id, ct);
             var historicalNavigation = RouteNavigationConfigurationFactory.FromRevision(historical, historicalStops);
+            if (isSibling && RouteNavigationConfigurationFactory.SameNavigation(historicalNavigation, targetNavigation))
+                shared.Add(new RouteSharedResultRevisionView(historical.Id, historical.RevisionNumber, historical.CreatedAt,
+                    scheduledTours.Where(tour => tour.RouteRevisionId == historical.Id).ToArray()));
+            if (!isSummary) continue;
             var historicalRuns = routeRuns.Where(run => run.RouteRevision is not null &&
                 RouteNavigationConfigurationFactory.SameNavigation(
                     RouteNavigationConfigurationFactory.FromRevision(run.RouteRevision, run.RouteRevision.RouteRevisionStops.ToArray()), historicalNavigation))
@@ -83,15 +110,10 @@ internal static class RouteRevisionMapper
             effective?.ResultCode ?? "NOT_TESTED", effective?.Id, duration, dwell,
             stops.Select(s => new RouteRevisionStopView(s.Id, s.PoiProposalRevisionId, s.SourcePoiVerificationRecordId,
                 s.StopOrder, s.DwellSeconds, Route.ReadHeadSteps(s.HeadStepsJson), s.Name, s.X, s.Y, s.Yaw,
-                s.CameraPreset, s.NarrationText, s.FallbackVideoUrl)).ToArray(), dtoRuns, summaries, eligibilityIssues,
+                s.CameraPreset, s.NarrationText, s.FallbackVideoUrl,
+                proposalByStop.TryGetValue(s.Id, out var proposalId) ? proposalId : null)).ToArray(), dtoRuns, summaries, eligibilityIssues,
             route.IsOpenForNewTours, LegacyRouteRevision.For(route), schedule is null ? Tours.RouteScheduleFit.Unknown
-                : Tours.TourSchedule.ScheduleFit(schedule, expected), expected);
+                : Tours.TourSchedule.ScheduleFit(schedule, expected), expected, retiredPoiNames, shared,
+            scheduledTours.Where(tour => tour.RouteRevisionId == revision.Id).ToArray());
     }
-
-    /// <summary>The effective PASS measured with dwell, plus any dwell added since (the same sum a reservation uses).</summary>
-    private static int? ExpectedDuration(RouteTestRun? effective, IReadOnlyList<RouteRevisionStop> stops) =>
-        effective is { ResultCode: "PASS", MeasurementBasis: RouteMeasurementBasis.TotalWithDwell, RouteRevision: { } tested }
-            ? Tours.TourSchedule.ExpectedDurationSeconds(effective.MeasuredDurationSeconds,
-                tested.RouteRevisionStops.Select(stop => (stop.StopOrder, stop.DwellSeconds)), stops.Select(stop => (stop.StopOrder, stop.DwellSeconds)))
-            : null;
 }

@@ -6,7 +6,7 @@ namespace SmartCampus.UnitTests;
 public sealed class PoiCameraPresetValidationTests
 {
     private static PoiProposalDraft Draft(string camera) =>
-        new(Guid.NewGuid(), "Library", "Entrance", null, 1m, 2m, 0m, camera, "Giới thiệu địa điểm.");
+        new(Guid.NewGuid(), "Library", "Entrance", null, 1m, 2m, 0m, camera);
 
     public static TheoryData<IValidator, Func<string, object>> WritePaths => new()
     {

@@ -161,24 +161,24 @@ describe('Representative real HTTP contract', () => {
   it('dates a cancelled Tour only when the server says when', async () => {
     registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: 'Robot bảo trì', tourEndedAt: '2026-10-19T02:30:00Z' }
     renderAt('/dai-dien/dang-ky/registration')
-    expect(await screen.findByText('Huỷ lúc 19/10/2026 09:30')).toBeInTheDocument()
+    expect(await screen.findByText('Hủy lúc 19/10/2026 09:30')).toBeInTheDocument()
   })
 
   it('prints no cancel time when the server sent none', async () => {
     registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: 'Robot bảo trì', tourEndedAt: null }
     renderAt('/dai-dien/dang-ky/registration')
-    expect(await screen.findByText('Buổi tham quan đã bị huỷ')).toBeInTheDocument()
-    expect(screen.queryByText(/Huỷ lúc/)).toBeNull()
+    expect(await screen.findByText('Buổi tham quan đã bị hủy')).toBeInTheDocument()
+    expect(screen.queryByText(/Hủy lúc/)).toBeNull()
   })
 
   const systemCancel = 'Không bắt đầu trong khung giờ, hệ thống tự huỷ.'
-  const friendlyCancel = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại.'
+  const friendlyCancel = 'Buổi tham quan không bắt đầu đúng giờ nên đã bị hủy. Đại học FPT sẽ liên hệ nếu sắp xếp lại.'
 
   it('shows a cancelled Tour as cancelled, with no actions, deadline or lock message', async () => {
     registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: systemCancel }
     registration.allowedActions = { edit: { allowed: false, reason: 'Tour đã khóa đăng ký' }, resubmit: { allowed: false, reason: 'Tour đã khóa đăng ký' }, cancel: { allowed: false, reason: 'Tour đã khóa đăng ký' } }
     renderAt('/dai-dien/dang-ky/registration')
-    expect(await screen.findByText('Buổi tham quan đã bị huỷ')).toBeInTheDocument()
+    expect(await screen.findByText('Buổi tham quan đã bị hủy')).toBeInTheDocument()
     expect(screen.getAllByText(friendlyCancel).length).toBeGreaterThan(0)
     expect(screen.queryByText(systemCancel)).toBeNull()
     expect(screen.queryByText('Hạn đăng ký và thêm dòng')).toBeNull()
@@ -240,7 +240,10 @@ describe('Representative real HTTP contract', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gửi đăng ký' }))
     expect(await screen.findByText('Lần gửi trước chưa được xác nhận')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Thử gửi lại' }))
-    expect(await screen.findByRole('heading', { name: 'Buổi chưa đăng ký' })).toBeInTheDocument()
+    // The form page already shows the Tour name as a heading, so waiting for that heading could catch the form's
+    // copy just before the successful retry navigates away (flaky in CI). Wait for the result page's own callout.
+    expect(await screen.findByText('Đã gửi đăng ký')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Buổi chưa đăng ký' })).toBeInTheDocument()
     expect(submitAttempts).toHaveLength(2)
     expect(submitAttempts[1]).toEqual(submitAttempts[0])
     expect(submitAttempts[0].input.roster.map(r => r.rowType)).toEqual(['INDIVIDUAL', 'SHARED_VIEWING'])
@@ -297,8 +300,19 @@ describe('Representative real HTTP contract', () => {
     expect(await screen.findByRole('table', { name: 'Danh sách lời mời' })).toHaveTextContent('Phòng A')
     expect(screen.getByText('Đã chấp nhận')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: 'Thông tin' }))
-    expect(await screen.findByRole('button', { name: 'Sửa và gửi lại' })).toBeDisabled()
+    // A locked approved record is not a resubmission: the button stays "Sửa đăng ký" with the lock reason.
+    expect(await screen.findByRole('button', { name: 'Sửa đăng ký' })).toBeDisabled()
+    expect(screen.getAllByText('Chức năng sau duyệt chưa được triển khai.').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Sửa và gửi lại' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Sửa/ })).not.toBeInTheDocument()
+  })
+  it('keeps "Sửa đăng ký" with its lock reason after the Tour is READY', async () => {
+    registration.summary = { ...registration.summary, state: 'APPROVED', tourState: 'READY' }
+    registration.allowedActions = { edit: { allowed: false, reason: 'Buổi đã sẵn sàng, đăng ký bị khóa.' }, resubmit: { allowed: false, reason: 'Chỉ gửi lại khi bị từ chối.' }, cancel: { allowed: false, reason: 'Buổi đã sẵn sàng.' } }
+    renderAt('/dai-dien/dang-ky/registration')
+    expect(await screen.findByRole('button', { name: 'Sửa đăng ký' })).toBeDisabled()
+    expect(screen.getByText('Buổi đã sẵn sàng, đăng ký bị khóa.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sửa và gửi lại' })).not.toBeInTheDocument()
   })
   it('surfaces an API error without replacing it with mock data', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => response(null, 503, { message: 'Unavailable' })))

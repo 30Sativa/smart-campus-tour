@@ -39,7 +39,7 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
   const pending = registrations.isSuccess ? registrations.data.pagination.totalItems : null
   const notReady = scheduled.isSuccess ? scheduled.data.pagination.totalItems : null
   const poiWork = pois.isSuccess ? pois.data.filter(needsStaffWork).length : null
-  const poiWaiting = pois.isSuccess ? pois.data.filter(p => poiStatus(p) === 'WAIT').length : null
+  const poiWaiting = pois.isSuccess ? pois.data.filter(p => !p.retiredAt && poiStatus(p) === 'WAIT').length : null
   // `canReview`: a request left PENDING on a Tour that has moved on is no longer anyone's work. Nearest deadline first.
   const reviewableEmails = emailChanges.isSuccess ? emailChanges.data.filter(item => item.canReview).sort((a, b) => a.expiresAt.localeCompare(b.expiresAt)) : null
   const figure = (value: number | null) => value ?? '-'
@@ -98,7 +98,7 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
         </QueueSection>
 
         <QueueSection title="POI cần hoàn thiện" total={poiWork} failed={pois.isError} loading={pois.isPending} onRetry={() => void pois.refetch()}
-          note={poiWaiting ? `Bản nháp và cần sửa, mọi bản đồ. ${poiWaiting} POI khác đang chờ kỹ thuật kiểm tra, Staff không cần làm gì.` : 'Bản nháp và cần sửa, mọi bản đồ.'}
+          note={poiWaiting ? `Chưa gửi kiểm và cần sửa, mọi bản đồ. ${poiWaiting} POI khác đang chờ kỹ thuật kiểm tra, Staff không cần làm gì.` : 'Chưa gửi kiểm và cần sửa, mọi bản đồ.'}
           more={<Link to="/staff/manage/pois" className={buttonClass('ghost', 'sm')}>Mở POI</Link>} />
       </div>}
     </section>

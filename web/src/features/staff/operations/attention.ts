@@ -31,7 +31,7 @@ export function buildAttention(running: RunningTour[], today: TourSummary[], end
     id: `reconcile-${tour.id}`, tone: 'danger', subject: tour.name, headline: RECONCILE_HEADLINE, detail: RECONCILE_HINT, to: `/staff/live/${tour.id}`, toLabel: 'Mở để đối soát',
   }))
   const ready = today.filter(tour => tour.state === 'READY').map((tour): AttentionItem => ({
-    id: `ready-${tour.id}`, tone: 'info', subject: tour.name, headline: `Đã chốt, giờ bắt đầu ${campusTime(tour.scheduledStartAt)}`, to: `/staff/tours/${tour.id}/start`, toLabel: 'Kiểm tra trước khi bắt đầu',
+    id: `ready-${tour.id}`, tone: 'info', subject: tour.name, headline: `Đã chốt, giờ bắt đầu ${campusTime(tour.scheduledStartAt)}`, to: `/staff/tours/${tour.id}/start`, toLabel: 'Mở Tour',
   }))
   const scheduled = today.filter(tour => tour.state === 'SCHEDULED').map((tour): AttentionItem => ({
     id: `scheduled-${tour.id}`, tone: 'warn', subject: tour.name, headline: `Chưa chốt, giờ bắt đầu ${campusTime(tour.scheduledStartAt)}`, to: `/staff/manage/tours/${tour.id}`, toLabel: 'Chuẩn bị và chốt',

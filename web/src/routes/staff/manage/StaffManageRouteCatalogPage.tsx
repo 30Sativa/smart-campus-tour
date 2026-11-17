@@ -7,6 +7,7 @@ import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { routeAvailabilityError, staffRouteStatus } from '../../../features/administration/routes/route-messages'
 import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
+import { RETIRED_POI_LABEL, retiredPoiChip, retiredPoiTitle } from '../../../features/administration/routes/retired-poi'
 import { versionedRoutesApi, type VersionedRoute } from '../../../features/administration/routes/versioned-api'
 import { tourKeys } from '../../../features/administration/tours/hooks'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
@@ -43,12 +44,17 @@ export default function StaffManageRouteCatalogPage() {
       </div>
       {routes.isPending ? <SkeletonRows rows={4} /> : routes.error ? <AdminErrorPanel title="Không tải được danh mục tuyến." onRetry={() => void routes.refetch()} /> : !routes.data?.data.length ? <EmptyState title={active ? 'Chưa có tuyến nào' : 'Không có tuyến ngừng sử dụng'} action={active ? <Link to="/staff/manage/routes/new" className={buttonClass('primary')}>Tạo tuyến</Link> : undefined} /> :
         <div className="grid gap-3 p-3 md:grid-cols-2 2xl:grid-cols-3">{routes.data.data.map(route => {
-          const tone = staffRouteStatus(route)
+          // ADR-0062: a route with a retired POI takes no new Tour, so that is its status whatever its run says.
+          const retired = route.retiredPoiNames?.length ? route.retiredPoiNames : null
+          // A failed run is shown beside the retired POI: both stop the route, and Staff fixes them separately.
+          const status = staffRouteStatus(route)
+          const chips = [...(retired ? [{ label: RETIRED_POI_LABEL, chip: retiredPoiChip, title: retiredPoiTitle(retired) }] : []),
+            ...(!retired || route.verificationStatus === 'FAIL' ? [{ ...status, title: undefined }] : [])]
           const area = maps.data?.find(item => item.map.id === route.mapVersionId)?.map.areaName
           return <article key={route.routeId} className="grid content-start gap-3 rounded-xl border border-[#e2e8f0] bg-white px-3.5 py-3 transition-colors hover:border-[#c9dcec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">
             <span className="flex items-start justify-between gap-2">
               <span className="min-w-0"><Link to={`/staff/manage/routes/${route.routeId}`} className="block text-[15px] font-semibold text-[#173b59] hover:underline">{route.name}</Link><small className="block text-xs text-[#64748b]">{area && `${area} · `}{route.stops.length} điểm dừng</small></span>
-              <span className="flex shrink-0 flex-col items-end gap-1"><span className={`rounded-full border px-2 py-px text-[11px] font-bold ${tone.chip}`}>{tone.label}</span><ScheduleFitBadge route={route} /></span>
+              <span className="flex shrink-0 flex-col items-end gap-1">{chips.map(chip => <span key={chip.label} title={chip.title} className={`rounded-full border px-2 py-px text-[11px] font-bold ${chip.chip}`}>{chip.label}</span>)}<ScheduleFitBadge route={route} /></span>
             </span>
             <span className="flex items-center" aria-hidden="true">{route.stops.map((stop, i) => <span key={stop.poiRevisionId} className="flex flex-1 items-center last:flex-none">{i > 0 && <i className="h-0.5 flex-1 bg-[#c9dfee]" />}<span className="size-2.5 shrink-0 rounded-full bg-[#7db9db]" title={stop.name} /></span>)}</span>
             {route.eligibilityIssues.length > 0 && <small className="text-xs text-[#8a5a06]">{route.eligibilityIssues.length} điều kiện chưa đạt để lập lịch</small>}

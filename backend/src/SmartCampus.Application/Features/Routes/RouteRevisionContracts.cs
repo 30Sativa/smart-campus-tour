@@ -13,17 +13,32 @@ public sealed record RouteRevisionRequest(Guid RequestId, int ExpectedCurrentRev
 public sealed record RouteRunRequest(
     Guid RequestId, string RobotCode, Guid ParticipatingStaffUserId,
     string ResultCode, bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed,
-    int MeasuredDurationSeconds, string? FailureReason, string EvidenceNote);
+    string? FailureReason, string EvidenceNote);
 
 /// <summary>One stop of a revision. <c>Id</c> is the <c>RouteRevisionStops.Id</c> that a Tour's execution stop ids name.</summary>
 public sealed record RouteRevisionStopView(Guid Id, Guid PoiRevisionId, Guid SourcePoiVerificationRecordId,
     int StopOrder, int DwellSeconds, IReadOnlyList<RouteHeadStep> HeadSteps,
     string Name, decimal X, decimal Y, decimal Yaw, string CameraPreset,
-    string? NarrationText = null, string? FallbackVideoUrl = null);
+    string? NarrationText = null, string? FallbackVideoUrl = null,
+    // ADR-0061: the POI the stop's revision belongs to, so a reader can find that POI's newer revisions.
+    Guid? PoiProposalId = null);
+/// <summary>
+/// One recorded run. Since nobody types a duration, <c>MeasuredDurationSeconds</c> holds the estimate stored when it was
+/// recorded (older runs keep what was typed); screens no longer show it. It and <c>MeasurementBasis</c> go with the columns
+/// in a later schema version.
+/// </summary>
 public sealed record RouteTestRunView(Guid Id, Guid RouteRevisionId, Guid MapVersionId, string MapPackageSha256,
     string RobotCode, Guid CheckedByUserId, Guid ParticipatingStaffUserId, string ResultCode,
     bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed, int MeasuredDurationSeconds,
-    string? FailureReason, string EvidenceNote, DateTimeOffset CheckedAt, string? MeasurementBasis);
+    string? FailureReason, string EvidenceNote, DateTimeOffset CheckedAt, string? MeasurementBasis,
+    // Names for the Staff fail banner; null for a deleted account or a view built before the names were read.
+    string? CheckedByName = null, string? ParticipatingStaffName = null);
+/// <summary>
+/// Another submitted save of the same route with the same path (map, start, end, stop POIs and order, head steps): the
+/// newest run on any of them is their applied result (ADR-0023 addendum), so recording one changes them all.
+/// </summary>
+public sealed record RouteSharedResultRevisionView(Guid RevisionId, int RevisionNumber, DateTimeOffset CreatedAt,
+    IReadOnlyList<RouteScheduledTourView> ScheduledTours);
 /// <summary>What a route test measured. A run without a basis predates ADR-0035 and cannot size a reservation.</summary>
 public static class RouteMeasurementBasis { public const string TotalWithDwell = "TOTAL_WITH_DWELL"; }
 public sealed record RouteTestParticipantView(Guid UserId, string FullName, string Username);
@@ -39,9 +54,16 @@ public sealed record RouteRevisionView(Guid RouteId, Guid RevisionId, int Revisi
     IReadOnlyList<RouteRevisionSummaryView> RevisionHistory, IReadOnlyList<string> EligibilityIssues,
     bool IsActive = true, string RowVersion = "",
     // docs/lich-tour-theo-ca.md §4: kept apart from EligibilityIssues, which READY reads as stale POI evidence.
-    string ScheduleFit = "UNKNOWN", int? ExpectedDurationSeconds = null);
+    string ScheduleFit = "UNKNOWN", int? ExpectedDurationSeconds = null,
+    // ADR-0062: names of the stops whose POI is retired or discarded now. A new Tour is refused on such a revision.
+    IReadOnlyList<string>? RetiredPoiNames = null,
+    // ADR-0023 addendum: the other submitted saves the applied result also covers, and the Tours still to run on this save.
+    IReadOnlyList<RouteSharedResultRevisionView>? SharedResultRevisions = null,
+    IReadOnlyList<RouteScheduledTourView>? ScheduledTours = null);
 public sealed record RouteAvailabilityRequest(Guid RequestId, string ExpectedRowVersion);
-public sealed record RouteScheduledTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State);
+/// <summary>A SCHEDULED or READY Tour on the route; the close of registration lets Staff screens label a quick Tour right.</summary>
+public sealed record RouteScheduledTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State,
+    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false, Guid? RouteRevisionId = null);
 public sealed record RouteAvailabilityResult(Guid RouteId, bool IsActive, IReadOnlyList<RouteScheduledTourView> ScheduledTours);
 
 public sealed record RoutePoiRevisionEvidence(PoiProposalRevision Revision, PoiVerificationRecord Verification);
@@ -65,6 +87,17 @@ public interface IRouteRevisionRepository
     Task<MapVersion?> GetMapAsync(Guid mapVersionId, CancellationToken ct);
     Task<IReadOnlyList<RoutePoiRevisionEvidence>> GetPoiEvidenceAsync(IReadOnlyCollection<Guid> revisionIds, CancellationToken ct);
     Task<PoiVerificationRecord?> GetEffectivePoiVerificationAsync(Guid proposalId, byte[] fingerprint, CancellationToken ct);
+    /// <summary>The current APPROVED narration of each of these POI proposals that has one (ADR-0060).</summary>
+    Task<IReadOnlyList<PoiNarrationRevision>> GetApprovedNarrationsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct);
+    /// <summary>Untracked revisions with these ids; unknown ids are left out.</summary>
+    Task<IReadOnlyList<PoiProposalRevision>> FindPoiRevisionsAsync(IReadOnlyCollection<Guid> revisionIds, CancellationToken ct);
+    /// <summary>
+    /// UPDLOCK/HOLDLOCK row locks on these POI proposals, taken one at a time in Guid order like the pose import, so a
+    /// concurrent discard or retire of one of them serializes with the route save (ADR-0062).
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, PoiProposal>> LockPoiProposalsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct);
+    /// <summary>Untracked proposals with these ids, discarded or retired ones included.</summary>
+    Task<IReadOnlyList<PoiProposal>> FindPoiProposalsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct);
     Task<PoiProposalRevision?> FindPoiRevisionAsync(Guid revisionId, CancellationToken ct);
     Task<PoiVerificationRecord?> FindPoiVerificationAsync(Guid verificationId, CancellationToken ct);
     Task<IReadOnlyList<RouteRevisionStop>> GetStopsAsync(Guid revisionId, CancellationToken ct);

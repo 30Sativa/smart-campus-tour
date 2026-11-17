@@ -18,7 +18,7 @@ def run_launch_probe(robot_id):
     try:
         from launch import LaunchContext, LaunchDescription
         from launch.launch_description_sources import PythonLaunchDescriptionSource
-        from launch.utilities import visit_all_entities_and_collect_futures
+        from launch.utilities import perform_substitutions, visit_all_entities_and_collect_futures
         from launch_ros.actions import Node
         from launch_ros.substitutions import FindPackageShare
         from launch_ros.utilities import evaluate_parameters
@@ -60,6 +60,17 @@ def run_launch_probe(robot_id):
                         # the OpaqueFunction in astra_pro.launch.py.
                         node._perform_substitutions(node_context)
                         [params] = evaluate_parameters(node_context, node._Node__parameters)
+                    elif package == 'tf2_ros':
+                        # static_transform_publisher --x ... --frame-id ...; stop before the
+                        # --ros-args tail, which only resolves inside a running launch.
+                        cmd = []
+                        for part in node.cmd[1:]:
+                            text = perform_substitutions(node_context, part)
+                            if text == '--ros-args':
+                                break
+                            cmd.append(text)
+                        params = dict(zip(
+                            (k[2:] for k in cmd[0::2]), cmd[1::2]))
                     nodes.append((package, node, params))
                     return []
 
@@ -83,6 +94,8 @@ def run_launch_probe(robot_id):
                     assert camera[2]['enable_point_cloud'] is True
                     assert camera[2]['enable_color'] is False
                     assert camera[2]['enable_ir'] is False
+                    # color off must also keep the UVC RGB device closed (it doubled the driver CPU)
+                    assert camera[2]['use_uvc_camera'] is False
                     assert (camera[2]['depth_width'], camera[2]['depth_height'],
                             camera[2]['depth_fps']) == (320, 240, 10)
                     assert len(mounts) == 1
@@ -96,6 +109,26 @@ def run_launch_probe(robot_id):
                 assert 'depth_width' not in context.launch_configurations
                 assert 'x' not in context.launch_configurations
                 assert len([entry for entry in nodes if entry[0] == 'rviz2']) == 1
+
+        # Defaults: the CAD mount (level, ~0.27 m above the floor) and the lean depth mode.
+        context = LaunchContext()
+        context.launch_configurations.update(
+            robot_id=robot_id, enable_camera='true', rviz='false',
+            map=str(SRC / 'robot_navigation/maps/warehouse_12x12.yaml'))
+        nodes = []
+        with mock.patch.object(Node, 'execute', capture_node):
+            source = PythonLaunchDescriptionSource(
+                str(SRC / 'robot_navigation/launch/navigation.launch.py'))
+            visit_all_entities_and_collect_futures(
+                source.get_launch_description(context), context)
+        [camera] = [entry for entry in nodes if entry[0] == 'astra_camera']
+        assert (camera[2]['depth_width'], camera[2]['depth_height'],
+                camera[2]['depth_fps']) == (160, 120, 30)
+        assert camera[2]['use_uvc_camera'] is False
+        [mount] = [entry for entry in nodes if entry[0] == 'tf2_ros']
+        assert (mount[2]['frame-id'], mount[2]['child-frame-id']) == ('base_link', 'camera_link')
+        assert [float(mount[2][k]) for k in ('x', 'y', 'z', 'roll', 'pitch', 'yaw')] == [
+            0.394, 0.0, 0.066, 0.0, 0.0, 0.0]
 
         # Preserve standalone callers' explicit TF choice at the camera entry point.
         for publish_tf in ('true', 'false'):

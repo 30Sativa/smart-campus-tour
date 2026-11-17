@@ -25,6 +25,7 @@ public sealed class PreviewPoiImportQueryHandler(IMapVersionRepository mapReposi
         var sources = PoiImportFileSet.Expand(request.Files);
         var map = await mapRepository.FindMapVersionAsync(request.MapVersionId, includePackage: true, cancellationToken)
             ?? throw new NotFoundException("Map version", request.MapVersionId);
+        if (map.RetiredAt is not null) throw new ConflictException(MapRetirement.RetiredMessage, MapRetirement.RetiredCode);
         var robotCode = request.RobotCode.Trim();
         var robot = await mapRepository.FindPhysicalRobotAsync(robotCode, cancellationToken)
             ?? throw new NotFoundException("Physical robot", robotCode);

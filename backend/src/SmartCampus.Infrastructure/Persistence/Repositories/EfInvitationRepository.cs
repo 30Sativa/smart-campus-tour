@@ -86,7 +86,8 @@ public sealed class EfInvitationRepository(ApplicationDbContext context) : IInvi
             .Include(r => r.RosterRows.Where(row => row.IsActive))
             .SingleAsync(r => r.Id == registrationId && (owner == null || r.RepresentativeUserId == owner), ct);
         var invitations = await context.Invitations.AsNoTracking().Include(i => i.RosterRow)
-            .Where(i => i.RosterRow.RegistrationId == registrationId).ToArrayAsync(ct);
+            // A removed roster row keeps its revoked invitation for audit, but it is no longer listed (or counted).
+            .Where(i => i.RosterRow.RegistrationId == registrationId && i.RosterRow.IsActive).ToArrayAsync(ct);
         var ids = invitations.Select(i => i.Id.ToString("D")).ToArray();
         // At most one request and its latest outcome per invitation, regardless of historical resend count.
         var latest = context.AuditLogs.Where(a => a.EntityType == "Invitation" && ids.Contains(a.EntityId) &&
@@ -100,6 +101,21 @@ public sealed class EfInvitationRepository(ApplicationDbContext context) : IInvi
                 !context.AuditLogs.Any(newer => newer.EntityType == a.EntityType && newer.Action == a.Action &&
                     newer.CorrelationId == a.CorrelationId && newer.Id > a.Id)))
             .OrderBy(a => a.Id).ToArrayAsync(ct);
-        return new(invitations, registration.Tour, registration, audits);
+        // One aggregate row per invitation instead of hydrating closed-session history. Sessions are never deleted
+        // and reissue keeps the Invitation row, so MIN(CreatedAt) is the first entry across reissues. LastSeenAt only
+        // moves forward and sessions are sequential (UX_BrowserSessions_OneOpen), so MAX is the latest session's.
+        var sessions = await context.BrowserSessions.AsNoTracking()
+            .Where(s => s.Invitation.RosterRow.RegistrationId == registrationId)
+            .GroupBy(s => s.InvitationId)
+            .Select(g => new {
+                InvitationId = g.Key,
+                FirstEnteredAt = g.Min(s => s.CreatedAt),
+                LastSeenAt = g.Max(s => s.LastSeenAt),
+                UnendedLastSeenAt = g.Where(s => s.EndedAt == null).Max(s => s.LastSeenAt),
+                UnendedExpiresAt = g.Where(s => s.EndedAt == null).Max(s => (DateTimeOffset?)s.ExpiresAt)
+            })
+            .ToDictionaryAsync(row => row.InvitationId, row => new ViewerSessionSummary(row.FirstEnteredAt, row.LastSeenAt,
+                row.UnendedLastSeenAt, row.UnendedExpiresAt), ct);
+        return new(invitations, registration.Tour, registration, audits, sessions);
     }
 }

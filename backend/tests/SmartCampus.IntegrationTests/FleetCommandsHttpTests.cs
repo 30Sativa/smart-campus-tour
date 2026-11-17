@@ -375,75 +375,47 @@ public sealed class FleetCommandsHttpTests
     }
 
     /// <summary>The bridge's side of the wire, against a real API process on the World's database.</summary>
-    /// <summary>ADR-0045 addendum: in AUTO mode the robot's POI arrival queues one SWEEP; MANUAL queues nothing.</summary>
+    /// <summary>
+    /// ADR-0045 addendum 14/11/2026: the robot reads its POIs with each stop's camera preset and turns the head itself, so
+    /// an arrival or Next no longer queues a head command; MANUAL mode turns <c>autoMotion</c> off.
+    /// </summary>
     [SchemaV11Fact]
-    public async Task HeadAutoMode_AnArrivalAtAPoi_DoesWhatItsCameraPresetSays_AndManualModeDoesNot()
+    public async Task HeadPois_TheRobotReadsEachStopsCameraPreset_AndTheBackendNoLongerQueuesArrivalMotion()
     {
         await using var b = await Bridge.Create(headEnabled: true);
         // Staff picked "Quét trái rồi phải, 90 độ mỗi bên" in the POI's Camera & tư liệu; the route stop carries it.
         await b.W.H.Database.ExecuteAsync("UPDATE dbo.RouteRevisionStops SET CameraPreset = N'SWEEP:90';");
-        var status = await b.OperatorCall(HttpMethod.Get, "head");
-        Assert.Equal("AUTO", status.Body.GetProperty("data").GetProperty("mode").GetString());
         await b.StartTour();
+
+        var running = await b.Get("/api/fleet/head/v1/pois");
+        Assert.True(running.Status == HttpStatusCode.OK, running.Body.ToString());
+        var data = running.Body.GetProperty("data");
+        Assert.Equal(("TOUR", "AUTO", true), (data.GetProperty("source").GetString(), data.GetProperty("mode").GetString(),
+            data.GetProperty("autoMotion").GetBoolean()));
+        Assert.Equal(b.W.H.TourId, data.GetProperty("tourId").GetGuid());
+        var pois = data.GetProperty("pois").EnumerateArray().ToArray();
+        Assert.NotEmpty(pois);
+        Assert.All(pois, poi => Assert.Equal("SWEEP:90", poi.GetProperty("cameraPreset").GetString()));
+        Assert.True(pois[0].TryGetProperty("x", out _) && pois[0].TryGetProperty("y", out _) && pois[0].TryGetProperty("name", out _));
 
         async Task<JsonElement> HeadPoll(long afterSeq, Guid? epoch) => (await b.Post("/api/fleet/head/v1/poll",
             new { epoch, afterSeq, waitMs = 0, head = new { state = "IDLE", referenced = true, panDeg = 0.0, tiltDeg = 0.0 } })).Body.GetProperty("data");
-        async Task Arrive()
-        {
-            await b.Sync(status: "IDLE");
-            var command = (await b.PollData()).GetProperty("command");
-            var path = $"/api/fleet/commands/v1/{command.GetProperty("commandId").GetGuid()}/results";
-            Assert.Equal(HttpStatusCode.OK, (await b.Post(path, b.ResultBody(command, "result-accepted.json"))).Status);
-            Assert.Equal(HttpStatusCode.OK, (await b.Post(path, b.ResultBody(command, "result-terminal-arrived.json"))).Status);
-        }
-
-        var first = await HeadPoll(0, null);                       // the robot is listening
-        var epoch = first.GetProperty("epoch").GetGuid();
-        await Arrive();
-        var sweep = Assert.Single((await HeadPoll(0, epoch)).GetProperty("commands").EnumerateArray());
-        Assert.Equal("SWEEP", sweep.GetProperty("kind").GetString());
-        Assert.Equal(90, sweep.GetProperty("sweepDeg").GetInt32());
-        Assert.False(sweep.TryGetProperty("panDeg", out _));
-
-        var manual = await b.OperatorCall(HttpMethod.Put, "head-mode", new { mode = "MANUAL" });
-        Assert.True(manual.Status == HttpStatusCode.OK, manual.Body.ToString());
-        Assert.Equal("MANUAL", (await b.OperatorCall(HttpMethod.Get, "head")).Body.GetProperty("data").GetProperty("mode").GetString());
-        await b.Sync();
-        await b.StaffPost("next", new { requestId = Guid.NewGuid(), expectedRowVersion = await b.TourVersion() });
-        await Arrive();
-        Assert.Empty((await HeadPoll(sweep.GetProperty("seq").GetInt64(), epoch)).GetProperty("commands").EnumerateArray());
-
-        var bad = await b.OperatorCall(HttpMethod.Put, "head-mode", new { mode = "SOMETIMES" });
-        Assert.Equal(HttpStatusCode.BadRequest, bad.Status);
-    }
-
-    [SchemaV11Fact]
-    public async Task HeadAutoMode_LeavingAPoi_BringsTheHeadBackToTheFront()
-    {
-        await using var b = await Bridge.Create(headEnabled: true);
-        await b.W.H.Database.ExecuteAsync("UPDATE dbo.RouteRevisionStops SET CameraPreset = N'LEFT';");
-        await b.StartTour();
-
-        async Task<JsonElement> HeadPoll(long afterSeq, Guid? epoch) => (await b.Post("/api/fleet/head/v1/poll",
-            new { epoch, afterSeq, waitMs = 0, head = new { state = "IDLE", referenced = true, panDeg = 0.0, tiltDeg = 0.0 } })).Body.GetProperty("data");
-
         var epoch = (await HeadPoll(0, null)).GetProperty("epoch").GetGuid();
         await b.Sync(status: "IDLE");
         var command = (await b.PollData()).GetProperty("command");
         var path = $"/api/fleet/commands/v1/{command.GetProperty("commandId").GetGuid()}/results";
         Assert.Equal(HttpStatusCode.OK, (await b.Post(path, b.ResultBody(command, "result-accepted.json"))).Status);
         Assert.Equal(HttpStatusCode.OK, (await b.Post(path, b.ResultBody(command, "result-terminal-arrived.json"))).Status);
-        var sweep = Assert.Single((await HeadPoll(0, epoch)).GetProperty("commands").EnumerateArray());
-        Assert.Equal("ANGLE", sweep.GetProperty("kind").GetString());
-        Assert.Equal(90.0, sweep.GetProperty("panDeg").GetDouble());
+        Assert.Empty((await HeadPoll(0, epoch)).GetProperty("commands").EnumerateArray());
 
-        // The Operator moves on while the head may still be sweeping: the robot must not drive with it turned.
-        await b.Sync();
-        await b.StaffPost("next", new { requestId = Guid.NewGuid(), expectedRowVersion = await b.TourVersion() });
-        var recenter = Assert.Single((await HeadPoll(sweep.GetProperty("seq").GetInt64(), epoch)).GetProperty("commands").EnumerateArray());
-        Assert.Equal("ANGLE", recenter.GetProperty("kind").GetString());
-        Assert.Equal(0.0, recenter.GetProperty("panDeg").GetDouble());
-        Assert.Equal(0.0, recenter.GetProperty("tiltDeg").GetDouble());
+        var manual = await b.OperatorCall(HttpMethod.Put, "head-mode", new { mode = "MANUAL" });
+        Assert.True(manual.Status == HttpStatusCode.OK, manual.Body.ToString());
+        var off = (await b.Get("/api/fleet/head/v1/pois")).Body.GetProperty("data");
+        Assert.Equal(("MANUAL", false), (off.GetProperty("mode").GetString(), off.GetProperty("autoMotion").GetBoolean()));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await b.Get("/api/fleet/head/v1/pois", credential: b.OperatorToken)).Status);
+        var bad = await b.OperatorCall(HttpMethod.Put, "head-mode", new { mode = "SOMETIMES" });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.Status);
     }
 
     private sealed class Bridge(World world, PoiManagementEndpointTests.ApiHost host, string secret, string operatorToken, ClientWebSocket? console) : IAsyncDisposable
@@ -583,6 +555,17 @@ public sealed class FleetCommandsHttpTests
             {
                 Content = new StringContent(body is JsonNode node ? node.ToJsonString() : JsonSerializer.Serialize(body, body.GetType(), Web), Encoding.UTF8, "application/json")
             };
+            request.Headers.Add("X-Robot-Code", robotCode);
+            if (credential is not null)
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential == UseOwnCredential ? secret : credential);
+            using var response = await host.Client.SendAsync(request);
+            var text = await response.Content.ReadAsStringAsync();
+            return (response.StatusCode, string.IsNullOrEmpty(text) ? default : JsonDocument.Parse(text).RootElement.Clone());
+        }
+
+        public async Task<(HttpStatusCode Status, JsonElement Body)> Get(string path, string? credential = UseOwnCredential, string robotCode = TourReadySqlTests.Robot)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
             request.Headers.Add("X-Robot-Code", robotCode);
             if (credential is not null)
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential == UseOwnCredential ? secret : credential);

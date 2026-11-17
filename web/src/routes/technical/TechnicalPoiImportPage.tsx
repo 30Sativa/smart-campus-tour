@@ -6,17 +6,17 @@ import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
-import { CheckRow, DetailFact, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
-import { mapVersionLabel, poiObservationLabels, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { CheckRow, ComputedResult, NoneChecked, DetailFact, Note, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
+import { mapVersionLabel, narrationStatus, poiObservationLabels, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { headPresetLabel } from '../../features/technical/head-camera-preset'
 import { errorText, poiVerifyErrors } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
 import { useMapVersions, usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
-import type { PoiProposal, PoiRevision, PoiVerificationQueueItem } from '../../features/technical/api/technical'
+import type { PoiNarrationSummary, PoiProposal, PoiRevision, PoiVerificationQueueItem } from '../../features/technical/api/technical'
 
 type PoiFilter = 'pending' | 'retry' | 'passed'
 /** `recordable` follows the backend queue: it holds exactly the revisions still accepting a result. */
-type PoiRow = PoiVerificationQueueItem & { filter: PoiFilter; recordable: boolean }
+type PoiRow = PoiVerificationQueueItem & { filter: PoiFilter; recordable: boolean; narration?: PoiNarrationSummary | null }
 
 const filterText: Record<PoiFilter, { title: string; empty: string }> = {
   pending: { title: 'POI chờ kiểm chứng', empty: 'Chưa có POI chờ kiểm chứng' },
@@ -27,9 +27,11 @@ const filterText: Record<PoiFilter, { title: string; empty: string }> = {
 function toRows(queue: PoiVerificationQueueItem[], proposals: PoiProposal[]): PoiRow[] {
   const queued = new Set(queue.map(item => item.proposalId))
   const recorded = proposals.filter(item => !queued.has(item.id) && ['PASS', 'FAIL'].includes(item.revision.navigationStatus))
+  // The queue carries no narration summary; the proposal list does (ADR-0060), read-only here.
+  const narrationOf = new Map(proposals.map(item => [item.id, item.narration ?? null]))
   return [
-    ...queue.map(item => ({ ...item, filter: (item.revision.navigationStatus === 'FAIL' ? 'retry' : 'pending') as PoiFilter, recordable: true })),
-    ...recorded.map(({ id, currentRevision, rowVersion, revision }) => ({ proposalId: id, currentRevision, rowVersion, revision, filter: (revision.navigationStatus === 'PASS' ? 'passed' : 'retry') as PoiFilter, recordable: false })),
+    ...queue.map(item => ({ ...item, narration: narrationOf.get(item.proposalId) ?? null, filter: (item.revision.navigationStatus === 'FAIL' ? 'retry' : 'pending') as PoiFilter, recordable: true })),
+    ...recorded.map(({ id, currentRevision, rowVersion, revision, narration }) => ({ proposalId: id, currentRevision, rowVersion, revision, narration, filter: (revision.navigationStatus === 'PASS' ? 'passed' : 'retry') as PoiFilter, recordable: false })),
   ]
 }
 
@@ -53,7 +55,9 @@ export default function TechnicalPoiImportPage() {
   const [filter, setFilter] = useState<PoiFilter>('pending')
 
   const rows = useMemo(() => toRows(proposals.data ?? [], allProposals.data ?? []), [proposals.data, allProposals.data])
+  // Newest submission first; a revision without a submit time goes last.
   const visible = rows.filter(row => row.filter === filter)
+    .sort((a, b) => (b.revision.submittedAt ? Date.parse(b.revision.submittedAt) : -Infinity) - (a.revision.submittedAt ? Date.parse(a.revision.submittedAt) : -Infinity) || 0)
   const count = (value: PoiFilter) => rows.filter(row => row.filter === value).length
   // The queue alone is enough for the first two figures; only recorded results need the full list.
   const recordedCount = (value: PoiFilter) => allProposals.isPending ? '…' : allProposals.isError ? '-' : count(value)
@@ -126,8 +130,7 @@ function PoiDetailModal({ row, mapName, onClose, onRecord }: { row: PoiRow; mapN
         <DetailFact label="Phiên bản POI">{revision.revisionNumber}</DetailFact>
         <DetailFact label="Tọa độ"><span className="font-mono">x {revision.x}, y {revision.y}, yaw {revision.yaw}</span></DetailFact>
         <DetailFact label="Đầu camera VR">{headPresetLabel(revision.cameraPreset)}</DetailFact>
-        <DetailFact label="Thuyết minh"><span className="whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</span></DetailFact>
-        {revision.fallbackVideoUrl && <DetailFact label="Video dự phòng"><span className="break-all">{revision.fallbackVideoUrl}</span></DetailFact>}
+        <DetailFact label="Thuyết minh"><ToneBadge tone={narrationStatus(row.narration).tone}>{narrationStatus(row.narration).label}</ToneBadge><p className="mt-0.5 text-[11.5px] text-[#64748b]">Staff viết và duyệt; không ảnh hưởng kết quả kiểm chứng.</p></DetailFact>
       </dl>
     </Modal>
   )
@@ -139,12 +142,13 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
   const [robotCode, setRobotCode] = useState('')
   const [evidence, setEvidence] = useState('')
   const [reason, setReason] = useState('')
-  // Nothing is chosen or ticked up front: every observation is one the checker made on purpose.
-  const [resultCode, setResultCode] = useState<'PASS' | 'FAIL' | null>(null)
+  // Nothing is ticked up front: every observation is one the checker made on purpose.
   const [reached, setReached] = useState(false)
   const [stopped, setStopped] = useState(false)
   const [localized, setLocalized] = useState(false)
   const [cameraConfirmed, setCameraConfirmed] = useState(false)
+  // Until a box is ticked or unticked, the result is neither Đạt nor Không đạt and no reason is asked.
+  const [touched, setTouched] = useState(false)
   const { revision } = proposal
 
   const [reachedLabel, stoppedLabel, localizedLabel, cameraLabel] = poiObservationLabels(revision.cameraPreset)
@@ -154,19 +158,17 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
     { label: localizedLabel, checked: localized, set: setLocalized },
     { label: cameraLabel, checked: cameraConfirmed, set: setCameraConfirmed },
   ]
-  const missing = checks.filter(check => !check.checked).map(check => check.label)
-  const passBlocked = resultCode === 'PASS' && missing.length > 0
-  const failBlocked = resultCode === 'FAIL' && missing.length === 0
+  // The result follows the ticks: all four ticked is Đạt, any left unticked is Không đạt and needs a reason.
+  const resultCode: 'PASS' | 'FAIL' = checks.every(check => check.checked) ? 'PASS' : 'FAIL'
+  const pending = !touched && checks.every(check => !check.checked)
   const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
   // The server refuses this either way (MAP_NOT_DEPLOYED), so save waits for a fresh robot list that shows a pass on this map.
   const robotElsewhere = selectedRobot && (selectedRobot.latestDeployedMapKey !== revision.mapKey || selectedRobot.latestDeploymentPassed === false)
   const missingToSave = [
-    !resultCode && 'chọn kết quả',
     !robotCode && 'chọn robot',
     robotElsewhere && 'robot chưa kiểm tra triển khai đạt trên map này',
-    passBlocked && 'tick đủ bốn mục để ghi Đạt',
-    failBlocked && 'bỏ tick mục không đạt',
-    resultCode === 'FAIL' && !reason.trim() && 'nhập lý do không đạt',
+    pending && 'tick các mục đã kiểm tra',
+    !pending && resultCode === 'FAIL' && !reason.trim() && 'nhập lý do không đạt',
     !evidence.trim() && 'nhập ghi chú bằng chứng',
   ].filter((item): item is string => Boolean(item))
   const errors = verify.error ? poiVerifyErrors(verify.error) : {}
@@ -174,7 +176,7 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (missingToSave.length || !resultCode) return
+    if (missingToSave.length) return
     verify.mutate({
       proposalId: proposal.proposalId,
       revisionNumber: revision.revisionNumber,
@@ -192,21 +194,19 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
 
   return (
     <Modal open size="lg" title={`Kiểm tra ${revision.name}`} description={`${mapName}, phiên bản POI ${revision.revisionNumber}, đầu camera ${headPresetLabel(revision.cameraPreset)}. Đạt khi cả bốn kiểm tra đều đạt.`} onClose={onClose}
-      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
+      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="poi-verify-form" className="space-y-3.5" onSubmit={submit}>
         <div>
           <RobotPicker id="verify-robot" label="Robot vật lý" mapKey={revision.mapKey} requireReady value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả kiểm chứng." />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
           {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {revision.mapKey}. Ghi kiểm tra triển khai đạt ở trang Bản đồ rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
-        <ResultToggle id="verify-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này, sửa POI và gửi lại phiên bản mới." />
-        <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm"><p className="font-medium">Nội dung thuyết minh, chỉ đọc</p><p className="mt-1 whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</p>{revision.fallbackVideoUrl && <p className="mt-2 break-all text-xs text-[#64748b]">Video dự phòng: {revision.fallbackVideoUrl}</p>}</div>
         <div className="space-y-2">
-          {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
-          {passBlocked && <p role="alert" className="text-xs text-[#b23e18]">Chưa thể ghi Đạt, còn thiếu: {missing.join(', ')}. Tick đủ cả bốn mục hoặc chọn Không đạt.</p>}
-          {failBlocked && <p role="alert" className="text-xs text-[#b23e18]">Không đạt cần ít nhất một mục chưa đạt. Bỏ tick mục không đạt hoặc chọn Đạt.</p>}
+          <p className="text-xs text-[#64748b]">Tick mục đã đạt. Còn mục chưa tick thì kết quả là Không đạt.</p>
+          {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); setTouched(true); changed() }}>{check.label}</CheckRow>)}
+          {pending && <NoneChecked reasonId="verify-reason" onNone={() => { setTouched(true); changed() }} />}
         </div>
-        {resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="verify-reason">Lý do không đạt</label><input id="verify-reason" aria-invalid={Boolean(errors.reason)} className={`${inputClass} mt-1`} required maxLength={1000} value={reason} onChange={(event) => { setReason(event.target.value); changed() }} />{errors.reason && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.reason}</p>}</div>}
+        {!pending && resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="verify-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này, sửa POI và gửi lại phiên bản mới.</p><input id="verify-reason" aria-invalid={Boolean(errors.reason)} className={`${inputClass} mt-1`} required maxLength={1000} value={reason} onChange={(event) => { setReason(event.target.value); changed() }} />{errors.reason && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.reason}</p>}</div>}
         <div><label className={labelClass} htmlFor="verify-evidence">Ghi chú bằng chứng</label><textarea id="verify-evidence" rows={3} aria-invalid={Boolean(errors.evidenceNote)} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={(event) => { setEvidence(event.target.value); changed() }} />{errors.evidenceNote && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.evidenceNote}</p>}</div>
         {errors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errors.form}</p>}
         <Note>Bản ghi gắn với phiên bản POI {revision.revisionNumber}. Nếu Staff sửa POI trong lúc bạn kiểm tra, máy chủ sẽ từ chối và bạn cần mở lại.</Note>

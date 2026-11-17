@@ -20,7 +20,7 @@ public sealed class AdminScheduleBlocksController(ISender sender) : ControllerBa
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct) =>
         Ok(new BaseResponse<TourShiftsView> { Success = true, Message = "Schedule blocks retrieved.",
-            Data = await sender.Send(new GetTourShiftsQuery(from, to), ct) });
+            Data = await sender.Send(new GetTourShiftsQuery(from, to, IncludeTours: true), ct) });
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateScheduleBlockRequest request, CancellationToken ct) =>

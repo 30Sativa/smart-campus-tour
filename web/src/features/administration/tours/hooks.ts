@@ -27,8 +27,9 @@ export function useTourCalendar(from: string, to: string, enabled = true) {
   const query: TourListQuery = { from: dayStart(from), to: dayEnd(to), sort: 'scheduledStartAt', page: 1, size: CALENDAR_SIZE }
   return useQuery({ queryKey: tourKeys.list(query), queryFn: () => toursApi.list(query), enabled })
 }
-export function useTourRobots(routeRevisionId: string) {
-  return useQuery({ queryKey: [...tourKeys.all, 'robots', routeRevisionId], queryFn: () => toursApi.robots(routeRevisionId), enabled: Boolean(routeRevisionId) })
+/** `quick` also asks which Tour holds each robot over a quick Tour's hold from now; create remains the final check. */
+export function useTourRobots(routeRevisionId: string, quick = false) {
+  return useQuery({ queryKey: [...tourKeys.all, 'robots', routeRevisionId, quick], queryFn: () => toursApi.robots(routeRevisionId, quick), enabled: Boolean(routeRevisionId) })
 }
 /** The shifts of one campus date for this route and robot. Refreshed when a create is refused, because a shift was taken meanwhile. */
 export function useTourSlots(routeRevisionId: string, robotCode: string, date: string, enabled = true) {

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Common.Models;
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
 
@@ -61,11 +62,34 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
         return result;
     }
 
+    public async Task<IReadOnlyList<PoiNarrationRevision>> GetApprovedNarrationsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct) =>
+        proposalIds.Count == 0 ? [] : await db.PoiNarrationRevisions.AsNoTracking()
+            .Where(n => proposalIds.Contains(n.ProposalId) && n.State == PoiNarrationStates.Approved).ToArrayAsync(ct);
+
     public Task<PoiVerificationRecord?> GetEffectivePoiVerificationAsync(Guid proposalId, byte[] fingerprint, CancellationToken ct) =>
         db.PoiVerificationRecords.AsNoTracking()
             .Where(v => v.ProposalRevision.ProposalId == proposalId && v.NavigationFingerprint == fingerprint)
             .OrderByDescending(v => v.ProposalRevision.RevisionNumber)
             .ThenByDescending(v => v.CheckedAt).ThenByDescending(v => v.Id).FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<PoiProposalRevision>> FindPoiRevisionsAsync(IReadOnlyCollection<Guid> revisionIds, CancellationToken ct) =>
+        revisionIds.Count == 0 ? [] : await db.PoiProposalRevisions.AsNoTracking().Where(r => revisionIds.Contains(r.Id)).ToArrayAsync(ct);
+
+    public async Task<IReadOnlyDictionary<Guid, PoiProposal>> LockPoiProposalsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct)
+    {
+        var locked = new Dictionary<Guid, PoiProposal>();
+        foreach (var id in proposalIds.Distinct().OrderBy(id => id))
+        {
+            var proposal = await db.PoiProposals
+                .FromSqlInterpolated($"SELECT * FROM dbo.PoiProposals WITH (UPDLOCK, HOLDLOCK, ROWLOCK) WHERE Id = {id}").AsNoTracking()
+                .SingleOrDefaultAsync(ct);
+            if (proposal is not null) locked[id] = proposal;
+        }
+        return locked;
+    }
+
+    public async Task<IReadOnlyList<PoiProposal>> FindPoiProposalsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken ct) =>
+        proposalIds.Count == 0 ? [] : await db.PoiProposals.AsNoTracking().Where(p => proposalIds.Contains(p.Id)).ToArrayAsync(ct);
 
     public Task<PoiProposalRevision?> FindPoiRevisionAsync(Guid revisionId, CancellationToken ct) =>
         db.PoiProposalRevisions.AsNoTracking().SingleOrDefaultAsync(r => r.Id == revisionId, ct);
@@ -95,7 +119,9 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
         await db.Tours.AsNoTracking().Where(t => (t.RouteId == routeId || t.ActiveRouteId == routeId) &&
                 (t.State == "SCHEDULED" || t.State == "READY"))
             .OrderBy(t => t.ScheduledStartAt).ThenBy(t => t.Id)
-            .Select(t => new RouteScheduledTourView(t.Id, t.Name, t.ScheduledStartAt, t.State)).ToArrayAsync(ct);
+            .Select(t => new RouteScheduledTourView(t.Id, t.Name, t.ScheduledStartAt, t.State,
+                t.IsShortNotice ? t.ScheduledStartAt : t.ScheduledStartAt.AddHours(-Application.Features.Tours.TourSchedule.RegistrationCloseHours),
+                t.IsShortNotice, t.RouteRevisionId)).ToArrayAsync(ct);
 
     public Task<AuditLog?> FindAvailabilityRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct) =>
         db.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.ActorUserId == actorUserId && a.CorrelationId == requestId &&

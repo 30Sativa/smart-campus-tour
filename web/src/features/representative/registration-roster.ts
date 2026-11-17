@@ -22,6 +22,19 @@ export function matchRosterIdentities(imported: RosterRow[], existing: Represent
 }
 
 export type RosterChange = { before: RepresentativeRosterRow; after: RegistrationRosterInput }
+
+/** One value regardless of Unicode form, outer spaces or repeated inner spaces (Excel often adds them). */
+const comparable = (value: string | null | undefined) => (value ?? '').normalize('NFC').trim().replace(/\s+/g, ' ')
+
+export type RosterFieldChange = { field: 'rowType' | 'displayName' | 'className'; before: string | null; after: string | null }
+/** Fields that really differ between a stored row and its imported match; the file position is not one. */
+export function rosterFieldChanges(before: RepresentativeRosterRow, after: RegistrationRosterInput): RosterFieldChange[] {
+  const changes: RosterFieldChange[] = []
+  if (before.rowType !== after.rowType) changes.push({ field: 'rowType', before: before.rowType, after: after.rowType })
+  if (comparable(before.displayName) !== comparable(after.displayName)) changes.push({ field: 'displayName', before: before.displayName, after: after.displayName })
+  if (comparable(before.className) !== comparable(after.className)) changes.push({ field: 'className', before: before.className ?? null, after: after.className ?? null })
+  return changes
+}
 export function rosterReplacement(existing: RepresentativeRosterRow[], incoming: RegistrationRosterInput[]) {
   const current = existing.filter(row => row.participationState !== 'REMOVED')
   const byId = new Map(current.filter(row => row.id).map(row => [row.id!, row]))
@@ -33,8 +46,8 @@ export function rosterReplacement(existing: RepresentativeRosterRow[], incoming:
   for (const after of incoming) {
     const before = after.rowId ? byId.get(after.rowId) : undefined
     if (!before) continue
-    const isSame = before.rowNumber === after.rowNumber && before.rowType === after.rowType &&
-      before.displayName.trim() === after.displayName && normalized(before.email) === normalized(after.email) && optionalText(before.className) === after.className
+    // A row that only moved in the file is unchanged; its new rowNumber is still sent as imported.
+    const isSame = normalized(before.email) === normalized(after.email) && rosterFieldChanges(before, after).length === 0
     if (isSame) unchanged.push({ before, after })
     else changed.push({ before, after })
   }

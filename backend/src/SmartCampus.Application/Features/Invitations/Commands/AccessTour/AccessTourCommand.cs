@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using FluentValidation;
 using MediatR;
@@ -5,6 +6,7 @@ using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Invitations.Commands.AccessTour;
@@ -27,6 +29,37 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
     : IRequestHandler<AccessTourCommand, StudentAccessResult>
 {
     private static UnauthorizedException Invalid() => new("Mã truy cập hoặc phiên không hợp lệ, đã hết hạn hoặc bị thu hồi.");
+    public const string ReconnectWindowExpiredCode = "RECONNECT_WINDOW_EXPIRED";
+
+    /// <summary>This browser's open session is past the reconnect grace but still holds the seat until its lease ends.</summary>
+    private static ConflictException ReconnectWindowExpired(DateTimeOffset expiresAt, DateTimeOffset now)
+    {
+        var seconds = Math.Max(1L, (long)Math.Ceiling((expiresAt - now).TotalSeconds));
+        var minutes = Math.Max(1L, (seconds + 59) / 60);
+        var grace = ViewerReconnectPolicy.GracePeriod.TotalMinutes.ToString(CultureInfo.InvariantCulture);
+        return new ConflictException(
+            $"Trình duyệt này đã mất kết nối quá {grace} phút nên phiên cũ đang bị giữ. Nhờ đại diện hoặc Staff cấp mã mới để vào ngay, hoặc thử lại sau khoảng {minutes.ToString(CultureInfo.InvariantCulture)} phút.",
+            ReconnectWindowExpiredCode,
+            new Dictionary<string, string[]> { ["retryAfterSeconds"] = [seconds.ToString(CultureInfo.InvariantCulture)] });
+    }
+    public const string TourEndedCode = "TOUR_ENDED";
+
+    /// <summary>The Tour this browser was invited to is over: COMPLETED, or CANCELLED before it ever ran. Grants nothing.</summary>
+    private static ConflictException TourEnded(string state) => new(
+        state == "COMPLETED" ? "Buổi tham quan đã kết thúc." : "Buổi tham quan đã bị hủy.",
+        TourEndedCode,
+        new Dictionary<string, string[]> { ["tourState"] = [state] });
+
+    /// <summary>
+    /// Whether a refused request still proved it holds this invitation, as RECONNECT_WINDOW_EXPIRED requires: the current
+    /// code, an open session or an open session's device token, on an invitation that was not revoked or removed.
+    /// </summary>
+    private static bool ProvesInvitation(Invitation invitation, bool codeMatched, BrowserSession? current, byte[]? deviceHash) =>
+        invitation.RevokedAt is null && invitation.RosterRow.IsActive &&
+        invitation.RosterRow.ParticipationState == RosterParticipationStates.Accepted &&
+        (codeMatched || current is not null || deviceHash is not null && invitation.BrowserSessions.Any(s =>
+            s.EndedAt is null && s.DeviceTokenHash is not null && CryptographicOperations.FixedTimeEquals(s.DeviceTokenHash, deviceHash)));
+
     public async Task<StudentAccessResult> Handle(AccessTourCommand command, CancellationToken ct)
     {
         if (!settings.Enabled) throw Invalid();
@@ -67,9 +100,13 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
             }
             guard.Clear(codeHash, command.ClientIp);
         }
-        var allowed = InvitationPolicy.CanSend(tour, invitation.RosterRow.Registration, invitation, now) ||
-            tour.State == "CANCELLED" && tour.StartedAt is not null && InvitationPolicy.CanRevoke(tour, invitation.RosterRow.Registration, invitation, now);
-        if (!allowed) throw Invalid();
+        if (!InvitationPolicy.CanEnter(tour, invitation.RosterRow.Registration, invitation, now))
+        {
+            // A proven holder of a Tour that is over is told so instead of being handed the generic 401.
+            var ended = tour.State == "COMPLETED" || tour.State == "CANCELLED" && tour.StartedAt is null;
+            if (ended && ProvesInvitation(invitation, codeHash is not null, current, deviceHash)) throw TourEnded(tour.State);
+            throw Invalid();
+        }
         var active = invitation.BrowserSessions.SingleOrDefault(s => s.EndedAt is null);
         string? token = command.SessionToken;
         string? deviceToken = command.DeviceToken;
@@ -79,10 +116,11 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
             var sameDevice = deviceHash is not null && active.DeviceTokenHash is not null &&
                 CryptographicOperations.FixedTimeEquals(active.DeviceTokenHash, deviceHash);
             var withinReconnectGrace = ViewerReconnectPolicy.IsWithinGrace(active.LastSeenAt, now);
-            if (sameSession && !withinReconnectGrace) throw Invalid();
-            if (!sameSession && sameDevice && !withinReconnectGrace) throw Invalid();
+            // Reached only by a matching code, session or device token: this browser held the seat but lost it.
+            if (sameSession && !withinReconnectGrace) throw ReconnectWindowExpired(active.ExpiresAt, now);
+            if (!sameSession && sameDevice && !withinReconnectGrace) throw ReconnectWindowExpired(active.ExpiresAt, now);
             if (!sameSession && !(sameDevice && withinReconnectGrace))
-                throw new ConflictException("Lời mời đang được dùng trên browser khác. Liên hệ đại diện để thu hồi/cấp mã mới.", "INVITATION_IN_USE");
+                throw new ConflictException("Mã này đang được dùng trên một trình duyệt khác. Nhờ đại diện hoặc Staff cấp mã mới nếu đó không phải bạn.", "INVITATION_IN_USE");
             if (sameSession && active.DeviceTokenHash is not null && !sameDevice)
                 throw new ConflictException("Phiên không khớp browser đã liên kết với lời mời.", "INVITATION_IN_USE");
             if (deviceToken is null) deviceToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));

@@ -54,15 +54,19 @@ branch-request endpoint is implemented here.
 |---|---|---|
 | GET | `/api/staff/manage/tours` | Each row carries its active `reservation`, or null, and a read-only `execution` summary (additive; the detail's `tour` carries it too): `operationalStatus`, `assistanceReason`, `currentStep`, `commandState` (the current leg's GoTo state, the command the detail's `execution.command` shows, or null) and `needsReconcile` (true while any GoTo of the Tour is UNKNOWN, also after End Early, until Reconcile or a late result closes it). Read in the same list query; it changes no Tour or command. Paged list: search name/description/Route name; state; `phase` (`UPCOMING` = SCHEDULED/READY with a future start, `RUNNING`, `FINISHED` = COMPLETED/ENDED/CANCELLED); from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. Since 2026-11-07 (additive): each row carries `operator` (`userId`, `fullName`, `username` of the assigned Operator, null for a legacy Tour; never CreatedByUserId); `operator=me` keeps the caller's own Tours (any other value is 400); `needsReconcile=true` keeps Tours with an UNKNOWN GoTo in any state; `readyBlockers=true` adds `readyBlockers` (the detail's `permissions.readyBlockers`, same advisory checks without locks) to SCHEDULED rows, other rows null, and is 400 above size 10. |
 | GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. `permissions` adds `canMarkReady`, `canReopen` and `readyBlockers` (`[{code, message}]`, Vietnamese message): the READY conditions evaluated now, without locks. `execution` gives state, operationalStatus, assistanceReason, currentStep, the current leg, the stop ids, dwellDeadlineAt (display only) and the leg's command. `allowedActions` (`start`, `next`, `endEarly`, `retryLeg`, `reconcile`) are `{allowed, reason, blockedBy}` for the caller, advisory until rechecked under locks. |
-| GET | `/api/staff/manage/tours/slots` | `routeRevisionId`, `robotCode`, `from`, `to` (Vietnam dates, at most 31 days). Per day, one entry per configured shift (`Tours:Shifts`, `docs/lich-tour-theo-ca.md`): `shiftCode`, `shiftName`, `maxDurationSeconds`, `time` and `startsAt` (the Tour start), `available`, or `reasonCode` (`LEAD_TIME_TOO_SHORT`, `ROUTE_TEST_REMEASURE_REQUIRED`, `ROUTE_TOO_LONG_FOR_SHIFT`, `SHIFT_BLOCKED`, `RESERVATION_OVERLAP`) with Vietnamese `reason`, plus the reservation window (the whole shift) and registration close. The response adds `recommendedMaxSeconds`. Same calculation as create. |
-| GET | `/api/staff/manage/tours/shifts` | Staff only. `from`, `to` (Vietnam dates, at most 31 days). `{days: [{date, shifts: [{code, name, startsAt, endsAt, tourStartsAt, time, maxDurationSeconds, block}]}], recommendedMaxSeconds}`; `startsAt`/`endsAt` is the robot hold, `block` is null or `{id, scope: DAY or SHIFT, reason}`. Draws the calendar before a route or robot is chosen. |
+| GET | `/api/staff/manage/tours/slots` | `routeRevisionId`, `robotCode`, `from`, `to` (Vietnam dates, at most 31 days). Per day, one entry per configured shift (`Tours:Shifts`, `docs/lich-tour-theo-ca.md`): `shiftCode`, `shiftName`, `maxDurationSeconds`, `time` and `startsAt` (the Tour start), `available`, or `reasonCode` (`LEAD_TIME_TOO_SHORT`, `ROUTE_TOO_LONG_FOR_SHIFT`, `SHIFT_BLOCKED`, `RESERVATION_OVERLAP`) with Vietnamese `reason`, plus the reservation window (the whole shift) and registration close. The response adds `recommendedMaxSeconds` and `expectedDurationSeconds`, the revision's estimated length (`docs/lich-tour-theo-ca.md` §4); `measuredDurationSeconds` carries the same estimate until the column is dropped. Same calculation as create. |
+| GET | `/api/staff/manage/tours/shifts` | Staff only. `from`, `to` (Vietnam dates, at most 31 days). `{days: [{date, shifts: [{code, name, startsAt, endsAt, tourStartsAt, time, maxDurationSeconds, block}]}], recommendedMaxSeconds}`; `startsAt`/`endsAt` is the robot hold, `block` is null or `{id, scope: DAY or SHIFT, reason}`. Draws the calendar before a route or robot is chosen. Adds `estimatedSpeedMetersPerSecond` (`Tours:EstimatedSpeedMetersPerSecond`), so the route form shows an unsaved draft's estimate by the server rule (`web/src/features/administration/routes/route-estimate.ts`, cross-checked with `TourScheduleTests`). |
+| GET | `/api/admin/schedule-blocks` | Admin only. Same `from`, `to` and response as `shifts`, plus `tours` on each shift and each day: the uncancelled Tours that start in that window or still hold a robot in it, i.e. exactly those that would make a block return `SHIFT_HAS_TOURS`. Each is `{id, name, scheduledStartAt, state, isShortNotice, registrationClosesAt}`, oldest start first. The Staff `shifts` endpoint returns `tours: null`. |
+| POST | `/api/admin/schedule-blocks` | Admin only. `{requestId, date, shiftCode, reason}`; null `shiftCode` closes the whole day; returns `{id, scope, reason}`. 400 for a date before today (Vietnam date), a shift that has already ended (a shift still running may be closed), an unknown shift or a blank reason. 409 `SCHEDULE_BLOCK_EXISTS` for a duplicate block, or a whole-day block and a single-shift block on one day; 409 `SHIFT_HAS_TOURS` with `errors.blockers` naming each uncancelled Tour. Takes the same per-date lock as Tour create. Audited as `SCHEDULE_BLOCK_CREATED`. |
+
+| GET | `/api/staff/manage/tours/shifts` | Staff only. `from`, `to` (Vietnam dates, at most 31 days). `{days: [{date, shifts: [{code, name, startsAt, endsAt, tourStartsAt, time, maxDurationSeconds, block}]}], recommendedMaxSeconds}`; `startsAt`/`endsAt` is the robot hold, `block` is null or `{id, scope: DAY or SHIFT, reason}`. Draws the calendar before a route or robot is chosen; the route page and route form read one day of it to warn when a route is longer than the shortest shift (`maxDurationSeconds`). Adds `estimatedSpeedMetersPerSecond` (`Tours:EstimatedSpeedMetersPerSecond`), so the route form shows an unsaved draft's estimate by the server rule (`web/src/features/administration/routes/route-estimate.ts`, cross-checked with `TourScheduleTests`). |
 | GET | `/api/admin/schedule-blocks` | Admin only. Same `from`, `to` and response as `shifts`. |
 | POST | `/api/admin/schedule-blocks` | Admin only. `{requestId, date, shiftCode, reason}`; null `shiftCode` closes the whole day; returns `{id, scope, reason}`. 400 for a date before today (Vietnam date), an unknown shift or a blank reason. 409 `SCHEDULE_BLOCK_EXISTS` for a duplicate block, or a whole-day block and a single-shift block on one day; 409 `SHIFT_HAS_TOURS` with `errors.blockers` naming each uncancelled Tour. Takes the same per-date lock as Tour create. Audited as `SCHEDULE_BLOCK_CREATED`. |
 | POST | `/api/admin/schedule-blocks/{id}/remove` | Admin only. `{requestId}`; allowed for past dates too. 404 when missing, 409 `SCHEDULE_BLOCK_ALREADY_REMOVED`. Audited as `SCHEDULE_BLOCK_REMOVED`. |
-| GET | `/api/admin/system-audit-logs` | Admin only. Paged audit entries, newest first, filtered by `action`, `actor`, `from`, `to`. Safe columns only, never `DataJson`. |
+| GET | `/api/admin/system-audit-logs` | Admin only. Paged audit entries, newest first, filtered by `action`, `actor`, `from`, `to`. Safe columns only, never `DataJson`. A `Route` row adds `routeName`, a `RouteRevision` row (e.g. a test run) `routeName` and `routeRevisionSavedAt` (additive, null otherwise), so it is named by its route rather than the robot. |
 | GET | `/api/staff/notifications` | Staff only (Admin/TechnicalStaff 403). `size` 1-50 (default 30). The newest audit rows of Technical Staff outcomes Staff acts on, newest first: `POI_TECHNICAL_VERIFIED`, `POI_POSE_CAPTURE_VERIFIED`, `POI_TECHNICAL_REJECTED`, `ROUTE_TEST_PASSED`, `ROUTE_TEST_FAILED`, `MAP_DEPLOYMENT_CHECK_RECORDED` (`resultCode` PASS/FAIL) and `ROBOT_INSPECTION_RELEASED`. Each row is `{id, occurredAt, action, resultCode, targetId, subject, revisionNumber, robotCode, actorName}`; `targetId` is the POI proposal, Route, map version or robot to open, null with `subject` when the target is gone. A read projection of the audit log: no new table, never `DataJson`. Read state is the browser's (per account); there is no push event, the web polls. |
 | GET | `/api/staff/manage/tours/operators` | Active single-role Staff accounts a new Tour can name as Operator (ADR-0034). |
-| POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. The schedule must be exactly the Tour start of a configured shift (409 `TOUR_SLOT_NOT_ALLOWED`), at least 72 hours ahead (409 `TOUR_LEAD_TIME_TOO_SHORT`); a run without a measurement basis returns 409 `ROUTE_TEST_REMEASURE_REQUIRED`. Creates a SCHEDULED Tour on one exact tested revision and holds the robot for the whole shift (`docs/lich-tour-theo-ca.md`); 409 `ROUTE_TOO_LONG_FOR_SHIFT`, `SHIFT_BLOCKED`, `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
+| POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. The schedule must be exactly the Tour start of a configured shift (409 `TOUR_SLOT_NOT_ALLOWED`), at least 72 hours ahead (409 `TOUR_LEAD_TIME_TOO_SHORT`). The shift must hold the revision's estimated duration (total dwell plus straight-line travel at `Tours:EstimatedSpeedMetersPerSecond`, default 0.25); `ROUTE_TEST_REMEASURE_REQUIRED` is no longer returned. Creates a SCHEDULED Tour on one exact tested revision and holds the robot for the whole shift (`docs/lich-tour-theo-ca.md`); 409 `ROUTE_TOO_LONG_FOR_SHIFT`, `SHIFT_BLOCKED`, `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
 | PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`; cancel and recreate instead. Cancelling releases the reservation. |
 | POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. The commit also queues one notice for representatives of SUBMITTED/APPROVED registrations; the email worker sends it after commit and audits `TOUR_CANCEL_NOTICE_SENT`/`TOUR_CANCEL_NOTICE_FAILED`. Email outcome never changes the response, and a replay queues nothing. |
 | POST | `/api/staff/manage/tours/{id}/ready` | `{requestId, expectedRowVersion}`; any Staff (Admin/TechnicalStaff/Representative 403). SCHEDULED → READY when every READY condition of §3.2 passes under the Tour lock, then the map preparation, robot deployment and robot reservation locks (Tour create order). Otherwise 409 `READY_PRECONDITION_FAILED` with `errors.blockers` listing every failing condition; `STALE_VERSION`, `IDEMPOTENCY_CONFLICT`. Commits a `TOUR_READY` TourEvent and receipt. No robot claim, `CurrentTourId`, Start or command. |
@@ -77,7 +81,8 @@ branch-request endpoint is implemented here.
 | POST | `/api/technical/physical-robots/{id}/dispatch` | `{requestId, expectedRowVersion, enabled, reason, evidenceRef}`; Technical Staff (ADR-0049). Turning off always works, even from a stale page. Turning on needs `evidenceRef` (the GATE A record), an active robot (`ROBOT_DEACTIVATED`) with a key (`ROBOT_CREDENTIAL_REQUIRED`), an assigned map (`ROBOT_MAP_REQUIRED`), a passing latest deployment check on that map (`ROBOT_DEPLOYMENT_CHECK_REQUIRED`) and no pending inspection (`ROBOT_NEEDS_INSPECTION`); `STALE_VERSION`. Audit `ROBOT_DISPATCH_CHANGED`; same `requestId` replays, other content is `IDEMPOTENCY_CONFLICT`. Returns `{robotId, isDispatchEnabled}`. It does not stop a robot already moving. The physical-robot list, the Technical dashboard and the robot diagnostics read return `isDispatchEnabled`. |
 | POST | `/api/staff/routes/{id}/deactivate` | Staff only. `{requestId, expectedRowVersion}`; `expectedRowVersion` is the route view's opaque `rowVersion`. Stops new Tours on a VERSIONED route (ADR-0037); returns `{routeId, isActive, scheduledTours}`. 409 `STALE_ROUTE` or `IDEMPOTENCY_CONFLICT`; 404 for a legacy or missing Route. |
 | POST | `/api/staff/routes/{id}/activate` | Same body and result. Only lifts the stop; Tour create still requires an effective PASS. |
-| GET | `/api/staff/routes/{id}/scheduled-tours` | Staff only. SCHEDULED/READY Tours on a VERSIONED route, shown before deactivating. |
+| GET | `/api/staff/routes/{id}/scheduled-tours` | Staff only. SCHEDULED/READY Tours on a VERSIONED route, shown before deactivating. Each row adds `registrationClosesAt` and `isShortNotice` (additive), so a quick Tour is not labelled by the 48-hour shift rule. |
+| GET | `/api/staff/poi-proposals/{id}/scheduled-tours` | Staff only. SCHEDULED/READY Tours whose route revision stops at any revision of the POI, shown before retiring it. Same row shape as the route list. Read-only; missing POI 404. |
 
 `configuration` is `{name, description?, routeId, scheduledStartAt,
 fallbackVideoUrl?}`. Name <=150, description <=1000, fallback URL <=1000 and
@@ -90,7 +95,9 @@ Metadata corrections on an unchanged Route do not reactivate/reconfigure it.
 
 List returns PagedResponse with Tour summaries: id, name, description, routeId,
 routeName, activeRouteId, scheduledStartAt, state, createdByUserId, createdAt,
-updatedAt, base64 SQL rowVersion, registrationCount and invitationCount. Detail
+updatedAt, base64 SQL rowVersion, registrationCount and invitationCount
+(invitations of active roster rows only since 2026-11-17; a row removed by a roster
+replace keeps its revoked invitation for audit but is no longer counted). Detail
 is BaseResponse data `{tour, route, activeRoute, fallbackVideoUrl, startedAt,
 endedAt, endReason, usage, permissions}`. Permission fields are canEditMetadata,
 canChangeScheduleAndRoute, canCancel and canDelete (always false). Responses
@@ -135,7 +142,10 @@ Errors use BaseResponse: 400 validation, 401/403 auth/role, 404 missing Tour/Rou
 409 STALE_VERSION, STALE_ROUTE, IDEMPOTENCY_CONFLICT, TOUR_LOCKED,
 TOUR_CONFIGURATION_LOCKED, ROUTE_VERSION_REQUIRED, ROUTE_UNAVAILABLE or
 TOUR_CONCURRENT_CHANGE. Data-valid/active configuration is not physical
-commissioning or readiness for robot operation.
+commissioning or readiness for robot operation. A 400 from a `ValidationException`
+that names no field (a rule checked in a handler, e.g. POI precision) also carries
+its own message in the additive top-level `detail` (omitted otherwise); `errors`
+stays the per-field map.
 
 ## Versioned Route authoring and legacy Tour read boundary
 
@@ -145,7 +155,10 @@ authoring uses `GET /api/routes`, `POST /api/staff/routes`, revision creation,
 submission and Technical Staff manual test evidence described in
 `backend/docs/route-revisions.md` and ADR-0023. Technical Staff picks the
 participating Staff account from the read-only
-`GET /api/technical/route-verifications/participants`. Route stops carry exact
+`GET /api/technical/route-verifications/participants`. A test run's request no
+longer has `measuredDurationSeconds` (an extra field is ignored) and
+`ROUTE_TEST_DURATION_TOO_SHORT` is retired: the run stores the revision's estimated
+duration, which is also what sizes the Tour's robot hold. Route stops carry exact
 `PoiRevisionId` and the corresponding effective verification evidence; they do
 not pass legacy `PoiId` values. Each stop view (route revision reads and the Tour detail's
 `routeRevision.stops[]`) also returns its own `id`, the `RouteRevisionStops.Id` that Tour
@@ -499,7 +512,7 @@ Integration instructions and separate frontend tasks:
 
 | Endpoint | Request and success | Rejection behavior |
 |---|---|---|
-| `POST /api/auth/login` | JSON `{ "username": "...", "password": "..." }`; HTTP 200 with `accessToken`, `userId`, `username`, and `role`, and sets the refresh cookie. | Invalid username (empty, over 100 characters, or containing whitespace): 400. Unknown username or incorrect password: 401. Inactive account or invalid role assignment: 403. |
+| `POST /api/auth/login` | JSON `{ "username": "...", "password": "..." }`; HTTP 200 with `accessToken`, `userId`, `username`, and `role`, and sets the refresh cookie. Revokes the account's earlier refresh tokens (one session per account). | Invalid username (empty, over 100 characters, or containing whitespace): 400. Unknown username or incorrect password: 401. Inactive account or invalid role assignment: 403. |
 | `POST /api/auth/refresh` | No body; reads the refresh cookie. HTTP 200 returns the same response fields and re-sets the same refresh token with its stored expiry. Tokens are not rotated. | Missing, unknown, expired, or revoked refresh token: 401. Inactive account or invalid role assignment: 403. Rejected refresh clears the cookie. |
 | `POST /api/auth/logout` | No body; HTTP 204 and clears the cookie. A matching stored token is marked revoked. Missing, unknown, or already revoked tokens are an idempotent no-op. | An unexpected persistence failure uses the common error response and still clears the cookie. |
 
@@ -545,7 +558,11 @@ ProblemDetails shape. Conflict responses that use a feature code expose
 `errors` as `{ code, fields }`; legacy generic conflicts keep `errors: null`
 for existing clients. Login failures do not create a refresh token. Login
 creates a cryptographically random refresh token and stores only its SHA-256
-hash in `RefreshTokens`; it lives for 7 days. Refresh does not rotate or mutate
+hash in `RefreshTokens`; it lives for 7 days. One session per account
+(2026-11-16): under the same User lock, a successful login revokes every
+earlier unrevoked refresh token of that account, so the previous browser's
+refresh returns 401 and it is signed out once its access token (at most 15
+minutes) expires; already-issued access tokens are not revoked early. Refresh does not rotate or mutate
 the stored token: it returns the same refresh token and stored expiry while
 issuing a new access token. Logout revokes a matching stored token. The cookie
 is named `campustour.refresh`, with `HttpOnly`, `Secure`, `SameSite=None`, and
@@ -680,6 +697,105 @@ Staff list and verification queue but no row is deleted. Proposal views add
 `canDiscard` and `discardedAt`; later writes to it return 409
 `POI_PROPOSAL_DISCARDED`.
 
+Under ADR-0062 (schema v1.23), which amends that rule:
+
+- Discard is allowed while no revision of the proposal is a stop of any route
+  revision (retired routes included), whether or not it ever passed; otherwise
+  409 `POI_PROPOSAL_IN_ROUTE` (replaces `POI_PROPOSAL_HAS_PASS`). Request unchanged.
+- `POST /api/staff/poi-proposals/{id}/retire` and `/reactivate` (Staff only) with
+  `{ requestId, expectedRowVersion }` return the proposal view. Retire needs
+  `canRetire`, else 409 `POI_NOT_RETIRABLE`; stale rowversion 409 `STALE_VERSION`;
+  a discarded POI 409 `POI_PROPOSAL_DISCARDED`; a request for a POI already in the
+  requested state returns it unchanged. Audit actions `POI_PROPOSAL_RETIRED`,
+  `POI_PROPOSAL_REACTIVATED`.
+- A retired POI refuses create revision, submit, verification and narration
+  save/approve/discard with 409 `POI_RETIRED`, leaves the verification queue, and
+  a pose import of its source id fails with `POI_RETIRED`. It stays in the Staff list.
+- Route revision save returns 409 `POI_PROPOSAL_DISCARDED` or `POI_RETIRED`
+  ("POI {tên} đã ngưng dùng. Bỏ khỏi tuyến hoặc dùng lại POI.") for such a stop.
+  It locks each stop's proposal row before the map-preparation lock, the lock that
+  discard and retire take, so neither can interleave with the save. Saved route
+  revisions and Tours are unchanged.
+- Proposal views add `canRetire`, `retiredAt` and `canReactivate` at the end.
+- `GET /api/staff/poi-proposals/{id}/history` now gives each revision the
+  effective result for its navigation fingerprint (`navigationStatus`,
+  `verificationSourceRevisionId`), the rule the list and detail views already use;
+  a content-only save shows the PASS it kept. Response shape unchanged.
+- Tour create (regular and quick) returns 409 `ROUTE_HAS_RETIRED_POI` ("Tuyến có
+  POI đã ngưng dùng: {tên}. Lưu phiên bản tuyến mới không có POI này, hoặc dùng
+  lại POI.") when a stop's POI on the chosen route revision is retired or
+  discarded, checked under row locks on those POIs after the Route lock. Tours
+  already SCHEDULED or READY still go READY and Start. Route revision views (route
+  detail and list, and `routeRevision` in Tour detail) add `retiredPoiNames` at the
+  end: the stop names whose POI is retired or discarded now.
+
+Under ADR-0041 (schema v1.21), TechnicalStaff retire a map version instead of
+deleting it: `POST /api/technical/map-versions/{id}/retire` with
+`{ reason, expectedRowVersion }` and `POST /api/technical/map-versions/{id}/reopen`
+with optional `{ expectedRowVersion }`; `GET /api/technical/map-versions/{id}/retirement-impact`
+lists the routes, assigned robots, waiting POI/route reviews and SCHEDULED/READY
+Tours on it. Retire is refused with 409 `MAP_VERSION_ROBOT_ASSIGNED`,
+`MAP_VERSION_HAS_PENDING_REVIEWS` or `MAP_VERSION_HAS_UPCOMING_TOURS` (each with
+`errors.blockers`) and `MAP_VERSION_STALE` for a stale version, all checked under
+the per-version map-preparation lock and a row lock. A retired version is left out
+of `GET /api/maps/versions` unless `includeRetired=true`; map views add `status`
+(`ACTIVE`/`RETIRED`), `retiredAt`, `retiredByUserId`, `retiredByName`,
+`retirementReason` and an opaque `rowVersion`. Robot map assignment, deployment
+checks, POI proposal/revision/submission/import (and preview), route revision/
+submission and Tour create/slots on it return 409 `MAP_VERSION_RETIRED`; existing
+data stays readable. Audit actions: `MAP_VERSION_RETIRED`, `MAP_VERSION_REOPENED`.
+
+Under ADR-0060 (schema v1.22), POI narration is versioned content of the POI
+proposal, not of a navigation revision. Narration is written and approved
+whether or not the POI has been submitted or passed, as long as it exists and is
+not discarded:
+
+- `GET /api/staff/poi-proposals/{id}/narrations` (Staff, TechnicalStaff) lists
+  every version newest first: `{ id, proposalId, revisionNumber, state,
+  narrationText, fallbackVideoUrl, createdByUserId, createdByName, createdAt,
+  lastEditedByUserId, lastEditedByName, lastEditedAt, approvedByUserId,
+  approvedByName, approvedAt, rowVersion }`; `state` is `DRAFT`, `APPROVED`,
+  `SUPERSEDED` or `DISCARDED`.
+- `PUT /api/staff/poi-proposals/{id}/narrations/draft` (Staff) with
+  `{ requestId, expectedRowVersion?, narrationText, fallbackVideoUrl? }` creates
+  the draft when there is none (`expectedRowVersion` absent) or edits the current
+  draft in place (`expectedRowVersion` required); a mismatch either way is 409
+  `STALE_VERSION`. Text is trimmed, 1–4000 characters. `fallbackVideoUrl` is
+  still accepted but ignored (stored NULL); a route revision copies no video to
+  its stops either. The columns `PoiNarrationRevisions.FallbackVideoUrl` and
+  `RouteRevisionStops.FallbackVideoUrl` remain until a later schema drops them.
+  The only fallback video students see is the Tour's own `fallbackVideoUrl`.
+- `POST /api/staff/poi-proposals/{id}/narrations/{revisionNumber}/approve` and
+  `/discard` (Staff) with `{ requestId, expectedRowVersion }`. Approving needs an
+  approver other than the draft's last editor (409
+  `NARRATION_SELF_APPROVAL_FORBIDDEN`) and moves the previously approved version
+  to `SUPERSEDED` in the same transaction. A version that is not `DRAFT` is 409
+  `NARRATION_NOT_DRAFT`; a discarded POI is 409 `POI_PROPOSAL_DISCARDED`.
+- All three writes return the affected version, take the POI proposal row lock
+  and do not change the proposal's `rowVersion`. A repeated `requestId` with the
+  same content returns that version's current view; other content is 409
+  `IDEMPOTENCY_CONFLICT`. Audit actions: `POI_NARRATION_DRAFT_CREATED`,
+  `POI_NARRATION_DRAFT_EDITED`, `POI_NARRATION_APPROVED`, `POI_NARRATION_DISCARDED`.
+- POI proposal views add `narration: { approved: { revisionNumber,
+  approvedByUserId, approvedByName, approvedAt } | null, draft: { revisionNumber,
+  lastEditedByUserId, lastEditedByName, lastEditedAt, rowVersion } | null }`.
+- **Breaking:** POI create/revise drafts no longer accept `narrationText` or
+  `fallbackVideoUrl` (ignored if sent), and revision views no longer return them.
+  Submit no longer returns `POI_NARRATION_REQUIRED`.
+- Route revision save requires an approved narration for every selected POI,
+  otherwise 409 `POI_NARRATION_NOT_APPROVED` ("POI {tên} chưa có thuyết minh đã
+  duyệt."). The stop snapshots that text and video and records
+  `RouteRevisionStops.NarrationRevisionId`; the route fingerprint and test-run
+  inheritance are unchanged. Existing route revisions and Tours keep their snapshot.
+
+Under ADR-0061, a POI proposal appears at most once in a route revision: route
+revision save returns 409 `ROUTE_DUPLICATE_POI` ("POI {tên} đã có trong tuyến.
+Mỗi POI chỉ được dùng một lần.") when two stops name revisions of the same POI,
+checked before the stop-separation rule. Route revision stop views add
+`poiProposalId` (null only if the POI revision is missing); existing fields are
+unchanged. A stop still points at its exact POI revision; nothing moves an
+existing route revision or Tour to a newer POI revision.
+
 Under ADR-0028, a valid uploaded package alone is not selectable for new POI
 work. Map list/detail return backend-calculated `technicalCheckStatus`,
 `canUseForPoiPreparation`, a block reason code/text, and the evidence record
@@ -765,7 +881,7 @@ TechnicalStaff imports robot pose-capture files through multipart
 `POI_IMPORT_INVALID` with per-file errors). Verification views add `verificationMethod` and
 `sourceFileSha256`, their four observation fields are null for `POSE_CAPTURE`, revisions add the
 effective `verificationMethod`, and proposals add `sourcePoiId`. Route save returns 409
-`POI_NARRATION_REQUIRED` for a stop without narration. See ADR-0038.
+`POI_NARRATION_NOT_APPROVED` for a stop without approved narration (ADR-0060). See ADR-0038.
 
 Map and pose input limits (ADR-0040): `POST /api/technical/map-versions` returns 409
 `MAP_PACKAGE_DUPLICATE` for a package already in that area. POI create and draft return 422
@@ -783,7 +899,9 @@ Robot integrity (ADR-0039): map assignment returns `affectedTours` and 409
 `deactivatedAt`, `deactivationReason`; it also returns `needsInspection`, `currentTourId`, `currentTourName` and
 `currentTourState` (ADR-0043 D13) so the Technical robots page can offer release-inspection only for a
 held robot. Staff `GET /api/staff/manage/tours/robots?routeRevisionId=` lists
-robots with `usable` and `blockReason`; create and slots return 409 `ROBOT_NOT_READY_FOR_ROUTE`. Writers
+robots with `usable` and `blockReason`, plus read-only `needsInspection` (create still accepts such a robot;
+only the Start preflight refuses it). With `quick=true` each row also names `heldByTourName`/`heldUntil` when another
+Tour holds the robot over the hold a quick Tour created now would take (display only; create re-checks); create and slots return 409 `ROBOT_NOT_READY_FOR_ROUTE`. Writers
 refuse a deactivated robot with 409 `ROBOT_DEACTIVATED`.
 
 Project POI YAML templates/frame mapping, route revision/test tuple, scheduling/READY,
@@ -1236,6 +1354,16 @@ A real Start stores its `requestId` receipt (`TourRequestReceipt`) against repea
 Start, SRS §4 (ADR-0042 §5 step 1). A refused Start commits nothing, so it leaves no
 receipt.
 
+**Demo Tour flow (ADR-0059, proposed 14/11/2026).** `POST …/start` with `holdAtStart: true` opens the Tour at
+`CurrentStep = INITIALIZING` with no command (`robotLocalized`/`motionReady` shown, not required; `GET …/start-checks?holdAtStart=true`);
+`POST …/next` from `INITIALIZING` is the departure and takes the four on-site confirmations. `POST …/pause` withdraws an
+undelivered GoTo or queues a Cancel; the leg's CANCELLED/FAILED/REJECTED end then sets `OperationalStatus = PAUSED` (ARRIVED
+still opens the POI), and `POST …/retry-leg` resumes it as a new leg. `POST …/skip` passes over the POI the robot would go to
+next while it stands still (`STOP_SKIPPED`). `PUT …/auto-advance {enabled}` (Operator, in memory, off by default) lets a worker
+make one attempt per visit to leave a POI whose dwell ended, with every movement check. End Early with no open GoTo releases
+the robot. A quick Tour needs no accepted row for READY or Start. GET Tour adds `allowedActions.open/pause/skip`,
+`execution.command.cancelRequested` and `execution.autoAdvance {enabled, blockedReason}`.
+
 **Tour runtime (M2.2-b, ADR-0043).** `ReportCommandResultCommand` is the Application
 use case the robot results endpoint will call; it locks the Tour, then the command.
 A result is valid only from `DeliveredStreamId` with the command's `legId` and an
@@ -1296,10 +1424,11 @@ buttons on the Operator console:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE\|SWEEP, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?, sweepDeg?}` (ANGLE within pan ±170, tilt ±18; `sweepDeg` 10..170, SWEEP only); 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
-| PUT | `/api/staff/manage/tours/{id}/head-mode` | `{mode: AUTO\|MANUAL}`, Operator only, until the Tour ends. AUTO (default) turns each POI's camera preset into one command at arrival (ANGLE, SWEEP with its `sweepDeg`, nothing for NONE) and queues `ANGLE 0/0` when Next starts the following leg (ADR-0045 addenda); MANUAL skips both. In memory. |
+| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE\|SWEEP\|HOME, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?, sweepDeg?}` (ANGLE within pan ±170, tilt ±18; `sweepDeg` 10..170, SWEEP only); `HOME` (re-align against the stops) is also accepted while READY, for the held robot; 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
+| PUT | `/api/staff/manage/tours/{id}/head-mode` | `{mode: AUTO\|MANUAL}`, Operator only, until the Tour ends. AUTO (default) lets the robot turn the head to each POI's camera preset itself; MANUAL sets `autoMotion: false` on `GET pois`. In memory. |
 | GET | `/api/staff/manage/tours/{id}/head` | Any Staff: `{enabled, mode, robotCode, connected, lastPollAt, head}` from the robot's last poll. |
 | POST | `/api/fleet/head/v1/poll` | Robot scheme. Long poll `{epoch, afterSeq, waitMs, head}` → `{epoch, commands[]}`. |
+| GET | `/api/fleet/head/v1/pois` | Robot scheme (added 14/11/2026). `{source: TOUR\|MAP\|NONE, tourId, mapVersionId, mode, autoMotion, pois[{id, name, x, y, yaw, cameraPreset}]}`: the running Tour's stops, else the verified POIs on the robot's map. |
 
 Wire: `docs/contracts/fleet-head/v1/`. Commands live only in API memory per robot
 (epoch + seq, last 32, never older than `FleetHead:MaxCommandAgeMs`); no
@@ -1311,6 +1440,12 @@ closed tab stops the head. On the robot, `fleet_bridge` (`head_enabled`) maps
 `sweepDeg` or 0 for the default 135°: left, right, back to the start at 30°/s; any button stops it), and reports
 `head/state` on its next poll. Same
 single-API-instance limit as Fleet Sync (ADR-0019).
+
+POI head motion is robot-side (ADR-0045 addendum 14/11/2026): `fleet_bridge` (`head_poi_auto`) refreshes `GET pois`
+every 5 s and watches `navigate_to_pose/_action/status`; a goal that starts executing turns the head to `ANGLE 0/0`,
+a goal that succeeds within 0.6 m of a POI runs that POI's preset (`ANGLE` or `SWEEP`), only while `autoMotion`. The
+backend no longer queues head commands on `ARRIVED` or Next. Head hardware since 14/11/2026: DRV8825 1/4 microstep on
+both axes, PAN 3:1 and TILT 5:1 planetary gearboxes; soft limits unchanged (PAN ±170°, TILT ±18°).
 
 **Quest camera on demand (ADR-0052, proposed 09/11/2026; robot side opt-in).**
 The robot's Quest stream runs only while a Tour assigned to it is `RUNNING` or a Staff
@@ -1520,6 +1655,9 @@ optional '-' descending and ID tie-breaker. State uses the SQL uppercase values.
 from/to are offset-qualified instants filtering Tour scheduled time, inclusive
 lower/exclusive upper bound; the web converts calendar dates using UTC+7.
 Unknown IDs return 404. Anonymous/non-Staff requests return 401/403.
+Each list item (and the detail summary) carries `rowCount` (active rows) and, since
+2026-11-17, `pendingRowCount`: active roster rows still PENDING a Staff row
+decision, counted in SQL; removed rows are never counted and `state` is unchanged.
 
 Both decisions accept {expectedRowVersion, expectedTourRowVersion, reason?};
 versions must be 8-byte base64 SQL rowversions, reason is required for rejection
@@ -1594,8 +1732,25 @@ per active approved row; failed mail never reverses approval or changes Tour sta
 
 Staff or owner Representative GET /api/registrations/{registrationId}/invitations
 returns enabled/canIssue and items with approved row identity, version, expiry,
-revocation, latest email status and action gates. Codes/hashes/ciphertext/session
+revocation, latest email status and action gates. Since 2026-11-17 items cover
+active roster rows only: a row removed by a roster replace keeps its revoked
+invitation and audit history in SQL but is no longer listed. Codes/hashes/ciphertext/session
 credentials are never returned. Staff has organization-wide support; a Representative can access only their own group's invitations; Admin is denied.
+Each item also carries viewer presence (since 2026-11-16): `viewerPresence`
+`NOT_ENTERED | CONNECTED | DISCONNECTED | LEFT`, `firstEnteredAt`, `lastSeenAt`
+(most recent session) and `sessionExpiresAt` (open session only, else null).
+A session is open while EndedAt is null and ExpiresAt is in the future.
+NOT_ENTERED: the invitation never had a session. CONNECTED: an open session
+seen within the two-minute reconnect grace. DISCONNECTED: an open session not
+seen within the grace; the code stays held until `sessionExpiresAt`. LEFT: it
+had a session but none is open (left, idle-expired, revoked or reissued; an
+unclosed session past ExpiresAt counts as LEFT). Ending or cancelling a Tour does
+not close sessions, so an open session whose invitation can no longer enter
+(`InvitationPolicy.CanEnter`, the same rule as Student access) reports LEFT with
+null `sessionExpiresAt`; a started-then-cancelled Tour's fallback viewer stays
+CONNECTED. `firstEnteredAt` survives
+reissue. One shared rule beside the reconnect policy computes it. No IP,
+device token or browser detail is returned.
 POST the same path + /issue with requestId (UUID), expectedRowVersion
 (registration), expectedTourRowVersion to fill missing invitations of previously
 approved groups. POST + /{invitationId}/resend, /reissue or /revoke with requestId
@@ -1628,14 +1783,33 @@ The per-Tour cookie is HttpOnly, Secure, SameSite=None and scoped to that API
 path; SQL stores only its HMAC. Exact browser-origin checks protect cookie
 mutations. Join is limited to 60 requests/minute/IP. A shared Tour lock and SQL
 filtered UNIQUE enforce one active session; expired sessions close before INSERT.
-The same cookie/tabs reuse it; competing browsers get 409 INVITATION_IN_USE.
+The same cookie/tabs reuse it; competing browsers get 409 INVITATION_IN_USE
+(message tells the viewer to ask the Representative or Staff for a new code;
+no hint whether the other browser is still connected).
 Wrong-Tour/invalid/expired/revoked access gets a generic 401. Heartbeats retain the
 session for configured SessionIdleMinutes (default 10), bounded by invitation
 expiry. Reconnect/heartbeat is a separate two-minute grace from the active
 session's `LastSeenAt`: both the session and device cookies may be presented,
 or a matching device cookie alone may recover that browser by rotating the
 session token. A stale session cookie does not bypass the grace, and the
-10-minute idle lease does not enlarge it. The Tour-scoped device token is a
+10-minute idle lease does not enlarge it. When the code matched (after the
+lock) or the session/device cookie matched but that browser's grace has passed
+while its session is still open, the response is 409
+`RECONNECT_WINDOW_EXPIRED` (since 2026-11-16; was the generic 401) with
+`errors.fields.retryAfterSeconds` (string array, like `remainingSeats`) = seconds until that session's ExpiresAt; the viewer
+asks for a new code or retries after it. When the Tour is not enterable because
+it is COMPLETED, or CANCELLED without ever starting (`StartedAt` null), and the
+request proved this invitation the same way (the current code after the lock,
+the cookie of an open session, or the device cookie of an open session) on an
+invitation that is not revoked and whose roster row is still active and
+accepted, join/session answer 409 `TOUR_ENDED` (since 2026-11-17; was the
+generic 401) with `errors.fields.tourState` (string array, like
+`retryAfterSeconds`) = `COMPLETED` or `CANCELLED` and the message "Buổi tham
+quan đã kết thúc." / "Buổi tham quan đã bị hủy.". It grants nothing: no session
+is created or extended, no cookie is set, and entry rules (`CanEnter`) are
+unchanged; a Tour CANCELLED after Start still answers 200 for the fallback
+video. Every other refusal keeps the generic
+401. The Tour-scoped device token is a
 browser credential, never an IP-derived identity. First successful entry
 records INVITATION_ENTERED once per invitation.
 
@@ -1772,6 +1946,7 @@ Public contract added by this batch. Held seats are the Tour's active PENDING an
 | `GET /api/representative/registrations`, `GET /api/representative/registrations/{id}` | Items and `summary` add nullable `tourEndedAt`, from `Tours.EndedAt`. It is set for any ended Tour, so read it together with `tourState`. |
 | `POST /api/student/tours/{tourId}/join` | 429 `INVITATION_CODE_LOCKED` after `Invitations:CodeGuard:MaxFailures` (5) wrong codes per (code, IP) in `WindowMinutes` (10), for `LockMinutes` (15). In memory, one API instance. The 60 requests/minute/IP limiter stays in front. |
 | `GET /api/technical/route-verifications/rerun-queue` | TechnicalStaff. Current revisions whose effective PASS has no `measurementBasis`. `GET /api/technical/dashboard` adds `kpis.routeRerunsCount` and action type `ROUTE_RERUN`. |
+| `GET /api/technical/route-verifications/queue`, route revision reads | ADR-0023 addendum. The queue lists only submitted revisions with no applied result; one carrying its path's PASS or FAIL is left out. Route revision views add `sharedResultRevisions[]` (`revisionId`, `revisionNumber`, `createdAt`, `scheduledTours[]`) and `scheduledTours[]`; test runs add `checkedByName` and `participatingStaffName`; scheduled-Tour items add `routeRevisionId`. `ROUTE_TEST_PASS_REQUIRED` keeps its code and, when the applied result is a FAIL, names that run in its message. All additive. |
 
 Audit actions `ROSTER_PENDING_EXPIRED`, `REGISTRATION_EXPIRED` and `ROSTER_EXPIRY_NOTICE_{REQUESTED,STARTED,SENT,FAILED}` carry ids and counts only. The notice uses the delivery shape of the cancellation notice: one email per registration, claimed once, an uncertain send never repeated.
 
@@ -1781,8 +1956,9 @@ Audit actions `ROSTER_PENDING_EXPIRED`, `REGISTRATION_EXPIRED` and `ROSTER_EXPIR
 |---|---|
 | `GET .../tours/{id}/start-checks`, `POST .../tours/{id}/start` | Check `allViewersJoined` (table in §3.2; information only since ADR-0057). The read adds `opensAt`, the first instant Start is accepted. An early Start records `ReasonCode = EARLY_START` on `TOUR_STARTED`, with the waiting-room count in `ReasonNote`. |
 | `POST /api/staff/manage/tours` | A quick Tour (ADR-0053) is created through the same call: `configuration.shortNoticeReason` (at most 500 characters, not blank) with `scheduledStartAt` null. The server sets `scheduledStartAt` to the latest Start (now + `Tours:ShortNoticeMinLeadMinutes`, 30 when unset, next whole minute), holds the robot `[now, latest Start + expected + 15 min]` with no shift, and records `TOUR_CREATED_SHORT_NOTICE` with the reason. A reason with a start, or no reason and no start, is 400. 409 `SHIFT_BLOCKED` when the hold reaches a closed day or shift, `ROBOT_RESERVATION_CONFLICT` on any other hold. Always available. |
-| `GET .../tours/shifts`, `GET .../tours/slots` | Shifts read adds `quickTourWaitMinutes`. Slots are for Tours on a shift only: `shortNotice` and `shortNoticeMinLeadMinutes` are removed. |
-| Staff Tour reads | `tour.isShortNotice` (a quick Tour); `tour.registrationClosesAt` is its latest Start. |
+| `GET .../tours/shifts`, `GET .../tours/slots` | Shifts read adds `quickTourWaitMinutes` and (additive) `estimatedSpeedMetersPerSecond`. Slots are for Tours on a shift only: `shortNotice` and `shortNoticeMinLeadMinutes` are removed. |
+| Staff Tour reads | `tour.isShortNotice` (a quick Tour); `tour.registrationClosesAt` is its latest Start. Additive (A3, every Tour): `tour.latestStartAt` (published time + `FleetCommands:StartLateLimitMinutes`, the last moment Start is accepted) and `tour.autoCancelAt` (`TourAutoCancel.HoldEndsAt`, when the system cancels an unstarted Tour and frees the robot); both set while SCHEDULED/READY, null otherwise. Screens read them instead of recomputing. |
+| `GET .../tours/robots?quick=true` | Additive (B12): each row adds `quick: {expectedDurationSeconds, startBy, holdStartsAt, holdEndsAt, autoCancelAt}`, the quick Tour create would make at that moment (preview only; create recomputes), or null when the route cannot size one. `autoCancelAt` (additive) is `TourAutoCancel.HoldEndsAt(startBy, holdEndsAt, StartLateLimit)`, the moment the system would cancel it unstarted, as `tour.autoCancelAt`. Absent without `quick=true`. |
 | Representative Tour and registration reads | Tour adds `registrationClosesAt`; registration summary adds `tourIsShortNotice` and `tourRegistrationClosesAt`. |
 
 A short-notice Tour replaces the 72-hour lead, the 48-hour close and the 24-hour review close. Its list closes with READY, the T-24h job skips it, and undecided rows still block READY and Start. Since ADR-0053 every new short-notice Tour is a quick Tour with no shift: Start, and `opensAt`, open when its robot hold opens (creation), `allViewersJoined` is shown before its latest Start (information only, ADR-0057), and every other Start check is the same as for any other Tour. The late limit and automatic cancellation run from its latest Start.
@@ -2206,7 +2382,7 @@ and `emergency_stop_state` topic do not change.
 |---|---|---|---|---|
 | `motion_permit` | `std_msgs/Bool`, RELIABLE, VOLATILE, every 0.2 s | `fleet_bridge`, only when `commands_enabled` | `mode_manager` | 3.1 |
 | `motion_gate_state` | `std_msgs/String` (`DISABLED`, `OPEN`, `BLOCKED`, `LATCHED:<reason>`), VOLATILE, 2 Hz | `mode_manager` | `fleet_bridge` | 3.1 |
-| `motion_inhibit_reset` | `std_srvs/Trigger` | `mode_manager` | A person on the robot; never `fleet_bridge` or the backend | 3.1 |
+| `motion_inhibit_reset` | `std_srvs/Trigger` | `mode_manager` | A person on the robot; `fleet_bridge` only just before the goal of a new backend GoTo, for a `BOOT` or `PERMIT_LOST` latch (ADR-0049 addendum); never the backend | 3.1 |
 | `stm32_link_ok` | `std_msgs/Bool`, RELIABLE, VOLATILE, 20 Hz: `stm32_bridge` may command the wheels | `stm32_bridge` | `mode_manager` (`require_stm32_link`) | Link safety |
 | `hardware_estop_state` | `std_msgs/Bool`, from a new field in the FB frame (`robot/docs/PROTOCOL_FB.md`) | `stm32_bridge` | `mode_manager`, `fleet_bridge` | 3.4, input pin not yet confirmed |
 
@@ -2520,8 +2696,9 @@ optional exact map-version and `isActive` filtering; the legacy catalog remains 
 Each view carries `isActive` and an opaque `rowVersion` (ADR-0037). Tour create and
 slots refuse an inactive route with 409 `ROUTE_UNAVAILABLE`. A revision also carries
 `scheduleFit` (`UNKNOWN`, `FITS`, `OVER_RECOMMENDED`, `TOO_LONG_FOR_SHIFT`) and
-`expectedDurationSeconds`. Saving a revision returns 409 `ROUTE_STOP_TOO_CLOSE` or
-`ROUTE_TOO_LONG_FOR_SHIFT` (`docs/lich-tour-theo-ca.md`).
+`expectedDurationSeconds`. Saving a revision returns 409 `ROUTE_STOP_TOO_CLOSE`,
+`ROUTE_TOO_LONG_FOR_SHIFT` (`docs/lich-tour-theo-ca.md`) or, for a new request identical to the
+newest revision (`backend/docs/route-revisions.md`), `ROUTE_REVISION_UNCHANGED`.
 Submission receipts are separate from draft creation. Technical Staff appends
 manual whole-route test runs with an explicit distinct active Staff participant
 whose single persisted role resolves through `ApplicationRoles`. The technical

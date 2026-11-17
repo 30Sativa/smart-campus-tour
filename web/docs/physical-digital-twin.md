@@ -2,7 +2,9 @@
 
 ## Campus display styling
 
-The V3 view loads `web/public/models/simulator-map/NVHSV_Tang6_V3_modern_v2.glb`.
+The V3 view loads `web/public/models/simulator-map/NVHSV_Tang6_V3_modern_v2.opt.glb`,
+built from `NVHSV_Tang6_V3_modern_v2.glb` by `web/scripts/optimize-twin-model.mjs`
+(see [Digital Twin performance](digital-twin-performance.md)); rerun it after restyling.
 Rebuild this independent display asset with `node web/scripts/style-campus-model.mjs`
 from the repo root. The original V3 GLB and legacy OBJ remain available unchanged.
 The styled variant uses light terrazzo, ivory walls and pale aqua glass with slim
@@ -19,9 +21,11 @@ The long glazing run follows the same measured wall planes as its door frames.
 
 ## Implemented browser preparation
 
-`web/src/routes/staff/DigitalTwinPage.tsx` renders a read-only physical robot
-surface separately from the existing labelled local simulator. The Staff route
-guard still applies. The physical surface starts disconnected, without a pose
+`web/src/routes/staff/DigitalTwinPage.tsx` renders one read-only 3D scene
+(`features/staff/components/FleetTwin.tsx`): the physical robots from the fleet
+snapshot, plus the local patrol only as an opt-in, dimmed and labelled layer.
+See `web/docs/staff-operations.md`. `PhysicalRobotTwin` is no longer mounted by
+the page. The Staff route guard still applies. The physical surface starts disconnected, without a pose
 or a robot marker. No production Hub is connected and no mock is used as a
 fallback.
 

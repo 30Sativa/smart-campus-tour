@@ -1,13 +1,59 @@
 import { useState } from 'react'
 import { Lock, LockOpen, MonitorPlay, PlayCircle, X } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { panelClass } from '../../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { notify } from '../../../components/ui/toast-store'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { operationRefusal } from '../../staff/operations/operation-errors'
+import { checkInfo, INFO_CHECKS } from '../../staff/operations/operation-labels'
+import { useOpenTour } from '../../staff/operations/hooks'
 import { useMarkTourReady, useReopenTour, useRequestId } from './hooks'
+import { earlyReadyWarning } from './tour-messages'
 import type { TourDetails } from './types'
+
+/**
+ * Why a READY Tour cannot be opened yet, one line per cause: what is missing, then who unblocks it. The Start
+ * checklist's labels name the condition to reach ("Robot không chờ kiểm tra tại chỗ") and read as already met after
+ * "Chưa mở được", so this panel says it in its own words. A robot waiting for an on-site check also fails "not held
+ * by another Tour" (the run that flagged it still holds it), so the two are one line that blames no other Tour.
+ */
+function openBlockerLines(blockedBy: readonly string[], robotCode: string | null | undefined): string[] {
+  const robot = robotCode ? `Robot ${robotCode}` : 'Robot'
+  const inspection = blockedBy.includes('robotNotNeedsInspection')
+  const lines = blockedBy.flatMap(id => {
+    if (id === 'robotNotHeldByOtherTour' && inspection) return []
+    const own = OPEN_BLOCKER[id]
+    if (own) return [own(robot)]
+    const info = checkInfo(id)
+    return info.group === 'other' || INFO_CHECKS.has(id) ? [] : [`Chưa đạt mục “${info.label}”: mở trang “Xem điều kiện mở Tour” để biết chi tiết.`]
+  })
+  return [...new Set(lines)]
+}
+
+const OPEN_BLOCKER: Record<string, (robot: string) => string> = {
+  tourReady: () => 'Tour chưa chốt: chốt Tour trước khi mở.',
+  callerIsOperator: () => 'Bạn không phải người vận hành được giao: đăng nhập bằng tài khoản người vận hành, hoặc đổi người vận hành của Tour.',
+  withinStartWindow: () => 'Đang ngoài khung giờ được mở Tour: xem giờ mở ở trang “Xem điều kiện mở Tour”.',
+  reservationActive: () => 'Tour chưa giữ robot cho khung giờ: giữ lại robot ở trang chuẩn bị Tour.',
+  revisionStillSchedulable: () => 'Bản tuyến của Tour chưa có lần chạy thử đạt: Kỹ thuật cần ghi một lần chạy thử đạt cho đường đi này.',
+  noPendingDecisions: () => 'Còn đăng ký chờ duyệt: duyệt hết ở danh sách đăng ký của Tour.',
+  hasAcceptedRows: () => 'Chưa có dòng đăng ký nào được duyệt: duyệt ít nhất một dòng, hoặc hủy Tour.',
+  robotEligibleForRoute: robot => `${robot} chưa dùng được cho tuyến này: Kỹ thuật kiểm tra robot với bản tuyến.`,
+  robotMapMatchesRoute: robot => `${robot} chưa được gán bản đồ của tuyến: Kỹ thuật gán đúng bản đồ cho robot.`,
+  robotNotNeedsInspection: robot => `${robot} đang chờ kiểm tra tại chỗ: Kỹ thuật cần kiểm tra và trả robot.`,
+  robotNotHeldByOtherTour: robot => `${robot} đang bị một Tour khác giữ: chờ Tour đó kết thúc.`,
+  robotDispatchEnabled: robot => `${robot} chưa được bật điều phối: Kỹ thuật cần bật điều phối cho robot.`,
+  noOpenIncident: robot => `${robot} đang có sự cố ở Tour đang giữ nó: xử lý sự cố ở màn hình điều hành của Tour đó.`,
+  noUnresolvedCommand: robot => `${robot} còn lệnh chưa đóng: đóng lệnh ở màn hình điều hành (Đối soát).`,
+  telemetryFresh: robot => `${robot} chưa gửi trạng thái gần đây: kiểm tra robot đã bật và kết nối mạng.`,
+  mapContextMatches: robot => `${robot} đang chạy bản đồ khác bản đồ của tuyến: cho robot chạy đúng bản đồ.`,
+  executionIdle: robot => `${robot} đang làm việc khác: chờ robot làm xong.`,
+  robotLocalized: robot => `${robot} chưa định vị trên bản đồ: đặt lại vị trí ban đầu cho robot.`,
+  motionReady: robot => `${robot} chưa sẵn sàng di chuyển: kiểm tra nút dừng khẩn cấp và động cơ.`,
+  operatorConsoleConnected: () => 'Trang điều hành của người vận hành chưa mở: người vận hành mở trang Staff và giữ trang mở.',
+  commandTransportEnabled: () => 'Kênh lệnh robot trên máy chủ đang tắt: báo Kỹ thuật bật kênh lệnh.',
+}
 
 const refusalText = (error: unknown) => {
   const refusal = operationRefusal(error)
@@ -27,6 +73,19 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
   const [dialog, setDialog] = useState<'ready' | 'reopen' | null>(null)
   const readyRequest = useRequestId(`ready:${tour.id}:${tour.rowVersion}`)
   const reopenRequest = useRequestId(`reopen:${tour.id}:${tour.rowVersion}`)
+  const openRequest = useRequestId(`open:${tour.id}:${tour.rowVersion}`)
+  const open = useOpenTour()
+  const navigate = useNavigate()
+  const openGate = detail.allowedActions?.open
+  const openTour = () => {
+    open.reset()
+    open.mutateAsync({ id: tour.id, requestId: openRequest, rowVersion: tour.rowVersion }).then(() => {
+      notify({ title: `Đã mở Tour “${tour.name}”`, detail: 'Robot chưa di chuyển. Kiểm tra camera và robot rồi bấm Khởi hành.' })
+      navigate(`/staff/live/${tour.id}`)
+    }, () => undefined)
+  }
+  // Read when the dialog opens: the warning is about that moment, not a live clock.
+  const [earlyWarning, setEarlyWarning] = useState<string | null>(null)
   const blockers = permissions.readyBlockers ?? []
   const supported = permissions.canMarkReady !== undefined
 
@@ -34,7 +93,7 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
     try {
       await markReady.mutateAsync({ id: tour.id, requestId: readyRequest, rowVersion: tour.rowVersion })
       setDialog(null)
-      notify({ title: `Đã chốt Tour “${tour.name}”`, detail: 'Đăng ký và cấu hình đã khóa. Người vận hành kiểm tra điều kiện rồi bắt đầu đúng giờ.' })
+      notify({ title: `Đã chốt Tour “${tour.name}”`, detail: 'Đăng ký và cấu hình đã khóa. Người vận hành mở Tour khi tới giờ.' })
     } catch { /* The dialog shows the refusal. */ }
   }
   const confirmReopen = async (reason: string) => {
@@ -61,7 +120,7 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
             <h2 className="text-[15px] font-semibold text-[#0f172a]">Chốt Tour</h2>
             <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Chốt khóa đăng ký và cấu hình để chuẩn bị bắt đầu.</p>
           </div>
-          {supported && <button type="button" className={buttonClass('primary', 'sm')} disabled={!permissions.canMarkReady} onClick={() => { markReady.reset(); setDialog('ready') }}
+          {supported && <button type="button" className={buttonClass('primary', 'sm')} disabled={!permissions.canMarkReady} onClick={() => { markReady.reset(); setEarlyWarning(earlyReadyWarning(tour, Date.now())); setDialog('ready') }}
             aria-describedby={`ready-state-${tour.id}`}><Lock size={15} aria-hidden="true" />Chốt Tour</button>}
         </div>
         <div id={`ready-state-${tour.id}`} className="mt-3">
@@ -79,16 +138,28 @@ export function TourReadyPanel({ detail }: { detail: TourDetails }) {
       </> : <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold text-[#0f172a]">Tour đã chốt</h2>
-          <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Người vận hành được giao kiểm tra điều kiện rồi bắt đầu Tour.</p>
+          <p className="mt-1 max-w-2xl text-[13px] leading-5 text-[#64748b]">Mở Tour để khách vào xem và camera hoạt động. Robot chỉ chạy khi người vận hành bấm Khởi hành ở màn hình điều hành.</p>
+          {openGate && !openGate.allowed && (() => {
+            const lines = openBlockerLines(openGate.blockedBy, detail.reservation?.robotCode ?? tour.reservation?.robotCode)
+            return <div className="mt-1.5 max-w-2xl text-[13px] leading-5 text-[#7d5310]">
+              <p>{openGate.reason ?? 'Chưa đủ điều kiện mở Tour.'}</p>
+              {lines.length > 0 && <ul className="mt-1 list-disc space-y-0.5 pl-5" aria-label="Điều kiện mở Tour chưa đạt">{lines.map(line => <li key={line}>{line}</li>)}</ul>}
+            </div>
+          })()}
+          {open.isError && <p role="alert" className="mt-1.5 text-[13px] font-semibold text-[#9d3428]">{refusalText(open.error)}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to={`/staff/tours/${tour.id}/start`} className={buttonClass('primary', 'sm')}><PlayCircle size={15} aria-hidden="true" />Kiểm tra trước khi bắt đầu</Link>
+          {openGate?.allowed && <button type="button" className={buttonClass('primary', 'sm')} disabled={open.isPending} onClick={openTour}><PlayCircle size={15} aria-hidden="true" />{open.isPending ? 'Đang mở…' : 'Mở Tour'}</button>}
+          <Link to={`/staff/tours/${tour.id}/start`} className={buttonClass(openGate?.allowed ? 'secondary' : 'primary', 'sm')}>Xem điều kiện mở Tour</Link>
           {permissions.canReopen && <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => { reopen.reset(); setDialog('reopen') }}><LockOpen size={15} aria-hidden="true" />Mở lại</button>}
         </div>
       </div>}
 
       <ConfirmationDialog open={dialog === 'ready'} title="Chốt Tour?" confirmLabel="Chốt Tour" withReason={false} busyLabel="Đang chốt…"
-        description="Đại diện trường không còn tạo, sửa hay hủy đăng ký; Staff không duyệt dòng đăng ký và không sửa thông tin Tour. Lời mời và truy cập của học sinh vẫn hoạt động. Có thể mở lại khi Tour chưa bắt đầu."
+        description={<>
+          <p>Đại diện trường không còn tạo, sửa hay hủy đăng ký; Staff không duyệt dòng đăng ký và không sửa thông tin Tour. Lời mời và truy cập của học sinh vẫn hoạt động. Có thể mở lại khi Tour chưa bắt đầu.</p>
+          {earlyWarning && <p className="mt-2 font-semibold text-[#7d5310]">{earlyWarning}</p>}
+        </>}
         busy={markReady.isPending} error={markReady.isError ? refusalText(markReady.error) : null}
         onCancel={() => { if (!markReady.isPending) setDialog(null) }} onConfirm={() => void confirmReady()} />
       <ConfirmationDialog open={dialog === 'reopen'} title="Mở lại Tour?" confirmLabel="Mở lại" requireReason reasonLabel="Lý do mở lại" busyLabel="Đang mở lại…"

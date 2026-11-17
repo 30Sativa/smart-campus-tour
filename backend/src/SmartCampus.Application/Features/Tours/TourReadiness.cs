@@ -14,6 +14,7 @@ internal static class TourReadiness
 {
     public const string FailedCode = "READY_PRECONDITION_FAILED";
     public const string NoAcceptedRowsCode = "NO_ACCEPTED_ROWS";
+    public const string QuickTourNeedsNoRowMessage = "Tour nhanh không cần đoàn đăng ký trước.";
     public const string NoAcceptedRowsMessage = "Tour chưa có dòng đăng ký nào được duyệt. Duyệt ít nhất một dòng, hoặc hủy Tour nếu không có trường nào tham gia.";
 
     /// <summary>
@@ -43,7 +44,8 @@ internal static class TourReadiness
         if (await registrations.HasPendingDecisionsAsync(tour.Id, ct))
             Fail("PENDING_DECISIONS", "Còn dòng đăng ký hoặc yêu cầu đổi email đang chờ Staff duyệt.");
         // Undecided rows are the root cause while they wait: once decided, they may be the accepted ones.
-        else if (!await registrations.HasAcceptedRowsAsync(tour.Id, ct))
+        // A quick Tour may run for a group that is already on site with nobody registered (demo, ADR-0054 addendum).
+        else if (!tour.IsShortNotice && !await registrations.HasAcceptedRowsAsync(tour.Id, ct))
             Fail(NoAcceptedRowsCode, NoAcceptedRowsMessage);
 
         // Read after every lock, so a wait cannot carry the Tour past its start.

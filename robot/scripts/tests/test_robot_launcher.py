@@ -2,6 +2,8 @@
 /proc; real ROS processes are never started and nothing joins domain 30.
 --dry-run and status only build the environment (bash + source-minipc) and read files."""
 import json
+import shutil
+from pathlib import Path
 import os
 import signal
 import subprocess
@@ -501,9 +503,10 @@ def test_fleet_commands_need_a_running_nav_and_note_a_missing_permit(world):
                 time.sleep(0.05)
             r = robot(world, 'fleet', '--commands', '--dry-run')
             out = json.loads(r.stdout)
-            assert r.returncode == 0 and out['argv'][-8:] == [
+            assert r.returncode == 0 and out['argv'][-10:] == [
                 '-p', 'commands_enabled:=true', '-p', 'report_period_sec:=0.5',
-                '-p', 'localized_max_xy_variance:=0.3', '-p', 'localized_max_yaw_variance:=0.1'], r.stdout + r.stderr
+                '-p', 'localized_max_xy_variance:=0.3', '-p', 'localized_max_yaw_variance:=0.1',
+                '-p', 'motion_permit_link_timeout_sec:=20.0'], r.stdout + r.stderr
             assert ('no motion permit' in r.stderr) == (not gated), r.stderr
             reset = robot(world, 'reset-latch', '--dry-run')
             if gated:
@@ -578,9 +581,11 @@ def test_fleet_commands_pass_the_map_package_or_note_it_is_missing(world):
         assert r.returncode == 0 and 'MAP_EVIDENCE_MISSING' not in r.stderr, r.stderr
         assert argv[-4:] == ['-p', f'map_package_path:={package}', '-p', f'map_package_sha256:={sha.lower()}']
         assert not any(x.startswith('map_package') for x in json.loads(robot(world, 'fleet', '--dry-run').stdout)['argv'])
-        fleet_profile(world, LOCALIZED_MAX_XY_VARIANCE='0.09', LOCALIZED_MAX_YAW_VARIANCE='0.05')
+        fleet_profile(world, LOCALIZED_MAX_XY_VARIANCE='0.09', LOCALIZED_MAX_YAW_VARIANCE='0.05',
+                      MOTION_PERMIT_LINK_TIMEOUT_SEC='1.5')
         argv = json.loads(robot(world, 'fleet', '--commands', '--dry-run').stdout)['argv']
         assert 'localized_max_xy_variance:=0.09' in argv and 'localized_max_yaw_variance:=0.05' in argv
+        assert 'motion_permit_link_timeout_sec:=1.5' in argv
         assert not any(x.startswith('localized_max') for x in json.loads(robot(world, 'fleet', '--dry-run').stdout)['argv'])
         package.unlink()
         r = robot(world, 'fleet', '--commands', '--dry-run')
@@ -608,3 +613,309 @@ def test_viewer_runs_the_debug_bridge_with_the_foxglove_env(world):
     fake_process(world, 7200, '/usr/bin/python3 /opt/ros/humble/bin/ros2 launch robot_navigation debug_bridge.launch.py')
     r = robot(world, 'viewer', '--dry-run')
     assert r.returncode == 2 and 'already running' in r.stderr, r.stderr
+
+
+# ---- initial pose from the LiDAR (pose_bootstrap) -------------------------------------------
+def pose_runtime(w, has_bootstrap=True, map_config=True):
+    launch = w['overlay'] / 'nav' / 'share' / 'robot_navigation' / 'launch'
+    launch.mkdir(parents=True, exist_ok=True)
+    (launch / 'navigation.launch.py').write_text("DeclareLaunchArgument('auto_initial_pose')\n" if has_bootstrap else '# old\n')
+    cfg = w['root'] / 'robot_maps' / 'map2.pose_bootstrap.yaml'
+    if map_config:
+        cfg.write_text('map_yaml: map2.yaml\n')
+    elif cfg.exists():
+        cfg.unlink()
+
+
+def test_auto_pose_is_opt_in_and_needs_a_runtime_and_map_settings(world):
+    profile(world)
+    pose_runtime(world)
+    assert not any(x.startswith('auto_initial_pose') for x in dry(world, 'nav')['argv'])
+    assert dry(world, 'nav', '--auto-pose')['argv'][-1] == 'auto_initial_pose:=true'
+    pose_runtime(world, has_bootstrap=False)
+    r = robot(world, 'nav', '--auto-pose', '--dry-run')
+    assert r.returncode == 2 and 'no pose_bootstrap' in r.stderr, r.stderr
+    pose_runtime(world, map_config=False)
+    r = robot(world, 'nav', '--auto-pose', '--dry-run')
+    assert r.returncode == 2 and 'map2.pose_bootstrap.yaml' in r.stderr, r.stderr
+
+
+def test_profile_turns_auto_pose_on_and_manual_pose_overrides_it(world):
+    profile(world, AUTO_INITIAL_POSE='true')
+    pose_runtime(world)
+    assert dry(world, 'nav')['argv'][-1] == 'auto_initial_pose:=true'
+    assert not any(x.startswith('auto_initial_pose') for x in dry(world, 'nav', '--manual-pose')['argv'])
+    r = robot(world, 'nav', '--auto-pose', '--manual-pose', '--dry-run')
+    assert r.returncode == 2                                       # mutually exclusive
+    assert not any(x.startswith('auto_initial_pose') for x in dry(world, 'map')['argv'])   # nav only
+
+
+def test_relocalize_needs_an_auto_pose_nav_session(world):
+    profile(world)
+    pose_runtime(world)
+    r = robot(world, 'relocalize', '--dry-run')
+    assert r.returncode == 2 and 'needs "robot nav"' in r.stderr
+    fake = world['tmp'] / 'sleeper.sh'
+    fake.write_text('#!/bin/sh\nexec sleep 30\n')
+    fake.chmod(0o755)
+    for nav_args, ok in ((['nav'], False), (['nav', '--auto-pose'], True)):
+        holder = robot(world, *nav_args, extra_env={'SCT_ROBOT_TEST_EXEC': str(fake)}, popen=True)
+        try:
+            for _ in range(100):
+                if 'running' in robot(world, 'status').stdout:
+                    break
+                time.sleep(0.05)
+            r = robot(world, 'relocalize', '--dry-run')
+            if ok:
+                assert json.loads(r.stdout)['argv'] == ['ros2', 'service', 'call', '/robot_01/pose_bootstrap/relocalize',
+                                                        'std_srvs/srv/Trigger', '{}'], r.stdout + r.stderr
+            else:
+                assert r.returncode == 2 and 'auto pose' in r.stderr, r.stderr
+        finally:
+            holder.send_signal(signal.SIGTERM)
+            holder.wait(10)
+            time.sleep(1.1)                # session directories are named to the second
+
+# ---- depth camera in the local costmap (robot nav --camera) -----------------------------------
+def camera_runtime(w, driver=True, lean=True, usb=True):
+    """astra_camera in the base install, orbbec_bringup in the overlay, a fake USB tree."""
+    if driver:
+        fake_prefix(w['root'] / 'ros2_ws' / 'install' / 'base', ['astra_camera'])
+    fake_prefix(w['overlay'] / 'nav', ['orbbec_bringup'])
+    launch = w['overlay'] / 'nav' / 'share' / 'orbbec_bringup' / 'launch'
+    launch.mkdir(parents=True, exist_ok=True)
+    (launch / 'astra_pro.launch.py').write_text("'use_uvc_camera': False,\n" if lean else "# old\n")
+    dev = w['tmp'] / 'usb' / '1-2'
+    dev.mkdir(parents=True, exist_ok=True)
+    (dev / 'idVendor').write_text('2bc5\n')
+    (dev / 'idProduct').write_text('0403\n' if usb else '0501\n')     # 0501 = the RGB half only
+    return {'SCT_USB_ROOT': str(w['tmp'] / 'usb')}
+
+
+def test_camera_is_opt_in_per_run_or_profile(world):
+    usb = camera_runtime(world)
+    assert 'enable_camera:=false' in dry(world, 'nav', extra_env=usb)['argv']
+    assert 'enable_camera:=true' in dry(world, 'nav', '--camera', extra_env=usb)['argv']
+    profile(world, ENABLE_CAMERA='true')
+    assert 'enable_camera:=true' in dry(world, 'nav', extra_env=usb)['argv']
+    assert 'enable_camera:=false' in dry(world, 'nav', '--no-camera', extra_env=usb)['argv']
+    r = robot(world, 'nav', '--camera', '--no-camera', '--dry-run', extra_env=usb)
+    assert r.returncode == 2                                       # mutually exclusive
+    assert not any(x.startswith('enable_camera') for x in dry(world, 'map', extra_env=usb)['argv'])   # nav only
+
+
+@pytest.mark.parametrize('broken, why', [(dict(usb=False), 'no Astra depth device'),
+                                         (dict(lean=False), 'predates the 14/11 camera settings'),
+                                         (dict(driver=False), 'astra_camera')])
+def test_camera_problem_falls_back_to_lidar_only(world, broken, why):
+    # the camera is supplementary (ADR-0001): a missing camera never stops nav
+    usb = camera_runtime(world, **broken)
+    r = robot(world, 'nav', '--camera', '--dry-run', extra_env=usb)
+    assert r.returncode == 0, r.stderr
+    assert 'enable_camera:=false' in json.loads(r.stdout)['argv']
+    assert 'LiDAR-only' in r.stderr and why in r.stderr, r.stderr
+
+
+# ---- fleet service (robot fleet --service, run by sct-fleet.service) -----------------------
+# The supervisor gives the bridge a clean ROS environment, so the fake reads its knobs from files.
+FAKE_BRIDGE = '''#!/bin/sh
+d=$(dirname "$0")
+echo "$@" >> "$d/bridge_args"
+echo "[INFO] [1] [robot_01.fleet_bridge]: Fleet Sync acknowledged (accepted)."
+[ -f "$d/bridge_exit" ] && exit "$(cat "$d/bridge_exit")"
+exec sleep 60
+'''
+
+
+def start_service(w, **env):
+    fleet_runtime(w)
+    fake = w['tmp'] / 'fake_bridge.sh'
+    fake.write_text(FAKE_BRIDGE)
+    fake.chmod(0o755)
+    e = {k: v for k, v in os.environ.items() if not k.startswith(('ROS_', 'AMENT', 'RMW_', 'FASTRTPS', 'FASTDDS'))}
+    e.update(SCT_ROBOT_PROFILE=str(w['profile']), SCT_ROBOT_STATE=str(w['state']), SCT_PROC_ROOT=str(w['proc']),
+             SCT_ROBOT_TEST_EXEC=str(fake), SCT_FLEET_TIME_GATE='true',
+             SCT_FLEET_POLL='0.2', SCT_FLEET_BACKOFF_MIN='0.5', SCT_FLEET_BACKOFF_MAX='2')
+    e.update(env)
+    log = open(w['tmp'] / 'service.log', 'w')
+    return subprocess.Popen([sys.executable, ROBOT, 'fleet', '--service'], env=e, stdout=log, stderr=subprocess.STDOUT)
+
+
+def service_status(w):
+    try:
+        return json.loads((w['state'] / 'fleet-service.json').read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def wait_until(cond, timeout=15):
+    end = time.time() + timeout
+    while time.time() < end:
+        if cond():
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def bridge_runs(w):
+    p = w['tmp'] / 'bridge_args'
+    return p.read_text().splitlines() if p.exists() else []
+
+
+def stop_service(proc):
+    proc.send_signal(signal.SIGTERM)
+    return proc.wait(20)
+
+
+def test_fleet_service_runs_telemetry_and_blocks_a_second_bridge(world):
+    fleet_profile(world)
+    svc = start_service(world)
+    try:
+        assert wait_until(lambda: service_status(world).get('sync', {}).get('state') == 'connected'), \
+            (world['tmp'] / 'service.log').read_text()
+        st = service_status(world)
+        assert st['mode'] == 'telemetry' and 'commands_enabled:=true' not in bridge_runs(world)[0]
+        r = robot(world, 'fleet', '--dry-run')
+        assert r.returncode == 2 and 'fleet service owns the bridge' in r.stderr, r.stderr
+        r = robot(world, 'fleet', '--commands', '--dry-run')
+        assert r.returncode == 2 and 'fleet service owns the bridge' in r.stderr
+        r = robot(world, 'fleet', '--service', '--dry-run')
+        assert r.returncode == 2 and 'fleet lock held' in r.stderr
+        assert 'service' in robot(world, 'status').stdout
+    finally:
+        assert stop_service(svc) == 0
+    st = service_status(world)
+    assert st['why'] == 'stopped' and st['child_pid'] is None
+    assert lock_free(world)
+
+
+def lock_free(w):
+    import fcntl
+    fd = os.open(w['state'] / 'fleet.lock', os.O_RDONLY)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        return False
+    finally:
+        os.close(fd)
+
+
+def test_fleet_service_takes_commands_only_while_nav_fleet_runs(world):
+    fleet_profile(world)
+    svc = start_service(world)
+    sleeper = world['tmp'] / 'sleeper.sh'
+    sleeper.write_text('#!/bin/sh\nexec sleep 30\n')
+    sleeper.chmod(0o755)
+    try:
+        assert wait_until(lambda: service_status(world).get('mode') == 'telemetry')
+        plain = robot(world, 'nav', extra_env={'SCT_ROBOT_TEST_EXEC': str(sleeper)}, popen=True)
+        time.sleep(1.5)
+        assert service_status(world)['mode'] == 'telemetry'      # plain nav: route tests stay possible
+        plain.send_signal(signal.SIGTERM); plain.wait(10)
+        time.sleep(1.1)                    # session directories are named to the second
+        nav = robot(world, 'nav', '--fleet', extra_env={'SCT_ROBOT_TEST_EXEC': str(sleeper)}, popen=True)
+        try:
+            if not wait_until(lambda: service_status(world).get('mode') == 'commands'):
+                nav.send_signal(signal.SIGTERM)
+                pytest.fail(f'{service_status(world)}\nnav: {nav.communicate(timeout=10)}')
+            assert 'commands_enabled:=true' in bridge_runs(world)[-1]
+            out = nav.stdout.readline() + nav.stdout.readline()
+            assert 'fleet service: switches fleet_bridge to commands' in out, out
+        finally:
+            nav.send_signal(signal.SIGTERM); nav.wait(10)
+        assert wait_until(lambda: service_status(world).get('mode') == 'telemetry'), service_status(world)
+        assert 'commands_enabled:=true' not in bridge_runs(world)[-1]
+    finally:
+        stop_service(svc)
+
+
+def test_fleet_service_policy_off_never_takes_commands(world):
+    fleet_profile(world, FLEET_SERVICE_COMMANDS='off')
+    svc = start_service(world)
+    sleeper = world['tmp'] / 'sleeper.sh'
+    sleeper.write_text('#!/bin/sh\nexec sleep 30\n')
+    sleeper.chmod(0o755)
+    try:
+        nav = robot(world, 'nav', '--fleet', extra_env={'SCT_ROBOT_TEST_EXEC': str(sleeper)}, popen=True)
+        try:
+            time.sleep(2)
+            assert service_status(world)['mode'] == 'telemetry'
+            assert all('commands_enabled:=true' not in a for a in bridge_runs(world))
+        finally:
+            nav.send_signal(signal.SIGTERM); nav.wait(10)
+    finally:
+        stop_service(svc)
+
+
+def test_fleet_service_restarts_a_bridge_that_exits(world):
+    fleet_profile(world)
+    (world['tmp'] / 'bridge_exit').write_text('1')
+    svc = start_service(world)
+    try:
+        assert wait_until(lambda: service_status(world).get('restarts', 0) >= 3, timeout=20), service_status(world)
+        st = service_status(world)
+        assert st['last_exit'] == 1 and len(bridge_runs(world)) >= 3
+    finally:
+        stop_service(svc)
+
+
+def test_fleet_service_waits_for_ntp_and_for_a_foreign_bridge(world, tmp_path):
+    fleet_profile(world)
+    flag = tmp_path / 'ntp_ok'
+    svc = start_service(world, SCT_FLEET_TIME_GATE=f'test -f {flag}')
+    try:
+        assert wait_until(lambda: 'waiting for NTP' in (service_status(world).get('why') or ''))
+        assert bridge_runs(world) == []
+        fake_process(world, 7300, '/usr/bin/python3 /x/install/fleet_bridge/lib/fleet_bridge/fleet_bridge --ros-args')
+        flag.write_text('')
+        assert wait_until(lambda: 'another fleet_bridge runs' in (service_status(world).get('why') or ''), timeout=25)
+        assert bridge_runs(world) == []
+        shutil.rmtree(world['proc'] / '7300')
+        assert wait_until(lambda: len(bridge_runs(world)) == 1, timeout=20), service_status(world)
+    finally:
+        stop_service(svc)
+
+
+def test_fleet_service_actions_map_to_the_user_unit(world):
+    fleet_profile(world)
+    assert dry(world, 'fleet', 'start')['argv'] == ['systemctl', '--user', 'start', 'sct-fleet.service']
+    assert dry(world, 'fleet', 'restart')['argv'][2] == 'restart'
+    assert dry(world, 'fleet', 'logs', '-f')['argv'] == ['journalctl', '--user', '-u', 'sct-fleet.service', '-n', '200',
+                                                         '--no-pager', '-f']
+    r = robot(world, 'fleet', 'status')
+    assert r.returncode == 0 and 'commands     policy auto: off now' in r.stdout, r.stdout + r.stderr
+
+
+def test_commands_flag_is_read_from_p_overrides_too(world):
+    fleet_runtime(world)
+    fake_process(world, 7400, '/usr/bin/python3 /x/install/fleet_bridge/lib/fleet_bridge/fleet_bridge --ros-args '
+                              '-p commands_enabled:=true')
+    assert 'commands_enabled=True' in robot(world, 'status').stdout
+
+
+def test_unit_file_runs_the_installed_launcher():
+    unit = (Path(ROBOT).resolve().parents[1] / 'config' / 'systemd' / 'sct-fleet.service').read_text()
+    assert 'ExecStart=%h/.local/bin/robot fleet --service' in unit and 'Restart=always' in unit
+    assert 'WantedBy=default.target' in unit
+
+
+def test_fleet_service_stops_a_leftover_bridge_of_its_own(world):
+    """A bridge marked SCT_FLEET_SERVICE outlived a SIGKILLed supervisor: the next one stops it.
+    An unmarked (hand-started) bridge is only waited for (test above)."""
+    fleet_profile(world)
+    leftover = subprocess.Popen(['sleep', '60'])
+    d = world['proc'] / str(leftover.pid)
+    d.mkdir()
+    (d / 'stat').write_text(f'{leftover.pid} (x) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 1 0 0')
+    (d / 'cmdline').write_bytes(b'/usr/bin/python3\0/x/install/fleet_bridge/lib/fleet_bridge/fleet_bridge\0')
+    (d / 'environ').write_bytes(b'ROS_DOMAIN_ID=77\0SCT_FLEET_SERVICE=1\0')
+    svc = start_service(world)
+    try:
+        assert wait_until(lambda: leftover.poll() is not None, timeout=20)
+        shutil.rmtree(d)
+        assert wait_until(lambda: len(bridge_runs(world)) == 1, timeout=20), service_status(world)
+    finally:
+        stop_service(svc)
+        if leftover.poll() is None:
+            leftover.kill()

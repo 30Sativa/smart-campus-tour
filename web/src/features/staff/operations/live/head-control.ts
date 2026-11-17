@@ -15,8 +15,9 @@ export type HeadCommand =
   | { kind: 'STOP' }
   | { kind: 'ANGLE'; panDeg: number; tiltDeg: number }
   | { kind: 'SWEEP' }
+  | { kind: 'HOME' }
 export type HeadReport = { state: string; referenced: boolean; panDeg: number | null; tiltDeg: number | null; observedAt: string | null }
-/** `GET /api/staff/manage/tours/{id}/head`, any Staff. `robotCode` is null before Start. */
+/** `GET /api/staff/manage/tours/{id}/head`, any Staff. `robotCode`: the assigned robot, or the one a READY Tour holds. */
 export type TourHeadStatus = {
   enabled: boolean; mode: HeadMode | string; robotCode: string | null; connected: boolean
   lastPollAt: string | null; head: HeadReport | null; headReceivedAt?: string | null

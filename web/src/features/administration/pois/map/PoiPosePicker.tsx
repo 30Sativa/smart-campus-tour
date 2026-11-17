@@ -4,6 +4,7 @@ import { buttonClass } from '../../../../components/ui/ui-classes'
 import type { OccupancyMap } from './catalog'
 import '../poi-form.css'
 import { loadMapImage, type MapRaster } from './load-map-image'
+import { isTouchScreen } from './touch-screen'
 import {
   cellAtPose, clearanceMessage, headingFromPoints, imageToRos, poseClearance, quantizePosition, quantizeYaw,
   rosToImage, sampleCell, screenToImage, yawDegrees, type ImagePoint, type RosPoint,
@@ -68,6 +69,8 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
   const [view, setView] = useState<Viewport>({ u: 0, v: 0, width: map.width, height: map.height })
   const [hover, setHover] = useState<ImagePoint | null>(null)
   const [interactionError, setInteractionError] = useState<string | null>(null)
+  // The picker zooms with its +/− buttons only (no pinch), so a touch screen is not told about the mouse wheel.
+  const [touch] = useState(isTouchScreen)
   const drag = useRef<PanDrag | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const actualMode = editable ? mode : 'pan'
@@ -187,7 +190,7 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
       ? staff ? 'Bấm vào ảnh để chọn vị trí, sau đó chọn hướng robot nhìn.' : 'Bấm vào ảnh để chọn vị trí. Sau đó chọn hướng thân hoặc nhập yaw bằng số.'
       : actualMode === 'heading'
         ? 'Di chuyển để xem hướng, bấm để chốt. Escape hủy chọn hướng.'
-        : 'Kéo để di chuyển bản đồ, cuộn chuột hoặc dùng +/− để phóng to. Phím 1 chọn vị trí, 2 chọn hướng.'
+        : touch ? 'Kéo để di chuyển bản đồ, dùng nút +/− để phóng to.' : 'Kéo để di chuyển bản đồ, cuộn chuột hoặc dùng +/− để phóng to. Phím 1 chọn vị trí, 2 chọn hướng.'
   const arrow = `M 0 0 L ${arrowLength} 0 M ${arrowLength * 0.72} ${-arrowLength * 0.2} L ${arrowLength} 0 L ${arrowLength * 0.72} ${arrowLength * 0.2}`
 
   return (

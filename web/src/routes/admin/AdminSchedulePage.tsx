@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Lock, LockOpen } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
-import { formatDate, formatTime } from '../../components/ui/date-time'
+import { formatDate, formatDateTime, formatTime } from '../../components/ui/date-time'
 import { notify } from '../../components/ui/toast-store'
 import { buttonClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, SkeletonRows } from '../../features/administration/AdminUi'
 import { scheduleBlockError, useCreateScheduleBlock, useRemoveScheduleBlock, useScheduleBlocks } from '../../features/administration/schedule/schedule-blocks'
 import { campusDay } from '../../features/administration/tours/tour-calendar'
-import type { TourShift, TourShiftBlock } from '../../features/administration/tours/types'
+import { tourStateLabel } from '../../features/administration/tours/tour-messages'
+import type { TourShift, TourShiftBlock, TourShiftTour } from '../../features/administration/tours/types'
 
 const addDays = (day: string, delta: number) => {
   const date = new Date(`${day}T00:00:00Z`)
@@ -28,7 +29,9 @@ const targetName = (target: Target) => `${target.shift ? `${target.shift.name} `
 
 /**
  * Admin closes a campus day or one shift for holidays or maintenance, and reopens it (docs/lich-tour-theo-ca.md §5).
- * A shift with a Tour cannot be closed: Admin does not operate Tours, so Staff cancels the Tour first.
+ * A shift with a Tour cannot be closed: Admin does not operate Tours, so Staff cancels the Tour first. The grid counts
+ * those Tours and the dialog lists them before any reason is typed. A shift still running can be closed; one that has
+ * ended reads "Đã qua", as the server refuses it.
  */
 export default function AdminSchedulePage() {
   const [monday, setMonday] = useState(() => mondayOf(campusDay(new Date())))
@@ -56,6 +59,10 @@ export default function AdminSchedulePage() {
   const columns = shifts.data?.days[0]?.shifts ?? []
   const now = new Date()
   const today = campusDay(now)
+  // Read from the latest list, so a Tour Staff cancels meanwhile disappears once the page refreshes.
+  const targetDay = target ? shifts.data?.days.find(day => day.date === target.date) : undefined
+  const occupying: TourShiftTour[] = target?.kind !== 'close' ? []
+    : (target.shift ? targetDay?.shifts.find(shift => shift.code === target.shift!.code)?.tours : targetDay?.tours) ?? []
 
   return <AdminPage>
     <PageHeader eyebrow="Quản trị" title="Lịch vận hành" description="Khoá cả ngày hoặc một ca khi nghỉ lễ, bảo trì." />
@@ -84,7 +91,7 @@ export default function AdminSchedulePage() {
                 {dayBlock ? <span className="text-xs text-[#64748b]">Khoá theo ngày</span>
                   : shift.block ? <Closed reason={shift.block.reason} label={`Gỡ khoá ${shift.name} ${day.date}`} onRemove={() => open({ kind: 'remove', date: day.date, shift, block: shift.block! })} />
                   : past || new Date(shift.endsAt) <= now ? <PastDay />
-                  : <LockCell label={`Khoá ${shift.name} ${day.date}`} items={[
+                  : <LockCell label={`Khoá ${shift.name} ${day.date}`} tours={shift.tours?.length ?? 0} items={[
                     { label: `Khoá ${shift.name}`, onSelect: () => open({ kind: 'close', date: day.date, shift }) },
                     { label: 'Khoá cả ngày', onSelect: () => open({ kind: 'close', date: day.date, shift: null }) },
                   ]} />}
@@ -92,7 +99,7 @@ export default function AdminSchedulePage() {
               <td className={`${tdClass} relative`}>
                 {dayBlock ? <Closed reason={dayBlock.reason} label={`Gỡ khoá cả ngày ${day.date}`} onRemove={() => open({ kind: 'remove', date: day.date, shift: null, block: dayBlock })} />
                   : past ? <PastDay />
-                  : <LockCell label={`Khoá cả ngày ${day.date}`} items={[{ label: 'Khoá cả ngày', onSelect: () => open({ kind: 'close', date: day.date, shift: null }) }]} />}
+                  : <LockCell label={`Khoá cả ngày ${day.date}`} tours={day.tours?.length ?? 0} items={[{ label: 'Khoá cả ngày', onSelect: () => open({ kind: 'close', date: day.date, shift: null }) }]} />}
               </td>
             </tr>
           })}</tbody>
@@ -102,11 +109,21 @@ export default function AdminSchedulePage() {
     {/* Keyed so a typed reason never carries over to another shift. */}
     {target && <ConfirmationDialog key={`${target.kind}:${target.date}:${target.shift?.code ?? 'day'}`} open
       title={target.kind === 'close' ? `Khoá ${targetName(target)}` : `Gỡ khoá ${targetName(target)}`}
-      description={target.kind === 'close' ? 'Staff sẽ không tạo được Tour vào đây và thấy lý do bạn nhập.' : <>Staff lại tạo được Tour vào đây. Lý do đang khoá: {target.block.reason}</>}
+      description={target.kind === 'remove' ? <>Staff lại tạo được Tour vào đây. Lý do đang khoá: {target.block.reason}</>
+        : occupying.length > 0 ? `Còn ${occupying.length} Tour chưa hủy ở đây. Staff cần hủy Tour trước rồi mới khoá được.`
+        : 'Staff sẽ không tạo được Tour vào đây và thấy lý do bạn nhập.'}
       confirmLabel={target.kind === 'close' ? 'Khoá' : 'Gỡ khoá'} busyLabel="Đang lưu…" busy={mutation.isPending}
+      confirmDisabled={occupying.length > 0} reasonDisabled={occupying.length > 0}
       withReason={target.kind === 'close'} requireReason reasonLabel="Lý do khoá" reasonPlaceholder="Ví dụ: Nghỉ lễ, bảo trì robot…"
       error={refusal?.message} onConfirm={confirm} onCancel={close}>
-      {refusal && refusal.tours.length > 0 && <div role="status" className="rounded-xl border border-[#f5c8c2] bg-[#fff1ef] px-3 py-2 text-sm text-[#7f2f25]">
+      {occupying.length > 0 ? <div role="status" className="rounded-xl border border-[#f5c8c2] bg-[#fff1ef] px-3 py-2 text-sm text-[#7f2f25]">
+        <p className="font-semibold">Tour đang chiếm chỗ:</p>
+        <ul aria-label="Tour đang chiếm chỗ" className="mt-1 space-y-1">{occupying.map(tour => <li key={tour.id}>
+          <span className="font-medium">{tour.name}</span>
+          <span className="block text-xs tabular-nums">{formatDateTime(tour.scheduledStartAt)} · {tourStateLabel(tour, now.getTime())}</span>
+        </li>)}</ul>
+      </div>
+      : refusal && refusal.tours.length > 0 && <div role="status" className="rounded-xl border border-[#f5c8c2] bg-[#fff1ef] px-3 py-2 text-sm text-[#7f2f25]">
         <p className="font-semibold">Tour đang chiếm chỗ:</p>
         <ul aria-label="Tour đang chiếm chỗ" className="mt-1 list-inside list-disc">{refusal.tours.map(tour => <li key={tour}>{tour}</li>)}</ul>
       </div>}
@@ -122,7 +139,7 @@ type LockItem = { label: string; onSelect: () => void }
  * An open cell: the whole cell is the lock control, its lock icon shows only on hover or keyboard focus.
  * With a pointer the click opens the confirmation; on a touch screen (no hover) a tap opens a menu first.
  */
-function LockCell({ label, items }: { label: string; items: LockItem[] }) {
+function LockCell({ label, items, tours }: { label: string; items: LockItem[]; tours: number }) {
   const [menu, setMenu] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -133,7 +150,9 @@ function LockCell({ label, items }: { label: string; items: LockItem[] }) {
   }, [menu])
   const choose = (item: LockItem) => { setMenu(false); item.onSelect() }
   return <div ref={root} className="group min-h-9">
-    <button type="button" aria-label={label} aria-haspopup={touchOnly() ? 'menu' : undefined} aria-expanded={touchOnly() ? menu : undefined}
+    {/* Printed under the full-cell button, so a click on the chip still opens the dialog that lists the Tours. */}
+    {tours > 0 && <span className="relative inline-flex rounded-full bg-[#eff6ff] px-2 py-0.5 text-xs font-medium text-[#1d4ed8] pointer-events-none">{tours} Tour</span>}
+    <button type="button" aria-label={tours > 0 ? `${label}, có ${tours} Tour` : label} aria-haspopup={touchOnly() ? 'menu' : undefined} aria-expanded={touchOnly() ? menu : undefined}
       className="absolute inset-0 flex items-center justify-center rounded-lg text-[#475569] outline-none hover:bg-[#f8fafc] focus-visible:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-[#2563eb]/40 focus-visible:ring-inset"
       onClick={() => touchOnly() ? setMenu(value => !value) : items[0].onSelect()}>
       <Lock size={15} aria-hidden="true" data-lock-icon className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none" />

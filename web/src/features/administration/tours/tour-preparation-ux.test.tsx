@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageTourCreatePage from '../../../routes/staff/manage/StaffManageTourCreatePage'
 import StaffManageTourDetailPage from '../../../routes/staff/manage/StaffManageTourDetailPage'
 import { useAuthStore } from '../../../stores/auth-store'
+import { formatTime } from '../../../components/ui/date-time'
 import { countdownText } from './quick-tour'
 import type { TourDetails, TourState } from './types'
 
@@ -87,22 +88,67 @@ describe('sending a new quick Tour to the Representative', () => {
     const writeText = vi.fn(() => Promise.resolve())
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
     renderAt('/staff/manage/tours/tour-1')
-    const block = await screen.findByRole('region', { name: 'Gửi cho đại diện' })
+    const block = await screen.findByRole('region', { name: 'Link đăng ký cho đại diện' })
+    expect(within(block).getByRole('heading', { name: 'Link đăng ký cho đại diện' })).toBeInTheDocument()
+    expect(within(block).getByText('Tour nhanh chỉ mở khoảng 30 phút nên gửi thẳng link này cho đại diện để họ đăng ký đoàn. Sau khi bạn duyệt, người xem nhận email lời mời riêng. Đoàn đã có mặt và không cần đăng ký thì bỏ qua bước này.')).toBeInTheDocument()
     expect(within(block).getByRole('timer')).toHaveTextContent(/Còn (29:5\d|30:00)/)
     const link = `${window.location.origin}/dai-dien/buoi/tour-1`
-    expect(within(block).getByLabelText('Link đăng ký cho đại diện')).toHaveValue(link)
+    expect(within(block).getByLabelText('Link để sao chép')).toHaveValue(link)
     await act(async () => { fireEvent.click(within(block).getByRole('button', { name: 'Sao chép link' })) })
     expect(writeText).toHaveBeenCalledWith(link)
     expect(within(block).getByRole('button', { name: 'Đã sao chép' })).toBeInTheDocument()
+    // The steps stay folded under "Xem hướng dẫn" until Staff opens them.
+    const steps = within(block).getByRole('list', { name: 'Các bước tiếp theo', hidden: true })
+    expect(steps).not.toBeVisible()
+    fireEvent.click(within(block).getByText('Xem hướng dẫn'))
+    expect(steps).toBeVisible()
+    expect(within(steps).getAllByRole('listitem')).toHaveLength(4)
     expect(within(block).getByRole('link', { name: 'danh sách đăng ký của Tour' })).toHaveAttribute('href', '/staff/manage/registrations?tourId=tour-1')
-    expect(within(block).getAllByRole('listitem')).toHaveLength(4)
+  })
+
+  it('before the start time, says the three server moments: start, last start once locked, and the system cancel', async () => {
+    const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString()
+    current = detail('SCHEDULED', { isShortNotice: true, scheduledStartAt: at(30), latestStartAt: at(45), autoCancelAt: at(50) })
+    renderAt('/staff/manage/tours/tour-1')
+    const block = await screen.findByRole('region', { name: 'Link đăng ký cho đại diện' })
+    expect(block).toHaveTextContent(`Bắt đầu trước ${formatTime(at(30))}. Đã chốt thì còn bắt đầu được tới ${formatTime(at(45))}. Chưa bắt đầu thì hệ thống tự hủy và trả robot lúc ${formatTime(at(50))}.`)
+    expect(block).not.toHaveTextContent(/Hạn bắt đầu lúc|Đã tới hạn/)
+    expect(within(block).getByRole('button', { name: 'Sao chép link' })).toBeInTheDocument()
+    expect(within(block).queryByRole('button', { name: 'Hủy Tour ngay' })).not.toBeInTheDocument()
+  })
+
+  it('after the start time, withdraws the link, names the system cancel time and offers to cancel now', async () => {
+    const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString()
+    current = detail('SCHEDULED', { isShortNotice: true, scheduledStartAt: at(-3), latestStartAt: at(12), autoCancelAt: at(17) })
+    renderAt('/staff/manage/tours/tour-1')
+    const block = await screen.findByRole('region', { name: 'Link đăng ký cho đại diện' })
+    expect(block).toHaveTextContent(`Đã quá giờ bắt đầu, không chốt được nữa. Hệ thống sẽ tự hủy lúc ${formatTime(at(17))}, hoặc bạn hủy ngay.`)
+    expect(within(block).getByRole('timer')).toHaveTextContent(/Tự hủy sau 1[67]:\d\d/)
+    expect(within(block).queryByLabelText('Link để sao chép')).not.toBeInTheDocument()
+    expect(block).not.toHaveTextContent(/gửi thẳng link này/)
+    expect(within(block).queryByRole('button', { name: 'Sao chép link' })).not.toBeInTheDocument()
+    expect(within(block).queryByText('Xem hướng dẫn')).not.toBeInTheDocument()
+    fireEvent.click(within(block).getByRole('button', { name: 'Hủy Tour ngay' }))
+    expect(await screen.findByRole('dialog', { name: 'Hủy Tour?' })).toBeInTheDocument()
+  })
+
+  it('gives one line of guidance per state: the share panel for a quick Tour, the registration notice for a Tour on a shift', async () => {
+    current = detail('SCHEDULED', { isShortNotice: true })
+    const view = renderAt('/staff/manage/tours/tour-1')
+    await screen.findByRole('region', { name: 'Link đăng ký cho đại diện' })
+    expect(screen.queryByText(/Đại diện trường đang thấy Tour này/)).not.toBeInTheDocument()
+    view.unmount()
+    current = detail('SCHEDULED', { scheduledStartAt: '2099-01-03T01:15:00Z' })
+    renderAt('/staff/manage/tours/tour-1')
+    expect(await screen.findByText(/Đại diện trường đang thấy Tour này/)).toBeInTheDocument()
+    expect(screen.queryByText('Xem hướng dẫn')).not.toBeInTheDocument()
   })
 
   it('selects the link for Ctrl+C when the browser has no clipboard', async () => {
     current = detail('SCHEDULED', { isShortNotice: true })
     vi.stubGlobal('navigator', { ...navigator, clipboard: undefined })
     renderAt('/staff/manage/tours/tour-1')
-    const block = await screen.findByRole('region', { name: 'Gửi cho đại diện' })
+    const block = await screen.findByRole('region', { name: 'Link đăng ký cho đại diện' })
     fireEvent.click(within(block).getByRole('button', { name: 'Sao chép link' }))
     expect(within(block).getByRole('status')).toHaveTextContent(/bấm Ctrl\+C/)
   })
@@ -111,12 +157,12 @@ describe('sending a new quick Tour to the Representative', () => {
     current = detail('SCHEDULED')
     const view = renderAt('/staff/manage/tours/tour-1')
     await screen.findByRole('region', { name: 'Thông tin Tour' })
-    expect(screen.queryByRole('region', { name: 'Gửi cho đại diện' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Link đăng ký cho đại diện' })).not.toBeInTheDocument()
     view.unmount()
     current = detail('READY', { isShortNotice: true })
     renderAt('/staff/manage/tours/tour-1')
     await screen.findByRole('region', { name: 'Thông tin Tour' })
-    expect(screen.queryByRole('region', { name: 'Gửi cho đại diện' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Link đăng ký cho đại diện' })).not.toBeInTheDocument()
   })
 
   it('formats the countdown and stops at the deadline', () => {
@@ -148,7 +194,7 @@ describe('quick Tour form', () => {
 
   it('says nowhere that Start waits for everyone (ADR-0057)', async () => {
     const view = renderAt('/staff/manage/tours/new')
-    await screen.findByText('Chưa bắt đầu sau 30 phút thì tự huỷ')
+    await screen.findByText('Chưa bắt đầu sau 30 phút thì tự hủy')
     expect(document.body.textContent).not.toMatch(/đủ người/)
     view.unmount()
     renderAt('/staff/manage/tours/new?kind=quick')

@@ -25,7 +25,7 @@ describe('Đăng ký của tôi groups', () => {
   it('words the system auto-cancel for a Representative and never dates a cancelled Tour by the registration update', () => {
     // The exact text of TourAutoCancel.Reason in the backend.
     const note = closedNote({ ...base, state: 'APPROVED', tourState: 'CANCELLED', tourCancelReason: 'Không bắt đầu trong khung giờ, hệ thống tự huỷ.' })
-    expect(note.reason).toBe('Buổi tham quan không bắt đầu đúng giờ nên đã bị huỷ. Đại học FPT sẽ liên hệ nếu sắp xếp lại.')
+    expect(note.reason).toBe('Buổi tham quan không bắt đầu đúng giờ nên đã bị hủy. Đại học FPT sẽ liên hệ nếu sắp xếp lại.')
     expect(note.at).toBeNull()
   })
   it('says who ended it and why', () => {

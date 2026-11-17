@@ -8,9 +8,10 @@
 #
 # AMCL does NOT seed itself on the real robot (set_initial_pose defaults to
 # false). After startup you MUST give it a "2D Pose Estimate" in RViz, which
-# publishes <robot_ns>/initialpose in the map frame. Pass
-# set_initial_pose:=true only where the start pose is genuinely known - Gazebo,
-# or a future dock/homing routine.
+# publishes <robot_ns>/initialpose in the map frame, or run pose_bootstrap
+# (navigation.launch.py auto_initial_pose:=true), which publishes one only after
+# the live scan matches the map there. Pass set_initial_pose:=true only where
+# the start pose is genuinely known - Gazebo.
 # =============================================================================
 import os
 

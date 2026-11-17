@@ -43,6 +43,17 @@ public sealed class SchemaV11FactAttribute : FactAttribute, ITraitAttribute
 
 }
 
+/// <summary>The data-driven form of <see cref="SchemaV11FactAttribute"/>, with the same opt-in and trait.</summary>
+[TraitDiscoverer("SmartCampus.IntegrationTests.SqlIntegrationTraitDiscoverer", "SmartCampus.IntegrationTests")]
+public sealed class SchemaV11TheoryAttribute : TheoryAttribute, ITraitAttribute
+{
+    public SchemaV11TheoryAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")))
+            Skip = "Set SMARTCAMPUS_SCHEMA_TEST_CONNECTION to a disposable local SQL Server instance (CREATE DATABASE permission).";
+    }
+}
+
 public sealed class SchemaV12FactAttribute : FactAttribute, ITraitAttribute
 {
     public SchemaV12FactAttribute()
@@ -306,7 +317,7 @@ public sealed class SchemaV11Tests
         await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
             new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manual localization and display check.")));
         var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
-            new(Guid.NewGuid(), new(map.Id, "Library", "Entrance", null, -1.5m, -1.5m, 0m, "FRONT", "Nội dung thuyết minh", null))));
+            new(Guid.NewGuid(), new(map.Id, "Library", "Entrance", null, -1.5m, -1.5m, 0m, "FRONT"))));
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 1, proposal.RowVersion)));
         await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 1,
@@ -314,11 +325,28 @@ public sealed class SchemaV11Tests
         var verifiedPoiNavigationFingerprint = proposal.Revision.NavigationFingerprint;
         // A route needs at least two stops one metre apart (docs/lich-tour-theo-ca.md §2).
         var lab = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
-            new(Guid.NewGuid(), new(map.Id, "Lab", "Lab", null, -0.5m, -1.5m, 0m, "FRONT", "Thuyết minh phòng lab", null))));
+            new(Guid.NewGuid(), new(map.Id, "Lab", "Lab", null, -0.5m, -1.5m, 0m, "FRONT"))));
         lab = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), lab.Id, new(Guid.NewGuid(), 1, lab.RowVersion)));
         await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), lab.Id, 1,
             new(Guid.NewGuid(), 1, lab.RowVersion, "physical_1", "PASS", true, true, true, true, null, "Manual POI PASS.")));
         RouteRevisionStopInput LabStop() => new(lab.Revision.Id, 30, [new("FRONT", 30)]);
+
+        // ADR-0060: passed POIs without approved narration cannot join a route.
+        var unapproved = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), null,
+            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
+                [new(proposal.Revision.Id, 30, [new("FRONT", 30)]), LabStop()]))));
+        Assert.Equal("POI_NARRATION_NOT_APPROVED", unapproved.Code);
+        Assert.Equal("POI Library chưa có thuyết minh đã duyệt.", unapproved.Message);
+        var libraryNarration = await NarrationSeed.ApproveAsync(request => sender.Send(request), Guid.Parse(Id(2)), participatingStaffId, proposal.Id, "Nội dung thuyết minh");
+        // A draft waiting for approval is not enough either.
+        await sender.Send(new SavePoiNarrationDraftCommand(Guid.Parse(Id(2)), lab.Id, new(Guid.NewGuid(), null, "Thuyết minh phòng lab", null)));
+        var labDraftOnly = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), null,
+            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
+                [new(proposal.Revision.Id, 30, [new("FRONT", 30)]), LabStop()]))));
+        Assert.Equal("POI_NARRATION_NOT_APPROVED", labDraftOnly.Code);
+        Assert.Contains("POI Lab", labDraftOnly.Message);
+        var labDraft = (await sender.Send(new ListPoiNarrationsQuery(lab.Id)))[0];
+        await sender.Send(new ApprovePoiNarrationCommand(participatingStaffId, lab.Id, labDraft.RevisionNumber, new(Guid.NewGuid(), labDraft.RowVersion)));
 
         var draft1 = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), null,
             new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
@@ -330,13 +358,14 @@ public sealed class SchemaV11Tests
         Assert.Equal(await db.ScalarAsync<Guid>($"SELECT Id FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId:D}' AND StopOrder=1;"),
             draft1.Stops[0].Id);
         Assert.Equal("Nội dung thuyết minh", await db.ScalarAsync<string>($"SELECT NarrationText FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId}' AND StopOrder=1;"));
+        Assert.Equal(libraryNarration.Id, await db.ScalarAsync<Guid>($"SELECT NarrationRevisionId FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId}' AND StopOrder=1;"));
         await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId, draft1.RevisionId,
             new(Guid.NewGuid(), 1)));
 
         async Task RejectParticipant(Guid userId)
         {
             var error = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new RecordRouteTestRunCommand(technicalStaffId, draft1.RouteId, draft1.RevisionId,
-                new(Guid.NewGuid(), "physical_1", userId, "FAIL", false, true, true, 240,
+                new(Guid.NewGuid(), "physical_1", userId, "FAIL", false, true, true,
                     "Invalid participant.", "Expected participant account rejection."))));
             Assert.Equal("STAFF_PARTICIPANT_REQUIRED", error.Code);
         }
@@ -400,14 +429,14 @@ public sealed class SchemaV11Tests
         await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), mapB.Id,
             new(Guid.NewGuid(), "physical_1", mapB.PackageSha256, true, true, "Manual check after deploying map B.")));
         var mapMismatch = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new RecordRouteTestRunCommand(technicalStaffId, draft1.RouteId, draft1.RevisionId,
-            new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true, 240,
+            new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true,
                 "Map A was not deployed.", "Expected rejection while map B is current."))));
         Assert.Equal("MAP_NOT_CURRENTLY_DEPLOYED", mapMismatch.Code);
         await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
             new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manual check after restoring map A.")));
 
         var failed = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, draft1.RouteId, draft1.RevisionId,
-                new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true, 240,
+                new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true,
                 "Did not arrive at the stop.", "Human-observed failed whole-route run.")));
         Assert.Equal("FAIL", failed.VerificationStatus);
 
@@ -419,11 +448,20 @@ public sealed class SchemaV11Tests
         await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), draft2.RouteId, draft2.RevisionId,
             new(Guid.NewGuid(), 2)));
         var passed = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, draft2.RouteId, draft2.RevisionId,
-                new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true, 260,
+                new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true,
                 null, "Human-observed successful whole-route run.")));
         Assert.Equal("PASS", passed.VerificationStatus);
         Assert.Equal("INCOMPLETE_CONTENT_AUDIO_DATA", passed.DurationStatus);
         Assert.Equal(60, passed.DwellDurationSeconds);
+        // Nobody types a duration: it is the dwell plus the straight-line travel at Tours:EstimatedSpeedMetersPerSecond.
+        static int Estimate(RouteRevisionView view) => TourSchedule.EstimatedDurationSeconds(
+            new RouteRevision { StartX = view.StartX, StartY = view.StartY, EndMode = view.EndMode, EndX = view.EndX, EndY = view.EndY },
+            view.Stops.Select(stop => new RouteRevisionStop { StopOrder = stop.StopOrder, DwellSeconds = stop.DwellSeconds, X = stop.X, Y = stop.Y }),
+            TourScheduleSettings.DefaultEstimatedSpeedMetersPerSecond);
+        var estimated = Estimate(passed);
+        Assert.True(estimated > 60);
+        Assert.Equal(estimated, passed.ExpectedDurationSeconds);
+        Assert.Equal(estimated, await db.ScalarAsync<int>($"SELECT MeasuredDurationSeconds FROM dbo.RouteTestRuns WHERE Id='{passed.EffectiveTestRunId:D}';"));
 
         var tourActor = Guid.Parse(Id(2));
         var tourStart = TourSlot(4, "S1");
@@ -443,10 +481,10 @@ public sealed class SchemaV11Tests
         Assert.Equal(draft2.RevisionId, tourDetail.RouteRevision!.RevisionId);
         Assert.Equal(participatingStaffId, tourDetail.Operator!.UserId);
         Assert.Equal("physical_1", tourDetail.Reservation!.RobotCode);
-        // The hold is the whole 08:00-10:00 shift, not the measured run plus buffers.
+        // The hold is the whole 08:00-10:00 shift, not the estimated run plus buffers.
         Assert.Equal(tourStart.AddMinutes(-15), tourDetail.Reservation.StartsAt);
         Assert.Equal(tourStart.AddMinutes(105), tourDetail.Reservation.EndsAt);
-        Assert.Equal(260, tourDetail.Reservation.ExpectedDurationSeconds);
+        Assert.Equal(estimated, tourDetail.Reservation.ExpectedDurationSeconds);
         Assert.Equal(new[] { "Library", "Lab" }, (await scope.ServiceProvider.GetRequiredService<IStudentTourViewReader>().LoadAsync(tour.Id, default))!.Stops.Select(stop => stop.Name));
         await sender.Send(new CancelTourCommand(tour.Id, tourActor, new(Guid.NewGuid(), tourDetail.Tour.RowVersion, "Rescheduling")));
         Assert.NotNull((await sender.Send(new GetTourQuery(tour.Id))).Reservation!.ReleasedAt);
@@ -466,6 +504,7 @@ public sealed class SchemaV11Tests
             new(Guid.NewGuid(), 3)));
 
         // ADR-0035: the slot list and create share one calculation, so each refusal matches.
+        // The column keeps a value its CHECK allows until a later schema drops it; nothing reads it any more.
         Assert.Equal(RouteMeasurementBasis.TotalWithDwell, passed.TestRuns.Single(run => run.Id == passed.EffectiveTestRunId).MeasurementBasis);
         async Task<string> Refused(CreateTourRequest request) =>
             (await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new CreateTourCommand(tourActor, request)))).Code;
@@ -475,15 +514,17 @@ public sealed class SchemaV11Tests
             return (await sender.Send(new GetTourSlotsQuery(dwellOnly.RevisionId, "physical_1", date, date))).Days.Single().Slots.Single(slot => slot.StartsAt == start);
         }
 
-        // The dwell-only revision adds 15 s to the 260 s measured on revision 2.
+        // The dwell-only revision adds 15 s to the estimate of revision 2; the run it inherits does not size it.
         var dwellStart = TourSlot(5, "S1");
+        Assert.Equal(estimated + 15, Estimate(dwellOnly));
+        Assert.Equal(estimated + 15, dwellOnly.ExpectedDurationSeconds);
         var dwellTour = await sender.Send(new CreateTourCommand(tourActor, NewTour(dwellStart, dwellOnly.RevisionId)));
         var dwellReservation = (await sender.Send(new GetTourQuery(dwellTour.Id))).Reservation!;
-        Assert.Equal(260, dwellReservation.MeasuredDurationSeconds);
-        Assert.Equal(275, dwellReservation.ExpectedDurationSeconds);
+        Assert.Equal(estimated + 15, dwellReservation.MeasuredDurationSeconds);
+        Assert.Equal(estimated + 15, dwellReservation.ExpectedDurationSeconds);
         Assert.Equal(dwellStart.AddMinutes(105), dwellReservation.EndsAt);
         Assert.Equal(dwellStart.AddHours(-48), (await SlotOf(dwellStart)).RegistrationClosesAt);
-        Assert.Equal(("FITS", 275), (await sender.Send(new GetRouteRevisionQuery(dwellOnly.RouteId, dwellOnly.RevisionId, false))) is var fit
+        Assert.Equal(("FITS", estimated + 15), (await sender.Send(new GetRouteRevisionQuery(dwellOnly.RouteId, dwellOnly.RevisionId, false))) is var fit
             ? (fit.ScheduleFit, fit.ExpectedDurationSeconds!.Value) : default);
 
         var overlap = await SlotOf(dwellStart);
@@ -538,52 +579,65 @@ public sealed class SchemaV11Tests
         Assert.Equal("ROBOT_RESERVATION_CONFLICT", Assert.Single(outcomes.OfType<string>()));
         Assert.Equal(1, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.TourRobotReservations WHERE StartsAt='{contested.AddMinutes(-15):O}' AND ReleasedAt IS NULL;"));
 
-        // docs/lich-tour-theo-ca.md §4: a PASS over the 90 minutes a shift holds stays PASS, but fits no shift.
+        // docs/lich-tour-theo-ca.md §4: a route estimated over the 90 minutes a shift holds stays PASS, but fits no shift.
+        // The API keeps dwell to 300 s a stop, so the stored dwell is raised directly to stand in for a long route.
+        string DwellUpdate(int first, int second) =>
+            $"UPDATE dbo.RouteRevisionStops SET DwellSeconds = CASE StopOrder WHEN 1 THEN {first} ELSE {second} END WHERE RouteRevisionId='{dwellOnly.RevisionId:D}';";
+        await db.ExecuteAsync(DwellUpdate(3600, 1800));
         var tooLong = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, dwellOnly.RouteId, dwellOnly.RevisionId,
-            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true, 5401,
-                null, "Whole-route measurement including dwell.")));
-        Assert.Equal(("PASS", "TOO_LONG_FOR_SHIFT", 5401), (tooLong.VerificationStatus, tooLong.ScheduleFit, tooLong.ExpectedDurationSeconds!.Value));
+            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true,
+                null, "Whole-route run with the long dwell.")));
+        Assert.Equal(("PASS", "TOO_LONG_FOR_SHIFT", Estimate(tooLong)), (tooLong.VerificationStatus, tooLong.ScheduleFit, tooLong.ExpectedDurationSeconds!.Value));
+        Assert.True(tooLong.ExpectedDurationSeconds > 5400);
         Assert.DoesNotContain(tooLong.EligibilityIssues, issue => issue.Contains("SHIFT"));
         var noShift = await SlotOf(TourSlot(6, "S1"));
         Assert.Equal("ROUTE_TOO_LONG_FOR_SHIFT", noShift.ReasonCode);
-        Assert.Equal("Tuyến cần 90 phút 1 giây, ca này chỉ chứa được 90 phút", noShift.Reason);
+        Assert.StartsWith("Tuyến cần 9", noShift.Reason);
+        Assert.EndsWith(", ca này chỉ chứa được 90 phút", noShift.Reason);
         Assert.Equal("ROUTE_TOO_LONG_FOR_SHIFT", await Refused(NewTour(TourSlot(6, "S1"), dwellOnly.RevisionId)));
 
         // Over the 60 minutes recommended is only a warning: the Tour is still created.
+        await db.ExecuteAsync(DwellUpdate(3600, 30));
         var longRun = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, dwellOnly.RouteId, dwellOnly.RevisionId,
-            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true, 4000,
-                null, "Longer whole-route measurement including dwell.")));
+            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true,
+                null, "Whole-route run with the longer dwell.")));
         Assert.Equal("OVER_RECOMMENDED", longRun.ScheduleFit);
         Assert.Equal("OVER_RECOMMENDED", Assert.Single((await sender.Send(new ListVersionedRoutesQuery("Dwell adjustment only", map.Id, 1, 10, "name"))).Items).ScheduleFit);
         Assert.NotEqual(Guid.Empty, (await sender.Send(new CreateTourCommand(tourActor, NewTour(TourSlot(6, "S1"), dwellOnly.RevisionId)))).Id);
 
-        // A run from before the definition cannot size a reservation, however good its result.
+        // A run from before ADR-0035 no longer matters: the length comes from the revision, so it still schedules.
         await db.ExecuteAsync($"UPDATE dbo.RouteTestRuns SET MeasurementBasis=NULL WHERE Id='{longRun.EffectiveTestRunId:D}';");
-        Assert.Equal("UNKNOWN", (await sender.Send(new GetRouteRevisionQuery(dwellOnly.RouteId, dwellOnly.RevisionId, false))).ScheduleFit);
-        var remeasure = await SlotOf(TourSlot(7, "S1"));
-        Assert.Equal("ROUTE_TEST_REMEASURE_REQUIRED", remeasure.ReasonCode);
-        Assert.Equal("Cần chạy thử lại tuyến để đo theo định nghĩa mới", remeasure.Reason);
-        Assert.Equal("ROUTE_TEST_REMEASURE_REQUIRED", await Refused(NewTour(TourSlot(7, "S1"), dwellOnly.RevisionId)));
+        Assert.Equal("OVER_RECOMMENDED", (await sender.Send(new GetRouteRevisionQuery(dwellOnly.RouteId, dwellOnly.RevisionId, false))).ScheduleFit);
+        Assert.True((await SlotOf(TourSlot(7, "S1"))).Available);
         await db.ExecuteAsync($"UPDATE dbo.RouteTestRuns SET MeasurementBasis='TOTAL_WITH_DWELL' WHERE Id='{longRun.EffectiveTestRunId:D}';");
+        await db.ExecuteAsync(DwellUpdate(45, 30));
 
         var newerFail = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, dwellOnly.RouteId, dwellOnly.RevisionId,
-            new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true, 270,
+            new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true,
                 "The revised dwell configuration was observed with a route failure.", "Newer run for unchanged navigation.")));
         Assert.Equal("FAIL", newerFail.VerificationStatus);
 
         // Content-only POI revisions keep the navigation fingerprint and may reuse the route PASS.
         proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 1, proposal.RowVersion,
-                new(map.Id, "Library entrance", "Entrance", "Narration wording corrected", -1.5m, -1.5m, 0m, "FRONT", "Nội dung thuyết minh", null))));
+                new(map.Id, "Library entrance", "Entrance", "Narration wording corrected", -1.5m, -1.5m, 0m, "FRONT"))));
         Assert.Equal(verifiedPoiNavigationFingerprint, proposal.Revision.NavigationFingerprint);
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 2, proposal.RowVersion)));
+        // New approved narration (ADR-0060) is content too: the new route revision snapshots it and still inherits the run.
+        var newNarration = await NarrationSeed.ApproveAsync(request => sender.Send(request), participatingStaffId, Guid.Parse(Id(2)), proposal.Id, "Thuyết minh đã sửa");
+        Assert.Equal(2, newNarration.RevisionNumber);
         var contentOnlyDraft = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId,
             new(Guid.NewGuid(), 3, "Pilot", "Content wording update", map.Id, -1m, -0.4m, 0m, "POSE", -0.5m, -0.5m, 0m,
                 [new(proposal.Revision.Id, 45, [new("FRONT", 30)]), LabStop()])));
         Assert.Equal(4, contentOnlyDraft.RevisionNumber);
         Assert.Equal("FAIL", contentOnlyDraft.VerificationStatus);
         Assert.Equal(newerFail.EffectiveTestRunId, contentOnlyDraft.EffectiveTestRunId);
+        Assert.Equal("Thuyết minh đã sửa", contentOnlyDraft.Stops[0].NarrationText);
+        Assert.Equal(newNarration.Id, await db.ScalarAsync<Guid>($"SELECT NarrationRevisionId FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{contentOnlyDraft.RevisionId}' AND StopOrder=1;"));
+        // The earlier revision keeps the narration it was saved with.
+        Assert.Equal("Nội dung thuyết minh", (await sender.Send(new GetRouteRevisionQuery(draft1.RouteId, draft1.RevisionId, false))).Stops[0].NarrationText);
+        Assert.Equal("SUPERSEDED", await db.ScalarAsync<string>($"SELECT State FROM dbo.PoiNarrationRevisions WHERE Id='{libraryNarration.Id}';"));
         await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), contentOnlyDraft.RouteId, contentOnlyDraft.RevisionId,
             new(Guid.NewGuid(), 4)));
 
@@ -721,6 +775,12 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.18-to-v1.19-short-notice-tour.sql");
         await db.ApplyFileAsync("upgrade-v1.19-to-v1.20-poi-discard.sql");
         await db.ApplyFileAsync("upgrade-v1.19-to-v1.20-poi-discard.sql");
+        await db.ApplyFileAsync("upgrade-v1.20-to-v1.21-map-retirement.sql");
+        await db.ApplyFileAsync("upgrade-v1.20-to-v1.21-map-retirement.sql");
+        await db.ApplyFileAsync("upgrade-v1.21-to-v1.22-poi-narration-approval.sql");
+        await db.ApplyFileAsync("upgrade-v1.21-to-v1.22-poi-narration-approval.sql");
+        await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
+        await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -731,8 +791,13 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.20", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.23", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='PoiNarrationRevisions';"));
+        Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name IN ('RetiredAt','RetiredByUserId') AND is_nullable=1;"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.PoiProposals WHERE RetiredAt IS NOT NULL OR RetiredByUserId IS NOT NULL;"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.PoiNarrationRevisions WHERE State=N'APPROVED';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name='DiscardedAt' AND is_nullable=1;"));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.MapVersions') AND name IN ('RetiredAt','RetiredByUserId','RetirementReason') AND is_nullable=1;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RobotCommands';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='TourScheduleBlocks';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Tours') AND name='CurrentRevisionStopId' AND is_nullable=1;"));
@@ -1134,6 +1199,70 @@ public sealed class SchemaV11Tests
     }
 
     [SchemaV17Fact]
+    public async Task MapRetirementUpgrade_MatchesTheSnapshot_LeavesEveryVersionActive_AndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.20.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.20';");
+        const string bootstrapHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{bootstrapHash}';");
+
+        await db.ApplyFileAsync("upgrade-v1.20-to-v1.21-map-retirement.sql");
+        await db.ApplyFileAsync("upgrade-v1.20-to-v1.21-map-retirement.sql");
+
+        Assert.Equal("1.21", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        await using var snapshot = await TestDatabase.CreateAsync();
+        const string columns = "SELECT STRING_AGG(CONCAT(name,':',TYPE_NAME(system_type_id),':',max_length,':',scale,':',is_nullable), N',') WITHIN GROUP (ORDER BY name) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.MapVersions') AND name IN ('RetiredAt','RetiredByUserId','RetirementReason');";
+        const string check = "SELECT CONCAT(definition,':',is_not_trusted) FROM sys.check_constraints WHERE name=N'CK_MapVersions_Retirement_Complete';";
+        const string foreignKey = "SELECT CONCAT(OBJECT_NAME(referenced_object_id),':',is_not_trusted) FROM sys.foreign_keys WHERE name=N'FK_MapVersions_RetiredByUserId';";
+        foreach (var shape in new[] { columns, check, foreignKey })
+            Assert.Equal(await snapshot.ScalarAsync<string>(shape), await db.ScalarAsync<string>(shape));
+        Assert.Equal("Users:0", await db.ScalarAsync<string>(foreignKey));
+    }
+
+    [SchemaV17Fact]
+    public async Task PoiRetirementUpgrade_MatchesTheSnapshot_LeavesEveryPoiActive_AndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.22.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.22';");
+        const string bootstrapHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{bootstrapHash}';");
+
+        await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
+        await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
+
+        Assert.Equal("1.23", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        await using var snapshot = await TestDatabase.CreateAsync();
+        const string columns = "SELECT STRING_AGG(CONCAT(name,':',TYPE_NAME(system_type_id),':',max_length,':',scale,':',is_nullable), N',') WITHIN GROUP (ORDER BY name) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name IN ('RetiredAt','RetiredByUserId');";
+        const string check = "SELECT CONCAT(definition,':',is_not_trusted) FROM sys.check_constraints WHERE name=N'CK_PoiProposals_Retirement_Complete';";
+        const string foreignKey = "SELECT CONCAT(OBJECT_NAME(referenced_object_id),':',is_not_trusted) FROM sys.foreign_keys WHERE name=N'FK_PoiProposals_RetiredByUserId';";
+        foreach (var shape in new[] { columns, check, foreignKey })
+            Assert.Equal(await snapshot.ScalarAsync<string>(shape), await db.ScalarAsync<string>(shape));
+        Assert.Equal("Users:0", await db.ScalarAsync<string>(foreignKey));
+    }
+
+    [SchemaV17Fact]
+    public async Task PoiRetirementUpgrade_RefusesAnyOtherVersion()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.21.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.21';");
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql"));
+        Assert.Equal(51230, error.Number);
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name='RetiredAt';"));
+    }
+
+    [SchemaV17Fact]
+    public async Task MapRetirementUpgrade_RefusesAnyOtherVersion()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.19.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.19';");
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.20-to-v1.21-map-retirement.sql"));
+        Assert.Equal(51210, error.Number);
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.MapVersions') AND name='RetiredAt';"));
+    }
+
+    [SchemaV17Fact]
     public async Task ShortNoticeUpgrade_RefusesAnyOtherVersion()
     {
         await using var db = await TestDatabase.CreateAsync("snapshot-v1.17.sql");
@@ -1367,13 +1496,12 @@ public sealed class SchemaV11Tests
             new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manual localization and display check.")));
         Assert.True(deployment.Passed);
         var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
-            new(Guid.NewGuid(), new(map.Id, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT", "Nội dung thuyết minh", null))));
+            new(Guid.NewGuid(), new(map.Id, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT"))));
         Assert.Equal("NOT_CHECKED", proposal.Revision.NavigationStatus);
-        await db.ExecuteAsync($"UPDATE dbo.PoiProposalRevisions SET NarrationText=NULL WHERE Id='{proposal.Revision.Id}';");
-        var missingNarration = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
-            new(Guid.NewGuid(), 1, proposal.RowVersion))));
-        Assert.Equal("POI_NARRATION_REQUIRED", missingNarration.Code);
-        await db.ExecuteAsync($"UPDATE dbo.PoiProposalRevisions SET NarrationText=N'Nội dung thuyết minh' WHERE Id='{proposal.Revision.Id}';");
+        // ADR-0060: narration is written after the technical check, so a POI without any narration can be submitted.
+        Assert.Equal(1, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.PoiProposalRevisions WHERE Id='{proposal.Revision.Id}' AND NarrationText IS NULL;"));
+        Assert.Null(proposal.Narration!.Approved);
+        Assert.Null(proposal.Narration.Draft);
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 1, proposal.RowVersion)));
         Assert.True(proposal.Revision.IsSubmitted);
@@ -1385,7 +1513,7 @@ public sealed class SchemaV11Tests
         Assert.Equal("FAIL", failed.ResultCode);
         proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 1, proposal.RowVersion,
-                new(map.Id, "Library", "Entrance", "Moved to clear aisle", 1.5m, 0.5m, 0m, "FRONT", "Nội dung thuyết minh", null))));
+                new(map.Id, "Library", "Entrance", "Moved to clear aisle", 1.5m, 0.5m, 0m, "FRONT"))));
         Assert.Equal("NOT_CHECKED", proposal.Revision.NavigationStatus);
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 2, proposal.RowVersion)));
@@ -1397,11 +1525,10 @@ public sealed class SchemaV11Tests
 
         proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 2, proposal.RowVersion,
-                new(map.Id, "Library", "Entrance", null, 1.5m, 0.5m, 0m, "FRONT", "Nội dung thuyết minh đã biên tập.", null))));
+                new(map.Id, "Library", "Entrance", null, 1.5m, 0.5m, 0m, "FRONT"))));
         Assert.Equal("PASS", proposal.Revision.NavigationStatus);
         Assert.Equal(passed.ProposalRevisionId, proposal.Revision.VerificationSourceRevisionId);
         Assert.Equal(passed.NavigationFingerprint, proposal.Revision.NavigationFingerprint);
-        Assert.Equal("Nội dung thuyết minh đã biên tập.", proposal.Revision.NarrationText);
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 3, proposal.RowVersion)));
         Assert.Empty(await sender.Send(new ListPoiVerificationQueueQuery(map.Id)));
@@ -1409,7 +1536,7 @@ public sealed class SchemaV11Tests
         // A content-only submitted revision inherits the exact prior navigation result and remains editable.
         proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 3, proposal.RowVersion,
-                new(map.Id, "Library entry", "Entrance", "Second content correction", 1.5m, 0.5m, 0m, "FRONT", "Nội dung thuyết minh", null))));
+                new(map.Id, "Library entry", "Entrance", "Second content correction", 1.5m, 0.5m, 0m, "FRONT"))));
         Assert.Equal("PASS", proposal.Revision.NavigationStatus);
         Assert.Equal(passed.ProposalRevisionId, proposal.Revision.VerificationSourceRevisionId);
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
@@ -1424,7 +1551,7 @@ public sealed class SchemaV11Tests
         Assert.Equal("FAIL", newerFailure.ResultCode);
         proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 4, proposal.RowVersion,
-                new(map.Id, "Library entrance", "Entrance", "Third content correction", 1.5m, 0.5m, 0m, "FRONT", "Nội dung thuyết minh", null))));
+                new(map.Id, "Library entrance", "Entrance", "Third content correction", 1.5m, 0.5m, 0m, "FRONT"))));
         Assert.Equal("FAIL", proposal.Revision.NavigationStatus);
         Assert.Equal(newerFailure.ProposalRevisionId, proposal.Revision.VerificationSourceRevisionId);
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
@@ -1442,7 +1569,7 @@ public sealed class SchemaV11Tests
         // Changing the navigation tuple requires a new result and appears in the technical queue.
         proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 5, proposal.RowVersion,
-                new(map.Id, "Library entrance", "Entrance", "Move to another free cell", 0.5m, 1.5m, 0m, "FRONT", "Nội dung thuyết minh", null))));
+                new(map.Id, "Library entrance", "Entrance", "Move to another free cell", 0.5m, 1.5m, 0m, "FRONT"))));
         Assert.Equal("NOT_CHECKED", proposal.Revision.NavigationStatus);
         Assert.NotEqual(newerFailure.NavigationFingerprint, proposal.Revision.NavigationFingerprint);
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
@@ -1471,7 +1598,7 @@ public sealed class SchemaV11Tests
         await RecordDeploymentAsync(sender, mapA);
 
         var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
-            new(Guid.NewGuid(), new(mapA.Id, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT", "Nội dung thuyết minh", null))));
+            new(Guid.NewGuid(), new(mapA.Id, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT"))));
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 1, proposal.RowVersion)));
         await RecordDeploymentAsync(sender, mapB);
@@ -1519,7 +1646,8 @@ public sealed class SchemaV11Tests
     [SchemaV12Fact]
     public async Task ConcurrentMapUploads_SerializeAreaVersioningAndIdempotentRetries()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
+        // The current snapshot (v1.23): MapVersions gained the v1.21 retirement columns (ADR-0041), which today's upload reads back.
+        await using var db = await TestDatabase.CreateAsync();
         await using var services = db.BuildFeatureServiceProvider();
         var package = CreateMapPackage();
         var sameRequest = Guid.NewGuid();
@@ -1716,7 +1844,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.20.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.23.sql")
         {
             var db = new TestDatabase();
             try
@@ -1763,6 +1891,9 @@ public sealed class SchemaV11Tests
             services.AddSingleton<TimeProvider>(Clock);
             services.AddSingleton<IFleetTelemetryStore, InMemoryFleetTelemetryStore>();
             services.AddSingleton<IOperatorConsolePresence, UnavailableOperatorConsolePresence>();
+            // GET Tour reads the Operator's auto-advance switch (ADR-0059); registered like AddInfrastructure does.
+            services.AddSingleton<SmartCampus.Application.Common.Abstractions.Tours.ITourAutoAdvanceStore,
+                SmartCampus.Application.Features.Tours.InMemoryTourAutoAdvanceStore>();
             services.AddSingleton(new FleetCommandSettings());
             services.AddSingleton(new SmartCampus.Application.Common.Abstractions.Invitations.InvitationSettings(false, 24));
             services.AddSingleton(Shifts);
@@ -1927,7 +2058,7 @@ public sealed class SchemaV11Tests
         await using var scope = services.CreateAsyncScope();
         var sender = scope.ServiceProvider.GetRequiredService<ISender>();
         var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
-            new(Guid.NewGuid(), new(mapVersionId, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT", "Nội dung thuyết minh", null))));
+            new(Guid.NewGuid(), new(mapVersionId, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT"))));
         return await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), proposal.CurrentRevision, proposal.RowVersion)));
     }

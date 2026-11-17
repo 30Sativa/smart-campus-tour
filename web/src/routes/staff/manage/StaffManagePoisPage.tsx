@@ -1,41 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { FileText, Maximize2, MapPinOff, Pencil, Plus, Send, Trash2, Volume2 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Archive, FileText, Maximize2, MapPinOff, Pencil, Plus, RotateCcw, Send, Trash2, Volume2 } from 'lucide-react'
 import { SearchField } from '../../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
-import { useDiscardPoiProposal, useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
+import { useDiscardPoiProposal, useMapVersions, usePoiProposals, useReactivatePoiProposal, useRetirePoiProposal } from '../../../features/technical/technical-hooks'
 import { errorText } from '../../../features/technical/technical-format'
-import type { MapVersionItem, PoiProposal } from '../../../features/technical/api/technical'
-import { NARRATION_NEEDED, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { technicalApi, type MapVersionItem, type PoiProposal } from '../../../features/technical/api/technical'
+import { mapCheckLabel, narrationStatus, routeUseLine, VERIFICATION } from '../../../features/technical/poi-labels'
 import { headPresetLabel } from '../../../features/technical/head-camera-preset'
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
 import { fitView } from '../../../features/administration/pois/map/fit-view'
 import { ZoomableMap } from '../../../features/administration/pois/map/ZoomableMap'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
-import { poiStatus, type PoiStatus } from '../../../features/administration/pois/poi-status'
+import { isTouchScreen, mapZoomHint } from '../../../features/administration/pois/map/touch-screen'
+import { effectiveFailRecord, poiStatus, type PoiStatus } from '../../../features/administration/pois/poi-status'
+import { RouteScheduledToursList } from '../../../features/administration/routes/RouteScheduledTours'
+import { useAuthStore } from '../../../stores/auth-store'
 
 type Status = PoiStatus
-type Filter = 'all' | Status
+/** A retired POI (ADR-0062) has its own filter and label; the check-state filters leave it out. */
+type Filter = 'all' | Status | 'RETIRED'
 const statusOf = poiStatus
-/**
- * Labels carry a muted tint per state (grey draft, sand waiting, soft blue passed,
- * soft red to fix). On the map every point is grey except a failed one (red) and
- * the chosen one (blue).
- */
-const NEUTRAL_CHIP = 'bg-[#f1f5f9] text-[#475569]'
+const isRetired = (p: PoiProposal) => Boolean(p.retiredAt)
+const RETIRED_CHIP = 'bg-[#eef0f3] text-[#5a6473]'
+const matchesFilter = (p: PoiProposal, filter: Filter) =>
+  filter === 'all' || (filter === 'RETIRED' ? isRetired(p) : !isRetired(p) && statusOf(p) === filter)
+/** On the map every point is grey except a failed one (red) and the chosen one (blue). Labels come from `VERIFICATION`. */
 const NEUTRAL_PIN = '#7c8ba1'
 const FAIL_PIN = '#e05a4f'
 const SELECTED_PIN = '#3b82f6'
-const STATUS: Record<Status, { label: string; chip: string; pin: string }> = {
-  DRAFT: { label: 'Bản nháp', chip: NEUTRAL_CHIP, pin: NEUTRAL_PIN },
-  WAIT: { label: 'Chờ kỹ thuật', chip: 'bg-[#fbf5e8] text-[#8a6a2e]', pin: NEUTRAL_PIN },
-  PASS: { label: 'Đã đạt', chip: 'bg-[#edf3fc] text-[#3f62a0]', pin: NEUTRAL_PIN },
-  FAIL: { label: 'Cần sửa', chip: 'bg-[#fbeeec] text-[#a4473d]', pin: FAIL_PIN },
-}
+const PIN: Record<Status, string> = { DRAFT: NEUTRAL_PIN, WAIT: NEUTRAL_PIN, PASS: NEUTRAL_PIN, FAIL: FAIL_PIN }
 const ORDER: Status[] = ['DRAFT', 'WAIT', 'PASS', 'FAIL']
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
@@ -60,8 +59,8 @@ export default function StaffManagePoisPage() {
   const mapVersionId = maps.some(map => map.id === selectedMap) ? selectedMap : maps[0]?.id ?? ''
   const scoped = all.filter(p => p.revision.mapVersionId === mapVersionId)
   const number = new Map(scoped.map((p, index) => [p.id, index + 1]))
-  const count = (f: Status) => scoped.filter((p) => statusOf(p) === f).length
-  const rows = scoped.filter((p) => (filter === 'all' || statusOf(p) === filter) && `${p.revision.name} ${p.revision.purpose}`.toLowerCase().includes(search.trim().toLowerCase()))
+  const count = (f: Filter) => scoped.filter((p) => matchesFilter(p, f)).length
+  const rows = scoped.filter((p) => matchesFilter(p, filter) && `${p.revision.name} ${p.revision.purpose}`.toLowerCase().includes(search.trim().toLowerCase()))
   const selected = rows.find(p => p.id === chosen) ?? rows[0]
   const listRef = useRef<HTMLUListElement>(null)
   // A point chosen on the map may sit below the fold of the list, so bring its row into view.
@@ -78,7 +77,7 @@ export default function StaffManagePoisPage() {
     <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
         <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Quản lý POI</h1>
-        <p className="mt-1 text-sm text-[#718096]">Chọn điểm trên bản đồ hoặc trong danh sách. Chỉ điểm đã đạt mới dùng được khi tạo tuyến.</p>
+        <p className="mt-1 text-sm text-[#718096]">Chọn điểm trên bản đồ hoặc trong danh sách. Chỉ điểm đã đạt và có thuyết minh đã duyệt mới dùng được khi tạo tuyến.</p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
       <Link to="/staff/manage/pois/thu-thuyet-minh" className={buttonClass('secondary')}><Volume2 size={16} aria-hidden="true" />Chạy thử thuyết minh</Link>
@@ -102,7 +101,7 @@ export default function StaffManagePoisPage() {
         <SearchField value={search} onChange={setSearch} label="Tìm POI" placeholder="Tìm tên, mục đích POI…" className="w-full sm:ml-auto sm:w-64" />
       </div>
       <div role="group" aria-label="Lọc theo trạng thái" className="mt-2.5 flex flex-wrap gap-1.5 border-t border-[#eef2f6] pt-2.5">
-        {([['all', 'Tất cả', scoped.length], ...ORDER.map(key => [key, STATUS[key].label, count(key)] as const)] as const).map(([key, label, n]) => (
+        {([['all', 'Tất cả', scoped.length], ...ORDER.map(key => [key, VERIFICATION[key].label, count(key)] as const), ['RETIRED', 'Ngưng dùng', count('RETIRED')]] as const).map(([key, label, n]) => (
           <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key as Filter)}
             className={`inline-flex min-h-8 items-center gap-2 rounded-full px-3.5 text-[13px] font-semibold transition-colors ${focus} ${filter === key ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:bg-[#f8fafc] hover:text-[#2d3748]'}`}>
             {label}<span className={`rounded-full px-1.5 text-xs tabular-nums ${filter === key ? 'bg-white text-[#4a6fa5]' : 'bg-[#eef2f6] text-[#718096]'}`}>{n}</span>
@@ -127,7 +126,9 @@ export default function StaffManagePoisPage() {
         {proposals.isPending ? <SkeletonRows rows={4} /> : proposals.error ? <AdminErrorPanel title="Không tải được đề xuất POI." onRetry={() => void proposals.refetch()} /> : !rows.length ?
           (blocked && !everyProposal.length ? <NoEligibleMap maps={mapItems} /> : <EmptyState title={all.length || deployedOnly ? 'Không có POI khớp bộ lọc' : 'Chưa có đề xuất POI'} description={all.length || deployedOnly ? 'Đổi trạng thái hoặc từ khóa để tìm điểm tham quan.' : 'Tạo đề xuất từ một bản đồ đã tải lên.'} />) :
           <ul ref={listRef} aria-label="Điểm tham quan" className="min-h-0 divide-y divide-[#eef2f6] overflow-y-auto border-t border-[#eef2f6]">{rows.map((p) => {
-            const st = STATUS[statusOf(p)]
+            const verification = VERIFICATION[statusOf(p)]
+            const narration = narrationStatus(p.narration)
+            const use = routeUseLine(p)
             const active = p.id === selected?.id
             return <li key={p.id} data-active={active} className={active ? 'bg-[#f5f9ff]' : ''}>
               <button type="button" onClick={() => setChosen(p.id)} aria-pressed={active} aria-label={`Chọn ${p.revision.name}`}
@@ -136,11 +137,11 @@ export default function StaffManagePoisPage() {
                 <span className="min-w-0 flex-1">
                   <b className="block truncate text-sm font-semibold text-[#2d3748]">{p.revision.name}</b>
                   <span className="block truncate text-xs text-[#718096]">{p.revision.purpose}</span>
-                  {p.sourcePoiId && !p.revision.narrationText && <span className="mt-1 block"><ToneBadge tone="warn">{NARRATION_NEEDED}</ToneBadge></span>}
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className={`inline-flex rounded-lg px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${st.chip}`}>{st.label}</span>
-                  {p.revision.verificationMethod && <span className="mt-0.5 block text-[11px] text-[#718096]">{verificationMethodLabel[p.revision.verificationMethod]}</span>}
+                  {/* Both axes, each named, in one style; a retired POI takes no work on either, so it shows one chip. */}
+                  <span className="mt-1.5 flex flex-wrap gap-1.5">{isRetired(p)
+                    ? <ToneBadge tone="muted">Ngưng dùng</ToneBadge>
+                    : <><ToneBadge tone={verification.tone}>Kiểm chứng: {verification.label}</ToneBadge><ToneBadge tone={narration.tone}>Thuyết minh: {narration.label}</ToneBadge></>}</span>
+                  <span className={`mt-1 block text-xs ${use.usable ? 'text-[#166534]' : 'text-[#718096]'}`}>Dùng được cho tuyến: {use.text}</span>
                 </span>
               </button>
               {active && <PoiDetail proposal={p} />}
@@ -151,39 +152,62 @@ export default function StaffManagePoisPage() {
   </AdminPage>
 }
 
-/** What the status means for Staff, and the one thing to do next. Every action opens the proposal page. */
-const NEXT_STEP: Record<Status, { text: string; action: string; icon: typeof Send }> = {
-  DRAFT: { text: 'Chưa gửi kiểm chứng. Hoàn tất nội dung rồi gửi để kỹ thuật viên kiểm tra trên robot.', action: 'Mở để gửi kiểm chứng', icon: Send },
-  WAIT: { text: 'Đã gửi, đang chờ kỹ thuật viên kiểm tra trên robot.', action: 'Xem đề xuất', icon: FileText },
-  PASS: { text: 'Đã đạt kiểm chứng, dùng được khi tạo tuyến.', action: 'Xem đề xuất', icon: FileText },
-  FAIL: { text: 'Kỹ thuật viên ghi không đạt. Xem lý do, sửa rồi gửi lại.', action: 'Xem lý do và sửa', icon: Pencil },
-}
-const NEXT_TONE: Record<Status, string> = { DRAFT: 'bg-[#f8fafc] text-[#475569]', WAIT: 'bg-[#fbf5e8] text-[#7a5c22]', PASS: 'bg-[#edf3fc] text-[#3f62a0]', FAIL: 'bg-[#fbeeec] text-[#a4473d]' }
+type Missing = { key: string; text: string; reason?: string; action?: { label: string; tab: 'vi-tri' | 'thuyet-minh' | null; icon: typeof Send } }
 
-/** The chosen point, opened under its own row: its facts and the next step. */
+/** One line of the FAIL reason in effect, from the same history the POI page reads (shared query cache). */
+function useFailReason(proposal: PoiProposal, enabled: boolean): string {
+  const history = useQuery({ queryKey: ['technical', 'poi-history', proposal.id], queryFn: () => technicalApi.getPoiHistory(proposal.id), enabled })
+  if (!enabled) return ''
+  if (history.isPending) return 'Đang tải lý do…'
+  if (history.isError) return 'Không tải được lý do.'
+  const record = effectiveFailRecord(proposal.revision, history.data.revisions, history.data.verificationRecords)
+  return record?.reason?.trim() || 'Không ghi lý do.'
+}
+
+/**
+ * The chosen point, opened under its own row: everything it still lacks before a route can use it, one line and
+ * one action each, so Staff sees the whole picture without opening the POI. Every action opens the POI page.
+ */
 function PoiDetail({ proposal }: { proposal: PoiProposal }) {
   const status = statusOf(proposal)
-  // An imported POI is Staff's to finish whatever its check says: a route cannot use it without narration (ADR-0038).
-  const needsNarration = Boolean(proposal.sourcePoiId && !proposal.revision.narrationText)
-  const next = needsNarration
-    ? { text: `Nhập từ tệp ghi pose trên robot. Đặt tên và viết thuyết minh để dùng được trong tuyến.${status === 'WAIT' ? ' Kỹ thuật vẫn đang kiểm tra vị trí.' : ''}`, action: 'Bổ sung thuyết minh', icon: Pencil }
-    : NEXT_STEP[status]
-  const tone = needsNarration ? NEXT_TONE.WAIT : NEXT_TONE[status]
-  const facts: Array<[string, string]> = [
-    ['Đầu camera VR', headPresetLabel(proposal.revision.cameraPreset)],
-    ['Thuyết minh', proposal.revision.narrationText ? 'Đã có nội dung' : 'Chưa có nội dung'],
-    ['Cách kiểm chứng', proposal.revision.verificationMethod ? verificationMethodLabel[proposal.revision.verificationMethod] ?? '-' : '-'],
-  ]
+  const retired = isRetired(proposal)
+  const userId = useAuthStore(state => state.user?.userId)
+  const failReason = useFailReason(proposal, status === 'FAIL' && !retired)
+  const summary = proposal.narration
+  // The server refuses a self-approval, so the last editor is told a second Staff has to approve it.
+  const selfLastEditor = Boolean(summary?.draft && userId && summary.draft.lastEditedByUserId === userId)
+  const missing = ([
+    status === 'DRAFT' && { key: 'submit', text: 'Chưa gửi kiểm chứng.', action: { label: 'Gửi kiểm chứng', tab: null, icon: Send } },
+    status === 'WAIT' && { key: 'wait', text: 'Đang chờ kỹ thuật viên kiểm tra trên robot.' },
+    status === 'FAIL' && { key: 'fail', text: 'Kiểm chứng không đạt.', reason: failReason, action: { label: 'Xem lý do và sửa', tab: 'vi-tri', icon: Pencil } },
+    !summary?.approved && !summary?.draft && { key: 'write', text: 'Chưa có thuyết minh.', action: { label: 'Viết thuyết minh', tab: 'thuyet-minh', icon: Pencil } },
+    !summary?.approved && summary?.draft && { key: 'approve', text: selfLastEditor ? 'Thuyết minh chờ duyệt, chờ một Staff khác duyệt.' : 'Thuyết minh chờ duyệt.', action: { label: 'Mở thuyết minh', tab: 'thuyet-minh', icon: FileText } },
+  ] as Array<Missing | false | null | undefined>).filter((item): item is Missing => Boolean(item))
+  // A plain way into the POI only when no line already offers one.
+  const plainLink = retired || !missing.some(item => item.action)
+  const href = (tab: string | null) => `/staff/manage/pois/${proposal.id}${tab ? `?tab=${tab}` : ''}`
+  // The row above already shows both statuses and the route line; only the camera is new here.
   return (
     <section aria-label="Điểm đang chọn" className="space-y-3 px-4 pb-4 pl-15">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">
-        {facts.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-[#718096]">{label}</dt><dd className="truncate font-semibold text-[#2d3748]">{value}</dd></div>)}
-      </dl>
-      <p className={`rounded-xl px-3.5 py-2.5 text-[13px] ${tone}`}>{next.text}</p>
-      <div className="flex flex-wrap items-center gap-2">
-        <Link to={`/staff/manage/pois/${proposal.id}`} className={buttonClass('primary', 'sm')}><next.icon size={14} aria-hidden="true" />{next.action}</Link>
-        {/* The server decides: a POI that ever passed may back a route and is never offered here. */}
+      <p className="text-[13px] text-[#718096]">Đầu camera VR: <span className="font-semibold text-[#2d3748]">{headPresetLabel(proposal.revision.cameraPreset)}</span></p>
+      {retired
+        ? <p className={`rounded-xl px-3.5 py-2.5 text-[13px] ${RETIRED_CHIP}`}>Đã ngưng dùng. Tuyến và Tour đã lưu vẫn giữ điểm này, nhưng tuyến mới không chọn được và điểm không sửa hay gửi kiểm được.</p>
+        : missing.length
+          ? <ul aria-label="Việc còn thiếu" className="divide-y divide-[#eef2f6] rounded-xl bg-[#f8fafc] text-[13px] text-[#475569]">{missing.map((item, index) =>
+            <li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3.5 py-2.5">
+              <span className="min-w-0 flex-1 basis-48">
+                <span className="block">{item.text}</span>
+                {item.reason && <span title={item.reason} className="block truncate text-[#a4473d]">Lý do: {item.reason}</span>}
+              </span>
+              {item.action && <Link to={href(item.action.tab)} className={buttonClass(index === 0 ? 'primary' : 'secondary', 'sm')}><item.action.icon size={14} aria-hidden="true" />{item.action.label}</Link>}
+            </li>)}</ul>
+          : <p className="rounded-xl bg-[#edf3fc] px-3.5 py-2.5 text-[13px] text-[#3f62a0]">Dùng được khi tạo tuyến.</p>}
+      <div className="flex flex-wrap items-center gap-2 empty:hidden">
+        {plainLink && <Link to={href(null)} className={buttonClass('secondary', 'sm')}><FileText size={14} aria-hidden="true" />Xem đề xuất</Link>}
+        {/* The server decides (ADR-0062): discard while no route revision uses it, retire once one does. */}
         {proposal.canDiscard && <DiscardPoi proposal={proposal} />}
+        {proposal.canRetire && <RetirePoi proposal={proposal} />}
+        {proposal.canReactivate && <ReactivatePoi proposal={proposal} />}
       </div>
     </section>
   )
@@ -199,8 +223,40 @@ function DiscardPoi({ proposal }: { proposal: PoiProposal }) {
     <ConfirmationDialog open={open} tone="danger" withReason={false} title={`Xoá ${proposal.revision.name}?`} confirmLabel="Xoá điểm" busyLabel="Đang xoá…"
       busy={discard.isPending} error={discard.error ? errorText(discard.error) : null} onCancel={close}
       onConfirm={() => discard.mutate(proposal, { onSuccess: () => setOpen(false) })}
-      description="Điểm sẽ không còn trong danh sách và hàng chờ kiểm chứng, không thể sửa hay gửi lại. Lịch sử chỉnh sửa và kiểm chứng vẫn được lưu. Điểm này chưa từng đạt nên không tuyến nào đang dùng." />
+      description="Điểm sẽ không còn trong danh sách và hàng chờ kiểm chứng, không thể sửa hay gửi lại. Lịch sử chỉnh sửa và kiểm chứng vẫn được lưu. Chưa có tuyến nào dùng điểm này, kể cả tuyến đã ngưng dùng." />
   </>
+}
+
+/** "Ngưng dùng" for a POI a route uses (ADR-0062): saved routes and Tours keep it, new routes cannot pick it. */
+function RetirePoi({ proposal }: { proposal: PoiProposal }) {
+  const [open, setOpen] = useState(false)
+  const retire = useRetirePoiProposal()
+  // Loaded only while the dialog is open, like "Ngừng sử dụng tuyến" (DeactivateRouteDialog).
+  const tours = useQuery({ queryKey: ['technical', 'poi-scheduled-tours', proposal.id], queryFn: () => technicalApi.poiScheduledTours(proposal.id), enabled: open })
+  const close = () => { setOpen(false); retire.reset() }
+  return <>
+    <button type="button" onClick={() => setOpen(true)} className={buttonClass('secondary', 'sm')}><Archive size={14} aria-hidden="true" />Ngưng dùng</button>
+    <ConfirmationDialog open={open} tone="danger" withReason={false} title={`Ngưng dùng ${proposal.revision.name}?`} confirmLabel="Ngưng dùng" busyLabel="Đang lưu…"
+      busy={retire.isPending} error={retire.error ? errorText(retire.error) : null} onCancel={close}
+      onConfirm={() => retire.mutate(proposal, { onSuccess: () => setOpen(false) })}
+      description="Điểm này đã nằm trong tuyến nên không xoá được. Tuyến và Tour đã lưu không đổi gì và vẫn chạy điểm này. Sau khi ngưng dùng, tuyến mới không chọn được điểm này, và điểm không sửa, gửi kiểm hay đổi thuyết minh được cho tới khi dùng lại.">
+      {tours.isPending ? <p aria-busy="true" className="text-xs text-[#64748b]">Đang tải Tour đã lên lịch…</p>
+        : tours.isError ? <p role="alert" className="text-xs text-[#b23e31]">Không tải được danh sách Tour đã lên lịch. Đóng hộp thoại rồi thử lại.</p>
+        : !tours.data.length ? <p className="text-xs text-[#64748b]">Không có Tour nào đã lên lịch đi qua điểm này.</p>
+        : <div className="text-sm">
+          <p className="font-medium text-[#334155]">{tours.data.length} Tour đã lên lịch đi qua điểm này, vẫn chạy như cũ:</p>
+          <RouteScheduledToursList tours={tours.data} />
+        </div>}
+    </ConfirmationDialog>
+  </>
+}
+
+function ReactivatePoi({ proposal }: { proposal: PoiProposal }) {
+  const reactivate = useReactivatePoiProposal()
+  return <span className="inline-flex flex-wrap items-center gap-2">
+    <button type="button" disabled={reactivate.isPending} onClick={() => reactivate.mutate(proposal)} className={buttonClass('secondary', 'sm')}><RotateCcw size={14} aria-hidden="true" />{reactivate.isPending ? 'Đang lưu…' : 'Dùng lại'}</button>
+    {reactivate.error && <span role="alert" className="text-xs text-[#a4473d]">{errorText(reactivate.error)}</span>}
+  </span>
 }
 
 /** No map has passed its technical check yet, so there is nowhere to place a POI. */
@@ -222,6 +278,7 @@ function NoEligibleMap({ maps }: { maps: MapVersionItem[] }) {
 function PoiMap({ proposals, framed, mapVersionId, mapLabel, number, selectedId, onSelect }: { proposals: PoiProposal[]; framed: PoiProposal[]; mapVersionId: string; mapLabel: string; number: Map<string, number>; selectedId?: string; onSelect: (id: string) => void }) {
   const { map, error, retry } = useMapRaster(mapVersionId)
   const frame = useRef<HTMLElement>(null)
+  const [touch] = useState(isTouchScreen)
   if (!mapVersionId) return <section className={`${card} p-6 text-center text-[13px] text-[#718096]`} aria-label="Bản đồ POI">Chưa có bản đồ cho các POI đang lọc.</section>
   if (error) return <section aria-label="Bản đồ POI"><AdminErrorPanel title="Không tải được bản đồ." description={error} onRetry={retry} /></section>
   if (!map) return <section className={`${card} overflow-hidden`} aria-label="Bản đồ POI"><SkeletonRows rows={6} label="Đang tải bản đồ" /></section>
@@ -242,8 +299,8 @@ function PoiMap({ proposals, framed, mapVersionId, mapLabel, number, selectedId,
           const n = number.get(p.id) ?? 0
           const r = (active ? 15 : 12) * unit
           return (
-            <g key={p.id} role="button" tabIndex={0} aria-pressed={active} aria-label={`${n}. ${p.revision.name}, ${STATUS[statusOf(p)].label}`} onClick={() => onSelect(p.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(p.id) } }} className="cursor-pointer focus:outline-none">
-              <circle cx={at.u} cy={at.v} r={r} fill={active ? SELECTED_PIN : STATUS[statusOf(p)].pin} stroke="#fff" strokeWidth={3 * unit} />
+            <g key={p.id} role="button" tabIndex={0} aria-pressed={active} aria-label={`${n}. ${p.revision.name}, ${isRetired(p) ? 'Ngưng dùng' : `Kiểm chứng: ${VERIFICATION[statusOf(p)].label}, Thuyết minh: ${narrationStatus(p.narration).label}`}`} onClick={() => onSelect(p.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(p.id) } }} className="cursor-pointer focus:outline-none" opacity={isRetired(p) && !active ? 0.4 : 1} data-retired={isRetired(p) || undefined}>
+              <circle cx={at.u} cy={at.v} r={r} fill={active ? SELECTED_PIN : PIN[statusOf(p)]} stroke="#fff" strokeWidth={3 * unit} />
               {active && <circle cx={at.u} cy={at.v} r={r + 6 * unit} fill="none" stroke={SELECTED_PIN} strokeOpacity={0.35} strokeWidth={5 * unit} />}
               <text x={at.u} y={at.v + 5 * unit} textAnchor="middle" fontSize={14 * unit} fontWeight={700} fill="#fff">{n}</text>
               {active && <g>
@@ -255,8 +312,8 @@ function PoiMap({ proposals, framed, mapVersionId, mapLabel, number, selectedId,
         })}
       </ZoomableMap>
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[#718096]">
-        {([[NEUTRAL_PIN, 'Điểm tham quan'], [FAIL_PIN, STATUS.FAIL.label], [SELECTED_PIN, 'Đang chọn']] as const).map(([color, label]) => <span key={label} className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: color }} />{label}</span>)}
-        <span className="ml-auto">Cuộn chuột để phóng to, kéo để di chuyển bản đồ</span>
+        {([[NEUTRAL_PIN, 'Điểm tham quan'], [FAIL_PIN, VERIFICATION.FAIL.label], [SELECTED_PIN, 'Đang chọn']] as const).map(([color, label]) => <span key={label} className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: color }} />{label}</span>)}
+        <span className="ml-auto">{mapZoomHint(touch)}</span>
       </div>
     </section>
   )

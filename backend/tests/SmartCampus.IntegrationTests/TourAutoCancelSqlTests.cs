@@ -7,6 +7,8 @@ using SmartCampus.Application.Features.Tours.Commands.AutoCancelOverdueTour;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Commands.DeliverCancelNotice;
 using SmartCampus.Application.Features.Tours.Commands.StartTour;
+using SmartCampus.Application.Features.Tours.Queries.GetTour;
+using SmartCampus.Application.Features.Tours.Queries.GetTours;
 
 namespace SmartCampus.IntegrationTests;
 
@@ -173,6 +175,32 @@ public sealed class TourAutoCancelSqlTests
         Assert.Equal(1, await w.Count("TOUR_CANCELLED"));
         await using var db = w.H.Context();
         Assert.Null(await db.Robots.AsNoTracking().Select(r => r.CurrentTourId).SingleAsync());
+    }
+
+    [SchemaV11Fact]
+    public async Task TourDetailAndList_CarryTheLatestStartAndTheAutoCancelMoment_TheWorkerUses()
+    {
+        await using var w = await World.Create();
+        var endsAt = await w.HoldEndsAt();
+        w.Clock.Now = w.H.Start.AddMinutes(-30);
+
+        var detail = (await w.H.Send(new GetTourQuery(w.H.TourId))).Tour;
+        Assert.Equal(w.H.Start.AddMinutes(15), detail.LatestStartAt);
+        Assert.Equal(endsAt, detail.AutoCancelAt);
+        var row = Assert.Single((await w.H.Send(new GetToursQuery(new(null, "scheduledStartAt", 1, 20, null, null, null)))).Items,
+            t => t.Id == w.H.TourId);
+        Assert.Equal(detail.LatestStartAt, row.LatestStartAt);
+        Assert.Equal(detail.AutoCancelAt, row.AutoCancelAt);
+
+        // The worker cancels at exactly the moment the DTO announced.
+        w.Clock.Now = detail.AutoCancelAt!.Value.AddMinutes(-1);
+        Assert.Equal(AutoCancelOutcome.Skipped, await w.AutoCancel());
+        w.Clock.Now = detail.AutoCancelAt.Value;
+        Assert.Equal(AutoCancelOutcome.Cancelled, await w.AutoCancel());
+
+        var cancelled = (await w.H.Send(new GetTourQuery(w.H.TourId))).Tour;
+        Assert.Null(cancelled.LatestStartAt);
+        Assert.Null(cancelled.AutoCancelAt);
     }
 
     private static async Task<Exception?> Capture(Func<Task> action)

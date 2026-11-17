@@ -93,7 +93,8 @@ fail-closed rather than fail-open.
 **Reset.** `motion_inhibit_reset`, `std_srvs/Trigger`, on `mode_manager`. It refuses unless the E-stop is off,
 `permit_ok` is true, and Nav2 action status has a live publisher and shows no active goal. It clears the latch only and
 never resumes anything; motion needs a new leg from the backend. Reconnect never clears it [ADR-0008, §6]. No backend
-path clears it, including release-inspection. `fleet_bridge` must contain no client for it (static test).
+path clears it, including release-inspection. **Amended 14/11/2026 (addendum below):** a `BOOT` or `PERMIT_LOST` latch is
+cleared by `fleet_bridge` just before it sends the goal of a new backend GoTo; an `ESTOP` latch still needs a person.
 
 **Teleop.** `cmd_vel_manual` and `manual_override` keep today's behaviour under BLOCKED and LATCHED: a person holding the
 controller is the authority, and the E-stop still blocks them. `motionReady` is false while the mode is not `explore`.
@@ -350,6 +351,34 @@ S3.2**. Neither is PASS without logs.
 `T_link` 1.5 s, `T_permit` 0.6 s and the 2.7 s budget (to be measured at GATE A); permit from successful polls only;
 LATCHED(BOOT); reset refused while a goal is alive; `motion_gate_state`; teleop stays live under a latch while the
 E-stop still blocks it.
+
+## Addendum 14/11/2026: a new leg clears a BOOT or PERMIT_LOST latch
+
+**Status:** proposed for the course-project demo (PR `feature/claude/fleet-latch-new-leg`); needs the owner's review.
+
+**Context.** On 13/11 five of nine web legs ended in `LOCAL_LINK_LOSS` on corridor Wi-Fi, and every one needed someone to
+SSH into the Mini PC and run `robot reset-latch` before the Operator could press "Thử lại chặng". Every robot start also
+needs it once for `LATCHED:BOOT`. The Consequences above foresaw this; the demo needs the web alone.
+
+**Decision.**
+1. What the latch protects against is unchanged: a goal never resumes after a link loss, a bridge crash or a reconnect,
+   because the bridge cancels its leg, holds the permit false until Nav2 ends it, and the latch stays set.
+2. The only thing that clears a `BOOT` or `PERMIT_LOST` latch without a person on the robot is a **new leg**: a GoTo with
+   a new `commandId` that the backend created because the Operator pressed Start, Next or Retry (or, later, Resume),
+   after the backend's movement checks. Just before sending that goal, `fleet_bridge` calls `motion_inhibit_reset`.
+   `mode_manager` keeps every refusal of its own: E-stop engaged, no fresh permit, no live Nav2 status, any active goal.
+   A refused or unanswered reset (2 s) rejects the GoTo with `MOTION_GATE_LATCHED`; no goal is sent.
+3. A Cancel that reaches the bridge while the reset is in flight wins: no goal is sent and the GoTo is rejected with
+   `CANCELLED_BEFORE_START`.
+4. `readiness` reports such a latch as ready for a new leg (`motionReady` true, no fault code), otherwise the backend
+   would never create the leg that clears it. `LATCHED:ESTOP` stays a fault (`MOTION_GATE_LATCHED`) and still needs
+   `robot reset-latch` on the robot.
+
+**Consequences.** The web Operator's press is the human decision that was previously typed on the robot; the attendant
+with the hardware E-stop remains required. The static test now allows exactly one client, in `node.py`, used only on
+this path, and pins the resettable set to `BOOT` and `PERMIT_LOST`. GATE A rows A1 to A5 still hold: restoring the link
+alone moves nothing. Hardware check: unplug the Wi-Fi during a leg on wheels lifted, restore it, watch 30 s (no motion),
+then press Retry on the web and watch the leg start without a shell command.
 
 ## Follow-up
 

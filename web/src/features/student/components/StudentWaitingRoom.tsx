@@ -174,15 +174,18 @@ function Countdown({ scheduledAt }: { scheduledAt: string }) {
   const target = scheduledTime(scheduledAt)
   const left = target == null ? null : Math.max(0, target - now)
   const pad = (n: number) => String(n).padStart(2, '0')
+  // Four days read better as days and hours than as "105:05:57".
+  const days = left != null && left >= 86_400_000
   const label = left == null ? scheduledAt
     : left === 0 ? 'Sắp bắt đầu'
+    : days ? `Còn ${Math.floor(left / 86_400_000)} ngày ${Math.floor((left % 86_400_000) / 3_600_000)} giờ`
     : left >= 3_600_000 ? `${Math.floor(left / 3_600_000)}:${pad(Math.floor((left % 3_600_000) / 60_000))}:${pad(Math.floor((left % 60_000) / 1000))}`
     : `${pad(Math.floor(left / 60_000))}:${pad(Math.floor((left % 60_000) / 1000))}`
   return (
-    <div className="st-x-ring" role="timer" aria-label={left == null ? `Giờ dự kiến ${scheduledAt}` : `Còn ${label} tới giờ bắt đầu`}>
+    <div className="st-x-ring" role="timer" aria-label={left == null ? `Giờ dự kiến ${scheduledAt}` : days ? `${label} tới giờ bắt đầu` : `Còn ${label} tới giờ bắt đầu`}>
       <span className="st-x-ring__c">
         <b>{label}</b>
-        <span>{left == null ? 'Giờ dự kiến' : left === 0 ? 'Chờ Staff bắt đầu' : 'Bắt đầu sau'}</span>
+        <span>{left == null ? 'Giờ dự kiến' : left === 0 ? 'Chờ Staff bắt đầu' : days ? 'Tới giờ bắt đầu' : 'Bắt đầu sau'}</span>
       </span>
     </div>
   )

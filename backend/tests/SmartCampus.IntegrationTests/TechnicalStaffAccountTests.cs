@@ -49,6 +49,22 @@ public sealed class TechnicalStaffAccountTests
         AssertClaim(refreshed.AccessToken, role);
     }
 
+    [Fact]
+    public async Task Login_RevokesEarlierRefreshTokensSoOnlyTheNewestSessionRefreshes()
+    {
+        var repository = new Accounts();
+        repository.Seed(true, ["STAFF"]);
+        var tokens = TokenService();
+        var first = await Login(repository, tokens).Handle(new("test.user", Password), default);
+        var second = await Login(repository, tokens).Handle(new("test.user", Password), default);
+
+        Assert.Single(repository.User!.RefreshTokens, token => token.RevokedAt is null);
+        await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            new RefreshSessionQueryHandler(repository, tokens, TimeProvider.System).Handle(new(first.RefreshToken), default));
+        Assert.Equal(second.RefreshToken, (await new RefreshSessionQueryHandler(repository, tokens, TimeProvider.System)
+            .Handle(new(second.RefreshToken), default)).RefreshToken);
+    }
+
     [Theory]
     [InlineData(false, "TECHNICAL_STAFF")]
     [InlineData(true, "")]
@@ -180,6 +196,8 @@ public sealed class TechnicalStaffAccountTests
         public Task<User?> FindForManagementAsync(Guid id, CancellationToken cancellationToken = default) => LockUserAsync(id, cancellationToken);
         public Task<RefreshToken?> FindRefreshTokenByHashAsync(byte[] hash, CancellationToken cancellationToken = default) =>
             Task.FromResult(User?.RefreshTokens.SingleOrDefault(t => t.TokenHash.SequenceEqual(hash)));
+        public Task<IReadOnlyList<RefreshToken>> ListUnrevokedRefreshTokensAsync(Guid id, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<RefreshToken>>(User?.Id == id ? User.RefreshTokens.Where(t => t.RevokedAt is null).ToList() : []);
         public void AddRefreshToken(RefreshToken token) { token.User = User!; User!.RefreshTokens.Add(token); }
         public Task<bool> NormalizedUsernameExistsAsync(string username, CancellationToken cancellationToken = default) =>
             Task.FromResult(User?.NormalizedUsername == username);

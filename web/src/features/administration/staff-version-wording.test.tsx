@@ -45,12 +45,10 @@ describe('staffMapLabels', () => {
 
 describe('staffRouteStatus', () => {
   it.each([
-    [{ isSubmitted: false, verificationStatus: 'NOT_CHECKED' }, 'Bản nháp'],
+    [{ isSubmitted: false, verificationStatus: 'NOT_CHECKED' }, 'Chưa gửi kiểm chứng'],
     [{ isSubmitted: true, verificationStatus: 'NOT_CHECKED' }, 'Chờ chạy thử'],
-    [{ isSubmitted: true, verificationStatus: 'FAIL', scheduleFit: 'UNKNOWN' as const }, 'Chạy thử không đạt'],
-    [{ isSubmitted: true, verificationStatus: 'PASS', scheduleFit: 'FITS' as const }, 'Đã chạy thử đạt'],
+    [{ isSubmitted: true, verificationStatus: 'FAIL' }, 'Chạy thử không đạt'],
     [{ isSubmitted: true, verificationStatus: 'PASS' }, 'Đã chạy thử đạt'],
-    [{ isSubmitted: true, verificationStatus: 'PASS', scheduleFit: 'UNKNOWN' as const }, 'Cần chạy thử lại'],
   ])('%o reads as %s', (route, label) => {
     expect(staffRouteStatus(route).label).toBe(label)
   })

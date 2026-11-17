@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useRepRegistration, useRepRegistrations, useRepTour, useSubmitRegistration, useUpdateRegistration, useResubmitRegistration } from '../../features/representative/representative-hooks'
@@ -71,6 +71,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
   const [attempt, setAttempt] = useState<{ requestId: string; input: RegistrationInput } | null>(null)
   const [confirmed, setConfirmed] = useState(false)
   const [reloading, setReloading] = useState(false)
+  const consentId = useId()
   const busy = submit.isPending || update.isPending || resubmitMutation.isPending
   const locked = busy || Boolean(attempt) || Boolean(error?.stale) || reloading
   const existingRows = base.registration?.roster.filter(row => row.participationState !== 'REMOVED') ?? []
@@ -78,8 +79,11 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
   const diff = base.registration ? rosterReplacement(existingRows, rows) : null
   // UX only: the server recounts under the Tour lock. Rows this form already holds do not need a new seat.
   const heldHere = existingRows.filter(row => row.participationState === 'PENDING' || row.participationState === 'ACCEPTED').length
-  const overSeats = base.tour.remainingSeats != null && rows.length - heldHere > base.tour.remainingSeats
-  const seatsMessage = `Danh sách có ${rows.length} dòng, nhưng Tour chỉ còn ${(base.tour.remainingSeats ?? 0) + heldHere} chỗ cho đoàn của bạn. Bớt dòng trước khi tiếp tục.`
+  const seatsForGroup = base.tour.remainingSeats != null ? base.tour.remainingSeats + heldHere : null
+  const overSeats = seatsForGroup != null && rows.length > seatsForGroup
+  const seatsMessage = `Danh sách có ${rows.length} dòng, nhưng Tour chỉ còn ${seatsForGroup ?? 0} chỗ cho đoàn của bạn. Bớt dòng trước khi tiếp tục.`
+  // A new roster or a dropped file makes an earlier roster error obsolete; a stale-version error stays until reload.
+  const clearRosterError = () => setError(previous => previous?.stale ? previous : null)
   const resubmit = Boolean(base.registration?.allowedActions.resubmit.allowed)
   const gate = base.registration ? resubmit ? base.registration.allowedActions.resubmit : base.registration.allowedActions.edit : base.tour.register
   const title = !base.registration ? 'Đăng ký tham quan' : resubmit ? 'Sửa và gửi lại đăng ký' : 'Chỉnh sửa đăng ký'
@@ -139,7 +143,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
             {fieldErrors[field.key] && <span id={`registration-${field.key}-error`} className="rep-error-message">{fieldErrors[field.key]}</span>}
           </label>)}</div><p className="rep-hint">Email liên hệ của đoàn không thay thế email riêng của từng dòng lời mời.</p></Panel>}
           {step === 1 && <Panel title="Danh sách lời mời" action={base.registration && <button type="button" className={repButton('secondary', 'sm')} onClick={() => downloadBytes('CampusTour-danh-sach-hien-tai.xlsx', rosterWorkbookBytes(existingRows))}>Tải danh sách hiện tại</button>}>
-            <div className="rep-stack"><ExcelUploader accepted={accepted} onAccept={next => { setAccepted(next); setConfirmed(false) }} existingRows={existingRows} canAddRows={newRosterRowsAllowed(base.tour)} inUse={base.registration ? { count: existingRows.length } : null} />
+            <div className="rep-stack"><ExcelUploader accepted={accepted} onAccept={next => { setAccepted(next); setConfirmed(false); clearRosterError() }} onDiscard={clearRosterError} seatsForGroup={seatsForGroup} existingRows={existingRows} canAddRows={newRosterRowsAllowed(base.tour)} inUse={base.registration ? { count: existingRows.length } : null} />
               {overSeats && <Callout tone="warn" title="Vượt số chỗ còn lại" role="status">{seatsMessage}</Callout>}
               {base.registration && !accepted && <RosterPreview rows={rows} variant="representative" />}
               {base.registration && <Link className={repButton('ghost', 'sm')} to={`/dai-dien/dang-ky/${base.registration.summary.id}?tab=email-change`}>Yêu cầu đổi email dòng đã chấp nhận</Link>}
@@ -150,7 +154,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
               {diff && accepted && <p className="rep-hint">Giữ nguyên {diff.unchanged.length} dòng, cập nhật {diff.changed.length}, thêm {diff.added.length}, loại {diff.removed.length}. Dòng bị loại sẽ mất lời mời và phiên truy cập hiện tại khi lưu.</p>}
             </Panel>
             <Panel title="Mục đích sử dụng thông tin"><p className="rep-form-purpose">Thông tin trường, người liên hệ và danh sách lời mời chỉ dùng để tổ chức đăng ký, gửi lời mời và thống kê vận hành buổi tham quan. Không dùng để liên hệ tuyển sinh sau buổi.</p>
-              <label className="rep-consent"><input type="checkbox" required checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Tôi xác nhận có quyền cung cấp thông tin đăng ký và email lời mời trong danh sách này.</label>
+              <label className="rep-consent"><input type="checkbox" required aria-labelledby={consentId} checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /><span id={consentId}>Tôi xác nhận có quyền cung cấp thông tin đăng ký và email lời mời trong danh sách này.</span></label>
             </Panel></div>}
         </fieldset>
         <div className="rep-form-foot"><button type="button" className={repButton('secondary')} disabled={locked || step === 0} onClick={() => { setError(null); setStep(previous => previous - 1) }}>Quay lại bước trước</button>
@@ -159,7 +163,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
       </form>
     </div><aside className="rep-summary-aside" aria-label="Buổi tham quan đang đăng ký"><h2>{base.tour.name}</h2>
       <InfoList columns={1} items={[{ label: 'Thời gian dự kiến', value: formatDateTime(base.tour.scheduledStartAt) }, { label: 'Hạn tạo đăng ký và thêm dòng', value: formatDateTime(registrationClosesAt(base.tour).toISOString()) }, { label: 'Tuyến tham quan', value: base.tour.routeName }, { label: 'Điểm dừng trong tuyến', value: base.tour.stops.length }]} />
-      <p className="rep-hint">Tối đa 10 điểm xem cho mỗi hồ sơ. Cập nhật và loại dòng hiện tại theo quyền do Đại học FPT cung cấp.</p>
+      <p className="rep-hint">Tối đa 10 điểm xem cho mỗi hồ sơ. Sau khi gửi, bạn vẫn sửa được danh sách tới hạn thêm dòng. Dòng đã duyệt muốn đổi email thì gửi yêu cầu đổi email.</p>
     </aside></div>
   </RepPage>
 }

@@ -31,6 +31,17 @@ permission to execute it.
 - [Launcher `robot`](robot-launcher.md) — per-process environment from one machine
   profile, one workflow at a time, teleop and stop separate, candidate LiDAR yaw only
   for the static check, session logs and retention. Not installed yet.
+- [Auto initial pose](auto-initial-pose.md) — `pose_bootstrap`: AMCL initial pose from the
+  LiDAR (saved pose / map homes checked against the scan, never published unverified),
+  per-map settings, statuses, offline evidence and the hardware test list. Off by default.
+- [Fleet service](fleet-service.md) — `fleet_bridge` from boot as a systemd user unit supervised
+  by the launcher (`robot fleet --service`): telemetry always, commands only while
+  `robot nav --fleet` runs; NTP gate, restart policy, offline end-to-end evidence, install steps.
+- [Nav2 Baseline V3](nav2-baseline-v3.md) — V2 + BT timeout 200 ms + cancel guards so an
+  orphan goal never drives alongside a recovery Spin (offline proof, hardware acceptance).
+- [Depth camera](depth-camera.md) — Astra Pro depth in the local costmap beside the LiDAR
+  (`robot nav --camera`, off by default): CAD mount, lean driver, measured cost, offline costmap
+  check, why it does not stop the robot for a low obstacle ahead, hardware test plan.
 - [Runtime deploy and rollback](runtime-deploy.md) — how the MiniPC runtime
   differs from source today, staging an immutable overlay from one commit, and
   rolling back by sourcing the previous overlay.
@@ -87,6 +98,8 @@ Dated evidence (true for its date; later pages supersede it):
 - [Camera mounts](cad-sensor-mounts.md) — measured CAD positions.
 - [Docker dependencies and targets](docker-dependencies.md) — CI, laptop
   debug and simulation image boundaries.
+- [Camera head per POI in Gazebo](sim-head-poi.md) — set a POI's head angle on
+  the web, drive the simulated robot there and watch `head_sim` turn (simulation only).
 
 ## Historical phase records
 

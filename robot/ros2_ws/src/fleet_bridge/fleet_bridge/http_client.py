@@ -68,17 +68,20 @@ class FleetSyncHttpClient:
         return self._post(self.url, body)
 
     def _post(self, url: str, body: str) -> HttpResponse:
-        request = urllib.request.Request(
-            url,
-            data=body.encode('utf-8'),
-            headers={
-                'Authorization': f'Bearer {self._credential}',
-                'X-Robot-Code': self.robot_code,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
-            method='POST',
-        )
+        return self._send(url, 'POST', body.encode('utf-8'))
+
+    def _get(self, url: str) -> HttpResponse:
+        return self._send(url, 'GET', None)
+
+    def _send(self, url: str, method: str, data: bytes | None) -> HttpResponse:
+        headers = {
+            'Authorization': f'Bearer {self._credential}',
+            'X-Robot-Code': self.robot_code,
+            'Accept': 'application/json',
+        }
+        if data is not None:
+            headers['Content-Type'] = 'application/json'
+        request = urllib.request.Request(url, data=data, headers=headers, method=method)
         handlers: list[urllib.request.BaseHandler] = [NoRedirect()]
         if self.url.startswith('https://'):
             handlers.append(urllib.request.HTTPSHandler(context=verified_tls_context()))

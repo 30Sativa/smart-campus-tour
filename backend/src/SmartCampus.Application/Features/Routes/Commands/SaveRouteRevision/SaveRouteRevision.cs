@@ -91,7 +91,11 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         }
 
         var map = await repo.GetMapAsync(i.MapVersionId, ct) ?? throw new NotFoundException("Map version", i.MapVersionId);
+        // ADR-0062: the POI proposal row locks come before the map lock, the order the POI writers use. Discard and
+        // retire take the same row lock, so they either commit first (and this refuses) or wait and see these stops.
+        await EnsurePoisUsableAsync(i.Stops.Select(s => s.PoiRevisionId).ToArray(), ct);
         await mapRepository.LockMapPreparationStateAsync(map.Id, ct);
+        await MapRetirement.EnsureActiveAsync(mapRepository, map.Id, ct);
         (await MapPreparationEligibility.LoadAsync(mapRepository, map, ct)).EnsureCanUse();
         var poiIds = i.Stops.Select(s => s.PoiRevisionId).ToArray();
         var evidence = await repo.GetPoiEvidenceAsync(poiIds, ct);
@@ -107,9 +111,20 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             var latest = await repo.GetEffectivePoiVerificationAsync(selected.Revision.ProposalId, selected.Revision.NavigationFingerprint, ct);
             if (latest?.Id != selected.Verification.Id || latest.ResultCode != "PASS")
                 throw new ConflictException("A newer POI verification result supersedes the selected PASS.", "POI_VERIFICATION_STALE");
-            if (string.IsNullOrWhiteSpace(selected.Revision.NarrationText))
-                throw new ConflictException($"POI {selected.Revision.Name} chưa có nội dung thuyết minh. Bổ sung nội dung rồi chọn lại phiên bản mới.", "POI_NARRATION_REQUIRED");
         }
+        EnsureEachPoiOnce(poiIds.Select(id => byId[id].Revision).ToArray());
+        // ADR-0060: a route uses only narration a second Staff approved. The text is snapshotted below; changing it later
+        // does not touch this revision, and it is not part of the navigation fingerprint.
+        var narrationByProposal = (await repo.GetApprovedNarrationsAsync(
+            poiIds.Select(id => byId[id].Revision.ProposalId).Distinct().ToArray(), ct)).ToDictionary(n => n.ProposalId);
+        foreach (var id in poiIds)
+            if (!narrationByProposal.ContainsKey(byId[id].Revision.ProposalId))
+                throw new ConflictException($"POI {byId[id].Revision.Name} chưa có thuyết minh đã duyệt.", PoiNarrationNotApprovedCode);
+        // A request that would only copy the newest save adds a useless row to the history and Technical's queue. A save
+        // that only picks up newly approved narration is not a copy (ADR-0060). A repeated RequestId returned above.
+        if (current is not null && SameContent(current, await repo.GetStopsAsync(current.Id, ct), i,
+                poiIds.ToDictionary(id => id, id => narrationByProposal[byId[id].Revision.ProposalId].Id)))
+            throw new ConflictException("Bản lưu này giống hệt bản đang dùng, không có gì để lưu.", UnchangedCode);
         EnsureStopSeparation(i, poiIds.Select(id => byId[id].Revision).ToArray());
         // docs/lich-tour-theo-ca.md §4: dwell alone, before any travel, already longer than the longest shift can hold.
         var totalDwell = i.Stops.Sum(stop => stop.DwellSeconds);
@@ -120,9 +135,9 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         EnsureWrittenPose(package, i.StartX, i.StartY, i.StartYaw, previous?.StartX, previous?.StartY);
         if (i.EndMode == "POSE")
         {
-            var endX = i.EndX ?? throw new ValidationException("End pose X is required.");
-            var endY = i.EndY ?? throw new ValidationException("End pose Y is required.");
-            var endYaw = i.EndYaw ?? throw new ValidationException("End pose yaw is required.");
+            var endX = i.EndX ?? throw new ValidationException("Cần nhập X của điểm kết thúc.");
+            var endY = i.EndY ?? throw new ValidationException("Cần nhập Y của điểm kết thúc.");
+            var endYaw = i.EndYaw ?? throw new ValidationException("Cần nhập hướng của điểm kết thúc.");
             EnsureWrittenPose(package, endX, endY, endYaw, previous?.EndX, previous?.EndY);
         }
 
@@ -154,16 +169,20 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         revision.Route = route!;
         repo.Add(revision);
         var stopIds = new Guid[i.Stops.Count];
+        var stopRows = new RouteRevisionStop[i.Stops.Count];
         for (var index = 0; index < i.Stops.Count; index++)
         {
             var selected = byId[i.Stops[index].PoiRevisionId];
             stopIds[index] = Guid.NewGuid();
-            repo.Add(new RouteRevisionStop { Id = stopIds[index], RouteRevisionId = revision.Id, RouteRevision = revision,
+            repo.Add(stopRows[index] = new RouteRevisionStop { Id = stopIds[index], RouteRevisionId = revision.Id, RouteRevision = revision,
                 PoiProposalRevisionId = selected.Revision.Id, SourcePoiVerificationRecordId = selected.Verification.Id,
                 MapVersionId = map.Id, PoiNavigationFingerprint = selected.Revision.NavigationFingerprint,
                 StopOrder = index + 1, DwellSeconds = i.Stops[index].DwellSeconds,
                 HeadStepsJson = Route.WriteHeadSteps(i.Stops[index].HeadSteps), Name = selected.Revision.Name,
-                NarrationText = selected.Revision.NarrationText, FallbackVideoUrl = selected.Revision.FallbackVideoUrl,
+                NarrationRevisionId = narrationByProposal[selected.Revision.ProposalId].Id,
+                NarrationText = narrationByProposal[selected.Revision.ProposalId].NarrationText,
+                // Not copied from the narration any more: no screen plays a stop video; the Tour has its own.
+                FallbackVideoUrl = null,
                 X = selected.Revision.X, Y = selected.Revision.Y, Yaw = selected.Revision.Yaw, CameraPreset = selected.Revision.CameraPreset });
         }
         repo.AddAudit(new AuditLog { ActorUserId = c.ActorUserId, Action = "ROUTE_REVISION_CREATED", EntityType = "RouteRevision",
@@ -175,11 +194,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             inheritedRun.ParticipatingStaffUserId, inheritedRun.ResultCode, inheritedRun.AllStopsReached,
             inheritedRun.SafelyStopped, inheritedRun.LocalizationPassed, inheritedRun.MeasuredDurationSeconds,
             inheritedRun.FailureReason, inheritedRun.EvidenceNote, inheritedRun.CheckedAt, inheritedRun.MeasurementBasis)];
-        // A dwell-only change inherits the PASS; its length then follows like a reservation's (docs/lich-tour-theo-ca.md §4).
-        int? expected = inheritedRun is { ResultCode: "PASS", MeasurementBasis: RouteMeasurementBasis.TotalWithDwell, RouteRevision: { } tested }
-            ? Tours.TourSchedule.ExpectedDurationSeconds(inheritedRun.MeasuredDurationSeconds,
-                tested.RouteRevisionStops.Select(stop => (stop.StopOrder, stop.DwellSeconds)), i.Stops.Select((stop, index) => (index + 1, stop.DwellSeconds)))
-            : null;
+        // docs/lich-tour-theo-ca.md §4: estimated from dwell and the stop positions, the same sum a reservation uses.
+        var expected = Tours.TourSchedule.EstimatedDurationSeconds(revision, stopRows, schedule.EstimatedSpeedMetersPerSecond);
         return new RouteRevisionView(routeId, revision.Id, number, revision.Name, revision.Description, map.Id, map.MapKey,
             Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), revision.StartX, revision.StartY, revision.StartYaw,
             revision.EndMode, revision.EndX, revision.EndY, revision.EndYaw,
@@ -190,12 +206,40 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                 var selected = byId[s.PoiRevisionId];
                 return new RouteRevisionStopView(stopIds[index], selected.Revision.Id, selected.Verification.Id, index + 1, s.DwellSeconds,
                     s.HeadSteps, selected.Revision.Name, selected.Revision.X, selected.Revision.Y, selected.Revision.Yaw,
-                    selected.Revision.CameraPreset, selected.Revision.NarrationText, selected.Revision.FallbackVideoUrl);
+                    selected.Revision.CameraPreset, narrationByProposal[selected.Revision.ProposalId].NarrationText,
+                    null, selected.Revision.ProposalId);
             }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
                 inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], [],
             ScheduleFit: Tours.TourSchedule.ScheduleFit(schedule, expected), ExpectedDurationSeconds: expected);
     }
+
+    private async Task EnsurePoisUsableAsync(IReadOnlyCollection<Guid> poiRevisionIds, CancellationToken ct)
+    {
+        var revisions = await repo.FindPoiRevisionsAsync(poiRevisionIds, ct);
+        var proposals = await repo.LockPoiProposalsAsync(revisions.Select(r => r.ProposalId).Distinct().ToArray(), ct);
+        foreach (var revision in revisions)
+        {
+            if (!proposals.TryGetValue(revision.ProposalId, out var proposal)) continue;
+            if (proposal.DiscardedAt is not null)
+                throw new ConflictException($"POI {revision.Name} đã bị xoá khỏi danh sách. Bỏ điểm dừng này khỏi tuyến.",
+                    PoiProposalRules.DiscardedCode);
+            if (proposal.RetiredAt is not null)
+                throw new ConflictException($"POI {revision.Name} đã ngưng dùng. Bỏ khỏi tuyến hoặc dùng lại POI.",
+                    PoiProposalRules.RetiredCode);
+        }
+    }
+
+    // ADR-0061: a stop points at one exact POI revision, so the revision-id check in the validator lets two revisions of
+    // one POI into the same route. A POI is visited once; the stop keeps the revision the route was tested with.
+    private static void EnsureEachPoiOnce(IReadOnlyList<PoiProposalRevision> stops)
+    {
+        var duplicate = stops.GroupBy(stop => stop.ProposalId).FirstOrDefault(group => group.Count() > 1);
+        if (duplicate is not null)
+            throw new ConflictException($"POI {duplicate.Last().Name} đã có trong tuyến. Mỗi POI chỉ được dùng một lần.", DuplicatePoiCode);
+    }
+
+    public const string DuplicatePoiCode = "ROUTE_DUPLICATE_POI";
 
     // docs/lich-tour-theo-ca.md §2: the start, each consecutive pair of stops and a separate end pose must be
     // MinStopSeparationMeters apart. An end pose on the start is "return to start" and is always allowed.
@@ -228,6 +272,34 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         if (x == previousX && y == previousY) MapPackageValidator.EnsureFreePosition(package, x, y, yaw);
         else MapPackageValidator.EnsureClearPosition(package, x, y, yaw, settings.PoiClearanceMeters);
     }
+
+    public const string UnchangedCode = "ROUTE_REVISION_UNCHANGED";
+
+    /// <summary>
+    /// Whether <paramref name="input"/> would save exactly <paramref name="current"/>: name, description, map, each stop's
+    /// POI revision in order with its dwell and camera steps, start and end. Name and description compare as saved (trimmed).
+    /// <paramref name="approvedNarration"/> maps each sent POI revision to the narration a save would snapshot now: a stop
+    /// saved with older narration differs, since saving again is how a route takes newly approved wording (ADR-0060).
+    /// </summary>
+    public static bool SameContent(RouteRevision current, IReadOnlyList<RouteRevisionStop> stops, RouteRevisionDraftInput input,
+        IReadOnlyDictionary<Guid, Guid> approvedNarration)
+    {
+        if (current.Name != input.Name.Trim() || current.Description != Clean(input.Description)) return false;
+        if (current.MapVersionId != input.MapVersionId || current.StartX != input.StartX || current.StartY != input.StartY
+            || current.StartYaw != input.StartYaw || current.EndMode != input.EndMode || current.EndX != input.EndX
+            || current.EndY != input.EndY || current.EndYaw != input.EndYaw) return false;
+        var ordered = stops.OrderBy(stop => stop.StopOrder).ToArray();
+        if (ordered.Length != input.Stops.Count) return false;
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            var (saved, sent) = (ordered[index], input.Stops[index]);
+            if (saved.PoiProposalRevisionId != sent.PoiRevisionId || saved.DwellSeconds != sent.DwellSeconds
+                || !Route.ReadHeadSteps(saved.HeadStepsJson).SequenceEqual(sent.HeadSteps)
+                || saved.NarrationRevisionId != approvedNarration.GetValueOrDefault(sent.PoiRevisionId)) return false;
+        }
+        return true;
+    }
+    public const string PoiNarrationNotApprovedCode = "POI_NARRATION_NOT_APPROVED";
 
     internal static string Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null! : value.Trim();
     internal static byte[] Hash<T>(T value) => SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value));

@@ -52,6 +52,8 @@ public interface ITourManagementRepository
     Task<RobotCommand?> LockOpenGoToAsync(Guid tourId, CancellationToken ct);
     /// <summary>The live Cancel of a GoTo, tracked under an update lock; caller holds the Tour root lock.</summary>
     Task<RobotCommand?> LockOpenCancelAsync(Guid goToId, CancellationToken ct);
+    /// <summary>Unlocked read: whether the GoTo has a live Cancel (a pause or End Early in flight).</summary>
+    Task<bool> HasOpenCancelAsync(Guid goToId, CancellationToken ct);
     /// <summary>Candidates only, unlocked: each transition rechecks under its own locks.</summary>
     Task<IReadOnlyList<RobotCommand>> ListOpenCommandsAsync(CancellationToken ct);
     /// <summary>The Tour of the robot's open command, unlocked, so a poll knows which root lock to take first.</summary>

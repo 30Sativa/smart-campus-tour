@@ -94,11 +94,11 @@ describe('Technical POI file import', () => {
     expect(result.getByRole('link', { name: 'Mở hàng chờ kiểm chứng' })).toHaveAttribute('href', '/technical/poi-import')
   })
 
-  it('lists POIs that came from pose files, with their check and whether Staff added narration', async () => {
-    const revision = { id: 'r', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'floor6-v2', name: 'POI 02', purpose: 'Nhập từ tệp', x: 1, y: 2, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, navigationStatus: 'NOT_CHECKED', narrationText: null, verificationMethod: null }
+  it('lists POIs that came from pose files, with their check and their narration state (ADR-0060)', async () => {
+    const revision = { id: 'r', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'floor6-v2', name: 'POI 02', purpose: 'Nhập từ tệp', x: 1, y: 2, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, navigationStatus: 'NOT_CHECKED', verificationMethod: null }
     proposals = [
       { id: 'p-1', currentRevision: 1, rowVersion: 'x', sourcePoiId: 'POI_02', revision },
-      { id: 'p-2', currentRevision: 2, rowVersion: 'x', sourcePoiId: 'POI_03', revision: { ...revision, id: 'r2', name: 'Thư viện', navigationStatus: 'PASS', verificationMethod: 'POSE_CAPTURE', narrationText: 'Đây là thư viện.' } },
+      { id: 'p-2', currentRevision: 2, rowVersion: 'x', sourcePoiId: 'POI_03', narration: { approved: { revisionNumber: 1, approvedByUserId: 'u2', approvedByName: 'Lan', approvedAt: '2026-11-15T02:00:00Z' }, draft: null }, revision: { ...revision, id: 'r2', name: 'Thư viện', navigationStatus: 'PASS', verificationMethod: 'POSE_CAPTURE' } },
       { id: 'p-3', currentRevision: 1, rowVersion: 'x', sourcePoiId: null, revision: { ...revision, id: 'r3', name: 'Tạo tay' } },
     ]
     renderPage()
@@ -108,9 +108,9 @@ describe('Technical POI file import', () => {
     expect(rows[1]).toHaveTextContent('POI_02')
     expect(rows[1]).toHaveTextContent('Tầng 6 · floor6 · phiên bản 2')
     expect(rows[1]).toHaveTextContent('Chờ kiểm chứng')
-    expect(rows[1]).toHaveTextContent('Chờ Staff bổ sung')
+    expect(rows[1]).toHaveTextContent('Chưa có')
     expect(rows[2]).toHaveTextContent('Đạt · Ghi pose trực tiếp trên robot')
-    expect(rows[2]).toHaveTextContent('Staff đã bổ sung')
+    expect(rows[2]).toHaveTextContent('Đã duyệt')
     expect(list.queryByText('Tạo tay')).not.toBeInTheDocument()
   })
 
@@ -138,7 +138,7 @@ describe('Technical POI file import', () => {
   })
 
   it('shows a pose-capture result without inventing observations', async () => {
-    const revision = { id: 'rev-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'floor6-v2', name: 'POI 02', purpose: 'Nhập từ tệp', description: null, narrationText: null, fallbackVideoUrl: null, x: 1, y: 1, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-11-01T00:00:00Z', isSubmitted: true, submittedAt: '2026-11-01T00:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'rev-1', verificationMethod: 'POSE_CAPTURE' }
+    const revision = { id: 'rev-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'floor6-v2', name: 'POI 02', purpose: 'Nhập từ tệp', description: null, x: 1, y: 1, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-11-01T00:00:00Z', isSubmitted: true, submittedAt: '2026-11-01T00:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'rev-1', verificationMethod: 'POSE_CAPTURE' }
     const record = { id: 'check-1', proposalId: 'p-1', proposalRevisionId: 'rev-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'floor6-v2', robotCode: 'amr-01', resultCode: 'PASS', reached: null, stopped: null, localizationPassed: null, cameraPresetConfirmed: null, reason: null, evidenceNote: 'Ghi tại Tầng 6.', checkedByUserId: 'u', checkedAt: '2026-11-01T00:00:00Z', verificationMethod: 'POSE_CAPTURE', sourceFileSha256: 'c'.repeat(64) }
     const realFetch = vi.mocked(fetch).getMockImplementation()!
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

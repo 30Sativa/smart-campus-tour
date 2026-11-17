@@ -15,6 +15,20 @@ export function useMapVersions() {
   return useQuery({ queryKey: keys.maps, queryFn: technicalApi.listMaps })
 }
 
+/** Map Management: active and retired versions together, each with its status (ADR-0041). */
+export function useAllMapVersions() {
+  return useQuery({ queryKey: [...keys.maps, 'all'], queryFn: technicalApi.listAllMaps })
+}
+
+/** Routes, robots, waiting items and Tours that retiring this version would touch or be blocked by. */
+export function useMapRetirementImpact(mapVersionId: string | undefined) {
+  return useQuery({
+    queryKey: [...keys.maps, 'retirement-impact', mapVersionId],
+    queryFn: () => technicalApi.getMapRetirementImpact(mapVersionId!),
+    enabled: Boolean(mapVersionId),
+  })
+}
+
 export function useMapAreas(enabled = true) {
   return useQuery({ queryKey: ['technical', 'map-areas'], queryFn: technicalApi.listMapAreas, enabled })
 }
@@ -49,6 +63,40 @@ export function usePoiHistory(proposalId: string) {
   return useQuery({ queryKey: [...keys.poiProposals, 'history', proposalId], queryFn: () => technicalApi.getPoiHistory(proposalId) })
 }
 
+/** Every narration version of one POI, newest first (ADR-0060). */
+export function usePoiNarrations(proposalId: string | undefined) {
+  return useQuery({ queryKey: [...keys.poiProposals, 'narrations', proposalId], queryFn: () => technicalApi.listPoiNarrations(proposalId!), enabled: Boolean(proposalId) })
+}
+
+/**
+ * A narration write changes the POI's narration summary as well as its version list. Both live under the POI
+ * proposal keys; the detail page reads its proposal under a key of its own. Refusals are refreshed too: a stale
+ * version or a self-approval means the page shows data that no longer holds.
+ */
+function useNarrationMutation<T, R>(run: (input: T) => Promise<R>, done: (input: T) => ToastInput) {
+  const client = useQueryClient()
+  const refresh = () => Promise.all([
+    client.invalidateQueries({ queryKey: keys.poiProposals }),
+    ...poiDetailKeys.map(queryKey => client.invalidateQueries({ queryKey })),
+  ])
+  return useMutation({
+    mutationFn: run,
+    onSuccess: (_result, input) => { notify(done(input)); return refresh() },
+    onError: () => refresh(),
+  })
+}
+
+export const useSavePoiNarrationDraft = () => useNarrationMutation(technicalApi.savePoiNarrationDraft, input => ({
+  title: input.expectedRowVersion ? 'Đã lưu bản đang soạn' : 'Đã tạo bản đang soạn',
+  detail: 'Bản đang soạn cần một Staff khác duyệt trước khi dùng cho tuyến.',
+}))
+export const useApprovePoiNarration = () => useNarrationMutation(technicalApi.approvePoiNarration, () => ({
+  title: 'Đã duyệt thuyết minh', detail: 'Tuyến lưu từ bây giờ dùng bản này. Tuyến và Tour đã có giữ nội dung cũ.',
+}))
+export const useDiscardPoiNarration = () => useNarrationMutation(technicalApi.discardPoiNarration, () => ({
+  tone: 'info', title: 'Đã bỏ bản đang soạn', detail: 'Bản đã duyệt (nếu có) vẫn được dùng.',
+}))
+
 export function useRouteTestQueue() {
   return useQuery({ queryKey: [...keys.routeTests, 'queue'], queryFn: technicalApi.listRouteTestQueue })
 }
@@ -67,6 +115,11 @@ export function useRouteRevision(routeId: string, revisionId: string) {
   return useQuery({ queryKey: [...keys.routeTests, 'detail', revisionId], queryFn: () => versionedRoutesApi.get(routeId, revisionId) })
 }
 
+/** The save before the one being tested, to show what changed; nothing is read until its id is known. */
+export function usePreviousRevision(routeId: string, revisionId: string | undefined) {
+  return useQuery({ queryKey: [...keys.routeTests, 'detail', revisionId], queryFn: () => versionedRoutesApi.get(routeId, revisionId), enabled: Boolean(revisionId) })
+}
+
 export function useRouteTestParticipants() {
   return useQuery({ queryKey: [...keys.routeTests, 'participants'], queryFn: technicalApi.listRouteTestParticipants })
 }
@@ -75,17 +128,24 @@ export const useRecordRouteTest = () => useTechnicalMutation(
   ({ run }: { routeName: string; run: RouteTestRunInput }) => technicalApi.recordRouteTest(run),
   keys.routeTests,
   ({ routeName, run }) => run.resultCode === 'PASS'
-    ? { title: `Đã ghi chạy thử đạt: ${routeName}`, detail: 'Đây là bằng chứng thủ công, chưa làm tuyến READY.' }
+    ? { title: `Đã ghi chạy thử đạt: ${routeName}`, detail: 'Kết quả do người kiểm tra nhập. Tuyến đã dùng được để tạo Tour.' }
     : { tone: 'info', title: `Đã ghi chạy thử không đạt: ${routeName}`, detail: 'Staff cần tạo phiên bản mới nếu phải đổi tuyến.' })
 
+/**
+ * The POI page reads its proposal and its Lịch sử tab (versions, checks, narration) under keys of their own, so every
+ * POI write refreshes them as well; otherwise the tab keeps the old list until a reload.
+ */
+const poiDetailKeys = [['technical', 'poi-proposal'], ['technical', 'poi-history']] as const
+
 /** Every technical record ends with a notification saying what was written; refusals stay on the form. */
-function useTechnicalMutation<T, R>(run: (input: T) => Promise<R>, invalidate: readonly unknown[], done: (input: T, result: R) => ToastInput) {
+function useTechnicalMutation<T, R>(run: (input: T) => Promise<R>, invalidate: readonly unknown[], done: (input: T, result: R) => ToastInput,
+  alsoInvalidate: readonly (readonly unknown[])[] = []) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: run,
     onSuccess: (result, input) => {
       notify(done(input, result))
-      return client.invalidateQueries({ queryKey: invalidate })
+      return Promise.all([invalidate, ...alsoInvalidate].map(queryKey => client.invalidateQueries({ queryKey })))
     },
   })
 }
@@ -95,11 +155,31 @@ export const useUploadMap = () => useTechnicalMutation(technicalApi.uploadMap, k
   detail: 'Upload chỉ lưu phiên bản trên hệ thống; chưa nạp map lên robot.',
 }))
 
+/** Nothing is deleted: the version leaves every picker and keeps its history (ADR-0041). */
+export const useRetireMap = () => useTechnicalMutation(technicalApi.retireMap, keys.maps, (_input, map) => ({
+  title: `Đã ngừng sử dụng ${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`,
+  detail: 'POI, tuyến và kết quả kiểm tra trên phiên bản này vẫn được giữ.',
+}))
+
+export const useReopenMap = () => useTechnicalMutation(technicalApi.reopenMap, keys.maps, (_input, map) => ({
+  title: `Đã mở lại ${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`,
+  detail: 'Phiên bản này lại dùng được cho việc mới.',
+}))
+
 /** Staff remove a never-passed POI from the list; its history stays on the server (ADR-0051). */
 export const useDiscardPoiProposal = () => useTechnicalMutation(technicalApi.discardPoiProposal, keys.poiProposals, input => ({
   title: `Đã xoá ${input.revision.name} khỏi danh sách`,
   detail: 'Lịch sử chỉnh sửa và kiểm chứng của điểm này vẫn được lưu.',
-}))
+}), poiDetailKeys)
+
+export const useRetirePoiProposal = () => useTechnicalMutation(technicalApi.retirePoiProposal, keys.poiProposals, input => ({
+  title: `Đã ngưng dùng ${input.revision.name}`,
+  detail: 'Tuyến và Tour đã lưu không đổi. Tuyến mới không chọn được điểm này.',
+}), poiDetailKeys)
+
+export const useReactivatePoiProposal = () => useTechnicalMutation(technicalApi.reactivatePoiProposal, keys.poiProposals, input => ({
+  title: `Đã dùng lại ${input.revision.name}`,
+}), poiDetailKeys)
 
 /** Preview changes nothing on the server, so it neither invalidates data nor notifies. */
 export function usePreviewPoiImport() {
@@ -166,7 +246,7 @@ export function useClearRobotMap() {
 }
 
 export const useVerifyPoi = () => useTechnicalMutation(technicalApi.verifyPoi, keys.poiProposals, (input) => input.resultCode === 'PASS'
-  ? { title: 'Đã ghi POI đạt', detail: `Kiểm tra cùng robot ${input.robotCode}, gắn với revision ${input.revisionNumber}.` }
+  ? { title: 'Đã ghi POI đạt', detail: `Kiểm tra cùng robot ${input.robotCode}, gắn với phiên bản POI ${input.revisionNumber}.` }
   : { tone: 'info', title: 'Đã ghi POI không đạt', detail: 'Staff cần chỉnh POI rồi gửi lại để kiểm chứng.' })
 
 /**

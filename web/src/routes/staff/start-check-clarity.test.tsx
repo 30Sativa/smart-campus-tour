@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TourDetails, TourStartChecks } from '../../features/administration/tours/types'
@@ -69,7 +69,6 @@ describe('pre-start check wording', () => {
     // 2 passed, 3 failed, 2 not run, out of 7 counted checks (battery is information only).
     expect(screen.getByText('2/7 đạt')).toBeInTheDocument()
     expect(screen.getByText('2/7 đạt, 3 chưa đạt, 2 chưa kiểm tra')).toBeInTheDocument()
-    expect(within(screen.getByRole('group', { name: 'Bước 1: Máy chủ cho phép' })).getByText('Còn 3 mục chặn')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Robot tự báo' })).getByText('0/3 đạt, 1 chưa đạt, 2 chưa kiểm tra')).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Tour và lịch' })).getByText('2/2 đạt')).toBeInTheDocument()
   })
@@ -86,5 +85,43 @@ describe('pre-start check wording', () => {
     const text = document.body.textContent ?? ''
     expect(text).not.toMatch(/QUEST_CONTROL_URL|quest-stream|miniPC|Fleet Sync|telemetry|M2\.3|FleetCommands|59488/i)
     expect(text).not.toMatch(/Console của người vận hành/)
+  })
+})
+
+describe('head alignment before Start (ADR-0045 HOME)', () => {
+  it('lets the Operator re-home the camera head of the robot the Tour holds, and shows it homing', async () => {
+    const sent: Array<{ path: string; body: unknown }> = []
+    let report = { state: 'IDLE', referenced: false, panDeg: 0, tiltDeg: 0, observedAt: null }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'http://localhost')
+      if (url.pathname.endsWith('/start-checks')) return json({ success: true, data: CHECKS })
+      if (url.pathname === '/api/staff/manage/tours/tour-1') return json({ success: true, data: TOUR })
+      if (url.pathname.endsWith('/head')) return json({ success: true, data: { enabled: true, mode: 'AUTO', robotCode: 'amr_01', connected: true, lastPollAt: null, head: report } })
+      if (url.pathname.endsWith('/head-commands')) {
+        sent.push({ path: url.pathname, body: JSON.parse(String(init?.body)) })
+        report = { ...report, state: 'HOMING' }
+        return json({ success: true, data: { seq: 1, robotCode: 'amr_01', issuedAt: '2026-11-04T01:50:00Z' } })
+      }
+      return json({ success: true, data: [] })
+    }))
+    renderPage()
+    expect(await screen.findByText('Đầu camera chưa có mốc. Bấm Tự canh chỉnh trước khi bắt đầu.')).toBeInTheDocument()
+    const button = screen.getByRole('button', { name: 'Tự canh chỉnh đầu camera' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    await waitFor(() => expect(sent).toEqual([{ path: '/api/staff/manage/tours/tour-1/head-commands', body: { kind: 'HOME' } }]))
+    expect(await screen.findByRole('button', { name: 'Đang canh chỉnh…' }, { timeout: 4000 })).toBeDisabled()
+  })
+
+  // Regression: the merge of PR #321 with main kept both the old Start panel and the new opening, which did not compile.
+  it('keeps the head re-home under the camera of the opening page, next to Mở Tour, with no leftover Start panel', async () => {
+    renderPage()
+    const camera = await screen.findByRole('region', { name: 'Hình camera' })
+    expect(within(camera).getByRole('button', { name: 'Tự canh chỉnh đầu camera' })).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Mở Tour' })).getByRole('button', { name: /Mở Tour/ })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Bắt đầu Tour' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Bắt đầu Tour/ })).not.toBeInTheDocument()
+    // The on-site confirmations belong to Khởi hành on the console, not to opening.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
   })
 })

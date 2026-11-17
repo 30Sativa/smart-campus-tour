@@ -1,4 +1,5 @@
 import { ApiError } from '../../../api/client'
+import { formatDateTime } from '../../../components/ui/date-time'
 import type { TourState, TourSummary } from './types'
 
 export const TOUR_STATE_LABEL: Record<TourState, string> = {
@@ -11,10 +12,15 @@ export const TOUR_STATE_FILTER_LABEL: Record<TourState, string> = { ...TOUR_STAT
 export const REGISTRATION_CLOSED_LABEL = 'Đã đóng đăng ký'
 /** Backend `TourSchedule.RegistrationClose`; used only for a server that does not send `registrationClosesAt`. */
 const REGISTRATION_CLOSE_MS = 48 * 3600_000
-type TourTiming = Pick<TourSummary, 'state' | 'scheduledStartAt' | 'registrationClosesAt'>
+type TourTiming = Pick<TourSummary, 'state' | 'scheduledStartAt' | 'registrationClosesAt' | 'isShortNotice'>
 
-export const registrationClosesAtOf = (tour: Pick<TourTiming, 'scheduledStartAt' | 'registrationClosesAt'>) =>
-  tour.registrationClosesAt ? new Date(tour.registrationClosesAt).getTime() : new Date(tour.scheduledStartAt).getTime() - REGISTRATION_CLOSE_MS
+/**
+ * Backend `TourSchedule.RegistrationClosesAt`. The 48-hour fallback is only for a Tour on a shift: a quick Tour's
+ * registration stays open until its latest Start (`scheduledStartAt`), which is under 48 hours away from creation.
+ */
+export const registrationClosesAtOf = (tour: Pick<TourTiming, 'scheduledStartAt' | 'registrationClosesAt' | 'isShortNotice'>) =>
+  tour.registrationClosesAt ? new Date(tour.registrationClosesAt).getTime()
+    : new Date(tour.scheduledStartAt).getTime() - (tour.isShortNotice ? 0 : REGISTRATION_CLOSE_MS)
 
 /** Display only: a SCHEDULED Tour past the close of registration. The Tour's state does not change at this mark. */
 export const isRegistrationClosed = (tour: TourTiming, now: number) => tour.state === 'SCHEDULED' && now >= registrationClosesAtOf(tour)
@@ -33,7 +39,6 @@ const CONFLICTS: Record<string, string> = {
   TOUR_SLOT_NOT_ALLOWED: 'Giờ bắt đầu không khớp ca nào. Chọn lại một ca.',
   SHIFT_BLOCKED: 'Ca này vừa bị Admin khoá. Chọn ca hoặc ngày khác.',
   ROUTE_TOO_LONG_FOR_SHIFT:'Tuyến dài hơn thời lượng tối đa của ca. Chọn tuyến ngắn hơn hoặc giảm thời gian dừng.',
-  ROUTE_TEST_REMEASURE_REQUIRED: 'Cần chạy thử lại tuyến để đo theo định nghĩa mới. Nhờ Kỹ thuật ghi lại kết quả chạy thử.',
   OPERATOR_REQUIRED: 'Người vận hành phải là tài khoản Staff đang hoạt động. Chọn lại người vận hành.',
   ROUTE_TEST_PASS_REQUIRED: 'Phiên bản tuyến này không còn kết quả chạy thử đạt. Tải lại trang rồi chọn tuyến khác.',
   ROUTE_NOT_SUBMITTED: 'Phiên bản tuyến này chưa được gửi kiểm chứng.',
@@ -63,10 +68,31 @@ export function backendMessage(error: ApiError): string | null {
 
 export const MISSING_ENDPOINT_MESSAGE = 'Không kết nối được chức năng này, có thể máy chủ chưa cập nhật.'
 
+/** Seats still free (never negative); null when the server has not sent seats. */
+export function seatsLeft(tour: { capacity?: number; heldSeats?: number }): number | null {
+  if (tour.capacity == null || tour.heldSeats == null) return null
+  return Math.max(0, tour.capacity - tour.heldSeats)
+}
+
 /** "Còn 12/20 chỗ"; null when the server has not sent seats. */
 export function seatsLabel(tour: { capacity?: number; heldSeats?: number }): string | null {
-  if (tour.capacity == null || tour.heldSeats == null) return null
-  return `Còn ${Math.max(0, tour.capacity - tour.heldSeats)}/${tour.capacity} chỗ`
+  const left = seatsLeft(tour)
+  return left == null ? null : `Còn ${left}/${tour.capacity} chỗ`
+}
+
+/**
+ * The READY confirmation's warning for a Tour on a shift that is closed before its registration deadline: READY closes
+ * registration early. The seats still free join the sentence when there are any. Null once the deadline has passed
+ * (registration is already closed, seats free or not) and for a quick Tour, whose list Staff closes with READY anyway.
+ * Display only: READY is not blocked.
+ */
+export function earlyReadyWarning(tour: TourTiming & { capacity?: number; heldSeats?: number }, now: number): string | null {
+  if (tour.isShortNotice) return null
+  const closesAt = registrationClosesAtOf(tour)
+  if (now >= closesAt) return null
+  const left = seatsLeft(tour)
+  const seats = left ? ` và Tour còn ${left} chỗ` : ''
+  return `Hạn đăng ký là ${formatDateTime(closesAt)}${seats}. Chốt bây giờ sẽ đóng đăng ký sớm: trường khác không đăng ký thêm được. Có thể mở lại trước giờ bắt đầu.`
 }
 
 /** Seats for a Tour that can still fill them; an ended Tour has nothing left to book. */
@@ -74,12 +100,21 @@ export function openSeatsLabel(tour: { state: TourState; capacity?: number; held
   return tour.state === 'CANCELLED' || tour.state === 'COMPLETED' ? null : seatsLabel(tour)
 }
 
-export function tourError(error: unknown): string {
+/** A quick Tour has no shift, so a robot clash there speaks of the hold, not of "ca". */
+const QUICK_CONFLICTS: Record<string, string> = {
+  ROBOT_RESERVATION_CONFLICT: 'Robot đang được giữ cho Tour khác trong khoảng thời gian này. Chọn robot khác.',
+}
+
+export function tourError(error: unknown, context: { quick?: boolean } = {}): string {
   if (!(error instanceof ApiError)) return 'Không thể kết nối máy chủ. Hãy thử lại.'
   if (error.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
   if (error.status === 403) return 'Tài khoản không có quyền quản lý Tour.'
   const body = errorBody(error)
   const code = (body.errors as { code?: string } | undefined)?.code
+  // ADR-0062: the server names the retired POIs ("Tuyến có POI đã ngưng dùng: {tên}. …"), so its wording is kept.
+  if (error.status === 409 && code === 'ROUTE_HAS_RETIRED_POI')
+    return backendMessage(error) ?? 'Tuyến có POI đã ngưng dùng. Lưu phiên bản tuyến mới không có POI này, hoặc dùng lại POI.'
+  if (error.status === 409 && code && context.quick && QUICK_CONFLICTS[code]) return QUICK_CONFLICTS[code]
   if (error.status === 409 && code && CONFLICTS[code]) return CONFLICTS[code]
   if (error.status === 400) {
     const messages = Object.values(body.errors ?? {}).flat().filter((v): v is string => typeof v === 'string')

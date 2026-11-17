@@ -15,7 +15,7 @@ public sealed record ListRouteRevisionQueueQuery() : IRequest<IReadOnlyList<Rout
 /// <summary>Current revisions whose effective PASS was measured before dwell was included, so they cannot be scheduled (ADR-0048).</summary>
 public sealed record ListRouteRerunQueueQuery() : IRequest<IReadOnlyList<RouteRevisionView>>;
 
-public sealed class ListRouteRerunQueueHandler(IRouteRevisionRepository repo) : IRequestHandler<ListRouteRerunQueueQuery, IReadOnlyList<RouteRevisionView>>
+public sealed class ListRouteRerunQueueHandler(IRouteRevisionRepository repo, Tours.TourScheduleSettings schedule) : IRequestHandler<ListRouteRerunQueueQuery, IReadOnlyList<RouteRevisionView>>
 {
     public async Task<IReadOnlyList<RouteRevisionView>> Handle(ListRouteRerunQueueQuery q, CancellationToken ct)
     {
@@ -24,7 +24,7 @@ public sealed class ListRouteRerunQueueHandler(IRouteRevisionRepository repo) : 
         foreach (var id in current.Items)
         {
             if (await repo.FindRevisionAsync(id, ct) is not { } revision) continue;
-            var view = await RouteRevisionMapper.Load(repo, revision.RouteId, revision.Id, false, ct);
+            var view = await RouteRevisionMapper.Load(repo, revision.RouteId, revision.Id, false, ct, schedule);
             if (view.VerificationStatus == "PASS" && view.TestRuns.SingleOrDefault(run => run.Id == view.EffectiveTestRunId) is { MeasurementBasis: null })
                 views.Add(view);
         }
@@ -32,13 +32,19 @@ public sealed class ListRouteRerunQueueHandler(IRouteRevisionRepository repo) : 
     }
 }
 
-public sealed class ListRouteRevisionQueueHandler(IRouteRevisionRepository repo) : IRequestHandler<ListRouteRevisionQueueQuery, IReadOnlyList<RouteRevisionView>>
+public sealed class ListRouteRevisionQueueHandler(IRouteRevisionRepository repo, Tours.TourScheduleSettings schedule) : IRequestHandler<ListRouteRevisionQueueQuery, IReadOnlyList<RouteRevisionView>>
 {
     public async Task<IReadOnlyList<RouteRevisionView>> Handle(ListRouteRevisionQueueQuery q, CancellationToken ct)
     {
         var revisions = await repo.ListSubmittedPendingAsync(ct);
         var views = new List<RouteRevisionView>(revisions.Count);
-        foreach (var item in revisions) views.Add(await RouteRevisionMapper.Load(repo, item.RouteId, item.Id, false, ct));
+        foreach (var item in revisions)
+        {
+            var view = await RouteRevisionMapper.Load(repo, item.RouteId, item.Id, false, ct, schedule);
+            // A save that only changed dwell or narration already has the result of its path (ADR-0023 addendum): it is not
+            // waiting for a first run, and the passed or failed list shows it with that result.
+            if (view.VerificationStatus is not ("PASS" or "FAIL")) views.Add(view);
+        }
         return views;
     }
 }

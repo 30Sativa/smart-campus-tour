@@ -111,7 +111,7 @@ describe('live console camera head (ADR-0045)', () => {
     await waitFor(() => expect(headCommands()).toHaveLength(4))
     expect(headCommands().map(item => item.body)).toEqual([
       { kind: 'STEP', panSteps: 15, tiltSteps: 0 },
-      { kind: 'STEP', panSteps: 0, tiltSteps: 3 },
+      { kind: 'STEP', panSteps: 0, tiltSteps: 15 },
       { kind: 'ANGLE', panDeg: 0, tiltDeg: 0 },
       { kind: 'SWEEP' },
     ])
@@ -135,7 +135,7 @@ describe('live console camera head (ADR-0045)', () => {
 
   it('switches the automatic head mode for the Operator', async () => {
     renderAt('/staff/live/tour-1')
-    const toggle = within(await headPanel()).getByRole('switch', { name: /Tự động tại điểm dừng/ })
+    const toggle = within(await headPanel()).getByRole('switch', { name: /Đầu camera tự quay tại điểm dừng/ })
     await waitFor(() => expect(toggle).toBeChecked())
     fireEvent.click(toggle)
     await waitFor(() => expect(sent.find(item => item.path.endsWith('/head-mode'))).toEqual({ method: 'PUT', path: '/api/staff/manage/tours/tour-1/head-mode', body: { mode: 'MANUAL' } }))
@@ -198,7 +198,7 @@ describe('live console layout', () => {
       .map(name => screen.getByRole('region', { name }))
     for (let index = 1; index < order.length; index++)
       expect(order[index - 1].compareDocumentPosition(order[index]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(within(order[1]).getByRole('button', { name: /Đi tiếp/ })).toBeInTheDocument()
+    expect(within(order[1]).getByRole('button', { name: /Đi tới/ })).toBeInTheDocument()
     // From 1024px: camera and situation in the main column, head, map, robot and End Early in the side column.
     expect(order[0].parentElement?.className).toContain('lg:col-start-1')
     const side = order[2].parentElement as HTMLElement
@@ -210,10 +210,10 @@ describe('live console layout', () => {
     expect(sent.some(item => item.method === 'POST' && item.path === '/api/staff/manage/robots/amr_01/camera-lease')).toBe(true)
   })
 
-  it('opens the Digital Twin from the mini map', async () => {
+  it('opens the Digital Twin on the Tour robot from the mini map', async () => {
     renderAt('/staff/live/tour-1')
     const map = await screen.findByRole('region', { name: 'Bản đồ' })
-    expect(within(map).getByRole('link', { name: 'Mở Digital Twin' })).toHaveAttribute('href', '/staff/digital-twin')
+    expect(within(map).getByRole('link', { name: 'Mở Digital Twin' })).toHaveAttribute('href', '/staff/digital-twin?robot=amr_01')
   })
 
   it('shows no head control or camera on a Tour that has ended', async () => {
@@ -227,13 +227,13 @@ describe('live console layout', () => {
 })
 
 describe('live console without a running Tour', () => {
-  it('shows the next confirmed Tour with its pre-start check and the schedule', async () => {
+  it('shows the next confirmed Tour with its opening and the schedule', async () => {
     list = [summary('tour-9', 'SCHEDULED', 'Tour chưa chốt'), summary('tour-7', 'READY', 'Tour chiều thứ Ba', '2026-11-05T07:00:00Z')]
     renderAt('/staff/live')
     const next = await screen.findByRole('region', { name: 'Tour đã chốt kế tiếp' })
     expect(await within(next).findByText('Tour chiều thứ Ba')).toBeInTheDocument()
     expect(within(next).getByText(/05\/11\/2026 14:00/)).toBeInTheDocument()
-    expect(within(next).getByRole('link', { name: 'Kiểm tra trước khi bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-7/start')
+    expect(within(next).getByRole('link', { name: 'Mở Tour' })).toHaveAttribute('href', '/staff/tours/tour-7/start')
     expect(within(next).getByRole('link', { name: /Xem lịch/ })).toHaveAttribute('href', '/staff/schedule')
     expect(screen.queryByText('Tour chưa chốt')).not.toBeInTheDocument()
   })

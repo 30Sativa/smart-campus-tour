@@ -16,14 +16,17 @@ public sealed class ListPoiProposalsQueryHandler(IPoiProposalRepository proposal
         var proposalIds = proposals.Select(proposal => proposal.Id).ToArray();
         var revisions = await proposalRepository.ListCurrentRevisionsAsync(proposalIds, ct);
         var verifications = await verificationRepository.ListVerificationRecordsAsync(proposalIds, ct);
+        var narrationsByProposal = (await proposalRepository.ListCurrentNarrationsAsync(proposalIds, ct))
+            .ToLookup(narration => narration.ProposalId);
         var effectiveByFingerprint = verifications
             .GroupBy(record => (record.ProposalRevision.ProposalId, Fingerprint: Convert.ToHexString(record.NavigationFingerprint)))
             .ToDictionary(group => group.Key, group => group
                 .OrderByDescending(record => record.ProposalRevision.RevisionNumber)
                 .ThenByDescending(record => record.CheckedAt).ThenByDescending(record => record.Id).First());
         var revisionByProposal = revisions.ToDictionary(revision => revision.ProposalId);
-        var passedProposals = verifications.Where(record => !PoiProposalRules.CanDiscard([record]))
+        var passedProposals = verifications.Where(record => record.ResultCode == "PASS")
             .Select(record => record.ProposalRevision.ProposalId).ToHashSet();
+        var usedInRoutes = await proposalRepository.ListProposalsUsedInRoutesAsync(proposalIds, ct);
         var result = new List<PoiProposalView>(proposals.Count);
         foreach (var proposal in proposals)
         {
@@ -32,9 +35,8 @@ public sealed class ListPoiProposalsQueryHandler(IPoiProposalRepository proposal
             effectiveByFingerprint.TryGetValue((proposal.Id, Convert.ToHexString(revision.NavigationFingerprint)), out var verification);
             var submission = revision.PoiProposalSubmission;
             var view = PoiProposalReadModelLoader.ToRevisionView(revision, submission, verification);
-            result.Add(new(proposal.Id, proposal.CurrentRevision, Convert.ToBase64String(proposal.RowVersion),
-                proposal.CreatedAt, proposal.UpdatedAt, view, proposal.SourcePoiId,
-                proposal.DiscardedAt is null && !passedProposals.Contains(proposal.Id), proposal.DiscardedAt));
+            result.Add(PoiProposalReadModelLoader.ToProposalView(proposal, view, passedProposals.Contains(proposal.Id),
+                usedInRoutes.Contains(proposal.Id), PoiNarrationRules.Summary(narrationsByProposal[proposal.Id])));
         }
         return result;
     }

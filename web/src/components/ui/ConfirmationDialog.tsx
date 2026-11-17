@@ -49,6 +49,7 @@ export function ConfirmationDialog({
   busyLabel = 'Đang gửi…',
   busy = false,
   confirmDisabled = false,
+  reasonDisabled = false,
   error,
   onConfirm,
   onCancel,
@@ -68,6 +69,8 @@ export function ConfirmationDialog({
   busy?: boolean
   /** The decision is no longer possible (e.g. the server withdrew it while the dialog was open); say why in `children`. */
   confirmDisabled?: boolean
+  /** Nothing can be decided yet, so typing a reason would be wasted (e.g. something still blocks the action). */
+  reasonDisabled?: boolean
   error?: string | null
   onConfirm: (reason: string) => void
   onCancel: () => void
@@ -117,10 +120,11 @@ export function ConfirmationDialog({
               id={reasonId}
               value={reason}
               onChange={(event) => setReason(event.target.value)}
+              disabled={reasonDisabled}
               maxLength={500}
               rows={3}
               placeholder={reasonPlaceholder}
-              className="mt-2 w-full rounded-xl border border-[#e2e8f0] px-3 py-2 text-sm text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#6ba0ff] focus:ring-2 focus:ring-[#2563eb]/20"
+              className="mt-2 w-full rounded-xl border border-[#e2e8f0] px-3 py-2 text-sm text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#6ba0ff] focus:ring-2 focus:ring-[#2563eb]/20 disabled:cursor-not-allowed disabled:bg-[#f8fafc] disabled:text-[#94a3b8]"
             />
           </>
         )}

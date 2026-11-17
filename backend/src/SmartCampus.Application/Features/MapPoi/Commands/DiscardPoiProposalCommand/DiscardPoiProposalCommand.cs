@@ -9,8 +9,10 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Application.Features.MapPoi;
 
 /// <summary>
-/// Hides a POI proposal that never passed technical verification (ADR-0051). Nothing is deleted: revisions,
-/// submissions, results and import receipts stay as history. Without a PASS the proposal cannot be in any Route.
+/// Hides a POI proposal that no route revision uses (ADR-0051, amended by ADR-0062): one that never passed, or one that
+/// passed but none of whose revisions is a stop of any route revision. Nothing is deleted: revisions, submissions,
+/// results and import receipts stay as history. SaveRouteRevision takes the same proposal row lock before it checks
+/// DiscardedAt, so a route saved at the same time either commits first (and this refuses) or sees the discard.
 /// </summary>
 public sealed record DiscardPoiProposalCommand(Guid ActorUserId, Guid ProposalId, DiscardPoiProposalRequest Request)
     : IPoiMutationCommand<PoiProposalView>;
@@ -43,11 +45,12 @@ public sealed class DiscardPoiProposalCommandHandler(
             return await PoiProposalReadModelLoader.LoadAsync(proposalRepository, verificationRepository, proposal, revision, cancellationToken);
 
         PoiProposalRules.EnsureCurrent(proposal, command.Request.ExpectedRevisionNumber, command.Request.ExpectedRowVersion);
-        var results = await verificationRepository.ListVerificationRecordsAsync([proposal.Id], cancellationToken);
-        if (!PoiProposalRules.CanDiscard(results))
+        var usedInRoute = (await proposalRepository.ListProposalsUsedInRoutesAsync([proposal.Id], cancellationToken))
+            .Contains(proposal.Id);
+        if (!PoiProposalRules.CanDiscard(proposal, usedInRoute))
             throw new ConflictException(
-                "POI đã từng đạt kiểm chứng nên không thể xoá: tuyến có thể đang dùng một phiên bản của POI này.",
-                PoiProposalRules.HasPassCode);
+                "POI này đã nằm trong một tuyến (kể cả tuyến đã ngưng dùng) nên không thể xoá. Dùng \"Ngưng dùng\" để không chọn POI này cho tuyến mới.",
+                PoiProposalRules.InRouteCode);
 
         var now = timeProvider.GetUtcNow();
         proposal.DiscardedAt = now;

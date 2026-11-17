@@ -48,9 +48,17 @@ describe('system audit log', () => {
   it('words a system auto-cancel without showing its result code', async () => {
     rows = [{ ...entry, actorUserId: null, actorName: null, resultCode: 'SYSTEM_NO_START' }]
     show()
-    expect(await screen.findByText('Tự huỷ: không bắt đầu đúng giờ')).toBeInTheDocument()
+    expect(await screen.findByText('Tự hủy: không bắt đầu đúng giờ')).toBeInTheDocument()
     expect(screen.getByText('Hệ thống')).toBeInTheDocument()
     expect(screen.queryByText('SYSTEM_NO_START')).not.toBeInTheDocument()
+  })
+
+  it('names a route test run by its route and save time, not by the robot that ran it', async () => {
+    rows = [{ ...entry, action: 'ROUTE_TEST_PASSED', entityType: 'RouteRevision', entityId: 'rev-1', tourId: null, tourName: null,
+      robotCode: 'amr_01', resultCode: 'PASS', routeName: 'Tuyến thư viện', routeRevisionSavedAt: '2026-11-16T01:00:00Z' }]
+    show()
+    expect(await screen.findByText(/^Tuyến thư viện · bản lưu /)).toBeInTheDocument()
+    expect(screen.queryByText('amr_01')).not.toBeInTheDocument()
   })
 
   it('sends the action code and actor, then clears the filters', async () => {

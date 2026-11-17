@@ -64,7 +64,7 @@ Test chạy đủ 13 lệnh × 3 vị trí, rồi kiểm cây file không đổi
 |---|---|
 | manual | `ros2 launch robot_control manual_mode.launch.py robot_id:=<ID> lidar_yaw:=<LIDAR_YAW>` |
 | map | `… manual_mapping.launch.py … max_wheel_speed_mm_s:=<MAP_MAX_WHEEL_SPEED_MM_S> rviz:=false` |
-| nav | `ros2 launch robot_navigation navigation.launch.py … map:=<MAP> enable_camera:=false rviz:=false nav2_params_file:=<NAV2_PARAMS>` |
+| nav | `ros2 launch robot_navigation navigation.launch.py … map:=<MAP> enable_camera:=false rviz:=false nav2_params_file:=<NAV2_PARAMS>` (`enable_camera:=true` với `--camera`, §11) |
 
 **`robot teleop` từ chối chạy khi:**
 - chưa có `mode_manager`, hoặc có hai `mode_manager`;
@@ -196,3 +196,40 @@ Vẫn bị chặn: hai workflow cùng lúc, hai `fleet_bridge` cùng lúc, `flee
 Hai công tắc phía backend vẫn cần bật cho buổi test:
 - `FleetCommands__Enabled=true`: biến môi trường của backend, rồi restart;
 - "Cho phép điều phối" trong trang Robot của Technical Staff (`IsDispatchEnabled`).
+
+## 9. Tự khởi tạo pose: `robot nav --auto-pose`, `robot relocalize`
+
+`pose_bootstrap` đặt initial pose cho AMCL từ LiDAR thay cho 2D Pose trên RViz
+(`robot/docs/auto-initial-pose.md`). Mặc định tắt.
+
+| Lệnh / khóa profile | Việc làm |
+|---|---|
+| `AUTO_INITIAL_POSE=true` | `robot nav` bật `pose_bootstrap` (truyền `auto_initial_pose:=true`) |
+| `robot nav --auto-pose` / `--manual-pose` | Bật / tắt cho một lần chạy, bỏ qua giá trị profile |
+| `robot relocalize` | Làm lại khi robot đứng yên (`/<robot>/pose_bootstrap/relocalize`). Chỉ khi `nav` đang chạy với auto pose |
+
+Launcher từ chối `--auto-pose` khi runtime chưa có `pose_bootstrap` hoặc map không có
+`<map>.pose_bootstrap.yaml` bên cạnh. Kết quả nằm ở `/<robot>/pose_bootstrap/status`;
+`NEEDS_MANUAL_POSE` nghĩa là đặt 2D Pose tay như trước.
+## 10. Fleet chạy từ lúc bật máy: `robot fleet status|start|stop|restart|logs`
+
+User unit `sct-fleet.service` chạy `robot fleet --service` từ lúc boot (`robot/docs/fleet-service.md`):
+một `fleet_bridge` duy nhất, gửi telemetry suốt; tự chuyển sang nhận lệnh khi `robot nav --fleet`
+chạy và về telemetry khi phiên đó kết thúc. Khi dịch vụ chạy, `robot fleet [--commands]` tay bị
+từ chối (không có hai bridge). `FLEET_SERVICE_COMMANDS=off` giữ chỉ telemetry. Cài:
+`robot/scripts/install-fleet-service`, rồi một lần `sudo loginctl enable-linger $USER`.
+
+## 11. Depth camera trong local costmap: `robot nav --camera`
+
+Astra Pro depth vào local costmap, đặt cạnh LiDAR (`robot/docs/depth-camera.md`). Mặc định tắt.
+
+| Lệnh / khóa profile | Việc làm |
+|---|---|
+| `ENABLE_CAMERA=true` | `robot nav` truyền `enable_camera:=true` |
+| `robot nav --camera` / `--no-camera` | Bật / tắt cho một lần chạy, bỏ qua giá trị profile |
+
+Khi bật camera, Nav2 nhận thêm RPP `max_allowed_time_to_collision_up_to_carrot` 4.0 (tầm kiểm va chạm
+0.8 m) để robot dừng khi camera còn thấy vật thấp; camera tắt thì file params giữ nguyên.
+Launcher không từ chối nav vì camera. Khi không có USB `2bc5:0403`, thiếu `astra_camera` hoặc
+runtime cũ, nó in `WARNING … LiDAR-only` rồi chạy như baseline. Đọc mục 6 của
+`depth-camera.md` trước khi bật cho demo.

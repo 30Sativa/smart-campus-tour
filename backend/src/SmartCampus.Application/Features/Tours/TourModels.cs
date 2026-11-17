@@ -26,13 +26,19 @@ public static class TourPhases
     public const string Running = "RUNNING";
     public const string Finished = "FINISHED";
 }
+/// <summary>
+/// <see cref="LatestStartAt"/> is the last moment Start is accepted (published time + StartLateLimit);
+/// <see cref="AutoCancelAt"/> is when the system cancels the Tour if it has not started (<see cref="TourAutoCancel.HoldEndsAt"/>).
+/// Both are set by the query handlers while the Tour is SCHEDULED or READY and are null otherwise, so no screen recomputes them.
+/// </summary>
 public sealed record TourSummary(Guid Id, string Name, string? Description, Guid RouteId, string RouteName,
     Guid ActiveRouteId, DateTimeOffset ScheduledStartAt, string State, Guid CreatedByUserId,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string RowVersion,
     int RegistrationCount, int InvitationCount, Guid? RouteRevisionId, TourReservationView? Reservation = null,
     TourExecutionSummary? Execution = null, RouteTestParticipantView? Operator = null,
     IReadOnlyList<ConflictBlocker>? ReadyBlockers = null, int Capacity = 0, int HeldSeats = 0,
-    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false);
+    DateTimeOffset? RegistrationClosesAt = null, bool IsShortNotice = false,
+    DateTimeOffset? LatestStartAt = null, DateTimeOffset? AutoCancelAt = null);
 /// <summary>
 /// Read-only situation of a Tour for list rows. <see cref="CommandState"/> is the current leg's GoTo, the command
 /// <c>GetTour</c> shows. <see cref="NeedsReconcile"/> is true while any GoTo of the Tour is UNKNOWN, in any Tour state.
@@ -56,15 +62,29 @@ public sealed record TourSlotView(string Time, DateTimeOffset StartsAt, bool Ava
 public sealed record TourSlotDay(DateOnly Date, IReadOnlyList<TourSlotView> Slots);
 public sealed record TourSlotsView(Guid RouteRevisionId, string RobotCode, int? MeasuredDurationSeconds,
     int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days, int RecommendedMaxSeconds, int MaxCapacity = 0);
-/// <summary>A configured shift on one day, for drawing the calendar before a route or robot is chosen.</summary>
+/// <summary>
+/// A configured shift on one day, for drawing the calendar before a route or robot is chosen. <see cref="Tours"/>, sent only
+/// on the Admin schedule, lists the Tours not cancelled that stop the shift being closed; null when not asked for.
+/// </summary>
 public sealed record TourShiftView(string Code, string Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
-    DateTimeOffset TourStartsAt, string Time, int MaxDurationSeconds, TourShiftBlockView? Block);
+    DateTimeOffset TourStartsAt, string Time, int MaxDurationSeconds, TourShiftBlockView? Block,
+    IReadOnlyList<TourShiftTourView>? Tours = null);
+/// <summary>A Tour occupying a shift or day that Admin may want to close.</summary>
+public sealed record TourShiftTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State, bool IsShortNotice,
+    DateTimeOffset RegistrationClosesAt);
 /// <summary>The Admin block closing a shift; <see cref="Scope"/> says whether it covers the whole day.</summary>
 public sealed record TourShiftBlockView(Guid Id, string Scope, string Reason);
 public static class ScheduleBlockScope { public const string Day = "DAY"; public const string Shift = "SHIFT"; }
-public sealed record TourShiftDay(DateOnly Date, IReadOnlyList<TourShiftView> Shifts);
-/// <summary><see cref="QuickTourWaitMinutes"/>: how long a quick Tour waits to be started (ADR-0053).</summary>
-public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds, int QuickTourWaitMinutes);
+/// <summary><see cref="Tours"/>: as on <see cref="TourShiftView"/>, for closing the whole day.</summary>
+public sealed record TourShiftDay(DateOnly Date, IReadOnlyList<TourShiftView> Shifts, IReadOnlyList<TourShiftTourView>? Tours = null);
+/// <summary>
+/// <see cref="QuickTourWaitMinutes"/>: how long a quick Tour waits to be started (ADR-0053).
+/// <see cref="EstimatedSpeedMetersPerSecond"/>: the speed <see cref="TourSchedule.EstimatedDurationSeconds"/> uses
+/// (Tours:EstimatedSpeedMetersPerSecond), so the route form estimates an unsaved draft by the same rule
+/// (web/src/features/administration/routes/route-estimate.ts).
+/// </summary>
+public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds, int QuickTourWaitMinutes,
+    double EstimatedSpeedMetersPerSecond = TourScheduleSettings.DefaultEstimatedSpeedMetersPerSecond);
 public sealed record TourTargetView(RouteTestParticipantView? Operator, TourReservationView? Reservation);
 /// <summary>A Tour scheduled from a revision has null Route/ActiveRoute and carries RouteRevision instead.</summary>
 public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDetails? ActiveRoute,
@@ -75,12 +95,20 @@ public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDet
 /// <summary>The running state of a Tour: null fields until Start; <see cref="DwellDeadlineAt"/> is display only (ADR-0043 D12).</summary>
 public sealed record TourExecutionView(string State, string? OperationalStatus, string? AssistanceReason, string? CurrentStep,
     Guid? CurrentLegId, string? CurrentLegKind, Guid? CurrentRevisionStopId, Guid? LastArrivedRevisionStopId,
-    DateTimeOffset? DwellDeadlineAt, TourCommandView? Command);
-public sealed record TourCommandView(Guid Id, string Kind, string State, string? Outcome, string? ReasonCode);
+    DateTimeOffset? DwellDeadlineAt, TourCommandView? Command, TourAutoAdvanceView? AutoAdvance = null);
+/// <summary><see cref="CancelRequested"/>: the Operator paused this leg and the robot has not reported its end yet.</summary>
+public sealed record TourCommandView(Guid Id, string Kind, string State, string? Outcome, string? ReasonCode, bool CancelRequested = false);
+/// <summary>The Operator's automatic departure switch; <see cref="BlockedReason"/> says why this visit's attempt did not leave.</summary>
+public sealed record TourAutoAdvanceView(bool Enabled, string? BlockedReason);
 /// <summary>Advisory for the caller; Start and Next recheck under locks. <see cref="BlockedBy"/> holds check ids, or a state reason code.</summary>
 public sealed record TourActionAvailability(bool Allowed, string? Reason, IReadOnlyList<string> BlockedBy);
+/// <summary>
+/// <see cref="Open"/> is Start with HoldAtStart (the robot's localization and motion readiness are shown, not required);
+/// <see cref="Pause"/> stops the current leg; <see cref="Skip"/> skips the POI the robot would go to next.
+/// </summary>
 public sealed record TourAllowedActions(TourActionAvailability Start, TourActionAvailability Next, TourActionAvailability EndEarly,
-    TourActionAvailability RetryLeg, TourActionAvailability Reconcile);
+    TourActionAvailability RetryLeg, TourActionAvailability Reconcile, TourActionAvailability? Open = null,
+    TourActionAvailability? Pause = null, TourActionAvailability? Skip = null);
 public sealed record TourMutationResult(Guid Id);
 public sealed record TourViewerPresence(int Accepted, int Joined);
 /// <summary>TourEvent types and receipt actions. Short-notice creation, READY and Reopen are not operational use of the Tour; the rest are.</summary>
@@ -91,6 +119,15 @@ public static class TourLifecycleEvents
     public const string Reopened = "TOUR_REOPENED";
     public const string Started = "TOUR_STARTED";
     public const string Next = "TOUR_NEXT";
+    /// <summary>The first leg of a Tour opened with HoldAtStart; carries the on-site confirmations.</summary>
+    public const string Departed = "TOUR_DEPARTED";
+    public const string Pause = "TOUR_PAUSE";
+    public const string PauseRequested = "LEG_PAUSE_REQUESTED";
+    public const string Paused = "TOUR_PAUSED";
+    public const string Skip = "TOUR_SKIP";
+    public const string StopSkipped = "STOP_SKIPPED";
+    public const string AutoAdvanced = "TOUR_AUTO_ADVANCED";
+    public const string AutoAdvanceBlocked = "TOUR_AUTO_ADVANCE_BLOCKED";
     public const string Completed = "TOUR_COMPLETED";
     public const string LegDispatchRequested = "LEG_DISPATCH_REQUESTED";
     public const string VisitClosed = "VISIT_CLOSED";

@@ -16,12 +16,14 @@ export function tourSteps(detail: Pick<TourDetails, 'tour' | 'startedAt'>): Step
   const { id, state } = detail.tour
   const started = state === 'RUNNING' || Boolean(detail.startedAt)
   const ended = state === 'COMPLETED' || state === 'CANCELLED'
+  const cancelledBeforeRun = state === 'CANCELLED' && !started
   const at = state === 'SCHEDULED' ? 0 : state === 'READY' ? 1 : state === 'RUNNING' ? 2 : 3
   // A Tour cancelled before it ran skipped the check and the console.
   const status = (index: number): StepStatus => index < at ? (ended && !started && (index === 1 || index === 2) ? 'skipped' : 'done') : index === at ? (index === 3 ? 'done' : 'current') : 'next'
   return [
-    { key: 'prepare', title: 'Chuẩn bị & chốt', status: status(0), note: state === 'SCHEDULED' ? 'Duyệt đăng ký, rồi chốt Tour' : STATUS_NOTE[status(0)], to: `/staff/manage/tours/${id}` },
-    { key: 'start', title: 'Kiểm tra & bắt đầu', status: status(1), note: state === 'READY' ? 'Chờ đủ điều kiện để bắt đầu' : STATUS_NOTE[status(1)], to: state === 'READY' ? `/staff/tours/${id}/start` : null },
+    // A Tour cancelled before it ran may never have been locked; the page does not know, so it does not say Xong.
+    { key: 'prepare', title: 'Chuẩn bị & chốt', status: cancelledBeforeRun ? 'skipped' : status(0), note: state === 'SCHEDULED' ? 'Duyệt đăng ký, rồi chốt Tour' : cancelledBeforeRun ? 'Hủy trước khi chạy' : STATUS_NOTE[status(0)], to: `/staff/manage/tours/${id}` },
+    { key: 'start', title: 'Mở Tour', status: status(1), note: state === 'READY' ? 'Mở Tour khi tới giờ' : STATUS_NOTE[status(1)], to: state === 'READY' ? `/staff/tours/${id}/start` : null },
     { key: 'live', title: 'Điều hành', status: status(2), note: state === 'RUNNING' ? 'Robot đang dẫn Tour' : STATUS_NOTE[status(2)], to: started ? `/staff/live/${id}` : null },
     { key: 'result', title: 'Kết quả', status: status(3), note: state === 'COMPLETED' ? 'Hoàn thành' : state === 'CANCELLED' ? 'Đã hủy' : STATUS_NOTE[status(3)], to: null },
   ]

@@ -13,10 +13,11 @@ public sealed class GetTourHeadStatusQueryHandler(ITourHeadControlReader tours, 
     {
         var tour = await tours.GetAsync(query.TourId, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
         var mode = modes.GetMode(tour.TourId);
-        if (string.IsNullOrEmpty(tour.RobotCode))
+        var robotCode = tour.HeadRobotCode;
+        if (string.IsNullOrEmpty(robotCode))
             return new TourHeadStatus(settings.Enabled, mode, null, false, null, null, null);
-        var status = channel.GetStatus(tour.RobotCode);
-        return new TourHeadStatus(settings.Enabled, mode, tour.RobotCode, status.Connected, status.LastPollAt, status.Head,
+        var status = channel.GetStatus(robotCode);
+        return new TourHeadStatus(settings.Enabled, mode, robotCode, status.Connected, status.LastPollAt, status.Head,
             status.HeadReceivedAt);
     }
 }

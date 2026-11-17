@@ -37,6 +37,10 @@ public partial class RouteRevisionStop
 
     public string? FallbackVideoUrl { get; set; }
 
+    public Guid? NarrationRevisionId { get; set; }
+
+    public virtual PoiNarrationRevision? NarrationRevision { get; set; }
+
     public virtual PoiProposalRevision PoiProposalRevision { get; set; } = null!;
 
     public virtual PoiVerificationRecord PoiVerificationRecord { get; set; } = null!;

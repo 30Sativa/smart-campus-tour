@@ -1,5 +1,7 @@
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Common.Authentication;
+using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.UnitTests;
 
@@ -91,10 +93,10 @@ public sealed class RouteRevisionWorkflowTests
     }
 
     [Fact]
-    public void RouteTestPassRequiresWholeRouteObservationsAndMeasuredTime()
+    public void RouteTestPassRequiresWholeRouteObservations_AndNoTypedDuration()
     {
         var request = new RouteRunRequest(Guid.NewGuid(), "physical", Guid.NewGuid(), "PASS",
-            false, true, true, 60, null, "manual evidence");
+            false, true, true, null, "manual evidence");
         var command = new RecordRouteTestRunCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), request);
         Assert.False(new RecordRouteTestRunValidator().Validate(command).IsValid);
         Assert.True(new RecordRouteTestRunValidator().Validate(command with
@@ -107,7 +109,7 @@ public sealed class RouteRevisionWorkflowTests
     public void FailRequiresExplicitReasonAndAFailedObservation()
     {
         var request = new RouteRunRequest(Guid.NewGuid(), "physical", Guid.NewGuid(), "FAIL",
-            true, true, true, 60, null, "manual evidence");
+            true, true, true, null, "manual evidence");
         var command = new RecordRouteTestRunCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), request);
         Assert.False(new RecordRouteTestRunValidator().Validate(command).IsValid);
         Assert.True(new RecordRouteTestRunValidator().Validate(command with
@@ -115,5 +117,4 @@ public sealed class RouteRevisionWorkflowTests
             Request = request with { FailureReason = "Localization drift", LocalizationPassed = false }
         }).IsValid);
     }
-
 }

@@ -1,6 +1,6 @@
-import { Grid, Html, OrbitControls } from '@react-three/drei'
+import { AdaptiveDpr, Grid, Html, OrbitControls, PerformanceMonitor } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { memo, useCallback, useEffect, useRef } from 'react'
 import type { MapPose, RouteStop } from '../../api/contracts/staff'
 import { CampusModel } from './CampusModel'
 import { mapToScene } from './demo-motion'
@@ -38,7 +38,16 @@ export type TwinRobot = {
   groundY?: number
   exactPose?: boolean
   traffic?: 'hold' | 'yield' | 'clear'
+  /** A simulated robot drawn beside real ones: patrol styling, dimmed, labelled "Mô phỏng". Defaults to the scene's `syntheticPatrol`. */
+  synthetic?: boolean
+  /** Replaces the label's " · dữ liệu cũ", e.g. "dữ liệu cũ, 3 phút trước". */
+  labelNote?: string
+  /** Read every frame instead of `pose` (the simulated patrol, which advances outside React). */
+  livePose?: () => MapPose & { yaw: number }
 }
+
+/** What the `?perf=1` overlay shows, sampled about twice a second. */
+export type TwinPerfSample = { fps: number; calls: number; triangles: number; textures: number; geometries: number }
 
 /** A request to fly the camera to a scene point; a new `id` repeats the flight to the same point. */
 export type TwinFocus = { id: number; position: [number, number, number] }
@@ -52,6 +61,8 @@ export type TwinRoute = {
   /** ROS map -> scene for the stops, from the map's calibration; identity when absent. */
   transform?: Affine2D
   groundY?: number
+  /** Size of the stop markers against the default; a model drawn smaller (NVH V3) shrinks them with its robots. */
+  markerScale?: number
 }
 
 export type TwinSceneProps = {
@@ -73,7 +84,20 @@ export type TwinSceneProps = {
   onSelectCamera?: (point: number) => void
   tool?: TwinTool
   focus?: TwinFocus | null
+  /** Draw the route's stops even with labels off; defaults to `showLabels` (the operations twin's behaviour). */
+  showRoute?: boolean
+  /**
+   * `always` while something animates on its own (the simulation), `demand` to
+   * draw only on a change, `never` while the view is off screen. See `twinFrameloop`.
+   */
+  frameloop?: 'always' | 'demand' | 'never'
+  /** Receives renderer numbers for the `?perf=1` overlay. */
+  onPerf?: (sample: TwinPerfSample) => void
 }
+
+/** DPR range; PerformanceMonitor moves inside it and AdaptiveDpr drops to its floor while the camera moves. */
+const DPR_MIN = 1
+const DPR_MAX = 1.5
 
 const STOP_COLOR: Record<RouteStop['status'], string> = {
   Completed: '#2f8f6b',
@@ -96,13 +120,15 @@ const FOCUS_SECONDS = 0.9
 function FocusCamera({ focus }: { focus?: TwinFocus | null }) {
   const camera = useThree(state => state.camera)
   const controls = useThree(state => state.controls) as unknown as { target: Vector3; update: () => void } | null
+  const invalidate = useThree(state => state.invalidate)
   const flight = useRef<{ fromPosition: Vector3; fromTarget: Vector3; toPosition: Vector3; toTarget: Vector3; t: number } | null>(null)
   useEffect(() => {
     if (!focus || !controls) return
     const toTarget = new Vector3(...focus.position)
     const direction = camera.position.clone().sub(controls.target).normalize()
     flight.current = { fromPosition: camera.position.clone(), fromTarget: controls.target.clone(), toPosition: toTarget.clone().addScaledVector(direction, FOCUS_DISTANCE), toTarget, t: 0 }
-  }, [focus, controls, camera])
+    invalidate()
+  }, [focus, controls, camera, invalidate])
   useFrame((_, delta) => {
     const current = flight.current
     if (!current || !controls) return
@@ -112,7 +138,45 @@ function FocusCamera({ focus }: { focus?: TwinFocus | null }) {
     controls.target.lerpVectors(current.fromTarget, current.toTarget, eased)
     controls.update()
     if (current.t === 1) flight.current = null
+    else invalidate()
   })
+  return null
+}
+
+/**
+ * The campus does not move, so its shadow map is drawn once, after the model
+ * is in the scene, instead of every frame. Robots cast no map shadow (they
+ * carry a contact blob, see RobotModel).
+ */
+function useStaticShadows() {
+  // `shadowMap.autoUpdate` is switched off when the canvas is created (TwinScene's onCreated).
+  const get = useThree(state => state.get)
+  return useCallback(() => {
+    const { gl, invalidate } = get()
+    gl.shadowMap.needsUpdate = true
+    invalidate()
+  }, [get])
+}
+
+function StaticCampus({ modelKey }: { modelKey?: CampusModelKey }) {
+  const bake = useStaticShadows()
+  return <CampusModel modelKey={modelKey} onLoaded={bake} />
+}
+
+/** Feeds the `?perf=1` overlay: frames actually drawn and `renderer.info` of the last one. */
+function PerfProbe({ onPerf }: { onPerf: (sample: TwinPerfSample) => void }) {
+  const gl = useThree(state => state.gl)
+  const window = useRef({ frames: 0, start: 0 })
+  useFrame(() => {
+    const current = window.current
+    const now = performance.now()
+    if (!current.start) { window.current = { frames: 0, start: now }; return }
+    current.frames++
+    if (now - current.start < 500) return
+    const { render, memory } = gl.info
+    onPerf({ fps: Math.round(current.frames * 1000 / (now - current.start)), calls: render.calls, triangles: render.triangles, textures: memory.textures, geometries: memory.geometries })
+    window.current = { frames: 0, start: now }
+  }, 1)
   return null
 }
 
@@ -121,9 +185,9 @@ const ground = (pose: MapPose, transform?: Affine2D, groundY = 0): [number, numb
   return [position[0], groundY, position[2]]
 }
 
-function Marker({ position, color, label, number, emphasis, showLabel, fixedLabel = false, transform, groundY }: { position: MapPose; color: string; label: string; number: string; emphasis: 'target' | 'selected' | null; showLabel: boolean; fixedLabel?: boolean; transform?: Affine2D; groundY?: number }) {
+function Marker({ position, color, label, number, emphasis, showLabel, fixedLabel = false, transform, groundY, scale = 1 }: { position: MapPose; color: string; label: string; number: string; emphasis: 'target' | 'selected' | null; showLabel: boolean; fixedLabel?: boolean; transform?: Affine2D; groundY?: number; scale?: number }) {
   return (
-    <group position={ground(position, transform, groundY)}>
+    <group position={ground(position, transform, groundY)} scale={scale}>
       <mesh position={[0, 0.03, 0]} rotation={fixedLabel ? [-Math.PI / 2, 0, 0] : [0, 0, 0]}>
         {fixedLabel ? <ringGeometry args={[0.6 * PATROL_MODEL_SCALE, 0.7 * PATROL_MODEL_SCALE, 48]} /> : <cylinderGeometry args={[emphasis ? 0.34 : 0.26, emphasis ? 0.34 : 0.26, 0.06, 32]} />}
         {fixedLabel ? <meshBasicMaterial color="#7dc7e8" toneMapped={false} /> : <meshStandardMaterial color={color} />}
@@ -134,7 +198,7 @@ function Marker({ position, color, label, number, emphasis, showLabel, fixedLabe
           <meshBasicMaterial color={emphasis === 'selected' ? '#1f314d' : '#2f62b8'} transparent opacity={0.75} />
         </mesh>
       )}
-      <Html position={[0, fixedLabel ? 0.06 : 0.45, 0]} center distanceFactor={fixedLabel ? undefined : 14} zIndexRange={[10, 0]}>
+      <Html position={[0, fixedLabel ? 0.06 : 0.45, 0]} center distanceFactor={fixedLabel ? undefined : 14 * scale} zIndexRange={[10, 0]}>
         <span aria-label={fixedLabel ? `Điểm point ${number}` : undefined} className={`pointer-events-none inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap ${fixedLabel ? 'text-[#40546f]' : emphasis === 'target' ? 'bg-[#2f62b8] text-white shadow-sm' : emphasis === 'selected' ? 'bg-[#1f314d] text-white shadow-sm' : 'bg-white/90 text-[#40546f] shadow-sm'}`}>
           <span className="tabular-nums">{number}</span>
           {!fixedLabel && (showLabel || emphasis) && <span>{label}</span>}
@@ -150,7 +214,7 @@ function Marker({ position, color, label, number, emphasis, showLabel, fixedLabe
  * through walls would pretend it is (scope §11.3).
  */
 function Route({ route, selectedStopId, showLabels }: { route: TwinRoute; selectedStopId?: string | null; showLabels: boolean }) {
-  const place = { transform: route.transform, groundY: route.groundY }
+  const place = { transform: route.transform, groundY: route.groundY, scale: route.markerScale ?? 1 }
   return (
     <group>
       {route.stops.map((stop, index) => (
@@ -165,17 +229,34 @@ function Route({ route, selectedStopId, showLabels }: { route: TwinRoute; select
  * The WebGL half of the operational twin. Kept apart from the DOM wrapper so
  * tests can replace it: jsdom has no WebGL (web/AGENTS.md §5).
  */
-export default function TwinScene({ robots, route, selectedStopId, overhead, showLabels, modelKey, syntheticPatrol = false, patrolPaths = [], seconds = 0, onSelectRobot, heat = {}, viewMode = 'scene', sensors = false, showCameras = false, cameraPoint = 0, onSelectCamera, tool = 'select', focus }: TwinSceneProps) {
+/** Draws one frame whenever the loop mode changes, e.g. back on screen after updates arrived while hidden. */
+function RenderOnResume({ frameloop }: { frameloop: string }) {
+  const invalidate = useThree(state => state.invalidate)
+  useEffect(() => { if (frameloop !== 'never') invalidate() }, [frameloop, invalidate])
+  return null
+}
+
+/** Lowers the resolution while frames are slow and restores it when they recover, inside [DPR_MIN, DPR_MAX]. */
+function AdaptiveResolution() {
+  const setDpr = useThree(state => state.setDpr)
+  return <PerformanceMonitor bounds={() => [45, 58]} onDecline={() => setDpr(DPR_MIN)} onIncline={() => setDpr(DPR_MAX)} />
+}
+
+export function TwinScene({ robots, route, selectedStopId, overhead, showLabels, modelKey, syntheticPatrol = false, patrolPaths = [], seconds = 0, onSelectRobot, heat = {}, viewMode = 'scene', sensors = false, showCameras = false, cameraPoint = 0, onSelectCamera, tool = 'select', focus, showRoute, frameloop = 'always', onPerf }: TwinSceneProps) {
   const campusView = modelKey === 'nvh-v3'
   const viewX = (overhead ? -0.01 : -14) * Math.cos(CAMPUS_VIEW_YAW)
   const viewZ = (overhead ? 0.01 : 14) * Math.sin(CAMPUS_VIEW_YAW)
   return (
     <Canvas
       key={String(overhead)}
-      dpr={[1, 1.5]}
+      dpr={[DPR_MIN, DPR_MAX]}
+      frameloop={frameloop}
+      performance={{ min: DPR_MIN / DPR_MAX }}
       shadows={modelKey === 'nvh-v3' ? { type: PCFShadowMap } : false}
       camera={{ position: campusView ? [viewX, overhead ? 28 : 24.25, viewZ] : overhead ? [0, 21, 0.01] : [5, 17, 12], fov: 42 }}
-      onCreated={({ camera, size }) => {
+      onCreated={({ camera, size, gl }) => {
+        // The campus shadow map is baked once the model is loaded (StaticCampus), not every frame.
+        if (gl) gl.shadowMap.autoUpdate = false
         if (modelKey !== 'nvh-v3') return
         // Keep the garden at the bottom and leave room for the full map on narrow screens.
         const distance = Math.max(28, 30 * size.height / size.width + 4)
@@ -185,10 +266,15 @@ export default function TwinScene({ robots, route, selectedStopId, overhead, sho
       }}
       fallback={<p className="p-8 text-sm text-[#40546f]">Trình duyệt chưa hỗ trợ WebGL. Vị trí robot vẫn có trong bảng thông tin.</p>}
     >
+      {/* Slow frames lower the resolution until they recover; AdaptiveDpr drops it to the floor while the camera moves. */}
+      <AdaptiveResolution />
+      <AdaptiveDpr />
+      <RenderOnResume frameloop={frameloop} />
+      {onPerf && <PerfProbe onPerf={onPerf} />}
       <color attach="background" args={[modelKey === 'nvh-v3' ? '#20313f' : '#edf2fa']} />
       {modelKey === 'nvh-v3' ? <CampusLighting /> : <group><ambientLight intensity={1.5} /><directionalLight position={[5, 12, 6]} intensity={2} /></group>}
       <Grid position={[0, -0.32, 0]} rotation={[0, campusView ? CAMPUS_VIEW_YAW : 0, 0]} args={[26, 26]} cellSize={1} cellColor={modelKey === 'nvh-v3' ? '#2d4353' : '#dce9fb'} sectionSize={5} sectionColor={modelKey === 'nvh-v3' ? '#415e72' : '#b8c9e0'} fadeDistance={38} />
-      <SceneRuler enabled={tool === 'measure'}><CampusModel modelKey={modelKey} /></SceneRuler>
+      <SceneRuler enabled={tool === 'measure'}><StaticCampus modelKey={modelKey} /></SceneRuler>
       {syntheticPatrol && <group>
         {showCameras && onSelectCamera && <PointCameras selected={cameraPoint} onSelect={onSelectCamera} />}
         {mergeFleetRoutes(patrolPaths).map(path => <FleetPathLine key={path.id} route={path} seconds={seconds} />)}
@@ -207,31 +293,34 @@ export default function TwinScene({ robots, route, selectedStopId, overhead, sho
           return <group key={p.poi} position={[0, PATROL_FLOOR_Y, 0]}><Marker position={{ x: position[0], y: -position[2] }} color="#5997b4" label="60 giây" number={String(p.poi)} showLabel={showLabels} emphasis={null} fixedLabel /></group>
         })}
       </group>}
-      {route && showLabels && <Route route={route} selectedStopId={selectedStopId} showLabels={showLabels} />}
-      {robots.map((robot) => (
-        <RobotModel key={robot.id} cad={syntheticPatrol} onSelect={onSelectRobot ? () => onSelectRobot(robot.id) : undefined} pose={{ x: robot.pose.x, y: robot.pose.y, yaw: robot.pose.yaw ?? 0 }} transform={robot.transform} accent={robot.color} pulse={robot.active && !robot.stale} dimmed={robot.stale || (!robot.focused && Boolean(route))} stale={robot.stale} headYaw={robot.headYaw} scale={robot.scale} groundY={robot.groundY} exactPose={robot.exactPose} showDirection={!syntheticPatrol}>
-          {syntheticPatrol && viewMode === 'traffic' && <mesh position={[0,0.025,0]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[0.72,0.85,40]}/><meshBasicMaterial color={robot.traffic==='hold'?'#dc2626':robot.traffic==='yield'?'#f59e0b':'#16a34a'} transparent opacity={0.75}/></mesh>}
-          {syntheticPatrol && sensors && <mesh position={[0,0.02,0]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[0.2,4,48,1,-Math.PI*0.75,Math.PI*1.5]}/><meshBasicMaterial color={robot.color} transparent opacity={0.06} depthWrite={false}/></mesh>}
+      {route && (showRoute ?? showLabels) && <Route route={route} selectedStopId={selectedStopId} showLabels={showLabels} />}
+      {robots.map((robot) => { const synthetic = robot.synthetic ?? syntheticPatrol; return (
+        <RobotModel key={robot.id} livePose={robot.livePose} cad={synthetic} onSelect={onSelectRobot ? () => onSelectRobot(robot.id) : undefined} pose={{ x: robot.pose.x, y: robot.pose.y, yaw: robot.pose.yaw ?? 0 }} transform={robot.transform} accent={robot.color} pulse={robot.active && !robot.stale} dimmed={robot.stale || robot.synthetic === true || (!robot.focused && Boolean(route))} stale={robot.stale} headYaw={robot.headYaw} scale={robot.scale} groundY={robot.groundY} exactPose={robot.exactPose} showDirection={!synthetic}>
+          {synthetic && viewMode === 'traffic' && <mesh position={[0,0.025,0]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[0.72,0.85,40]}/><meshBasicMaterial color={robot.traffic==='hold'?'#dc2626':robot.traffic==='yield'?'#f59e0b':'#16a34a'} transparent opacity={0.75}/></mesh>}
+          {synthetic && sensors && <mesh position={[0,0.02,0]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[0.2,4,48,1,-Math.PI*0.75,Math.PI*1.5]}/><meshBasicMaterial color={robot.color} transparent opacity={0.06} depthWrite={false}/></mesh>}
           {/* A robot drawn to scale is a few pixels across on the whole floor, often behind a corridor
               wall: a halo drawn through walls finds it. Stale uses the label's amber; grey vanishes on the floor. */}
-          {!syntheticPatrol && <mesh name="robot-locator" position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
+          {!synthetic && <mesh name="robot-locator" position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
             <ringGeometry args={[1.5, 1.9, 48]} />
             <meshBasicMaterial color={robot.stale ? '#d69412' : robot.color} transparent opacity={0.9} depthTest={false} depthWrite={false} toneMapped={false} />
           </mesh>}
           {/* Fixed pixel size, lifted above the robot: a label that grows with zoom covers the robot it names. */}
           <Html position={[0, 1.1, 0]} center zIndexRange={[20, 10]}>
-            {syntheticPatrol ? <span style={{ backgroundColor: robot.color }} className="pointer-events-none inline-block -translate-y-5 rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold whitespace-nowrap text-white shadow-sm">{robot.name}</span>
+            {synthetic ? <span style={{ backgroundColor: robot.color }} className={`pointer-events-none inline-block -translate-y-5 rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold whitespace-nowrap text-white shadow-sm ${robot.synthetic ? 'opacity-75' : ''}`}>{robot.name}{robot.synthetic ? ' · Mô phỏng' : ''}</span>
               : <span className="pointer-events-none flex -translate-y-6 flex-col items-center">
                 <span className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold whitespace-nowrap shadow-sm ${robot.stale ? 'bg-[#fff8e6] text-[#8a5a06]' : robot.focused ? 'bg-[#1f314d] text-white' : 'bg-white/90 text-[#40546f]'}`}>
-                  {robot.name}{robot.stale ? ' · dữ liệu cũ' : ''}
+                  {robot.name}{robot.labelNote ? ` · ${robot.labelNote}` : robot.stale ? ' · dữ liệu cũ' : ''}
                 </span>
                 <span aria-hidden="true" className={`h-0 w-0 border-x-[5px] border-t-[7px] border-x-transparent ${robot.stale ? 'border-t-[#fff8e6]' : robot.focused ? 'border-t-[#1f314d]' : 'border-t-white/90'}`} />
               </span>}
           </Html>
         </RobotModel>
-      ))}
-      <OrbitControls makeDefault enabled={tool !== 'measure'} mouseButtons={{ LEFT: tool === 'pan' ? MOUSE.PAN : MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }} touches={{ ONE: tool === 'pan' ? TOUCH.PAN : TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }} target={modelKey === 'nvh-v3' ? [0, 0.6, 0] : [0, 0, 0]} minDistance={modelKey === 'nvh-v3' ? 1.5 : 6} maxDistance={modelKey === 'nvh-v3' ? 80 : 32} maxPolarAngle={Math.PI / 2.1} />
+      ) })}
+      <OrbitControls makeDefault regress enabled={tool !== 'measure'} mouseButtons={{ LEFT: tool === 'pan' ? MOUSE.PAN : MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }} touches={{ ONE: tool === 'pan' ? TOUCH.PAN : TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }} target={modelKey === 'nvh-v3' ? [0, 0.6, 0] : [0, 0, 0]} minDistance={modelKey === 'nvh-v3' ? 1.5 : 6} maxDistance={modelKey === 'nvh-v3' ? 80 : 32} maxPolarAngle={Math.PI / 2.1} />
       <FocusCamera focus={focus} />
     </Canvas>
   )
 }
+
+/** Props are kept stable by the caller (memoised robots), so an unchanged frame does not re-render the scene. */
+export default memo(TwinScene)

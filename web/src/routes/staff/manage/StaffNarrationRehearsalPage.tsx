@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
+import { useQueries } from '@tanstack/react-query'
+import { technicalApi } from '../../../features/technical/api/technical'
+import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { ArrowLeft, Navigation, RotateCcw, SkipForward } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
@@ -25,16 +28,30 @@ export default function StaffNarrationRehearsalPage() {
   const [picked, setPicked] = useState<string[] | null>(null)
   const [phase, setPhase] = useState<Phase>(null)
 
-  const withNarration = useMemo(() => (proposals.data ?? [])
-    .filter(p => !p.discardedAt && p.revision.narrationText?.trim()), [proposals.data])
+  // Narration text is not on the POI list any more (ADR-0060): read the versions of each POI that has some.
+  const candidates = useMemo(() => (proposals.data ?? [])
+    .filter(p => !p.discardedAt && (p.narration?.approved || p.narration?.draft)), [proposals.data])
+  const versions = useQueries({ queries: candidates.map(p => ({
+    queryKey: ['technical', 'poi-proposals', 'narrations', p.id], queryFn: () => technicalApi.listPoiNarrations(p.id),
+  })) })
+  const loadingText = versions.some(query => query.isPending)
+  const textError = versions.find(query => query.isError)?.error
+  // The approved version is what a Tour reads; a POI with only a draft rehearses that draft, labelled as such.
+  const withNarration = candidates.flatMap((p, index) => {
+    const list = versions[index]?.data ?? []
+    const approved = list.find(item => item.state === 'APPROVED')
+    const draft = list.find(item => item.state === 'DRAFT')
+    const used = approved ?? draft
+    return used ? [{ id: p.id, name: p.revision.name, description: p.revision.description, text: used.narrationText, isDraft: !approved }] : []
+  })
   const chosen = picked ?? withNarration.map(p => p.id)
-  const stops: StudentTourStop[] = useMemo(() => chosen
+  const stops: StudentTourStop[] = chosen
     .map(id => withNarration.find(p => p.id === id))
     .filter(p => p !== undefined)
     .map((p, index) => ({
-      order: index + 1, poiId: p.id, name: p.revision.name, description: p.revision.description ?? null,
-      narrationText: p.revision.narrationText ?? null, audioUrl: null, narrationSeconds: null, dwellSeconds: 60,
-    })), [chosen, withNarration])
+      order: index + 1, poiId: p.id, name: p.isDraft ? `${p.name} (Bản đang soạn)` : p.name, description: p.description ?? null,
+      narrationText: p.text, audioUrl: null, narrationSeconds: null, dwellSeconds: 60,
+    }))
 
   // Travelling ends with an arrival, like a robot's GoTo reporting ARRIVED.
   useEffect(() => {
@@ -66,16 +83,19 @@ export default function StaffNarrationRehearsalPage() {
     {proposals.isPending ? <SkeletonRows /> : proposals.isError ? <AdminErrorPanel title="Không tải được danh sách POI" description={errorText(proposals.error)} onRetry={() => void proposals.refetch()} /> : <>
       <section className="mb-4 rounded-[15px] border border-[#e2e8f0] bg-white p-4">
         <h2 className="text-base font-bold text-[#2d3748]">Điểm dừng theo thứ tự</h2>
-        {withNarration.length === 0
+        {textError ? <Notice tone="danger">Không tải được nội dung thuyết minh. {errorText(textError)}</Notice>
+          : loadingText ? <p className="mt-2 text-sm text-[#718096]">Đang tải thuyết minh…</p>
+          : withNarration.length === 0
           ? <Notice tone="warn">Chưa có POI nào có nội dung thuyết minh.</Notice>
           : <ul className="mt-2 flex flex-wrap gap-2">{withNarration.map(p => {
               const order = chosen.indexOf(p.id)
               return <li key={p.id}><label className="inline-flex items-center gap-2 rounded-lg border border-[#e2e8f0] px-3 py-1.5 text-sm">
                 <input type="checkbox" checked={order >= 0} disabled={phase !== null} onChange={() => toggle(p.id)} />
-                {order >= 0 && <b>{order + 1}.</b>}{p.revision.name}
+                {order >= 0 && <b>{order + 1}.</b>}{p.name}
+                {p.isDraft && <ToneBadge tone="warn">Bản đang soạn</ToneBadge>}
               </label></li>
             })}</ul>}
-        <p className="mt-2 text-xs text-[#718096]">Bỏ chọn rồi chọn lại để đổi thứ tự. Bấm vào trang ít nhất một lần để trình duyệt cho phép phát tiếng.</p>
+        <p className="mt-2 text-xs text-[#718096]">Mỗi điểm đọc bản thuyết minh đã duyệt; điểm chỉ có bản đang soạn đọc bản đó và có nhãn “Bản đang soạn”. Bỏ chọn rồi chọn lại để đổi thứ tự. Bấm vào trang ít nhất một lần để trình duyệt cho phép phát tiếng.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className={buttonClass('primary', 'sm')} disabled={!stops.length || phase?.at === 'travelling' || finished}
             onClick={() => setPhase({ index: next, at: 'travelling' })}>

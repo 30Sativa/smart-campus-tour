@@ -46,6 +46,9 @@ class FakeActuator:
     def sweep(self, amplitude_deg):
         self._record('sweep', amplitude_deg)
 
+    def home(self):
+        self._record('home')
+
 
 class FixtureTests(unittest.TestCase):
     def test_fixtures_are_the_shared_contract(self):
@@ -61,13 +64,18 @@ class FixtureTests(unittest.TestCase):
     def test_fixture_commands_parse_and_run_in_order(self):
         epoch, commands = parse_head_poll_response(fixture('poll-response-commands.json'))
         self.assertEqual(EPOCH, epoch)
-        self.assertEqual([42, 43, 44, 45, 46, 47], [c.seq for c in commands])
+        self.assertEqual([42, 43, 44, 45, 46, 47, 48], [c.seq for c in commands])
         actuator = FakeActuator()
         HeadCommandApplier(actuator).apply(epoch, commands, now=100.0)
         # A SWEEP without sweepDeg asks for the robot's default (0); with it, the POI's own amplitude.
         self.assertEqual([('step', 1, 0), ('jog', -1, 0), ('jog', 0, 0), ('stop',), ('angle', 0.0, 0.0), ('sweep', 0.0),
-                          ('sweep', 90.0)], actuator.calls)
+                          ('sweep', 90.0), ('home',)], actuator.calls)
         self.assertEqual((EPOCH, []), parse_head_poll_response(fixture('poll-response-empty.json')))
+
+    def test_home_rehomes_the_head(self):
+        actuator = FakeActuator()
+        HeadCommandApplier(actuator).apply(EPOCH, [parse_head_command({'seq': 1, 'kind': 'HOME'})], now=0.0)
+        self.assertEqual([('home',)], actuator.calls)
 
     def test_request_fixture_is_what_the_worker_sends(self):
         request = fixture('poll-request.json')
@@ -80,7 +88,7 @@ class ParseTests(unittest.TestCase):
         for bad in [None, {}, {'data': {'epoch': 'x', 'commands': []}}, {'data': {'epoch': EPOCH, 'commands': {}}}]:
             with self.assertRaises(ValueError):
                 parse_head_poll_response(bad)
-        for raw in [{'seq': 1, 'kind': 'HOME'}, {'seq': 0, 'kind': 'STOP'}, {'seq': True, 'kind': 'STOP'},
+        for raw in [{'seq': 1, 'kind': 'PARK'}, {'seq': 0, 'kind': 'STOP'}, {'seq': True, 'kind': 'STOP'},
                     {'seq': 1, 'kind': 'STEP', 'panSteps': 21}, {'seq': 1, 'kind': 'STEP', 'panSteps': 1.5},
                     {'seq': 1, 'kind': 'JOG', 'panDir': 2}, {'seq': 1, 'kind': 'JOG', 'panDir': 1, 'ttlMs': 0},
                     {'seq': 1, 'kind': 'ANGLE', 'panDeg': 0}, {'seq': 1, 'kind': 'ANGLE', 'panDeg': float('nan'), 'tiltDeg': 0},
@@ -147,7 +155,7 @@ class ApplierTests(unittest.TestCase):
 
     def test_release_stop_angle_sweep_and_step_end_a_jog(self):
         for ender in [{'kind': 'JOG', 'panDir': 0, 'tiltDir': 0}, {'kind': 'STOP'}, {'kind': 'ANGLE', 'panDeg': 0, 'tiltDeg': 0},
-                      {'kind': 'SWEEP'}, {'kind': 'STEP', 'panSteps': -2}]:
+                      {'kind': 'SWEEP'}, {'kind': 'STEP', 'panSteps': -2}, {'kind': 'HOME'}]:
             actuator = FakeActuator()
             applier = HeadCommandApplier(actuator)
             applier.apply(EPOCH, [parse_head_command({'seq': 1, 'kind': 'JOG', 'tiltDir': 1}),

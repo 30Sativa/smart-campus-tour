@@ -82,7 +82,7 @@ public sealed class GetTechnicalDashboardQueryHandler(
         var robots = await robotRepository.ListPhysicalRobotsAsync(cancellationToken);
         var deploymentChecks = (await robotRepository.ListLatestDeploymentChecksAsync(cancellationToken))
             .ToDictionary(check => check.RobotId);
-        var activeMaps = await mapVersionRepository.ListMapVersionsAsync(null, 100, cancellationToken);
+        var activeMaps = await mapVersionRepository.ListMapVersionsAsync(null, 100, includeRetired: false, cancellationToken);
 
         var latestTelemetryByRobot = telemetryStore.GetLatest()
             .ToDictionary(s => s.Robot.RobotCode, StringComparer.OrdinalIgnoreCase);

@@ -28,6 +28,8 @@
 from launch import LaunchDescription
 import os
 
+import yaml
+
 from launch.actions import (DeclareLaunchArgument, GroupAction,
                             IncludeLaunchDescription, LogInfo, OpaqueFunction,
                             SetLaunchConfiguration)
@@ -38,6 +40,7 @@ from launch.logging import get_logger
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node, PushRosNamespace, SetRemap
 from launch_ros.substitutions import FindPackageShare
+from nav2_common.launch import RewrittenYaml
 
 
 def _check_map(context, *args, **kwargs):
@@ -61,6 +64,51 @@ def _check_map(context, *args, **kwargs):
                             '  Kiem tra lai duong dan (phai la file .yaml da luu).'),
                 Shutdown(reason=f'map file not found: {path}')]
     return [LogInfo(msg=f'[navigation] Dung map: {path}')]
+
+
+# Camera mode only (robot/docs/depth-camera.md). RPP checks for a collision
+# min(v * T, carrot 0.8 m) ahead; with the V2/V3 T = 1.0 s that is 0.2 m at 0.2 m/s,
+# inside the depth camera's 0.6 m blind zone, so a low obstacle seen only by the
+# camera is lost before RPP reacts. T = 4.0 s reaches the 0.8 m carrot: the robot
+# stops ~0.7 m away, where the camera still sees the obstacle. LiDAR-only runs keep
+# the params file exactly as it is.
+CAMERA_NAV2_REWRITES = {
+    'controller_server.ros__parameters.FollowPath.max_allowed_time_to_collision_up_to_carrot': '4.0',
+}
+
+
+def _nav2_params_for_mode(context, nav2_params_file, enable_camera):
+    """(params_file, log actions): the file itself, or a rewritten copy in camera mode."""
+    if not IfCondition(enable_camera).evaluate(context):
+        return nav2_params_file, []
+    source = nav2_params_file.perform(context)
+    data = yaml.safe_load(open(source))
+    missing = []
+    for path in CAMERA_NAV2_REWRITES:
+        node = data
+        for key in path.split('.'):
+            node = node.get(key) if isinstance(node, dict) else None
+        if node is None:
+            missing.append(path)
+    if missing:
+        return nav2_params_file, [LogInfo(msg=f'[navigation] camera mode: {source} has no {missing}; '
+                                              'using it unchanged (camera marks only, no longer RPP horizon)')]
+    rewritten = RewrittenYaml(source_file=source, param_rewrites=CAMERA_NAV2_REWRITES, convert_types=True)
+    return rewritten, [LogInfo(msg='[navigation] camera mode: RPP '
+                                   'max_allowed_time_to_collision_up_to_carrot 4.0 (depth-camera.md)')]
+
+
+def _nav2(context, nav2_launch, robot_id, use_sim_time, nav2_params_file, enable_camera):
+    params, logs = _nav2_params_for_mode(context, nav2_params_file, enable_camera)
+    return logs + [IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(nav2_launch),
+        launch_arguments={
+            'namespace': robot_id,
+            'use_sim_time': use_sim_time,
+            'params_file': params,
+            'autostart': 'true',
+        }.items(),
+    )]
 
 
 def _warn_if_lidar_yaw_defaulted(context):
@@ -100,6 +148,8 @@ def generate_launch_description():
     odom_linear_scale = LaunchConfiguration('odom_linear_scale')
     enable_camera = LaunchConfiguration('enable_camera')
     rviz = LaunchConfiguration('rviz')
+    auto_initial_pose = LaunchConfiguration('auto_initial_pose')
+    pose_bootstrap_config = LaunchConfiguration('pose_bootstrap_config')
 
     manual_launch = PathJoinSubstitution([
         FindPackageShare('robot_control'),
@@ -218,21 +268,36 @@ def generate_launch_description():
                                           'local costmap. Enable only after the '
                                           'camera mount has been calibrated.'),
         DeclareLaunchArgument(
+            'auto_initial_pose', default_value='false',
+            description='Run pose_bootstrap: set AMCL\'s initial pose from the LiDAR scan '
+                        '(saved pose / map homes, checked against the scan; nothing is published '
+                        'unless the match is good and unique). Manual 2D Pose Estimate still works. '
+                        'See robot/docs/auto-initial-pose.md.'),
+        DeclareLaunchArgument(
+            'pose_bootstrap_config', default_value='',
+            description='Per-map pose_bootstrap settings. Empty: <map without .yaml>.pose_bootstrap.yaml.'),
+        DeclareLaunchArgument(
             'rviz', default_value='false',
             description='Open RViz with the navigation layout. Default false: '
                         'the robot mini PC is usually headless and you run RViz '
                         'on your dev machine. rviz:=true opens it here.'),
-        DeclareLaunchArgument('camera_x', default_value='0.25',
-                              description='PLACEHOLDER - replace with the Phase 2 '
-                                          'calibrated mount, base_link -> camera_link.'),
+        # base_link -> camera_link from the CAD camera face point, user-confirmed level and
+        # facing forward (robot/docs/cad-sensor-mounts.md; base_link is 0.2068 m above the floor,
+        # so the camera is ~0.27 m high). The old 0.25/0.35/0.17 placeholders put it 28 cm too
+        # high, which would squash real obstacles under min_obstacle_height. Verify with the
+        # box test in robot/docs/depth-camera.md: the glossy floor returns no depth here, so a
+        # floor-plane fit (depth_check) cannot calibrate the mount.
+        DeclareLaunchArgument('camera_x', default_value='0.394',
+                              description='Mount x (m, forward), base_link -> camera_link.'),
         DeclareLaunchArgument('camera_y', default_value='0.0'),
-        DeclareLaunchArgument('camera_z', default_value='0.35'),
+        DeclareLaunchArgument('camera_z', default_value='0.066',
+                              description='Mount z (m) above base_link (0.2068 m above the floor).'),
         DeclareLaunchArgument('camera_roll', default_value='0.0'),
-        DeclareLaunchArgument('camera_pitch', default_value='0.17',
-                              description='Radians, nose-down positive. ~10 deg.'),
+        DeclareLaunchArgument('camera_pitch', default_value='0.0',
+                              description='Radians, nose-down positive. The camera is mounted level.'),
         DeclareLaunchArgument('camera_yaw', default_value='0.0'),
-        DeclareLaunchArgument('camera_depth_width', default_value='320'),
-        DeclareLaunchArgument('camera_depth_height', default_value='240'),
+        DeclareLaunchArgument('camera_depth_width', default_value='160'),
+        DeclareLaunchArgument('camera_depth_height', default_value='120'),
         DeclareLaunchArgument(
             'camera_enable_color', default_value='false',
             description='PHASE 4 only. Costmaps need geometry, not colour, and '
@@ -245,10 +310,11 @@ def generate_launch_description():
             description='PHASE 4. file:// URL of the RGB intrinsics from '
                         'camera_calibration. Empty means color/camera_info is '
                         'the factory guess, and every detection range is off.'),
-        DeclareLaunchArgument('camera_depth_fps', default_value='10',
-                              description='320x240 @ 10 Hz is ~77k points per '
-                                          'frame. 640x480 @ 30 is 9x that and the '
-                                          'costmap update falls behind on a mini PC.'),
+        DeclareLaunchArgument('camera_depth_fps', default_value='30',
+                              description='The Astra has no 10 Hz mode (the driver fell back '
+                                          'to 30). 160x120 @ 30 is 19.2k points per frame, '
+                                          '~6 % of a J5005 core for the driver; 320x240 is 4x '
+                                          'the points at the same coverage (measured 14/11).'),
 
         # 1) Base bringup: robot_state_publisher + STM32 bridge + mode manager.
         #    initial_mode=explore so Nav2's /cmd_vel_nav drives the robot;
@@ -406,16 +472,24 @@ def generate_launch_description():
             # this does the same without baking the robot id into the file.
             SetLaunchConfiguration('robot_ns', robot_ns),
 
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(nav2_launch),
-                launch_arguments={
-                    'namespace': robot_id,
-                    'use_sim_time': use_sim_time,
-                    'params_file': nav2_params_file,
-                    'autostart': 'true',
-                }.items(),
-            ),
+            # In camera mode the params file goes through CAMERA_NAV2_REWRITES first.
+            OpaqueFunction(function=_nav2, args=[nav2_launch, robot_id, use_sim_time,
+                                                 nav2_params_file, enable_camera]),
         ]),
+
+        # 5) Optional: initial pose from the LiDAR instead of RViz (off by default).
+        Node(
+            package='robot_navigation',
+            executable='pose_bootstrap',
+            name='pose_bootstrap',
+            namespace=robot_id,
+            output='screen',
+            parameters=[
+                PathJoinSubstitution([FindPackageShare('robot_navigation'), 'config', 'pose_bootstrap.yaml']),
+                {'map_yaml': map_yaml, 'config_file': pose_bootstrap_config, 'use_sim_time': use_sim_time},
+            ],
+            condition=IfCondition(auto_initial_pose),
+        ),
 
         # Optional viewer. OFF by default so a headless robot does not try to
         # open a window and hang the launch. Run RViz on your dev machine, or

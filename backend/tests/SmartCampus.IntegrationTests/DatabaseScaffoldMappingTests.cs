@@ -26,7 +26,8 @@ public sealed class DatabaseScaffoldMappingTests
             new[]
             {
                 "AuditLogs", "BranchRequests", "BrowserSessions", "GroupRegistrations",
-                "Invitations", "MapAreas", "MapDeploymentChecks", "MapVersions", "PoiImportReceipts", "PoiProposalRevisions",
+                "Invitations", "MapAreas", "MapDeploymentChecks", "MapVersions", "PoiImportReceipts", "PoiNarrationRequestReceipts",
+                "PoiNarrationRevisions", "PoiProposalRevisions",
                 "PoiProposalSubmissions", "PoiProposals", "PoiVerificationRecords", "Pois", "RefreshTokens",
                 "RobotCommands", "Robots", "RosterEmailChangeRequests", "RosterRows", "Routes", "RouteRevisions", "RouteRevisionStops",
                 "RouteRevisionSubmissions", "RouteTestRuns", "RouteStops", "RouteVariants", "TourAllowedBranches",

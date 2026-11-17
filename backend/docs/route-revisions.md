@@ -65,6 +65,8 @@ Submission is a separate receipt; it is not a test result, activation, schedulin
 
 **ADR-0033 map gate:** saving a draft and submitting a revision both require the exact map version to have current technical evidence under ADR-0028. Otherwise they return 409 `TECHNICAL_CHECK_PENDING` or `TECHNICAL_CHECK_NOT_PASSED` and write nothing. A committed idempotent retry still replays its result. Saved or submitted revisions are not rewritten, and route test runs keep their own deployment rule.
 
+**Unchanged save:** a new save request whose content equals the route's newest revision (name and description as saved after trimming, map version, each stop's POI revision in order with its dwell and camera steps, start and end, and each stop's narration revision equal to the one approved now, so a save that takes newly approved narration under ADR-0060 is not a copy) returns 409 `ROUTE_REVISION_UNCHANGED` ("Bản lưu này giống hệt bản đang dùng, không có gì để lưu.") and writes nothing. A repeated `requestId` still replays its committed result.
+
 ### 3. Technical Staff records a failed manual run
 
 Read the queue, then call:
@@ -79,7 +81,6 @@ Read the queue, then call:
   "allStopsReached": false,
   "safelyStopped": true,
   "localizationPassed": true,
-  "measuredDurationSeconds": 420,
   "failureReason": "Robot did not reach stop 2 during the observed test.",
   "evidenceNote": "Manual run on the physical robot; see linked test evidence."
 }
@@ -97,7 +98,7 @@ Submit revision 2 and record the same observations as PASS: all stops reached, l
 
 `GET /api/routes/{routeId}/revisions?revisionId={revision2Id}&includeHistory=true`
 
-Each stop includes its own `id` (`RouteRevisionStops.Id`, the value a Tour's execution stop ids name), the exact POI revision, map and source PASS evidence IDs, plus the narration text and optional HTTPS fallback video URL snapshotted when this route revision was saved. Later POI content revisions do not rewrite existing stops. Test records include the exact route revision, map checksum, robot, Technical checker, participating Staff, observations, measured duration, evidence, and timestamp. The view reports `durationStatus: INCOMPLETE_CONTENT_AUDIO_DATA` and recalculated `dwellDurationSeconds` separately because the approved narration/audio duration source is not implemented. A reused navigation TestRun is the source of evidence only; its measured duration is not presented as the duration of the new dwell configuration.
+Each stop includes its own `id` (`RouteRevisionStops.Id`, the value a Tour's execution stop ids name), the exact POI revision, map and source PASS evidence IDs, plus the narration text snapshotted when this route revision was saved (`fallbackVideoUrl` is null on revisions saved from 16/11/2026; the Tour has its own fallback video). Later POI content revisions do not rewrite existing stops. Test records include the exact route revision, map checksum, robot, Technical checker, participating Staff, observations, evidence, and timestamp (`measuredDurationSeconds` is still returned but holds the estimate stored at recording; screens do not show it). The view reports `durationStatus: INCOMPLETE_CONTENT_AUDIO_DATA` and recalculated `dwellDurationSeconds` separately because the approved narration/audio duration source is not implemented. A reused navigation TestRun is the source of evidence only; `expectedDurationSeconds` is always estimated from the revision itself.
 
 ## Common responses and retry rules
 
@@ -111,7 +112,7 @@ Each stop includes its own `id` (`RouteRevisionStops.Id`, the value a Tour's exe
 
 ## Measuring a whole-route test
 
-`MeasuredDurationSeconds` is the total time for the whole route from departure to finish, including dwell at every stop (ADR-0035). New runs record `MeasurementBasis = TOTAL_WITH_DWELL`. A run from before that definition has NULL and cannot size a Tour reservation, so Tour create and the slot list report `ROUTE_TEST_REMEASURE_REQUIRED` until the route is run again. A revision that only raises dwell reuses the effective PASS, and the increase per stop is added to the reservation. Lower dwell is never subtracted.
+Since 16/11/2026 nobody types a duration. A route's expected length is estimated from the revision: total dwell plus the straight-line travel start -> stops -> end (no final leg for `LAST_POI`) at `Tours:EstimatedSpeedMetersPerSecond` (0.25 by default), rounded up (`docs/lich-tour-theo-ca.md` §4). The run writes that estimate to the NOT NULL `MeasuredDurationSeconds` column and `MeasurementBasis = TOTAL_WITH_DWELL` (the only value its CHECK allows besides NULL); neither is read for scheduling, and both columns go in a later schema version. `ROUTE_TEST_REMEASURE_REQUIRED` and `ROUTE_TEST_DURATION_TOO_SHORT` are no longer returned. The rerun queue (ADR-0048) still lists PASS runs with no basis; it no longer blocks scheduling.
 
 No branch variants or Viewer/Representative branch requests, Tour scheduling/reservation/READY/Start/End Early, command transport, map upload/deployment, project POI YAML import, approved narration/audio workflow, media, frontend, or autonomous physical verification. Branch cutoff, YAML/frame mapping and M2 transport remain pending decisions. A route `PASS` is manual evidence for the stored navigation fingerprint, never Tour readiness.
 

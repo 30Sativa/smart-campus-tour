@@ -23,7 +23,7 @@ describe('UnsavedChangesGuard', () => {
     show(true)
     fireEvent.click(screen.getByRole('link', { name: 'Danh sách' }))
     expect(await screen.findByRole('dialog', { name: 'Rời trang khi chưa lưu?' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Hủy|Huỷ|Quay lại|Ở lại/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Hủy|Hủy|Quay lại|Ở lại/ }))
     expect(screen.queryByText('Trang danh sách')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: 'Danh sách' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Rời trang' }))

@@ -23,12 +23,51 @@ async function access(tourId: string, action: string, code?: string, signal?: Ab
     method: 'POST', credentials: 'include', auth: false, signal, ...(code ? { json: { accessCode: code } } : {}),
   })).data
 }
+const RECONNECT_WINDOW_EXPIRED = 'RECONNECT_WINDOW_EXPIRED'
+// Also said when the session simply expired (a tab asleep past its lease), so it names revocation only as a possibility.
+const SESSION_ENDED = 'Phiên xem đã kết thúc. Mã có thể đã bị thu hồi hoặc thay bằng mã mới; kiểm tra email mới nhất rồi nhập lại mã, hoặc liên hệ đại diện đoàn.'
+const TOUR_ENDED = 'TOUR_ENDED'
+const IN_USE_FALLBACK = 'Lời mời đang được dùng trên trình duyệt khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
+/** A 409's code, message and `errors.fields` (retryAfterSeconds, tourState; docs/architecture.md §3.2.3). */
+function conflict(error: ApiError): { code?: string; message?: string; retryAfterSeconds?: number; tourState?: string } {
+  try {
+    const body = JSON.parse(error.body) as { message?: unknown; errors?: { code?: unknown; fields?: { retryAfterSeconds?: unknown; tourState?: unknown } } }
+    const fields = body.errors?.fields
+    const seconds = Number(Array.isArray(fields?.retryAfterSeconds) ? fields.retryAfterSeconds[0] : undefined)
+    const tourState = Array.isArray(fields?.tourState) ? fields.tourState[0] : undefined
+    return {
+      code: typeof body.errors?.code === 'string' ? body.errors.code : undefined,
+      message: typeof body.message === 'string' && body.message.trim() ? body.message : undefined,
+      retryAfterSeconds: Number.isFinite(seconds) && seconds > 0 ? seconds : undefined,
+      tourState: typeof tourState === 'string' ? tourState : undefined,
+    }
+  } catch { return {} }
+}
+const isReconnectWindowExpired = (error: unknown) =>
+  error instanceof ApiError && error.status === 409 && conflict(error).code === RECONNECT_WINDOW_EXPIRED
+/** 409 TOUR_ENDED: the invitation is still proven but its Tour is COMPLETED or was CANCELLED before it ran. */
+function tourEnded(error: unknown): { tourState: 'COMPLETED' | 'CANCELLED' } | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null
+  const { code, tourState } = conflict(error)
+  return code === TOUR_ENDED ? { tourState: tourState === 'CANCELLED' ? 'CANCELLED' : 'COMPLETED' } : null
+}
+function conflictMessage(error: ApiError) {
+  const { code, message, retryAfterSeconds, tourState } = conflict(error)
+  if (code === TOUR_ENDED) return message ?? (tourState === 'CANCELLED' ? 'Buổi tham quan đã bị hủy.' : 'Buổi tham quan đã kết thúc.')
+  if (code === RECONNECT_WINDOW_EXPIRED) {
+    const text = message ?? 'Trình duyệt này đã mất kết nối quá lâu nên phiên cũ đang bị giữ. Nhờ đại diện hoặc Staff cấp mã mới để vào ngay.'
+    // The backend sentence may already name the wait; never say it twice.
+    if (!retryAfterSeconds || /thử lại sau/i.test(text)) return text
+    return `${text} Thử lại sau khoảng ${Math.max(1, Math.ceil(retryAfterSeconds / 60))} phút.`
+  }
+  return code === 'INVITATION_IN_USE' && message ? message : IN_USE_FALLBACK
+}
 function accessError(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 400) return 'Mã truy cập không hợp lệ. Kiểm tra mã trong email rồi thử lại.'
     if (error.status === 401) return 'Mã hoặc phiên đã hết hạn, bị thu hồi hoặc không thuộc Tour này.'
     if (error.status === 403) return 'Nguồn truy cập không được phép. Liên hệ quản trị hệ thống để kiểm tra cấu hình truy cập.'
-    if (error.status === 409) return 'Lời mời đang được dùng trên browser khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
+    if (error.status === 409) return conflictMessage(error)
     if (error.status === 429) return 'Bạn đã thử quá nhiều lần. Đợi một phút rồi thử lại.'
   }
   return 'Không kết nối được hệ thống. Vui lòng thử lại.'
@@ -56,19 +95,26 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const key = ['student-invitation', tourId]
   const [code, setCode] = useState('')
   const [left, setLeft] = useState(false)
+  const [hadSession, setHadSession] = useState(false)
+  // The last Tour this tab was admitted to; a later TOUR_ENDED reuses it for the end screen.
+  const [lastInfo, setLastInfo] = useState<StudentTourInfo | null>(null)
   const join = useMutation({ mutationFn: () => access(tourId, 'join', code),
     onMutate: () => client.cancelQueries({ queryKey: key }),
     onSuccess: info => { setCode(''); setLeft(false); client.setQueryData(key, info) } })
+  const exitSession = () => { setLeft(true); setHadSession(false); setLastInfo(null); client.setQueryData(key, null); join.reset() }
   const leave = useMutation({ mutationFn: () => access(tourId, 'leave'),
     onMutate: () => client.cancelQueries({ queryKey: key }),
-    onSuccess: () => { setLeft(true); client.setQueryData(key, null); join.reset() } })
+    onSuccess: exitSession })
   const sessionEnabled = !left && !join.isPending && !leave.isPending
   // A heartbeat begun before join/leave must not overwrite the mutation's committed state.
   const session = useQuery({ queryKey: key, queryFn: ({ signal }) => access(tourId, 'session', undefined, signal),
     retry: false, enabled: sessionEnabled, refetchIntervalInBackground: true,
     // SRS v1.9: a revoked or reissued invitation must stop playback within 10 s,
     // so a running Tour re-checks the session every 5 s.
-    refetchInterval: query => query.state.data?.tourState === 'RUNNING' ? SESSION_CHECK_RUNNING_MS : 30000 })
+    // A held old session answers the same 409 until its lease ends: wait for the viewer, never poll it.
+    // TOUR_ENDED is final: nothing to poll for either.
+    refetchInterval: query => isReconnectWindowExpired(query.state.error) || tourEnded(query.state.error) ? false
+      : query.state.data?.tourState === 'RUNNING' ? SESSION_CHECK_RUNNING_MS : 30000 })
   const sessionHash = hashKey(key)
   const [slow, setSlow] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -99,10 +145,20 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
     void client.cancelQueries({ queryKey: key }).then(() => recheck.current())
   }
   const accessDenied = session.isError && session.error instanceof ApiError && [401, 403, 409].includes(session.error.status)
-  const info = left || accessDenied ? null : session.data
+  const sessionInfo = left || accessDenied ? null : session.data
+  if (sessionInfo && sessionInfo !== lastInfo) setLastInfo(sessionInfo)
+  const refused = !left && session.isError && session.error instanceof ApiError && session.error.status === 401
+  // The session check goes from 200 RUNNING straight to 409 TOUR_ENDED when the Tour completes (or was cancelled
+  // before it ran): show the end screen from what this tab already knew. With nothing known, the code form says why.
+  const endedBy = left ? null : tourEnded(session.error)
+  const finished = !!endedBy && !!lastInfo
+  const info = finished ? { ...lastInfo!, tourState: endedBy!.tourState } : sessionInfo
+  // A first visit has no cookie and gets a silent 401; a later 401 means the code was revoked, reissued or the session expired.
+  if (sessionInfo && !hadSession) setHadSession(true)
+  const ended = hadSession && refused
   // Route and progress; a failure only hides the stops, the session above stays the access authority.
   const view = useQuery({ queryKey: ['student-tour-view', tourId], queryFn: ({ signal }) => getStudentTourView(tourId, signal),
-    retry: false, enabled: !!info && !leave.isPending, refetchInterval: info?.tourState === 'RUNNING' ? 5000 : 30000 })
+    retry: false, enabled: !!info && !finished && !leave.isPending, refetchInterval: info?.tourState === 'RUNNING' ? 5000 : 30000 })
 
   const unchecked = !left && !info && ((session.isPending && slow) || (session.isError && uncheckedError(session.error)))
   const shared = info?.rowType === 'SHARED_VIEWING'
@@ -113,8 +169,8 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const quest = useStudentStreamAccess(tourId, snapshot?.tourState === 'Running' && !leave.isPending)
   const status = <>
     {leave.isError && <p role="alert" className="st-session-error">{accessError(leave.error)}</p>}
-    {info && session.isError && <p role="alert" className="st-session-error">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên có thể hết hạn trong thời gian mất kết nối; kết nối lại để kiểm tra.</p>}
-    {session.isError && !left && !unchecked && <button type="button" className="st-session-retry" disabled={session.isFetching || join.isPending || leave.isPending} onClick={() => void session.refetch()}>Kiểm tra lại phiên</button>}
+    {info && session.isError && !finished && <p role="alert" className="st-session-error">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên có thể hết hạn trong thời gian mất kết nối; kết nối lại để kiểm tra.</p>}
+    {session.isError && !left && !unchecked && !endedBy && <button type="button" className="st-session-retry" disabled={session.isFetching || join.isPending || leave.isPending} onClick={() => void session.refetch()}>Kiểm tra lại phiên</button>}
   </>
 
   let body
@@ -130,13 +186,14 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         </div>}
         <form onSubmit={event => { event.preventDefault(); join.mutate() }}>
           <div className="st-entry-form-heading"><Mail size={24} aria-hidden="true" /><h2 id="student-access-title">Nhập mã truy cập</h2></div>
-          <p>Sao chép mã trong email lời mời. Mỗi lời mời dùng trên một browser; không cần tài khoản học sinh.</p>
+          <p>Sao chép mã trong email lời mời. Mỗi lời mời dùng trên một trình duyệt; không cần tài khoản học sinh.</p>
           <label htmlFor="invitation-code">Mã truy cập</label>
           <div className="st-entry-code-field"><KeyRound size={18} aria-hidden="true" />
           <input id="invitation-code" autoComplete="off" maxLength={64} value={code} disabled={join.isPending} onChange={event => setCode(event.target.value)}
             aria-invalid={join.isError} aria-describedby={join.isError ? 'invitation-code-error' : undefined} required />
           </div>
           {join.isError && <p id="invitation-code-error" role="alert" className="st-session-error">{accessError(join.error)}</p>}
+          {ended && <p role="alert" className="st-session-error">{SESSION_ENDED}</p>}
           {session.isError && !unchecked && !(session.error instanceof ApiError && session.error.status === 401) && <p role="alert" className="st-session-error">{accessError(session.error)}</p>}
           <button className="st-btn st-invitation-submit" aria-busy={join.isPending} disabled={join.isPending || !code.trim()}>{ENTER_TOUR_LABEL}</button>
           <p className="st-invitation-note"><LifeBuoy size={18} aria-hidden="true" /><span>Mất email hoặc mã đang bị dùng? Liên hệ đại diện đoàn để gửi lại hoặc cấp mã mới.</span></p>
@@ -180,8 +237,10 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
     </>
   } else if (snapshot.tourState === 'Completed' || snapshot.tourState === 'Cancelled') {
     body = <>
+      {/* The session answers 200 CANCELLED only for a Tour that started (fallback video); TOUR_ENDED CANCELLED means it never ran. */}
       <StudentEndScreen snapshot={snapshot} name="bạn" meta={`${info.tourName}, ${formatDateTime(info.scheduledStartAt)}`}
-        onLeave={leave.isPending ? undefined : () => leave.mutate()} />
+        neverStarted={endedBy?.tourState === 'CANCELLED'}
+        onLeave={leave.isPending ? undefined : () => finished ? exitSession() : leave.mutate()} />
       <div className="st-ctn st-invitation-status">{status}</div>
     </>
   } else {
@@ -205,7 +264,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
       isLive={info?.tourState === 'RUNNING'}
       liveLabel="Trực tiếp"
       portalLabel={info ? sessionLabel : undefined}
-      onLeave={info ? () => leave.mutate() : undefined}
+      onLeave={info ? () => finished ? exitSession() : leave.mutate() : undefined}
       leaveLabel="Thoát phiên"
       leaveDisabled={leave.isPending}
     />

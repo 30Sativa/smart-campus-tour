@@ -1,0 +1,64 @@
+<!--
+  Nav2 Baseline V3 navigate-to-pose tree (robot/docs/nav2-baseline-v3.md).
+  = navigate_to_pose_no_backup.xml with two guards made of Nav2 Humble / BT.CPP stock nodes:
+
+    before NavigateWithReplanning: CancelSpin
+    before Spin:                   CancelControl, Delay 500 ms, CancelControl, Delay 200 ms
+
+  WHY: when a server acknowledges a goal later than server_timeout, Humble's
+  BtActionNode returns FAILURE without cancelling it (it never got a goal handle,
+  so halt() cannot cancel either) and the server runs the goal anyway. On 14/11 an
+  orphan FollowPath kept driving while the recovery Spin ran: two velocity sources
+  on cmd_vel_ctrl for 10 s. The cancel nodes call cancel_goals_before(now - 10 ms),
+  which needs no goal handle, so they also stop orphans; the second, delayed
+  CancelControl catches a goal the controller accepted after the first one (seen
+  offline when FollowPath acks were forced late: the last retry was accepted
+  about 50 ms after the first cancel, and drove alongside the Spin). The last
+  200 ms lets the controller loop (10 Hz) act on the cancel before Spin publishes:
+  offline it logged "Goal was canceled" 10-80 ms after the cancel was accepted. If a
+  cancel is not confirmed within server_timeout, the guard FAILS and Spin does not
+  run (the RoundRobin moves on to Wait, which does not move the robot).
+  Clearing and Wait do not move the robot, so they are not guarded.
+
+  Everything else, including the removed BackUp, is the navigate_to_pose_no_backup.xml tree.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <Sequence name="NavigateWithSpinCancelled">
+        <CancelSpin name="CancelLeftoverSpin" server_name="spin"/>
+        <PipelineSequence name="NavigateWithReplanning">
+          <RateController hz="1.0">
+            <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+              <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+              <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+            </RecoveryNode>
+          </RateController>
+          <RecoveryNode number_of_retries="1" name="FollowPath">
+            <FollowPath path="{path}" controller_id="FollowPath"/>
+            <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+          </RecoveryNode>
+        </PipelineSequence>
+      </Sequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Sequence name="SpinAfterFollowPathCancelled">
+            <CancelControl name="CancelLeftoverFollowPath" server_name="follow_path"/>
+            <Delay delay_msec="500">
+              <CancelControl name="CancelLateFollowPath" server_name="follow_path"/>
+            </Delay>
+            <Delay delay_msec="200">
+              <Spin spin_dist="1.57"/>
+            </Delay>
+          </Sequence>
+          <Wait wait_duration="5"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

@@ -296,15 +296,16 @@ public sealed class TourReadySqlTests
                 twoStopsToEndPose ? "POSE" : "LAST_POI", twoStopsToEndPose ? 1.5m : null, twoStopsToEndPose ? 2.5m : null, twoStopsToEndPose ? 0m : null, stops)));
             await Send(new SubmitRouteRevisionCommand(staffId, route.RouteId, route.RevisionId, new(Guid.NewGuid(), 1)));
             Route = await Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
-                new(Guid.NewGuid(), Robot, staffId, "PASS", true, true, true, 260, null, "Chạy thử đạt.")));
+                new(Guid.NewGuid(), Robot, staffId, "PASS", true, true, true, null, "Chạy thử đạt.")));
             TourId = await CreateTour(Start);
         }
 
         private async Task<Guid> VerifiedPoi(Guid mapId, string name, decimal x, decimal y)
         {
-            var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(mapId, name, "Tham quan", null, x, y, 0m, "FRONT", "Đây là điểm tham quan."))));
+            var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(mapId, name, "Tham quan", null, x, y, 0m, "FRONT"))));
             var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));
             await Send(new RecordPoiVerificationCommand(technicalId, proposal.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, Robot, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+            await NarrationSeed.ApproveAsync(Send, staffId, operatorId, proposal.Id);
             return proposal.Revision.Id;
         }
 
@@ -329,7 +330,7 @@ public sealed class TourReadySqlTests
         public Task<TourMutationResult> Reopen(ReopenTourRequest request) => Send(new ReopenTourCommand(TourId, staffId, request));
 
         public Task FailRouteTest() => Send(new RecordRouteTestRunCommand(technicalId, Route.RouteId, Route.RevisionId,
-            new(Guid.NewGuid(), Robot, staffId, "FAIL", false, true, true, 260, "Kẹt ở cửa", "Chạy lại không đạt.")));
+            new(Guid.NewGuid(), Robot, staffId, "FAIL", false, true, true, "Kẹt ở cửa", "Chạy lại không đạt.")));
 
         public async Task Deactivate()
         {

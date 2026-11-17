@@ -55,7 +55,7 @@ public sealed class DeactivateAccountCommandHandler(
         if (usage.IsOperator && usage.IsRunning)
             return new("TOUR_OPERATOR", $"Đang vận hành Tour {usage.TourName} lúc {at}. Chờ Tour kết thúc.");
         return usage.IsOperator
-            ? new("TOUR_OPERATOR", $"Đang vận hành Tour {usage.TourName} lúc {at}. Staff cần đổi người vận hành hoặc huỷ Tour này trước.")
-            : new("ACTIVE_REGISTRATION", $"Đoàn {usage.GroupName} còn đăng ký Tour {usage.TourName} lúc {at}. Đại diện cần huỷ đăng ký hoặc chờ Tour kết thúc.");
+            ? new("TOUR_OPERATOR", $"Đang vận hành Tour {usage.TourName} lúc {at}. Staff cần đổi người vận hành hoặc hủy Tour này trước.")
+            : new("ACTIVE_REGISTRATION", $"Đoàn {usage.GroupName} còn đăng ký Tour {usage.TourName} lúc {at}. Đại diện cần hủy đăng ký hoặc chờ Tour kết thúc.");
     }
 }

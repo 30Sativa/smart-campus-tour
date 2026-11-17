@@ -192,9 +192,9 @@ class FakeFirmware:
         if not ref:
             return self._err('head_not_zeroed')
         if p[2] == 'STEP':
-            # Nhu firmware: cong vao dich, chan o gioi han mem (PAN 0.6 do/buoc, TILT 1.8 do/buoc).
+            # Nhu firmware: cong vao dich, chan o gioi han mem (PAN 0.6 do/buoc, TILT 0.36 do/buoc qua hop so 5:1).
             pan = max(-17000, min(17000, self.target[0] + int(p[3]) * 60))
-            tilt = max(-1800, min(1800, self.target[1] + int(p[4]) * 180))
+            tilt = max(-1800, min(1800, self.target[1] + int(p[4]) * 36))
             self.target = (pan, tilt)
             self.state, self.busy_until = hl.STATE_MOVING, now + self.move_s
         self.head_seq = seq

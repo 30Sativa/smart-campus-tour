@@ -29,13 +29,21 @@ public partial class PoiProposal
 
     public Guid? DiscardedByUserId { get; set; }
 
+    public DateTimeOffset? RetiredAt { get; set; }
+
+    public Guid? RetiredByUserId { get; set; }
+
     public virtual User CreatedByUser { get; set; } = null!;
 
     public virtual User? DiscardedByUser { get; set; }
 
+    public virtual User? RetiredByUser { get; set; }
+
     public virtual MapArea? SourceAreaKeyNavigation { get; set; }
 
     public virtual ICollection<PoiImportReceipt> PoiImportReceipts { get; set; } = new List<PoiImportReceipt>();
+
+    public virtual ICollection<PoiNarrationRevision> PoiNarrationRevisions { get; set; } = new List<PoiNarrationRevision>();
 
     public virtual ICollection<PoiProposalRevision> PoiProposalRevisions { get; set; } = new List<PoiProposalRevision>();
 }

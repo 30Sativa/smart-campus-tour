@@ -57,7 +57,8 @@ public sealed class TourShortNoticeSqlTests
         await using var db = w.H.Context();
         var hold = await db.TourRobotReservations.AsNoTracking().SingleAsync(r => r.TourId == id);
         Assert.Equal(w.Noon, hold.StartsAt);
-        Assert.Equal(deadline + TimeSpan.FromSeconds(hold.ExpectedDurationSeconds!.Value) + TourSchedule.ReservationBuffer, hold.EndsAt);
+        Assert.Equal(TourSchedule.ExpectedEnd(deadline, hold.ExpectedDurationSeconds!.Value) + TourSchedule.ReservationBuffer, hold.EndsAt);
+        Assert.Equal(0, hold.EndsAt.Second); // the rounded length keeps the hold on a whole minute
         var recorded = await db.TourEvents.AsNoTracking().SingleAsync(e => e.TourId == id);
         Assert.Equal((TourLifecycleEvents.CreatedShortNotice, Reason), (recorded.EventType, recorded.ReasonNote));
 
@@ -98,10 +99,13 @@ public sealed class TourShortNoticeSqlTests
         var checks = await w.H.Send(new GetTourStartChecksQuery(id, w.H.OperatorId));
         Assert.Equal(w.Noon, checks.OpensAt);
         Assert.True(checks.Checks.Single(check => check.Id == "withinStartWindow").Passed);
-        // No accepted row, so nobody can be left behind; but nobody to run it for either.
+        // No accepted row, so nobody can be left behind.
         Assert.True(checks.Checks.Single(check => check.Id == TourStartPreflight.AllViewersJoinedCheck).Passed);
+        // ADR-0054 addendum: a quick Tour runs for a group already on site, so it needs no accepted row.
+        Assert.True(checks.Checks.Single(check => check.Id == TourStartPreflight.HasAcceptedRowsCheck).Passed);
+        Assert.DoesNotContain(TourStartPreflight.HasAcceptedRowsCheck, checks.BlockedBy);
         // Every other Start check still decides.
-        foreach (var expected in new[] { "tourReady", TourStartPreflight.HasAcceptedRowsCheck, "robotDispatchEnabled", "telemetryFresh", "commandTransportEnabled" })
+        foreach (var expected in new[] { "tourReady", "robotDispatchEnabled", "telemetryFresh", "commandTransportEnabled" })
             Assert.Contains(expected, checks.BlockedBy);
 
         Assert.Equal(w.H.Start.AddMinutes(-10), (await w.H.Send(new GetTourStartChecksQuery(w.H.TourId, w.H.OperatorId))).OpensAt);

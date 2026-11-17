@@ -19,26 +19,57 @@ export const QUICK_TOUR_RULES = {
   hold: { value: 'Từ lúc bấm Tạo Tour', note: 'Robot đang bận cho Tour khác thì không tạo được.' },
   start: {
     value: 'Ngay khi Tour đã chốt',
-    note: 'Cần ít nhất một đăng ký đã duyệt và robot đạt mọi điều kiện. Không phải chờ mọi điểm xem vào phòng chờ: trang kiểm tra chỉ cảnh báo số điểm xem còn thiếu.',
+    // TourStartPreflight: a quick Tour starts without any accepted registration (IsShortNotice || HasAcceptedRows).
+    note: 'Không cần đăng ký đã duyệt. Robot phải đạt mọi điều kiện. Không phải chờ mọi điểm xem vào phòng chờ: trang kiểm tra chỉ cảnh báo số điểm xem còn thiếu.',
   },
   deadline: (waitMinutes: number | null | undefined) => ({
     value: waitMinutes != null ? `${waitMinutes} phút sau khi tạo` : 'Theo cấu hình máy chủ',
-    note: 'Chưa bắt đầu trước hạn thì hệ thống tự huỷ Tour và trả robot.',
+    // FleetCommands:StartLateLimitMinutes (15) after the deadline; the cancel worker waits for the hold end (TourAutoCancel.HoldEndsAt).
+    note: 'Đã chốt thì còn bắt đầu muộn tối đa 15 phút sau hạn. Chưa bắt đầu thì hệ thống tự hủy và trả robot khi hết khung giữ robot.',
   }),
   registration: 'Khi Staff chốt Tour hoặc tới hạn bắt đầu',
   /** The facts on the "Tour nhanh" card of step 1. */
   facts: (waitMinutes: number | null | undefined): string[] => [
     'Không chọn ngày, ca: robot được giữ từ lúc tạo',
     'Bắt đầu ngay khi Tour đã chốt, không phải chờ mọi điểm xem vào phòng chờ',
-    waitMinutes != null ? `Chưa bắt đầu sau ${waitMinutes} phút thì tự huỷ` : 'Tự huỷ nếu không bắt đầu kịp',
+    waitMinutes != null ? `Chưa bắt đầu sau ${waitMinutes} phút thì tự hủy` : 'Tự hủy nếu không bắt đầu kịp',
     'Cần ghi lý do',
   ],
-  /** Toast after a quick Tour is created. */
-  created: 'Robot đã được giữ. Gửi link cho đại diện trường để đăng ký đoàn, duyệt rồi chốt Tour và bắt đầu trước hạn.',
 } as const
 
 /** Where a Representative opens a Tour to register a group (`/dai-dien/buoi/:tourId` in app/router). */
 export const representativeTourPath = (tourId: string) => `/dai-dien/buoi/${encodeURIComponent(tourId)}`
+
+type QuickTourTimes = { scheduledStartAt: string; latestStartAt?: string | null; autoCancelAt?: string | null }
+
+/**
+ * What the share panel of a SCHEDULED quick Tour says (A3). Before the published start the Representative link is
+ * still worth sending; after it the Tour can no longer be locked, so the link goes and Staff can only wait for the
+ * system cancel or cancel now. `latestStartAt`/`autoCancelAt` come from the server (the rule Start and the cancel
+ * worker apply); a sentence whose time the server did not send is left out rather than guessed.
+ */
+export function quickTourDeadline(tour: QuickTourTimes, now: number, time: (iso: string) => string) {
+  const passed = now >= new Date(tour.scheduledStartAt).getTime()
+  const latest = tour.latestStartAt ? time(tour.latestStartAt) : null
+  const cancelAt = tour.autoCancelAt ? time(tour.autoCancelAt) : null
+  if (!passed) {
+    const left = countdownText(tour.scheduledStartAt, now)
+    return {
+      passed, timerLabel: 'Thời gian còn lại để bắt đầu', chip: left ? `Còn ${left}` : null,
+      text: [`Bắt đầu trước ${time(tour.scheduledStartAt)}.`,
+        latest && `Đã chốt thì còn bắt đầu được tới ${latest}.`,
+        cancelAt && `Chưa bắt đầu thì hệ thống tự hủy và trả robot lúc ${cancelAt}.`].filter(Boolean).join(' '),
+    }
+  }
+  const left = tour.autoCancelAt ? countdownText(tour.autoCancelAt, now) : null
+  return {
+    passed, timerLabel: 'Thời gian còn lại tới lúc tự hủy',
+    chip: left ? `Tự hủy sau ${left}` : tour.autoCancelAt ? 'Đang tự hủy' : 'Quá giờ bắt đầu',
+    text: cancelAt
+      ? `Đã quá giờ bắt đầu, không chốt được nữa. Hệ thống sẽ tự hủy lúc ${cancelAt}, hoặc bạn hủy ngay.`
+      : 'Đã quá giờ bắt đầu, không chốt được nữa. Hệ thống sẽ tự hủy, hoặc bạn hủy ngay.',
+  }
+}
 
 /** "28:41" until the deadline; null once it has passed. */
 export function countdownText(deadline: string, now: number): string | null {

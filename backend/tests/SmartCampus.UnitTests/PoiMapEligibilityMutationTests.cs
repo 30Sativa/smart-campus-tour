@@ -117,13 +117,14 @@ public sealed class PoiMapEligibilityMutationTests
         Assert.Equal(0, writes);
     }
 
-    private static PoiProposalDraft Draft() => new(MapId, "North entrance", "Entrance", null, 1m, 2m, 0m, "FRONT", "Nội dung giới thiệu", null);
+    private static PoiProposalDraft Draft() => new(MapId, "North entrance", "Entrance", null, 1m, 2m, 0m, "FRONT");
 
     private static IMapVersionRepository MapRepository() => Proxy<IMapVersionRepository>(method => method.Name switch
     {
         nameof(IMapVersionRepository.FindMapVersionAsync) => Task.FromResult<MapVersion?>(Map),
         nameof(IMapVersionRepository.ListDeploymentChecksForMapAsync) => Task.FromResult<IReadOnlyList<MapDeploymentCheck>>([]),
         nameof(IMapVersionRepository.LockMapPreparationStateAsync) => Task.CompletedTask,
+        nameof(IMapVersionRepository.IsMapVersionRetiredAsync) => Task.FromResult(false),
         _ => throw new NotImplementedException(method.Name)
     });
 

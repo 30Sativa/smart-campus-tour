@@ -29,12 +29,19 @@
     localized_max_xy_variance: 0.09
     localized_max_yaw_variance: 0.05
     motion_ready_max_odom_age_sec: 0.5
-    # ADR-0045 Operator head buttons and the automatic POI sweep (docs/contracts/fleet-head/v1). Off by default;
+    # ADR-0045 Operator head buttons and the POI camera presets (docs/contracts/fleet-head/v1). Off by default;
     # needs stm32_bridge head/* in the same namespace and FleetHead:Enabled on the backend. While false, the head
-    # never moves from the web and never sweeps at a POI (the node logs this at startup).
+    # never moves from the web and never turns at a POI (the node logs this at startup).
     head_enabled: false
     head_base_url: ""
     head_wait_ms: 1500
+    # POI head (with head_enabled): the robot reads GET /api/fleet/head/v1/pois every head_poi_refresh_sec and,
+    # from the navigate_to_pose goal status, turns the head to the front when a goal starts and to the POI's camera
+    # preset when a goal succeeds within head_poi_radius_m of that POI. The backend's autoMotion can switch it off.
+    head_poi_auto: true
+    head_poi_radius_m: 0.6
+    head_poi_refresh_sec: 5.0
+    head_poi_nav_action: navigate_to_pose
     # Mini PC diagnostics report: CPU, RAM, disk, CPU temperature, sensor topic rates and the stm32_bridge
     # IMU diagnostic, sent to POST /api/fleet/v1/diagnostics. Observation only; never affects Fleet Sync.
     # Topics resolve inside robot_namespace; set one to "" for a sensor this robot does not have.

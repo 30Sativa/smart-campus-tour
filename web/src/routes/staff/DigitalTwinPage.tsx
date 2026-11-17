@@ -1,23 +1,20 @@
-import { ArrowLeft } from 'lucide-react'
-import { Link } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { PageHeader } from '../../components/ui/ConsolePrimitives'
 import { StaffPage } from '../../features/staff/StaffUi'
-import { buttonClass } from '../../components/ui/ui-classes'
-import { PhysicalRobotTwin } from '../../features/digital-twin/PhysicalRobotTwin'
-import { useFleetTelemetrySource } from '../../features/digital-twin/fleet-telemetry-source'
-import { OperationalTwin } from '../../features/staff/components/OperationalTwin'
+import { FleetTwin } from '../../features/staff/components/FleetTwin'
 
 /**
- * Local fleet workbench, with the separate physical-robot preparation below. The Robot page links here for the wider view.
+ * Digital Twin: one 3D view, the physical robots first and the local patrol as
+ * an optional simulated layer. `?robot=<code>` opens it on that robot; the live
+ * mini map and Robot & thiết bị link here with it. `?perf=1` shows the
+ * renderer numbers (web/docs/digital-twin-performance.md).
  */
 export default function DigitalTwinPage() {
-  const physicalSource = useFleetTelemetrySource()
+  const [params] = useSearchParams()
   return (
     <StaffPage wide>
-      <Link to="/staff/robot" className={`${buttonClass('ghost', 'sm')} mb-3 -ml-2`}><ArrowLeft size={15} aria-hidden="true" />Robot & thiết bị</Link>
-      <PageHeader eyebrow="Điều hành" title="Digital Twin" description="6 robot chạy theo vòng · 10 điểm · Camera cố định tại point, điều phối và thử nghiệm kịch bản. Robot thật hiển thị ở khung bên dưới khi miniPC gửi vị trí." />
-      <OperationalTwin robots={[]} className="mb-4 h-[820px]" />
-      <PhysicalRobotTwin source={physicalSource} />
+      <PageHeader eyebrow="Vận hành" title="Digital Twin" description="Vị trí robot thật trên bản đồ 3D. Robot mô phỏng là lớp phụ, tắt sẵn và tự tắt khi có Tour chạy." />
+      <FleetTwin key={params.get('robot') ?? ''} requestedRobot={params.get('robot')} perf={params.get('perf') === '1'} />
     </StaffPage>
   )
 }

@@ -9,10 +9,13 @@ interface StudentEndScreenProps {
   onLeave?: () => void
   name?: string
   meta?: string
+  /** A cancelled Tour that never ran: it was called off, not ended early. */
+  neverStarted?: boolean
 }
 
-export function StudentEndScreen({ session, snapshot, onLeave, name, meta }: StudentEndScreenProps) {
+export function StudentEndScreen({ session, snapshot, onLeave, name, meta, neverStarted = false }: StudentEndScreenProps) {
   const isCancelled = snapshot.tourState === 'Cancelled' || snapshot.step === 'ended_cancelled'
+  const calledOff = isCancelled && neverStarted
 
   const stops = [...snapshot.pois].sort((a, b) => a.order - b.order)
 
@@ -22,14 +25,16 @@ export function StudentEndScreen({ session, snapshot, onLeave, name, meta }: Stu
       <span className="st-end__icon" aria-hidden="true">
         {isCancelled ? <XCircle size={30} /> : <CheckCircle2 size={30} />}
       </span>
-      <h2 className="st-x-display">{isCancelled ? 'Buổi tham quan đã kết thúc sớm' : 'Hoàn thành chuyến tham quan!'}</h2>
-      <p className="st-pill-status" role="status">{isCancelled ? 'Buổi tham quan đã dừng' : 'Buổi tham quan đã xong'}</p>
-      <p className="st-x-lead">
-        Cảm ơn {name ?? session?.studentName ?? 'bạn'} đã đồng hành cùng Robot AMR.{' '}
-        {isCancelled
-          ? 'Buổi tham quan được nhân viên vận hành kết thúc sớm. Hình ảnh trực tiếp và trợ lý AI đã dừng hoạt động.'
-          : 'Robot đã hoàn thành chặng đường và về tới vị trí kết thúc an toàn. Hy vọng bạn đã có trải nghiệm thú vị về khuôn viên!'}
-      </p>
+      <h2 className="st-x-display">{calledOff ? 'Buổi tham quan đã bị hủy' : isCancelled ? 'Buổi tham quan đã kết thúc sớm' : 'Hoàn thành chuyến tham quan!'}</h2>
+      <p className="st-pill-status" role="status">{calledOff ? 'Buổi tham quan không diễn ra' : isCancelled ? 'Buổi tham quan đã dừng' : 'Buổi tham quan đã xong'}</p>
+      {calledOff
+        ? <p className="st-x-lead">Buổi tham quan đã bị hủy trước khi bắt đầu. Liên hệ đại diện đoàn nếu cần biết thêm.</p>
+        : <p className="st-x-lead">
+          Cảm ơn {name ?? session?.studentName ?? 'bạn'} đã đồng hành cùng Robot AMR.{' '}
+          {isCancelled
+            ? 'Buổi tham quan được nhân viên vận hành kết thúc sớm. Hình ảnh trực tiếp và trợ lý AI đã dừng hoạt động.'
+            : 'Robot đã hoàn thành chặng đường và về tới vị trí kết thúc an toàn. Hy vọng bạn đã có trải nghiệm thú vị về khuôn viên!'}
+        </p>}
       <p className="st-x-meta"><School size={16} /><span>{meta ?? `${snapshot.schoolName}, Đoàn ${session?.groupCode ?? ''}`}</span></p>
 
       {!isCancelled && stops.length > 0 && (

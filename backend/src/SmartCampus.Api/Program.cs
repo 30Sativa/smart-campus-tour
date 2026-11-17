@@ -101,6 +101,7 @@ if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
     builder.Services.AddHostedService<SmartCampus.Api.Hubs.FleetCommandRestartRecovery>();
     builder.Services.AddHostedService<SmartCampus.Api.Hubs.FleetCommandSweeper>();
     builder.Services.AddHostedService<SmartCampus.Api.Tours.TourAutoCancelWorker>();
+    builder.Services.AddHostedService<SmartCampus.Api.Tours.TourAutoAdvanceWorker>();
     builder.Services.AddHostedService<SmartCampus.Api.Tours.RosterExpiryWorker>();
 }
 if (initialAdminSeedCommand.Requested || !simulationPreviewEnabled)
