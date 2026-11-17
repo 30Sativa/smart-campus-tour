@@ -120,6 +120,11 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         foreach (var id in poiIds)
             if (!narrationByProposal.ContainsKey(byId[id].Revision.ProposalId))
                 throw new ConflictException($"POI {byId[id].Revision.Name} chưa có thuyết minh đã duyệt.", PoiNarrationNotApprovedCode);
+        // A request that would only copy the newest save adds a useless row to the history and Technical's queue. A save
+        // that only picks up newly approved narration is not a copy (ADR-0060). A repeated RequestId returned above.
+        if (current is not null && SameContent(current, await repo.GetStopsAsync(current.Id, ct), i,
+                poiIds.ToDictionary(id => id, id => narrationByProposal[byId[id].Revision.ProposalId].Id)))
+            throw new ConflictException("Bản lưu này giống hệt bản đang dùng, không có gì để lưu.", UnchangedCode);
         EnsureStopSeparation(i, poiIds.Select(id => byId[id].Revision).ToArray());
         // docs/lich-tour-theo-ca.md §4: dwell alone, before any travel, already longer than the longest shift can hold.
         var totalDwell = i.Stops.Sum(stop => stop.DwellSeconds);
@@ -268,6 +273,32 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         else MapPackageValidator.EnsureClearPosition(package, x, y, yaw, settings.PoiClearanceMeters);
     }
 
+    public const string UnchangedCode = "ROUTE_REVISION_UNCHANGED";
+
+    /// <summary>
+    /// Whether <paramref name="input"/> would save exactly <paramref name="current"/>: name, description, map, each stop's
+    /// POI revision in order with its dwell and camera steps, start and end. Name and description compare as saved (trimmed).
+    /// <paramref name="approvedNarration"/> maps each sent POI revision to the narration a save would snapshot now: a stop
+    /// saved with older narration differs, since saving again is how a route takes newly approved wording (ADR-0060).
+    /// </summary>
+    public static bool SameContent(RouteRevision current, IReadOnlyList<RouteRevisionStop> stops, RouteRevisionDraftInput input,
+        IReadOnlyDictionary<Guid, Guid> approvedNarration)
+    {
+        if (current.Name != input.Name.Trim() || current.Description != Clean(input.Description)) return false;
+        if (current.MapVersionId != input.MapVersionId || current.StartX != input.StartX || current.StartY != input.StartY
+            || current.StartYaw != input.StartYaw || current.EndMode != input.EndMode || current.EndX != input.EndX
+            || current.EndY != input.EndY || current.EndYaw != input.EndYaw) return false;
+        var ordered = stops.OrderBy(stop => stop.StopOrder).ToArray();
+        if (ordered.Length != input.Stops.Count) return false;
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            var (saved, sent) = (ordered[index], input.Stops[index]);
+            if (saved.PoiProposalRevisionId != sent.PoiRevisionId || saved.DwellSeconds != sent.DwellSeconds
+                || !Route.ReadHeadSteps(saved.HeadStepsJson).SequenceEqual(sent.HeadSteps)
+                || saved.NarrationRevisionId != approvedNarration.GetValueOrDefault(sent.PoiRevisionId)) return false;
+        }
+        return true;
+    }
     public const string PoiNarrationNotApprovedCode = "POI_NARRATION_NOT_APPROVED";
 
     internal static string Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null! : value.Trim();

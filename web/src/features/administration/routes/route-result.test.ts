@@ -50,6 +50,20 @@ describe('what a save means for its run (B1)', () => {
     expect(routeChanges(base, { ...base, stops: [base.stops[0]] }).changes).toEqual(['bớt 1 điểm dừng'])
   })
 
+  // E2: a rename or a new description is a change, but not of the path, so the save keeps its result.
+  it('names a rename or a new description without calling it a path change', () => {
+    const named = { ...base, name: 'Tuyến A', description: 'Đi qua thư viện' }
+    expect(routeChanges(named, { ...named, name: 'Tuyến A mới' })).toEqual({ changes: ['đổi tên tuyến'], pathChanged: false })
+    expect(routeChanges(named, { ...named, description: 'Đi qua sân bóng' })).toEqual({ changes: ['đổi mô tả'], pathChanged: false })
+    expect(routeChanges(named, { ...named, name: 'Tuyến A mới', stops: [base.stops[0], { ...base.stops[1], dwellSeconds: 45 }] }))
+      .toEqual({ changes: ['đổi tên tuyến', 'đổi thời gian dừng 1 điểm'], pathChanged: false })
+  })
+
+  it('compares the name and description as they are saved: trimmed, and a blank description is none', () => {
+    const named = { ...base, name: 'Tuyến A', description: null }
+    expect(routeChanges(named, { ...named, name: '  Tuyến A ', description: '   ' })).toEqual({ changes: [], pathChanged: false })
+  })
+
   it('words the toast for each case', () => {
     expect(saveResultText({ isSubmitted: true, verificationStatus: 'PASS' })).toMatch(/giữ kết quả chạy thử đạt/)
     expect(saveResultText({ isSubmitted: true, verificationStatus: 'NOT_TESTED' })).toMatch(/cần Kỹ thuật chạy thử lại/)

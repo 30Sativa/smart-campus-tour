@@ -175,6 +175,8 @@ export function stopIssue(stop: StopDraft): string | null {
 
 /** What a save's run depends on, from a saved revision or a form draft. */
 export type RoutePathShape = Pick<VersionedRoute, 'mapVersionId' | 'startX' | 'startY' | 'startYaw' | 'endMode' | 'endX' | 'endY' | 'endYaw'> & {
+  /** Not part of the path: a rename or a new description keeps the result. Compared trimmed, as saved. */
+  name?: string; description?: string | null
   stops: Array<{ poiRevisionId: string; dwellSeconds: number; headSteps: Array<{ preset: string; holdSeconds: number }> }>
 }
 
@@ -200,5 +202,11 @@ export function routeChanges(previous: RoutePathShape, current: RoutePathShape):
   const heads = (steps: RoutePathShape['stops'][number]['headSteps']) => steps.map(step => `${step.preset}:${step.holdSeconds}`).join()
   if (current.stops.some(stop => byId.has(stop.poiRevisionId) && heads(byId.get(stop.poiRevisionId)!.headSteps) !== heads(stop.headSteps))) path.push('đổi góc nhìn camera')
   const dwell = current.stops.filter(stop => byId.has(stop.poiRevisionId) && byId.get(stop.poiRevisionId)!.dwellSeconds !== stop.dwellSeconds).length
-  return { changes: [...path, ...(dwell ? [`đổi thời gian dừng ${dwell} điểm`] : [])], pathChanged: path.length > 0 }
+  const text = (value: string | null | undefined) => (value ?? '').trim()
+  const labels = [
+    text(previous.name) !== text(current.name) && 'đổi tên tuyến',
+    text(previous.description) !== text(current.description) && 'đổi mô tả',
+    dwell > 0 && `đổi thời gian dừng ${dwell} điểm`,
+  ].filter((item): item is string => Boolean(item))
+  return { changes: [...path, ...labels], pathChanged: path.length > 0 }
 }
