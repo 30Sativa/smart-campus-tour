@@ -33,6 +33,9 @@ foxglove_bridge:
       - '^(/[A-Za-z0-9_]+)?/local_costmap/published_footprint$'
       - '^(/[A-Za-z0-9_]+)?/ultrasonic/sonar[1-4]/range$'
       - '^(/[A-Za-z0-9_]+)?/(robot_mode_state|emergency_stop_state)$'
+      # ~0.3 MB per cloud at ~20 Hz: fox2ros carries it only with -e camera/depth/points,
+      # one cloud every 2 s (robot/tools/rviz_over_ssh/fox2ros_topics.yaml).
+      - '^(/[A-Za-z0-9_]+)?/camera/depth/points$'
     include_hidden: false
     remote_access: false
     sysinfo: false
