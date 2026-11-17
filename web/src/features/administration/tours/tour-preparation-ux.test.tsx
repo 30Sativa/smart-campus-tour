@@ -107,7 +107,9 @@ describe('sending a new quick Tour to the Representative', () => {
   })
 
   it('before the start time, says the three server moments: start, last start once locked, and the system cancel', async () => {
-    const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString()
+    // One clock read: the expected times are formatted after the render, which may fall in the next minute.
+    const now = Date.now()
+    const at = (minutes: number) => new Date(now + minutes * 60_000).toISOString()
     current = detail('SCHEDULED', { isShortNotice: true, scheduledStartAt: at(30), latestStartAt: at(45), autoCancelAt: at(50) })
     renderAt('/staff/manage/tours/tour-1')
     const block = await screen.findByRole('region', { name: 'Link đăng ký cho đại diện' })
@@ -118,7 +120,8 @@ describe('sending a new quick Tour to the Representative', () => {
   })
 
   it('after the start time, withdraws the link, names the system cancel time and offers to cancel now', async () => {
-    const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString()
+    const now = Date.now()
+    const at = (minutes: number) => new Date(now + minutes * 60_000).toISOString()
     current = detail('SCHEDULED', { isShortNotice: true, scheduledStartAt: at(-3), latestStartAt: at(12), autoCancelAt: at(17) })
     renderAt('/staff/manage/tours/tour-1')
     const block = await screen.findByRole('region', { name: 'Link đăng ký cho đại diện' })
