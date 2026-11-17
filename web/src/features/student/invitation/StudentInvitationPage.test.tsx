@@ -417,20 +417,23 @@ it('stops polling the session after RECONNECT_WINDOW_EXPIRED and waits for the v
 
 const SESSION_ENDED = 'Phiên xem đã kết thúc. Mã có thể đã bị thu hồi hoặc thay bằng mã mới; kiểm tra email mới nhất rồi nhập lại mã, hoặc liên hệ đại diện đoàn.'
 
-it('keeps the end screen when a Tour seen COMPLETED then closes its session with 401', async () => {
-  let phase: 'running' | 'completed' | 'closed' = 'running'
+/** The backend's 409 for a proven viewer of a Tour that is over (docs/architecture.md, AccessTour). */
+function tourEndedReply(tourState: 'COMPLETED' | 'CANCELLED') {
+  return new Response(JSON.stringify({ success: false,
+    message: tourState === 'COMPLETED' ? 'Buổi tham quan đã kết thúc.' : 'Buổi tham quan đã bị hủy.',
+    errors: { code: 'TOUR_ENDED', fields: { tourState: [tourState] } } }), { status: 409 })
+}
+
+it('keeps the end screen when the session check of a RUNNING Tour turns into 409 TOUR_ENDED', async () => {
+  // The real backend never answers 200 COMPLETED: it goes from 200 RUNNING straight to 409 TOUR_ENDED.
+  let ended = false
   vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view)
-    : phase === 'closed' ? response(null, 401) : response({ ...info, tourState: phase === 'running' ? 'RUNNING' : 'COMPLETED' })))
+    : ended ? tourEndedReply('COMPLETED') : response({ ...info, tourState: 'RUNNING' })))
   mount()
   await screen.findByRole('heading', { name: 'Buổi tham quan đang diễn ra', level: 2 })
-  phase = 'completed'
+  ended = true
   await act(async () => { await client.refetchQueries({ queryKey: key }) })
   expect(await screen.findByRole('heading', { name: 'Hoàn thành chuyến tham quan!' })).toBeVisible()
-  phase = 'closed'
-  await act(async () => { await client.refetchQueries({ queryKey: key }) })
-  // Query notifications are batched on a timer: let the 401 reach the page before judging it.
-  await act(() => new Promise(resolve => setTimeout(resolve, 50)))
-  expect(screen.getByRole('heading', { name: 'Hoàn thành chuyến tham quan!' })).toBeVisible()
   expect(screen.queryByLabelText('Mã truy cập')).not.toBeInTheDocument()
   expect(screen.queryByText(SESSION_ENDED)).toBeNull()
   expect(screen.queryByText(/Đang mất kết nối/)).toBeNull()
@@ -440,6 +443,46 @@ it('keeps the end screen when a Tour seen COMPLETED then closes its session with
   expect(await screen.findByLabelText('Mã truy cập')).toBeVisible()
   expect(screen.queryByRole('alert')).toBeNull()
   expect(fetchCalls().some(url => url.endsWith('/leave'))).toBe(false)
+})
+
+it('shows the cancelled end screen when a waiting room gets TOUR_ENDED CANCELLED, and stops checking', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    let ended = false
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view)
+      : ended ? tourEndedReply('CANCELLED') : response()))
+    mount()
+    await screen.findByText('Bạn đã vào phòng chờ')
+    ended = true
+    await act(async () => { await client.refetchQueries({ queryKey: key }) })
+    expect(await screen.findByRole('heading', { name: 'Buổi tham quan đã kết thúc sớm' })).toBeVisible()
+    const checks = () => fetchCalls().filter(url => url.endsWith('/session')).length
+    const before = checks()
+    await act(async () => { await vi.advanceTimersByTimeAsync(65_000) })
+    expect(checks()).toBe(before)
+    expect(screen.queryByText(SESSION_ENDED)).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('says the Tour has ended on the code form when a first join gets 409 TOUR_ENDED', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/join') ? tourEndedReply('COMPLETED') : response(null, 401)))
+  mount()
+  await screen.findByLabelText('Mã truy cập')
+  submitCode()
+  expect(await screen.findByRole('alert')).toHaveTextContent('Buổi tham quan đã kết thúc.')
+  expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.queryByText(SESSION_ENDED)).toBeNull()
+})
+
+it('says the Tour has ended, not that the code was revoked, when a reload finds TOUR_ENDED with nothing known', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => tourEndedReply('COMPLETED')))
+  mount()
+  expect(await screen.findByRole('alert')).toHaveTextContent('Buổi tham quan đã kết thúc.')
+  expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
+  expect(screen.queryByText(SESSION_ENDED)).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Kiểm tra lại phiên' })).toBeNull()
 })
 
 it('says why the room closed when a session this tab held is refused with 401', async () => {

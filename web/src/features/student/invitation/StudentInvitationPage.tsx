@@ -26,25 +26,34 @@ async function access(tourId: string, action: string, code?: string, signal?: Ab
 const RECONNECT_WINDOW_EXPIRED = 'RECONNECT_WINDOW_EXPIRED'
 // Also said when the session simply expired (a tab asleep past its lease), so it names revocation only as a possibility.
 const SESSION_ENDED = 'Phiên xem đã kết thúc. Mã có thể đã bị thu hồi hoặc thay bằng mã mới; kiểm tra email mới nhất rồi nhập lại mã, hoặc liên hệ đại diện đoàn.'
-/** Tour states the end screen shows; the session check answers 401 once the Tour leaves them behind. */
-const ENDED_TOUR_STATES = ['COMPLETED', 'CANCELLED']
+const TOUR_ENDED = 'TOUR_ENDED'
 const IN_USE_FALLBACK = 'Lời mời đang được dùng trên trình duyệt khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
-/** A 409's code, message and `errors.fields.retryAfterSeconds` (docs/architecture.md §3.2.3). */
-function conflict(error: ApiError): { code?: string; message?: string; retryAfterSeconds?: number } {
+/** A 409's code, message and `errors.fields` (retryAfterSeconds, tourState; docs/architecture.md §3.2.3). */
+function conflict(error: ApiError): { code?: string; message?: string; retryAfterSeconds?: number; tourState?: string } {
   try {
-    const body = JSON.parse(error.body) as { message?: unknown; errors?: { code?: unknown; fields?: { retryAfterSeconds?: unknown } } }
-    const seconds = Number(Array.isArray(body.errors?.fields?.retryAfterSeconds) ? body.errors.fields.retryAfterSeconds[0] : undefined)
+    const body = JSON.parse(error.body) as { message?: unknown; errors?: { code?: unknown; fields?: { retryAfterSeconds?: unknown; tourState?: unknown } } }
+    const fields = body.errors?.fields
+    const seconds = Number(Array.isArray(fields?.retryAfterSeconds) ? fields.retryAfterSeconds[0] : undefined)
+    const tourState = Array.isArray(fields?.tourState) ? fields.tourState[0] : undefined
     return {
       code: typeof body.errors?.code === 'string' ? body.errors.code : undefined,
       message: typeof body.message === 'string' && body.message.trim() ? body.message : undefined,
       retryAfterSeconds: Number.isFinite(seconds) && seconds > 0 ? seconds : undefined,
+      tourState: typeof tourState === 'string' ? tourState : undefined,
     }
   } catch { return {} }
 }
 const isReconnectWindowExpired = (error: unknown) =>
   error instanceof ApiError && error.status === 409 && conflict(error).code === RECONNECT_WINDOW_EXPIRED
+/** 409 TOUR_ENDED: the invitation is still proven but its Tour is COMPLETED or was CANCELLED before it ran. */
+function tourEnded(error: unknown): { tourState: 'COMPLETED' | 'CANCELLED' } | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null
+  const { code, tourState } = conflict(error)
+  return code === TOUR_ENDED ? { tourState: tourState === 'CANCELLED' ? 'CANCELLED' : 'COMPLETED' } : null
+}
 function conflictMessage(error: ApiError) {
-  const { code, message, retryAfterSeconds } = conflict(error)
+  const { code, message, retryAfterSeconds, tourState } = conflict(error)
+  if (code === TOUR_ENDED) return message ?? (tourState === 'CANCELLED' ? 'Buổi tham quan đã bị hủy.' : 'Buổi tham quan đã kết thúc.')
   if (code === RECONNECT_WINDOW_EXPIRED) {
     const text = message ?? 'Trình duyệt này đã mất kết nối quá lâu nên phiên cũ đang bị giữ. Nhờ đại diện hoặc Staff cấp mã mới để vào ngay.'
     // The backend sentence may already name the wait; never say it twice.
@@ -87,12 +96,12 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const [code, setCode] = useState('')
   const [left, setLeft] = useState(false)
   const [hadSession, setHadSession] = useState(false)
-  // The last session answer that showed the Tour ended; kept so the 401 that follows does not undo the end screen.
-  const [endedInfo, setEndedInfo] = useState<StudentTourInfo | null>(null)
+  // The last Tour this tab was admitted to; a later TOUR_ENDED reuses it for the end screen.
+  const [lastInfo, setLastInfo] = useState<StudentTourInfo | null>(null)
   const join = useMutation({ mutationFn: () => access(tourId, 'join', code),
     onMutate: () => client.cancelQueries({ queryKey: key }),
     onSuccess: info => { setCode(''); setLeft(false); client.setQueryData(key, info) } })
-  const exitSession = () => { setLeft(true); setHadSession(false); setEndedInfo(null); client.setQueryData(key, null); join.reset() }
+  const exitSession = () => { setLeft(true); setHadSession(false); setLastInfo(null); client.setQueryData(key, null); join.reset() }
   const leave = useMutation({ mutationFn: () => access(tourId, 'leave'),
     onMutate: () => client.cancelQueries({ queryKey: key }),
     onSuccess: exitSession })
@@ -103,7 +112,8 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
     // SRS v1.9: a revoked or reissued invitation must stop playback within 10 s,
     // so a running Tour re-checks the session every 5 s.
     // A held old session answers the same 409 until its lease ends: wait for the viewer, never poll it.
-    refetchInterval: query => isReconnectWindowExpired(query.state.error) ? false
+    // TOUR_ENDED is final: nothing to poll for either.
+    refetchInterval: query => isReconnectWindowExpired(query.state.error) || tourEnded(query.state.error) ? false
       : query.state.data?.tourState === 'RUNNING' ? SESSION_CHECK_RUNNING_MS : 30000 })
   const sessionHash = hashKey(key)
   const [slow, setSlow] = useState(false)
@@ -136,15 +146,16 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   }
   const accessDenied = session.isError && session.error instanceof ApiError && [401, 403, 409].includes(session.error.status)
   const sessionInfo = left || accessDenied ? null : session.data
-  const knownEnded = sessionInfo ? (ENDED_TOUR_STATES.includes(sessionInfo.tourState) ? sessionInfo : null) : endedInfo
-  if (knownEnded !== endedInfo) setEndedInfo(knownEnded)
+  if (sessionInfo && sessionInfo !== lastInfo) setLastInfo(sessionInfo)
   const refused = !left && session.isError && session.error instanceof ApiError && session.error.status === 401
-  // A Tour seen COMPLETED or CANCELLED closes its sessions with it: that 401 keeps the end screen, it is no lost code.
-  const finished = refused && !!endedInfo
-  const info = finished ? endedInfo : sessionInfo
+  // The session check goes from 200 RUNNING straight to 409 TOUR_ENDED when the Tour completes (or was cancelled
+  // before it ran): show the end screen from what this tab already knew. With nothing known, the code form says why.
+  const endedBy = left ? null : tourEnded(session.error)
+  const finished = !!endedBy && !!lastInfo
+  const info = finished ? { ...lastInfo!, tourState: endedBy!.tourState } : sessionInfo
   // A first visit has no cookie and gets a silent 401; a later 401 means the code was revoked, reissued or the session expired.
   if (sessionInfo && !hadSession) setHadSession(true)
-  const ended = hadSession && refused && !finished
+  const ended = hadSession && refused
   // Route and progress; a failure only hides the stops, the session above stays the access authority.
   const view = useQuery({ queryKey: ['student-tour-view', tourId], queryFn: ({ signal }) => getStudentTourView(tourId, signal),
     retry: false, enabled: !!info && !finished && !leave.isPending, refetchInterval: info?.tourState === 'RUNNING' ? 5000 : 30000 })
@@ -159,7 +170,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const status = <>
     {leave.isError && <p role="alert" className="st-session-error">{accessError(leave.error)}</p>}
     {info && session.isError && !finished && <p role="alert" className="st-session-error">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên có thể hết hạn trong thời gian mất kết nối; kết nối lại để kiểm tra.</p>}
-    {session.isError && !left && !unchecked && !finished && <button type="button" className="st-session-retry" disabled={session.isFetching || join.isPending || leave.isPending} onClick={() => void session.refetch()}>Kiểm tra lại phiên</button>}
+    {session.isError && !left && !unchecked && !endedBy && <button type="button" className="st-session-retry" disabled={session.isFetching || join.isPending || leave.isPending} onClick={() => void session.refetch()}>Kiểm tra lại phiên</button>}
   </>
 
   let body
