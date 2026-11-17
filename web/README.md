@@ -19,6 +19,7 @@ npm run dev               # http://localhost:5173
 | `VITE_API_BASE_URL` | Backend API base URL, used by `src/api/client.ts` and the SignalR hub factory | `https://localhost:7092` |
 | `VITE_QUEST_WHEP_URL` | **Dev server only**: the NUC's own MediaMTX in the LAN. A production build ignores it; deployed pages get the relay URL and a token from the API (ADR-0055) | `http://10.80.192.207:8889/quest/whep` |
 | `VITE_QUEST_ICE_SERVERS` | Optional comma-separated STUN URLs | `stun:stun.l.google.com:19302` |
+| `VITE_CLOUDINARY_CLOUD_NAME` | **Build only**: serve `public/images/` from Cloudinary (see below). Unset keeps the local files | `xryd77ty` |
 
 `web/.env` is tracked with empty values as the shared list of variables.
 `web/.env.local` holds machine-specific values and is ignored by Git. Local
@@ -32,6 +33,26 @@ example, Vercel environment variables). Variables already present in the build
 environment take priority over the files. Vite embeds `VITE_*` values at build
 time, so rebuild/redeploy after changing them. Keep secrets in the backend or
 service environment, never in frontend variables or the tracked file.
+
+### Pictures on Cloudinary
+
+A build with `VITE_CLOUDINARY_CLOUD_NAME` set loads every picture of `public/images/` from Cloudinary
+(`f_auto,q_auto`: AVIF/WebP at automatic quality, so the 2–3 MB PNGs arrive far smaller) instead of from this site.
+`vite.config.ts` (`cloudinaryImages`) rewrites the `/images/…` paths at build time, so components keep plain
+`/images/…` paths and the dev server and tests use the local files. Videos stay in `public/videos/`.
+
+1. Upload the pictures, with the credentials only in your shell (Cloudinary Console → Settings → API Keys → API
+   environment variable). PowerShell:
+   ```powershell
+   $env:CLOUDINARY_URL = "cloudinary://<api_key>:<api_secret>@xryd77ty"
+   npm run images:upload
+   ```
+   It uploads new or changed files as `smartcampus/images/<path without extension>` and skips the rest. Run it
+   again whenever a file in `public/images/` is added or changed, before deploying.
+2. Set `VITE_CLOUDINARY_CLOUD_NAME=xryd77ty` in the Vercel project's environment variables and redeploy.
+
+Unset the variable and redeploy to go back to the local files. A new picture must not have a space in its
+file name, and two pictures in one folder must not differ only by extension (they would share a public ID).
 
 Login, refresh and logout use the backend through `/api/auth/*`; configure
 `VITE_API_BASE_URL` for the API host. Access tokens stay in memory and the

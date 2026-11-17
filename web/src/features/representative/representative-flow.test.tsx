@@ -103,18 +103,14 @@ beforeEach(() => {
 afterEach(() => { clients.forEach(c => c.clear()); useAuthStore.getState().logout(); vi.unstubAllGlobals() })
 
 describe('Representative real HTTP contract', () => {
-  it('opens navigation, closes it with Escape and restores the menu button focus', async () => {
+  it('shows the pages as tabs in the top bar, with no sidebar or menu button', async () => {
     renderAt('/dai-dien')
-    const opener = screen.getByRole('button', { name: 'Mở điều hướng đại diện' })
-    opener.focus()
-    fireEvent.click(opener)
     const navigation = screen.getByRole('navigation', { name: 'Điều hướng đại diện trường' })
-    expect(opener).toHaveAttribute('aria-expanded', 'true')
     expect(within(navigation).getByRole('link', { name: 'Tổng quan' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('button', { name: 'Đóng menu' })).toHaveFocus()
-    fireEvent.keyDown(navigation, { key: 'Escape' })
-    expect(opener).toHaveAttribute('aria-expanded', 'false')
-    expect(opener).toHaveFocus()
+    expect(within(navigation).getByRole('link', { name: 'Buổi tham quan' })).not.toHaveAttribute('aria-current')
+    expect(within(navigation).getByRole('link', { name: 'Đăng ký của tôi' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mở điều hướng đại diện' })).toBeNull()
+    expect(screen.queryByRole('complementary', { name: 'Khu vực đại diện trường' })).toBeNull()
     await screen.findByRole('heading', { name: 'Buổi đang nhận đăng ký' })
   })
   it('filters active and closed registrations; selecting an ended record retains its reason without actionable resubmission', async () => {

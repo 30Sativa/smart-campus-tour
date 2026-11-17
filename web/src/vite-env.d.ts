@@ -21,6 +21,11 @@ interface ImportMetaEnv {
   /** HTTPS MediaMTX stream paths without /whip or /whep; no credentials. */
   readonly VITE_QUEST_AUDIO_PATH?: string
   readonly VITE_STAFF_AUDIO_PATH?: string
+  /**
+   * Cloudinary cloud name (public, not a secret). Read only by the build in vite.config.ts (`cloudinaryImages`),
+   * which then serves `public/images/` from Cloudinary; app code never reads it.
+   */
+  readonly VITE_CLOUDINARY_CLOUD_NAME?: string
   /** @deprecated The old HLS address; only read to warn that it is ignored. */
   readonly VITE_QUEST_STREAM_URL?: string
 }

@@ -13,6 +13,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "preview": "vite preview",
+    "model:optimize": "node scripts/optimize-twin-model.mjs",
+    "images:upload": "node scripts/upload-images-to-cloudinary.mjs"
     "model:optimize": "node scripts/optimize-twin-model.mjs"
   },
   "dependencies": {
