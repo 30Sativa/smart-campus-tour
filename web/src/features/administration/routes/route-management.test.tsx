@@ -81,6 +81,8 @@ describe('Staff versioned Route workflow', () => {
       if (url.pathname === '/api/routes' && init?.method !== 'POST') return response([currentRoute])
       if (url.pathname === '/api/staff/routes' && init?.method === 'POST') return createFailure ?? response(route)
       if (url.pathname === '/api/routes/route-1/revisions') return response(currentRoute)
+      if (url.pathname === '/api/staff/routes/route-1/revisions' && init?.method === 'POST')
+        return response({ ...currentRoute, ...JSON.parse(String(init.body)), revisionId: 'route-rev-2', revisionNumber: currentRoute.revisionNumber + 1 })
       if (url.pathname === '/api/staff/routes/route-1/scheduled-tours') return response(scheduledTours)
       if (url.pathname === '/api/staff/manage/tours/shifts') return response(tourShifts)
       if (url.pathname === '/api/staff/routes/route-1/revisions/route-rev-1/submit') {
@@ -499,6 +501,64 @@ describe('Staff versioned Route workflow', () => {
     expect(screen.getByRole('button', { name: /Bước 4/ })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: /Bước 4/ }))
     expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getByText('x 11.40 m · y 21.60 m · hướng 0°')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' })).toBeEnabled()
+  })
+
+  // E1: an edit that changes nothing would save a copy of the revision in use.
+  // Saved after the fixtures' narration was approved (15/11), so saving again would take no new wording either.
+  const savedAfterNarration = (over: Partial<typeof route> = {}) => {
+    currentRoute = { ...currentRoute, ...over, revisionHistory: currentRoute.revisionHistory.map(item => ({ ...item, createdAt: '2026-11-16T10:00:00Z' })) }
+  }
+
+  it('locks both Save buttons when nothing changed and points an unsubmitted save to the route page', async () => {
+    savedAfterNarration()
+    renderAt('/staff/manage/routes/route-1/edit')
+    await screen.findByLabelText('Tên tuyến')
+    fireEvent.click(screen.getByRole('button', { name: /Bước 4/ }))
+    const hint = 'Chưa thay đổi gì so với bản đang dùng, nên không cần lưu. Muốn gửi Kỹ thuật chạy thử thì bấm Gửi kiểm chứng tuyến ở trang tuyến.'
+    expect(screen.getByText(hint)).toBeInTheDocument()
+    for (const name of ['Lưu, chưa gửi kiểm chứng', 'Lưu và gửi kiểm chứng']) {
+      const button = screen.getByRole('button', { name })
+      expect(button).toBeDisabled()
+      expect(button).toHaveAccessibleDescription(hint)
+    }
+    fireEvent.submit(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }).closest('form')!)
+    expect(requests.some(request => request.init?.method === 'POST')).toBe(false)
+  })
+
+  it('says only that nothing changed on a submitted save, which needs no trip to the route page', async () => {
+    savedAfterNarration({ isSubmitted: true, verificationStatus: 'PASS' })
+    renderAt('/staff/manage/routes/route-1/edit')
+    await screen.findByLabelText('Tên tuyến')
+    fireEvent.click(screen.getByRole('button', { name: /Bước 4/ }))
+    expect(screen.getByText('Chưa thay đổi gì so với bản đang dùng, nên không cần lưu.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu và gửi kiểm chứng' })).toBeDisabled()
+  })
+
+  // E2: a rename is a change, and it keeps the path's result.
+  it('saves a rename and says it keeps the passed run, on step 4 and in the toast', async () => {
+    savedAfterNarration({ isSubmitted: true, verificationStatus: 'PASS' })
+    renderAt('/staff/manage/routes/route-1/edit')
+    fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Library tour mới' } })
+    fireEvent.click(screen.getByRole('button', { name: /Bước 4/ }))
+    expect(screen.getByText('Chỉ đổi tên tuyến: đường đi không đổi nên bản mới giữ kết quả chạy thử đạt, không cần chạy lại.')).toBeInTheDocument()
+    const save = screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' })
+    expect(save).toBeEnabled()
+    expect(save).not.toHaveAttribute('aria-describedby')
+    fireEvent.click(save)
+    await waitFor(() => expect(useToastStore.getState().toasts.at(-1)).toMatchObject({
+      title: 'Đã lưu “Library tour mới”, chưa gửi kiểm chứng', detail: expect.stringMatching(/^Đường đi không đổi nên giữ kết quả chạy thử đạt/) }))
+    const body = JSON.parse(String(requests.find(request => request.url.pathname === '/api/staff/routes/route-1/revisions')!.init!.body))
+    expect(body.name).toBe('Library tour mới')
+  })
+
+  // ADR-0060: saving again is how a route takes narration approved after its save, so that is not "nothing changed".
+  it('lets an otherwise unchanged route be saved again to take newly approved narration, keeping the passed run', async () => {
+    currentRoute = { ...currentRoute, isSubmitted: true, verificationStatus: 'PASS' }
+    renderAt('/staff/manage/routes/route-1/edit')
+    await screen.findByLabelText('Tên tuyến')
+    fireEvent.click(screen.getByRole('button', { name: /Bước 4/ }))
+    expect(screen.getByText('Chỉ cập nhật thuyết minh mới duyệt 2 điểm: đường đi không đổi nên bản mới giữ kết quả chạy thử đạt, không cần chạy lại.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' })).toBeEnabled()
   })
 

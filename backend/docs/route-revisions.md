@@ -65,6 +65,8 @@ Submission is a separate receipt; it is not a test result, activation, schedulin
 
 **ADR-0033 map gate:** saving a draft and submitting a revision both require the exact map version to have current technical evidence under ADR-0028. Otherwise they return 409 `TECHNICAL_CHECK_PENDING` or `TECHNICAL_CHECK_NOT_PASSED` and write nothing. A committed idempotent retry still replays its result. Saved or submitted revisions are not rewritten, and route test runs keep their own deployment rule.
 
+**Unchanged save:** a new save request whose content equals the route's newest revision (name and description as saved after trimming, map version, each stop's POI revision in order with its dwell and camera steps, start and end, and each stop's narration revision equal to the one approved now, so a save that takes newly approved narration under ADR-0060 is not a copy) returns 409 `ROUTE_REVISION_UNCHANGED` ("Bản lưu này giống hệt bản đang dùng, không có gì để lưu.") and writes nothing. A repeated `requestId` still replays its committed result.
+
 ### 3. Technical Staff records a failed manual run
 
 Read the queue, then call:

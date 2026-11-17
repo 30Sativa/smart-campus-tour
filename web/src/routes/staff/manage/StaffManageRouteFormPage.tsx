@@ -209,7 +209,7 @@ export default function StaffManageRouteFormPage() {
   }
   const save = async (event: FormEvent | null, submit = false) => {
     event?.preventDefault()
-    if (busy || step !== STEPS.length - 1) return
+    if (busy || step !== STEPS.length - 1 || unchanged) return
     if (firstOpen !== -1) { setStep(firstOpen); return }
     const body: VersionedRouteDraft = {
       ...draft, startX: draft.startX!, startY: draft.startY!, startYaw: draft.startYaw!,
@@ -243,10 +243,21 @@ export default function StaffManageRouteFormPage() {
 
   const last = step === STEPS.length - 1
   // B1: whether this save keeps the result of the edited one, needs a new run, or starts with none.
-  const pathChange = source.data ? routeChanges(source.data, { ...draft, mapVersionId: draft.mapVersionId, startX: draft.startX ?? NaN, startY: draft.startY ?? NaN, startYaw: draft.startYaw ?? NaN, stops }) : null
+  const draftChange = source.data ? routeChanges(source.data, { ...draft, mapVersionId: draft.mapVersionId, startX: draft.startX ?? NaN, startY: draft.startY ?? NaN, startYaw: draft.startYaw ?? NaN, stops }) : null
+  // ADR-0060: a save copies each stop's approved narration, so narration approved after the revision in use was saved
+  // reaches the route only by saving again. That is a change, though not of the path; the server agrees.
+  const savedAt = source.data?.revisionHistory.find(item => item.revisionId === source.data?.revisionId)?.createdAt
+  const newNarration = savedAt ? stops.filter(stop => {
+    const approvedAt = stopPoi(stop.poiRevisionId)?.proposal?.narration?.approved?.approvedAt
+    return approvedAt && Date.parse(approvedAt) > Date.parse(savedAt)
+  }).length : 0
+  const pathChange = draftChange && newNarration ? { ...draftChange, changes: [...draftChange.changes, `cập nhật thuyết minh mới duyệt ${newNarration} điểm`] } : draftChange
   const keptPass = source.data?.verificationStatus === 'PASS'
   const keptResultText = keptPass ? 'chạy thử đạt, không cần chạy lại' : 'chạy thử không đạt. Muốn hết không đạt, sửa đường đi rồi gửi lại'
   const keepsResult = Boolean(source.data?.isSubmitted && pathChange && !pathChange.pathChanged && ['PASS', 'FAIL'].includes(source.data.verificationStatus))
+  // E1: an edit that changes nothing would only save a copy of the revision in use; a new route has nothing to compare.
+  const unchanged = Boolean(pathChange && !pathChange.changes.length)
+  const saveHint = firstOpen !== -1 ? 'route-step-missing' : unchanged ? 'route-unchanged' : undefined
   const missingHere = missingByStep[step]
   return <AdminPage>
     <UnsavedChangesGuard when={changed && !busy} />
@@ -373,8 +384,8 @@ export default function StaffManageRouteFormPage() {
             <ShiftLengthWarning expectedSeconds={estimate} />
           </ReviewRow>
         </dl>
-        {pathChange && <div className="mt-3"><Notice tone={keepsResult && keptPass ? 'success' : 'warn'}>
-          {!pathChange.changes.length ? 'Chưa thay đổi gì so với bản đang dùng.'
+        {pathChange && <div id={unchanged ? 'route-unchanged' : undefined} className="mt-3"><Notice tone={keepsResult && keptPass ? 'success' : 'warn'}>
+          {unchanged ? `Chưa thay đổi gì so với bản đang dùng, nên không cần lưu.${source.data?.isSubmitted ? '' : ' Muốn gửi Kỹ thuật chạy thử thì bấm Gửi kiểm chứng tuyến ở trang tuyến.'}`
             : keepsResult ? `Chỉ ${pathChange.changes.join(', ')}: đường đi không đổi nên bản mới giữ kết quả ${keptResultText}.`
             : pathChange.pathChanged ? `Bản mới ${pathChange.changes.join(', ')}: đường đi đã đổi nên cần gửi kiểm chứng và chờ Kỹ thuật chạy thử lại trước khi tạo Tour.`
             : `Bản mới ${pathChange.changes.join(', ')}. Bản đang dùng chưa có kết quả chạy thử, nên vẫn cần gửi kiểm chứng và chạy thử.`}
@@ -391,8 +402,8 @@ export default function StaffManageRouteFormPage() {
             the review step would finish as a submit and save before anyone reviewed it. */}
         {last
           ? <>
-            <button key="save" disabled={Boolean(busy) || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} type="submit" className={buttonClass('secondary')}>{busy === 'save' ? 'Đang lưu…' : 'Lưu, chưa gửi kiểm chứng'}</button>
-            <button key="submit" type="button" disabled={Boolean(busy) || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} onClick={() => void save(null, true)} className={buttonClass('primary')}>{busy === 'submit' ? 'Đang xử lý…' : 'Lưu và gửi kiểm chứng'}</button>
+            <button key="save" disabled={Boolean(busy) || firstOpen !== -1 || unchanged} aria-describedby={saveHint} type="submit" className={buttonClass('secondary')}>{busy === 'save' ? 'Đang lưu…' : 'Lưu, chưa gửi kiểm chứng'}</button>
+            <button key="submit" type="button" disabled={Boolean(busy) || firstOpen !== -1 || unchanged} aria-describedby={saveHint} onClick={() => void save(null, true)} className={buttonClass('primary')}>{busy === 'submit' ? 'Đang xử lý…' : 'Lưu và gửi kiểm chứng'}</button>
           </>
           : <button key="next" type="button" disabled={missingHere.length > 0} aria-describedby={missingHere.length ? 'route-step-missing' : undefined} className={buttonClass('primary')} onClick={() => goTo(step + 1)}>Tiếp<ChevronRight size={15} aria-hidden="true" /></button>}
       </div>

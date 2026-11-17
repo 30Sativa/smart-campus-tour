@@ -2696,8 +2696,9 @@ optional exact map-version and `isActive` filtering; the legacy catalog remains 
 Each view carries `isActive` and an opaque `rowVersion` (ADR-0037). Tour create and
 slots refuse an inactive route with 409 `ROUTE_UNAVAILABLE`. A revision also carries
 `scheduleFit` (`UNKNOWN`, `FITS`, `OVER_RECOMMENDED`, `TOO_LONG_FOR_SHIFT`) and
-`expectedDurationSeconds`. Saving a revision returns 409 `ROUTE_STOP_TOO_CLOSE` or
-`ROUTE_TOO_LONG_FOR_SHIFT` (`docs/lich-tour-theo-ca.md`).
+`expectedDurationSeconds`. Saving a revision returns 409 `ROUTE_STOP_TOO_CLOSE`,
+`ROUTE_TOO_LONG_FOR_SHIFT` (`docs/lich-tour-theo-ca.md`) or, for a new request identical to the
+newest revision (`backend/docs/route-revisions.md`), `ROUTE_REVISION_UNCHANGED`.
 Submission receipts are separate from draft creation. Technical Staff appends
 manual whole-route test runs with an explicit distinct active Staff participant
 whose single persisted role resolves through `ApplicationRoles`. The technical
