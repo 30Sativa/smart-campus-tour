@@ -479,8 +479,10 @@ public sealed class InvitationEndpointTests
         Assert.Equal(1, await db.BrowserSessions.CountAsync(s => s.EndedAt == null));
         Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.Action == "INVITATION_ENTERED" && a.EntityId == invitation.ToString("D")));
         Assert.Equal("IDLE_TIMEOUT", (await db.BrowserSessions.SingleAsync(s => s.EndedAt != null)).EndReason);
+        // A completed Tour still admits nobody; the current code is told the Tour ended instead of a generic 401.
         await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='COMPLETED';");
-        Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "join", code)).Status);
+        AssertTourEnded(await AccessAsync(host.Client, f.TourId, "join", code), "COMPLETED");
+        Assert.Equal(1, await db.BrowserSessions.CountAsync(s => s.EndedAt == null));
     }
 
     [SchemaV11Fact]
@@ -604,10 +606,71 @@ public sealed class InvitationEndpointTests
         Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "join", code)).Status);
         Assert.Equal(3, await SessionRowsAsync());
 
-        // Unchanged 401s: wrong code, and a Tour outside SCHEDULED/READY/RUNNING even for a past holder.
+        // Unchanged 401: wrong code. A completed Tour admits nobody, but the current code hears that it ended (TOUR_ENDED).
         Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "join", "WRONG-CODE")).Status);
         await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='COMPLETED';");
-        Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "join", code, cookie: deviceCookie)).Status);
+        AssertTourEnded(await AccessAsync(host.Client, f.TourId, "join", code, cookie: deviceCookie), "COMPLETED");
+        Assert.Equal(3, await SessionRowsAsync());
+    }
+
+    /// <summary>409 TOUR_ENDED with the Tour state in errors.fields.tourState, and no new cookie.</summary>
+    private static void AssertTourEnded((HttpStatusCode Status, JsonElement Body, string? Cookie) result, string state)
+    {
+        Assert.Equal(HttpStatusCode.Conflict, result.Status);
+        var errors = result.Body.GetProperty("errors");
+        Assert.Equal("TOUR_ENDED", errors.GetProperty("code").GetString());
+        var tourState = errors.GetProperty("fields").GetProperty("tourState");
+        Assert.Equal(1, tourState.GetArrayLength());
+        Assert.Equal(state, tourState[0].GetString());
+        Assert.Equal(state == "COMPLETED" ? "Buổi tham quan đã kết thúc." : "Buổi tham quan đã bị hủy.",
+            result.Body.GetProperty("message").GetString());
+        Assert.Null(result.Cookie);
+    }
+
+    [SchemaV11Fact]
+    public async Task EndedTour_TellsAProvenHolderTourEnded_OtherRefusalsStay401_StartedCancelledStillWatches()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var registration = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var invitationId = (await f.SendAsync(HttpMethod.Get, Path(registration))).Data.GetProperty("items")[0].GetProperty("id").GetGuid();
+        var code = await CodeAsync(f, invitationId);
+        var joined = await AccessAsync(host.Client, f.TourId, "join", code);
+        Assert.Equal(HttpStatusCode.OK, joined.Status);
+        var cookie = CookieHeader(joined.Cookie!);
+        async Task<int> SessionRowsAsync() { await using var db = f.Context(); return await db.BrowserSessions.CountAsync(s => s.InvitationId == invitationId); }
+
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='RUNNING',StartedAt=SYSDATETIMEOFFSET();");
+        var running = await AccessAsync(host.Client, f.TourId, "session", cookie: cookie);
+        Assert.Equal(HttpStatusCode.OK, running.Status);
+        Assert.Equal("RUNNING", running.Body.GetProperty("data").GetProperty("tourState").GetString());
+
+        // The Tour completes: the session cookie and the correct code both hear TOUR_ENDED; nothing is re-opened.
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='COMPLETED',EndedAt=SYSDATETIMEOFFSET();");
+        AssertTourEnded(await AccessAsync(host.Client, f.TourId, "session", cookie: cookie), "COMPLETED");
+        AssertTourEnded(await AccessAsync(host.Client, f.TourId, "join", code), "COMPLETED");
+        // Everyone else keeps the generic 401: a wrong code, and a browser that never had a session.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "join", "WRONG-CODE")).Status);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "session")).Status);
+        Assert.Equal(1, await SessionRowsAsync());
+
+        // Cancelled after Start: the fallback video stays watchable on the same session.
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='CANCELLED';");
+        var fallback = await AccessAsync(host.Client, f.TourId, "session", cookie: cookie);
+        Assert.Equal(HttpStatusCode.OK, fallback.Status);
+        Assert.Equal("CANCELLED", fallback.Body.GetProperty("data").GetProperty("tourState").GetString());
+
+        // Cancelled before it ever ran: TOUR_ENDED with CANCELLED, by cookie and by code.
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET StartedAt=NULL,EndedAt=SYSDATETIMEOFFSET();");
+        AssertTourEnded(await AccessAsync(host.Client, f.TourId, "session", cookie: cookie), "CANCELLED");
+        AssertTourEnded(await AccessAsync(host.Client, f.TourId, "join", code), "CANCELLED");
+
+        // A revoked invitation keeps the generic 401 even on a Tour that is over.
+        await f.Database.ExecuteAsync($"UPDATE dbo.Invitations SET RevokedAt=SYSDATETIMEOFFSET() WHERE Id='{invitationId}';");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "session", cookie: cookie)).Status);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "join", code)).Status);
+        Assert.Equal(1, await SessionRowsAsync());
     }
 
     [SchemaV11Fact]
