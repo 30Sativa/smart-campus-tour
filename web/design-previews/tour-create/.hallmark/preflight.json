@@ -1,0 +1,103 @@
+{
+  "date": "2026-11-18",
+  "mode": "approved layout applied",
+  "scope": "app",
+  "genre": "modern-minimal",
+  "theme": "brand",
+  "route": "/staff/manage/tours/new",
+  "dirtyTree": "Existing user edits preserved; proposal uses new files only. Live redesign is deferred until user approves.",
+  "preserved": [
+    {
+      "source": "web/src/index.css:13",
+      "item": "Existing ink, muted text and cool console palette"
+    },
+    {
+      "source": "web/src/index.css:73",
+      "item": "Be Vietnam Pro"
+    },
+    {
+      "source": "web/src/features/staff/staff-nav.ts:27",
+      "item": "Staff destinations"
+    },
+    {
+      "source": "web/src/features/administration/tours/CreateTourForm.tsx:137",
+      "item": "All form inputs and both Tour kinds"
+    },
+    {
+      "source": "web/src/features/administration/tours/CreateTourForm.tsx:229",
+      "item": "Review and route preview"
+    }
+  ],
+  "introduced": [
+    "Four grouped sections in a wider form column",
+    "Smaller sticky review column",
+    "Mobile review precedes submit buttons"
+  ],
+  "material": {
+    "real": [
+      "Project logo",
+      "Staff navigation",
+      "Form fields",
+      "Fixed shift schedule"
+    ],
+    "sample": [
+      "Tour trình diễn",
+      "Tuyến thử",
+      "POI 1, 30 seconds",
+      "Minh Staff",
+      "Robot mẫu placeholder"
+    ],
+    "absent": [
+      "Live availability",
+      "Live route-duration computation",
+      "Backend quick-tour deadline"
+    ]
+  },
+  "files": {
+    "create": [
+      "index.html",
+      "preview.css",
+      "preview.js",
+      "tokens.css",
+      "base.css",
+      "README.md",
+      "serve.mjs"
+    ],
+    "edit": [],
+    "delete": []
+  },
+  "baseline": "Source inspected. No authenticated live screenshot recorded; this preview has no API connection.",
+  "previewUrl": "http://127.0.0.1:5185/?sample=1",
+  "verification": {
+    "hallmark": "0 FAIL, 0 REFLEX, 0 WARN; F4/F7 answered, 74 dismissed as kept brand",
+    "interaction": "PASS at 8 widths; normal/quick, validation, summary, sticky, mobile order, states, no API, no page errors",
+    "mapsCheck": "PASS",
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "tests": "3 targeted Tour files, 47 tests PASS",
+    "fullScript": "Blocked at npm ci by native module lock; exact lock dependencies restored from isolated npm ci"
+  },
+  "appliedFiles": [
+    "web/src/routes/staff/manage/StaffManageTourCreatePage.tsx",
+    "web/src/features/administration/tours/CreateTourForm.tsx",
+    "web/src/features/administration/tours/create-tour.css",
+    "web/src/features/administration/tours/tour-preparation-ux.test.tsx"
+  ],
+  "applicationChecks": {
+    "hallmark": "0 FAIL, 0 REFLEX, 0 WARN; 74 dismissed as preserved Staff ink",
+    "render": "Actual React page with fixture API responses; desktop, phone and both Tour kinds inspected",
+    "browser": "Direct entry and switching verified at 6 sizes; no page errors",
+    "tests": "scripts/verify web PASS in isolated matching source snapshot;  Test Files  175 passed (175);       Tests  1459 passed | 1 skipped | 1 todo (1461)",
+    "status": "applied and verified"
+  },
+  "entryFlow": {
+    "screen": "direct create form",
+    "defaultKind": "normal",
+    "standaloneKindChooser": false,
+    "changeKindAction": false,
+    "inlineKindSelector": true,
+    "preservesEnteredValues": true,
+    "legacyShortLink": true
+  }
+}

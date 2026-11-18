@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Archive, FileText, Maximize2, MapPinOff, Pencil, Plus, RotateCcw, Send, Trash2, Volume2 } from 'lucide-react'
+import { Archive, ArrowUpDown, FileText, Maximize2, MapPinOff, Pencil, Plus, RotateCcw, Send, Trash2, Volume2 } from 'lucide-react'
 import { SearchField } from '../../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
@@ -25,6 +25,26 @@ import { useAuthStore } from '../../../stores/auth-store'
 type Status = PoiStatus
 /** A retired POI (ADR-0062) has its own filter and label; the check-state filters leave it out. */
 type Filter = 'all' | Status | 'RETIRED'
+const POI_SORT_OPTIONS = [
+  { value: 'original', label: 'Thứ tự ban đầu' },
+  { value: 'name', label: 'Tên A–Z' },
+  { value: 'name-desc', label: 'Tên Z–A' },
+  { value: 'updated-desc', label: 'Cập nhật mới nhất' },
+  { value: 'updated', label: 'Cập nhật cũ nhất' },
+] as const
+type PoiSort = typeof POI_SORT_OPTIONS[number]['value']
+
+function comparePois(a: PoiProposal, b: PoiProposal, sort: PoiSort) {
+  if (sort === 'name' || sort === 'name-desc') {
+    const order = a.revision.name.localeCompare(b.revision.name, 'vi', { numeric: true, sensitivity: 'base' })
+    return sort === 'name' ? order : -order
+  }
+  if (sort === 'updated' || sort === 'updated-desc') {
+    const order = Date.parse(a.revision.createdAt) - Date.parse(b.revision.createdAt)
+    return sort === 'updated' ? order : -order
+  }
+  return 0
+}
 const statusOf = poiStatus
 const isRetired = (p: PoiProposal) => Boolean(p.retiredAt)
 const RETIRED_CHIP = 'bg-[#eef0f3] text-[#5a6473]'
@@ -45,6 +65,8 @@ const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:rin
  * proposes; only Technical Staff records a check.
  */
 export default function StaffManagePoisPage() {
+  const [params, setParams] = useSearchParams()
+  const sort = POI_SORT_OPTIONS.find(option => option.value === params.get('sort'))?.value ?? 'original'
   const proposals = usePoiProposals()
   const mapVersions = useMapVersions()
   const [filter, setFilter] = useState<Filter>('all')
@@ -61,10 +83,20 @@ export default function StaffManagePoisPage() {
   const number = new Map(scoped.map((p, index) => [p.id, index + 1]))
   const count = (f: Filter) => scoped.filter((p) => matchesFilter(p, f)).length
   const rows = scoped.filter((p) => matchesFilter(p, filter) && `${p.revision.name} ${p.revision.purpose}`.toLowerCase().includes(search.trim().toLowerCase()))
+    .sort((a, b) => comparePois(a, b, sort))
   const selected = rows.find(p => p.id === chosen) ?? rows[0]
+  const chooseSort = (next: PoiSort) => {
+    if (selected) setChosen(selected.id)
+    setParams(previous => {
+      const copy = new URLSearchParams(previous)
+      if (next === 'original') copy.delete('sort')
+      else copy.set('sort', next)
+      return copy
+    }, { replace: true })
+  }
   const listRef = useRef<HTMLUListElement>(null)
   // A point chosen on the map may sit below the fold of the list, so bring its row into view.
-  useEffect(() => { listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView?.({ block: 'nearest' }) }, [selected?.id])
+  useEffect(() => { listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView?.({ block: 'nearest' }) }, [selected?.id, sort])
   const mapItems = mapVersions.data ?? []
   const blocked = !mapVersions.isPending && !mapVersions.error && !mapItems.some(item => item.canUseForPoiPreparation)
   const mapName = (id: string, fallback: string) => {
@@ -119,9 +151,17 @@ export default function StaffManagePoisPage() {
 
       {/* Beside the map the list is as tall as the map card and scrolls inside, so many POIs never stretch the page. */}
       <section className={`${card} flex min-w-0 flex-col xl:max-h-[calc(min(70vh,620px)+8.75rem)]`} aria-label="Danh sách đề xuất POI">
-        <div className="flex items-baseline justify-between gap-3 px-4 pt-4 pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-4 pb-2">
           <h2 className="text-base font-bold text-[#2d3748]">Danh sách điểm</h2>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 text-xs text-muted">
+            <ArrowUpDown size={14} aria-hidden="true" />Sắp xếp
+            <select aria-label="Sắp xếp điểm" value={sort} onChange={event => chooseSort(event.target.value as PoiSort)} disabled={!proposals.isSuccess} className={buttonClass('secondary', 'sm')}>
+              {POI_SORT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
           {proposals.isSuccess && <span className="text-xs text-[#718096]">{scoped.length} điểm{rows.length !== scoped.length ? `, đang hiện ${rows.length}` : ''}</span>}
+          </div>
         </div>
         {proposals.isPending ? <SkeletonRows rows={4} /> : proposals.error ? <AdminErrorPanel title="Không tải được đề xuất POI." onRetry={() => void proposals.refetch()} /> : !rows.length ?
           (blocked && !everyProposal.length ? <NoEligibleMap maps={mapItems} /> : <EmptyState title={all.length || deployedOnly ? 'Không có POI khớp bộ lọc' : 'Chưa có đề xuất POI'} description={all.length || deployedOnly ? 'Đổi trạng thái hoặc từ khóa để tìm điểm tham quan.' : 'Tạo đề xuất từ một bản đồ đã tải lên.'} />) :

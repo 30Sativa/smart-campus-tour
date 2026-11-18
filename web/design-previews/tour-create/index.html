@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Bản đề xuất bố cục trang Tạo Tour: biểu mẫu theo nhóm và tóm tắt bên phải, chưa áp dụng vào ứng dụng.">
+<title>Xem trước bố cục Tạo Tour | CampusTour</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./preview.css">
+</head>
+<body>
+<div class="preview-bar"><span>Bố cục đã duyệt và áp dụng trong mã nguồn. Đây là bản mẫu tham chiếu.</span><button type="button" id="sample-toggle">Thử dữ liệu mẫu</button></div>
+<div class="shell">
+<aside class="sidebar" aria-label="Menu Staff hiện có">
+ <div class="brand"><img src="../../public/images/logo.png" alt="Logo CampusTour"><div><strong>CampusTour</strong><span>Nhân viên vận hành</span></div></div>
+ <nav aria-label="Điều hướng Staff">
+ <p class="nav-heading">Vận hành</p>
+ <a class="nav-item" href="/staff" data-icon="grid">Tổng quan</a>
+ <a class="nav-item" href="/staff/live" data-icon="play">Điều hành trực tiếp</a>
+ <a class="nav-item" href="/staff/digital-twin" data-icon="box">Digital Twin</a>
+ <a class="nav-item" href="/staff/robot" data-icon="bot">Robot & thiết bị</a>
+ <p class="nav-heading">Tour & đăng ký</p>
+ <a class="nav-item" href="/staff/schedule" data-icon="calendar" aria-current="page">Lịch Tour</a>
+ <a class="nav-item" href="/staff/manage/registrations/pending" data-icon="clipboard">Đăng ký đoàn</a>
+ <p class="nav-heading">Nội dung tham quan</p>
+ <a class="nav-item" href="/staff/manage/pois" data-icon="pin">Quản lý POI</a>
+ <a class="nav-item" href="/staff/manage/routes" data-icon="route">Danh mục tuyến</a>
+ <p class="nav-heading">Lịch sử</p>
+ <a class="nav-item" href="/staff/history" data-icon="clock">Lịch sử Tour</a>
+ </nav>
+</aside>
+<div class="workspace">
+<header class="topbar"><div class="breadcrumbs"><span>Staff</span><i data-icon="chevron"></i><a href="/staff/schedule">Lịch Tour</a><i data-icon="chevron"></i><strong>Tạo Tour</strong></div><div class="account"><span class="avatar" data-icon="user"></span><span>Staff</span></div></header>
+<main>
+ <div class="heading"><a href="/staff/schedule" class="back"><i data-icon="back"></i>Lịch Tour</a><h1>Tạo Tour</h1><p class="intro" id="page-description">Tour mới nhận đăng ký và giữ chỗ robot. Staff bắt đầu thủ công khi tới giờ.</p></div>
+ <div class="layout">
+ <form id="tour-form" class="form-column">
+ <div class="form-surface">
+  <section class="form-section" aria-labelledby="info-title">
+   <div class="section-head"><i data-icon="clipboard"></i><h2 id="info-title">Thông tin Tour</h2></div>
+   <div class="kind-selector" role="group" aria-label="Loại Tour">
+    <button type="button" data-kind="normal" aria-pressed="true"><i data-icon="calendar"></i>Tour theo ca<i data-icon="check" class="kind-check"></i></button>
+    <button type="button" data-kind="quick" aria-pressed="false"><i data-icon="zap"></i>Tour nhanh<i data-icon="check" class="kind-check"></i></button>
+   </div>
+   <p class="kind-help" id="kind-help">Tạo trước ít nhất 72 giờ. Đăng ký đóng trước 48 giờ; Staff duyệt trước 24 giờ.</p>
+   <label class="field"><span class="field-title">Tên Tour <span>Bắt buộc</span></span><input name="name" id="tour-name" required maxlength="150" placeholder="Ví dụ: Tham quan từ xa, sáng thứ Bảy"></label>
+   <label class="field" id="reason-field" hidden><span class="field-title">Lý do tạo gấp <span>Bắt buộc</span></span><textarea id="quick-reason" name="shortNoticeReason" maxlength="500" rows="2" placeholder="Ví dụ: Buổi trình diễn với đoàn khách của nhà trường."></textarea></label>
+   <label class="field"><span class="field-title">Mô tả <span>Không bắt buộc</span></span><textarea name="description" id="description" maxlength="1000" rows="2" placeholder="Nội dung ngắn đại diện trường sẽ thấy khi đăng ký."></textarea></label>
+  </section>
+  <section class="form-section" aria-labelledby="route-title">
+   <div class="section-head"><i data-icon="route"></i><h2 id="route-title">Tuyến & vận hành</h2></div>
+   <div id="route-loading" hidden aria-busy="true"><div class="skeleton"></div><p class="hint">Đang tải danh mục tuyến…</p></div>
+   <div id="route-error" class="notice error" role="alert" hidden>Không tải được danh mục tuyến. <button type="button" class="button" id="retry">Thử lại</button></div>
+   <label class="field" id="route-field"><span class="field-title">Tuyến đã kiểm chứng <span>Bắt buộc</span></span><select name="routeRevisionId" id="route" required><option value="">Chọn tuyến</option><option value="sample">Tuyến thử (dữ liệu mẫu)</option></select><span class="hint" id="route-hint">Chỉ chọn tuyến có kết quả chạy thử đạt và vừa thời lượng ca.</span></label>
+   <div class="pair">
+    <label class="field"><span class="field-title">Robot <span>Bắt buộc</span></span><select name="robotCode" id="robot" required disabled><option value="">Chọn robot vật lý</option><option value="sample">Robot mẫu</option></select><span class="hint" id="robot-hint">Chọn tuyến trước.</span></label>
+    <label class="field"><span class="field-title">Người vận hành <span>Bắt buộc</span></span><select name="operatorUserId" id="operator" required><option value="">Chọn Staff</option><option value="sample">Minh Staff (mẫu)</option></select></label>
+   </div>
+  </section>
+  <section class="form-section" aria-labelledby="schedule-title">
+   <div class="section-head"><i data-icon="calendar"></i><h2 id="schedule-title">Lịch & sức chứa</h2></div>
+   <div id="normal-schedule">
+    <label class="field"><span class="field-title">Ngày tổ chức <span>Bắt buộc</span></span><input type="date" name="date" id="date" min="2026-11-21" required><span class="hint">Giờ Việt Nam. Robot không tự chạy khi tới giờ.</span></label>
+    <div class="field"><span class="field-title">Ca <span>Bắt buộc</span></span><div class="shift-empty" id="shift-empty">Chọn tuyến, robot và ngày để xem các ca còn trống.</div><p class="hint" id="available-hint" hidden>Các ca còn trống (dữ liệu mẫu).</p><div class="shift-options" id="shifts" role="group" aria-label="Ca" hidden>
+     <button type="button" class="shift" data-shift="S1" aria-pressed="false"><strong>Ca sáng</strong><span>08:15 đến 09:45</span></button>
+     <button type="button" class="shift" data-shift="S4" aria-pressed="false"><strong>Ca trưa</strong><span>11:15 đến 11:45</span></button>
+     <button type="button" class="shift" data-shift="S2" aria-pressed="false"><strong>Ca chiều 1</strong><span>13:15 đến 14:45</span></button>
+     <button type="button" class="shift" data-shift="S3" aria-pressed="false"><strong>Ca chiều 2</strong><span>16:15 đến 17:45</span></button>
+     <button type="button" class="shift" data-shift="S5" aria-pressed="false"><strong>Ca tối</strong><span>19:15 đến 20:45</span></button>
+    </div></div>
+   </div>
+   <div class="notice warn" id="quick-notice" hidden>Tour nhanh giữ robot từ lúc tạo. Chỉ bắt đầu khi đã chốt Tour và robot sẵn sàng.</div>
+   <label class="field"><span class="field-title">Sức chứa <span>Bắt buộc</span></span><input type="number" name="capacity" id="capacity" min="1" max="20" step="1" value="20" required aria-describedby="capacity-help"><span class="hint" id="capacity-help">Số dòng đăng ký tối đa. Mỗi điểm xem chung tính là 1 chỗ.</span></label>
+  </section>
+  <section class="form-section" aria-labelledby="media-title">
+   <div class="section-head"><i data-icon="image"></i><h2 id="media-title">Ảnh & video</h2><span class="optional">Không bắt buộc</span></div>
+   <label class="field" for="cover">Ảnh Tour</label>
+   <div class="upload-row"><div class="image-box" id="cover-preview"><i data-icon="image"></i></div><div><p class="hint">Ảnh hiển thị cho đại diện trường.</p><p class="hint">Nên dùng ảnh ngang 16:9.</p></div></div>
+   <button type="button" class="button" id="choose-cover">Chọn ảnh</button><input class="file-input" hidden type="file" id="cover" name="cover" accept="image/jpeg,image/png,image/webp,image/avif"><span class="hint" id="cover-status">JPG, PNG, WebP hoặc AVIF, tối đa 10 MB.</span><button class="button" type="button" id="clear-cover" hidden>Bỏ ảnh đã chọn</button>
+   <div class="video-row"><label class="field" for="video">Video dự phòng khi mất hình trực tiếp</label><span class="hint">Chưa có. Học sinh chỉ thấy thông báo mất hình nếu livestream gặp sự cố.</span><button type="button" class="button" id="choose-video">Chọn video</button><input class="file-input" hidden type="file" id="video" name="fallbackVideo" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/x-msvideo"><span class="hint" id="video-status">Bản xem trước chỉ chọn tệp, chưa tải video lên.</span></div>
+  </section>
+ </div>
+ <div class="form-actions"><p class="action-hint" id="missing">Cần nhập tên Tour, chọn tuyến, robot, người vận hành, ngày và ca.</p><button class="button" type="button" id="cancel">Hủy bỏ</button><button class="button primary" type="submit" id="create" disabled aria-describedby="missing">Tạo Tour</button></div>
+ <p class="feedback" id="feedback" role="status"></p>
+ </form>
+ <aside class="review-column" aria-label="Xem lại trước khi tạo">
+  <section class="review-panel"><div class="review-title"><i data-icon="clipboard"></i><h2>Xem lại trước khi tạo</h2></div><p class="review-name" id="review-name">Tour chưa đặt tên</p><p class="kind-label" id="review-kind">Tour theo ca</p>
+   <dl>
+    <div class="review-row"><dt>Tuyến</dt><dd id="review-route">Chưa chọn</dd></div>
+    <div class="review-row"><dt>Robot</dt><dd id="review-robot">Chưa chọn</dd></div>
+    <div class="review-row"><dt>Người vận hành</dt><dd id="review-operator">Chưa chọn</dd></div>
+    <div class="review-row" id="review-date-row"><dt>Ngày tổ chức</dt><dd id="review-date">Chưa chọn</dd></div>
+    <div class="review-row" id="review-shift-row"><dt>Ca</dt><dd id="review-shift">Chưa chọn</dd></div>
+    <div class="review-row"><dt>Sức chứa</dt><dd id="review-capacity">20 chỗ</dd></div>
+    <div class="review-row major"><dt>Giữ robot</dt><dd id="review-hold">Chờ chọn ca</dd></div>
+    <div class="review-row"><dt>Đóng đăng ký</dt><dd id="review-close">Chờ chọn ca</dd></div>
+    <div class="review-row" id="quick-deadline-row" hidden><dt>Hạn bắt đầu</dt><dd>Theo cấu hình máy chủ</dd></div>
+    <div class="review-row"><dt>Thời lượng dự kiến</dt><dd>Chờ dữ liệu máy chủ</dd></div>
+   </dl><p class="preview-note" id="review-note">Sau khi tạo, Tour ở trạng thái Đang nhận đăng ký. Đại diện trường có thể đăng ký đoàn.</p>
+  </section>
+  <section class="route-panel" aria-labelledby="preview-route-title"><h2 id="preview-route-title">Xem trước tuyến</h2><p class="route-empty" id="route-empty">Chọn một tuyến để xem các điểm dừng.</p><div id="route-full" hidden><p class="hint">Tuyến thử, dữ liệu minh họa bố cục.</p><ol class="route-list"><li><span class="stop-number">1</span>POI 1<span class="hint">Dừng 30 giây</span></li></ol></div></section>
+  <details class="review-tools"><summary>Kiểm tra trạng thái bản mẫu</summary><div class="state-buttons"><button type="button" data-state="empty">Chưa chọn</button><button type="button" data-state="loading">Đang tải</button><button type="button" data-state="error">Lỗi tải</button><button type="button" data-state="full">Có dữ liệu mẫu</button></div></details>
+ </aside>
+ </div>
+</main>
+</div>
+</div>
+<noscript><p class="notice">Đây là bản xem trước bố cục. Bật JavaScript để thử chuyển loại Tour và xem phần tóm tắt cập nhật.</p></noscript>
+<script src="./preview.js"></script>
+</body>
+</html>

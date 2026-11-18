@@ -239,11 +239,12 @@ describe('Representative real HTTP contract', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /có quyền cung cấp thông tin đăng ký/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Gửi đăng ký' }))
     expect(await screen.findByText('Lần gửi trước chưa được xác nhận')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Đã gửi đăng ký' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Thử gửi lại' }))
-    // The form page already shows the Tour name as a heading, so waiting for that heading could catch the form's
-    // copy just before the successful retry navigates away (flaky in CI). Wait for the result page's own callout.
+    // The API-confirmed popup opens while detail is loading; wait for that detail independently.
     expect(await screen.findByText('Đã gửi đăng ký')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Buổi chưa đăng ký' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Đã gửi đăng ký' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Buổi chưa đăng ký' })).toBeInTheDocument()
     expect(submitAttempts).toHaveLength(2)
     expect(submitAttempts[1]).toEqual(submitAttempts[0])
     expect(submitAttempts[0].input.roster.map(r => r.rowType)).toEqual(['INDIVIDUAL', 'SHARED_VIEWING'])

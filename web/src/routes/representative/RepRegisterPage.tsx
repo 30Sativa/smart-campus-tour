@@ -13,6 +13,8 @@ import { matchRosterIdentities, rosterInput, rosterReplacement } from '../../fea
 import { newRosterRowsAllowed, registrationClosesAt } from '../../features/representative/registration-deadline'
 import { formatDateTime, readRepError } from '../../features/representative/rep-format'
 import { repButton } from '../../features/representative/rep-classes'
+import { tourImage } from '../../features/representative/tour-image'
+import { TourCoverImg } from '../../features/representative/components/TourCover'
 
 export default function RepRegisterPage() {
   const { tourId, registrationId } = useParams()
@@ -104,7 +106,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
         ? resubmitMutation.mutateAsync({ id: base.registration.summary.id, input: next.input, version: base.registration.rowVersion })
         : update.mutateAsync({ id: base.registration.summary.id, input: next.input, version: base.registration.rowVersion })), base.registration.summary.id)
         : (await submit.mutateAsync({ tourId: base.tour.id, input: next.input, requestId: next.requestId })).id
-      navigate(`/dai-dien/dang-ky/${id}`, { replace: true, state: base.registration ? undefined : { justSent: true } })
+      navigate(`/dai-dien/dang-ky/${id}`, { replace: true, state: { registrationResult: { id, kind: base.registration ? resubmit ? 'resubmitted' : 'updated' : 'submitted' } } })
     } catch (failure) {
       const problem = readRepError(failure)
       if (problem.status && problem.status >= 400 && problem.status < 500) setAttempt(null)
@@ -118,8 +120,13 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
   if (!gate.allowed) return <RepPage><RepPageHeader title={title} back={{ to: base.registration ? `/dai-dien/dang-ky/${base.registration.summary.id}` : `/dai-dien/buoi/${base.tour.id}`, label: 'Quay lại' }} /><Callout title="Chưa thể thay đổi đăng ký">{gate.reason}</Callout></RepPage>
   return <RepPage>
     <RepPageHeader back={{ to: base.registration ? `/dai-dien/dang-ky/${base.registration.summary.id}` : `/dai-dien/buoi/${base.tour.id}`, label: 'Quay lại' }} title={title} description="Kiểm tra thông tin trường, người liên hệ và từng email lời mời." />
-    <RegistrationStepper steps={['Thông tin đoàn', 'Danh sách lời mời', 'Kiểm tra và gửi']} current={step} onSelect={locked ? undefined : setStep} />
-    <div className="rep-detail"><div className="rep-stack">
+    <div className="rep-registration-layout"><aside className="rep-registration-context" aria-label="Buổi tham quan đang đăng ký">
+      <RegistrationStepper steps={['Thông tin đoàn', 'Danh sách lời mời', 'Kiểm tra và gửi']} current={step} onSelect={locked ? undefined : setStep} />
+      <div className="rep-registration-tour"><TourCoverImg tourId={base.tour.id} tourName={base.tour.name} image={tourImage(base.tour)} /><h2>{base.tour.name}</h2>
+        <InfoList columns={1} items={[{ label: 'Thời gian dự kiến', value: formatDateTime(base.tour.scheduledStartAt) }, { label: 'Hạn tạo đăng ký và thêm dòng', value: formatDateTime(registrationClosesAt(base.tour).toISOString()) }, { label: 'Tuyến tham quan', value: base.tour.routeName }, { label: 'Điểm dừng trong tuyến', value: base.tour.stops.length }]} />
+        <p className="rep-hint">Tối đa 10 điểm xem cho mỗi hồ sơ. Sau khi gửi, bạn vẫn sửa được danh sách tới hạn thêm dòng. Dòng đã duyệt muốn đổi email thì gửi yêu cầu đổi email.</p>
+      </div>
+    </aside><div className="rep-stack rep-registration-form">
       {error && <Callout tone="danger" title={error.message} role="alert" actions={error.stale && !attempt ? <button type="button" className={repButton('secondary', 'sm')} disabled={reloading} onClick={async () => { setReloading(true); try { await onReload() } catch { setError({ ...error, message: 'Không tải lại được dữ liệu. Bản nháp vẫn được giữ; thử tải lại khi kết nối ổn định.' }); setReloading(false) } }}>Tải lại dữ liệu và bắt đầu lại</button> : undefined}>
         {error.details?.length ? <ul>{error.details.map((detail, index) => <li key={index}>{detail}</li>)}</ul> : null}
       </Callout>}
@@ -136,7 +143,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
         } else if (!confirmed) setError({ message: 'Xác nhận quyền cung cấp thông tin đăng ký trước khi gửi.' })
         else void send()
       }}>
-        <fieldset className="rep-form-fieldset rep-stack" disabled={locked}>
+        <fieldset key={step} className="rep-form-fieldset rep-stack rep-tab-enter" disabled={locked}>
           {step === 0 && <Panel title="Thông tin trường và đoàn"><div className="rep-fields">{fields.map(field => <label key={field.key} className="rep-field" htmlFor={`registration-${field.key}`}>
             <span>{field.label}<span aria-hidden="true"> *</span></span>
             <input id={`registration-${field.key}`} name={field.key} required type={field.type ?? 'text'} maxLength={field.max} className="rep-input" value={values[field.key]} aria-invalid={Boolean(fieldErrors[field.key])} aria-describedby={fieldErrors[field.key] ? `registration-${field.key}-error` : undefined} onChange={event => { setValues(previous => ({ ...previous, [field.key]: event.target.value })); setConfirmed(false) }} />
@@ -161,9 +168,6 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
           <button type="submit" className={repButton('dark')} disabled={busy || Boolean(error?.stale) || reloading}>{busy && <Spinner />}{busy ? 'Đang gửi...' : step === 2 ? attempt ? 'Thử gửi lại' : base.registration ? resubmit ? 'Gửi lại đăng ký' : 'Lưu thay đổi' : 'Gửi đăng ký' : 'Tiếp tục'}</button>
         </div>
       </form>
-    </div><aside className="rep-summary-aside" aria-label="Buổi tham quan đang đăng ký"><h2>{base.tour.name}</h2>
-      <InfoList columns={1} items={[{ label: 'Thời gian dự kiến', value: formatDateTime(base.tour.scheduledStartAt) }, { label: 'Hạn tạo đăng ký và thêm dòng', value: formatDateTime(registrationClosesAt(base.tour).toISOString()) }, { label: 'Tuyến tham quan', value: base.tour.routeName }, { label: 'Điểm dừng trong tuyến', value: base.tour.stops.length }]} />
-      <p className="rep-hint">Tối đa 10 điểm xem cho mỗi hồ sơ. Sau khi gửi, bạn vẫn sửa được danh sách tới hạn thêm dòng. Dòng đã duyệt muốn đổi email thì gửi yêu cầu đổi email.</p>
-    </aside></div>
+    </div></div>
   </RepPage>
 }

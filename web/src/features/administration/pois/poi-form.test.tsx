@@ -33,6 +33,11 @@ function renderAt(path: string) {
   </Routes></MemoryRouter></QueryClientProvider>)
 }
 
+async function openCamera() {
+  fireEvent.click(await screen.findByRole('tab', { name: 'Camera' }))
+  return screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
+}
+
 describe('Staff versioned POI workflow', () => {
   beforeEach(() => {
     restoreLayout = installSvgLayout()
@@ -59,7 +64,7 @@ describe('Staff versioned POI workflow', () => {
   it('loads the selected map package, converts a picked cell to world coordinates and creates/submits a proposal', async () => {
     renderAt('/staff/manage/pois/new')
     fireEvent.change(await screen.findByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
-    expect(screen.getByText('Robot đang chạy bản đồ này: amr-01')).toBeInTheDocument()
+    expect(screen.getByText('Robot đang dùng: amr-01')).toBeInTheDocument()
     const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
     fireEvent.click(screen.getByRole('button', { name: 'Chọn vị trí' }))
     fireEvent.pointerDown(svg, pointerAt(svg, 0.5, 0.5))
@@ -77,6 +82,19 @@ describe('Staff versioned POI workflow', () => {
     const submit = requests.find(r => r.url.pathname.endsWith('/submit'))!
     expect(JSON.parse(String(submit.init?.body))).toMatchObject({ expectedRevisionNumber: 1, expectedRowVersion: proposal.rowVersion })
     expect(requests.some(r => r.url.pathname === '/api/maps/versions/map-v1/package')).toBe(true)
+  })
+
+  it('keeps the full selected map label available when its displayed name is shortened', async () => {
+    const areaName = 'Khuôn viên chính Trường Đại học Công nghệ Thành phố Hồ Chí Minh'
+    const mapKey = 'campus-main-v1-khu-vuc-thu-vien-va-phong-nghien-cuu'
+    mapItem = { ...eligibleMap, map: { ...map, areaName, mapKey } }
+    renderAt('/staff/manage/pois/new')
+    const select = await screen.findByLabelText('Bản đồ')
+    fireEvent.change(select, { target: { value: 'map-v1' } })
+    expect(select).toHaveAttribute('title', `${areaName} · ${mapKey}`)
+    expect(within(select).getByRole('option', { name: `${areaName} · ${mapKey}` })).toBeInTheDocument()
+    fireEvent.change(select, { target: { value: '' } })
+    expect(select).toHaveAttribute('title', 'Chọn bản đồ')
   })
 
   it('rounds a heading typed in degrees to the stored radian precision, so the POI saves', async () => {
@@ -98,16 +116,53 @@ describe('Staff versioned POI workflow', () => {
     expect(draft.x).toBe(10.1235)
   })
 
-  it('groups the camera angle with the robot pose and keeps the content fields in their own card', async () => {
+  it('keeps the map visible while switching the inspector and preserves both drafts', async () => {
     renderAt('/staff/manage/pois/new')
-    const camera = await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
-    expect(screen.getByRole('region', { name: 'Vị trí và hướng robot' })).toContainElement(camera)
+    await screen.findByLabelText('Bản đồ')
+    const mapRegion = screen.getByRole('region', { name: 'Vị trí và hướng robot' })
     const content = screen.getByRole('complementary', { name: 'Nội dung điểm' })
+    fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Sảnh thư viện' } })
+    fireEvent.change(screen.getByLabelText('Mục đích'), { target: { value: 'Giới thiệu khu tự học' } })
+    const camera = await openCamera()
+    expect(mapRegion).toBeVisible()
+    expect(camera).toBeVisible()
+    expect(mapRegion).not.toContainElement(camera)
+    expect(content).not.toBeVisible()
+    fireEvent.click(screen.getByRole('radio', { name: /Góc tùy chỉnh/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Trái 45°' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Thông tin điểm' }))
+    expect(screen.getByLabelText('Tên POI')).toHaveValue('Sảnh thư viện')
+    expect(screen.getByLabelText('Mục đích')).toHaveValue('Giới thiệu khu tự học')
+    expect(content).toBeVisible()
     expect(content).not.toContainElement(camera)
-    expect(content).toContainElement(screen.getByLabelText('Mục đích'))
-    // Narration has its own section on the POI page (ADR-0060); a new POI is sent without it.
+    await openCamera()
+    expect(screen.getByRole('spinbutton', { name: /^PAN/ })).toHaveValue(45)
+    // Narration still has its own versioned section, not a field sent in this form.
     expect(screen.queryByLabelText('Nội dung thuyết minh')).not.toBeInTheDocument()
     expect(screen.queryByText(/Video dự phòng/)).not.toBeInTheDocument()
+  })
+
+  it('opens the camera inspector from its URL and supports keyboard tab navigation', async () => {
+    renderAt('/staff/manage/pois/proposal-1?panel=camera')
+    expect(await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })).toBeVisible()
+    const cameraTab = screen.getByRole('tab', { name: 'Camera' })
+    expect(cameraTab).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(cameraTab, { key: 'ArrowLeft' })
+    const infoTab = screen.getByRole('tab', { name: 'Thông tin điểm' })
+    expect(infoTab).toHaveAttribute('aria-selected', 'true')
+    expect(infoTab).toHaveFocus()
+    expect(screen.getByLabelText('Tên POI')).toBeVisible()
+  })
+
+  it('reveals an invalid field in the hidden inspector before native form validation focuses it', async () => {
+    renderAt('/staff/manage/pois/new?panel=camera')
+    await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
+    const name = screen.getByLabelText('Tên POI')
+    expect(name).not.toBeVisible()
+    fireEvent.invalid(name)
+    await waitFor(() => expect(name).toBeVisible())
+    await waitFor(() => expect(name).toHaveFocus())
+    expect(requests.some(r => r.init?.method === 'POST')).toBe(false)
   })
 
   it('shows the clearance message before submit and sends nothing for a pose too close to the map edge', async () => {
@@ -146,7 +201,7 @@ describe('Staff versioned POI workflow', () => {
     }))
     renderAt('/staff/manage/pois/proposal-1')
 
-    const camera = await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
+    const camera = await openCamera()
     expect(screen.getByText('Hướng cũ HEAD_LEFT, cần chọn lại.')).toBeInTheDocument()
     expect(within(camera).getAllByRole('radio').some(radio => (radio as HTMLInputElement).checked)).toBe(false)
     expect(screen.getByText('Chọn lại hoạt động để xem mô phỏng.')).toBeInTheDocument()
@@ -163,7 +218,7 @@ describe('Staff versioned POI workflow', () => {
     }))
     renderAt('/staff/manage/pois/proposal-1')
 
-    await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
+    await openCamera()
     expect(screen.getByRole('radio', { name: /Góc tùy chỉnh/ })).toBeChecked()
     expect(screen.getByRole('button', { name: 'Trái 90°' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('spinbutton', { name: /^PAN/ })).toHaveValue(90)
@@ -207,7 +262,7 @@ describe('Staff versioned POI workflow', () => {
     const picker = await screen.findByLabelText('Bản đồ') as HTMLSelectElement
     fireEvent.change(picker, { target: { value: 'map-v1' } })
 
-    expect(await screen.findByText('Chưa có robot nào đang chạy bản đồ này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.')).toBeInTheDocument()
+    expect(await screen.findByText('Chưa có robot dùng bản đồ này. Cần kỹ thuật triển khai trước khi kiểm chứng POI.')).toBeInTheDocument()
     expect(picker.selectedOptions[0].disabled).toBe(false)
     expect(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm' })).toBeEnabled()
   })
@@ -362,6 +417,7 @@ describe('Staff versioned POI workflow', () => {
       expect(screen.getByText('Lưu sẽ tạo bản mới và giữ kết quả đạt.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Lưu (giữ kết quả Đạt)' })).toBeEnabled()
       expect(screen.queryByRole('button', { name: /gửi kiểm/ })).not.toBeInTheDocument()
+      await openCamera()
       fireEvent.click(screen.getByRole('radio', { name: /Góc tùy chỉnh/ }))
       fireEvent.click(screen.getByRole('button', { name: 'Trái 90°' }))
       expect(screen.getByRole('img', { name: 'Nhìn từ trên: PAN 90° trái' })).toBeInTheDocument()
@@ -375,7 +431,7 @@ describe('Staff versioned POI workflow', () => {
     it('saves the VR head behaviour chosen in Camera & tư liệu, with its own sweep amplitude, and refuses a bad angle', async () => {
       serve({})
       renderAt('/staff/manage/pois/proposal-1')
-      await screen.findByRole('radiogroup', { name: 'Hoạt động đầu camera VR khi robot tới điểm' })
+      await openCamera()
       fireEvent.click(screen.getByRole('radio', { name: /Góc tùy chỉnh/ }))
       fireEvent.change(screen.getByRole('spinbutton', { name: /^PAN/ }), { target: { value: '45' } })
       fireEvent.change(screen.getByRole('slider', { name: 'Thanh kéo TILT' }), { target: { value: '-10' } })
@@ -413,6 +469,7 @@ describe('Staff versioned POI workflow', () => {
       expect(screen.getByLabelText('X (m)')).toBeDisabled()
       expect(screen.getByLabelText('Hướng (độ)')).toBeDisabled()
       expect(screen.getByLabelText('Bản đồ')).toBeDisabled()
+      await openCamera()
       for (const radio of screen.getAllByRole('radio')) expect(radio).toBeDisabled()
       expect(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm' })).toBeDisabled()
       expect(screen.getByRole('button', { name: 'Lưu và gửi kiểm lại' })).toBeDisabled()

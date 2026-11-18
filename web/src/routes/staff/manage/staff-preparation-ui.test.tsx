@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { strToU8, zipSync } from 'fflate'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkQueue } from '../../../features/staff/WorkQueue'
 import StaffManagePoisPage from './StaffManagePoisPage'
@@ -46,6 +46,10 @@ function show(element: React.ReactNode, path = '/staff/manage') {
   clients.push(client)
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}>{element}</MemoryRouter></QueryClientProvider>)
 }
+
+function PoiLocation() {
+  return <output aria-label="Địa chỉ danh sách điểm">{useLocation().search}</output>
+}
 beforeEach(() => {
   requests.length = 0; failRegistrations = false; packageFailure = null; proposals = standardProposals; mapVersions = standardMaps
   discardResponse = null; discardBodies.length = 0; lifecycleCalls.length = 0; historyRecords = []
@@ -89,6 +93,62 @@ afterEach(() => {
 })
 
 describe('staff preparation UI', () => {
+  it('sorts POI names naturally in Vietnamese while keeping selection and map numbers', async () => {
+    proposals = [proposal('p10', 'map-a', 'test123-v1', 'Điểm 10'), proposal('p2', 'map-a', 'test123-v1', 'Điểm 2'), proposal('pa', 'map-a', 'test123-v1', 'Ánh sáng')]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const list = await screen.findByRole('list', { name: 'Điểm tham quan' })
+    await within(list).findByRole('button', { name: 'Chọn Điểm 2' })
+    const names = () => within(list).getAllByRole('button', { name: /^Chọn / }).map(button => button.getAttribute('aria-label'))
+    fireEvent.click(within(list).getByRole('button', { name: 'Chọn Điểm 2' }))
+    const map = await screen.findByRole('img', { name: /với 3 POI/ })
+    const frame = map.getAttribute('viewBox')
+
+    fireEvent.change(screen.getByLabelText('Sắp xếp điểm'), { target: { value: 'name' } })
+    expect(names()).toEqual(['Chọn Ánh sáng', 'Chọn Điểm 2', 'Chọn Điểm 10'])
+    const selected = within(list).getByRole('button', { name: 'Chọn Điểm 2' })
+    expect(selected).toHaveAttribute('aria-pressed', 'true')
+    expect(within(selected).getByText('2')).toBeInTheDocument()
+    expect(within(map).getByRole('button', { name: /^2\. Điểm 2,/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(map.getAttribute('viewBox')).toBe(frame)
+
+    fireEvent.change(screen.getByLabelText('Sắp xếp điểm'), { target: { value: 'name-desc' } })
+    expect(names()).toEqual(['Chọn Điểm 10', 'Chọn Điểm 2', 'Chọn Ánh sáng'])
+    fireEvent.change(screen.getByLabelText('Tìm POI'), { target: { value: 'Điểm' } })
+    expect(names()).toEqual(['Chọn Điểm 10', 'Chọn Điểm 2'])
+    fireEvent.change(screen.getByLabelText('Tìm POI'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('Sắp xếp điểm'), { target: { value: 'original' } })
+    expect(names()).toEqual(['Chọn Điểm 10', 'Chọn Điểm 2', 'Chọn Ánh sáng'])
+  })
+
+  it('sorts by the current revision timestamp with timezone offsets', async () => {
+    proposals = ['Điểm A', 'Điểm B', 'Điểm C'].map((name, index) => {
+      const item = proposal(`p${index}`, 'map-a', 'test123-v1', name)
+      return { ...item, revision: { ...item.revision, createdAt: ['2026-11-02T02:00:00Z', '2026-11-02T08:00:00+07:00', '2026-11-02T02:30:00Z'][index] } }
+    })
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    await screen.findByRole('button', { name: 'Chọn Điểm A' })
+    const list = screen.getByRole('list', { name: 'Điểm tham quan' })
+    const names = () => within(list).getAllByRole('button', { name: /^Chọn / }).map(button => button.getAttribute('aria-label'))
+    fireEvent.change(screen.getByLabelText('Sắp xếp điểm'), { target: { value: 'updated-desc' } })
+    expect(names()).toEqual(['Chọn Điểm C', 'Chọn Điểm A', 'Chọn Điểm B'])
+    expect(within(list).getByRole('button', { name: 'Chọn Điểm A' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.change(screen.getByLabelText('Sắp xếp điểm'), { target: { value: 'updated' } })
+    expect(names()).toEqual(['Chọn Điểm B', 'Chọn Điểm A', 'Chọn Điểm C'])
+  })
+
+  it('restores sorting from the URL and preserves other parameters when changing it', async () => {
+    proposals = [proposal('pa', 'map-a', 'test123-v1', 'Điểm A'), proposal('pb', 'map-a', 'test123-v1', 'Điểm B')]
+    show(<><StaffManagePoisPage /><PoiLocation /></>, '/staff/manage/pois?sort=name-desc&keep=yes')
+    await screen.findByRole('button', { name: 'Chọn Điểm A' })
+    expect(screen.getByLabelText('Sắp xếp điểm')).toHaveValue('name-desc')
+    const list = screen.getByRole('list', { name: 'Điểm tham quan' })
+    expect(within(list).getAllByRole('button', { name: /^Chọn / })[0]).toHaveAccessibleName('Chọn Điểm B')
+    fireEvent.change(screen.getByLabelText('Sắp xếp điểm'), { target: { value: 'name' } })
+    expect(new URLSearchParams(screen.getByLabelText('Địa chỉ danh sách điểm').textContent!).get('sort')).toBe('name')
+    fireEvent.change(screen.getByLabelText('Sắp xếp điểm'), { target: { value: 'original' } })
+    expect(screen.getByLabelText('Địa chỉ danh sách điểm')).toHaveTextContent('?keep=yes')
+  })
+
   it('uses API totals rather than the number of rows in the queue preview', async () => {
     show(<WorkQueue urgent={false} />)
     const registrations = screen.getByRole('group', { name: 'Đăng ký chờ duyệt' })

@@ -2,6 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { campusDateKey } from '../../components/ui/date-time'
+import { dayStart } from '../../features/administration/tours/tour-calendar'
+import { addCampusDays } from '../../features/staff/operations/hooks'
 import { useAuthStore } from '../../stores/auth-store'
 import OverviewPage from './OverviewPage'
 
@@ -20,12 +23,18 @@ const READY_TOUR = tourRow('tour-ready', 'Tour chiều', 'READY', {
 
 let running: object[] = []
 let today: object[] = [READY_TOUR]
+let upcoming: object[] = []
+let upcomingTotal: number | undefined
+let routeDetail: object | null = null
 let emailRequests: object[] = []
 const page = (data: object[], total = data.length) => new Response(JSON.stringify({ success: true, data, pagination: { page: 1, pageSize: 20, totalItems: total, totalPages: 1 } }), { status: 200 })
 
 beforeEach(() => {
   running = []
   today = [READY_TOUR]
+  upcoming = []
+  upcomingTotal = undefined
+  routeDetail = null
   emailRequests = []
   useAuthStore.getState().setAuth('test-token', { userId: 'staff-1', username: 'lan', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
@@ -33,6 +42,9 @@ beforeEach(() => {
     if (url.pathname === '/api/staff/manage/registrations') return page([], 4)
     if (url.pathname === '/api/staff/manage/roster-email-change-requests') return page(emailRequests)
     if (url.pathname === '/api/staff/manage/registrations/registration-9') return new Response('{}', { status: 500 })
+    if (url.pathname.startsWith('/api/staff/manage/tours/')) {
+      return routeDetail ? Response.json({ success: true, data: routeDetail }) : new Response('{}', { status: 404 })
+    }
     if (url.pathname !== '/api/staff/manage/tours') return page([])
     if (url.searchParams.get('phase') === 'RUNNING') return page(running)
     if (url.searchParams.get('state') === 'SCHEDULED') {
@@ -43,6 +55,7 @@ beforeEach(() => {
     }
     // Today is the only list read with from/to and size 100.
     if (url.searchParams.get('from') && url.searchParams.get('size') === '100') return page(today)
+    if (url.searchParams.get('from')) return page(upcoming, upcomingTotal)
     return page([])
   }))
 })
@@ -64,7 +77,55 @@ describe('Staff home', () => {
     expect(await within(queue).findByText(/4 đăng ký chờ duyệt · 2 Tour chưa chốt/)).toBeInTheDocument()
     expect(within(queue).getByText(/Đang có việc cần xử lý ngay ở trên/)).toBeInTheDocument()
     // One overview: no figure strip that restates the alert.
-    expect(screen.queryByRole('region', { name: 'Tình hình hôm nay' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Tóm tắt hôm nay')).not.toBeInTheDocument()
+  })
+
+  it('shows route stops in order, without treating skipped stops as arrivals', async () => {
+    running = [ASSIST_TOUR]
+    routeDetail = {
+      tour: ASSIST_TOUR,
+      routeRevision: { stops: [
+        { id: 's4', stopOrder: 4, name: 'Khu thực hành' },
+        { id: 's1', stopOrder: 1, name: 'Sảnh chính' },
+        { id: 's2', stopOrder: 2, name: 'Hội trường' },
+        { id: 's3', stopOrder: 3, name: 'Thư viện' },
+      ] },
+      execution: { currentStep: 'NAVIGATING', currentRevisionStopId: 'S3', lastArrivedRevisionStopId: 's2' },
+    }
+    show()
+    const diagram = await screen.findByRole('region', { name: 'Sơ đồ tuyến theo thứ tự điểm dừng' })
+    const stops = within(diagram).getAllByRole('listitem')
+    expect(stops).toHaveLength(4)
+    expect(stops[0]).toHaveTextContent('Sảnh chính')
+    expect(stops[0]).not.toHaveTextContent('Đã đến')
+    expect(stops[1]).toHaveTextContent('Hội trườngĐã đến')
+    expect(stops[2]).toHaveAttribute('aria-current', 'step')
+    expect(stops[2]).toHaveTextContent('Thư việnĐiểm đích hiện tại')
+    expect(stops[3]).toHaveTextContent('Khu thực hànhĐiểm kế tiếp')
+  })
+
+  it('counts only the seven shown campus days and honors the operator filter', async () => {
+    const day = campusDateKey(Date.now())
+    const mine = { userId: 'staff-1', fullName: 'Lan', username: 'lan' }
+    today = [{ ...READY_TOUR, scheduledStartAt: dayStart(day), operator: mine }]
+    upcoming = [
+      tourRow('future-2', 'Tour của Minh', 'SCHEDULED', { scheduledStartAt: dayStart(addCampusDays(day, 2)) }),
+      tourRow('future-7', 'Ngoài biểu đồ', 'SCHEDULED', { scheduledStartAt: dayStart(addCampusDays(day, 7)), operator: mine }),
+    ]
+    show()
+    const chart = screen.getByRole('region', { name: 'Lịch Tour 7 ngày' })
+    expect(await within(chart).findByText('2 Tour theo ngày bắt đầu')).toBeInTheDocument()
+    expect(within(chart).getAllByRole('listitem')).toHaveLength(7)
+    fireEvent.click(screen.getByRole('button', { name: /Chỉ Tour tôi vận hành/ }))
+    expect(within(chart).getByText('1 Tour theo ngày bắt đầu')).toBeInTheDocument()
+  })
+
+  it('does not pass off a partial result as the full schedule', async () => {
+    upcomingTotal = 21
+    show()
+    const chart = screen.getByRole('region', { name: 'Lịch Tour 7 ngày' })
+    expect(await within(chart).findByText(/Dữ liệu trải trên nhiều trang/)).toBeInTheDocument()
+    expect(within(chart).queryByText(/Tour theo ngày bắt đầu/)).not.toBeInTheDocument()
   })
 
   it('without a running Tour, names the next one and keeps the queue open beside today', async () => {
@@ -120,15 +181,40 @@ describe('Staff home', () => {
     expect(within(today).queryByText(/sẵn sàng/i)).not.toBeInTheDocument()
   })
 
-  it('with no Tour today, says so on the one status line and goes straight to the coming days, with no "(0)" filters', async () => {
+  it('keeps the dashboard and previews the upcoming route when there is no Tour today', async () => {
     today = []
+    const date = addCampusDays(campusDateKey(Date.now()), 1)
+    const upcomingTour = tourRow('upcoming', 'Tour ngày mai', 'READY', { scheduledStartAt: dayStart(date) })
+    upcoming = [upcomingTour]
+    routeDetail = {
+      tour: upcomingTour,
+      routeRevision: { stops: [{ id: 's1', stopOrder: 1, name: 'Sảnh chính' }, { id: 's2', stopOrder: 2, name: 'Thư viện' }] },
+    }
     show()
     const line = await screen.findByText(/^Không có Tour nào đang chạy\. Hôm nay không có Tour nào\. Dữ liệu Tour đọc lúc \d{2}:\d{2}, tự cập nhật\./)
     expect(line).toHaveAttribute('role', 'status')
+    const summary = screen.getByLabelText('Tóm tắt hôm nay')
+    expect(within(summary).getAllByText('0')).toHaveLength(3)
+    const planned = screen.getByRole('region', { name: 'Tuyến Tour dự kiến' })
+    const diagram = await within(planned).findByRole('region', { name: 'Sơ đồ tuyến theo thứ tự điểm dừng' })
+    expect(within(diagram).getAllByRole('listitem')).toHaveLength(2)
+    expect(diagram.querySelector('[aria-current]')).toBeNull()
+    expect(within(planned).getByRole('link', { name: 'Xem chi tiết Tour' })).toHaveAttribute('href', '/staff/manage/tours/upcoming')
+    const chart = screen.getByRole('region', { name: 'Lịch Tour 7 ngày' })
+    expect(within(chart).getByText('1 Tour theo ngày bắt đầu')).toBeInTheDocument()
+    const schedule = screen.getByRole('region', { name: 'Tour sắp tới' })
+    expect(chart.compareDocumentPosition(schedule) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.queryByRole('region', { name: 'Tour hôm nay' })).not.toBeInTheDocument()
     expect(screen.queryByText(/\(0\)/)).not.toBeInTheDocument()
     expect(screen.getAllByText(/Hôm nay không có Tour nào/)).toHaveLength(1)
-    expect(screen.getByRole('region', { name: 'Tour sắp tới' })).toBeInTheDocument()
+  })
+
+  it('still shows the route section and charts when the upcoming schedule is empty too', async () => {
+    today = []
+    show()
+    const planned = await screen.findByRole('region', { name: 'Tuyến Tour dự kiến' })
+    expect(await within(planned).findByText('Sơ đồ sẽ hiển thị khi có Tour trong lịch sắp tới.')).toBeInTheDocument()
+    expect(await within(screen.getByRole('region', { name: 'Lịch Tour 7 ngày' })).findByText('0 Tour theo ngày bắt đầu')).toBeInTheDocument()
   })
 
   it('links each Tour name to its Tour page', async () => {

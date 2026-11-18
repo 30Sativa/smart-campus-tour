@@ -1,5 +1,5 @@
 import { Info, LogOut } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { AccountSettings } from '../../features/account/AccountSettings'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
@@ -15,6 +15,8 @@ function initialsOf(name: string) {
 }
 
 export default function RepProfilePage() {
+  const [params] = useSearchParams()
+  const tab = params.get('tab') === 'security' ? 'security' : params.get('tab') === 'account' ? 'account' : 'contact'
   const user = useAuthStore(state => state.user)
   const logout = useLogout()
   const recent = useRepRegistrations({ size: 5, sort: '-submittedAt' })
@@ -30,12 +32,12 @@ export default function RepProfilePage() {
   const items = recent.data?.data ?? []
   return <RepPage>
     <RepPageHeader title="Hồ sơ của tôi" description="Xem tài khoản và thông tin liên hệ từ đăng ký gần nhất." />
-    <div className="rep-profile-identity"><span className="rep-profile-avatar" aria-hidden="true">{initialsOf(displayName)}</span><div><h2>{displayName}</h2><p className="rep-muted">Đại diện trường</p>{school && <p>{school}</p>}</div></div>
-    <div className="rep-detail"><div className="rep-stack">
-      <Panel title="Thông tin đại diện">{latest ? contact.isError ? <ErrorState title="Chưa tải được thông tin liên hệ" message={readRepError(contact.error).message} onRetry={() => void contact.refetch()} /> : <><InfoList items={[{ label: 'Họ tên người liên hệ', value: contact.isPending ? 'Đang tải…' : contactName ?? 'Chưa có thông tin' }, { label: 'Trường / đơn vị', value: school ?? 'Chưa có thông tin' }, { label: 'Email liên hệ', value: contact.isPending ? 'Đang tải…' : email ?? 'Chưa có thông tin' }]} /><p className="rep-profile-note"><Info size={16} aria-hidden="true" /><span>Theo đăng ký gần nhất ({latest.tourName}). Mỗi đăng ký mang thông tin liên hệ riêng; cập nhật khi gửi hoặc sửa đăng ký.</span></p></> : <p className="rep-hint">Thông tin liên hệ sẽ hiện sau khi bạn gửi đăng ký đầu tiên.</p>}</Panel>
-      <Panel title="Tài khoản"><InfoList items={[{ label: 'Tên đăng nhập', value: username || 'Chưa có thông tin' }, { label: 'Vai trò', value: 'Đại diện trường' }]} /><p className="rep-profile-note"><Info size={16} aria-hidden="true" /><span>Tài khoản do Admin cấp. Bạn tự đổi họ tên và mật khẩu bên dưới; đổi tên đăng nhập, liên hệ Admin.</span></p></Panel>
-      <AccountSettings />
-    </div><aside className="rep-aside rep-stack"><button type="button" className={repButton('danger')} onClick={() => void logout()}><LogOut size={16} aria-hidden="true" />Đăng xuất</button></aside></div>
+    <div className="rep-profile-layout"><aside className="rep-profile-identity"><span className="rep-profile-avatar" aria-hidden="true">{initialsOf(displayName)}</span><div><h2>{displayName}</h2><p className="rep-muted">Đại diện trường</p>{school && <p>{school}</p>}</div><button type="button" className={repButton('danger')} onClick={() => void logout()}><LogOut size={16} aria-hidden="true" />Đăng xuất</button></aside>
+    <div className="rep-profile-settings"><nav className="rep-detail-tabs" aria-label="Hồ sơ tài khoản">{[{ id: 'contact', label: 'Thông tin liên hệ' }, { id: 'account', label: 'Tài khoản' }, { id: 'security', label: 'Bảo mật' }].map(item => <Link key={item.id} to={`?tab=${item.id}`} aria-current={tab === item.id ? 'page' : undefined}>{item.label}</Link>)}</nav><div key={tab} className="rep-stack rep-tab-enter">
+      {tab === 'contact' && <Panel title="Thông tin đại diện">{latest ? contact.isError ? <ErrorState title="Chưa tải được thông tin liên hệ" message={readRepError(contact.error).message} onRetry={() => void contact.refetch()} /> : <><InfoList items={[{ label: 'Họ tên người liên hệ', value: contact.isPending ? 'Đang tải…' : contactName ?? 'Chưa có thông tin' }, { label: 'Trường / đơn vị', value: school ?? 'Chưa có thông tin' }, { label: 'Email liên hệ', value: contact.isPending ? 'Đang tải…' : email ?? 'Chưa có thông tin' }]} /><p className="rep-profile-note"><Info size={16} aria-hidden="true" /><span>Theo đăng ký gần nhất ({latest.tourName}). Mỗi đăng ký mang thông tin liên hệ riêng; cập nhật khi gửi hoặc sửa đăng ký.</span></p></> : <p className="rep-hint">Thông tin liên hệ sẽ hiện sau khi bạn gửi đăng ký đầu tiên.</p>}</Panel>}
+      {tab === 'account' && <Panel title="Tài khoản"><InfoList items={[{ label: 'Tên đăng nhập', value: username || 'Chưa có thông tin' }, { label: 'Vai trò', value: 'Đại diện trường' }]} /><p className="rep-profile-note"><Info size={16} aria-hidden="true" /><span>Tài khoản do Admin cấp. Bạn tự đổi họ tên và mật khẩu; đổi tên đăng nhập, liên hệ Admin.</span></p></Panel>}
+      {tab !== 'contact' && <AccountSettings section={tab === 'security' ? 'security' : 'profile'} />}
+    </div></div></div>
     <RepSection title="Đăng ký gần đây" action={<Link to="/dai-dien/dang-ky" className="rep-text-link">Đăng ký của tôi</Link>}>{items.length ? <div className="rep-reg-list">{items.map(r => <RegistrationCard key={r.id} registration={r} />)}</div> : <EmptyState variant="empty" title="Bạn chưa có đăng ký nào." action={<Link to="/dai-dien/buoi" className={repButton('primary')}>Xem buổi tham quan</Link>} />}</RepSection>
   </RepPage>
 }

@@ -5,7 +5,7 @@ import { useAuthStore } from '../../../stores/auth-store'
 import { useThemeStore } from '../../../stores/theme-store'
 import { useLogout } from '../../../auth/use-logout'
 import { homePathForRole, isAdminRole, isRepresentativeRole, isStaffRole } from '../../../auth/roles'
-import { ROBOT_INSIDE, navLinks } from '../landing-content'
+import { navLinks } from '../landing-content'
 
 type Props = {
   /** Pauses smooth scrolling while the mobile sheet is open. */
@@ -15,8 +15,6 @@ type Props = {
    * scrolls in place; another page passes `/` so the links lead back home.
    */
   base?: string
-  /** The page this navigation sits on, marked as current. */
-  current?: 'robot'
 }
 
 
@@ -25,7 +23,7 @@ type Props = {
  * frosted once the page has moved. The stuck state comes from an
  * IntersectionObserver sentinel rather than a scroll listener.
  */
-export function SiteNav({ onLockScroll, base = '', current }: Props) {
+export function SiteNav({ onLockScroll, base = '' }: Props) {
   const [stuck, setStuck] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -129,11 +127,6 @@ export function SiteNav({ onLockScroll, base = '', current }: Props) {
                 <a href={`${base}${item.href}`} className="lp-navlink">
                   {item.label}
                 </a>
-                {item.href === ROBOT_INSIDE.after && (
-                  <Link to={ROBOT_INSIDE.to} className="lp-navlink" aria-current={current === 'robot' ? 'page' : undefined}>
-                    {ROBOT_INSIDE.label}
-                  </Link>
-                )}
               </Fragment>
             ))}
           </nav>
@@ -191,11 +184,6 @@ export function SiteNav({ onLockScroll, base = '', current }: Props) {
               <a href={`${base}${item.href}`} onClick={closeMenu}>
                 {item.label}
               </a>
-              {item.href === ROBOT_INSIDE.after && (
-                <Link to={ROBOT_INSIDE.to} onClick={closeMenu} aria-current={current === 'robot' ? 'page' : undefined}>
-                  {ROBOT_INSIDE.label}
-                </Link>
-              )}
             </Fragment>
           ))}
           {isAuthenticated ? (

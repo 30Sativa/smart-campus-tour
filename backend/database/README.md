@@ -1,5 +1,9 @@
 # CampusTour database snapshots
 
+## v1.24 account avatar (ADR-0064)
+
+`smart-campus-tour-schema-v1.24.sql` adds nullable `Users.AvatarUrl NVARCHAR(1000)` and `CK_Users_AvatarUrlHttps` (NULL or an `https://` link), placed after the v1.23 retirement columns. `patches/upgrade-v1.23-to-v1.24-user-avatar.sql` applies them to a v1.23 database, changes no row and is rerunnable (THROW 51240/51241). Runtime already has UPDATE on `dbo.Users`, so the grants and the check-only gate are unchanged. The v1.23 snapshot and its patch stay immutable. The EF `User` entity gained `AvatarUrl` by hand in scaffold form; re-scaffold against a v1.24 database to confirm.
+
 ## v1.23 POI retirement (ADR-0062)
 
 `smart-campus-tour-schema-v1.23.sql` adds nullable `PoiProposals.RetiredAt` and `RetiredByUserId`, `FK_PoiProposals_RetiredByUserId` and `CK_PoiProposals_Retirement_Complete` (both set or both null), placed next to the v1.20 discard columns. `patches/upgrade-v1.22-to-v1.23-poi-retirement.sql` applies them to a v1.22 database, changes no row and is rerunnable (THROW 51230/51231). Runtime gets column UPDATE on the two new columns through `smart-campus-tour-runtime-permissions.sql`, never table-wide UPDATE or DELETE; the check-only gate refuses a runtime without those grants or with broader rights on `PoiProposals`. The v1.22 snapshot and its patch stay immutable. EF entities gained the two properties, the `RetiredByUser` navigation and the `User.PoiProposalRetiredByUsers` collection by hand in scaffold form; re-scaffold against a v1.23 database to confirm.

@@ -98,8 +98,9 @@ export function Toast({ message, onDone }: { message: ToastMessage | null; onDon
   return <div className="rep-toast" role={danger ? 'alert' : 'status'}><div className={`rep-callout rep-callout--${danger ? 'danger' : 'ok'}`}><Icon size={18} aria-hidden="true" /><span>{message.text}</span><button type="button" onClick={onDone} className="rep-icon-btn" aria-label="Đóng thông báo"><X size={14} aria-hidden="true" /></button></div></div>
 }
 
-export function ConfirmationDialog({ open, title, children, confirmLabel, cancelLabel = 'Quay lại', busy, onConfirm, onClose }: {
+export function ConfirmationDialog({ open, title, children, confirmLabel, cancelLabel = 'Quay lại', busy, onConfirm, onClose, tone = 'danger', dialogRole = 'alertdialog', className = '', illustration }: {
   open: boolean; title: string; children: ReactNode; confirmLabel: string; cancelLabel?: string; busy?: boolean; onConfirm: () => void; onClose: () => void
+  tone?: 'danger' | 'primary'; dialogRole?: 'dialog' | 'alertdialog'; className?: string; illustration?: ReactNode
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -125,5 +126,5 @@ export function ConfirmationDialog({ open, title, children, confirmLabel, cancel
     return () => { window.removeEventListener('keydown', onKey); if (opener && document.contains(opener)) opener.focus() }
   }, [open])
   if (!open) return null
-  return <div className="rep-dialog-overlay" onClick={() => !busy && onClose()}><div ref={panelRef} tabIndex={-1} role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} className="rep-dialog" onClick={event => event.stopPropagation()}><h2 id={titleId}>{title}</h2><div id={descriptionId} className="rep-dialog-description">{children}</div><div className="rep-inline-actions rep-dialog-actions"><button ref={cancelRef} type="button" className={repButton('secondary')} onClick={onClose} disabled={busy}>{cancelLabel}</button><button type="button" className={repButton('danger')} onClick={onConfirm} disabled={busy}>{busy && <Spinner />}{busy ? 'Đang xử lý…' : confirmLabel}</button></div></div></div>
+  return <div className="rep-dialog-overlay" onClick={() => !busy && onClose()}><div ref={panelRef} tabIndex={-1} role={dialogRole} aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} className={`rep-dialog ${className}`} onClick={event => event.stopPropagation()}>{illustration}<h2 id={titleId}>{title}</h2><div id={descriptionId} className="rep-dialog-description">{children}</div><div className="rep-inline-actions rep-dialog-actions"><button ref={cancelRef} type="button" className={repButton('secondary')} onClick={onClose} disabled={busy}>{cancelLabel}</button><button type="button" className={repButton(tone)} onClick={onConfirm} disabled={busy}>{busy && <Spinner />}{busy ? 'Đang xử lý…' : confirmLabel}</button></div></div></div>
 }

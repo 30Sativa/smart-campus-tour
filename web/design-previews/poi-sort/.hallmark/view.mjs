@@ -1,0 +1,16 @@
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {MemoryRouter} from 'react-router';
+import Page from '/src/routes/staff/manage/StaffManagePoisPage';
+import {DEFAULT_POI_MAP} from '/src/features/administration/pois/map/catalog';
+import {useAuthStore} from '/src/stores/auth-store';
+import '/src/index.css';
+const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+client.setQueryData(['technical','map-raster','map-a'],DEFAULT_POI_MAP);
+const names=['Điểm 10 (mẫu)','Điểm 2 (mẫu)','Ánh sáng (mẫu)'];
+const rows=names.map((name,i)=>({id:'p'+i,currentRevision:1,rowVersion:'fixture',canDiscard:false,canRetire:false,revision:{id:'rev'+i,revisionNumber:1,mapVersionId:'map-a',mapKey:DEFAULT_POI_MAP.mapKey,name,purpose:'Tham quan, dữ liệu kiểm tra bố cục',description:null,x:i*3,y:i*2,yaw:0,cameraPreset:'FRONT',createdAt:['2026-11-01T00:00:00Z','2026-11-03T00:00:00Z','2026-11-02T00:00:00Z'][i],isSubmitted:true,submittedAt:'2026-11-03T00:00:00Z',navigationStatus:'PASS',verificationSourceRevisionId:null}}));
+const map={map:{...DEFAULT_POI_MAP,id:'map-a',areaName:'Bản đồ mẫu',areaKey:'fixture',versionNumber:2,imageFileName:'map.pgm',packageSha256:'a'.repeat(64)},currentlyDeployedOn:[],canUseForPoiPreparation:true,technicalCheckStatus:'PASSED'};
+useAuthStore.getState().setAuth('layout-fixture',{userId:'staff-ui',username:'staff',role:'Staff'});
+window.fetch=async(input,init)=>{const pathname=new URL(String(input),location.origin).pathname;if(init?.method&&init.method!=='GET')return new Response('{}',{status:403});const data=pathname==='/api/staff/poi-proposals'?rows:pathname==='/api/maps/versions'?[map]:null;return new Response(JSON.stringify({success:true,data}),{headers:{'Content-Type':'application/json'}});};
+createRoot(document.getElementById('root')).render(React.createElement(QueryClientProvider,{client},React.createElement(MemoryRouter,{initialEntries:['/staff/manage/pois'+location.search]},React.createElement(Page))));

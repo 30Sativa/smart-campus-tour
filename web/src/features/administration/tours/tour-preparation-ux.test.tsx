@@ -48,6 +48,32 @@ function renderAt(path: string) {
   </QueryClientProvider>)
 }
 
+describe('approved create Tour layout', () => {
+  it('preserves entered data across inline kind switches and puts the review before submit', async () => {
+    renderAt('/staff/manage/tours/new?date=2099-01-03')
+    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour dành cho đoàn trường' } })
+    fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Tham quan thư viện.' } })
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Sức chứa/ }), { target: { value: '15' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tour nhanh' }))
+    fireEvent.change(await screen.findByLabelText('Lý do tạo gấp'), { target: { value: 'Trình diễn cho đoàn khách.' } })
+    expect(screen.queryByLabelText(/Ngày tổ chức/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tour theo ca' }))
+    expect(screen.getByLabelText(/Ngày tổ chức/)).toHaveValue('03/01/2099')
+    expect(screen.getByLabelText('Tên Tour')).toHaveValue('Tour dành cho đoàn trường')
+    expect(screen.getByLabelText('Mô tả')).toHaveValue('Tham quan thư viện.')
+    expect(screen.getByRole('spinbutton', { name: /Sức chứa/ })).toHaveValue(15)
+    fireEvent.click(screen.getByRole('button', { name: 'Tour nhanh' }))
+    expect(screen.getByLabelText('Lý do tạo gấp')).toHaveValue('Trình diễn cho đoàn khách.')
+
+    const review = screen.getByRole('complementary', { name: 'Tóm tắt Tour' })
+    expect(within(review).getByText('Tour dành cho đoàn trường')).toBeInTheDocument()
+    expect(within(review).getByText('15 chỗ')).toBeInTheDocument()
+    expect(review.compareDocumentPosition(screen.getByRole('button', { name: 'Tạo Tour' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+})
+
 describe('Tour preparation layout', () => {
   it('puts the next step first and Cancel alone in a danger zone at the bottom', async () => {
     current = detail('SCHEDULED')
@@ -194,11 +220,12 @@ describe('quick Tour form', () => {
 
   it('says nowhere that Start waits for everyone (ADR-0057)', async () => {
     const view = renderAt('/staff/manage/tours/new')
-    await screen.findByText('Chưa bắt đầu sau 30 phút thì tự hủy')
+    await screen.findByLabelText('Tên Tour')
     expect(document.body.textContent).not.toMatch(/đủ người/)
     view.unmount()
     renderAt('/staff/manage/tours/new?kind=quick')
     await screen.findByRole('region', { name: 'Tour nhanh chạy thế nào' })
+    expect(await screen.findByText('30 phút sau khi tạo')).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/đủ người|mọi điểm xem đã vào phòng chờ/)
     expect(screen.getByText(/trang kiểm tra chỉ cảnh báo số điểm xem còn thiếu/)).toBeInTheDocument()
   })

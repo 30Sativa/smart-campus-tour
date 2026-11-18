@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { capturePage } from './support/capture'
 import { mockApi } from './support/mock-api'
-import { fleet, QUICK_ID, READY_ID, RUNNING_ID, staffHandlers } from './fixtures/staff'
+import { fleet, QUICK_ID, READY_ID, RUNNING_ID, scheduledTour, staffHandlers } from './fixtures/staff'
 
 const signIn = (page: Page) => mockApi(page, 'Staff', staffHandlers(), { fleet })
 const heading = (page: Page, name: string) => expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
@@ -10,7 +10,24 @@ test('staff: overview', async ({ page }) => {
   await signIn(page)
   await page.goto('/staff')
   await heading(page, 'Tổng quan')
+  const diagram = page.getByRole('region', { name: 'Sơ đồ tuyến theo thứ tự điểm dừng' })
+  await expect(diagram.getByRole('listitem')).toHaveCount(3)
+  await expect(diagram.locator('[aria-current="step"]')).toContainText('Thư viện')
+  await expect(page.getByRole('region', { name: 'Lịch Tour 7 ngày' })).toContainText('4 Tour theo ngày bắt đầu')
   await capturePage(page, 'staff', 'overview', { title: 'Tổng quan' })
+})
+
+test('staff: overview with no Tours today', async ({ page }) => {
+  await mockApi(page, 'Staff', staffHandlers([scheduledTour]), { fleet })
+  await page.goto('/staff')
+  await heading(page, 'Tổng quan')
+  await expect(page.getByLabel('Tóm tắt hôm nay')).toBeVisible()
+  const planned = page.getByRole('region', { name: 'Tuyến Tour dự kiến' })
+  const diagram = planned.getByRole('region', { name: 'Sơ đồ tuyến theo thứ tự điểm dừng' })
+  await expect(diagram.getByRole('listitem')).toHaveCount(3)
+  await expect(diagram.locator('[aria-current="step"]')).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Lịch Tour 7 ngày' })).toContainText('1 Tour theo ngày bắt đầu')
+  await capturePage(page, 'staff', 'overview-no-tours-today', { title: 'Tổng quan' })
 })
 
 test('staff: schedule', async ({ page }) => {

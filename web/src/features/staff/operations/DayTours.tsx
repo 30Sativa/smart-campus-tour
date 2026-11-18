@@ -2,12 +2,12 @@ import { Link, useSearchParams } from 'react-router'
 import { FilterChips, LoadingPanel, PanelHead, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { campusDateKey, formatDate, formatTime } from '../../../components/ui/date-time'
 import { EmptyState } from '../../../components/ui/EmptyState'
-import { buttonClass, rowClass, tdClass, thClass } from '../../../components/ui/ui-classes'
+import { buttonClass, rowClass, thClass } from '../../../components/ui/ui-classes'
 import { tourError } from '../../administration/tours/tour-messages'
 import type { TourState, TourSummary } from '../../administration/tours/types'
 import { ErrorPanel } from '../StaffUi'
 import { useFleetTelemetry, type FleetSnapshot } from './fleet-telemetry'
-import { useDayTours, useUpcomingTours } from './hooks'
+import { useDayTours, type useUpcomingTours } from './hooks'
 import { noTourToday, operatorLabel, useMineFilter } from './mine'
 import { ToneBadge, TourStateBadge } from './OperationParts'
 import { nextStep } from './next-step'
@@ -50,11 +50,10 @@ export function TodayTours() {
 }
 
 /** The not-ended Tours of the next week, so a Tour on a later day is still one click away. */
-export function UpcomingTours() {
-  const upcoming = useUpcomingTours(campusDateKey(new Date()))
+export function UpcomingTours({ upcoming }: { upcoming: ReturnType<typeof useUpcomingTours> }) {
   const { keep } = useMineFilter()
   const ahead = (upcoming.data?.data ?? []).filter(tour => !ENDED.includes(tour.state) && keep(tour))
-  return <section className={`${panelClass} mt-4`} aria-label="Tour sắp tới">
+  return <section className={panelClass} aria-label="Tour sắp tới">
     <PanelHead title="Sắp tới" description="Tour chưa kết thúc trong 7 ngày tới."
       action={<Link to="/staff/schedule" className={buttonClass('ghost', 'sm')}>Xem lịch</Link>} />
     {upcoming.isPending ? <div className="p-4"><LoadingPanel /></div>
@@ -80,18 +79,28 @@ function RobotReport({ robotCode, snapshot }: { robotCode: string; snapshot: Fle
 function TourTable({ label, tours, dated = false }: { label: string; tours: TourSummary[]; dated?: boolean }) {
   const snapshot = useFleetTelemetry()
   const { isMine } = useMineFilter()
-  return <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left" aria-label={label}>
-    <thead className="border-b border-[#e2e8f0]"><tr>{[dated ? 'Ngày giờ' : 'Giờ', 'Tour', 'Robot', 'Đoàn', 'Trạng thái', 'Bước tiếp theo'].map(head => <th key={head} scope="col" className={thClass}>{head}</th>)}</tr></thead>
-    <tbody className="divide-y divide-[#eef1f4]">{tours.map(tour => {
+  const cell = 'min-w-0 text-[13px] align-middle @min-[660px]:px-3 @min-[660px]:py-3'
+  return <div className="@container"><table role="table" className="block w-full text-left @min-[660px]:table" aria-label={label}>
+    <thead role="rowgroup" className="sr-only border-b border-slate-200 @min-[660px]:not-sr-only">
+      <tr role="row">{[dated ? 'Ngày giờ' : 'Giờ', 'Tour', 'Robot', 'Đoàn', 'Trạng thái', 'Bước tiếp theo'].map(head => <th role="columnheader" key={head} scope="col" className={thClass}>{head}</th>)}</tr>
+    </thead>
+    <tbody role="rowgroup" className="block divide-y divide-slate-100 @min-[660px]:table-row-group">{tours.map(tour => {
       const step = nextStep(tour)
       const robotCode = tour.reservation?.robotCode
-      return <tr key={tour.id} className={rowClass}>
-        <td className={`${tdClass} font-semibold tabular-nums whitespace-nowrap`}>{dated && `${formatDate(tour.scheduledStartAt).slice(0, 5)} · `}{formatTime(tour.scheduledStartAt)}</td>
-        <td className={tdClass}><Link to={`/staff/manage/tours/${tour.id}`} className="block font-semibold text-[#0f172a] underline-offset-2 hover:text-[#2d719e] hover:underline focus-visible:outline-2 focus-visible:outline-[#2d719e]">{tour.name}</Link><span className="block text-xs text-[#64748b]">{[tour.routeName, operatorLabel(tour, isMine(tour))].filter(Boolean).join(' · ')}</span></td>
-        <td className={tdClass}>{robotCode ? <span className="flex flex-col items-start gap-1"><span className="font-mono text-xs">{robotCode}</span>{!dated && !ENDED.includes(tour.state) && <RobotReport robotCode={robotCode} snapshot={snapshot} />}</span> : '-'}</td>
-        <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>
-        <td className={tdClass}><TourStateBadge tour={tour} /></td>
-        <td className={tdClass}><Link to={step.to} className={buttonClass(tour.state === 'READY' || tour.state === 'RUNNING' ? 'primary' : 'secondary', 'sm')}>{step.label}</Link></td>
+      return <tr key={tour.id} role="row" className={`${rowClass} grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 px-4 py-3 @min-[660px]:table-row`}>
+        <td role="cell" className={`${cell} font-semibold tabular-nums whitespace-nowrap`}>
+          {dated && <span className="mr-1 block text-xs text-slate-600 @min-[660px]:inline">{formatDate(tour.scheduledStartAt).slice(0, 5)}</span>}
+          {formatTime(tour.scheduledStartAt)}
+        </td>
+        <td role="cell" className={`${cell} col-span-2 break-words`}>
+          <Link to={`/staff/manage/tours/${tour.id}`} className="block font-semibold text-slate-900 underline-offset-2 hover:text-sky-800 hover:underline focus-visible:outline-2 focus-visible:outline-sky-800">{tour.name}</Link>
+          {tour.routeName && <span className="block text-xs text-slate-600">{tour.routeName}</span>}
+          <span className="block text-xs text-slate-600">{operatorLabel(tour, isMine(tour))}</span>
+        </td>
+        <td role="cell" className={`${cell} col-span-2`}>{robotCode ? <span className="flex flex-wrap items-center gap-1 @min-[660px]:flex-col @min-[660px]:items-start"><span className="text-xs font-medium">{robotCode}</span>{!dated && !ENDED.includes(tour.state) && <RobotReport robotCode={robotCode} snapshot={snapshot} />}</span> : '-'}</td>
+        <td role="cell" className={`${cell} text-right tabular-nums whitespace-nowrap @min-[660px]:text-left`}>{tour.registrationCount} đoàn</td>
+        <td role="cell" className={`${cell} col-span-2 self-center`}><TourStateBadge tour={tour} /></td>
+        <td role="cell" className={`${cell} text-right`}><Link to={step.to} className={buttonClass(tour.state === 'READY' || tour.state === 'RUNNING' ? 'primary' : 'secondary', 'sm')}>{step.label}</Link></td>
       </tr>
     })}</tbody>
   </table></div>

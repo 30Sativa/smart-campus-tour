@@ -6,8 +6,10 @@ using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Features.Profile;
 using SmartCampus.Application.Features.Profile.Commands.ChangePassword;
+using SmartCampus.Application.Features.Profile.Commands.SetMyAvatar;
 using SmartCampus.Application.Features.Profile.Commands.UpdateMyProfile;
 using SmartCampus.Application.Features.Profile.Queries.GetMyProfile;
+using SmartCampus.Application.Features.Profile.Queries.GetAvatarUpload;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -48,6 +50,28 @@ public sealed class AccountController(ISender sender) : ControllerBase
             Data = profile
         });
     }
+
+    /// <summary>ADR-0064: signs one direct upload of a new avatar picture to Cloudinary.</summary>
+    [HttpPost("avatar-upload")]
+    public async Task<ActionResult<BaseResponse<AvatarUploadTicket>>> SignAvatarUpload(CancellationToken cancellationToken) =>
+        Ok(new BaseResponse<AvatarUploadTicket>
+        {
+            Success = true,
+            Message = "Avatar upload signed.",
+            Data = await sender.Send(new GetAvatarUploadQuery(User.GetRequiredUserId()), cancellationToken)
+        });
+
+    /// <summary>ADR-0064: sets the avatar to this account's own upload, or removes it with <c>null</c>.</summary>
+    [HttpPut("avatar")]
+    public async Task<ActionResult<BaseResponse<AccountProfileResponse>>> SetAvatar(
+        [FromBody] SetMyAvatarRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(new BaseResponse<AccountProfileResponse>
+        {
+            Success = true,
+            Message = "Avatar updated.",
+            Data = await sender.Send(new SetMyAvatarCommand(User.GetRequiredUserId(), request), cancellationToken)
+        });
 
     /// <summary>Revokes every refresh token of the account; the client must sign in again.</summary>
     [HttpPost("password")]

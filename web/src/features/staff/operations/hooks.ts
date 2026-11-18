@@ -16,12 +16,12 @@ const LIST_MS = 15_000
 
 const isLive = (detail: TourDetails | undefined) => detail?.tour.state === 'READY' || detail?.tour.state === 'RUNNING'
 
-export function useOperationTour(id: string) {
+export function useOperationTour(id: string, poll = true) {
   return useQuery({
     queryKey: tourKeys.detail(id),
     queryFn: () => toursApi.get(id),
     enabled: Boolean(id),
-    refetchInterval: query => (isLive(query.state.data) ? LIVE_TOUR_MS : false),
+    refetchInterval: query => (poll && isLive(query.state.data) ? LIVE_TOUR_MS : false),
   })
 }
 
@@ -45,10 +45,10 @@ export function useDayTours(day: string) {
 
 const AHEAD_DAYS = 7
 /** `YYYY-MM-DD` a number of campus days after `day` (noon keeps it clear of any date-line edge). */
-const addDays = (day: string, days: number) => new Date(new Date(`${day}T12:00:00+07:00`).getTime() + days * 86_400_000).toISOString().slice(0, 10)
+export const addCampusDays = (day: string, days: number) => new Date(new Date(`${day}T12:00:00+07:00`).getTime() + days * 86_400_000).toISOString().slice(0, 10)
 /** The Tours of the next week after `day`, so the day page shows what is coming even when today is empty. */
 export function useUpcomingTours(day: string) {
-  const query: TourListQuery = { from: dayStart(addDays(day, 1)), to: dayEnd(addDays(day, AHEAD_DAYS)), sort: 'scheduledStartAt', page: 1, size: 20 }
+  const query: TourListQuery = { from: dayStart(addCampusDays(day, 1)), to: dayEnd(addCampusDays(day, AHEAD_DAYS)), sort: 'scheduledStartAt', page: 1, size: 20 }
   return useQuery({ queryKey: tourKeys.list(query), queryFn: () => toursApi.list(query), refetchInterval: LIST_MS })
 }
 

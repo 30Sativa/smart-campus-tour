@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
@@ -9,6 +9,8 @@ import { TourForm } from '../../../features/administration/tours/TourForm'
 import { TourSeatsAndOperatorPanel } from '../../../features/administration/tours/TourSeatsAndOperatorPanel'
 import type { TourInput } from '../../../features/administration/tours/types'
 import { notify } from '../../../components/ui/toast-store'
+import { tourCoverUrl } from '../../../api/tour-cover'
+import { coverUploadError, uploadTourCover } from '../../../features/administration/tours/api/cover-image'
 
 /** Edit a SCHEDULED Tour. Schedule and Route lock once it has registrations or history (ADR-0018). */
 export default function StaffManageTourEditPage() {
@@ -17,15 +19,30 @@ export default function StaffManageTourEditPage() {
   const detail = useTour(tourId)
   const update = useUpdateTour()
   const attempt = useRef<{ key: string; id: string } | null>(null)
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const [coverError, setCoverError] = useState<string | null>(null)
   const back = `/staff/manage/tours/${tourId}`
   const data = detail.data
 
-  const submit = (input: TourInput, routeVersion: string) => {
+  const submit = (input: TourInput, routeVersion: string, cover: File | null) => {
     if (!data) return
     const key = JSON.stringify([input, routeVersion, data.tour.rowVersion])
     if (attempt.current?.key !== key) attempt.current = { key, id: newRequestId() }
     update.mutate({ id: tourId, requestId: attempt.current.id, rowVersion: data.tour.rowVersion,
-      routeVersion: input.routeId === data.tour.routeId ? null : routeVersion, input }, { onSuccess: () => {
+      routeVersion: input.routeId === data.tour.routeId ? null : routeVersion, input }, { onSuccess: async () => {
+        setCoverError(null)
+        if (cover) {
+          // The Tour is saved already; a failed image stays on this page so Staff can try again.
+          setUploadingCover(true)
+          try {
+            await uploadTourCover(tourId, cover)
+          } catch (error) {
+            setCoverError(`Đã lưu Tour nhưng chưa tải được ảnh: ${coverUploadError(error)}`)
+            return
+          } finally {
+            setUploadingCover(false)
+          }
+        }
         notify({ title: `Đã lưu thay đổi “${input.name}”` })
         navigate(back)
       } })
@@ -41,11 +58,12 @@ export default function StaffManageTourEditPage() {
         <Link to={back} className={buttonClass('secondary')}>Về chi tiết Tour</Link>
       </div>
       : <TourForm key={data.tour.rowVersion}
+        currentCoverUrl={tourCoverUrl(tourId, { width: 480, height: 270 })}
         initial={{ name: data.tour.name, description: data.tour.description, routeId: data.tour.routeId, scheduledStartAt: data.tour.scheduledStartAt, fallbackVideoUrl: data.fallbackVideoUrl }}
         currentRoute={{ id: data.tour.routeId, name: data.tour.routeName }}
         fixedStops={data.routeRevision?.stops.map(stop => ({ order: stop.stopOrder, name: stop.name, dwellSeconds: stop.dwellSeconds }))}
         scheduleLocked={!data.permissions.canChangeScheduleAndRoute}
-        submitLabel="Lưu thay đổi" busy={update.isPending} error={update.isError ? tourError(update.error) : null} cancelTo={back} onSubmit={submit} />}
+        submitLabel="Lưu thay đổi" busy={update.isPending || uploadingCover} error={coverError ?? (update.isError ? tourError(update.error) : null)} cancelTo={back} onSubmit={submit} />}
     {data && <TourSeatsAndOperatorPanel key={data.tour.rowVersion} detail={data} />}
   </AdminPage>
 }

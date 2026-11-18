@@ -11,7 +11,9 @@ using SmartCampus.Application.Features.Accounts.Queries.GetAccounts;
 using SmartCampus.Application.Features.Accounts.Queries.GetAccounts.Dtos;
 using SmartCampus.Application.Features.Auth;
 using SmartCampus.Application.Features.Profile.Commands.ChangePassword;
+using SmartCampus.Application.Features.Profile.Commands.SetMyAvatar;
 using SmartCampus.Application.Features.Profile.Commands.UpdateMyProfile;
+using SmartCampus.Application.Features.Profile.Queries.GetAvatarUpload;
 using SmartCampus.Application.Features.Profile.Queries.GetMyProfile;
 using SmartCampus.Domain.Entities;
 
@@ -359,6 +361,85 @@ public sealed class ProfileAndAccountUpdateTests
         Assert.Equal(AccountVersion.Encode(created, previous), AccountVersion.Encode(created, previous.AddTicks(9999)));
         Assert.NotEqual(AccountVersion.Encode(created, previous), AccountVersion.Encode(created, null));
     }
+
+    // --- ADR-0064: the account's own avatar picture on Cloudinary ---------------------------------------------------
+
+    private static readonly SmartCampus.Application.Features.FallbackVideo.CloudinarySettings Cloudinary =
+        new("demo-cloud", "123456789012345", "test-secret");
+
+    [Fact]
+    public async Task AvatarUpload_IsSignedUnderTheAccountsOwnFolder_WithAFreshIdEachTime()
+    {
+        var me = AddUser("STAFF");
+        var handler = new GetAvatarUploadQueryHandler(accounts, Cloudinary, clock);
+
+        var first = await handler.Handle(new GetAvatarUploadQuery(me.Id), CancellationToken.None);
+        var second = await handler.Handle(new GetAvatarUploadQuery(me.Id), CancellationToken.None);
+
+        Assert.Equal("https://api.cloudinary.com/v1_1/demo-cloud/image/upload", first.UploadUrl);
+        Assert.StartsWith($"smartcampus/avatars/{me.Id:N}/", first.Fields["public_id"]);
+        Assert.NotEqual(first.Fields["public_id"], second.Fields["public_id"]);
+        Assert.Equal("c_limit,h_1024,w_1024", first.Fields["transformation"]);
+        Assert.Equal($"https://res.cloudinary.com/demo-cloud/image/upload/{first.Fields["public_id"]}", first.StoredUrl);
+        Assert.DoesNotContain(first.Fields.Values, value => value.Contains("test-secret", StringComparison.Ordinal));
+        var signed = first.Fields.Where(pair => pair.Key is not ("api_key" or "signature")).ToDictionary(pair => pair.Key, pair => pair.Value);
+        Assert.Equal(SmartCampus.Application.Features.FallbackVideo.FallbackVideoAssets.UploadSignature(signed, "test-secret"), first.Fields["signature"]);
+        Assert.Empty(accounts.Audits);
+    }
+
+    [Fact]
+    public async Task AvatarUpload_IsRefusedToADeactivatedAccount_AndUnavailableWithoutCloudinary()
+    {
+        var inactive = AddUser("STAFF", active: false);
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            new GetAvatarUploadQueryHandler(accounts, Cloudinary, clock).Handle(new GetAvatarUploadQuery(inactive.Id), CancellationToken.None));
+
+        var me = AddUser("STAFF");
+        var error = await Assert.ThrowsAsync<ServiceUnavailableException>(() =>
+            new GetAvatarUploadQueryHandler(accounts, new SmartCampus.Application.Features.FallbackVideo.CloudinarySettings(), clock)
+                .Handle(new GetAvatarUploadQuery(me.Id), CancellationToken.None));
+        Assert.Equal(GetAvatarUploadQueryHandler.Unavailable, error.Code);
+    }
+
+    [Fact]
+    public async Task SetAvatar_AcceptsOnlyTheAccountsOwnUpload_AndCanRemoveIt()
+    {
+        var me = AddUser("SCHOOL_REPRESENTATIVE");
+        var other = AddUser("STAFF");
+        var handler = new SetMyAvatarCommandHandler(accounts, Cloudinary, clock);
+        var own = $"https://res.cloudinary.com/demo-cloud/image/upload/smartcampus/avatars/{me.Id:N}/{Guid.NewGuid():N}";
+
+        var profile = await handler.Handle(new SetMyAvatarCommand(me.Id, new SetMyAvatarRequest(own)), CancellationToken.None);
+        Assert.Equal(own, profile.AvatarUrl);
+        Assert.Equal(own, me.AvatarUrl);
+        Assert.Equal(Now, me.UpdatedAt);
+        Assert.Equal("AVATAR_UPDATED", Assert.Single(accounts.Audits).Action);
+
+        foreach (var foreign in new[]
+                 {
+                     $"https://res.cloudinary.com/demo-cloud/image/upload/smartcampus/avatars/{other.Id:N}/{Guid.NewGuid():N}",
+                     $"https://res.cloudinary.com/other-cloud/image/upload/smartcampus/avatars/{me.Id:N}/{Guid.NewGuid():N}",
+                     own.Replace("/image/upload/", "/image/upload/w_10/"),
+                     "https://example.test/avatar.png",
+                 })
+        {
+            await Assert.ThrowsAsync<ValidationException>(() =>
+                handler.Handle(new SetMyAvatarCommand(me.Id, new SetMyAvatarRequest(foreign)), CancellationToken.None));
+            Assert.Equal(own, me.AvatarUrl);
+        }
+
+        var removed = await handler.Handle(new SetMyAvatarCommand(me.Id, new SetMyAvatarRequest(null)), CancellationToken.None);
+        Assert.Null(removed.AvatarUrl);
+        Assert.Null(me.AvatarUrl);
+        Assert.Equal("AVATAR_REMOVED", accounts.Audits.Last().Action);
+        Assert.Null(other.AvatarUrl);
+    }
+
+    [Fact]
+    public void SetAvatarRequest_RejectsUnknownFields() =>
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<SetMyAvatarRequest>(
+            """{"avatarUrl":null,"userId":"00000000-0000-0000-0000-000000000000"}""",
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 
     private sealed class Clock(DateTimeOffset now) : TimeProvider
     {

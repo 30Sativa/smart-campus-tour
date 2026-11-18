@@ -1,0 +1,34 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "theme": "brand",
+  "shape": "app screen",
+  "axes": "slate/Be Vietnam Pro/console blue",
+  "hero": "none, app screen",
+  "nav": "kept Staff destinations",
+  "footer": "sample disclosure and state previews",
+  "imagery": "existing CampusTour logo, live Tour stop diagram",
+  "photos": [],
+  "entry": "index.html",
+  "fingerprint": "staff-overview/route-diagram/daily-counts/week-columns/status-bar/tour-table/preparation",
+  "sections": [
+   "summary",
+   "running Tour route",
+   "seven-day schedule",
+   "state distribution",
+   "today Tours",
+   "preparation",
+   "upcoming Tour",
+   "robot report"
+  ],
+  "signature": "ordered route diagram of running library Tour",
+  "waived": [],
+  "prompt": "Redesign Staff overview with appropriate charts and provide an isolated preview",
+  "data": "existing e2e fixtures, sample only",
+  "sweep": "0 FAIL, 0 REFLEX, 0 WARN; 74 dismissed: preserved console ink",
+  "finishReview": "subagent: ship",
+  "date": "2026-11-18"
+ }
+]

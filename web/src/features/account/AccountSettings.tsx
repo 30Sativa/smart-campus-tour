@@ -8,6 +8,7 @@ import { notify } from '../../components/ui/toast-store'
 import { useAuthStore } from '../../stores/auth-store'
 import { readAccountError } from './api/account-api'
 import { useChangePassword, useMyProfile, useUpdateMyName } from './hooks'
+import { AvatarField } from './AvatarField'
 
 function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString('vi-VN') : '-'
@@ -64,8 +65,9 @@ function ProfileCard() {
   const nameError = localError ?? failure?.fields.fullName
 
   return (
-    <Card title="Thông tin cá nhân" note="Họ tên là thông tin duy nhất bạn tự sửa. Tên đăng nhập, vai trò và trạng thái do Admin quản lý.">
-      <form onSubmit={submit} noValidate className="flex flex-1 flex-col space-y-4">
+    <Card title="Thông tin cá nhân" note="Bạn tự sửa họ tên và ảnh đại diện. Tên đăng nhập, vai trò và trạng thái do Admin quản lý.">
+      <AvatarField name={data.fullName || data.username} avatarUrl={data.avatarUrl} />
+      <form onSubmit={submit} noValidate className="mt-4 flex flex-1 flex-col space-y-4">
         {failure && !failure.fields.fullName &&<p role="alert" className="rounded-xl bg-[#fff4f2] px-3 py-2 text-xs text-[#9d3428]">{failure.message}</p>}
         <div>
           <label htmlFor="profile-full-name" className={labelClass}>Họ tên</label>
@@ -167,11 +169,11 @@ function PasswordCard() {
 }
 
 /** The one self-service block every signed-in role embeds in its own profile page. */
-export function AccountSettings({ className = '' }: { className?: string }) {
+export function AccountSettings({ className = '', section }: { className?: string; section?: 'profile' | 'security' }) {
   return (
     <div className={`grid gap-3 ${className}`}>
-      <ProfileCard />
-      <PasswordCard />
+      {section !== 'security' && <ProfileCard />}
+      {section !== 'profile' && <PasswordCard />}
     </div>
   )
 }

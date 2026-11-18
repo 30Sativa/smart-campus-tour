@@ -3,6 +3,8 @@ import type { RegistrationSummary } from '../api/types'
 import { repButton } from '../rep-classes'
 import { formatDateTime, groupLabel } from '../rep-format'
 import { Callout, ErrorState, RegistrationStatusBadge, RepPageHeader } from './RepUi'
+import { tourImage, type TourImage } from '../tour-image'
+import { TourCoverFigure } from './TourCover'
 
 export function RepOverviewHeader() {
   return <RepPageHeader title="Tổng quan" description="Theo dõi đăng ký và chuẩn bị lời mời cho buổi tham quan."
@@ -10,11 +12,13 @@ export function RepOverviewHeader() {
 }
 
 /** Keep the next registered visit and incomplete-query states visible on the overview. */
-export function RepHero({ next, loading = false, error, onRetry }: {
-  next: RegistrationSummary | null; loading?: boolean; error?: string; onRetry?: () => void
+export function RepHero({ next, loading = false, error, onRetry, image: providedImage }: {
+  next: RegistrationSummary | null; loading?: boolean; error?: string; onRetry?: () => void; image?: TourImage
 }) {
+  const image = providedImage ?? (next ? tourImage({ id: next.tourId, name: next.tourName, routeName: '', stops: [] }) : null)
   return <section className="rep-section rep-card rep-next-card" aria-labelledby="rep-next-title">
-    <div className="rep-section-head"><h2 id="rep-next-title">Buổi sắp tới gần nhất</h2></div>
+    {next && image && !loading && !error && <TourCoverFigure className="rep-next-cover" tourId={next.tourId} tourName={next.tourName} image={image} fetchPriority="high" />}
+    <div className="rep-next-content"><div className="rep-section-head"><h2 id="rep-next-title">Buổi sắp tới gần nhất</h2></div>
     {loading ? <p role="status" aria-busy="true" className="rep-hint">Đang kiểm tra lịch tham quan của bạn…</p>
       : error ? <ErrorState title="Chưa xác định được buổi sắp tới" message={error} onRetry={onRetry} />
       : next ? <div className="rep-list-row">
@@ -26,6 +30,7 @@ export function RepHero({ next, loading = false, error, onRetry }: {
         <Link to={`/dai-dien/dang-ky/${next.id}`} className={repButton('secondary', 'sm')}>Xem đăng ký sắp tới</Link>
       </div>
         : <p className="rep-hint">Chưa có đăng ký chờ duyệt hoặc đã duyệt cho một buổi tham quan sắp tới.</p>}
+    </div>
   </section>
 }
 

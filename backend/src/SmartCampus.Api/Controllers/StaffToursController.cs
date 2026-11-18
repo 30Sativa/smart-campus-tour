@@ -36,6 +36,7 @@ using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
 using SmartCampus.Application.Features.Tours.Queries.GetTourStartChecks;
 using SmartCampus.Application.Features.Tours.Queries.ListTourRobots;
 using SmartCampus.Application.Features.Tours.Queries.GetTours;
+using SmartCampus.Application.Features.TourCoverImage;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -89,6 +90,12 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     public async Task<IActionResult> SignFallbackVideoUpload(CancellationToken ct) =>
         Ok(new BaseResponse<FallbackVideoUpload> { Success = true, Message = "Fallback video upload signed.",
             Data = await sender.Send(new GetFallbackVideoUploadQuery(), ct) });
+
+    /// <summary>Signs one direct upload of the Tour's cover image to Cloudinary; uploading again replaces it.</summary>
+    [HttpPost("{id:guid}/cover-image-upload")]
+    public async Task<IActionResult> SignCoverImageUpload(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<TourCoverImageUpload> { Success = true, Message = "Tour cover image upload signed.",
+            Data = await sender.Send(new GetTourCoverImageUploadQuery(id), ct) });
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>

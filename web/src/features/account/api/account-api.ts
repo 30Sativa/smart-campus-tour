@@ -10,7 +10,12 @@ export type MyProfile = {
   isActive: boolean
   createdAt: string
   updatedAt: string | null
+  /** ADR-0064: the account's own picture on Cloudinary (full size), or null. */
+  avatarUrl?: string | null
 }
+
+/** What the backend signs for one direct upload of a new avatar to Cloudinary (ADR-0064). */
+export type AvatarUploadTicket = { uploadUrl: string; fields: Record<string, string>; storedUrl: string; maxBytes: number }
 
 export type ChangePasswordInput = { currentPassword: string; newPassword: string }
 
@@ -27,6 +32,13 @@ export const accountSelfApi = {
     unwrap(apiClient<ApiResponse<MyProfile>>('/api/account/me', { method: 'PUT', json: { fullName } })),
   changePassword: (input: ChangePasswordInput) =>
     apiClient<ApiResponse<null>>('/api/account/me/password', { method: 'POST', json: input }),
+  signAvatarUpload: (signal?: AbortSignal) =>
+    apiClient<ApiResponse<AvatarUploadTicket>>('/api/account/me/avatar-upload', { method: 'POST', signal }).then((response) => {
+      if (!response.data) throw new Error('Máy chủ không trả về thông tin tải lên.')
+      return response.data
+    }),
+  setAvatar: (avatarUrl: string | null) =>
+    unwrap(apiClient<ApiResponse<MyProfile>>('/api/account/me/avatar', { method: 'PUT', json: { avatarUrl } })),
 }
 
 type ErrorBody = { message?: unknown; errors?: unknown }

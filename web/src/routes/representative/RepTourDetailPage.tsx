@@ -6,6 +6,7 @@ import { formatDateTime, groupLabel, isNotOpenError, readRepError, tourCancelRea
 import { repButton } from '../../features/representative/rep-classes'
 import { registrationClosesAt } from '../../features/representative/registration-deadline'
 import { tourImage } from '../../features/representative/tour-image'
+import { TourCoverFigure } from '../../features/representative/components/TourCover'
 
 export default function RepTourDetailPage() {
   const { tourId = '' } = useParams()
@@ -23,12 +24,12 @@ export default function RepTourDetailPage() {
   return <RepPage>
     <RepPageHeader back={{ to: '/dai-dien/buoi', label: 'Các buổi tham quan' }} title={tour.name}
       description={tour.description} badges={<TourStateBadge state={tour.state} />} />
-    <figure className="rep-tour-cover"><img src={cover.src} alt={cover.alt} decoding="async" /><figcaption>Ảnh minh họa</figcaption></figure>
     {tour.state === 'CANCELLED' && <Callout tone="warn" title="Buổi tham quan đã bị hủy" role="status">
       <p>{tourCancelReasonText(tour.cancelReason) || 'Đại học FPT chưa cung cấp lý do hủy.'}</p>
     </Callout>}
-    <div className="rep-detail">
-      <div className="rep-stack">
+    <div className="rep-detail rep-tour-detail">
+      <div className="rep-stack rep-tour-document">
+        <TourCoverFigure className="rep-tour-cover" tourId={tour.id} tourName={tour.name} image={cover} decoding="async" fetchPriority="high" />
         <Panel title="Lịch tham quan">
           <InfoList items={[
             { label: 'Thời gian dự kiến', value: formatDateTime(tour.scheduledStartAt) },

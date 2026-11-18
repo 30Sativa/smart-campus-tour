@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Gamepad2, Play } from 'lucide-react'
+import { Gamepad2, Play } from 'lucide-react'
 import { ViewerBoundary } from '../robot-explode/ViewerBoundary'
 import { canUseWebGL } from '../robot-explode/webgl'
 import { STORY_CHAPTERS } from '../robot-explode/story'
@@ -12,9 +12,6 @@ import { IntroVideo } from './IntroVideo'
 // play on (so the two do not share the bandwidth at its start); the maps live on the test-drive page.
 const RobotPartsViewer = lazy(() => import('../robot-explode/RobotPartsViewer'))
 
-const More = () => <Link to="/ben-trong-robot" className="lp3-td__btn lp3-td__more">Xem dữ liệu chạy bên trong robot <ArrowRight size={16} aria-hidden="true" /></Link>
-/** The same link, short, beside the test drive (its name still says where it goes). */
-const Inside = () => <Link to="/ben-trong-robot" className="lp3-td__btn lp3-td__more" aria-label="Xem dữ liệu chạy bên trong robot">Bên trong robot <ArrowRight size={16} aria-hidden="true" /></Link>
 const Drive = () => <Link to={ROBOT_DRIVE.to} className="lp3-td__btn lp3-td__btn--lime lp3-td__drive"><Gamepad2 size={17} aria-hidden="true" />Lái thử robot</Link>
 
 /** The section's title and links beside the robot's parts, and the way back to the video. */
@@ -29,7 +26,6 @@ function Intro({ watched, onWatch }: { watched: boolean; onWatch: () => void }) 
       <p className="lp3-td__lead">Xoay, bung và mở vỏ robot để xem từng linh kiện. Muốn tự cầm lái? Mở bản đồ lái thử.</p>
       <div className="lp3-td__go">
         <Drive />
-        <Inside />
       </div>
     </>
   )
@@ -46,7 +42,6 @@ function Chapter({ index }: { index: number }) {
       <p className="lp3-story__body">{chapter.body}</p>
       <div className="lp3-td__go">
         <Drive />
-        <More />
       </div>
     </div>
   )

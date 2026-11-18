@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Bản xem trước thiết kế Tổng quan Staff CampusTour, biểu đồ lịch Tour và sơ đồ tuyến với dữ liệu kiểm thử.">
+  <title>Tổng quan Staff | CampusTour</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="preview.css">
+</head>
+<body>
+  <svg class="icon-defs" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="play" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="m10 8 5 3-5 3zM8 21h8m-4-3v3"/></symbol>
+    <symbol id="box" viewBox="0 0 24 24"><path d="m12 3 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5m-9 5v8M7.5 5.5l9 5"/></symbol>
+    <symbol id="bot" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="13" rx="4"/><path d="M12 3v4M1 12v4m22-4v4M8 12v2m8-2v2m-8 3h8"/></symbol>
+    <symbol id="calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18m-14 4h3m4 0h3"/></symbol>
+    <symbol id="clipboard" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m8 14 3 3 5-6"/></symbol>
+    <symbol id="pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="route" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="19" r="2"/><path d="M8 5h8a4 4 0 0 1 0 8H8a3 3 0 0 0 0 6h8"/></symbol>
+    <symbol id="history" viewBox="0 0 24 24"><path d="M3 11a9 9 0 1 1 3 8M3 4v7h7m2-5v6l4 2"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></symbol>
+    <symbol id="menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></symbol>
+    <symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></symbol>
+    <symbol id="external" viewBox="0 0 24 24"><path d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/></symbol>
+  </defs></svg>
+  <a class="skip-link" href="#main">Đến nội dung chính</a>
+  <div class="shell">
+    <aside class="sidebar" id="navigation" aria-label="Điều hướng Staff">
+      <a class="brand" href="#main"><img src="../../public/images/logo.png" alt="" width="38" height="38"><span><strong>CampusTour</strong><small>DT-AMR / Vận hành</small></span></a>
+      <nav>
+        <p class="nav-label">Vận hành</p>
+        <a class="nav-item selected" href="#main" aria-current="page"><svg aria-hidden="true"><use href="#grid"/></svg>Tổng quan</a>
+        <a class="nav-item" href="#live"><svg aria-hidden="true"><use href="#play"/></svg>Điều hành trực tiếp<span class="nav-count">1</span></a>
+        <a class="nav-item" href="http://localhost:5173/staff/digital-twin" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#box"/></svg>Digital Twin</a>
+        <a class="nav-item" href="#robots"><svg aria-hidden="true"><use href="#bot"/></svg>Robot & thiết bị</a>
+        <p class="nav-label">Tour & đăng ký</p>
+        <a class="nav-item" href="#today"><svg aria-hidden="true"><use href="#calendar"/></svg>Lịch Tour</a>
+        <a class="nav-item" href="#preparation"><svg aria-hidden="true"><use href="#clipboard"/></svg>Đăng ký đoàn<span class="nav-count">1</span></a>
+        <p class="nav-label">Nội dung tham quan</p>
+        <a class="nav-item" href="http://localhost:5173/staff/manage/pois" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#pin"/></svg>Quản lý POI</a>
+        <a class="nav-item" href="http://localhost:5173/staff/manage/routes" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#route"/></svg>Danh mục tuyến</a>
+        <p class="nav-label">Lịch sử</p>
+        <a class="nav-item" href="http://localhost:5173/staff/history" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#history"/></svg>Lịch sử Tour</a>
+      </nav>
+      <div class="sidebar-foot"><svg aria-hidden="true"><use href="#info"/></svg><span>Bản xem trước thiết kế<small>Chưa kết nối dữ liệu thực</small></span></div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="crumbs"><button class="icon-button mobile-menu" id="menu-button" type="button" aria-label="Mở điều hướng" aria-controls="navigation" aria-expanded="false"><svg aria-hidden="true"><use href="#menu"/></svg></button><span>Vận hành</span><svg aria-hidden="true"><use href="#arrow"/></svg><strong>Tổng quan</strong></div>
+        <div class="topbar-actions"><span class="sample-tag">Dữ liệu mẫu</span><a class="icon-button" href="#preparation" aria-label="Xem việc cần xử lý"><svg aria-hidden="true"><use href="#bell"/></svg></a><span class="topbar-divider"></span><div class="account"><span class="avatar" aria-hidden="true">MA</span><span><strong>Nguyễn Minh Anh</strong><small>Nhân viên vận hành</small></span></div></div>
+      </header>
+      <main id="main" class="main" tabindex="-1">
+        <div class="page-head"><div><h1>Tổng quan</h1><p>Theo dõi lịch Tour và công việc trong ngày.</p></div><div class="page-actions"><a class="button" href="#today"><svg aria-hidden="true"><use href="#calendar"/></svg>Xem lịch</a><a class="button primary" href="http://localhost:5173/staff/manage/tours/new" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#plus"/></svg>Tạo Tour</a></div></div>
+        <div class="day-toolbar"><span class="date-label"><svg aria-hidden="true"><use href="#calendar"/></svg><time datetime="2026-11-13">Thứ Sáu, 13 tháng 11, 2026</time></span><div class="scope-control" role="group" aria-label="Phạm vi Tour"><button type="button" data-scope="all" aria-pressed="true">Tất cả Tour</button><button type="button" data-scope="mine" aria-pressed="false"><svg aria-hidden="true"><use href="#user"/></svg>Tôi vận hành</button></div></div>
+        <section class="stats" aria-label="Tóm tắt hôm nay">
+          <div class="stat"><span>Tour hôm nay</span><strong>3<span>Tour</span></strong><small>Trong lịch ngày 13/11</small></div>
+          <div class="stat"><span>Đang diễn ra</span><strong>1<span>Tour</span></strong><small>Đang dừng tại Thư viện</small></div>
+          <div class="stat"><span>Đã chốt</span><strong>1<span>Tour</span></strong><small>Chờ kiểm tra trước khi mở</small></div>
+          <div class="stat"><span>Đăng ký chờ duyệt</span><strong>1<span>đoàn</span></strong><small>Ưu tiên đăng ký đến trước</small></div>
+        </section>
+        <section class="live-panel" id="live" aria-labelledby="live-title">
+          <div class="live-main">
+            <div class="live-copy">
+              <span class="badge info" role="status"><svg aria-hidden="true"><use href="#play"/></svg>Đang diễn ra</span>
+              <h2 id="live-title">Tham quan Thư viện sáng thứ Sáu</h2>
+              <p>AMR-01 <span class="meta-divider">/</span> Nguyễn Minh Anh</p>
+            </div>
+            <div class="route-visual" id="route-visual" data-layout="horizontal">
+              <svg class="route-map" viewBox="0 0 336 148" role="img" aria-labelledby="route-map-title route-map-desc" hidden>
+                <title id="route-map-title">Các điểm dừng theo tọa độ mẫu</title>
+                <desc id="route-map-desc">Sảnh chính ở bên trái, Thư viện ở giữa và cao hơn, Khu thực hành ở bên phải.</desc>
+                <path class="route-map-grid" d="M28 28H308M28 48H308M28 68H308M28 88H308M28 108H308M28 128H308M28 28V128M48 28V128M68 28V128M88 28V128M108 28V128M128 28V128M148 28V128M168 28V128M188 28V128M208 28V128M228 28V128M248 28V128M268 28V128M288 28V128M308 28V128"/>
+                <path class="route-map-done" d="M48 108L168 48"/>
+                <path class="route-map-next" d="M168 48L288 88"/>
+                <circle class="route-map-stop" cx="48" cy="108" r="11"/>
+                <circle class="route-map-ring" cx="168" cy="48" r="16"/>
+                <circle class="route-map-active" cx="168" cy="48" r="11"/>
+                <circle class="route-map-stop" cx="288" cy="88" r="11"/>
+                <g class="route-map-numbers">
+                  <text x="48" y="108">1</text>
+                  <text class="route-map-active-number" x="168" y="48">2</text>
+                  <text x="288" y="88">3</text>
+                </g>
+              </svg>
+              <ol class="route-diagram" aria-label="Các điểm dừng của Tour">
+                <li class="complete">
+                  <span class="stop-symbol" aria-hidden="true"><svg><use href="#check"/></svg><span class="map-index">1</span></span>
+                  <span>Sảnh chính<small>Đã đến</small></span>
+                </li>
+                <li class="current" aria-current="step">
+                  <span class="stop-symbol" aria-hidden="true"><svg><use href="#pin"/></svg><span class="map-index">2</span></span>
+                  <span>Thư viện<small>Đang dừng</small></span>
+                </li>
+                <li>
+                  <span class="stop-symbol" aria-hidden="true">3</span>
+                  <span>Khu thực hành<small>Tiếp theo</small></span>
+                </li>
+              </ol>
+            </div>
+            <a class="button live-link" href="http://localhost:5173/staff/live/0a1b2c3d-0000-4000-8000-000000000001" target="_blank" rel="noopener">Mở điều hành<svg aria-hidden="true"><use href="#external"/></svg></a>
+          </div>
+          <div class="live-foot">
+            <div class="route-options" role="group" aria-label="Kiểu sơ đồ" hidden>
+              <button type="button" data-diagram="horizontal" aria-controls="route-visual" aria-pressed="true">Ngang</button>
+              <button type="button" data-diagram="vertical" aria-controls="route-visual" aria-pressed="false">Dọc</button>
+              <button type="button" data-diagram="map" aria-controls="route-visual" aria-pressed="false">Theo tọa độ</button>
+            </div>
+            <div class="route-note">
+              <svg aria-hidden="true"><use href="#info"/></svg>
+              <span id="route-note" aria-live="polite">Thứ tự điểm dừng của Tour.</span>
+            </div>
+          </div>
+        </section>
+        <div class="charts-grid">
+          <section class="panel calendar-panel" aria-labelledby="week-title"><div class="panel-head"><div><h2 id="week-title">Lịch Tour 7 ngày</h2><p>13/11 đến 19/11/2026</p></div><span class="subtle-label">4 Tour trong lịch</span></div><div class="chart-wrap"><svg id="week-chart" class="week-chart" role="img" aria-labelledby="chart-title chart-description" viewBox="0 0 650 180"><title id="chart-title">Số Tour theo ngày</title><desc id="chart-description">Ngày 13/11 có 3 Tour, ngày 17/11 có 1 Tour. Các ngày khác không có Tour.</desc><g class="chart-grid"><path d="M35 135H630M35 99H630M35 63H630M35 27H630"/></g><g class="axis-label"><text x="13" y="139">0</text><text x="13" y="103">1</text><text x="13" y="67">2</text><text x="13" y="31">3</text></g><g class="chart-bars"><rect x="68" y="27" width="24" height="108" rx="2"/><rect class="future-bar" x="408" y="99" width="24" height="36" rx="2"/></g><g class="value-label"><text x="80" y="17">3</text><text x="420" y="89">1</text></g><g class="axis-label date-axis"><text x="80" y="158">13/11</text><text x="165" y="158">14/11</text><text x="250" y="158">15/11</text><text x="335" y="158">16/11</text><text x="420" y="158">17/11</text><text x="505" y="158">18/11</text><text x="590" y="158">19/11</text><text x="80" y="176" class="today-axis">Hôm nay</text></g></svg></div><div class="chart-caption"><span class="legend"><i class="swatch accent"></i>Hôm nay</span><span class="legend"><i class="swatch future"></i>Sắp tới</span><span class="chart-unit">Đơn vị: Tour</span></div></section>
+          <section class="panel" aria-labelledby="state-title"><div class="panel-head"><div><h2 id="state-title">Trạng thái hôm nay</h2><p>Phân bố 3 Tour trong ngày</p></div><svg class="heading-icon" aria-hidden="true"><use href="#grid"/></svg></div><div class="state-chart" role="img" aria-label="3 Tour: 1 đang diễn ra, 1 đã chốt, 1 chưa chốt, 0 hoàn thành hoặc hủy"><div class="stacked-bar"><span class="stack-running"></span><span class="stack-ready"></span><span class="stack-scheduled"></span></div><dl class="state-list"><div><dt><i class="swatch accent"></i>Đang diễn ra</dt><dd>1 <span>Tour</span></dd></div><div><dt><i class="swatch ready"></i>Đã chốt</dt><dd>1 <span>Tour</span></dd></div><div><dt><i class="swatch scheduled"></i>Chưa chốt</dt><dd>1 <span>Tour</span></dd></div><div><dt><i class="swatch ended"></i>Đã hoàn thành / hủy</dt><dd>0 <span>Tour</span></dd></div></dl></div></section>
+        </div>
+        <div class="work-grid">
+          <section class="panel today-panel" id="today" aria-labelledby="today-title"><div class="panel-head"><div class="inline-heading"><h2 id="today-title">Tour hôm nay</h2><span class="count">3</span></div><a class="text-link" href="http://localhost:5173/staff/schedule" target="_blank" rel="noopener">Xem lịch đầy đủ<svg aria-hidden="true"><use href="#external"/></svg></a></div><div class="tabs" role="group" aria-label="Lọc Tour theo trạng thái"><button type="button" data-filter="all" aria-pressed="true">Tất cả <span>3</span></button><button type="button" data-filter="RUNNING" aria-pressed="false">Đang diễn ra <span>1</span></button><button type="button" data-filter="READY" aria-pressed="false">Đã chốt <span>1</span></button><button type="button" data-filter="SCHEDULED" aria-pressed="false">Chưa chốt <span>1</span></button></div><table><thead><tr><th scope="col">Giờ bắt đầu</th><th scope="col">Tour / người vận hành</th><th scope="col">Trạng thái</th><th scope="col"><span class="sr-only">Thao tác</span></th></tr></thead><tbody><tr data-state="RUNNING"><td><time datetime="2026-11-13T08:40:00+07:00">08:40</time><small>AMR-01</small></td><td><strong>Tham quan Thư viện sáng thứ Sáu</strong><small>Nguyễn Minh Anh</small></td><td><span class="badge info">Đang diễn ra</span></td><td><a class="row-action" href="#live">Điều hành<svg aria-hidden="true"><use href="#arrow"/></svg></a></td></tr><tr data-state="SCHEDULED"><td><time datetime="2026-11-13T10:30:00+07:00">10:30</time><small>AMR-01</small></td><td><strong>Tour nhanh đón đoàn khách</strong><small>Nguyễn Minh Anh</small></td><td><span class="badge warn">Chưa chốt</span></td><td><a class="row-action" href="http://localhost:5173/staff/manage/tours/0a1b2c3d-0000-4000-8000-000000000004" target="_blank" rel="noopener">Chuẩn bị<svg aria-hidden="true"><use href="#arrow"/></svg></a></td></tr><tr data-state="READY"><td><time datetime="2026-11-13T14:00:00+07:00">14:00</time><small>AMR-01</small></td><td><strong>Tham quan Khu thực hành buổi chiều</strong><small>Nguyễn Minh Anh</small></td><td><span class="badge ok">Đã chốt</span></td><td><a class="row-action" href="http://localhost:5173/staff/tours/0a1b2c3d-0000-4000-8000-000000000002/start" target="_blank" rel="noopener">Kiểm tra<svg aria-hidden="true"><use href="#arrow"/></svg></a></td></tr></tbody></table><p class="table-note">Thời gian hiển thị theo giờ Việt Nam.</p></section>
+          <section class="panel preparation-panel" id="preparation" aria-labelledby="queue-title"><div class="panel-head"><div><h2 id="queue-title">Cần chuẩn bị</h2><p>Ưu tiên trước khi mở Tour</p></div><svg class="heading-icon" aria-hidden="true"><use href="#clipboard"/></svg></div><div class="queue-item"><div class="queue-icon"><svg aria-hidden="true"><use href="#clipboard"/></svg></div><div><div class="inline-heading"><h3>Duyệt đăng ký đoàn</h3><span class="count">1</span></div><p>THPT Lê Quý Đôn, lớp 12A1</p><small>Đã chờ 26 giờ</small><a class="text-link" href="http://localhost:5173/staff/manage/registrations/pending" target="_blank" rel="noopener">Xem & duyệt<svg aria-hidden="true"><use href="#external"/></svg></a></div></div><div class="queue-item"><div class="queue-icon"><svg aria-hidden="true"><use href="#calendar"/></svg></div><div><div class="inline-heading"><h3>Chốt Tour sắp tới</h3><span class="count">2</span></div><p>Hoàn tất chuẩn bị để chuyển sang đã chốt.</p><a class="text-link" href="http://localhost:5173/staff/schedule?view=list&state=SCHEDULED" target="_blank" rel="noopener">Xem Tour cần chốt<svg aria-hidden="true"><use href="#external"/></svg></a></div></div><div class="queue-note"><svg aria-hidden="true"><use href="#info"/></svg>POI cần hoàn thiện: chưa có dữ liệu trong mẫu.</div></section>
+        </div>
+        <section class="panel upcoming-panel" aria-labelledby="upcoming-title"><div class="panel-head"><h2 id="upcoming-title">Tour sắp tới</h2><span class="subtle-label">Trong 7 ngày</span></div><div class="upcoming-row"><time datetime="2026-11-17T09:00:00+07:00"><strong>17/11</strong><small>09:00</small></time><div><h3>Tham quan campus cho THPT Lê Quý Đôn</h3><p>Trần Quốc Bảo / AMR-01</p></div><span class="badge warn">Chưa chốt</span><a class="text-link" href="http://localhost:5173/staff/manage/tours/0a1b2c3d-0000-4000-8000-000000000003" target="_blank" rel="noopener">Xem Tour<svg aria-hidden="true"><use href="#external"/></svg></a></div></section>
+        <section class="robot-strip" id="robots" aria-label="Báo cáo robot"><span class="robot-title"><svg aria-hidden="true"><use href="#bot"/></svg><strong>Robot số 1</strong><span>AMR-01</span></span><span class="badge ok">Đang báo cáo</span><span class="robot-caution">Báo cáo gần đây không đồng nghĩa đã sẵn sàng.</span><a class="text-link" href="http://localhost:5173/staff/robot" target="_blank" rel="noopener">Xem thiết bị<svg aria-hidden="true"><use href="#external"/></svg></a></section>
+        <footer class="preview-footer"><span><svg aria-hidden="true"><use href="#info"/></svg>Bản xem trước dùng dữ liệu kiểm thử ngày 13/11/2026, không phải dữ liệu vận hành thực.</span><a href="?state=empty">Xem trạng thái trống</a><a href="?state=error">Xem lỗi tải</a><a href="?state=loading">Xem đang tải</a></footer>
+      </main>
+    </div>
+  </div>
+  <script src="preview.js"></script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import { ArrowRight, ChevronRight, CircleCheck, Crosshair, Hand, Info, LocateFix
 import { buttonClass } from '../../../../components/ui/ui-classes'
 import type { OccupancyMap } from './catalog'
 import '../poi-form.css'
+import { poiThemeClass } from '../poi-ui'
 import { loadMapImage, type MapRaster } from './load-map-image'
 import { isTouchScreen } from './touch-screen'
 import {
@@ -14,6 +15,8 @@ export type PickerMode = 'pan' | 'position' | 'heading'
 export type PickerPose = { x: number | null; y: number | null; yaw: number | null }
 
 type Props = {
+  /** The Staff workbench uses a compact toolbar and a large desktop canvas. */
+  layout?: 'default' | 'workbench'
   map: OccupancyMap
   pose: PickerPose
   editable: boolean
@@ -51,7 +54,7 @@ const MODES = [
   { key: 'pan', label: 'Di chuyển bản đồ', shortcut: 'Esc', icon: Hand },
 ] as const
 
-const zoomButton = 'grid size-8.5 place-items-center rounded-lg text-[#475569] transition-colors hover:bg-[#f1f5f9] disabled:cursor-not-allowed disabled:text-[#c2cfda] disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]'
+const zoomButton = 'grid size-8.5 place-items-center rounded-lg text-[var(--poi-muted)] transition-colors hover:bg-[var(--poi-ground)] disabled:cursor-not-allowed disabled:text-[var(--poi-control)] disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--poi-focus)]'
 
 /** Zoom around the view centre, or keep `focus` fixed under the cursor. */
 function zoomView(map: OccupancyMap, current: Viewport, factor: number, focus?: ImagePoint): Viewport {
@@ -61,8 +64,10 @@ function zoomView(map: OccupancyMap, current: Viewport, factor: number, focus?: 
   return { u: focus.u - (focus.u - current.u) * width / current.width, v: focus.v - (focus.v - current.v) * height / current.height, width, height }
 }
 
-export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseChange, clearanceMeters, placing, landmarks = [], landmarkRadiusMeters }: Props) {
+export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseChange, clearanceMeters, placing, landmarks = [], landmarkRadiusMeters, layout = 'default' }: Props) {
   const staff = placing != null
+  const canvasHeight = layout === 'workbench' ? 'h-[280px] sm:h-[440px] xl:h-[460px]' : 'h-[380px] sm:h-[460px]'
+  const loadingHeight = layout === 'workbench' ? canvasHeight : 'h-[460px]'
   const helpId = useId()
   const [rasterState, setRasterState] = useState<RasterState>({ status: 'loading' })
   const [retry, setRetry] = useState(0)
@@ -194,8 +199,8 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
   const arrow = `M 0 0 L ${arrowLength} 0 M ${arrowLength * 0.72} ${-arrowLength * 0.2} L ${arrowLength} 0 L ${arrowLength * 0.72} ${arrowLength * 0.2}`
 
   return (
-    <div className="min-w-0">
-      <div role="group" aria-label="Chế độ thao tác bản đồ" className="flex flex-wrap gap-2 rounded-xl border border-[#e2e8f0] p-1.5">
+    <div className={`${poiThemeClass} min-w-0`}>
+      <div role="group" aria-label="Chế độ thao tác bản đồ" className="flex flex-wrap gap-2 rounded-xl border border-[var(--poi-rule)] p-1.5">
         {MODES.map(({ key, label, shortcut, icon: Icon }) => {
           const disabled = key === 'pan' ? !ready : !editable || !ready || (key === 'heading' && !inside)
           const pressed = actualMode === key
@@ -203,31 +208,31 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
             <button
               key={key} type="button" aria-label={label} aria-pressed={pressed} disabled={disabled}
               onClick={() => chooseMode(key)}
-              className={`inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] disabled:cursor-not-allowed disabled:opacity-45 sm:flex-none sm:px-5 ${
-                pressed ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:bg-[#f8fafc] hover:text-[#2d3748]'
+              className={`inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--poi-focus)] active:bg-[var(--poi-soft)] disabled:cursor-not-allowed disabled:opacity-45 sm:flex-none ${layout === 'workbench' ? 'sm:px-3' : 'sm:px-5'} ${
+                pressed ? 'bg-[var(--poi-soft)] text-[var(--poi-accent-ink)]' : 'text-[var(--poi-muted)] hover:bg-[var(--poi-paper)] hover:text-[var(--poi-ink)]'
               }`}
             >
-              <Icon size={16} aria-hidden="true" />{key === 'pan' ? 'Di chuyển' : label}
-              <kbd aria-hidden="true" className="hidden rounded border border-current px-1 font-mono text-[10px] leading-4 font-semibold opacity-55 sm:inline">{shortcut}</kbd>
+              <Icon size={16} aria-hidden="true" />{key === 'pan' ? 'Di chuyển' : layout === 'workbench' ? key === 'position' ? 'Vị trí' : 'Hướng' : label}
+              <kbd aria-hidden="true" className={`hidden rounded border border-current px-1 font-mono text-[10px] leading-4 font-semibold opacity-55 ${layout === 'workbench' ? '' : 'sm:inline'}`}>{shortcut}</kbd>
             </button>
           )
         })}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-[13px]">
-        <p aria-hidden="true" className="flex items-center gap-2 text-[#475569]"><Info size={15} className="shrink-0 text-[#718096]" />{coach?.text ?? (editable ? 'Kéo để di chuyển bản đồ; phím 1 đặt vị trí, phím 2 chọn hướng.' : 'Vị trí đã khóa, chỉ xem và di chuyển bản đồ.')}</p>
-        {!staff && <p className="text-xs text-[#718096]">Độ phân giải bản đồ: <span className="font-mono">{map.resolution} m/ô</span></p>}
+        <p aria-hidden="true" className="flex items-center gap-2 text-[var(--poi-muted)]"><Info size={15} className="shrink-0 text-[var(--poi-muted)]" />{coach?.text ?? (editable ? 'Kéo để di chuyển bản đồ; phím 1 đặt vị trí, phím 2 chọn hướng.' : 'Vị trí đã khóa, chỉ xem và di chuyển bản đồ.')}</p>
+        {!staff && <p className="text-xs text-[var(--poi-muted)]">Độ phân giải bản đồ: <span className="font-mono">{map.resolution} m/ô</span></p>}
       </div>
 
-      <div className="relative overflow-hidden rounded-xl border border-[#e2e8f0] bg-[#f8fafc] bg-[linear-gradient(#eef2f6_1px,transparent_1px),linear-gradient(90deg,#eef2f6_1px,transparent_1px)] bg-[length:24px_24px]">
-        {rasterState.status === 'loading' && <div className="flex h-[460px] items-center justify-center text-sm text-[#64748b]" role="status">Đang tải bản đồ…</div>}
-        {rasterState.status === 'error' && <div className="flex h-[460px] flex-col items-center justify-center gap-3 px-3.5 text-center" role="alert"><p className="text-sm text-[#334155]">Không tải được ảnh đúng kích thước bản đồ. Tọa độ trong form vẫn được giữ.</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => { setRasterState({ status: 'loading' }); setRetry((value) => value + 1) }}><RotateCcw size={14} aria-hidden="true" />Tải lại bản đồ</button></div>}
+      <div className="relative overflow-hidden rounded-xl border border-[var(--poi-rule)] bg-[var(--poi-paper)] bg-[linear-gradient(var(--poi-grid)_1px,transparent_1px),linear-gradient(90deg,var(--poi-grid)_1px,transparent_1px)] bg-[length:24px_24px]">
+        {rasterState.status === 'loading' && <div className={`flex ${loadingHeight} items-center justify-center text-sm text-[var(--poi-muted)]`} role="status">Đang tải bản đồ…</div>}
+        {rasterState.status === 'error' && <div className={`flex ${loadingHeight} flex-col items-center justify-center gap-3 px-3.5 text-center`} role="alert"><p className="text-sm text-[var(--poi-text)]">Không tải được ảnh đúng kích thước bản đồ. Tọa độ trong form vẫn được giữ.</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => { setRasterState({ status: 'loading' }); setRetry((value) => value + 1) }}><RotateCcw size={14} aria-hidden="true" />Tải lại bản đồ</button></div>}
         {ready && <>
           <svg
             ref={svgRef}
             role="group" aria-label="Bản đồ occupancy ROS" aria-describedby={helpId} tabIndex={0}
             viewBox={`${view.u} ${view.v} ${view.width} ${view.height}`}
-            className={`h-[380px] w-full touch-none select-none outline-offset-[-3px] sm:h-[460px] ${actualMode === 'pan' ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'}`}
+            className={`${canvasHeight} w-full touch-none select-none outline-offset-[-3px] ${actualMode === 'pan' ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'}`}
             onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={finishPan}
             onPointerCancel={finishPan} onLostPointerCapture={finishPan}
             onPointerLeave={() => setHover(null)}
@@ -244,68 +249,68 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
             {landmarks.map(point => {
               const at = rosToImage(map, point)
               return <g key={point.label} pointerEvents="none" aria-label={`${point.label}. ${point.name}`}>
-                {landmarkRadiusMeters != null && <circle cx={at.u} cy={at.v} r={landmarkRadiusMeters / map.resolution} fill="rgba(23,59,95,0.06)" stroke="#173b5f" strokeOpacity={0.6} strokeWidth={1.25} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
-                <circle cx={at.u} cy={at.v} r={markerRadius * 2.2} fill="#173b5f" stroke="white" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-                <text x={at.u} y={at.v + markerRadius * 0.85} textAnchor="middle" fontSize={markerRadius * 2.4} fontWeight={700} fill="white">{point.label}</text>
+                {landmarkRadiusMeters != null && <circle cx={at.u} cy={at.v} r={landmarkRadiusMeters / map.resolution} fill="var(--poi-landmark-soft)" stroke="var(--poi-landmark)" strokeOpacity={0.6} strokeWidth={1.25} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
+                <circle cx={at.u} cy={at.v} r={markerRadius * 2.2} fill="var(--poi-landmark)" stroke="var(--poi-paper)" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                <text x={at.u} y={at.v + markerRadius * 0.85} textAnchor="middle" fontSize={markerRadius * 2.4} fontWeight={700} fill="var(--poi-paper)">{point.label}</text>
               </g>
             })}
             {ghost && <g pointerEvents="none" opacity={0.55}>
-              {clearanceRadius != null && <circle data-testid="clearance-preview" cx={ghost.u} cy={ghost.v} r={clearanceRadius} fill="rgba(37,99,235,0.1)" stroke="#2563eb" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
-              <circle cx={ghost.u} cy={ghost.v} r={markerRadius * 0.8} fill="#2563eb" />
-              <circle cx={ghost.u} cy={ghost.v} r={markerRadius * 2} fill="none" stroke="#2563eb" strokeWidth={1.5} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+              {clearanceRadius != null && <circle data-testid="clearance-preview" cx={ghost.u} cy={ghost.v} r={clearanceRadius} fill="var(--poi-pose-soft)" stroke="var(--poi-focus)" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
+              <circle cx={ghost.u} cy={ghost.v} r={markerRadius * 0.8} fill="var(--poi-focus)" />
+              <circle cx={ghost.u} cy={ghost.v} r={markerRadius * 2} fill="none" stroke="var(--poi-focus)" strokeWidth={1.5} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
             </g>}
             {marker && <g aria-label="Pose POI" transform={`translate(${marker.u} ${marker.v})`}>
-              {clearanceRadius != null && <circle data-testid="clearance-circle" pointerEvents="none" r={clearanceRadius} fill={tooClose ? 'rgba(217,119,6,0.16)' : 'rgba(37,99,235,0.1)'} stroke={tooClose ? '#b45309' : '#2563eb'} strokeWidth={1.5} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
+              {clearanceRadius != null && <circle data-testid="clearance-circle" pointerEvents="none" r={clearanceRadius} fill={tooClose ? 'var(--poi-clearance-soft)' : 'var(--poi-pose-soft)'} stroke={tooClose ? 'var(--poi-clearance-warn)' : 'var(--poi-focus)'} strokeWidth={1.5} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
               {yaw != null && Number.isFinite(yaw) && <g transform={`rotate(${-(yaw - map.origin[2]) * 180 / Math.PI})`}>
-                <path d={`M 0 0 L ${arrowLength * 1.05} ${-arrowLength * 0.45} A ${arrowLength * 1.14} ${arrowLength * 1.14} 0 0 1 ${arrowLength * 1.05} ${arrowLength * 0.45} Z`} fill="rgba(37,99,235,0.12)" />
-                <path d={arrow} fill="none" stroke="white" strokeWidth={6} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-                <path d={arrow} fill="none" stroke="#2563eb" strokeWidth={3} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={headingPreview != null ? '6 5' : undefined} />
+                <path d={`M 0 0 L ${arrowLength * 1.05} ${-arrowLength * 0.45} A ${arrowLength * 1.14} ${arrowLength * 1.14} 0 0 1 ${arrowLength * 1.05} ${arrowLength * 0.45} Z`} fill="var(--poi-pose-soft)" />
+                <path d={arrow} fill="none" stroke="var(--poi-paper)" strokeWidth={6} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+                <path d={arrow} fill="none" stroke="var(--poi-focus)" strokeWidth={3} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={headingPreview != null ? '6 5' : undefined} />
               </g>}
-              <circle className="poi-marker-ring" r={markerRadius} fill="none" stroke="#2563eb" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-              <circle key={`${pose.x}:${pose.y}`} className="poi-marker-drop" r={markerRadius} fill="#2563eb" stroke="white" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
+              <circle className="poi-marker-ring" r={markerRadius} fill="none" stroke="var(--poi-focus)" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+              <circle key={`${pose.x}:${pose.y}`} className="poi-marker-drop" r={markerRadius} fill="var(--poi-focus)" stroke="var(--poi-paper)" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
             </g>}
           </svg>
 
-          <div className="absolute top-3 right-3 flex flex-col gap-1 rounded-xl border border-[#e2e8f0] bg-white p-1 shadow-[0_3.5px_5.5px_rgba(0,0,0,0.06)]">
+          <div className="absolute top-3 right-3 flex flex-col gap-1 rounded-xl border border-[var(--poi-rule)] bg-white p-1 shadow-[0_3.5px_5.5px_var(--poi-shadow)]">
             <button type="button" aria-label="Phóng to" disabled={view.height <= map.height / 32} onClick={() => zoom(2)} className={zoomButton}><Plus size={16} aria-hidden="true" /></button>
             <button type="button" aria-label="Thu nhỏ" disabled={view.height >= map.height} onClick={() => zoom(0.5)} className={zoomButton}><Minus size={16} aria-hidden="true" /></button>
             <button type="button" aria-label="Vừa bản đồ" onClick={fitMap} className={zoomButton}><Maximize size={16} aria-hidden="true" /></button>
             <button type="button" aria-label="Đưa POI vào giữa" disabled={!marker} onClick={() => { if (marker) setView((current) => ({ ...current, u: marker.u - current.width / 2, v: marker.v - current.height / 2 })) }} className={zoomButton}><LocateFixed size={16} aria-hidden="true" /></button>
           </div>
 
-          {!staff && <div aria-hidden="true" className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-1.5 font-mono text-[11.5px] text-[#475569]">
-            <span className="rounded-lg border border-[#e2e8f0] bg-white/92 px-2 py-1">X {shown ? shown.x.toFixed(4) : '—'} m</span>
-            <span className="rounded-lg border border-[#e2e8f0] bg-white/92 px-2 py-1">Y {shown ? shown.y.toFixed(4) : '—'} m</span>
-            <span className="rounded-lg border border-[#e2e8f0] bg-white/92 px-2 py-1">Yaw {yaw == null ? '—' : yaw.toFixed(6)} rad</span>
+          {!staff && <div aria-hidden="true" className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-1.5 font-mono text-[11.5px] text-[var(--poi-muted)]">
+            <span className="rounded-lg border border-[var(--poi-rule)] bg-white/92 px-2 py-1">X {shown ? shown.x.toFixed(4) : '—'} m</span>
+            <span className="rounded-lg border border-[var(--poi-rule)] bg-white/92 px-2 py-1">Y {shown ? shown.y.toFixed(4) : '—'} m</span>
+            <span className="rounded-lg border border-[var(--poi-rule)] bg-white/92 px-2 py-1">Yaw {yaw == null ? '—' : yaw.toFixed(6)} rad</span>
           </div>}
         </>}
       </div>
 
-      <div className="space-y-2.5 pt-3 text-xs leading-5 text-[#718096]">
+      <div className="space-y-2.5 pt-3 text-xs leading-5 text-[var(--poi-muted)]">
         {!staff && <p className="sr-only">X: {pose.x == null ? 'chưa chọn' : `${pose.x.toFixed(4)} m`}, Y: {pose.y == null ? 'chưa chọn' : `${pose.y.toFixed(4)} m`}, Yaw: {pose.yaw == null ? 'chưa chọn' : `${pose.yaw.toFixed(6)} rad`}</p>}
-        {cellState && <p role="status" className={`flex items-start gap-2 rounded-lg px-3 py-2 font-semibold ${cellState === 'free' && !tooClose ? 'bg-[#f1f5f9] text-[#475569]' : 'bg-[#fbf5e8] text-[#8a6a2e]'}`}>
+        {cellState && <p role="status" className={`flex items-start gap-2 rounded-lg px-3 py-2 font-semibold ${cellState === 'free' && !tooClose ? 'bg-[var(--poi-ground)] text-[var(--poi-muted)]' : 'bg-[var(--poi-warn-soft)] text-[var(--poi-warn)]'}`}>
           {cellState === 'free' && !tooClose ? <CircleCheck size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> : <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />}{tooClose ? clearanceMessage(clearanceMeters!) : CELL_LABELS[cellState]}
         </p>}
-        {interactionError && <p role="alert" className="font-semibold text-[#b23e31]">{interactionError}</p>}
+        {interactionError && <p role="alert" className="font-semibold text-[var(--poi-danger)]">{interactionError}</p>}
         <div className="flex flex-wrap gap-x-4 gap-y-1">
-          <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] border border-[#94a3b8] bg-white" aria-hidden="true" />Trắng: ô trống</span>
-          <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[#111]" aria-hidden="true" />Đen: vật cản</span>
-          <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[#9aa5b1]" aria-hidden="true" />Xám: chưa biết</span>
-          {clearanceMeters != null && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full border border-dashed border-[#2563eb] bg-[#2563eb]/10" aria-hidden="true" />Vòng tròn: khoảng trống quanh robot</span>}
-          {landmarks.length > 0 && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full bg-[#173b5f]" aria-hidden="true" />Số: điểm dừng{landmarkRadiusMeters != null ? `, vòng nét đứt: cách tối thiểu ${landmarkRadiusMeters.toLocaleString('vi-VN')} m` : ''}</span>}
+          <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] border border-[var(--poi-control)] bg-white" aria-hidden="true" />Trắng: ô trống</span>
+          <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[var(--poi-obstacle)]" aria-hidden="true" />Đen: vật cản</span>
+          <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[var(--poi-unknown)]" aria-hidden="true" />Xám: chưa biết</span>
+          {clearanceMeters != null && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full border border-dashed border-[var(--poi-focus)] bg-[var(--poi-focus)]/10" aria-hidden="true" />Vòng tròn: khoảng trống quanh robot</span>}
+          {landmarks.length > 0 && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full bg-[var(--poi-landmark)]" aria-hidden="true" />Số: điểm dừng{landmarkRadiusMeters != null ? `, vòng nét đứt: cách tối thiểu ${landmarkRadiusMeters.toLocaleString('vi-VN')} m` : ''}</span>}
           {!staff && <span>Yaw 0 = +X, chiều dương quay về +Y</span>}
         </div>
         {staff && <>
-          <p className="flex items-center gap-2 text-sm text-[#334155]"><span className="text-[#64748b]">Hướng robot:</span>{yaw == null ? 'chưa chọn'
-            : <><ArrowRight size={16} aria-hidden="true" className="shrink-0 text-[#2563eb]" style={{ transform: `rotate(${-(yaw - map.origin[2]) * 180 / Math.PI}deg)` }} /><span className="font-semibold">{yawDegrees(yaw)}°</span></>}</p>
-          <details className="group rounded-lg border border-[#e2e8f0]">
-            <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 font-medium text-[#475569] [&::-webkit-details-marker]:hidden"><ChevronRight size={14} aria-hidden="true" className="transition-transform group-open:rotate-90" />Chi tiết kỹ thuật</summary>
-            <dl className="grid gap-x-4 gap-y-1 border-t border-[#e2e8f0] px-3 py-2 font-mono sm:grid-cols-3">
+          <p className="flex items-center gap-2 text-sm text-[var(--poi-text)]"><span className="text-[var(--poi-muted)]">Hướng robot:</span>{yaw == null ? 'chưa chọn'
+            : <><ArrowRight size={16} aria-hidden="true" className="shrink-0 text-[var(--poi-focus)]" style={{ transform: `rotate(${-(yaw - map.origin[2]) * 180 / Math.PI}deg)` }} /><span className="font-semibold">{yawDegrees(yaw)}°</span></>}</p>
+          <details className="group rounded-lg border border-[var(--poi-rule)]">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 font-medium text-[var(--poi-muted)] [&::-webkit-details-marker]:hidden"><ChevronRight size={14} aria-hidden="true" className="transition-transform group-open:rotate-90" />Chi tiết kỹ thuật</summary>
+            <dl className="grid gap-x-4 gap-y-1 border-t border-[var(--poi-rule)] px-3 py-2 font-mono sm:grid-cols-3">
               <div><dt className="font-sans">X</dt><dd>{shown ? `${shown.x.toFixed(4)} m` : '-'}</dd></div>
               <div><dt className="font-sans">Y</dt><dd>{shown ? `${shown.y.toFixed(4)} m` : '-'}</dd></div>
               <div><dt className="font-sans">Yaw</dt><dd>{yaw == null ? '-' : `${yaw.toFixed(6)} rad`}</dd></div>
             </dl>
-            <p className="border-t border-[#e2e8f0] px-3 py-2">Yaw 0 = +X, chiều dương quay về +Y. Độ phân giải bản đồ: <span className="font-mono">{map.resolution} m/ô</span>.</p>
+            <p className="border-t border-[var(--poi-rule)] px-3 py-2">Yaw 0 = +X, chiều dương quay về +Y. Độ phân giải bản đồ: <span className="font-mono">{map.resolution} m/ô</span>.</p>
           </details>
         </>}
         <p id={helpId} className="sr-only">{help}</p>

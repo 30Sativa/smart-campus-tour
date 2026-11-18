@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { ChevronDown, LogOut, Menu, UserRound } from 'lucide-react'
 import { Link } from 'react-router'
+import { AccountAvatar } from './AccountAvatar'
 import { useDismiss } from './use-dismiss'
 import { softConsoleHeader } from './ui-classes'
-import { initialsOf } from './console-crumbs'
 
 /**
  * The header every signed-in console shares (Staff, Đại diện trường, Kỹ thuật,
@@ -56,7 +56,9 @@ function Breadcrumb({ crumbs }: { crumbs: string[] }) {
 }
 
 /** The signed-in account, top right, the same in every console: its profile and sign-out. */
-export function ConsoleAccountMenu({ name, role, profilePath, profileCurrent = false, onLogout, onNavigate }: {
+export function ConsoleAccountMenu({ name, role, profilePath, profileCurrent = false, onLogout, onNavigate, avatarUrl }: {
+  /** ADR-0064: the account's own picture; initials without one. */
+  avatarUrl?: string | null
   name: string
   role: string
   profilePath: string
@@ -81,7 +83,7 @@ export function ConsoleAccountMenu({ name, role, profilePath, profileCurrent = f
         onClick={() => setOpen((value) => !value)}
         className={`flex min-w-0 items-center gap-2.5 rounded-xl py-1 pr-2 pl-1.5 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${open ? 'bg-white' : ''}`}
       >
-        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#edf3fb] text-[11.5px] font-extrabold text-[#4a6fa5]">{initialsOf(name)}</span>
+        <AccountAvatar name={name} url={avatarUrl} size={32} className="rounded-xl" />
         <span className="hidden min-w-0 text-left sm:block">
           <span className="block max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{name}</span>
           <span className="text-muted block max-w-40 truncate text-[11px] leading-tight">{role}</span>

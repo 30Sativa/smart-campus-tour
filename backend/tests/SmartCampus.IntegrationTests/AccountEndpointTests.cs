@@ -681,6 +681,73 @@ public sealed class AccountEndpointTests
         Assert.Equal(1, await context.AuditLogs.CountAsync(log => log.Action == "PROFILE_UPDATED" && log.ActorUserId == stored.Id));
     }
 
+    /// <summary>ADR-0064: an account signs an avatar upload and saves only its own picture.</summary>
+    [SchemaV11Fact]
+    public async Task SelfService_Avatar_IsSignedSavedShownAndRemoved_ForTheOwnAccountOnly()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(isActive: true, username: "avatar.rep", roles: ["SCHOOL_REPRESENTATIVE"]);
+        var otherId = (await database.InsertUserAsync(isActive: true, username: "avatar.other", roles: ["STAFF"])).Id;
+        var settings = new Dictionary<string, string>
+        {
+            ["Cloudinary__CloudName"] = "demo-cloud",
+            ["Cloudinary__ApiKey"] = "123456789012345",
+            ["Cloudinary__ApiSecret"] = "integration-cloudinary-secret",
+        };
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString, settings);
+        var token = await GetAccessTokenAsync(host.Client, "avatar.rep");
+
+        using var ticketResponse = await host.Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Post, "/api/account/me/avatar-upload", token));
+        Assert.Equal(HttpStatusCode.OK, ticketResponse.StatusCode);
+        var ticketText = await ticketResponse.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("integration-cloudinary-secret", ticketText);
+        using var ticket = JsonDocument.Parse(ticketText);
+        var data = ticket.RootElement.GetProperty("data");
+        Assert.Equal("https://api.cloudinary.com/v1_1/demo-cloud/image/upload", data.GetProperty("uploadUrl").GetString());
+        Assert.Equal("123456789012345", data.GetProperty("fields").GetProperty("api_key").GetString());
+        var stored = data.GetProperty("storedUrl").GetString()!;
+
+        async Task<HttpStatusCode> SetAsync(string? avatarUrl)
+        {
+            var put = CreateAuthenticatedRequest(HttpMethod.Put, "/api/account/me/avatar", token);
+            put.Content = JsonContent.Create(new { avatarUrl });
+            using var response = await host.Client.SendAsync(put);
+            return response.StatusCode;
+        }
+        async Task<string?> ShownAsync()
+        {
+            using var me = await host.Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, "/api/account/me", token));
+            using var document = JsonDocument.Parse(await me.Content.ReadAsStringAsync());
+            return document.RootElement.GetProperty("data").GetProperty("avatarUrl").GetString();
+        }
+
+        Assert.Null(await ShownAsync());
+        Assert.Equal(HttpStatusCode.OK, await SetAsync(stored));
+        Assert.Equal(stored, await ShownAsync());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            await SetAsync($"https://res.cloudinary.com/demo-cloud/image/upload/smartcampus/avatars/{otherId:N}/{Guid.NewGuid():N}"));
+        Assert.Equal(HttpStatusCode.BadRequest, await SetAsync("https://example.test/avatar.png"));
+        Assert.Equal(stored, await ShownAsync());
+        Assert.Equal(HttpStatusCode.OK, await SetAsync(null));
+        Assert.Null(await ShownAsync());
+
+        await using var context = CreateContext(database.ConnectionString);
+        Assert.Null((await context.Users.AsNoTracking().SingleAsync(user => user.Id == otherId)).AvatarUrl);
+        Assert.Equal(1, await context.AuditLogs.CountAsync(log => log.Action == "AVATAR_UPDATED"));
+        Assert.Equal(1, await context.AuditLogs.CountAsync(log => log.Action == "AVATAR_REMOVED"));
+    }
+
+    [SchemaV11Fact]
+    public async Task SelfService_AvatarUpload_IsUnavailableWithoutCloudinary()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(isActive: true, username: "avatar.none", roles: ["STAFF"]);
+        await using var host = await ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var token = await GetAccessTokenAsync(host.Client, "avatar.none");
+        using var response = await host.Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Post, "/api/account/me/avatar-upload", token));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
     [SchemaV11Fact]
     public async Task AdminUpdateAccount_EditsManagedNameOnly_AndNonAdminsAndAdminTargetsAreRefused()
     {

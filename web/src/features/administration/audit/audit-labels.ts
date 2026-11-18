@@ -18,7 +18,7 @@ import type { AuditLogEntry } from './audit-api'
 export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, string> }[] = [
   { label: 'Tài khoản', actions: {
     ACCOUNT_CREATED: 'Tạo tài khoản', ACCOUNT_UPDATED: 'Sửa tài khoản', ACCOUNT_DEACTIVATED: 'Khóa tài khoản',
-    ACCOUNT_REACTIVATED: 'Mở lại tài khoản', PROFILE_UPDATED: 'Sửa hồ sơ cá nhân', PASSWORD_CHANGED: 'Đổi mật khẩu',
+    ACCOUNT_REACTIVATED: 'Mở lại tài khoản', PROFILE_UPDATED: 'Sửa hồ sơ cá nhân', AVATAR_UPDATED: 'Đổi ảnh đại diện', AVATAR_REMOVED: 'Bỏ ảnh đại diện', PASSWORD_CHANGED: 'Đổi mật khẩu',
     PASSWORD_RESET_BY_ADMIN: 'Admin đặt lại mật khẩu',
   } },
   { label: 'Tour', actions: {

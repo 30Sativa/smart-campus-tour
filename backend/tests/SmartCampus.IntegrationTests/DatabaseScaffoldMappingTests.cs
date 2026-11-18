@@ -79,7 +79,8 @@ public sealed class DatabaseScaffoldMappingTests
                      (typeof(PoiProposalRevision), nameof(PoiProposalRevision.NarrationText), 4000),
                      (typeof(PoiProposalRevision), nameof(PoiProposalRevision.FallbackVideoUrl), 2048),
                      (typeof(RouteRevisionStop), nameof(RouteRevisionStop.NarrationText), 4000),
-                     (typeof(RouteRevisionStop), nameof(RouteRevisionStop.FallbackVideoUrl), 2048)
+                     (typeof(RouteRevisionStop), nameof(RouteRevisionStop.FallbackVideoUrl), 2048),
+                     (typeof(User), nameof(User.AvatarUrl), 1000)
                  })
         {
             var property = context.Model.FindEntityType(type)!.FindProperty(name)!;

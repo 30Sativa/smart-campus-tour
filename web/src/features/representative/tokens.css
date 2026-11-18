@@ -1,11 +1,15 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · scope: app · v2.0.0 */
+/* Hallmark · pre-emit critique: P5 H4 E4 S5 R5 V4 · weakest: R, preserve the approved blue console palette and strengthen form boundaries */
+/* Hallmark · dismissed 74 · These values are the existing Representative/Staff console brand, preserved in the approved preview. */
 /* Representative tokens, synchronised with the Staff console (components/ui/ui-classes.ts):
  * same blue accent, slate ink, borderless 15px cards with a soft lift, 12px buttons and inputs.
  * Light only, like the Staff console: the shell's soft sidebar and header have no dark variant. */
 :root {
   --rep-font: 'Be Vietnam Pro', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --rep-bg: #f4f7fb; --rep-surface: #ffffff; --rep-sunk: #f8fafc; --rep-sunk-2: #eef2f7;
-  --rep-ink: #0f172a; --rep-ink-2: #64748b; --rep-ink-3: #94a3b8;
-  --rep-line: #edf2f7; --rep-line-2: #d9e9f5; --rep-line-hover: #a8cde6;
+  --rep-ink: #0f172a; --rep-ink-2: #52667c; --rep-ink-3: #94a3b8;
+  --rep-line: #e4ebf2; --rep-line-2: #d9e9f5; --rep-line-hover: #a8cde6;
+  --rep-field: #7a8da3; --rep-clear: transparent;
   /* Primary buttons: the Staff console's light-blue button with muted blue text. */
   --rep-accent: #edf3fb; --rep-accent-hover: #e3ecf8; --rep-accent-ink: #4a6fa5;
   --rep-focus: #2d719e; --rep-ring: #5b9dc9; --rep-green: #2d719e; --rep-link: #285c7d;
@@ -15,10 +19,10 @@
   --rep-info: #2f62b8; --rep-info-bg: #eef5ff; --rep-info-line: #cfe1fb;
   --rep-mute: #5d7085; --rep-mute-bg: #f6f9fd; --rep-mute-line: #dbe6f4;
   --rep-overlay: rgb(30 41 59 / .2); --rep-shadow: rgb(31 49 77 / .16);
-  --rep-card-shadow: 0 3.5px 5.5px rgba(0,0,0,.04); --rep-pop-shadow: 0 18px 40px -20px rgba(15,23,42,.35);
+  --rep-card-shadow: 0 4px 12px rgb(31 49 77 / .035); --rep-pop-shadow: 0 18px 40px -20px rgba(15,23,42,.35);
   --rep-space-2xs: 4px; --rep-space-xs: 8px; --rep-space-sm: 12px; --rep-space-md: 16px;
   --rep-space-lg: 24px; --rep-space-xl: 40px; --rep-space-2xl: 64px;
   --rep-text-xs: .75rem; --rep-text-sm: .875rem; --rep-text-md: 1rem; --rep-text-lg: 1.2rem; --rep-text-xl: 1.44rem; --rep-text-2xl: 1.728rem; --rep-text-3xl: 2.074rem;
-  --rep-radius: 12px; --rep-radius-sm: 8px; --rep-radius-card: 15px; --rep-radius-dialog: 16px; --rep-container: 1440px; --rep-hit: 40px;
+  --rep-radius: 12px; --rep-radius-sm: 8px; --rep-radius-card: 16px; --rep-radius-dialog: 16px; --rep-container: 1408px; --rep-hit: 44px;
   --rep-ease: cubic-bezier(.22,1,.36,1); --rep-duration: 150ms;
 }

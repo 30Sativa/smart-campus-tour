@@ -4,6 +4,13 @@ User approved the complete standalone reference on 2026-11-05. Implement the rea
 
 ## Locked visual system
 
+**Approved interactive layout (user request, 2026-11-17) supersedes earlier layout revisions below.**
+Apply the standalone Representative preview to the API-backed routes. Keep blue/slate and Be Vietnam Pro, a capped 1408px content area, flat top navigation, 16px surfaces and 12px controls. The overview has a three-part summary strip, an illustrated next visit and balanced recent-registration/open-Tour columns. The catalog offers cards and a list. Tour detail puts the cover, schedule and stops beside registration actions. Registration forms use a three-step context column and the form beside it; phones use a horizontal stepper. Owned registrations retain their chooser/document workspace and four detail tabs. Profile contact, account and security are URL-backed tabs.
+
+`approved-layout.css` composes existing classes after the original stylesheet. Keep real data, guards, permissions, version snapshots, explicit import acceptance and retry semantics. Never bring preview fixture data or simulated mutations into the application.
+
+Motion is limited to route/tab entries, button states and opening dialogs, with reduced-motion fallbacks. A successful create/update/resubmit navigates with a transient result for the shell's centred `RegistrationResultDialog`. It offers the record and roster, traps focus, closes on Escape and clears its history state on dismissal. Errors and uncertain responses stay in the form. This popup is the user's explicit exception to toast-only success feedback; do not also show a success banner or toast. Submission never implies approval or email delivery.
+
 **Console sync (user request, 2026-11-12) — supersedes the palette, nav and footer below.**
 The Representative area uses the Staff console's visual language while keeping its
 navigation across the top (user revision, same day: no left sidebar). The shell is one

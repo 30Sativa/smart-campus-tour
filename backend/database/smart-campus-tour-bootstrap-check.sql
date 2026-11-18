@@ -1,4 +1,4 @@
--- SQLCMD input: SchemaHash is the current v1.23 snapshot hash; prior hashes are used only for controlled upgrades.
+-- SQLCMD input: SchemaHash is the current v1.24 snapshot hash; prior hashes are used only for controlled upgrades.
 -- Upgrade paths preserve the original bootstrap hash and advance only CampusTourSchemaVersion.
 SET NOCOUNT ON;
 DECLARE @hash nvarchar(64) = (
@@ -13,6 +13,7 @@ DECLARE @v18 nvarchar(64) = N'$(SchemaHashV18)';
 DECLARE @v110 nvarchar(64) = N'$(SchemaHashV110)';
 DECLARE @v111 nvarchar(64) = N'$(SchemaHashV111)';
 DECLARE @v112 nvarchar(64) = N'$(SchemaHashV112)';
+DECLARE @v123 nvarchar(64) = N'$(SchemaHashV123)';
 DECLARE @v122 nvarchar(64) = N'$(SchemaHashV122)';
 DECLARE @v121 nvarchar(64) = N'$(SchemaHashV121)';
 DECLARE @v120 nvarchar(64) = N'$(SchemaHashV120)';
@@ -72,6 +73,7 @@ DECLARE @knownPriorHash bit = CASE WHEN @hash IN (
     @v115,
     @v116,
     @v117,
+    @v123,
     @v122,
     @v121,
     @v120,
@@ -243,8 +245,19 @@ DECLARE @v123ObjectsPresent bit = CASE WHEN @v122ObjectsPresent = 1 AND
         AND name=N'CK_PoiProposals_Retirement_Complete' AND is_disabled=0 AND is_not_trusted=0)
     THEN 1 ELSE 0 END;
 
-IF @schemaVersion = N'1.23' AND @v123ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
+-- v1.24 (ADR-0064): an account's own avatar picture.
+DECLARE @v124ObjectsPresent bit = CASE WHEN @v123ObjectsPresent = 1 AND
+    COL_LENGTH(N'dbo.Users', N'AvatarUrl') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Users')
+        AND name=N'CK_Users_AvatarUrlHttps' AND is_disabled=0 AND is_not_trusted=0)
+    THEN 1 ELSE 0 END;
+
+IF @schemaVersion = N'1.24' AND @v124ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
     SELECT 'READY';
+ELSE IF @schemaVersion = N'1.24'
+    THROW 51001, 'Database schema version marker is 1.24 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+ELSE IF @schemaVersion = N'1.23' AND @v123ObjectsPresent = 1 AND (@hash = @v123 OR @knownPriorHash = 1)
+    SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.23'
     THROW 51001, 'Database schema version marker is 1.23 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
 ELSE IF @schemaVersion = N'1.22' AND @v122ObjectsPresent = 1 AND (@hash = @v122 OR @knownPriorHash = 1)

@@ -7,13 +7,22 @@ The schema is v1.1, unchanged by this feature.
 ## Implemented
 
 The Representative workspace uses a compact three-destination header: overview,
-Tour catalog and owned registrations. The overview keeps three equally sized
-summary cards, a full-width upcoming-visit card, then two equal-width cards for
-recent registrations and open Tours. Card spacing and empty-state heights match
+Tour catalog and owned registrations. The overview uses a three-part summary
+strip, an illustrated upcoming visit, then balanced columns for recent
+registrations and open Tours. Card spacing and empty-state heights match
 across both columns; mobile layouts stack naturally. The registration list and detail share a
 workspace; selection, filters, pagination and detail tab survive in the URL.
 Phone layouts offer a registration chooser and labelled table values. Account
-and contact information are read-only; contact values come from owned records.
+contact values come from owned records. Contact, account and password forms
+have separate profile tabs; self-service account APIs retain their existing behavior.
+
+The catalog can switch between cards and a list without losing search or pagination.
+Registration forms keep the three steps and Tour context together. Route/tab
+entries, button states and dialogs use short motion with a reduced-motion fallback.
+Successful create/update/resubmit responses open one centred result popup;
+dismissal consumes its navigation state. Failed and uncertain responses stay in
+the form and never show success. This user-requested registration popup replaces
+the former create-success banner and does not claim approval or email delivery.
 
 - One registration per Representative/Tour. Opening a Tour checks existing
   ownership before offering a new registration; failed lookups block creation.
