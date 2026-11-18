@@ -127,7 +127,9 @@ Thêm một giá trị vào `LEGACY_BASELINE_LIDAR_YAWS` là thay đổi code, p
 
 ## 5. Log theo phiên
 
-- Mỗi `robot manual|map|nav` tạo `SCT_LOG_ROOT/<YYYYmmdd_HHMMSS>_<workflow>/`, gồm:
+- Mỗi `robot manual|map|nav` tạo `SCT_LOG_ROOT/<YYYYmmdd_HHMMSS>_<workflow>/` (hai phiên
+  khởi động trong cùng một giây thành `..._<workflow>_2/`, `_3/`; không bao giờ dùng lại thư
+  mục cũ), gồm:
   - `ros_log/`: `ROS_LOG_DIR` của launch;
   - `session.json`: argv, pid, env tóm tắt;
   - `.sct-session`: đánh dấu thư mục do launcher tạo.
