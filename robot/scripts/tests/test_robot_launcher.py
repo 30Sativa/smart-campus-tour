@@ -435,6 +435,24 @@ def test_a_reused_pid_does_not_keep_an_old_session_alive(world):
     assert (d2 / 'ros_log').exists()
 
 
+def test_two_sessions_started_in_the_same_second_get_their_own_directories(tmp_path, monkeypatch):
+    from importlib.machinery import SourceFileLoader
+    import importlib.util
+    loader = SourceFileLoader('robot_launcher', ROBOT)
+    launcher = importlib.util.module_from_spec(importlib.util.spec_from_loader('robot_launcher', loader))
+    loader.exec_module(launcher)
+
+    class FrozenClock(launcher.dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 18, 16, 24, 25)
+    monkeypatch.setattr(launcher.dt, 'datetime', FrozenClock)
+    p = {'SCT_LOG_ROOT': str(tmp_path)}
+    paths = [launcher.new_session(p, 'nav') for _ in range(3)]
+    assert [os.path.basename(x) for x in paths] == ['20261118_162425_nav', '20261118_162425_nav_2', '20261118_162425_nav_3']
+    assert all(os.path.isdir(os.path.join(x, 'ros_log')) and os.path.isfile(os.path.join(x, '.sct-session')) for x in paths)
+
+
 # ---- fleet sessions (ADR-0049: commands only with the motion permit) ------------------------
 def fleet_runtime(w, gate=True, permit_publisher=True):
     nav = w['overlay'] / 'nav'
@@ -498,7 +516,7 @@ def test_fleet_commands_need_a_running_nav_and_note_a_missing_permit(world):
         holder = robot(world, *nav_args, extra_env={'SCT_ROBOT_TEST_EXEC': str(fake)}, popen=True)
         try:
             for _ in range(100):
-                if 'running' in robot(world, 'status').stdout:
+                if 'workflow     running:' in robot(world, 'status').stdout:
                     break
                 time.sleep(0.05)
             r = robot(world, 'fleet', '--commands', '--dry-run')
@@ -527,7 +545,7 @@ def test_fleet_commands_need_the_permit_publisher_in_fleet_bridge(world):
     holder = robot(world, 'nav', '--fleet', extra_env={'SCT_ROBOT_TEST_EXEC': str(fake)}, popen=True)
     try:
         for _ in range(100):
-            if 'running' in robot(world, 'status').stdout:
+            if 'workflow     running:' in robot(world, 'status').stdout:
                 break
             time.sleep(0.05)
         r = robot(world, 'fleet', '--commands', '--dry-run')
@@ -555,7 +573,7 @@ def nav_holder(world, *nav_args):
     fake.chmod(0o755)
     holder = robot(world, 'nav', *nav_args, extra_env={'SCT_ROBOT_TEST_EXEC': str(fake)}, popen=True)
     for _ in range(100):
-        if 'running' in robot(world, 'status').stdout:
+        if 'workflow     running:' in robot(world, 'status').stdout:
             break
         time.sleep(0.05)
     return holder
@@ -662,7 +680,7 @@ def test_relocalize_needs_an_auto_pose_nav_session(world):
         holder = robot(world, *nav_args, extra_env={'SCT_ROBOT_TEST_EXEC': str(fake)}, popen=True)
         try:
             for _ in range(100):
-                if 'running' in robot(world, 'status').stdout:
+                if 'workflow     running:' in robot(world, 'status').stdout:
                     break
                 time.sleep(0.05)
             r = robot(world, 'relocalize', '--dry-run')
