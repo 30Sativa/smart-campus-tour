@@ -26,7 +26,7 @@ describe('TechDrive (section 04)', () => {
     expect(video()).toHaveAttribute('poster', expect.stringContaining('videos/robot-intro'))
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Công nghệ đứng sau mỗi điểm dừng.')
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(`${STORY_CHAPTERS[0].title} ${STORY_CHAPTERS[0].after}`)
-    expect(screen.getByRole('link', { name: /Xem dữ liệu chạy bên trong robot/ })).toHaveAttribute('href', '/ben-trong-robot')
+    expect(screen.queryByRole('link', { name: /bên trong robot/i })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Lái thử robot/ })).toHaveAttribute('href', ROBOT_DRIVE.to)
     expect(screen.getByRole('button', { name: /Bỏ qua/ })).toBeInTheDocument()
     expect(document.getElementById('cong-nghe')).toHaveAttribute('data-phase', 'intro')

@@ -6,6 +6,13 @@ the source of truth; this file maps it onto the web area.
 
 ## Current implementation boundary
 
+The current Staff create page, `/staff/manage/tours/new`, opens the form directly
+with **Tour theo ca** selected when `kind` is absent or unrecognized. Its inline
+kind selector switches to **Tour nhanh** without clearing entered values; there
+is no separate kind-selection screen or “Đổi loại” action. Explicit `kind=quick`
+and legacy `kind=short` links still open a quick Tour. Route/date/shift presets
+and the existing validation, create and media-upload flows are preserved.
+
 `/admin/routes` now provides live SQL Route CRUD, separate from the Tour demo
 route selector. See `web/docs/route-management.md` and ADR-0017.
 

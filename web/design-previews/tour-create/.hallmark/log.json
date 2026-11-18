@@ -1,0 +1,74 @@
+[
+  {
+    "date": "2026-11-18",
+    "mode": "redesign",
+    "depth": "full",
+    "scope": "app",
+    "theme": "brand",
+    "status": "approved design applied to real React page",
+    "entry": "web/src/routes/staff/manage/StaffManageTourCreatePage.tsx",
+    "shape": "app screen",
+    "nav": "existing Staff shell",
+    "signature": "grouped form and sticky reservation review",
+    "sections": [
+      "Thông tin Tour",
+      "Tuyến & vận hành",
+      "Lịch & sức chứa",
+      "Ảnh & video"
+    ],
+    "prompt": "Áp dụng bản bố cục Tạo Tour đã được duyệt",
+    "waived": [],
+    "sweep": "0 FAIL, 0 REFLEX, 0 WARN; existing Staff ink dismissed 74",
+    "finishReview": "in-thread, 2 resolved",
+    "verification": {
+      "script": "scripts/verify web PASS in isolated matching source snapshot",
+      "tests": " Test Files  174 passed (174)\n      Tests  1447 passed | 1 skipped (1448)",
+      "browser": "8 widths and both kinds PASS"
+    },
+    "businessLogic": "State, queries, validation and submit compared byte-for-byte with pre-apply backup, unchanged"
+  },
+  {
+    "date": "2026-11-18",
+    "mode": "redesign",
+    "depth": "full",
+    "scope": "app",
+    "theme": "brand",
+    "shape": "app screen",
+    "axes": "cool paper / Be Vietnam Pro / console blue",
+    "nav": "existing Staff destinations",
+    "hero": "none, application form",
+    "footer": "form actions",
+    "imagery": "existing project logo and optional local file preview",
+    "photos": [],
+    "entry": "name and Tour kind",
+    "fingerprint": "grouped-form/sticky-review/reservation-summary",
+    "sections": [
+      "Thông tin Tour",
+      "Tuyến & vận hành",
+      "Lịch & sức chứa",
+      "Ảnh & video"
+    ],
+    "signature": "shift and robot reservation beside grouped form",
+    "waived": [],
+    "prompt": "Đề xuất bố cục trang tạo Tour, cho xem trước khi áp dụng; gom nhóm và xem lại bên phải",
+    "status": "preview only, awaiting user review",
+    "sweep": {
+      "floorFails": 0,
+      "reflex": 0,
+      "warnings": 0,
+      "answered": [
+        "F4",
+        "F7"
+      ],
+      "dismissed": [
+        "74"
+      ],
+      "finishReview": "in-thread, 3 resolved"
+    },
+    "verification": {
+      "prototype": "PASS, 8 responsive widths and interactions",
+      "project": "Isolated npm ci from unchanged lock PASS; workspace maps:check, typecheck, lint, build PASS; 3 targeted Tour files and 47 tests PASS; full scripts/verify blocked at npm ci by native file locks",
+      "appliedToLivePage": false
+    }
+  }
+]

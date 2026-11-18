@@ -22,8 +22,9 @@ interface ImportMetaEnv {
   readonly VITE_QUEST_AUDIO_PATH?: string
   readonly VITE_STAFF_AUDIO_PATH?: string
   /**
-   * Cloudinary cloud name (public, not a secret). Read only by the build in vite.config.ts (`cloudinaryImages`),
-   * which then serves `public/images/` from Cloudinary; app code never reads it.
+   * Cloudinary cloud name (public, not a secret). Read by the build in vite.config.ts (`cloudinaryImages`), which
+   * then serves `public/images/` from Cloudinary, and by `api/tour-cover.ts` for the Tour cover images Staff upload.
+   * Must be the backend's `Cloudinary:CloudName`.
    */
   readonly VITE_CLOUDINARY_CLOUD_NAME?: string
   /** @deprecated The old HLS address; only read to warn that it is ignored. */

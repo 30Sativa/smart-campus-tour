@@ -21,6 +21,8 @@ public partial class User
 
     public DateTimeOffset? UpdatedAt { get; set; }
 
+    public string? AvatarUrl { get; set; }
+
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
     public virtual ICollection<BranchRequest> BranchRequestRequestedByUsers { get; set; } = new List<BranchRequest>();

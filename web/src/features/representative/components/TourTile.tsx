@@ -6,6 +6,7 @@ import { repButton } from '../rep-classes'
 import { registrationClosesAt } from '../registration-deadline'
 import { tourImage, type TourImage } from '../tour-image'
 import { TourStateBadge } from './RepUi'
+import { TourCoverImg } from './TourCover'
 
 /** A catalog card: the Tour's sample image on top, its state on the image, then name, Route, times and the way in. */
 export function TourTile({ tour, image = tourImage(tour) }: { tour: RepresentativeTour; image?: TourImage }) {
@@ -13,12 +14,12 @@ export function TourTile({ tour, image = tourImage(tour) }: { tour: Representati
   const closes = registrationClosesAt(tour).toISOString()
   return <article className="rep-tile">
     <Link to={detail} className="rep-tile-media" tabIndex={-1} aria-hidden="true">
-      <img src={image.src} alt="" loading="lazy" decoding="async" />
+      <TourCoverImg tourId={tour.id} image={image} decorative loading="lazy" decoding="async" />
       <span className="rep-tile-badge"><TourStateBadge state={tour.state} /></span>
     </Link>
     <div className="rep-tile-body">
       <h3><Link to={detail}>{tour.name}</Link></h3>
-      <p className="rep-tile-route"><RouteIcon size={14} aria-hidden="true" />{tour.routeName} · {tour.stops.length} điểm dừng</p>
+      <p className="rep-tile-route"><RouteIcon size={14} aria-hidden="true" /><span>{tour.routeName}<span className="rep-tile-stop-count">{tour.stops.length} điểm dừng</span></span></p>
       {!tour.register.allowed && tour.register.reason && <p className="rep-hint">{tour.register.reason}</p>}
       <dl className="rep-tile-meta">
         <div><dt><CalendarClock size={14} aria-hidden="true" />Thời gian</dt><dd><time dateTime={tour.scheduledStartAt}>{formatTime(tour.scheduledStartAt)}, {formatShortDate(tour.scheduledStartAt)}</time></dd></div>

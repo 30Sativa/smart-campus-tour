@@ -302,9 +302,31 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV123SnapshotAndMarker()
+    public async Task Bootstrap_AcceptsVerifiedV124SnapshotAndMarker()
     {
-        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.23.sql", "1.23"));
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.24.sql", "1.24"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_AskForTheUpgradeOnAVerifiedV123Database()
+    {
+        Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.23.sql", "1.23"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_RefusesAV124MarkerWithoutTheTrustedAvatarStructure()
+    {
+        foreach (var sql in new[]
+        {
+            "ALTER TABLE dbo.Users DROP CONSTRAINT CK_Users_AvatarUrlHttps;",
+            "ALTER TABLE dbo.Users NOCHECK CONSTRAINT CK_Users_AvatarUrlHttps;",
+        })
+        {
+            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.24.sql", "1.24", sql));
+            Assert.Equal(51001, error.Number);
+        }
+        var marker = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.23.sql", "1.24"));
+        Assert.Equal(51001, marker.Number);
     }
 
     [SchemaV11Fact]
@@ -464,7 +486,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     // Bootstraps the snapshot with its own hash and version markers, then runs the guard with every
-    // variable bound exactly as init-db.sh binds it for the current v1.23 release.
+    // variable bound exactly as init-db.sh binds it for the current v1.24 release.
     private static async Task<object?> RunCurrentGuardAsync(string snapshot, string version, string? alteration = null)
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync(snapshot);
@@ -493,7 +515,8 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV120)", await SnapshotHashAsync("snapshot-v1.20.sql"))
             .Replace("$(SchemaHashV121)", await SnapshotHashAsync("snapshot-v1.21.sql"))
             .Replace("$(SchemaHashV122)", await SnapshotHashAsync("snapshot-v1.22.sql"))
-            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.23.sql"));
+            .Replace("$(SchemaHashV123)", await SnapshotHashAsync("snapshot-v1.23.sql"))
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.24.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();
     }

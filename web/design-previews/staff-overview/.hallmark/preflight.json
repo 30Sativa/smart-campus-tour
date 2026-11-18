@@ -1,0 +1,24 @@
+{
+  "scanned": "2026-11-18",
+  "scope": "app preview",
+  "findings": {
+    "fonts": "Be Vietnam Pro, web/index.html:23",
+    "framework": "React + Vite, web/package.json",
+    "palette": "Staff console blue and slate, web/src/components/ui/ui-classes.ts:65",
+    "content": "web/src/routes/staff/OverviewPage.tsx:59,91; web/e2e/fixtures/staff.ts:66-78",
+    "workingTree": "Existing unrelated modifications; create isolated preview files only."
+  },
+  "preserve": [
+    "Staff navigation destinations",
+    "Be Vietnam Pro",
+    "Console blue",
+    "Real data ownership and command permissions during future integration"
+  ],
+  "introduce": [
+    "Seven-day Tour chart",
+    "Status distribution",
+    "Ordered route diagram",
+    "Preview states"
+  ],
+  "data": "Existing e2e sample at 2026-11-13 09:00 Asia/Ho_Chi_Minh; no live data"
+}

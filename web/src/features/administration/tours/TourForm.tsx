@@ -11,6 +11,7 @@ import { useMapVersions } from '../../technical/technical-hooks'
 import { SaveBlockedHint } from '../../technical/TechnicalUi'
 import type { TourInput } from './types'
 import { FallbackVideoField } from './FallbackVideoField'
+import { CoverImageField } from './CoverImageField'
 
 const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
 
@@ -19,8 +20,10 @@ const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
  * selected Route's detail supplies its revision, which the API checks on create
  * or on a Route change, and the read-only stop preview.
  */
-export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = false, submitLabel, busy, error, cancelTo, onSubmit }: {
+export function TourForm({ initial, currentCoverUrl = null, currentRoute, fixedStops, scheduleLocked = false, submitLabel, busy, error, cancelTo, onSubmit }: {
   initial?: TourInput
+  /** The cover image the Tour already has, if any. */
+  currentCoverUrl?: string | null
   currentRoute?: { id: string; name: string }
   /** A Tour on a route revision: its route cannot change and has no legacy Route detail to load. */
   fixedStops?: { order: number; name: string; dwellSeconds: number }[]
@@ -29,13 +32,15 @@ export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = f
   busy: boolean
   error: string | null
   cancelTo: string
-  onSubmit: (input: TourInput, routeVersion: string) => void
+  /** `cover`: a newly picked cover image, uploaded by the page after the save. */
+  onSubmit: (input: TourInput, routeVersion: string, cover: File | null) => void
 }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [schedule, setSchedule] = useState(toLocalInput(initial?.scheduledStartAt))
   const [routeId, setRouteId] = useState(initial?.routeId ?? '')
   const [video, setVideo] = useState(initial?.fallbackVideoUrl ?? '')
+  const [cover, setCover] = useState<File | null>(null)
   const [clientError, setClientError] = useState('')
   const routes = useRoutes({ isActive: true, page: 1, size: 100 })
   const route = useRoute(fixedStops ? undefined : routeId || undefined)
@@ -55,7 +60,7 @@ export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = f
     if (!at) return setClientError('Chọn ngày và giờ dự kiến.')
     if ((!initial || scheduleChanged) && new Date(at).getTime() <= Date.now()) return setClientError('Giờ dự kiến phải ở tương lai.')
     setClientError('')
-    onSubmit({ name: name.trim(), description: description.trim() || null, routeId, scheduledStartAt: at, fallbackVideoUrl: video.trim() || null }, route.data?.version ?? '')
+    onSubmit({ name: name.trim(), description: description.trim() || null, routeId, scheduledStartAt: at, fallbackVideoUrl: video.trim() || null }, route.data?.version ?? '', cover)
   }
 
   return <form onSubmit={submit} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -77,9 +82,10 @@ export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = f
         {options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
       </select>
         <span className="mt-1 block text-xs text-[#64748b]">{routes.isError ? 'Không tải được danh mục tuyến.' : 'Danh sách này chỉ có tuyến kiểu cũ.'}</span></label>}
+      <CoverImageField file={cover} onChange={setCover} currentUrl={currentCoverUrl} disabled={busy} />
       <FallbackVideoField value={video} onChange={setVideo} disabled={busy} />
-      {fixedStops ? <Notice tone="info">Muốn đổi lịch, tuyến hoặc robot, hãy hủy Tour rồi tạo lại; ở đây chỉ sửa được tên, mô tả và video.</Notice>
-        : scheduleLocked && <Notice tone="info">Tour đã có đăng ký hoặc lịch sử nên lịch và tuyến bị khóa; chỉ sửa được tên, mô tả và video.</Notice>}
+      {fixedStops ? <Notice tone="info">Muốn đổi lịch, tuyến hoặc robot, hãy hủy Tour rồi tạo lại; ở đây chỉ sửa được tên, mô tả, ảnh và video.</Notice>
+        : scheduleLocked && <Notice tone="info">Tour đã có đăng ký hoặc lịch sử nên lịch và tuyến bị khóa; chỉ sửa được tên, mô tả, ảnh và video.</Notice>}
       <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:items-center sm:justify-end">
         <SaveBlockedHint id="tour-form-missing" tone="neutral" lead="Cần" missing={busy ? [] : routeMissing} />
         <Link to={cancelTo} className={buttonClass('secondary')}>Hủy bỏ</Link>

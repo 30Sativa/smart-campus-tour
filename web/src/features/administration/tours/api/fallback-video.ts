@@ -1,5 +1,6 @@
 import { apiClient } from '../../../../api/client'
 import type { ApiResponse } from '../../../../api/contracts/shared'
+import { CloudinaryUploadError, megabytes, uploadToCloudinary } from '../../../../api/cloudinary-upload'
 
 /**
  * ADR-0063: what the backend signs for one direct upload of a Tour's fallback video to Cloudinary. The file goes
@@ -35,47 +36,10 @@ export async function uploadFallbackVideo(file: File, onProgress: (percent: numb
     throw new FallbackVideoUploadError('too-large',
       `Video nặng ${megabytes(file.size)} MB, vượt giới hạn ${megabytes(ticket.maxBytes)} MB. Hãy xuất lại ở 720p rồi thử lại.`)
   }
-  const form = new FormData()
-  for (const [name, value] of Object.entries(ticket.fields)) form.append(name, value)
-  form.append('file', file)
-  await send(ticket.uploadUrl, form, onProgress, signal)
-  return ticket.storedUrl
-}
-
-function megabytes(bytes: number) {
-  return Math.ceil(bytes / (1024 * 1024))
-}
-
-/** Cloudinary's own error text, `{"error":{"message":"…"}}`, when it sent one. */
-function cloudinaryMessage(body: string) {
   try {
-    const message = (JSON.parse(body) as { error?: { message?: unknown } }).error?.message
-    return typeof message === 'string' && message ? message : null
-  } catch {
-    return null
+    await uploadToCloudinary(ticket.uploadUrl, ticket.fields, file, 'video', onProgress, signal)
+  } catch (error) {
+    throw error instanceof CloudinaryUploadError ? new FallbackVideoUploadError(error.reason, error.message) : error
   }
-}
-
-/**
- * Cloudinary is not the backend, so this is not `apiClient`; XMLHttpRequest because only it reports upload progress
- * for a file of up to 100 MB.
- */
-function send(url: string, form: FormData, onProgress: (percent: number) => void, signal?: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'))
-    const request = new XMLHttpRequest()
-    request.open('POST', url)
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.min(100, Math.round((event.loaded * 100) / event.total)))
-    }
-    request.onload = () => {
-      if (request.status >= 200 && request.status < 300) return resolve()
-      const reason = cloudinaryMessage(request.responseText)
-      reject(new FallbackVideoUploadError('refused', reason ? `Cloudinary từ chối video: ${reason}` : `Cloudinary từ chối video (HTTP ${request.status}).`))
-    }
-    request.onerror = () => reject(new FallbackVideoUploadError('network', 'Không gửi được video lên Cloudinary. Kiểm tra mạng rồi thử lại.'))
-    request.onabort = () => reject(new DOMException('Aborted', 'AbortError'))
-    signal?.addEventListener('abort', () => request.abort(), { once: true })
-    request.send(form)
-  })
+  return ticket.storedUrl
 }

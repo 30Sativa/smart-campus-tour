@@ -171,6 +171,21 @@ Done since the first M2 console, listed so these rows are not re-opened:
 - POI summaries, rows and map markers share an explicit map-version selection.
   Empty filters and API errors are distinct. Route cards keep revision history
   collapsed and support server pagination.
+- The POI list has a sort control for its original order, Vietnamese name A–Z/Z–A,
+  and newest/oldest current-revision timestamp. The `sort` URL parameter restores
+  the choice. Sorting preserves the selected point, map numbers and fitted view,
+  and applies to the points matching the existing filters without changing POI data.
+- POI create/details use the map-first workbench: a large map and coordinate
+  fields on the left, with `Thông tin điểm` / `Camera` in the right inspector
+  (`?panel=info|camera`, independently of the existing `?tab=` page sections).
+  Both inspector panels stay mounted so switching preserves the draft; arrow
+  keys, Home and End switch tabs. Native validation opens the panel containing
+  an invalid field before focusing it. The two camera views sit side by side.
+  On phones the inspector follows the map and save actions stay below the form,
+  rather than covering the canvas. Save/submit, verification locks and narration
+  approval keep their existing API contracts and rules.
+  The map selector stays on one line; its tooltip and options retain the full
+  map label. Helper text keeps internal notes separate from student narration.
 - A Tour runs the route revision it was created on (ADR-0034); saving a route
   makes a new revision and moves no Tour. The route editor names the Tours
   scheduled on the route (`GET /api/staff/routes/{id}/scheduled-tours`) before a

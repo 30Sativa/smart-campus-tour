@@ -256,8 +256,8 @@ describe('POI narration section (ADR-0060)', () => {
 
   it('labels the description as an internal note and links the narration tab', async () => {
     renderPage('/staff/manage/pois/proposal-1')
-    expect(await screen.findByLabelText('Ghi chú nội bộ (không hiện cho học sinh)')).toBeInTheDocument()
-    expect(screen.getByText(/Lời guide đọc cho học sinh là Thuyết minh/)).toBeInTheDocument()
+    expect(await screen.findByLabelText('Ghi chú nội bộ')).toBeInTheDocument()
+    expect(screen.getByText(/Chỉ Staff xem\. Nội dung cho học sinh ở/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: 'tab Thuyết minh' }))
     expect(screen.getByRole('tab', { name: 'Thuyết minh' })).toHaveAttribute('aria-selected', 'true')
     expect(await panel()).toBeTruthy()

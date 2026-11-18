@@ -358,23 +358,35 @@ describe('live Tour management', () => {
     expect(writes[0].body.requestId).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/))
   })
 
-  it('asks for the Tour kind before showing the form, and lets Staff change it', async () => {
+  it.each([
+    ['/staff/manage/tours/new', ''],
+    ['/staff/manage/tours/new?route=revision-2', 'revision-2'],
+    ['/staff/manage/tours/new?kind=unknown&route=revision-2', 'revision-2'],
+  ])('opens the scheduled form immediately at %s and switches kind inline', async (path, routeId) => {
     shortNoticeMinutes = 60
     api()
-    renderAt('/staff/manage/tours/new?route=revision-2')
-    expect(screen.queryByLabelText('Tên Tour')).not.toBeInTheDocument()
-    expect(await screen.findByText('Chưa bắt đầu sau 60 phút thì tự hủy')).toBeInTheDocument()
+    renderAt(path)
+    expect(screen.getByLabelText('Tên Tour')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tour theo ca' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText(/Ngày tổ chức/)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Chọn loại Tour' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Đổi loại' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue(routeId)
+    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour giữ thông tin' } })
     fireEvent.click(screen.getByRole('button', { name: /Tour nhanh/ }))
     expect(await screen.findByLabelText(/Lý do tạo gấp/)).toBeInTheDocument()
+    expect(await screen.findByText('60 phút sau khi tạo')).toBeInTheDocument()
     // A quick Tour has no date or shift (ADR-0053).
     expect(screen.queryByLabelText(/Ngày tổ chức/)).not.toBeInTheDocument()
     expect(await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue('revision-2')
-    fireEvent.click(screen.getByRole('button', { name: 'Đổi loại' }))
+    expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue(routeId)
     fireEvent.click(screen.getByRole('button', { name: /Tour theo ca/ }))
     expect(await screen.findByLabelText('Tên Tour')).toBeInTheDocument()
     expect(screen.getByLabelText(/Ngày tổ chức/)).toBeInTheDocument()
     expect(screen.queryByLabelText(/Lý do tạo gấp/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Tên Tour')).toHaveValue('Tour giữ thông tin')
+    expect(screen.getByLabelText('Tuyến đã kiểm chứng')).toHaveValue(routeId)
   })
 
   it('marks a robot waiting for its on-site check but still lets it be chosen, in both forms', async () => {

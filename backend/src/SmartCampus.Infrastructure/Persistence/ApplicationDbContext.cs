@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Domain.Entities;
@@ -1332,6 +1332,7 @@ public partial class ApplicationDbContext : DbContext
             entity.HasIndex(e => e.NormalizedUsername, "UQ_Users_NormalizedUsername").IsUnique();
 
             entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.AvatarUrl).HasMaxLength(1000);
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.FullName).HasMaxLength(150);
             entity.Property(e => e.NormalizedUsername).HasMaxLength(100);

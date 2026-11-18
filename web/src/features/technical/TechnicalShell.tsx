@@ -2,6 +2,7 @@ import { useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
+import { useMyAvatarUrl } from '../account/hooks'
 import { RouteView } from '../../components/ui/RouteView'
 import { softConsoleGround, softConsoleMain } from '../../components/ui/ui-classes'
 import { useConsoleDrawer } from '../../components/ui/use-mobile-nav'
@@ -22,6 +23,7 @@ export default function TechnicalShell() {
   const drawer = useConsoleDrawer()
   const location = useLocation()
   const user = useAuthStore((state) => state.user)
+  const avatarUrl = useMyAvatarUrl(!!user)
   const handleLogout = useLogout()
   const pageTitle = useCurrentPageTitle()
   const current = technicalActivePath(location.pathname)
@@ -51,7 +53,7 @@ export default function TechnicalShell() {
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <ConsoleHeader crumbs={crumbs} menuOpen={drawer.open} menuControls="technical-navigation" menuLabel="Mở điều hướng kỹ thuật" onMenu={drawer.openDrawer} menuButtonRef={drawer.menuButtonRef}>
           <TechnicalBell />
-          <ConsoleAccountMenu name={user?.username || 'Nhân viên kỹ thuật'} role={roleLabel(user?.role)} profilePath="/technical/profile" profileCurrent={onProfile} onLogout={handleLogout} onNavigate={drawer.close} />
+          <ConsoleAccountMenu avatarUrl={avatarUrl} name={user?.username || 'Nhân viên kỹ thuật'} role={roleLabel(user?.role)} profilePath="/technical/profile" profileCurrent={onProfile} onLogout={handleLogout} onNavigate={drawer.close} />
         </ConsoleHeader>
         <main className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto ${softConsoleMain}`}><RouteView /></main>
       </div>

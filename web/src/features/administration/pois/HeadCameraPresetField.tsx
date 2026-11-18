@@ -1,11 +1,12 @@
 import { ArrowUp, Hand, Info, Minus, MoveHorizontal, Plus, SlidersHorizontal, TriangleAlert, type LucideIcon } from 'lucide-react'
 import { HEAD_PAN_LIMIT_DEG, HEAD_SWEEP_LIMITS, HEAD_TILT_LIMIT_DEG, headCameraModeHint, headPresetProblem,
   joinHeadPreset, presetForMode, splitHeadPreset, type HeadCameraMode, type HeadCameraParts } from '../../technical/head-camera-preset'
+import { poiThemeClass } from './poi-ui'
 import { HeadCameraPreview } from './HeadCameraPreview'
 
-const hint = 'text-xs text-[#64748b]'
-const focus = 'peer-focus-visible:ring-2 peer-focus-visible:ring-[#5b9dc9] peer-focus-visible:ring-offset-2'
-const chip = 'inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs font-medium tabular-nums transition-colors duration-150 motion-reduce:transition-none'
+const hint = 'text-xs text-[var(--poi-muted)]'
+const focus = 'peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--poi-focus)] peer-focus-visible:ring-offset-2'
+const chip = 'active:bg-[var(--poi-ground)] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--poi-focus)] inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs font-medium tabular-nums transition-colors duration-150 motion-reduce:transition-none'
 
 // Four choices. "Bên trái"/"Bên phải" are angles inside "Góc tùy chỉnh"; a stored LEFT/RIGHT opens there.
 const MODES: { mode: HeadCameraMode; icon: LucideIcon; title: string }[] = [
@@ -71,36 +72,36 @@ function DegreeControl({ label, side, text, min, max, step, ends, reversed, nudg
   const inRange = valid && value >= min && value <= max
   const current = inRange ? value : 0
   const bump = (delta: number) => onChange(fit(current + delta, min, max, step))
-  const nudgeButton = 'grid size-8 shrink-0 place-items-center rounded-lg border border-[#e2e8f0] bg-white text-[#475569] transition-colors duration-150 hover:border-[#a8cde6] hover:text-[#1f557a] disabled:opacity-40 motion-reduce:transition-none'
-  return <div className="rounded-xl border border-[#e2e8f0] bg-white p-3">
+  const nudgeButton = 'grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--poi-rule)] bg-[var(--poi-paper)] text-[var(--poi-text)] transition-colors duration-150 hover:border-[var(--poi-control)] hover:text-[var(--poi-accent-ink)] active:bg-[var(--poi-ground)] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--poi-focus)] motion-reduce:transition-none'
+  return <div className="border-t border-[var(--poi-rule)] pt-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <p className="text-sm font-medium text-[#1e293b]">
-        {label}{side && <span className="ml-1.5 font-normal text-[#64748b]">{side}</span>}
-        <span className="ml-2 text-xs font-normal text-[#64748b]">giới hạn {min}° đến {max}°</span>
+      <p className="text-sm font-medium text-[var(--poi-visor)]">
+        {label}{side && <span className="ml-1.5 font-normal text-[var(--poi-muted)]">{side}</span>}
+        <span className="ml-2 text-xs font-normal text-[var(--poi-muted)]">giới hạn {min}° đến {max}°</span>
       </p>
       <div className="flex items-center gap-1.5">
         <button type="button" className={nudgeButton} aria-label={nudge.less} title={nudge.less}
           disabled={inRange && current - nudge.by < min} onClick={() => bump(-nudge.by)}><Minus size={14} aria-hidden="true" /></button>
-        <input className="h-8 w-20 rounded-lg border border-[#e2e8f0] bg-white px-2 text-right text-sm tabular-nums text-[#0f172a] outline-none focus:border-[#2d719e] focus:ring-2 focus:ring-[#5b9dc9]/40 aria-[invalid=true]:border-[#d92d20] aria-[invalid=true]:ring-[#d92d20]/30"
+        <input className="h-8 w-20 rounded-lg border border-[var(--poi-control)] bg-[var(--poi-paper)] px-2 text-right text-sm tabular-nums text-[var(--poi-ink)] outline-none focus:border-[var(--poi-accent)] focus:ring-2 focus:ring-[var(--poi-focus)]/40 aria-[invalid=true]:border-[var(--poi-danger)] aria-[invalid=true]:ring-[var(--poi-danger)]/30"
           type="number" inputMode="decimal" min={min} max={max} step={step} value={text}
           aria-label={`${label}${side ? ` ${side}` : ''}`} aria-invalid={!inRange || undefined}
           onChange={e => onChange(e.target.value)}
           onBlur={() => { if (valid && !inRange) onChange(fit(value, min, max, step)) }} />
-        <span className="text-sm text-[#64748b]" aria-hidden="true">°</span>
+        <span className="text-sm text-[var(--poi-muted)]" aria-hidden="true">°</span>
         <button type="button" className={nudgeButton} aria-label={nudge.more} title={nudge.more}
           disabled={inRange && current + nudge.by > max} onClick={() => bump(nudge.by)}><Plus size={14} aria-hidden="true" /></button>
       </div>
     </div>
     <input type="range" aria-label={`Thanh kéo ${label}`} min={min} max={max} step={step} value={current}
-      dir={reversed ? 'rtl' : undefined} onChange={e => onChange(e.target.value)} className="mt-3 w-full accent-[#2d719e]" />
-    <div className="mt-0.5 flex justify-between text-[11px] text-[#64748b]" aria-hidden="true">
+      dir={reversed ? 'rtl' : undefined} onChange={e => onChange(e.target.value)} className="mt-3 w-full accent-[var(--poi-accent)]" />
+    <div className="mt-0.5 flex justify-between text-[11px] text-[var(--poi-muted)]" aria-hidden="true">
       <span>{ends[0]}</span><span>{(min + max) / 2}°</span><span>{ends[1]}</span>
     </div>
     <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label={`Góc nhanh ${label}`}>
       {chips.map(item => {
         const pressed = inRange && current === item.value
         return <button key={item.label} type="button" aria-pressed={pressed} onClick={() => onChange(String(item.value))}
-          className={`${chip} ${pressed ? 'border-[#2d719e] bg-[#eff6fb] text-[#1f557a]' : 'border-[#e2e8f0] bg-white text-[#475569] hover:border-[#a8cde6]'}`}>
+          className={`${chip} ${pressed ? 'border-[var(--poi-accent)] bg-[var(--poi-soft)] text-[var(--poi-accent-ink)]' : 'border-[var(--poi-rule)] bg-[var(--poi-paper)] text-[var(--poi-text)] hover:border-[var(--poi-control)]'}`}>
           {item.label}
         </button>
       })}
@@ -119,22 +120,22 @@ export function HeadCameraPresetField({ value, onChange }: { value: string; onCh
   const parts = stored && editable(stored)
   const problem = stored ? headPresetProblem(value) : null
   const change = (patch: Partial<HeadCameraParts>) => parts && onChange(joinHeadPreset({ ...parts, ...patch }))
-  // Sized by the room the form gives it, not the window: side by side only when the field itself is wide.
-  return <div className="@container"><div className="grid grid-cols-1 gap-4 @3xl:grid-cols-[minmax(0,1fr)_320px]">
+  // The workbench inspector stacks configuration above a compact pair of camera views.
+  return <div className={`${poiThemeClass} min-w-0`}><div className="grid min-w-0 grid-cols-1 gap-4">
     <div className="min-w-0 space-y-3">
       <fieldset>
         <legend id="poi-camera-legend" className="sr-only">Hoạt động đầu camera VR khi robot tới điểm</legend>
-        <p className="text-sm font-medium text-[#1e293b]" aria-hidden="true">Khi robot tới điểm</p>
-        {!stored && <p className="mt-2 flex items-start gap-2 rounded-xl border border-[#f1dcb0] bg-[#fffaf0] px-3 py-2 text-[13px] text-[#7d5310]">
+        <p className="text-sm font-medium text-[var(--poi-visor)]" aria-hidden="true">Khi robot tới điểm</p>
+        {!stored && <p className="mt-2 flex items-start gap-2 rounded-xl border border-[var(--poi-warn-rule)] bg-[var(--poi-warn-soft)] px-3 py-2 text-[13px] text-[var(--poi-warn)]">
           <TriangleAlert size={15} aria-hidden="true" className="mt-0.5 shrink-0" />Hướng cũ {value}, cần chọn lại.</p>}
-        <div role="radiogroup" aria-labelledby="poi-camera-legend" className="mt-2 grid grid-cols-2 gap-1 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-1 sm:grid-cols-4">
+        <div role="radiogroup" aria-labelledby="poi-camera-legend" className="mt-2 grid grid-cols-2 gap-2">
           {MODES.map(({ mode, icon: Icon, title }) => {
             const checked = parts?.mode === mode
             return <label key={mode} className="relative block cursor-pointer">
               <input type="radio" name="poi-camera" value={mode} checked={checked} onChange={() => onChange(presetForMode(mode))} className="peer sr-only" />
-              <span className={`flex min-h-10 items-center justify-center gap-2 rounded-lg px-2 py-2 text-[13px] font-semibold transition-[background-color,color,box-shadow] duration-150 motion-reduce:transition-none ${focus} ${checked
-                ? 'bg-white text-[#1f557a] shadow-[0_0_0_1px_#2d719e]'
-                : 'text-[#475569] hover:bg-white/70'}`}>
+              <span className={`flex min-h-10 items-center justify-start gap-2 rounded-lg border border-[var(--poi-rule)] px-2 py-2 text-[13px] font-semibold transition-[background-color,color,box-shadow] duration-150 motion-reduce:transition-none active:bg-[var(--poi-ground)] ${focus} ${checked
+                ? 'border-[var(--poi-accent)] bg-[var(--poi-soft)] text-[var(--poi-accent-ink)]'
+                : 'text-[var(--poi-text)] hover:bg-[var(--poi-ground)]'}`}>
                 <Icon size={15} aria-hidden="true" className="shrink-0" />{title}
               </span>
             </label>
@@ -158,13 +159,13 @@ export function HeadCameraPresetField({ value, onChange }: { value: string; onCh
           nudge={{ less: 'Cúi 1°', more: 'Ngửa 1°', by: 1 }} chips={TILT_CHIPS}
           onChange={tiltDeg => change({ tiltDeg })} />
       </div>}
-      {problem && <p className="text-xs font-medium text-[#b42318]" role="alert">{problem}</p>}
-      <p className="flex items-start gap-2 rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#475569]">
-        <Info size={14} aria-hidden="true" className="mt-px shrink-0 text-[#64748b]" />
-        <span>Robot tự quay đầu khi tới đúng điểm này (trong khoảng 0,6 m). Khi robot đi tiếp, đầu tự quay về phía trước.</span>
+      {problem && <p className="text-xs font-medium text-[var(--poi-danger)]" role="alert">{problem}</p>}
+      <p className="flex items-start gap-2 rounded-xl bg-[var(--poi-ground)] px-3 py-2 text-xs text-[var(--poi-text)]">
+        <Info size={14} aria-hidden="true" className="mt-px shrink-0 text-[var(--poi-muted)]" />
+        <span>Tới điểm (trong 0,6 m), camera xoay theo cài đặt; đi tiếp thì quay về trước.</span>
       </p>
     </div>
     {parts ? <HeadCameraPreview key={value} parts={parts} />
-      : <p className="grid place-items-center rounded-2xl border border-dashed border-[#e2e8f0] p-6 text-center text-xs text-[#64748b]">Chọn lại hoạt động để xem mô phỏng.</p>}
+      : <p className="grid place-items-center rounded-2xl border border-dashed border-[var(--poi-rule)] p-6 text-center text-xs text-[var(--poi-muted)]">Chọn lại hoạt động để xem mô phỏng.</p>}
   </div></div>
 }

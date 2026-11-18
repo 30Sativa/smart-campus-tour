@@ -4,12 +4,14 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useToastStore } from '../../components/ui/toast-store'
+import { campusDateKey } from '../../components/ui/date-time'
 import type { TourActionAvailability, TourDetails, TourStartChecks } from '../../features/administration/tours/types'
 import { useAuthStore } from '../../stores/auth-store'
 import { useTourOriginStore } from '../../features/staff/operations/tour-origin'
 import LiveOperationsPage from './LiveOperationsPage'
 import StartCheckPage from './StartCheckPage'
 import { TodayTours, UpcomingTours } from '../../features/staff/operations/DayTours'
+import { useUpcomingTours } from '../../features/staff/operations/hooks'
 import StaffManageTourDetailPage from './manage/StaffManageTourDetailPage'
 
 const STOP = { poiRevisionId: 'poi-rev-1', sourcePoiVerificationRecordId: 'v-1', stopOrder: 1, dwellSeconds: 60, headSteps: [], name: 'Thư viện', x: 0, y: 0, yaw: 0, cameraPreset: 'FRONT' }
@@ -656,7 +658,11 @@ describe('today list', () => {
 
   it('lists the next week under today, so a Tour two days out is reachable from here', async () => {
     tour = detail('READY')
-    renderAt('/staff', '/staff', <><TodayTours /><UpcomingTours /></>)
+    function TourLists() {
+      const upcoming = useUpcomingTours(campusDateKey(Date.now()))
+      return <><TodayTours /><UpcomingTours upcoming={upcoming} /></>
+    }
+    renderAt('/staff', '/staff', <TourLists />)
     const ahead = await screen.findByRole('region', { name: 'Tour sắp tới' })
     const table = await within(ahead).findByRole('table', { name: 'Tour sắp tới' })
     expect(within(table).getByRole('columnheader', { name: 'Ngày giờ' })).toBeInTheDocument()

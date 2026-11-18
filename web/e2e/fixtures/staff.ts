@@ -171,10 +171,10 @@ function inRange(tour: TourSummary, url: URL) {
 const notFound = { status: 404, json: { success: false, message: 'Not found', data: null, errors: null } }
 
 /** Staff API answers. `tours` filters list queries the way the server does, so every panel gets the rows it asks for. */
-export function staffHandlers(): Handler[] {
+export function staffHandlers(tours: TourSummary[] = allTours): Handler[] {
   const listTours = (url: URL) => {
     const params = url.searchParams
-    let rows = allTours.filter((tour) => inRange(tour, url))
+    let rows = tours.filter((tour) => inRange(tour, url))
     const phase = params.get('phase'); const state = params.get('state')
     if (phase === 'RUNNING') rows = rows.filter((tour) => tour.state === 'RUNNING')
     if (phase === 'FINISHED') rows = rows.filter((tour) => tour.state === 'COMPLETED' || tour.state === 'CANCELLED')
@@ -195,7 +195,7 @@ export function staffHandlers(): Handler[] {
     {
       method: 'GET', path: /^\/api\/staff\/manage\/tours\/[0-9a-f-]{36}$/,
       reply: (_r, url) => {
-        const tour = allTours.find((item) => item.id === url.pathname.split('/').pop())
+        const tour = tours.find((item) => item.id === url.pathname.split('/').pop())
         return tour ? { json: ok(details(tour)) } : notFound
       },
     },

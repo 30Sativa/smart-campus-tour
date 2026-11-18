@@ -54,6 +54,13 @@ A build with `VITE_CLOUDINARY_CLOUD_NAME` set loads every picture of `public/ima
 Unset the variable and redeploy to go back to the local files. A new picture must not have a space in its
 file name, and two pictures in one folder must not differ only by extension (they would share a public ID).
 
+**Tour cover images.** Staff pick an image in "Tạo Tour" / "Sửa Tour"; after the save the page uploads it straight
+to Cloudinary under `smartcampus/tours/cover/<tour id>` with a signature from
+`POST /api/staff/manage/tours/{id}/cover-image-upload` (the backend's `Cloudinary` settings, the same account as
+the fallback videos). Representative pages show it from `https://res.cloudinary.com/<VITE_CLOUDINARY_CLOUD_NAME>/…`
+and fall back to the sample picture when the Tour has none or the variable is unset, so set
+`VITE_CLOUDINARY_CLOUD_NAME` in `.env.local` too if you want to see uploaded covers on the dev server.
+
 Login, refresh and logout use the backend through `/api/auth/*`; configure
 `VITE_API_BASE_URL` for the API host. Access tokens stay in memory and the
 backend refresh cookie restores a session after reload. Business features that

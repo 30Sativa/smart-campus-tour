@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
+import { useMyAvatarUrl } from '../account/hooks'
 import { usePendingReviewCount } from '../administration/registrations/hooks'
 import { LiveDot } from './StaffUi'
 import { RouteView } from '../../components/ui/RouteView'
@@ -44,6 +45,7 @@ export default function StaffShell() {
   const drawer = useConsoleDrawer()
   const location = useLocation()
   const user = useAuthStore((state) => state.user)
+  const avatarUrl = useMyAvatarUrl(!!user)
   const handleLogout = useLogout()
   const pageTitle = useCurrentPageTitle()
 
@@ -111,7 +113,7 @@ export default function StaffShell() {
             {CONNECTION_LABEL[connection]}
           </span>
           <StaffBell />
-          <ConsoleAccountMenu name={user?.username || 'Nhân viên vận hành'} role={roleLabel(user?.role)} profilePath="/staff/profile" profileCurrent={onProfile} onLogout={handleLogout} onNavigate={drawer.close} />
+          <ConsoleAccountMenu avatarUrl={avatarUrl} name={user?.username || 'Nhân viên vận hành'} role={roleLabel(user?.role)} profilePath="/staff/profile" profileCurrent={onProfile} onLogout={handleLogout} onNavigate={drawer.close} />
         </ConsoleHeader>
 
         {/* Every panel on a console page becomes a soft card, and every primary button the one console blue. */}

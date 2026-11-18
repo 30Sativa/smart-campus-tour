@@ -1,0 +1,9 @@
+:root {
+ --bg-primary:#ffffff; --text-primary:#0f172a; --text-muted:#5b6b7f; --color-body:#334155;
+ --color-ground:#f4f7fb; --color-line:#dce4ed; --color-field-line:#7a899b;
+ --color-accent:#2d719e; --color-accent-hover:#245d83; --color-accent-soft:#edf5fb; --color-selected-line:#9cbcd2;
+ --color-error:#b23e31; --color-error-soft:#fff1ef; --color-warn:#80551c; --color-warn-soft:#fff8ec; --color-clear:transparent; --color-accent-ink:#ffffff;
+ --font-body:'Be Vietnam Pro',system-ui,sans-serif; --font-display:var(--font-body);
+ --text-xs:.75rem; --text-sm:.875rem; --text-md:1rem; --text-lg:1.2rem; --text-xl:1.44rem; --text-2xl:1.728rem;
+ --radius-panel:14px; --radius-control:7px; --gap-columns:24px;
+}

@@ -34,7 +34,7 @@ export default function RepDashboardPage() {
       <div><dt><ClipboardList size={16} aria-hidden="true" />Đăng ký của tôi</dt><dd className="num">{registrations.data.pagination.totalItems}</dd><p className="rep-hint">Tất cả hồ sơ đăng ký của bạn</p></div>
       <div><dt><Hourglass size={16} aria-hidden="true" />Chờ duyệt</dt><dd className="num">{pending.data.pagination.totalItems}</dd><p className="rep-hint">Đang chờ Đại học FPT xét duyệt</p></div>
     </dl>
-    <RepHero next={next} loading={upcoming.isPending} error={upcoming.error ? readRepError(upcoming.error).message : undefined} onRetry={() => void upcoming.refetch()} />
+    <RepHero next={next} image={next ? images.get(next.tourId) : undefined} loading={upcoming.isPending} error={upcoming.error ? readRepError(upcoming.error).message : undefined} onRetry={() => void upcoming.refetch()} />
     <div className="rep-overview-grid">
       <RepSection className="rep-card" title="Hoạt động gần đây" action={<Link to="/dai-dien/dang-ky" className="rep-text-link">Đăng ký của tôi</Link>}>
         {recent.length ? <div className="rep-reg-list">{recent.map(item => item.kind === 'registration'

@@ -12,7 +12,8 @@ public sealed record AccountProfileResponse(
     string Role,
     bool IsActive,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? UpdatedAt);
+    DateTimeOffset? UpdatedAt,
+    string? AvatarUrl = null);
 
 internal static class ProfileRules
 {
@@ -27,5 +28,5 @@ internal static class ProfileRules
     }
 
     internal static AccountProfileResponse ToResponse(User user, string role) => new(
-        user.Id, user.Username, user.FullName, role, user.IsActive, user.CreatedAt, user.UpdatedAt);
+        user.Id, user.Username, user.FullName, role, user.IsActive, user.CreatedAt, user.UpdatedAt, user.AvatarUrl);
 }

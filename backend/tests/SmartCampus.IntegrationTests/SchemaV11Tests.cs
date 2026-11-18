@@ -781,6 +781,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.21-to-v1.22-poi-narration-approval.sql");
         await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
         await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
+        await db.ApplyFileAsync("upgrade-v1.23-to-v1.24-user-avatar.sql");
+        await db.ApplyFileAsync("upgrade-v1.23-to-v1.24-user-avatar.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -791,7 +793,9 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.23", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.24", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Users') AND name='AvatarUrl' AND is_nullable=1;"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Users WHERE AvatarUrl IS NOT NULL;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='PoiNarrationRevisions';"));
         Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.PoiProposals') AND name IN ('RetiredAt','RetiredByUserId') AND is_nullable=1;"));
         Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.PoiProposals WHERE RetiredAt IS NOT NULL OR RetiredByUserId IS NOT NULL;"));
@@ -1243,6 +1247,38 @@ public sealed class SchemaV11Tests
     }
 
     [SchemaV17Fact]
+    public async Task AvatarUpgrade_MatchesTheSnapshot_GivesNoAccountAnAvatar_AndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.23.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.23';");
+        const string bootstrapHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{bootstrapHash}';");
+
+        await db.ApplyFileAsync("upgrade-v1.23-to-v1.24-user-avatar.sql");
+        await db.ApplyFileAsync("upgrade-v1.23-to-v1.24-user-avatar.sql");
+
+        Assert.Equal("1.24", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Users WHERE AvatarUrl IS NOT NULL;"));
+        await using var snapshot = await TestDatabase.CreateAsync();
+        const string column = "SELECT CONCAT(name,':',TYPE_NAME(system_type_id),':',max_length,':',is_nullable) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Users') AND name='AvatarUrl';";
+        const string check = "SELECT CONCAT(definition,':',is_not_trusted) FROM sys.check_constraints WHERE name=N'CK_Users_AvatarUrlHttps';";
+        foreach (var shape in new[] { column, check })
+            Assert.Equal(await snapshot.ScalarAsync<string>(shape), await db.ScalarAsync<string>(shape));
+        Assert.Equal("AvatarUrl:nvarchar:2000:1", await db.ScalarAsync<string>(column));
+    }
+
+    [SchemaV17Fact]
+    public async Task AvatarUpgrade_RefusesAnyOtherVersion()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.22.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.22';");
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.23-to-v1.24-user-avatar.sql"));
+        Assert.Equal(51240, error.Number);
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Users') AND name='AvatarUrl';"));
+    }
+
+    [SchemaV17Fact]
     public async Task PoiRetirementUpgrade_RefusesAnyOtherVersion()
     {
         await using var db = await TestDatabase.CreateAsync("snapshot-v1.21.sql");
@@ -1646,7 +1682,7 @@ public sealed class SchemaV11Tests
     [SchemaV12Fact]
     public async Task ConcurrentMapUploads_SerializeAreaVersioningAndIdempotentRetries()
     {
-        // The current snapshot (v1.23): MapVersions gained the v1.21 retirement columns (ADR-0041), which today's upload reads back.
+        // The current snapshot (v1.24): MapVersions gained the v1.21 retirement columns (ADR-0041), which today's upload reads back.
         await using var db = await TestDatabase.CreateAsync();
         await using var services = db.BuildFeatureServiceProvider();
         var package = CreateMapPackage();
@@ -1844,7 +1880,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.23.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.24.sql")
         {
             var db = new TestDatabase();
             try
