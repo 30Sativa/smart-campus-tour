@@ -16,14 +16,16 @@ try:
 except ImportError:
     sys.exit('Thieu pyserial: sudo apt install python3-serial  (hoac pip install pyserial)')
 
-EXPECTED = 28
+EXPECTED = 33
 NAMES = ['FB', 'seq', 'left_count', 'right_count', 'dt_ms', 'status', 'yaw_cdeg', 'yaw_valid',
          's1_mm', 's1_valid', 's2_mm', 's2_valid', 's3_mm', 's3_valid', 's4_mm', 's4_valid',
          'yaw_acc', 'imu_rearm', 'imu_reset_seen', 'head_seq', 'pan_cdeg', 'tilt_cdeg',
-         'head_state', 'contactor', 'alm_left', 'alm_right', 'alm_left_trips', 'alm_right_trips']
+         'head_state', 'contactor', 'alm_left', 'alm_right', 'alm_left_trips', 'alm_right_trips',
+         'enc_state', 'enc_left', 'enc_right', 'enc_left_terr', 'enc_right_terr']
 HEAD_STATES = {'0': 'OFF', '1': 'IDLE', '2': 'MOVING', '3': 'HOMING', '4': 'NO_REF'}
 ALM_STATES = {'0': 'DISABLED', '1': 'UNKNOWN', '2': 'OK', '3': 'ALARM (chi giam sat)',
               '4': 'NO_SIGNAL (chan tha noi: chua dau/dut day)'}
+ENC_STATES = {'0': 'DISABLED', '1': 'RX_OFF (receiver tat)', '2': 'RX_ON'}
 
 
 def find_port():
@@ -74,6 +76,10 @@ def main():
             extra = ' = BAT (PA10 cao)' if v == '1' else ' = TAT (PA10 thap)'
         elif name in ('alm_left', 'alm_right'):
             extra = ' = ' + ALM_STATES.get(v, '?')
+        elif name == 'enc_state':
+            extra = ' = ' + ENC_STATES.get(v, '?')
+        elif name in ('enc_left', 'enc_right'):
+            extra = ' count x4 (chua hieu chuan)'
         elif name in ('pan_cdeg', 'tilt_cdeg') and v.lstrip('-').isdigit():
             extra = f' = {int(v) / 100:.2f} do'
         print(f'  [{i:2}] {name:15} {v}{extra}')

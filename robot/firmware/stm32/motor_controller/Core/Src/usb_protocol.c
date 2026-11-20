@@ -5,6 +5,7 @@
 #include "main.h"
 #include "motor/motor.h"
 #include "motor/motor_alarm_core.h"
+#include "motor/motor_encoder.h"
 #include "imu/bno08x.h"
 #include "sonar/sr04t.h"
 #include "usb_rx_queue.h"
@@ -51,6 +52,9 @@ static const char *pending_error = NULL;
 /* Dong ALM,<seq>,... dang cho gui (lenh ALM tu nguoi van hanh). */
 static uint8_t alm_report_pending = 0U;
 static uint32_t alm_report_seq = 0U;
+/* Dong ENC,<seq>,... dang cho gui (lenh ENC tu nguoi van hanh). */
+static uint8_t enc_report_pending = 0U;
+static uint32_t enc_report_seq = 0U;
 
 #define ERR_BAD_COMMAND    "ERR,bad_command\r\n"
 #define ERR_HEAD_NOT_ZERO  "ERR,head_not_zeroed\r\n"
@@ -67,6 +71,7 @@ static uint8_t Protocol_ParseI32(const char *text, int32_t *value);
 static uint8_t Protocol_TrySendPendingError(void);
 static uint8_t Protocol_TrySendFeedback(uint32_t now_ms);
 static uint8_t Protocol_TrySendAlarmReport(void);
+static uint8_t Protocol_TrySendEncoderReport(void);
 static uint8_t Protocol_TrySendRaw(const char *text);
 static uint8_t Protocol_TrySendFormatted(const char *format, ...);
 static uint8_t Protocol_TokenizeCsv(char *line, char *tokens[], uint8_t max_tokens, uint8_t *token_count);
@@ -95,6 +100,7 @@ void Protocol_Init(void)
 	pending_error = NULL;
 	last_head_seq = 0U;
 	alm_report_pending = 0U;
+	enc_report_pending = 0U;
 }
 
 void Protocol_Update(void)
@@ -114,6 +120,10 @@ void Protocol_Update(void)
 		return;
 	}
 	if (Protocol_TrySendAlarmReport() != 0U)
+	{
+		return;
+	}
+	if (Protocol_TrySendEncoderReport() != 0U)
 	{
 		return;
 	}
@@ -315,6 +325,34 @@ void Protocol_ProcessLine(char *line)
 		last_seq = seq;
 		alm_report_seq = seq;
 		alm_report_pending = 1U;
+		return;
+	}
+
+	/* ENC,<seq>          -> mot dong ENC,... mo ta encoder hai banh
+	 * ENC,<seq>,ON|OFF   -> bat/tat receiver AM26LV32E (PB9) roi tra dong do
+	 * De nguoi van hanh thu khi lap mach; bridge khong gui lenh nay. Khong
+	 * blocking, khong refresh watchdog motor, khong doi count. */
+	if (Protocol_EqualsIgnoreCase(tokens[0], "ENC") != 0U)
+	{
+		uint32_t seq;
+
+		if ((token_count < 2U) || (token_count > 3U) ||
+			(Protocol_ParseU32(tokens[1], &seq) == 0U) ||
+			((token_count == 3U) &&
+			 (Protocol_EqualsIgnoreCase(tokens[2], "ON") == 0U) &&
+			 (Protocol_EqualsIgnoreCase(tokens[2], "OFF") == 0U)))
+		{
+			Protocol_ReportBadCommand();
+			return;
+		}
+
+		last_seq = seq;
+		if (token_count == 3U)
+		{
+			MotorEncoder_SetReceiver(Protocol_EqualsIgnoreCase(tokens[2], "ON"));
+		}
+		enc_report_seq = seq;
+		enc_report_pending = 1U;
 		return;
 	}
 
@@ -669,7 +707,8 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	 *      <sonar3_mm>,<sonar3_valid>,<sonar4_mm>,<sonar4_valid>,<yaw_acc>,
  *      <imu_rearm>,<imu_reset_seen>,
 	 *      <head_seq>,<pan_cdeg>,<tilt_cdeg>,<head_state>,<contactor>,
-	 *      <alm_left>,<alm_right>,<alm_left_trips>,<alm_right_trips>
+	 *      <alm_left>,<alm_right>,<alm_left_trips>,<alm_right_trips>,
+	 *      <enc_state>,<enc_left>,<enc_right>,<enc_left_terr>,<enc_right_terr>
 	 * yaw_acc 0..3: 0 = tu ke chua hieu chuan, heading co the sai hang chuc do.
 	 * imu_rearm / imu_reset_seen: bo dem tich luy tu luc boot (BNO08x_Service).
 	 * head_*: seq lenh HEAD cuoi duoc chap nhan, vi tri dem xung (centi-do),
@@ -678,9 +717,18 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	 * phan hoi tu tiep diem contactor.
 	 * alm_*: trang thai ALM HBS57H sau loc (motor/motor_alarm_core.h:
 	 * 0 DISABLED 1 UNKNOWN 2 OK 3 ALARM 4 NO_SIGNAL) va so lan vao ALARM tu
-	 * luc boot, de host khong bo sot mot lan loi ngan giua hai khung. */
+	 * luc boot, de host khong bo sot mot lan loi ngan giua hai khung.
+	 * enc_*: encoder that (motor/motor_encoder_core.h): 0 DISABLED 1 RX_OFF
+	 * 2 RX_ON, count x4 tich luy tu luc boot (chieu theo day noi, chua hieu
+	 * chuan), so ms co loi chuyen trang thai. Count encoder la mau SysTick gan
+	 * nhat, tre toi da 1 ms so voi left/right_count; ca hai deu tich luy nen
+	 * do lech khong cong don qua cac khung. */
 	MotorAlarmStatus alm_left;
 	MotorAlarmStatus alm_right;
+	MotorEncoderStatus enc_left;
+	MotorEncoderStatus enc_right;
+	int32_t step_left;
+	int32_t step_right;
 	uint8_t yaw_valid = 0U;
 	float   yaw_deg   = BNO08x_GetLastYaw(&yaw_valid);
 	long    yaw_cdeg  = (long)(yaw_deg * 100.0f);
@@ -691,12 +739,17 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	HeadCore_GetStatus(&head);
 	MotorAlarmCore_GetStatus(0U, &alm_left);
 	MotorAlarmCore_GetStatus(1U, &alm_right);
+	step_left = Motor_GetLeftCount();
+	step_right = Motor_GetRightCount();
+	MotorEncoderCore_GetStatus(0U, &enc_left);
+	MotorEncoderCore_GetStatus(1U, &enc_right);
 
 	return Protocol_TrySendFormatted(
-		"FB,%lu,%ld,%ld,%lu,%s,%ld,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%ld,%ld,%u,%u,%u,%u,%lu,%lu\r\n",
+		"FB,%lu,%ld,%ld,%lu,%s,%ld,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%ld,%ld,%u,%u,%u,%u,%lu,%lu,"
+		"%u,%ld,%ld,%lu,%lu\r\n",
 		(unsigned long)last_seq,
-		(long)Motor_GetLeftCount(),
-		(long)Motor_GetRightCount(),
+		(long)step_left,
+		(long)step_right,
 		(unsigned long)dt_ms,
 		Protocol_StatusText(),
 		yaw_cdeg,
@@ -720,7 +773,12 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 		(unsigned)alm_left.state,
 		(unsigned)alm_right.state,
 		(unsigned long)alm_left.trips,
-		(unsigned long)alm_right.trips);
+		(unsigned long)alm_right.trips,
+		(unsigned)MotorEncoderCore_GetState(),
+		(long)enc_left.count,
+		(long)enc_right.count,
+		(unsigned long)enc_left.transition_errors,
+		(unsigned long)enc_right.transition_errors);
 }
 
 /* ALM,<seq>,EN=<0|1>,ACT=<LOW|HIGH>,PROBE=<0|1>,DEB=<ms>,NOW=<ms>,
@@ -758,6 +816,41 @@ static uint8_t Protocol_TrySendAlarmReport(void)
 			(unsigned long)r.last_change_ms, (unsigned long)r.last_trip_ms) != 0U)
 	{
 		alm_report_pending = 0U;
+		return 1U;
+	}
+	return 0U;
+}
+
+/* ENC,<seq>,EN=..,RX=..,FILT=..,NOW=..,L=<count>,CPS=..,A=..,B=..,TERR=..,STEP=..,R=... */
+static uint8_t Protocol_TrySendEncoderReport(void)
+{
+	MotorEncoderStatus l;
+	MotorEncoderStatus r;
+	uint8_t state;
+
+	if (enc_report_pending == 0U)
+	{
+		return 0U;
+	}
+
+	state = MotorEncoderCore_GetState();
+	MotorEncoderCore_GetStatus(0U, &l);
+	MotorEncoderCore_GetStatus(1U, &r);
+	if (Protocol_TrySendFormatted(
+			"ENC,%lu,EN=%u,RX=%s,FILT=%u,NOW=%lu,"
+			"L=%ld,CPS=%ld,A=%u,B=%u,TERR=%lu,STEP=%ld,"
+			"R=%ld,CPS=%ld,A=%u,B=%u,TERR=%lu,STEP=%ld\r\n",
+			(unsigned long)enc_report_seq,
+			(unsigned)(state != MOTOR_ENCODER_DISABLED),
+			MotorEncoderCore_StateText(state),
+			(unsigned)MOTOR_ENCODER_INPUT_FILTER,
+			(unsigned long)HAL_GetTick(),
+			(long)l.count, (long)l.speed_cps, (unsigned)l.level_a, (unsigned)l.level_b,
+			(unsigned long)l.transition_errors, (long)Motor_GetLeftCount(),
+			(long)r.count, (long)r.speed_cps, (unsigned)r.level_a, (unsigned)r.level_b,
+			(unsigned long)r.transition_errors, (long)Motor_GetRightCount()) != 0U)
+	{
+		enc_report_pending = 0U;
 		return 1U;
 	}
 	return 0U;

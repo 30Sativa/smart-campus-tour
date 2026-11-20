@@ -87,8 +87,10 @@ Code: `Core/Src/motor/motor_alarm.c` (GPIO, SysTick),
   lên). Chỉ đứt dây 1k phía STM32 mới ra NO_SIGNAL.
 - Chưa biết driver có báo ALM thoáng qua lúc vừa cấp nguồn hay không. Nếu
   có, mỗi lần bật contactor `trips` sẽ tăng — mục 5 bước 4 kiểm tra việc này.
-- Chưa có xử lý tự động nào. Encoder chưa làm; nó sẽ thêm module riêng cạnh
-  `motor_alarm` và thêm trường ở cuối FB, không phải đổi phần này.
+- Chưa có xử lý tự động nào. Encoder (từ 20/11/2026) là một module riêng cạnh
+  `motor_alarm` với các trường FB 28–32 (`docs/ENCODER_HBS57H.md`). Phần này
+  không đổi. `MotorEncoder_Init()` chạy trước `MotorAlarm_Init()` vì PC6
+  cũng nằm ở GPIOC.
 
 ## 5. Kiểm tra sau khi hàn
 

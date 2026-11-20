@@ -105,6 +105,7 @@ if _PKG_ROOT not in sys.path:
 from stm32_bridge.imu_health import ImuHealth  # noqa: E402
 from stm32_bridge.link_supervisor import LinkSupervisor  # noqa: E402
 from stm32_bridge.motor_alarm import MotorAlarmHealth  # noqa: E402
+from stm32_bridge.motor_encoder import MotorEncoderMonitor  # noqa: E402
 from stm32_bridge.stm32_bridge_node import (  # noqa: E402
     DEFAULT_IMU_ORIENTATION_REPORT,
     DEFAULT_IMU_YAW_VARIANCE,
@@ -593,6 +594,11 @@ class _FeedbackHarness:
         self.published_odometry = []
         self._imu_health = ImuHealth()
         self._motor_alarm = MotorAlarmHealth()
+        self._motor_encoder = MotorEncoderMonitor()
+        self.published_encoder_raw = []
+        self._encoder_raw_pub = SimpleNamespace(publish=self.published_encoder_raw.append)
+        self._int32_array_msg = lambda: SimpleNamespace(layout=SimpleNamespace(dim=[]), data=[])
+        self._encoder_raw_dim = 'dim'
         self.logged_errors = []
         self.odom_linear_scale = 1.0
         self.feedback_timeout = 1.0
@@ -622,6 +628,7 @@ class _FeedbackHarness:
     _log_imu_events = Stm32BridgeNode._log_imu_events
     _log_link_events = Stm32BridgeNode._log_link_events
     _log_motor_alarm_events = Stm32BridgeNode._log_motor_alarm_events
+    _publish_encoder_raw = Stm32BridgeNode._publish_encoder_raw
 
 
 def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
@@ -713,6 +720,24 @@ def test_driver_alarm_is_logged_but_odometry_and_path_are_unchanged():
     assert len(a.logged_errors) == 1 and 'right driver ALARM' in a.logged_errors[0]
     assert 'NOT stopped' in a.logged_errors[0]
     assert b.logged_errors == []
+
+
+def test_stalled_encoder_is_logged_but_odometry_is_unchanged():
+    """Monitoring only: encoder fields 28-32 (here a wheel whose encoder never
+    moves) are logged and published raw; odometry still integrates STEP counts
+    exactly as with 28-field firmware."""
+    with_encoder = [_alarm_fb(k, 500 * k, 500 * k, 2, 2, 0, 0) + f',2,{1250 * k},0,0,0'
+                    for k in range(1, 6)]
+    without = [line.rsplit(',', 5)[0] for line in with_encoder]   # 28-field firmware
+    a = _odometry_after(with_encoder)
+    b = _odometry_after(without)
+    assert a.published_odometry == b.published_odometry and a.published_odometry
+    approx(a._x, b._x, tol=1e-12)
+    assert len(a.logged_errors) == 1 and 'right motor' in a.logged_errors[0]
+    assert 'NOT stopped' in a.logged_errors[0]
+    assert b.logged_errors == []
+    assert len(a.published_encoder_raw) == 5 and b.published_encoder_raw == []
+    assert a.published_encoder_raw[-1].data == [2, 2500, 2500, 6250, 0, 0, 0]
 
 
 def test_joint_states_follow_corrected_feedback_deltas_and_refresh_at_stop():

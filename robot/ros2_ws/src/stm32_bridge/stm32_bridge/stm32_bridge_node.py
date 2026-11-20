@@ -19,6 +19,8 @@ from stm32_bridge.link_supervisor import (
 )
 from stm32_bridge.motor_alarm import (
     MotorAlarmHealth, parse_fb_alarm, ERROR as ALARM_ERROR, WARN as ALARM_WARN)
+from stm32_bridge.motor_encoder import (
+    MotorEncoderMonitor, WheelCalibration, parse_fb_encoder)
 
 try:
     import serial
@@ -36,6 +38,10 @@ INT32_HALF_RANGE = 2 ** 31
 # Effective wheel base calibrated from real-robot point turns. This is
 # intentionally different from the 0.4325 m physical/CAD wheel separation.
 DEFAULT_WHEEL_BASE = 0.4714
+# wheel/encoder_raw (std_msgs/Int32MultiArray): raw FB values, firmware
+# conventions (STEP = logical direction, encoder = wiring direction, uncalibrated).
+ENCODER_RAW_LAYOUT = ('state,left_step,right_step,left_encoder,right_encoder,'
+                      'left_transition_errors,right_transition_errors')
 DEFAULT_WHEEL_RADIUS = 0.09725
 DEFAULT_ODOM_COVARIANCE_DIAGONAL = [
     0.01,
@@ -195,6 +201,16 @@ class Stm32BridgeNode(Node):
         # ALM cua 2 driver HBS57H (FB truong 24-27, stm32_bridge/motor_alarm.py):
         # chi log + /diagnostics, KHONG dung banh xe hay doi odometry.
         self.declare_parameter('enable_motor_alarm', True)
+        # Encoder that cua 2 motor (FB truong 28-32, stm32_bridge/motor_encoder.py):
+        # so voi so xung STEP, log + /diagnostics + wheel/encoder_raw. CHI GIAM
+        # SAT: odometry van tinh tu STEP. 0 = chua hieu chuan (chi kiem tra
+        # "co STEP ma encoder khong quay"); dat sau khi do theo
+        # firmware/stm32/motor_controller/docs/ENCODER_HBS57H.md.
+        self.declare_parameter('enable_motor_encoder', True)
+        self.declare_parameter('encoder_counts_per_step_left', 0.0)
+        self.declare_parameter('encoder_counts_per_step_right', 0.0)
+        self.declare_parameter('encoder_sign_left', 0)
+        self.declare_parameter('encoder_sign_right', 0)
         # Phai khop BNO08X_USE_GAME_ROTATION_VECTOR cua firmware dang nap.
         self.declare_parameter(
             'imu_orientation_report', DEFAULT_IMU_ORIENTATION_REPORT)
@@ -400,6 +416,17 @@ class Stm32BridgeNode(Node):
         self._motor_alarm = (MotorAlarmHealth()
                              if bool(self.get_parameter('enable_motor_alarm').value)
                              else None)
+        self._motor_encoder = None
+        self._encoder_raw_pub = None
+        if bool(self.get_parameter('enable_motor_encoder').value):
+            self._motor_encoder = MotorEncoderMonitor(
+                (WheelCalibration(
+                    float(self.get_parameter('encoder_counts_per_step_left').value),
+                    int(self.get_parameter('encoder_sign_left').value)),
+                 WheelCalibration(
+                    float(self.get_parameter('encoder_counts_per_step_right').value),
+                    int(self.get_parameter('encoder_sign_right').value))),
+                steps_per_meter=self.steps_per_meter)
 
         self._odom_pub = None
         self._tf_broadcaster = None
@@ -456,6 +483,14 @@ class Stm32BridgeNode(Node):
         from std_msgs.msg import Bool
         self._bool_msg = Bool
         self._link_ok_pub = self.create_publisher(Bool, 'stm32_link_ok', 1)
+        if self._motor_encoder is not None:
+            from std_msgs.msg import Int32MultiArray, MultiArrayDimension
+            self._int32_array_msg = Int32MultiArray
+            self._encoder_raw_dim = MultiArrayDimension(
+                label=ENCODER_RAW_LAYOUT, size=len(ENCODER_RAW_LAYOUT.split(',')),
+                stride=len(ENCODER_RAW_LAYOUT.split(',')))
+            self._encoder_raw_pub = self.create_publisher(
+                Int32MultiArray, 'wheel/encoder_raw', 10)
         self._filter_switch = self._create_filter_switch()
         self._imu_health_timer = self.create_timer(1.0, self._imu_health_callback)
 
@@ -794,6 +829,12 @@ class Stm32BridgeNode(Node):
         if self._motor_alarm is not None:
             self._log_motor_alarm_events(self._motor_alarm.on_feedback(
                 now_mono, parse_fb_alarm(line)))
+        if self._motor_encoder is not None:
+            encoder = parse_fb_encoder(line)
+            self._log_motor_alarm_events(self._motor_encoder.on_feedback(
+                now_mono, encoder, dt_ms / 1000.0))
+            if encoder is not None and self._encoder_raw_pub is not None:
+                self._publish_encoder_raw(encoder)
         now_ros = self.get_clock().now()
         now_ros_sec = now_ros.nanoseconds / 1e9
 
@@ -1179,6 +1220,13 @@ class Stm32BridgeNode(Node):
             else:
                 self.get_logger().info(text)
 
+    def _publish_encoder_raw(self, encoder) -> None:
+        msg = self._int32_array_msg()
+        msg.layout.dim = [self._encoder_raw_dim]
+        msg.data = [encoder.state, *encoder.steps, *encoder.counts,
+                    *(min(t, 0x7FFFFFFF) for t in encoder.terr)]
+        self._encoder_raw_pub.publish(msg)
+
     def _imu_health_callback(self):
         now = time.monotonic()
         alive = self._imu_feedback_alive(now)
@@ -1202,6 +1250,15 @@ class Stm32BridgeNode(Node):
             alarm_status.hardware_id = self.port
             alarm_status.values = [KeyValue(key=k, value=v) for k, v in values.items()]
             array.status.append(alarm_status)
+        if self._motor_encoder is not None:
+            level, message, values = self._motor_encoder.status(now, alive)
+            encoder_status = DiagnosticStatus()
+            encoder_status.level = bytes([level])
+            encoder_status.name = f'{self.get_fully_qualified_name()}: motor_encoder'
+            encoder_status.message = message
+            encoder_status.hardware_id = self.port
+            encoder_status.values = [KeyValue(key=k, value=v) for k, v in values.items()]
+            array.status.append(encoder_status)
         self._diag_pub.publish(array)
 
     def _link_diagnostic_status(self, now: float) -> DiagnosticStatus:
@@ -1282,6 +1339,8 @@ class Stm32BridgeNode(Node):
         self._last_left_count = None
         self._last_right_count = None
         self._force_count_baseline = True
+        if self._motor_encoder is not None:
+            self._motor_encoder.reset_baseline()
 
     def _count_jump_detected(
             self,

@@ -12,7 +12,8 @@ Cập nhật 18/11/2026, đối chiếu trực tiếp với:
 Mọi thay đổi pin phải cập nhật **cùng lúc** ở CubeMX (`.ioc`), code driver,
 tài liệu này và sơ đồ dây thực tế.
 
-Tổng quan: 42 chân I/O → **26 đang dùng**, **1 là NRST**, **15 còn trống**.
+Tổng quan: 42 chân I/O → **32 đang dùng**, **1 là NRST**, **9 còn trống**
+(đếm lại 20/11/2026 sau khi thêm 5 chân encoder, xem `docs/ENCODER_HBS57H.md`).
 Clock hệ thống lấy từ **HSI** (không dùng thạch anh), nên PF0/PF1 và
 PC14/PC15 đều trống.
 
@@ -57,6 +58,11 @@ Chú thích cột "Chế độ hiện tại":
 | 28 | PB15 | `PB15_SONAR4_TRIG` | SR04T sonar 4 TRIG | GPIO OUT PP | `.ioc`, `main.c` | TIM15_CH2, TIM1_CH3N, SPI2_MOSI, ADC2_IN15 |
 | 39 | PC10 | — (`motor_alarm.c`) | ALM driver HBS57H bánh trái (M1) | GPIO IN, firmware đảo **pull-up/pull-down nội mỗi 1 ms** trong SysTick để nhận ra chân thả nổi. Chỉ giám sát | **Chỉ `motor_alarm.c`**, không có trong `.ioc` | TIM8_CH1N, USART3_TX, UART4_TX, SPI3_SCK |
 | 40 | PC11 | — (`motor_alarm.c`) | ALM driver HBS57H bánh phải (M2) | GPIO IN, như PC10 | **Chỉ `motor_alarm.c`**, không có trong `.ioc` | TIM8_CH2N, USART3_RX, UART4_RX, SPI3_MISO, I2C3_SDA |
+| 29 | PC6 | — (`motor_encoder.c`) | Encoder motor phải EA (AM26LV32E 3Y qua 470 Ω) | **AF4 TIM8_CH1**, pull-down nội. Encoder mode x4, không ngắt | **Chỉ `motor_encoder.c`**, không có trong `.ioc` | TIM3_CH1 (AF2), I2S2_MCK. Không dùng được EXTI (line 6 của PA6) |
+| 42 | PB4 | — (`motor_encoder.c`) | Encoder motor trái EA (1Y qua 470 Ω) | **AF2 TIM3_CH1**, pull-down nội | **Chỉ `motor_encoder.c`** | TIM16_CH1, TIM8_CH2N, SPI1/3_MISO, USART2_RX. Dead-battery UCPD1_CC2 đã tắt trong `stm32g4xx_hal_msp.c` |
+| 43 | PB5 | — (`motor_encoder.c`) | Encoder motor trái EB (2Y qua 470 Ω) | **AF2 TIM3_CH2**, pull-down nội | **Chỉ `motor_encoder.c`** | TIM17_CH1, TIM8_CH3N, LPTIM1_IN1, SPI1/3_MOSI, I2C3_SDA |
+| 46 | PB8-BOOT0 | — (`motor_encoder.c`) | Encoder motor phải EB (4Y qua 470 Ω). **Cũng là BOOT0** | **AF10 TIM8_CH2**, pull-down nội (chỉ có hiệu lực sau khi firmware chạy) | **Chỉ `motor_encoder.c`** | Xem mục 7: receiver phải tắt lúc reset |
+| 47 | PB9 | — (`motor_encoder.c`) | G (enable) AM26LV32E, cao = bật. 10 kΩ ngoài kéo xuống | GPIO OUT PP, ghi bằng BSRR. Mức thấp cho tới khi timer sẵn sàng | **Chỉ `motor_encoder.c`** | TIM8_CH3, FDCAN1_TX, I2C1_SDA |
 | 44 | PB6 | `PB6___IMU_SCL_BITBANG` | BNO08x SCL | `.ioc` khai báo GPIO OUT, còn `bno08x.c` cấu hình lại thành **GPIO OUT OD** để chạy I2C bit-bang | `.ioc`, `main.c`, `bno08x.c` | TIM4_CH1, TIM8_CH1, TIM16_CH1N, USART1_TX, UCPD1_CC1 |
 | 45 | PB7 | `PB7___IMU_SDA_BITBANG` | BNO08x SDA | `.ioc` khai báo GPIO OUT, còn `bno08x.c` cấu hình lại thành **GPIO OUT OD**, đọc mức qua `GPIOB->IDR` | `.ioc`, `main.c`, `bno08x.c` | TIM4_CH2, TIM3_CH4, TIM17_CH1N, I2C1_SDA, USART1_RX |
 
@@ -65,7 +71,7 @@ Chú thích cột "Chế độ hiện tại":
 | # | Chân | Chức năng | Ghi chú |
 |---|---|---|---|
 | 7 | PG10-NRST | **SYS: NRST (reset)** | Firmware giữ nguyên chức năng reset, không cấu hình làm GPIO. Xem mục 5. |
-| 46 | PB8-BOOT0 | SYS: BOOT0 | Hiện chưa dùng. Nếu chân này ở mức cao lúc reset, chip sẽ vào bootloader. Xem mục 2. |
+| 46 | PB8-BOOT0 | SYS: BOOT0 | Nay là encoder phải EB. Nếu chân này ở mức cao lúc reset, chip sẽ vào bootloader. Xem mục 7. |
 | 1 | VBAT | Nguồn | |
 | 20 | VREF+ | Điện áp tham chiếu ADC | |
 | 21 | VDDA | Nguồn analog | |
@@ -84,12 +90,7 @@ trong CubeMX và kiểm tra xung đột ở mục 3.
 | 12 | PA4 | GPIO | **TIM3_CH2**, ADC2_IN17, DAC1_OUT1, SPI1/3_NSS, USART2_CK | **Dành cho BNO08x RST**, chỉ dùng khi bật `BNO08X_USE_HW_RST=1` trong `bno08x.c` (hiện đang `0`). Muốn dùng chân này cho việc khác thì giữ macro ở `0`. |
 | 13 | PA5 | GPIO | **TIM2_CH1/ETR**, ADC2_IN13, DAC1_OUT2, SPI1_SCK | **Dành cho BNO08x INT**, chỉ dùng khi bật `BNO08X_USE_INT_PIN=1` (hiện đang `0`, driver đang polling). |
 | 16 | PC4 | GPIO | TIM1_ETR, ADC2_IN5, I2C2_SCL, USART1_TX | |
-| 29 | PC6 | GPIO | **TIM3_CH1, TIM8_CH1** | **Không dùng được EXTI** vì EXTI line 6 đã thuộc về PA6 (sonar 4). |
 | 41 | PB3 | GPIO | **TIM2_CH2**, TIM3_ETR, TIM4_ETR, TIM8_CH1N, SPI1/3_SCK, USART2_TX | Chức năng JTDO/SWO chưa được dùng, vì debug chỉ chạy SWD. |
-| 42 | PB4 | GPIO | **TIM3_CH1, TIM16_CH1**, TIM8_CH2N, SPI1/3_MISO, USART2_RX | Điện trở kéo dead-battery UCPD1_CC2 đã được tắt bằng `HAL_PWREx_DisableUCPDDeadBattery()` trong `stm32g4xx_hal_msp.c`. NJTRST không dùng. |
-| 43 | PB5 | GPIO | **TIM3_CH2, TIM17_CH1**, TIM8_CH3N, LPTIM1_IN1, SPI1/3_MOSI, I2C3_SDA, USART2_CK | |
-| 46 | PB8-BOOT0 | GPIO + SYS BOOT0 | TIM4_CH3, TIM8_CH2, TIM16_CH1, **I2C1_SCL, FDCAN1_RX**, USART3_RX | Dùng được làm GPIO, nhưng ở mức cao lúc reset thì chip vào bootloader. Hạn chế dùng. |
-| 47 | PB9 | GPIO | TIM4_CH4, TIM8_CH3, TIM17_CH1, TIM1_CH3N, **I2C1_SDA, FDCAN1_TX**, USART3_TX | Cùng với PB8 là cặp FDCAN1/I2C1 duy nhất còn trống. Chưa có cấu hình hay driver CAN/I2C nào. |
 | 2 | PC13 | GPIO (yếu) | TIM1_CH1N, TIM1_BKIN, TIM8_CH4N, RTC_TAMP1, WKUP2 | Chân thuộc miền backup, dòng ra rất yếu (khoảng 3 mA, tối đa 2 MHz). Chỉ nên dùng cho input, nút nhấn hoặc LED nhỏ. |
 | 3 | PC14-OSC32_IN | GPIO (yếu) | OSC32_IN (LSE) | Giới hạn giống PC13. **Không dùng được EXTI** vì EXTI line 14 đã thuộc về PB14 (sonar 3). |
 | 4 | PC15-OSC32_OUT | GPIO (yếu) | OSC32_OUT (LSE) | Giới hạn giống PC13. |
@@ -106,8 +107,10 @@ trong CubeMX và kiểm tra xung đột ở mục 3.
 |---|---|---|---|---|
 | TIM2 | Tick 50 kHz (`MOTOR_BASE_TIMER_HZ`) phát xung STEP bánh xe | 1 | `.ioc` + `main.c` + `motor_hal.c` / `motor.c` | Chỉ dùng ngắt update, không có ngõ ra kênh. **Không dùng được TIM2_CHx (PA5, PB3…) làm PWM**, vì ARR/PSC đã bị khóa cho tick 50 kHz. |
 | TIM6 | Tick 10 kHz phát xung Pan/Tilt | 2 | **Chỉ có trong `head.c`** (ghi thanh ghi trực tiếp), không có trong `.ioc` | Nếu bật TIM6 hoặc DAC trong CubeMX, code sinh ra sẽ có `TIM6_DAC_IRQHandler` trùng với bản đang có trong `stm32g4xx_it.c`. |
-| SysTick | HAL tick 1 kHz, và lấy mẫu ALM PC10/PC11 (`MotorAlarm_Tick`) | 15 (thấp nhất) | `stm32g4xx_it.c` (USER CODE), `motor_alarm.c` | Ưu tiên thấp nhất nên không chen ngang TIM2/TIM6/EXTI/USB. |
-| TIM1, TIM3, TIM4, TIM8, TIM15, TIM16, TIM17, LPTIM1 | **Còn trống** | — | — | TIM3/TIM4 là lựa chọn gọn nhất nếu cần PWM, input capture hoặc encoder trên PB4/PB5/PC6/PB8/PB9/PA4. |
+| SysTick | HAL tick 1 kHz, lấy mẫu ALM PC10/PC11 (`MotorAlarm_Tick`), nối CNT encoder 16 → 32 bit (`MotorEncoder_Tick`) | 15 (thấp nhất) | `stm32g4xx_it.c` (USER CODE), `motor_alarm.c`, `motor_encoder.c` | Ưu tiên thấp nhất nên không chen ngang TIM2/TIM6/EXTI/USB. |
+| TIM3 | Encoder motor trái, encoder mode x4 (PB4/PB5) | không ngắt | **Chỉ `motor_encoder.c`** (ghi thanh ghi), không có trong `.ioc` | Không dùng được cho PWM/capture khác. |
+| TIM8 | Encoder motor phải, encoder mode x4 (PC6/PB8) | không ngắt | **Chỉ `motor_encoder.c`**, không có trong `.ioc` | Timer nâng cao, MOE = 0: không có ngõ ra nào. |
+| TIM1, TIM4, TIM15, TIM16, TIM17, LPTIM1 | **Còn trống** | — | — | TIM4 là lựa chọn gọn nhất nếu cần thêm PWM/capture (PA4 có TIM3_CH2 nhưng TIM3 đã dùng). |
 
 Bộ đếm chu kỳ DWT->CYCCNT được `bno08x.c` và `sr04t.c` dùng để đo thời gian.
 Nó không chiếm chân nào.
@@ -131,8 +134,8 @@ vẫn trống. Ưu tiên ngắt của EXTI là 2.
 |---|---|
 | USB FS (CDC) | Đang dùng: PA11/PA12 |
 | I2C1/I2C2/I2C3 (phần cứng) | **Không chạy.** Một số giá trị clock I2C còn sót trong `.ioc` không có nghĩa là I2C đang bật. IMU dùng I2C bit-bang trên PB6/PB7. |
-| FDCAN1 | Chưa cấu hình. Cặp chân còn trống: PB8 (RX) / PB9 (TX). |
-| USART1/2/3, UART4, LPUART1 | Chưa cấu hình. Cặp còn trống: PB3/PB4 (USART2). PC10/PC11 nay là ALM HBS57H. |
+| FDCAN1 | Chưa cấu hình. PB8/PB9 nay là encoder/receiver: không còn cặp chân FDCAN1 trống trên gói 48 chân. |
+| USART1/2/3, UART4, LPUART1 | Chưa cấu hình. PB4 nay là encoder, PC10/PC11 là ALM HBS57H. |
 | SPI1/SPI2/SPI3 | Chưa cấu hình. SPI3 trên PC10/PC11 không còn dùng được (ALM HBS57H). |
 | ADC, DAC | Chưa cấu hình. |
 
@@ -162,8 +165,18 @@ ALM- (driver) -- GND STM32            # mỗi driver một mạch riêng
 |---|---|---|
 | ALM trái / ALM phải | PC10 / PC11 | `motor_alarm.c` (GPIO, SysTick), `motor_alarm_core.c` (lọc) |
 
-GPIOC chỉ được `motor_alarm.c` cấu hình và chỉ SysTick ghi `GPIOC->PUPDR`. Nếu
-sau này dùng chân PC khác, khởi tạo nó trước `MotorAlarm_Init()`.
+GPIOC chỉ được `motor_encoder.c` (PC6) và `motor_alarm.c` (PC10/PC11) cấu hình,
+và chỉ SysTick ghi `GPIOC->PUPDR` sau đó. `MotorEncoder_Init()` chạy trước
+`MotorAlarm_Init()`; chân PC mới nào cũng phải khởi tạo trước `MotorAlarm_Init()`.
+
+Encoder của driver (chỉ giám sát, xem `docs/ENCODER_HBS57H.md`), qua AM26LV32E,
+mỗi ngõ Y nối 470 Ω tới STM32:
+
+| Tín hiệu | Chân | Timer |
+|---|---|---|
+| EA / EB motor trái | PB4 / PB5 | TIM3_CH1 / CH2 (AF2) |
+| EA / EB motor phải | PC6 / PB8-BOOT0 | TIM8_CH1 (AF4) / TIM8_CH2 (AF10) |
+| G (enable receiver) | PB9 (10 kΩ kéo xuống) | — |
 
 ### Đầu quay PAN/TILT
 
@@ -247,3 +260,19 @@ khoảng 40 kΩ một cách dễ dàng.
 
 Cấu hình này đã có ở **cả** `.ioc` lẫn `main.c`. Sau mỗi lần generate lại từ
 CubeMX, kiểm tra lại bốn chân này vẫn là PULLDOWN.
+
+---
+
+## 7. PB8 = BOOT0 và receiver encoder
+
+PB8 nay mang kênh B encoder phải (ngõ 4Y của AM26LV32E qua 470 Ω). Với option
+byte mặc định, chip đọc PB8 lúc thoát reset; mức cao thì chạy bootloader thay
+cho firmware. Lúc reset mọi GPIO về Hi-Z, PB9 được 10 kΩ kéo xuống nên
+receiver tắt và 4Y không lái PB8. Firmware chỉ bật receiver khi đã chạy.
+Khi đó PB8 chỉ còn phụ thuộc mạch BOOT0 của module (nút BOOT0 + kéo xuống),
+**chưa đo**. Cách kiểm, và lựa chọn option byte `nSWBOOT0` (làm bằng tay,
+firmware không ghi): `docs/ENCODER_HBS57H.md` mục 3 và 6.
+
+**Thử ngày 20/11/2026: không đạt.** Nhấn NRST lúc PB8 đang mức cao thì chip vào
+DFU. PCB V2 dời encoder phải sang TIM1 PA8/PA9 và để PB8 chỉ làm BOOT0, xem
+`robot/docs/encoder-bench-2026-11-20.md`.

@@ -57,6 +57,11 @@ def generate_launch_description():
     enable_head = LaunchConfiguration('enable_head')
     enable_contactor = LaunchConfiguration('enable_contactor')
     enable_motor_alarm = LaunchConfiguration('enable_motor_alarm')
+    enable_motor_encoder = LaunchConfiguration('enable_motor_encoder')
+    encoder_counts_per_step_left = LaunchConfiguration('encoder_counts_per_step_left')
+    encoder_counts_per_step_right = LaunchConfiguration('encoder_counts_per_step_right')
+    encoder_sign_left = LaunchConfiguration('encoder_sign_left')
+    encoder_sign_right = LaunchConfiguration('encoder_sign_right')
     head_auto_home = LaunchConfiguration('head_auto_home')
     head_park_on_shutdown = LaunchConfiguration('head_park_on_shutdown')
     contactor_on_at_startup = LaunchConfiguration('contactor_on_at_startup')
@@ -77,6 +82,31 @@ def generate_launch_description():
             description='Log + /diagnostics for the two HBS57H ALM inputs '
                         '(FB fields 24-27). Monitoring only: never stops the '
                         'wheels. Older firmware is detected and ignored.'),
+        DeclareLaunchArgument(
+            'enable_motor_encoder', default_value='true',
+            description='Compare the real motor encoders (FB fields 28-32) with '
+                        'the STEP counts: log, /diagnostics motor_encoder, '
+                        'wheel/encoder_raw. Monitoring only: odometry stays on '
+                        'STEP counts, wheels are never stopped. Older firmware '
+                        'is detected and ignored.'),
+        DeclareLaunchArgument(
+            'encoder_counts_per_step_left', default_value='2.5',
+            description='Measured left encoder counts per STEP pulse '
+                        '(0 = uncalibrated: only the no-motion check runs). '
+                        '2.5 measured 2026-11-20, robot/docs/encoder-bench-2026-11-20.md.'),
+        DeclareLaunchArgument(
+            'encoder_counts_per_step_right', default_value='2.5',
+            description='Measured right encoder counts per STEP pulse (0 = uncalibrated). '
+                        '2.5 measured 2026-11-20.'),
+        DeclareLaunchArgument(
+            'encoder_sign_left', default_value='-1',
+            description='+1/-1: left encoder count sign for a positive firmware '
+                        'STEP count (0 = unknown, direction check off). '
+                        '-1 measured 2026-11-20.'),
+        DeclareLaunchArgument(
+            'encoder_sign_right', default_value='1',
+            description='+1/-1: right encoder count sign (0 = unknown). '
+                        '+1 measured 2026-11-20.'),
         DeclareLaunchArgument(
             'head_auto_home', default_value='true',
             description='HOME the PAN/TILT head automatically after the STM32 '
@@ -348,6 +378,14 @@ def generate_launch_description():
                     enable_contactor, value_type=bool),
                 'enable_motor_alarm': ParameterValue(
                     enable_motor_alarm, value_type=bool),
+                'enable_motor_encoder': ParameterValue(
+                    enable_motor_encoder, value_type=bool),
+                'encoder_counts_per_step_left': ParameterValue(
+                    encoder_counts_per_step_left, value_type=float),
+                'encoder_counts_per_step_right': ParameterValue(
+                    encoder_counts_per_step_right, value_type=float),
+                'encoder_sign_left': ParameterValue(encoder_sign_left, value_type=int),
+                'encoder_sign_right': ParameterValue(encoder_sign_right, value_type=int),
                 'head_auto_home': ParameterValue(head_auto_home, value_type=bool),
                 'head_park_on_shutdown': ParameterValue(
                     head_park_on_shutdown, value_type=bool),

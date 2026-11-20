@@ -29,6 +29,8 @@ file này tồn tại.
 | `TARE,<seq>,RAW` | Bỏ offset tare |
 | `DIAG,<seq>` | Chẩn đoán IMU. **Blocking ~2.5 s và dừng động cơ** — chỉ dùng khi debug |
 | `ALM,<seq>` | Trả một dòng `ALM,...` mô tả chi tiết ALM của hai driver HBS57H (xem mục khung `ALM`). Không blocking, không dừng động cơ, không refresh motor watchdog. Để người đọc khi hàn mạch/chẩn đoán; bridge không gửi lệnh này |
+| `ENC,<seq>` | Trả một dòng `ENC,...` mô tả encoder hai motor (xem mục khung `ENC`). Không blocking, không dừng động cơ, không refresh motor watchdog, không đổi count. Để người đọc khi lắp mạch/hiệu chuẩn; bridge không gửi lệnh này |
+| `ENC,<seq>,ON` / `ENC,<seq>,OFF` | Bật / tắt receiver AM26LV32E (PB9), rồi trả dòng `ENC,...`. Chỉ để thử mạch; khi tắt, count đứng yên và `enc_state=1`. Khi boot firmware tự bật (`MOTOR_ENCODER_RX_ON_AT_BOOT`) |
 | `HEAD,<seq>,HOME` | Đầu quay: bật driver, mỗi trục quay chậm (20°/s) về phía **vật cản cơ khí**, đứng yên 200 ms, coi như đang ở cạnh vật cản, rồi chạy về 0°. PAN: quay **phải** 190° tới cạnh vật cản ở 174° phải, rồi quay trái 174° về 0° (chỉ đúng khi đầu đang trong khoảng 174° phải – 16° trái). TILT: cúi **xuống** 44° tới vật cản ở cúi 20°, rồi ngửa 20° về thẳng. Giới hạn mềm PAN ±170°, TILT ±18°. `stm32_bridge` tự gửi lệnh này khi STM32 vừa khởi động. Mất khoảng 13 s. Bị từ chối khi đang chạy |
 | `HEAD,<seq>,STOP` | Đầu quay giảm tốc về 0 rồi đứng, giữ driver bật và giữ mốc. Nếu đang HOME thì hủy HOME và mất mốc (`head_state=4`) |
 | `HEAD,<seq>,ZERO` | Lấy vị trí hiện tại làm mốc 0/0 (người vận hành tự cân đầu về FRONT), bật driver. Cách dự phòng khi không HOME được. Bị từ chối khi đang chạy/HOME |
@@ -75,7 +77,8 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
    <s1_mm>,<s1_valid>,<s2_mm>,<s2_valid>,<s3_mm>,<s3_valid>,<s4_mm>,<s4_valid>,
    <yaw_acc>,<imu_rearm>,<imu_reset_seen>,
    <head_seq>,<pan_cdeg>,<tilt_cdeg>,<head_state>,<contactor>,
-   <alm_left>,<alm_right>,<alm_left_trips>,<alm_right_trips>
+   <alm_left>,<alm_right>,<alm_left_trips>,<alm_right_trips>,
+   <enc_state>,<enc_left>,<enc_right>,<enc_left_terr>,<enc_right_terr>
 ```
 
 | Vị trí | Trường | Ghi chú |
@@ -95,6 +98,9 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
 | 23 | `contactor` | 0 OFF, 1 ON: trạng thái lệnh GPIO PA10, không phải tiếp điểm |
 | 24, 25 | `alm_left`, `alm_right` | ALM driver HBS57H bánh trái (PC10) / phải (PC11) sau lọc: 0 DISABLED (build `MOTOR_ALARM_ENABLE=0`), 1 UNKNOWN (vừa boot, chưa đủ mẫu), 2 OK, 3 ALARM, 4 NO_SIGNAL (chân thả nổi: chưa đấu hoặc đứt dây) |
 | 26, 27 | `alm_left_trips`, `alm_right_trips` | Số lần vào ALARM từ lúc MCU boot, uint32. Host thấy được cả lỗi ngắn nằm giữa hai khung; giảm về 0 = MCU vừa reset |
+| 28 | `enc_state` | Encoder motor: 0 DISABLED (build `MOTOR_ENCODER_ENABLE=0`), 1 RX_OFF (timer chạy, receiver tắt), 2 RX_ON |
+| 29, 30 | `enc_left`, `enc_right` | Count encoder thật x4 (TIM3 trái, TIM8 phải), int32 có dấu, tự tràn, về 0 khi MCU boot. Chiều theo dây nối. Đo 20/11/2026: trái −2,5, phải +2,5 count/STEP (`encoder-bench-2026-11-20.md`), so với `left_count/right_count` (cùng khung; count encoder là mẫu SysTick 1 kHz gần nhất, trễ tối đa 1 ms, không cộng dồn vì cả hai đều tích luỹ) để ra count/STEP và dấu |
+| 31, 32 | `enc_left_terr`, `enc_right_terr` | Số ms có lỗi chuyển trạng thái (TERRF: A và B đổi cùng lúc), uint32 từ lúc boot. Tín hiệu sạch thì đứng yên |
 
 `yaw_valid` nói *có dữ liệu mới*, `yaw_acc` nói *dữ liệu đáng tin tới đâu*.
 Hai thứ khác nhau. Bridge publish mọi yaw hợp lệ lên `imu/data` và chuyển
@@ -117,8 +123,13 @@ Bridge vẫn đọc được hết, để firmware cũ không làm chết node:
 | 19 | thêm bộ đếm IMU |
 | 23 | thêm head, chưa có contactor |
 | 24 | thêm contactor |
-| **28** | thêm ALM HBS57H (`alm_*`) ← hiện tại |
-| 29+ | trường lạ ở cuối được bỏ qua |
+| 28 | thêm ALM HBS57H (`alm_*`) |
+| **33** | thêm encoder (`enc_*`) ← hiện tại |
+| 34+ | trường lạ ở cuối được bỏ qua |
+
+Khung dài nhất (mọi trường ở độ rộng tối đa) khoảng 216 byte. Bộ đệm TX của
+firmware là 256 byte, và `tests/test_usb_protocol.c` kiểm điều này. Thêm
+trường nữa thì phải xem lại `PROTOCOL_TX_BUFFER_SIZE`.
 
 ### ALM chỉ để giám sát
 
@@ -137,6 +148,31 @@ contactor, không đổi `status` khi một driver báo ALARM; bridge chỉ log 
 
 Chi tiết mạch, bộ lọc, cách kiểm tra và rollback:
 `firmware/stm32/motor_controller/docs/ALM_HBS57H.md`.
+
+### Encoder chỉ để giám sát
+
+`enc_*` **không** điều khiển gì, và odometry vẫn tính từ `left_count/right_count`
+(số xung STEP). Bridge so hai bộ số rồi báo lên `/diagnostics` (status
+`<node>: motor_encoder`), và publish nguyên giá trị lên `wheel/encoder_raw`.
+Mạch, BOOT0/PB8, quy trình đo và hiệu chuẩn:
+`firmware/stm32/motor_controller/docs/ENCODER_HBS57H.md`.
+
+## Khung `ENC`
+
+Trả lời lệnh `ENC,<seq>[,ON|OFF]`, một dòng, để con người đọc (không parse
+trong node):
+
+```
+ENC,<seq>,EN=<0|1>,RX=<ON|OFF|DISABLED>,FILT=<icf>,NOW=<ms>,
+    L=<count>,CPS=<count/s>,A=<0|1>,B=<0|1>,TERR=<n>,STEP=<step>,
+    R=<count>,CPS=<count/s>,A=<0|1>,B=<0|1>,TERR=<n>,STEP=<step>
+```
+
+`FILT` = ICxF của bộ lọc timer. `CPS` = count/s đo trong cửa sổ 100 ms gần
+nhất. `A`/`B` = mức chân lúc lấy mẫu gần nhất: receiver tắt thì cả hai là 0
+(pull-down nội), còn receiver bật mà đầu vào hở (encoder mất nguồn) thì dự kiến
+là 1 (fail-safe, chưa đo). `STEP` = số xung STEP (giống trường 2/3 của FB).
+Firmware cũ trả `ERR,bad_command` cho lệnh này.
 
 ## Khung `ALM`
 

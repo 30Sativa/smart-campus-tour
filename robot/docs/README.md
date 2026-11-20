@@ -67,6 +67,11 @@ permission to execute it.
   bridge, safeguards and staged transition.
 Dated evidence (true for its date; later pages supersede it):
 
+- [Encoder bench 2026-11-20](encoder-bench-2026-11-20.md) — HBS57H encoders
+  read through AM26LV32E (TIM3/TIM8): 2.5 counts/STEP both wheels, signs,
+  TERR 0; NRST with PB8 high boots DFU (FAIL); final PCB V2 pin map and
+  circuit requirements.
+
 - [Robot status 2026-10-22](robot-status-2026-10-22.md) — LiDAR mount
   moved (yaw now about −4.8°, `lidar_yaw:=-0.0833` arg), START↔POI_03 done,
   Nav2 Baseline V2, sessions without rosbag and the `go.sh` guard, next steps.
