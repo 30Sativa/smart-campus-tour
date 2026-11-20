@@ -31,7 +31,15 @@ gcc -std=gnu11 -Wall -Wextra -Werror -O0 \
     -I "$root/tests/stubs" -I "$root/Core/Inc" \
     "$root/tests/test_usb_protocol.c" "$root/Core/Src/usb_protocol.c" \
     "$root/Core/Src/head/head_core.c" "$root/Core/Src/motor/motor_alarm_core.c" \
+    "$root/Core/Src/motor/motor_encoder_core.c" \
     -lm -o "$out/test_usb_protocol"
+
+# Encoder TIM3/TIM8 (chi giam sat): noi 16 -> 32 bit, toc do, TERR. Mo phong
+# CNT, khong phai bang chung phan cung.
+gcc -std=gnu11 -Wall -Wextra -Werror -O0 \
+    -I "$root/tests/stubs" -I "$root/Core/Inc" \
+    "$root/tests/test_motor_encoder_core.c" "$root/Core/Src/motor/motor_encoder_core.c" \
+    -o "$out/test_motor_encoder_core"
 
 # ALM HBS57H (chi giam sat): bo loc, ca hai cuc tinh. Mo phong, khong phai
 # bang chung phan cung.
@@ -64,7 +72,7 @@ gcc -std=gnu11 -Wall -Wextra -Werror -O0 \
     -lm -o "$out/test_head_core_micro16"
 
 echo "== run =="
-for t in test_bno08x_parse test_bno08x_rearm test_usb_rx_queue test_motor_core test_usb_protocol test_motor_alarm_core test_motor_alarm_core_active_high test_head_core test_head_core_fast test_head_core_micro16; do
+for t in test_bno08x_parse test_bno08x_rearm test_usb_rx_queue test_motor_core test_usb_protocol test_motor_alarm_core test_motor_alarm_core_active_high test_motor_encoder_core test_head_core test_head_core_fast test_head_core_micro16; do
     echo "-- $t"
     "$out/$t"
 done

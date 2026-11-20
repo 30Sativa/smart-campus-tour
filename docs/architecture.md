@@ -303,8 +303,8 @@ Astra Pro (RGB)     -> person detection      -> Nav2 speed limit
 ```
 
 Wheel odometry is derived from the STEP pulses the STM32 generated, not from
-encoder feedback: the HBS57H closes its encoder loop internally and ROS never
-reads encoder position. The EKF fuses `vx`, the nonholonomic `vy = 0`
+encoder feedback: the HBS57H closes its encoder loop internally, and the
+encoder counts the STM32 now also reads (below) are monitored, never fused. The EKF fuses `vx`, the nonholonomic `vy = 0`
 constraint and wheel-derived `vyaw` from `wheel/odom`, plus BNO085 **orientation
 yaw** from `imu/data`. Firmware publishes no raw gyro rate, so nothing in this
 stack fuses gyro yaw-rate.
@@ -323,6 +323,18 @@ same way: FB fields 24-27 carry their filtered state and alarm counters, and
 wheels, switches the contactor or changes odometry on an alarm, and the
 alarm polarity is not yet verified on hardware
 (`robot/firmware/stm32/motor_controller/docs/ALM_HBS57H.md`).
+
+The STM32 also reads both motor encoders in parallel with the HBS57H (AM26LV32E
+receiver, TIM3/TIM8 quadrature x4). FB fields 28-32 carry the receiver state,
+the raw counts and transition-error counters, read in the same frame as the
+STEP counts. `stm32_bridge` compares the two, then reports status
+`<node>: motor_encoder` on `/diagnostics` (NO_MOTION / WRONG_DIRECTION /
+RATIO_MISMATCH) and publishes the raw values on `wheel/encoder_raw`
+(`std_msgs/Int32MultiArray`, robot-internal debug/bag topic that no other work
+package consumes). This is also monitoring only: wheel odometry above still
+integrates STEP counts, and the encoder counts per STEP and signs are not yet
+calibrated on hardware
+(`robot/firmware/stm32/motor_controller/docs/ENCODER_HBS57H.md`).
 
 ### 2.0 Navigation baseline
 

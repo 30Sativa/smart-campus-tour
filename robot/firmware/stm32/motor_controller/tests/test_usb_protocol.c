@@ -6,6 +6,8 @@
  *  - HEAD commands (PAN/TILT): ZERO/OFF/angles, specific ERR lines, FB fields
  *  - HBS57H ALM fields 24-27 and the ALM,<seq> report (motor_alarm_core.c is
  *    linked for real; its samples are injected here, no GPIO)
+ *  - encoder fields 28-32, the ENC,<seq>[,ON|OFF] report (motor_encoder_core.c
+ *    linked for real, CNT samples injected) and the worst-case FB length
  * head_core.c is linked for real (pure logic); its TIM6 tick is driven by
  * run_ms(). Run: ./scripts/verify.sh
  */
@@ -17,6 +19,7 @@
 #include "head/head_core.h"
 #include "contactor/contactor.h"
 #include "motor/motor_alarm_core.h"
+#include "motor/motor_encoder.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -43,15 +46,21 @@ static void logc(const char *s) { if (g_nlog < 64) { strncpy(g_log[g_nlog], s, 3
 void Motor_FeedWatchdog(void) { logc("feed"); }
 void Motor_SetWheelSpeedMMPS(uint8_t id, float mm_s) { (void)id; (void)mm_s; logc("set"); }
 void Motor_StopAll(void) { logc("stopall"); }
-int32_t Motor_GetLeftCount(void) { return 0; }
-int32_t Motor_GetRightCount(void) { return 0; }
+static int32_t g_step_left = 0, g_step_right = 0;
+int32_t Motor_GetLeftCount(void) { return g_step_left; }
+int32_t Motor_GetRightCount(void) { return g_step_right; }
+/* motor_encoder.c (HAL) stand-in: no PB9, just the core state. */
+static int g_rx_calls = 0;
+void MotorEncoder_SetReceiver(uint8_t on) { g_rx_calls++; MotorEncoderCore_SetReceiver(on); }
 static uint8_t g_contactor = 0U;
 static int g_contactor_calls = 0;
 void Contactor_On(void) { g_contactor = 1U; g_contactor_calls++; }
 void Contactor_Off(void) { g_contactor = 0U; g_contactor_calls++; }
 uint8_t Contactor_IsCommandedOn(void) { return g_contactor; }
-void SR04T_GetReading(uint8_t i, uint16_t *mm, uint8_t *valid) { (void)i; *mm = 0U; *valid = 0U; }
-float BNO08x_GetLastYaw(uint8_t *valid) { *valid = 1U; return 0.0f; }
+static uint16_t g_sonar_mm = 0U;
+static float g_yaw = 0.0f;
+void SR04T_GetReading(uint8_t i, uint16_t *mm, uint8_t *valid) { (void)i; *mm = g_sonar_mm; *valid = 0U; }
+float BNO08x_GetLastYaw(uint8_t *valid) { *valid = 1U; return g_yaw; }
 uint8_t BNO08x_GetAccuracy(void) { return 3U; }
 void BNO08x_SetYawDeg(float d) { (void)d; }
 void BNO08x_ClearYawOffset(void) {}
@@ -69,8 +78,9 @@ uint32_t BNO08x_GetSampleRate(void) { return 0U; }
 uint32_t BNO08x_GetBusWarnCount(void) { return 0U; }
 uint32_t BNO08x_GetBusRecoverCount(void) { return 0U; }
 uint8_t BNO08x_IsDwtOk(void) { return 1U; }
-uint32_t BNO08x_GetRearmCount(void) { return 7U; }
-uint32_t BNO08x_GetResetSeenCount(void) { return 2U; }
+static uint32_t g_rearm = 7U, g_reset_seen = 2U;
+uint32_t BNO08x_GetRearmCount(void) { return g_rearm; }
+uint32_t BNO08x_GetResetSeenCount(void) { return g_reset_seen; }
 
 static int g_busy_for_err = 0;            /* CDC refuses ERR lines when set */
 static int g_n_fb = 0, g_n_err = 0;
@@ -78,6 +88,9 @@ static char g_last_fb[256];
 static char g_last_err[64];
 static int g_n_alm = 0;
 static char g_last_alm[256];
+static int g_n_enc = 0;
+static char g_last_enc[256];
+static int g_last_fb_len = 0;
 uint8_t CDC_Transmit_FS(uint8_t *buf, uint16_t len)
 {
     if (len >= 4 && memcmp(buf, "ERR,", 4) == 0)
@@ -91,9 +104,15 @@ uint8_t CDC_Transmit_FS(uint8_t *buf, uint16_t len)
         g_n_alm++;
         memcpy(g_last_alm, buf, len < 255 ? len : 255); g_last_alm[len < 255 ? len : 255] = '\0';
     }
+    else if (len >= 4 && memcmp(buf, "ENC,", 4) == 0)
+    {
+        g_n_enc++;
+        memcpy(g_last_enc, buf, len < 255 ? len : 255); g_last_enc[len < 255 ? len : 255] = '\0';
+    }
     else if (len >= 3 && memcmp(buf, "FB,", 3) == 0)
     {
         g_n_fb++;
+        g_last_fb_len = len;
         memcpy(g_last_fb, buf, len < 255 ? len : 255); g_last_fb[len < 255 ? len : 255] = '\0';
     }
     return USBD_OK;
@@ -200,7 +219,7 @@ static void test_fb_appends_imu_recovery_counters(void)
     int fields = 1;
     for (const char *c = g_last_fb; *c && *c != '\r'; c++) if (*c == ',') fields++;
     CHECK(g_n_fb >= 1, "an FB frame was sent");
-    CHECK(fields == 28, "FB has 28 fields (24 + alm_left, alm_right, alm_left_trips, alm_right_trips)");
+    CHECK(fields == 33, "FB has 33 fields (28 + enc_state, enc_left, enc_right, enc_left_terr, enc_right_terr)");
     CHECK(fb_field(16) == 3 && fb_field(17) == 7 && fb_field(18) == 2, "yaw_acc stays field 16, IMU counters 17-18 unchanged");
 }
 
@@ -283,6 +302,99 @@ static void test_fb_alarm_fields(void)
     rx("ALM\r\n"); rx("ALM,1,2\r\n"); run_ms(30);
     CHECK(g_n_alm == 0 && strcmp(g_last_err, "ERR,bad_command\r\n") == 0, "malformed ALM -> ERR,bad_command");
     MotorAlarmCore_Init(0U);
+}
+
+static void test_fb_encoder_fields(void)
+{
+    printf("test_fb_encoder_fields\n");
+    Protocol_Init(); g_last_fb[0] = '\0'; g_busy_for_err = 0; g_n_err = 0;
+
+    MotorEncoderCore_Init(0U);
+    run_ms(25);
+    CHECK(fb_field(28) == MOTOR_ENCODER_DISABLED && fb_field(29) == 0 && fb_field(30) == 0,
+          "MOTOR_ENCODER_ENABLE=0 -> enc_state 0 (DISABLED), counts 0");
+    CHECK(fb_field(24) >= 0 && fb_field(27) >= 0, "ALM keeps fields 24-27");
+
+    MotorEncoderCore_Init(1U);
+    MotorEncoderCore_SetReceiver(1U);
+    MotorEncoderCore_Sample(0U, 1000U, 0U, 0U, 0U);   /* baselines */
+    MotorEncoderCore_Sample(1U, 65000U, 0U, 0U, 0U);
+    MotorEncoderCore_Sample(0U, 3500U, 0U, 1U, 0U);   /* +2500 */
+    MotorEncoderCore_Sample(1U, 64000U, 1U, 0U, 1U);  /* -1000, one TERR */
+    g_step_left = 1000; g_step_right = -400;
+    run_ms(25);
+    CHECK(fb_field(28) == MOTOR_ENCODER_RX_ON, "enc_state 2 (RX_ON)");
+    CHECK(fb_field(29) == 2500 && fb_field(30) == -1000, "enc_left / enc_right = accumulated counts");
+    CHECK(fb_field(31) == 0 && fb_field(32) == 1, "enc_*_terr = transition-error counters");
+    CHECK(fb_field(2) == 1000 && fb_field(3) == -400, "STEP counts stay fields 2-3");
+    CHECK(strstr(g_last_fb, ",STOP,") != NULL || strstr(g_last_fb, ",TIMEOUT,") != NULL,
+          "monitoring only: encoder does not change the wheel status");
+
+    g_n_enc = 0; g_last_enc[0] = '\0'; g_rx_calls = 0; g_nlog = 0;
+    rx("ENC,51\r\n"); run_ms(25);
+    CHECK(g_n_enc == 1 && strncmp(g_last_enc, "ENC,51,EN=1,RX=ON,", 18) == 0, "ENC,<seq> -> ENC,51,EN=1,RX=ON,...");
+    CHECK(strstr(g_last_enc, ",L=2500,") != NULL && strstr(g_last_enc, ",R=-1000,") != NULL,
+          "ENC report has both counts");
+    CHECK(strstr(g_last_enc, ",STEP=1000,") != NULL && strstr(g_last_enc, ",STEP=-400") != NULL,
+          "ENC report carries the STEP counts next to the encoder counts");
+    CHECK(strstr(g_last_enc, "L=2500,CPS=0,A=1,B=0,TERR=0,") != NULL &&
+          strstr(g_last_enc, "R=-1000,CPS=0,A=0,B=1,TERR=1,") != NULL, "pin levels and TERR per wheel");
+    size_t n = strlen(g_last_enc);
+    CHECK(n > 2 && strcmp(g_last_enc + n - 2, "\r\n") == 0, "ENC line ends with CRLF");
+    CHECK(g_rx_calls == 0, "ENC,<seq> alone does not touch the receiver");
+    CHECK(fb_field(1) == 51, "ENC echoes its seq in FB");
+
+    rx("enc,52,off\r\n"); run_ms(25);
+    CHECK(g_rx_calls == 1 && fb_field(28) == MOTOR_ENCODER_RX_OFF, "ENC,<seq>,OFF -> receiver off, enc_state 1");
+    CHECK(strstr(g_last_enc, "ENC,52,EN=1,RX=OFF,") != NULL, "and reports it");
+    CHECK(fb_field(29) == 2500, "receiver off keeps the count");
+    rx("ENC,53,ON\r\n"); run_ms(25);
+    CHECK(g_rx_calls == 2 && fb_field(28) == MOTOR_ENCODER_RX_ON, "ENC,<seq>,ON -> back on");
+
+    int fed = 0; for (int i = 0; i < g_nlog; i++) if (strcmp(g_log[i], "feed") == 0 || strcmp(g_log[i], "set") == 0) fed = 1;
+    CHECK(!fed, "ENC never feeds the watchdog or moves a wheel");
+
+    g_n_enc = 0; g_rx_calls = 0;
+    rx("ENC\r\n"); rx("ENC,54,MAYBE\r\n"); rx("ENC,55,ON,1\r\n"); run_ms(30);
+    CHECK(g_n_enc == 0 && g_rx_calls == 0 && strcmp(g_last_err, "ERR,bad_command\r\n") == 0,
+          "malformed ENC -> ERR,bad_command, receiver untouched");
+    g_step_left = g_step_right = 0;
+    MotorEncoderCore_Init(0U);
+}
+
+/* Fields at their widest: the frame must still fit the 256 B TX buffer with
+ * its CRLF (vsnprintf truncation would drop it and the host would glue two
+ * frames). Head angles, dt_ms and status cannot be driven wide here; their
+ * extra width is added by hand (FB_UNDRIVEN_EXTRA). */
+#define FB_UNDRIVEN_EXTRA (2 * 5 /* pan/tilt "0" -> "-17000" */ + 8 /* dt "20" -> 10 digits */ + \
+                           3 /* STOP -> TIMEOUT */ + 9 /* head_seq */ + 2 * 9 /* alm trips */)
+static void test_fb_worst_case_length(void)
+{
+    printf("test_fb_worst_case_length\n");
+    Protocol_Init(); head_reset(); g_busy_for_err = 0;
+    rx("STOP,4294967295\r\n");
+    g_step_left = INT32_MIN; g_step_right = INT32_MIN;
+    g_rearm = 4294967295U; g_reset_seen = 4294967295U;
+    g_sonar_mm = 65535U; g_yaw = -179.99f;
+    MotorAlarmCore_Init(1U);
+    MotorEncoderCore_Init(1U);
+    MotorEncoderCore_SetReceiver(1U);
+    MotorEncoderCore_Sample(0U, 0U, 1U, 0U, 0U);
+    MotorEncoderCore_Sample(1U, 0U, 1U, 0U, 0U);
+    for (int i = 0; i < 65537; i++)   /* drive both counts to about -2^31 */
+    {
+        MotorEncoderCore_Sample(0U, (uint16_t)((i + 1) * -32767), 1U, 0U, 0U);
+        MotorEncoderCore_Sample(1U, (uint16_t)((i + 1) * -32767), 1U, 0U, 0U);
+    }
+    run_ms(25);
+    size_t n = strlen(g_last_fb);
+    printf("       worst-case FB = %d bytes: %s", g_last_fb_len, g_last_fb);
+    CHECK(fb_field(29) < -2000000000L && fb_field(31) > 60000, "encoder fields at their widest");
+    CHECK(n > 2 && strcmp(g_last_fb + n - 2, "\r\n") == 0, "FB still ends with CRLF");
+    CHECK(g_last_fb_len + FB_UNDRIVEN_EXTRA < 256, "worst case (incl. head angles, dt, TIMEOUT) fits the 256 B TX buffer");
+    g_step_left = g_step_right = 0; g_rearm = 7U; g_reset_seen = 2U;
+    g_sonar_mm = 0U; g_yaw = 0.0f;
+    MotorEncoderCore_Init(0U); MotorAlarmCore_Init(0U);
 }
 
 static void test_head_flow(void)
@@ -379,6 +491,8 @@ int main(void)
     test_fb_appends_imu_recovery_counters();
     test_contactor_pa10();
     test_fb_alarm_fields();
+    test_fb_encoder_fields();
+    test_fb_worst_case_length();
     test_head_flow();
     test_head_home_step_jog();
     if (g_fail == 0) { printf("\nTAT CA TEST PASS\n"); return 0; }

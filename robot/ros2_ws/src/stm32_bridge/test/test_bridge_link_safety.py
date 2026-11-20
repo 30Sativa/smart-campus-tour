@@ -141,6 +141,7 @@ class Bridge:
         node._head = None
         node._contactor = None
         node._motor_alarm = None    # ALM monitoring has its own tests (test_motor_alarm.py)
+        node._motor_encoder = None  # encoder monitoring has its own tests (test_motor_encoder.py)
         node._seq = 1
         node._left_mm_s = 0
         node._right_mm_s = 0

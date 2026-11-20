@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "motor/motor.h"
 #include "motor/motor_alarm.h"
+#include "motor/motor_encoder.h"
 #include "sonar/sr04t.h"
 #include "head/head.h"
 /* USER CODE END Includes */
@@ -194,6 +195,7 @@ void SysTick_Handler(void)
   /* USER CODE BEGIN SysTick_IRQn 1 */
   /* 1 kHz, uu tien 15 (thap nhat): khong chen ngang TIM2/TIM6/EXTI/USB. */
   MotorAlarm_Tick();
+  MotorEncoder_Tick();   /* noi CNT 16-bit TIM3/TIM8 thanh 32-bit, dem TERRF */
 
   /* USER CODE END SysTick_IRQn 1 */
 }

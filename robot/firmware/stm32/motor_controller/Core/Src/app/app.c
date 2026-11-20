@@ -4,6 +4,7 @@
 #include "head/head_core.h"
 #include "motor/motor.h"
 #include "motor/motor_alarm.h"
+#include "motor/motor_encoder.h"
 #include "usb_protocol.h"
 #include "imu/bno08x.h"
 #include "sonar/sr04t.h"
@@ -42,6 +43,7 @@ void App_Init(void)
 {
 	Contactor_Init();   /* PA10 = 0: MOSFET contactor tat luc khoi dong */
 	Motor_Init();
+	MotorEncoder_Init(); /* TIM3/TIM8 encoder, receiver PB9: chi giam sat. Truoc MotorAlarm_Init (GPIOC) */
 	MotorAlarm_Init();  /* PC10/PC11 ALM HBS57H: chi giam sat, lay mau trong SysTick */
 	Head_Init();      /* nEN cao: driver PAN/TILT tat cho toi HEAD,<seq>,ZERO */
 	Protocol_Init();
