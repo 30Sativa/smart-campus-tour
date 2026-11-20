@@ -134,6 +134,18 @@ In một dòng mỗi khi trạng thái đổi, và mỗi 2 s một dòng `ALM,..
 Ghi kết quả (ngày, firmware commit, bước nào đạt) vào `robot/docs/` trước khi
 bàn tới việc dùng ALM để dừng robot.
 
+### Kết quả đã ghi
+
+- **20/11/2026, robot, firmware ALM đã nạp sẵn** (`ALM` trả `EN=1,ACT=LOW,PROBE=1,DEB=20`;
+  hash chưa đối chiếu vì MiniPC không có SWD), nguồn động lực đã cắt, chưa nối
+  mạch 10k/1k vào PC10/PC11. **Bước 1 đạt:** cả hai `NO_SIGNAL`, `PU=1,PD=0`,
+  `TRIPS=0` suốt ~70 phút uptime. PC10 có 21945 `GLITCH` từ trước phiên (PC11: 0),
+  không tăng trong 12 phút theo dõi, không gây đổi trạng thái (`CHG=22`).
+  FB 28 trường, 0 khung hỏng/21819; 37 Hz do IMU câm (bag 14/11 trước ALM cũng
+  37,2 Hz khi IMU câm). Bridge mới đọc dữ liệu thật qua tap chỉ đọc và đưa
+  `motor_alarm` WARN lên `/diagnostics`. Bước 2–5 chưa làm. Chi tiết:
+  `~/amr_logs/runs/20261120_1340_alm_hw/REPORT.md` trên MiniPC.
+
 ## 6. Cấu hình và rollback
 
 Tất cả là macro lúc build (thêm `-D...` vào CFLAGS hoặc symbol của CubeIDE);
