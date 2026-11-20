@@ -28,6 +28,7 @@ file này tồn tại.
 | `TARE,<seq>,<deg>` | Đặt hướng hiện tại = `<deg>` |
 | `TARE,<seq>,RAW` | Bỏ offset tare |
 | `DIAG,<seq>` | Chẩn đoán IMU. **Blocking ~2.5 s và dừng động cơ** — chỉ dùng khi debug |
+| `ALM,<seq>` | Trả một dòng `ALM,...` mô tả chi tiết ALM của hai driver HBS57H (xem mục khung `ALM`). Không blocking, không dừng động cơ, không refresh motor watchdog. Để người đọc khi hàn mạch/chẩn đoán; bridge không gửi lệnh này |
 | `HEAD,<seq>,HOME` | Đầu quay: bật driver, mỗi trục quay chậm (20°/s) về phía **vật cản cơ khí**, đứng yên 200 ms, coi như đang ở cạnh vật cản, rồi chạy về 0°. PAN: quay **phải** 190° tới cạnh vật cản ở 174° phải, rồi quay trái 174° về 0° (chỉ đúng khi đầu đang trong khoảng 174° phải – 16° trái). TILT: cúi **xuống** 44° tới vật cản ở cúi 20°, rồi ngửa 20° về thẳng. Giới hạn mềm PAN ±170°, TILT ±18°. `stm32_bridge` tự gửi lệnh này khi STM32 vừa khởi động. Mất khoảng 13 s. Bị từ chối khi đang chạy |
 | `HEAD,<seq>,STOP` | Đầu quay giảm tốc về 0 rồi đứng, giữ driver bật và giữ mốc. Nếu đang HOME thì hủy HOME và mất mốc (`head_state=4`) |
 | `HEAD,<seq>,ZERO` | Lấy vị trí hiện tại làm mốc 0/0 (người vận hành tự cân đầu về FRONT), bật driver. Cách dự phòng khi không HOME được. Bị từ chối khi đang chạy/HOME |
@@ -73,7 +74,8 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
    <yaw_cdeg>,<yaw_valid>,
    <s1_mm>,<s1_valid>,<s2_mm>,<s2_valid>,<s3_mm>,<s3_valid>,<s4_mm>,<s4_valid>,
    <yaw_acc>,<imu_rearm>,<imu_reset_seen>,
-   <head_seq>,<pan_cdeg>,<tilt_cdeg>,<head_state>,<contactor>
+   <head_seq>,<pan_cdeg>,<tilt_cdeg>,<head_state>,<contactor>,
+   <alm_left>,<alm_right>,<alm_left_trips>,<alm_right_trips>
 ```
 
 | Vị trí | Trường | Ghi chú |
@@ -91,6 +93,8 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
 | 20, 21 | `pan_cdeg`, `tilt_cdeg` | Góc tính từ số xung STEP, đơn vị 0,01°, không phải encoder |
 | 22 | `head_state` | 0 OFF, 1 IDLE, 2 MOVING, 3 HOMING, 4 NO_REF |
 | 23 | `contactor` | 0 OFF, 1 ON: trạng thái lệnh GPIO PA10, không phải tiếp điểm |
+| 24, 25 | `alm_left`, `alm_right` | ALM driver HBS57H bánh trái (PC10) / phải (PC11) sau lọc: 0 DISABLED (build `MOTOR_ALARM_ENABLE=0`), 1 UNKNOWN (vừa boot, chưa đủ mẫu), 2 OK, 3 ALARM, 4 NO_SIGNAL (chân thả nổi: chưa đấu hoặc đứt dây) |
+| 26, 27 | `alm_left_trips`, `alm_right_trips` | Số lần vào ALARM từ lúc MCU boot, uint32. Host thấy được cả lỗi ngắn nằm giữa hai khung; giảm về 0 = MCU vừa reset |
 
 `yaw_valid` nói *có dữ liệu mới*, `yaw_acc` nói *dữ liệu đáng tin tới đâu*.
 Hai thứ khác nhau. Bridge publish mọi yaw hợp lệ lên `imu/data` và chuyển
@@ -112,8 +116,44 @@ Bridge vẫn đọc được hết, để firmware cũ không làm chết node:
 | 17 | thêm `yaw_acc` |
 | 19 | thêm bộ đếm IMU |
 | 23 | thêm head, chưa có contactor |
-| **24** | thêm contactor ← hiện tại |
-| 25+ | trường lạ ở cuối được bỏ qua |
+| 24 | thêm contactor |
+| **28** | thêm ALM HBS57H (`alm_*`) ← hiện tại |
+| 29+ | trường lạ ở cuối được bỏ qua |
+
+### ALM chỉ để giám sát
+
+`alm_*` **không** điều khiển gì: firmware không dừng xung STEP, không tắt
+contactor, không đổi `status` khi một driver báo ALARM; bridge chỉ log và
+đưa lên `/diagnostics` (status `<node>: motor_alarm`). Lưu ý khi đọc:
+
+- `OK` nghĩa là *không có tín hiệu lỗi*, không chứng minh driver đang có
+  nguồn: opto ALM của driver mất nguồn ở trạng thái không dẫn, giống lúc bình
+  thường. Contactor/E-stop cắt nguồn driver thì ALM vẫn `OK`.
+- Cực tính mặc định (`MOTOR_ALARM_ACTIVE_LEVEL=0`: mức LOW = lỗi) mới chỉ dựa
+  trên phép đo trạng thái **bình thường** (ALM+ ≈ 3,3 V). Trạng thái lỗi thật
+  chưa được thử trên phần cứng.
+- Khi driver đang ALARM nó bỏ qua xung STEP, nhưng `left_count/right_count`
+  vẫn đếm xung firmware phát ra: odometry bánh đó sai.
+
+Chi tiết mạch, bộ lọc, cách kiểm tra và rollback:
+`firmware/stm32/motor_controller/docs/ALM_HBS57H.md`.
+
+## Khung `ALM`
+
+Trả lời lệnh `ALM,<seq>`, một dòng, để con người đọc (không parse trong node):
+
+```
+ALM,<seq>,EN=<0|1>,ACT=<LOW|HIGH>,PROBE=<0|1>,DEB=<ms>,NOW=<ms>,
+    L=<state>,PU=<0|1>,PD=<0|1>,TRIPS=<n>,GLITCH=<n>,CHG=<ms>,TRIP=<ms>,
+    R=<state>,PU=<0|1>,PD=<0|1>,TRIPS=<n>,GLITCH=<n>,CHG=<ms>,TRIP=<ms>
+```
+
+`ACT` = mức điện áp coi là lỗi, `PROBE=1` = firmware đảo pull nội để phát hiện
+chân thả nổi, `DEB` = thời gian lọc. Mỗi kênh: `PU`/`PD` = mức đọc gần nhất với
+pull-up / pull-down nội (khác nhau ⇒ chân thả nổi), `GLITCH` = số lần tín hiệu
+lệch rồi quay lại trước khi đủ thời gian lọc (nhiễu), `CHG`/`TRIP` = HAL tick
+(ms từ lúc boot, so với `NOW`) lúc đổi trạng thái / vào ALARM gần nhất, 0 = chưa.
+Firmware cũ trả `ERR,bad_command` cho lệnh này.
 
 ## Khung `DIAG`
 

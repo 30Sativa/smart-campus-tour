@@ -4,6 +4,8 @@
  *  - the main-loop CMD timeout (CMD_TIMEOUT_MS) stops the motors
  *  - a pending ERR,bad_command no longer suppresses FB frames
  *  - HEAD commands (PAN/TILT): ZERO/OFF/angles, specific ERR lines, FB fields
+ *  - HBS57H ALM fields 24-27 and the ALM,<seq> report (motor_alarm_core.c is
+ *    linked for real; its samples are injected here, no GPIO)
  * head_core.c is linked for real (pure logic); its TIM6 tick is driven by
  * run_ms(). Run: ./scripts/verify.sh
  */
@@ -14,6 +16,7 @@
 #include "sonar/sr04t.h"
 #include "head/head_core.h"
 #include "contactor/contactor.h"
+#include "motor/motor_alarm_core.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -73,6 +76,8 @@ static int g_busy_for_err = 0;            /* CDC refuses ERR lines when set */
 static int g_n_fb = 0, g_n_err = 0;
 static char g_last_fb[256];
 static char g_last_err[64];
+static int g_n_alm = 0;
+static char g_last_alm[256];
 uint8_t CDC_Transmit_FS(uint8_t *buf, uint16_t len)
 {
     if (len >= 4 && memcmp(buf, "ERR,", 4) == 0)
@@ -80,6 +85,11 @@ uint8_t CDC_Transmit_FS(uint8_t *buf, uint16_t len)
         if (g_busy_for_err) return USBD_BUSY;
         g_n_err++;
         memcpy(g_last_err, buf, len < 63 ? len : 63); g_last_err[len < 63 ? len : 63] = '\0';
+    }
+    else if (len >= 4 && memcmp(buf, "ALM,", 4) == 0)
+    {
+        g_n_alm++;
+        memcpy(g_last_alm, buf, len < 255 ? len : 255); g_last_alm[len < 255 ? len : 255] = '\0';
     }
     else if (len >= 3 && memcmp(buf, "FB,", 3) == 0)
     {
@@ -190,7 +200,7 @@ static void test_fb_appends_imu_recovery_counters(void)
     int fields = 1;
     for (const char *c = g_last_fb; *c && *c != '\r'; c++) if (*c == ',') fields++;
     CHECK(g_n_fb >= 1, "an FB frame was sent");
-    CHECK(fields == 24, "FB has 24 fields (19 + head_seq, pan, tilt, head_state, contactor)");
+    CHECK(fields == 28, "FB has 28 fields (24 + alm_left, alm_right, alm_left_trips, alm_right_trips)");
     CHECK(fb_field(16) == 3 && fb_field(17) == 7 && fb_field(18) == 2, "yaw_acc stays field 16, IMU counters 17-18 unchanged");
 }
 
@@ -216,6 +226,63 @@ static void test_contactor_pa10(void)
     rx("STOP,10\r\n"); run_ms(25);
     CHECK(g_contactor == 1U, "STOP does not switch the contactor either");
     rx("CONTACTOR,11,OFF\r\n"); run_ms(25);
+}
+
+/* Inject ALM samples as SysTick would: one PU read + one PD read per pair. */
+static void alm_drive(uint8_t ch, uint8_t level, int ms)
+{
+    for (int i = 0; i < ms; i++)
+        MotorAlarmCore_Sample(ch, level, (uint8_t)(i & 1), 1U, g_now + (uint32_t)i);
+}
+
+static void test_fb_alarm_fields(void)
+{
+    printf("test_fb_alarm_fields\n");
+    const uint8_t act = (uint8_t)MOTOR_ALARM_ACTIVE_LEVEL, idle = (uint8_t)(act ^ 1U);
+    Protocol_Init(); g_last_fb[0] = '\0';
+
+    MotorAlarmCore_Init(0U);
+    run_ms(25);
+    CHECK(fb_field(24) == MOTOR_ALARM_DISABLED && fb_field(25) == MOTOR_ALARM_DISABLED,
+          "MOTOR_ALARM_ENABLE=0 -> FB alm fields 0 (DISABLED)");
+    CHECK(fb_field(23) == 0 || fb_field(23) == 1, "contactor stays field 23");
+
+    MotorAlarmCore_Init(1U);
+    run_ms(25);
+    CHECK(fb_field(24) == MOTOR_ALARM_UNKNOWN, "enabled, no samples yet -> UNKNOWN (1)");
+
+    for (int i = 0; i < 60; i++)   /* floating: follows the pull */
+    {
+        MotorAlarmCore_Sample(0U, (uint8_t)(i & 1), (uint8_t)(i & 1), 1U, g_now);
+        MotorAlarmCore_Sample(1U, (uint8_t)(i & 1), (uint8_t)(i & 1), 1U, g_now);
+    }
+    run_ms(25);
+    CHECK(fb_field(24) == MOTOR_ALARM_NO_SIGNAL && fb_field(25) == MOTOR_ALARM_NO_SIGNAL,
+          "unwired PC10/PC11 -> NO_SIGNAL (4) in FB");
+
+    alm_drive(0U, idle, 60); alm_drive(1U, idle, 60); run_ms(25);
+    CHECK(fb_field(24) == MOTOR_ALARM_OK && fb_field(25) == MOTOR_ALARM_OK &&
+          fb_field(26) == 0 && fb_field(27) == 0, "both normal -> OK (2), trips 0");
+
+    alm_drive(1U, act, 60); run_ms(25);
+    CHECK(fb_field(24) == MOTOR_ALARM_OK && fb_field(25) == MOTOR_ALARM_ALARM &&
+          fb_field(26) == 0 && fb_field(27) == 1, "right fault -> field 25 ALARM (3), right trips 1");
+    CHECK(strstr(g_last_fb, ",STOP,") != NULL || strstr(g_last_fb, ",TIMEOUT,") != NULL,
+          "monitoring only: wheel status not forced by the alarm");
+
+    g_n_alm = 0; g_last_alm[0] = '\0';
+    rx("ALM,42\r\n"); run_ms(25);
+    CHECK(g_n_alm == 1 && strncmp(g_last_alm, "ALM,42,EN=1,", 12) == 0, "ALM,<seq> -> one ALM,42,EN=1,... line");
+    CHECK(strstr(g_last_alm, ",L=OK,") != NULL && strstr(g_last_alm, ",R=ALARM,") != NULL,
+          "ALM report names both channel states");
+    CHECK(strstr(g_last_alm, act ? "ACT=HIGH" : "ACT=LOW") != NULL, "ALM report states the polarity");
+    size_t n = strlen(g_last_alm);
+    CHECK(n > 2 && strcmp(g_last_alm + n - 2, "\r\n") == 0, "ALM line ends with CRLF (not truncated)");
+    CHECK(fb_field(1) == 42, "ALM echoes its seq in FB like other commands");
+    g_n_alm = 0;
+    rx("ALM\r\n"); rx("ALM,1,2\r\n"); run_ms(30);
+    CHECK(g_n_alm == 0 && strcmp(g_last_err, "ERR,bad_command\r\n") == 0, "malformed ALM -> ERR,bad_command");
+    MotorAlarmCore_Init(0U);
 }
 
 static void test_head_flow(void)
@@ -311,6 +378,7 @@ int main(void)
     test_line_overflow_reports_bad();
     test_fb_appends_imu_recovery_counters();
     test_contactor_pa10();
+    test_fb_alarm_fields();
     test_head_flow();
     test_head_home_step_jog();
     if (g_fail == 0) { printf("\nTAT CA TEST PASS\n"); return 0; }

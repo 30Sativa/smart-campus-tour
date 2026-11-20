@@ -316,6 +316,14 @@ the EKF then runs on wheel odometry only. The firmware re-requests the BNO085
 report on its own and counts it in feedback fields 17-18
 (`robot/docs/PROTOCOL_FB.md`).
 
+The two HBS57H wheel drivers' ALM outputs (STM32 PC10/PC11) are monitored the
+same way: FB fields 24-27 carry their filtered state and alarm counters, and
+`stm32_bridge` logs changes and publishes status `<node>: motor_alarm`
+(OK/WARN/ERROR) on `/diagnostics`. This is monitoring only: nothing stops the
+wheels, switches the contactor or changes odometry on an alarm, and the
+alarm polarity is not yet verified on hardware
+(`robot/firmware/stm32/motor_controller/docs/ALM_HBS57H.md`).
+
 ### 2.0 Navigation baseline
 
 Planner `nav2_smac_planner/SmacPlanner2D`, controller

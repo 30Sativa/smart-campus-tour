@@ -3,6 +3,7 @@
 #include "head/head.h"
 #include "head/head_core.h"
 #include "motor/motor.h"
+#include "motor/motor_alarm.h"
 #include "usb_protocol.h"
 #include "imu/bno08x.h"
 #include "sonar/sr04t.h"
@@ -41,6 +42,7 @@ void App_Init(void)
 {
 	Contactor_Init();   /* PA10 = 0: MOSFET contactor tat luc khoi dong */
 	Motor_Init();
+	MotorAlarm_Init();  /* PC10/PC11 ALM HBS57H: chi giam sat, lay mau trong SysTick */
 	Head_Init();      /* nEN cao: driver PAN/TILT tat cho toi HEAD,<seq>,ZERO */
 	Protocol_Init();
 

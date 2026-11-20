@@ -1,158 +1,249 @@
-# STM32G431CBU (UFQFPN48) — pin map hiện tại
+# STM32G431C6U6 (UFQFPN48) — pin map hiện tại
 
-Tài liệu này mô tả **đúng theo source firmware và `motor_controller.ioc` hiện
-tại**. Mọi thay đổi pin phải được cập nhật đồng thời trong CubeMX, code driver
-và sơ đồ dây thực tế.
+Cập nhật 18/11/2026, đối chiếu trực tiếp với:
 
-## Các chân đang được firmware sử dụng
+- `robot/firmware/stm32/motor_controller/motor_controller.ioc`
+- `Core/Src/main.c` (`MX_GPIO_Init`, `MX_TIM2_Init`), `Core/Inc/main.h`
+- Driver: `motor/motor_hal.c`, `motor/motor.c`, `head/head.c`, `sonar/sr04t.c`,
+  `imu/bno08x.c`, `contactor/contactor.c`, `stm32g4xx_hal_msp.c`
+- Danh sách alternate function lấy từ dữ liệu pin chính thức của ST
+  (`STM32_open_pin_data`, file `STM32G431C(6-8-B)Ux.xml`).
 
-| Chân | Chức năng | Căn cứ |
-|---|---|---|
-| PA0 | M1_STEP | GPIO output trong `main.c` |
-| PA1 | M1_DIR | GPIO output trong `main.c` |
-| PA2 | M2_STEP | GPIO output trong `main.c` |
-| PA3 | M2_DIR | GPIO output trong `main.c` |
-| PA4 | IMU RST tùy chọn | Chỉ dùng khi bật `BNO08X_USE_HW_RST=1` |
-| PA5 | IMU INT tùy chọn | Chỉ dùng khi bật `BNO08X_USE_INT_PIN=1` |
-| PA11 | USB_DM | USB CDC |
-| PA12 | USB_DP | USB CDC |
-| PA13 | SWDIO | Debug, không dùng cho thiết bị khác |
-| PA14 | SWCLK | Debug, không dùng cho thiết bị khác |
-| PB6 | IMU SCL | I2C bit-bang trong `bno08x.c` |
-| PB7 | IMU SDA | I2C bit-bang trong `bno08x.c` |
-| PB0 | SR04T SONAR1 TRIG | J_SONAR1 pin 2, GPIO output |
-| PB1 | SR04T SONAR1 ECHO | J_SONAR1 pin 3, EXTI1 input |
-| PB11 | SR04T SONAR2 TRIG | J_SONAR2 pin 2, GPIO output |
-| PB12 | SR04T SONAR2 ECHO | J_SONAR2 pin 3, EXTI15_10 input |
-| PB13 | SR04T SONAR3 TRIG | J_SONAR3 pin 2, GPIO output |
-| PB14 | SR04T SONAR3 ECHO | J_SONAR3 pin 3, EXTI15_10 input |
-| PB15 | SR04T SONAR4 TRIG | J_SONAR4 pin 1, GPIO output |
-| PA6 | SR04T SONAR4 ECHO | J_SONAR4 pin 3, EXTI9_5 input |
-| PA8 | PAN STEP | J_MCU_R.10 → R11 220 Ω → J_PAN.1, GPIO output (`head.c`) |
-| PA15 | PAN DIR | J_MCU_R.15 → R12 220 Ω → J_PAN.2, GPIO output |
-| PB2 | PAN nEN | J_MCU_L.7 → J_PAN.3, kéo lên 3V3 qua R9/R10, GPIO output, khởi động mức CAO |
-| PA9 | TILT STEP | J_MCU_R.11 → R13 220 Ω → J_TILT.1, GPIO output |
-| PA7 | TILT DIR | J_MCU_L.11 → R14 220 Ω → J_TILT.2, GPIO output |
-| PB10 | TILT nEN | J_MCU_L.5 → J_TILT.3, kéo lên 3V3 qua R9/R10, GPIO output, khởi động mức CAO. **Trước 23/10/2026 là CONTACTOR_EN** |
-| PA10 | CONTACTOR_EN | Cổng MOSFET contactor, GPIO output push-pull. `MX_GPIO_Init` đặt mức thấp, rồi `App_Init` bật lên CAO (contactor bật khi khởi động, `CONTACTOR_ON_AT_BOOT`, từ 05/11/2026). Lệnh `CONTACTOR,<seq>,ON/OFF`. **Từ 23/10/2026** |
+Mọi thay đổi pin phải cập nhật **cùng lúc** ở CubeMX (`.ioc`), code driver,
+tài liệu này và sơ đồ dây thực tế.
 
-## Timer đang dùng
+Tổng quan: 42 chân I/O → **26 đang dùng**, **1 là NRST**, **15 còn trống**.
+Clock hệ thống lấy từ **HSI** (không dùng thạch anh), nên PF0/PF1 và
+PC14/PC15 đều trống.
 
-| Timer | Dùng cho | Cấu hình ở |
-|---|---|---|
-| TIM2 | Tick 50 kHz phát xung STEP bánh xe, ưu tiên ngắt 1 | `.ioc` + `motor_hal.c` |
-| TIM6 | Tick 10 kHz phát xung PAN/TILT, ưu tiên ngắt 2 | **chỉ `head.c`**, không có trong `.ioc` |
+Chú thích cột "Chế độ hiện tại":
 
-TIM6 không khai báo trong `.ioc`. Bật TIM6 hoặc DAC trong CubeMX sau này sẽ
-sinh `TIM6_DAC_IRQHandler` trùng với bản trong `stm32g4xx_it.c` (USER CODE).
-
-## Đầu quay PAN/TILT (DRV8825)
-
-Theo PCB `robot-pan-tilt-chan-cho-6-9` (19/10/2026): STEP/DIR đi **thẳng** từ
-STM32 qua điện trở nối tiếp 220 Ω, không qua 74HCT245, nên driver nhận mức
-logic 3,3 V. DRV8825 nhận mức cao từ 2,2 V nên đủ, nhưng cần đo dạng xung tại
-đầu driver với dây 20–25 cm. nEN tích cực mức thấp và có điện trở kéo lên
-3V3: khi MCU reset hay chưa chạy tới `MX_GPIO_Init`, driver tắt. Firmware
-chốt nEN mức cao trước khi bật output (`.ioc` `PinState=GPIO_PIN_SET`,
-`main.c`, `head.c`). Chi tiết điều khiển: `docs/HEAD_PAN_TILT.md`.
-
-**74HCT245 chân 6–9 (A5–A8) đang để hở** trên PCB mới. Firmware không điều
-khiển được các chân này. Trước khi cấp nguồn chạy IC đệm của bánh xe, phải
-đưa chúng về mức xác định ở phần cứng (nối GND hoặc điện trở kéo), xem tài
-liệu PCB mục 3 và datasheet TI SN74HCT245 mục 11.1.
-
-## Contactor (PA10)
-
-PA10 lái cổng MOSFET của contactor: mức cao = đóng. Từ lúc cấp nguồn tới khi
-`MX_GPIO_Init` chạy (và suốt lúc MCU reset hoặc đang nạp ST-Link), PA10 ở
-trạng thái input thả nổi. **Cổng MOSFET phải có điện trở kéo xuống GND trên
-mạch** (thường 10–100 kΩ), nếu không contactor có thể tự đóng lúc khởi động.
-Firmware không thay thế được điện trở này. Cần kiểm tra trên PCB.
-Từ 05/11/2026 firmware bật contactor ngay khi boot (`CONTACTOR_ON_AT_BOOT` = 1
-trong `contactor.c`): contactor đóng vài ms sau khi STM32 chạy, kể cả sau mỗi
-lần reset hoặc nạp code.
-
-## ST-LINK / SWD
-
-```text
-ST-LINK SWDIO  -> STM32 PA13 (SWDIO)
-ST-LINK SWCLK  -> STM32 PA14 (SWCLK)
-ST-LINK GND    -> STM32 GND
-ST-LINK VTref  -> STM32 3V3 (mức tham chiếu, không phải nguồn 5V)
-ST-LINK NRST   -> STM32 NRST (BẮT BUỘC, xem docs/FLASHING.md)
-```
-
-**Cả 5 dây đều bắt buộc.** Thiếu NRST thì lúc firmware chạy nặng (USB CDC +
-4 sonar EXTI + I2C bit-bang) ST-LINK không giành được quyền halt, báo
-`init mode failed (unable to connect to the target)`. Chi tiết sự cố và cách
-xử lý: `docs/FLASHING.md`.
-
-Không cấp nguồn cho board từ chân 3V3 của mạch nạp DAPLink — ngõ ra đó quá yếu,
-board sụt áp và SWD báo `cannot read IDR`.
-
-USB nối vào cổng USB CDC của board chỉ dùng cho giao tiếp firmware/ROS, không
-thay thế được dây SWD. ST-LINK phải được USB attach vào đúng hệ điều hành đang
-chạy CubeIDE; nếu CubeIDE chạy trên Windows thì không để VMware giữ ST-LINK cho
-Ubuntu guest. Kiểm tra bằng `STM32_Programmer_CLI -l` trước khi bấm Run/Debug.
-
-## IMU BNO08x
-
-```text
-BNO08x SCL -> PB6
-BNO08x SDA -> PB7
-BNO08x ADD -> GND       # địa chỉ 7-bit 0x4A
-BNO08x CS  -> 3V3       # chọn chế độ I2C
-BNO08x RST -> 3V3       # hiện không dùng reset GPIO
-BNO08x INT -> bỏ trống  # hiện driver đang polling
-```
-
-Driver không dùng `HAL_I2C`, `I2C_HandleTypeDef` hay `MX_I2C1_Init`. Nó tự tạo
-START/STOP/ACK bằng GPIO open-drain và đọc `GPIOB->IDR`. Vì vậy đây là I2C
-bit-bang, có hỗ trợ chờ clock stretching của BNO08x (timeout 25 ms).
-
-## Các chân chưa được cấu hình trong firmware hiện tại
-
-| Nhóm | Trạng thái |
+| Ký hiệu | Nghĩa |
 |---|---|
-| PB8/PB9 | Chưa dùng. Không được ghi là I2C1 trong tài liệu hiện tại. Có thể dành cho CAN sau khi cấu hình CubeMX và driver CAN. |
-| I2C1/I2C2/I2C3 | Chưa có peripheral nào được khởi tạo trong `main.c`; các giá trị clock I2C còn lại trong `.ioc` không có nghĩa là I2C đang chạy. |
-| CAN/FDCAN | Chưa có cấu hình và driver trong firmware hiện tại. |
-| PA7, PA8, PA9, PA10, PA15, PB2–PB5, PB8/PB9, PC4, PC6, PC10–PC15, PF0–PF1 | Đang để dành; phải kiểm tra alternate function trong CubeMX trước khi dùng. |
+| GPIO OUT PP | GPIO output push-pull, firmware tự ghi mức |
+| GPIO OUT OD | GPIO output open-drain (dùng cho I2C bit-bang) |
+| GPIO EXTI | GPIO input có ngắt ngoài (EXTI), cả sườn lên và xuống |
+| AF | Chân giao cho một peripheral phần cứng (USB, SWD…) |
+| SYS | Chân hệ thống (reset, boot, nguồn) |
 
-## Lưu ý phần cứng
+---
 
-- BNO08x dùng bus I2C open-drain; cần pull-up phù hợp lên 3.3V.
-- Không nối PB6/PB7 đồng thời vào một peripheral I2C khác nếu chưa kiểm tra địa
-  chỉ và tải bus.
-- Echo của SR04T có thể là 5V. Sơ đồ hiện tại nối trực tiếp vào PB1/PB12/PB14/PA6, nên phải xác nhận module đang chạy mức echo 3.3V hoặc thêm chia áp/level shifter trước khi cấp nguồn và flash firmware.
-- SONAR3 (PB13/PB14) và SONAR2 (PB11/PB12) dùng chung `EXTI15_10_IRQHandler` (khác EXTI line thật: line 12 và line 14, chỉ chung vector ngắt theo nhóm). SONAR4 ECHO (PA6) dùng `EXTI9_5_IRQHandler` riêng (EXTI line 6). Không có xung đột line vì PB1(1), PB12(12), PB14(14), PA6(6) là 4 line EXTI khác nhau.
-- SONAR4 TRIG dùng PB15 nhưng ECHO dùng PA6 (khác port A/B) — do đó `SR04T_EchoPort()` trong `sr04t.c` phải trả về đúng `GPIOA` cho sensor_index 3, các sensor còn lại vẫn `GPIOB`.
-- 74HCT245 phải cấp 5V nếu dùng để nâng mức tín hiệu STEP/DIR; `OE#` phải được
-  kéo đúng mức để output hoạt động.
-- PB8/PB9 không được tự nhận là CAN chỉ vì tài liệu cũ từng đề xuất như vậy.
+## 1. Các chân đang dùng
 
-## Chân ECHO của sonar phải là PULLDOWN
+| # | Chân | Tên trong code | Chức năng | Chế độ hiện tại | Cấu hình ở | Chức năng thay thế đáng chú ý (chưa dùng) |
+|---|---|---|---|---|---|---|
+| 8 | PA0 | `PA0___M1_STEP` | Bánh 1 STEP | GPIO OUT PP. Xung tạo bằng phần mềm trong ISR **TIM2**, không phải ngõ ra PWM của timer | `.ioc`, `main.c`, `motor_hal.c` | TIM2_CH1, TIM8_BKIN, ADC1/2_IN1 |
+| 9 | PA1 | `PA1___M1_DIR` | Bánh 1 DIR | GPIO OUT PP | `.ioc`, `main.c` | TIM2_CH2, TIM15_CH1N, ADC1/2_IN2 |
+| 10 | PA2 | `PA2___M2_STEP` | Bánh 2 STEP | GPIO OUT PP. Xung tạo bằng phần mềm trong ISR **TIM2** | `.ioc`, `main.c`, `motor_hal.c` | TIM2_CH3, TIM15_CH1, USART2_TX, LPUART1_TX |
+| 11 | PA3 | `PA3___M2_DIR` | Bánh 2 DIR | GPIO OUT PP | `.ioc`, `main.c` | TIM2_CH4, TIM15_CH2, USART2_RX, LPUART1_RX |
+| 14 | PA6 | `PA6_SONAR4_ECHO` | SR04T sonar 4 ECHO | GPIO EXTI, **PULLDOWN**, EXTI line 6 → `EXTI9_5_IRQHandler` | `.ioc`, `main.c` | TIM3_CH1, TIM16_CH1, TIM1_BKIN, ADC2_IN3, SPI1_MISO |
+| 15 | PA7 | `PA7_TILT_DIR` | Tilt DIR (DRV8825) | GPIO OUT PP | `.ioc`, `main.c`, `head.c` | TIM3_CH2, TIM17_CH1, TIM1_CH1N, TIM8_CH1N, SPI1_MOSI |
+| 30 | PA8 | `PA8_PAN_STEP` | Pan STEP (DRV8825) | GPIO OUT PP. Xung tạo bằng phần mềm trong ISR **TIM6** | `.ioc`, `main.c`, `head.c` | TIM1_CH1, TIM4_ETR, I2C2_SDA, MCO |
+| 31 | PA9 | `PA9_TILT_STEP` | Tilt STEP (DRV8825) | GPIO OUT PP. Xung tạo bằng phần mềm trong ISR **TIM6** | `.ioc`, `main.c`, `head.c` | TIM1_CH2, TIM2_CH3, TIM15_BKIN, USART1_TX, I2C2_SCL |
+| 32 | PA10 | `CONTACTOR_EN` | Cổng MOSFET contactor (mức cao = đóng) | GPIO OUT PP | `.ioc`, `main.c`, `contactor.c` | TIM1_CH3, TIM2_CH4, TIM17_BKIN, USART1_RX |
+| 33 | PA11 | — | USB_DM (USB CDC) | AF: USB FS | `.ioc`, USB_DEVICE | (dành riêng cho USB) |
+| 34 | PA12 | — | USB_DP (USB CDC) | AF: USB FS | `.ioc`, USB_DEVICE | (dành riêng cho USB) |
+| 36 | PA13 | — | SWDIO (nạp/debug) | AF: SYS Serial Wire | `.ioc` | Không dùng cho việc khác |
+| 37 | PA14 | — | SWCLK (nạp/debug) | AF: SYS Serial Wire | `.ioc` | Không dùng cho việc khác |
+| 38 | PA15 | `PA15_PAN_DIR` | Pan DIR (DRV8825) | GPIO OUT PP | `.ioc`, `main.c`, `head.c` | TIM2_CH1/ETR, TIM8_CH1, SPI1/3_NSS, USART2_RX (JTDI, không dùng vì chỉ chạy SWD) |
+| 17 | PB0 | `PB0_SONAR1_TRIG` | SR04T sonar 1 TRIG | GPIO OUT PP | `.ioc`, `main.c` | TIM3_CH3, TIM1_CH2N, TIM8_CH2N, ADC1_IN15 |
+| 18 | PB1 | `PB1_SONAR1_ECHO` | SR04T sonar 1 ECHO | GPIO EXTI, **PULLDOWN**, EXTI line 1 → `EXTI1_IRQHandler` | `.ioc`, `main.c` | TIM3_CH4, TIM1_CH3N, TIM8_CH3N, ADC1_IN12 |
+| 19 | PB2 | `PAN_nEN` | Pan nEN (tích cực mức thấp) | GPIO OUT PP, mức khởi động **CAO** (driver tắt) | `.ioc`, `main.c`, `head.c` | LPTIM1_OUT, ADC2_IN12 |
+| 22 | PB10 | `TILT_nEN` | Tilt nEN (tích cực mức thấp) | GPIO OUT PP, mức khởi động **CAO** (driver tắt) | `.ioc`, `main.c`, `head.c` | TIM2_CH3, TIM1_BKIN, USART3_TX, LPUART1_RX |
+| 24 | PB11 | `PB11_SONAR2_TRIG` | SR04T sonar 2 TRIG | GPIO OUT PP | `.ioc`, `main.c` | TIM2_CH4, USART3_RX, LPUART1_TX, ADC1/2_IN14 |
+| 25 | PB12 | `PB12_SONAR2_ECHO` | SR04T sonar 2 ECHO | GPIO EXTI, **PULLDOWN**, EXTI line 12 → `EXTI15_10_IRQHandler` | `.ioc`, `main.c` | TIM1_BKIN, SPI2_NSS, USART3_CK, ADC1_IN11 |
+| 26 | PB13 | `PB13_SONAR3_TRIG` | SR04T sonar 3 TRIG | GPIO OUT PP | `.ioc`, `main.c` | TIM1_CH1N, SPI2_SCK, USART3_CTS |
+| 27 | PB14 | `PB14_SONAR3_ECHO` | SR04T sonar 3 ECHO | GPIO EXTI, **PULLDOWN**, EXTI line 14 → `EXTI15_10_IRQHandler` | `.ioc`, `main.c` | TIM15_CH1, TIM1_CH2N, SPI2_MISO, ADC1_IN5 |
+| 28 | PB15 | `PB15_SONAR4_TRIG` | SR04T sonar 4 TRIG | GPIO OUT PP | `.ioc`, `main.c` | TIM15_CH2, TIM1_CH3N, SPI2_MOSI, ADC2_IN15 |
+| 39 | PC10 | — (`motor_alarm.c`) | ALM driver HBS57H bánh trái (M1) | GPIO IN, firmware đảo **pull-up/pull-down nội mỗi 1 ms** trong SysTick để nhận ra chân thả nổi. Chỉ giám sát | **Chỉ `motor_alarm.c`**, không có trong `.ioc` | TIM8_CH1N, USART3_TX, UART4_TX, SPI3_SCK |
+| 40 | PC11 | — (`motor_alarm.c`) | ALM driver HBS57H bánh phải (M2) | GPIO IN, như PC10 | **Chỉ `motor_alarm.c`**, không có trong `.ioc` | TIM8_CH2N, USART3_RX, UART4_RX, SPI3_MISO, I2C3_SDA |
+| 44 | PB6 | `PB6___IMU_SCL_BITBANG` | BNO08x SCL | `.ioc` khai báo GPIO OUT, còn `bno08x.c` cấu hình lại thành **GPIO OUT OD** để chạy I2C bit-bang | `.ioc`, `main.c`, `bno08x.c` | TIM4_CH1, TIM8_CH1, TIM16_CH1N, USART1_TX, UCPD1_CC1 |
+| 45 | PB7 | `PB7___IMU_SDA_BITBANG` | BNO08x SDA | `.ioc` khai báo GPIO OUT, còn `bno08x.c` cấu hình lại thành **GPIO OUT OD**, đọc mức qua `GPIOB->IDR` | `.ioc`, `main.c`, `bno08x.c` | TIM4_CH2, TIM3_CH4, TIM17_CH1N, I2C1_SDA, USART1_RX |
 
-Bốn chân ECHO (PB1, PB12, PB14, PA6) dùng ngắt trên cả hai sườn. Ban đầu chúng
-được cấu hình `GPIO_NOPULL` — thả nổi.
+### Chân hệ thống
 
-Chân input thả nổi bắt nhiễu, sinh sườn lên/xuống ngẫu nhiên, và driver tính ra
-khoảng cách nằm gọn trong dải hợp lệ 200–6000 mm rồi gắn cờ `valid=1`. Quan sát
-thực tế: khi **chưa cắm cảm biến nào**, khung `FB` vẫn báo `642mm valid` và
-`1364mm valid`.
+| # | Chân | Chức năng | Ghi chú |
+|---|---|---|---|
+| 7 | PG10-NRST | **SYS: NRST (reset)** | Firmware giữ nguyên chức năng reset, không cấu hình làm GPIO. Xem mục 5. |
+| 46 | PB8-BOOT0 | SYS: BOOT0 | Hiện chưa dùng. Nếu chân này ở mức cao lúc reset, chip sẽ vào bootloader. Xem mục 2. |
+| 1 | VBAT | Nguồn | |
+| 20 | VREF+ | Điện áp tham chiếu ADC | |
+| 21 | VDDA | Nguồn analog | |
+| 23, 35, 48 | VDD | Nguồn 3V3 | VSS là pad lộ ở mặt dưới chip. |
 
-Chế độ hỏng này im lặng và nguy hiểm — vật cản ma đi thẳng vào local costmap của
-Nav2, và dây đứt hay cảm biến chết cũng cho ra đúng triệu chứng đó thay vì báo
-`valid=0`.
+---
 
-`GPIO_PULLDOWN` là trạng thái nghỉ đúng: ECHO của SR04T nghỉ ở mức thấp và phát
-xung lên cao. Không cắm cảm biến → không có sườn → timeout → `valid=0`. Cảm biến
-thật có ngõ ra push-pull nên thắng điện trở nội ~40 kΩ dễ dàng, phép đo không
-bị ảnh hưởng.
+## 2. Các chân còn trống
 
-Sửa ở **cả** `motor_controller.ioc` (để CubeMX nhớ) và `Core/Src/main.c` (để
-chạy được ngay). Nếu generate lại từ CubeMX, kiểm tra bốn chân này vẫn là
-PULLDOWN.
+Các chân dưới đây **không có trong `.ioc` và không được driver nào khởi tạo**.
+Khi chưa cấu hình, chúng ở chế độ analog sau reset. Trước khi dùng phải bật
+trong CubeMX và kiểm tra xung đột ở mục 3.
 
-**Đây là lỗi cấu hình phần mềm, không phải lỗi PCB.** Điện trở pull-down nằm
-bên trong STM32, bật bằng một bit thanh ghi.
+| # | Chân | Loại | Chức năng thay thế đáng chú ý | Ghi chú |
+|---|---|---|---|---|
+| 12 | PA4 | GPIO | **TIM3_CH2**, ADC2_IN17, DAC1_OUT1, SPI1/3_NSS, USART2_CK | **Dành cho BNO08x RST**, chỉ dùng khi bật `BNO08X_USE_HW_RST=1` trong `bno08x.c` (hiện đang `0`). Muốn dùng chân này cho việc khác thì giữ macro ở `0`. |
+| 13 | PA5 | GPIO | **TIM2_CH1/ETR**, ADC2_IN13, DAC1_OUT2, SPI1_SCK | **Dành cho BNO08x INT**, chỉ dùng khi bật `BNO08X_USE_INT_PIN=1` (hiện đang `0`, driver đang polling). |
+| 16 | PC4 | GPIO | TIM1_ETR, ADC2_IN5, I2C2_SCL, USART1_TX | |
+| 29 | PC6 | GPIO | **TIM3_CH1, TIM8_CH1** | **Không dùng được EXTI** vì EXTI line 6 đã thuộc về PA6 (sonar 4). |
+| 41 | PB3 | GPIO | **TIM2_CH2**, TIM3_ETR, TIM4_ETR, TIM8_CH1N, SPI1/3_SCK, USART2_TX | Chức năng JTDO/SWO chưa được dùng, vì debug chỉ chạy SWD. |
+| 42 | PB4 | GPIO | **TIM3_CH1, TIM16_CH1**, TIM8_CH2N, SPI1/3_MISO, USART2_RX | Điện trở kéo dead-battery UCPD1_CC2 đã được tắt bằng `HAL_PWREx_DisableUCPDDeadBattery()` trong `stm32g4xx_hal_msp.c`. NJTRST không dùng. |
+| 43 | PB5 | GPIO | **TIM3_CH2, TIM17_CH1**, TIM8_CH3N, LPTIM1_IN1, SPI1/3_MOSI, I2C3_SDA, USART2_CK | |
+| 46 | PB8-BOOT0 | GPIO + SYS BOOT0 | TIM4_CH3, TIM8_CH2, TIM16_CH1, **I2C1_SCL, FDCAN1_RX**, USART3_RX | Dùng được làm GPIO, nhưng ở mức cao lúc reset thì chip vào bootloader. Hạn chế dùng. |
+| 47 | PB9 | GPIO | TIM4_CH4, TIM8_CH3, TIM17_CH1, TIM1_CH3N, **I2C1_SDA, FDCAN1_TX**, USART3_TX | Cùng với PB8 là cặp FDCAN1/I2C1 duy nhất còn trống. Chưa có cấu hình hay driver CAN/I2C nào. |
+| 2 | PC13 | GPIO (yếu) | TIM1_CH1N, TIM1_BKIN, TIM8_CH4N, RTC_TAMP1, WKUP2 | Chân thuộc miền backup, dòng ra rất yếu (khoảng 3 mA, tối đa 2 MHz). Chỉ nên dùng cho input, nút nhấn hoặc LED nhỏ. |
+| 3 | PC14-OSC32_IN | GPIO (yếu) | OSC32_IN (LSE) | Giới hạn giống PC13. **Không dùng được EXTI** vì EXTI line 14 đã thuộc về PB14 (sonar 3). |
+| 4 | PC15-OSC32_OUT | GPIO (yếu) | OSC32_OUT (LSE) | Giới hạn giống PC13. |
+| 5 | PF0-OSC_IN | GPIO | OSC_IN (HSE), TIM1_CH3N, ADC1_IN10, I2C2_SDA, SPI2_NSS | Trống vì đang chạy HSI. Nếu sau này gắn thạch anh HSE thì mất chân này. |
+| 6 | PF1-OSC_OUT | GPIO | OSC_OUT (HSE), ADC2_IN10, SPI2_SCK | Giống PF0. |
+
+---
+
+## 3. Tài nguyên đã chiếm (kiểm tra trước khi dùng chân mới)
+
+### Timer
+
+| Timer | Dùng cho | Ưu tiên ngắt | Cấu hình ở | Ghi chú |
+|---|---|---|---|---|
+| TIM2 | Tick 50 kHz (`MOTOR_BASE_TIMER_HZ`) phát xung STEP bánh xe | 1 | `.ioc` + `main.c` + `motor_hal.c` / `motor.c` | Chỉ dùng ngắt update, không có ngõ ra kênh. **Không dùng được TIM2_CHx (PA5, PB3…) làm PWM**, vì ARR/PSC đã bị khóa cho tick 50 kHz. |
+| TIM6 | Tick 10 kHz phát xung Pan/Tilt | 2 | **Chỉ có trong `head.c`** (ghi thanh ghi trực tiếp), không có trong `.ioc` | Nếu bật TIM6 hoặc DAC trong CubeMX, code sinh ra sẽ có `TIM6_DAC_IRQHandler` trùng với bản đang có trong `stm32g4xx_it.c`. |
+| SysTick | HAL tick 1 kHz, và lấy mẫu ALM PC10/PC11 (`MotorAlarm_Tick`) | 15 (thấp nhất) | `stm32g4xx_it.c` (USER CODE), `motor_alarm.c` | Ưu tiên thấp nhất nên không chen ngang TIM2/TIM6/EXTI/USB. |
+| TIM1, TIM3, TIM4, TIM8, TIM15, TIM16, TIM17, LPTIM1 | **Còn trống** | — | — | TIM3/TIM4 là lựa chọn gọn nhất nếu cần PWM, input capture hoặc encoder trên PB4/PB5/PC6/PB8/PB9/PA4. |
+
+Bộ đếm chu kỳ DWT->CYCCNT được `bno08x.c` và `sr04t.c` dùng để đo thời gian.
+Nó không chiếm chân nào.
+
+### EXTI
+
+| EXTI line | Chân đang giữ | Vector ngắt |
+|---|---|---|
+| 1 | PB1 (sonar 1 ECHO) | `EXTI1_IRQHandler` |
+| 6 | PA6 (sonar 4 ECHO) | `EXTI9_5_IRQHandler` |
+| 12 | PB12 (sonar 2 ECHO) | `EXTI15_10_IRQHandler` |
+| 14 | PB14 (sonar 3 ECHO) | `EXTI15_10_IRQHandler` |
+
+Mỗi line EXTI chỉ gắn được với một port. Trong các chân còn trống, **PC6 và
+PC14 không dùng được ngắt ngoài**. Các line còn lại (0, 2–5, 7–11, 13, 15)
+vẫn trống. Ưu tiên ngắt của EXTI là 2.
+
+### Peripheral giao tiếp
+
+| Peripheral | Trạng thái |
+|---|---|
+| USB FS (CDC) | Đang dùng: PA11/PA12 |
+| I2C1/I2C2/I2C3 (phần cứng) | **Không chạy.** Một số giá trị clock I2C còn sót trong `.ioc` không có nghĩa là I2C đang bật. IMU dùng I2C bit-bang trên PB6/PB7. |
+| FDCAN1 | Chưa cấu hình. Cặp chân còn trống: PB8 (RX) / PB9 (TX). |
+| USART1/2/3, UART4, LPUART1 | Chưa cấu hình. Cặp còn trống: PB3/PB4 (USART2). PC10/PC11 nay là ALM HBS57H. |
+| SPI1/SPI2/SPI3 | Chưa cấu hình. SPI3 trên PC10/PC11 không còn dùng được (ALM HBS57H). |
+| ADC, DAC | Chưa cấu hình. |
+
+---
+
+## 4. Sơ đồ dây theo module
+
+Tài liệu này lấy **code làm chuẩn**. Mã connector, điện trở và các chi tiết
+PCB không có trong code nên không ghi ở đây. Muốn xem phần đó thì đọc tài liệu
+PCB riêng.
+
+### Bánh xe
+
+| Tín hiệu | Chân | Code |
+|---|---|---|
+| M1_STEP / M1_DIR | PA0 / PA1 | `motor.c`, `motor_hal.c` |
+| M2_STEP / M2_DIR | PA2 / PA3 | `motor.c`, `motor_hal.c` |
+
+ALM của driver (chỉ giám sát, xem `docs/ALM_HBS57H.md`):
+
+```text
+3V3 STM32 -- 10k -- ALM+ (driver) -- 1k -- PC10 (trái) / PC11 (phải)
+ALM- (driver) -- GND STM32            # mỗi driver một mạch riêng
+```
+
+| Tín hiệu | Chân | Code |
+|---|---|---|
+| ALM trái / ALM phải | PC10 / PC11 | `motor_alarm.c` (GPIO, SysTick), `motor_alarm_core.c` (lọc) |
+
+GPIOC chỉ được `motor_alarm.c` cấu hình và chỉ SysTick ghi `GPIOC->PUPDR`. Nếu
+sau này dùng chân PC khác, khởi tạo nó trước `MotorAlarm_Init()`.
+
+### Đầu quay PAN/TILT
+
+| Tín hiệu | Chân | Code |
+|---|---|---|
+| PAN STEP / DIR / nEN | PA8 / PA15 / PB2 | `head.c` |
+| TILT STEP / DIR / nEN | PA9 / PA7 / PB10 | `head.c` |
+
+nEN tích cực mức thấp. Firmware chốt nEN ở mức cao (driver tắt) trước khi bật
+output: `.ioc` đặt `PinState=GPIO_PIN_SET`, và `main.c` cùng `head.c` đều ghi
+mức SET trước khi gọi `HAL_GPIO_Init`. Chi tiết điều khiển xem
+`docs/HEAD_PAN_TILT.md`.
+
+### Sonar SR04T
+
+| Sonar | TRIG | ECHO | Vector ngắt |
+|---|---|---|---|
+| 1 | PB0 | PB1 (EXTI line 1) | `EXTI1_IRQHandler` |
+| 2 | PB11 | PB12 (EXTI line 12) | `EXTI15_10_IRQHandler` |
+| 3 | PB13 | PB14 (EXTI line 14) | `EXTI15_10_IRQHandler` |
+| 4 | PB15 | **PA6** (EXTI line 6) | `EXTI9_5_IRQHandler` |
+
+Sonar 4 có ECHO nằm ở port A, còn các chân khác ở port B. Vì vậy
+`SR04T_EchoPort()` trong `sr04t.c` trả về `GPIOA` khi `sensor_index == 3`.
+
+### IMU BNO08x (I2C bit-bang, địa chỉ 0x4A)
+
+```text
+BNO08x SCL  -> PB6
+BNO08x SDA  -> PB7
+BNO08x ADD  -> GND        # địa chỉ 7-bit 0x4A
+BNO08x CS   -> 3V3        # bắt buộc mức cao để chọn chế độ I2C
+BNO08x PS0/PS1 -> GND
+BNO08x RST  -> 3V3        # PA4 để dành, BNO08X_USE_HW_RST=0
+BNO08x INT  -> bỏ trống   # PA5 để dành, BNO08X_USE_INT_PIN=0, driver polling
+BNO08x BOOT -> VCC (kéo cao, qua 10k nếu có)
+```
+
+Phần nối dây ở trên lấy từ comment đầu file `Core/Inc/imu/bno08x.h`. Driver
+không dùng `HAL_I2C`/`MX_I2C1_Init`. Nó tự tạo START/STOP/ACK bằng GPIO
+open-drain (`GPIO_MODE_OUTPUT_OD`) và đọc mức chân qua `GPIOB->IDR`.
+
+### Contactor (PA10)
+
+PA10 là GPIO OUT PP, mức cao là bật contactor. Trước khi `MX_GPIO_Init` chạy
+(lúc vừa cấp nguồn, đang reset hoặc đang nạp code), PA10 chưa được cấu hình
+nên code không kiểm soát được mức của chân.
+
+Firmware bật contactor ngay khi boot (`CONTACTOR_ON_AT_BOOT = 1` trong
+`contactor.c`): `MX_GPIO_Init` đặt mức thấp, rồi `App_Init` kéo lên cao. Nghĩa
+là contactor đóng vài ms sau khi STM32 chạy, kể cả sau mỗi lần reset hoặc nạp
+code. Điều khiển lúc chạy bằng lệnh `CONTACTOR,<seq>,ON|OFF`.
+
+---
+
+## 5. SWD / NRST
+
+| Tín hiệu | Chân | Căn cứ |
+|---|---|---|
+| SWDIO | PA13 | `.ioc`: `SYS_JTMS-SWDIO` |
+| SWCLK | PA14 | `.ioc`: `SYS_JTCK-SWCLK` |
+| NRST | PG10-NRST | Chân reset mặc định, firmware không cấu hình lại |
+
+Chỉ bật Serial Wire, không bật JTAG, nên PB3 (JTDO/SWO), PB4 (NJTRST) và
+JTDI trên PA15 đều được giải phóng. Cách nối ST-LINK và xử lý lỗi khi nạp
+xem `docs/FLASHING.md`.
+
+---
+
+## 6. Chân ECHO của sonar phải là PULLDOWN
+
+Bốn chân ECHO (PB1, PB12, PB14, PA6) dùng ngắt trên cả hai sườn. Nếu để
+`GPIO_NOPULL` (thả nổi), chân sẽ bắt nhiễu và sinh sườn ngẫu nhiên. Khi đó
+driver tính ra khoảng cách nằm trong dải hợp lệ 200–6000 mm và gắn cờ
+`valid=1`, dù **không cắm cảm biến nào**. Vật cản ma này đi thẳng vào local costmap của
+Nav2 mà không có dấu hiệu lỗi nào.
+
+Với `GPIO_PULLDOWN`: không có cảm biến thì không có sườn, driver timeout và
+báo `valid=0`. Cảm biến thật có ngõ ra push-pull nên thắng điện trở nội
+khoảng 40 kΩ một cách dễ dàng.
+
+Cấu hình này đã có ở **cả** `.ioc` lẫn `main.c`. Sau mỗi lần generate lại từ
+CubeMX, kiểm tra lại bốn chân này vẫn là PULLDOWN.
