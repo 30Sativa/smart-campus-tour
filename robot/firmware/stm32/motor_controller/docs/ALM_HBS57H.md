@@ -35,8 +35,11 @@ tắt nguồn. Driver bình thường, đèn xanh: ALM+ − ALM− ≈ 3,3 V, t�
 | Opto dẫn (lỗi, giả định) | ≈ 0,3 V → 0 | ≈ 0,2 V → 0 | mức 0 |
 | Chân thả nổi (chưa hàn, đứt dây 1k) | 1 | 0 | **NO_SIGNAL** |
 
-2,6 V vẫn trên ngưỡng V_IH (0,7·V_DD ≈ 2,3 V) nhưng biên chỉ ~0,3 V; nếu đo
-được thấp hơn ~2,5 V ở PC10/PC11 khi bình thường thì xem mục 6 (`PROBE=0`).
+2,6 V vẫn trên ngưỡng V_IH (0,7·V_DD ≈ 2,3 V) nhưng biên chỉ ~0,3 V. Với pull
+nội nhỏ nhất (25 kΩ) chân còn ≈ 2,29 V: vẫn trên V_IH đảm bảo theo thiết kế
+của chân FT (0,49·V_DD + 0,26 ≈ 1,88 V), nhưng sát mức 0,7·V_DD. Cách kiểm tra
+đúng là `PD=1` trong dòng `ALM` (mục 5 bước 2); nếu ra `PD=0` khi driver bình
+thường thì xem mục 6 (`PROBE=0`) hoặc giảm 10k xuống 4,7k.
 
 ## 2. Cách firmware đọc
 
@@ -45,13 +48,14 @@ tắt nguồn. Driver bình thường, đèn xanh: ALM+ − ALM− ≈ 3,3 V, t�
   USB; vẫn chạy khi vòng lặp chính bị chặn (`DIAG`, chờ USB lúc boot).
   Object code của `motor_core`, `head_core`, `sr04t`, `bno08x` và hai ISR
   TIM2/TIM6 giống hệt bản trước. Phía đọc (vòng lặp chính) dùng bộ đếm thế
-  hệ, **không tắt ngắt**. Chi phí ước lượng ~120 lệnh/ms (~1 % CPU ở 16 MHz),
-  chưa đo trên MCU.
+  hệ, **không tắt ngắt**. Chi phí ước lượng từ disassembly bản build -O2:
+  ~200–250 chu kỳ/ms (~1,5 % CPU ở SYSCLK 16 MHz HSI), chưa đo trên MCU.
 - **Phát hiện chân thả nổi:** mỗi tick đọc `GPIOC->IDR` rồi đảo pull-up /
   pull-down nội của PC10/PC11. Mạch ngoài 10k/1k mạnh hơn pull nội nhiều nên
   chân đang được lái cho cùng mức ở cả hai lần; chân thả nổi đi theo pull nên
-  hai lần khác nhau. Nhờ vậy **chân chưa đấu không bao giờ bị đọc thành OK hay
-  ALARM**.
+  hai lần khác nhau. Nhờ vậy **chân chưa hàn 10k/1k không bao giờ bị đọc thành
+  OK hay ALARM**. Khi 10k đã hàn thì dây tới driver tuột hoặc driver mất nguồn
+  vẫn đọc thành OK (mục 4).
 - **Lọc:** trạng thái chỉ đổi khi `MOTOR_ALARM_DEBOUNCE_MS` (20) mẫu liên tiếp
   giống nhau. Lệch rồi quay lại trước khi đủ 20 ms được đếm là `GLITCH`.
 - **Trạng thái** (mã trong FB): 0 DISABLED, 1 UNKNOWN (vừa boot, ~20 ms),
@@ -74,6 +78,9 @@ Code: `Core/Src/motor/motor_alarm.c` (GPIO, SysTick),
   khi NO_SIGNAL, OK khi bình thường / tắt / firmware cũ, STALE khi mất FB.
   `fleet_bridge` chỉ đọc status `: imu` nên không gửi trạng thái này lên
   backend.
+- Khung 28 trường mà trường ALM không đọc được (không phải số, `trips` âm):
+  bỏ qua khung đó, giữ trạng thái ALM trước, WARN một lần. Mã trạng thái lạ
+  (firmware mới hơn bridge) ra WARN, không bao giờ thành "drivers OK".
 - Firmware cũ (FB < 28 trường) được nhận ra và bỏ qua, log một lần. Bridge cũ
   đọc firmware mới bình thường vì chỉ thêm trường ở cuối.
 - Bộ đếm `trips` giảm ⇒ log “MCU restarted?”. Reconnect serial không sinh sự
@@ -106,7 +113,11 @@ In một dòng mỗi khi trạng thái đổi, và mỗi 2 s một dòng `ALM,..
 1. **Trước khi hàn / chưa nối dây 1k:** cả hai `NO_SIGNAL`, dòng `ALM` cho
    `PU=1,PD=0`. Không bao giờ ra ALARM.
 2. **Đã hàn, driver có nguồn, đèn xanh:** cả hai `OK`, `PU=1,PD=1`,
-   `GLITCH` không tăng. Đo PC10/PC11 so với GND: ≥ 2,5 V. Để chạy vài phút,
+   `GLITCH` không tăng. `PD=1` là bằng chứng chân vẫn ở mức cao khi bật
+   pull-down nội. Đồng hồ vạn năng ở PC10/PC11 chỉ thấy **trung bình** của
+   chân đang đảo pull 500 Hz (~2,9–3,0 V, không phải 3,3 V như lúc đo trước
+   khi nạp firmware); muốn thấy mức thấp nhất (~2,6 V) phải dùng oscilloscope.
+   Để chạy vài phút,
    cả lúc bánh quay (`CMD` từ bridge), để xem `GLITCH` có tăng vì nhiễu STEP
    hay không.
 3. **Giả lập lỗi phía STM32** (không động vào driver): tháo dây ALM+ khỏi

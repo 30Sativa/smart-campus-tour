@@ -93,7 +93,7 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
 | 20, 21 | `pan_cdeg`, `tilt_cdeg` | Góc tính từ số xung STEP, đơn vị 0,01°, không phải encoder |
 | 22 | `head_state` | 0 OFF, 1 IDLE, 2 MOVING, 3 HOMING, 4 NO_REF |
 | 23 | `contactor` | 0 OFF, 1 ON: trạng thái lệnh GPIO PA10, không phải tiếp điểm |
-| 24, 25 | `alm_left`, `alm_right` | ALM driver HBS57H bánh trái (PC10) / phải (PC11) sau lọc: 0 DISABLED (build `MOTOR_ALARM_ENABLE=0`), 1 UNKNOWN (vừa boot, chưa đủ mẫu), 2 OK, 3 ALARM, 4 NO_SIGNAL (chân thả nổi: chưa đấu hoặc đứt dây) |
+| 24, 25 | `alm_left`, `alm_right` | ALM driver HBS57H bánh trái (PC10) / phải (PC11) sau lọc: 0 DISABLED (build `MOTOR_ALARM_ENABLE=0`), 1 UNKNOWN (vừa boot, chưa đủ mẫu), 2 OK, 3 ALARM, 4 NO_SIGNAL (chân thả nổi: chưa hàn 10k/1k hoặc đứt dây phía STM32; dây phía driver tuột thì vẫn là OK) |
 | 26, 27 | `alm_left_trips`, `alm_right_trips` | Số lần vào ALARM từ lúc MCU boot, uint32. Host thấy được cả lỗi ngắn nằm giữa hai khung; giảm về 0 = MCU vừa reset |
 
 `yaw_valid` nói *có dữ liệu mới*, `yaw_acc` nói *dữ liệu đáng tin tới đâu*.
