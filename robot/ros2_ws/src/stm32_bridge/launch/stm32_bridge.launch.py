@@ -56,6 +56,7 @@ def generate_launch_description():
     twist_covariance_diagonal = LaunchConfiguration('twist_covariance_diagonal')
     enable_head = LaunchConfiguration('enable_head')
     enable_contactor = LaunchConfiguration('enable_contactor')
+    enable_motor_alarm = LaunchConfiguration('enable_motor_alarm')
     head_auto_home = LaunchConfiguration('head_auto_home')
     head_park_on_shutdown = LaunchConfiguration('head_park_on_shutdown')
     contactor_on_at_startup = LaunchConfiguration('contactor_on_at_startup')
@@ -71,6 +72,11 @@ def generate_launch_description():
             'enable_contactor', default_value='true',
             description='contactor/set and contactor/state (STM32 PA10). '
                         'Independent of enable_head.'),
+        DeclareLaunchArgument(
+            'enable_motor_alarm', default_value='true',
+            description='Log + /diagnostics for the two HBS57H ALM inputs '
+                        '(FB fields 24-27). Monitoring only: never stops the '
+                        'wheels. Older firmware is detected and ignored.'),
         DeclareLaunchArgument(
             'head_auto_home', default_value='true',
             description='HOME the PAN/TILT head automatically after the STM32 '
@@ -340,6 +346,8 @@ def generate_launch_description():
                 'enable_head': ParameterValue(enable_head, value_type=bool),
                 'enable_contactor': ParameterValue(
                     enable_contactor, value_type=bool),
+                'enable_motor_alarm': ParameterValue(
+                    enable_motor_alarm, value_type=bool),
                 'head_auto_home': ParameterValue(head_auto_home, value_type=bool),
                 'head_park_on_shutdown': ParameterValue(
                     head_park_on_shutdown, value_type=bool),

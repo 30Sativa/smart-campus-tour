@@ -104,6 +104,7 @@ if _PKG_ROOT not in sys.path:
 
 from stm32_bridge.imu_health import ImuHealth  # noqa: E402
 from stm32_bridge.link_supervisor import LinkSupervisor  # noqa: E402
+from stm32_bridge.motor_alarm import MotorAlarmHealth  # noqa: E402
 from stm32_bridge.stm32_bridge_node import (  # noqa: E402
     DEFAULT_IMU_ORIENTATION_REPORT,
     DEFAULT_IMU_YAW_VARIANCE,
@@ -591,6 +592,8 @@ class _FeedbackHarness:
         self.odom_invert_right = False
         self.published_odometry = []
         self._imu_health = ImuHealth()
+        self._motor_alarm = MotorAlarmHealth()
+        self.logged_errors = []
         self.odom_linear_scale = 1.0
         self.feedback_timeout = 1.0
         self._serial_lock = threading.RLock()
@@ -605,6 +608,7 @@ class _FeedbackHarness:
             debug=lambda *args, **kwargs: None,
             info=lambda *args, **kwargs: None,
             warn=lambda *args, **kwargs: None,
+            error=lambda text, *args, **kwargs: self.logged_errors.append(text),
         )
 
     _compute_count_delta = Stm32BridgeNode._compute_count_delta
@@ -617,6 +621,7 @@ class _FeedbackHarness:
     _normalize_angle = staticmethod(Stm32BridgeNode._normalize_angle)
     _log_imu_events = Stm32BridgeNode._log_imu_events
     _log_link_events = Stm32BridgeNode._log_link_events
+    _log_motor_alarm_events = Stm32BridgeNode._log_motor_alarm_events
 
 
 def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
@@ -670,6 +675,44 @@ def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
     approx(harness._theta, 0.0, tol=1e-12)
     assert len(harness.published_odometry) == 1
     assert len(harness.published_joint_states) == 3
+
+
+def _alarm_fb(seq, left, right, alm_left, alm_right, trips_left, trips_right):
+    head = f'FB,{seq},{left},{right},20,OK,0,1' + ',0,0' * 4 + ',3,0,0,0,0,0,1,1'
+    return head + f',{alm_left},{alm_right},{trips_left},{trips_right}'
+
+
+def _odometry_after(lines):
+    harness = _FeedbackHarness()
+    harness._publish_odometry = lambda stamp, linear, angular: (
+        harness.published_odometry.append((linear, angular)))
+    harness._publish_imu = lambda *args: None
+    harness._publish_sonar_range = lambda *args: None
+    for i in range(1, 5):
+        setattr(harness, f'_sonar{i}_pub', None)
+        setattr(harness, f'sonar{i}_frame', f'sonar{i}')
+    harness._parse_feedback_line = lambda line, include_sonar=False: (
+        Stm32BridgeNode._parse_feedback_line(harness, line, include_sonar=include_sonar))
+    harness.get_clock = lambda: SimpleNamespace(now=lambda: SimpleNamespace(
+        nanoseconds=0, to_msg=lambda: 'stamp'))
+    for line in lines:
+        Stm32BridgeNode._handle_feedback_line(harness, line)
+    return harness
+
+
+def test_driver_alarm_is_logged_but_odometry_and_path_are_unchanged():
+    """Monitoring only: an HBS57H ALARM in FB is logged as an error, the
+    wheel path (parse, odometry) behaves exactly as without the fields."""
+    with_alarm = [_alarm_fb(k, 100 * k, 100 * k, 2, 3 if k >= 2 else 2, 0, 1 if k >= 2 else 0)
+                  for k in range(1, 5)]
+    without = [line.rsplit(',', 4)[0] for line in with_alarm]   # 24-field firmware
+    a = _odometry_after(with_alarm)
+    b = _odometry_after(without)
+    assert a.published_odometry == b.published_odometry and a.published_odometry
+    approx(a._x, b._x, tol=1e-12)
+    assert len(a.logged_errors) == 1 and 'right driver ALARM' in a.logged_errors[0]
+    assert 'NOT stopped' in a.logged_errors[0]
+    assert b.logged_errors == []
 
 
 def test_joint_states_follow_corrected_feedback_deltas_and_refresh_at_stop():

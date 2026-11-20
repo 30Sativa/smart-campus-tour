@@ -17,6 +17,8 @@ from stm32_bridge.imu_health import ImuHealth, parse_fb_counters, WARN as IMU_WA
 from stm32_bridge.link_supervisor import (
     ERROR as LINK_ERROR, FEEDBACK_LOST, FilterSwitch, LinkSupervisor,
 )
+from stm32_bridge.motor_alarm import (
+    MotorAlarmHealth, parse_fb_alarm, ERROR as ALARM_ERROR, WARN as ALARM_WARN)
 
 try:
     import serial
@@ -190,6 +192,9 @@ class Stm32BridgeNode(Node):
         self.declare_parameter('enable_head', True)
         # Contactor PA10 (stm32_bridge/contactor_ros.py), doc lap voi dau quay.
         self.declare_parameter('enable_contactor', True)
+        # ALM cua 2 driver HBS57H (FB truong 24-27, stm32_bridge/motor_alarm.py):
+        # chi log + /diagnostics, KHONG dung banh xe hay doi odometry.
+        self.declare_parameter('enable_motor_alarm', True)
         # Phai khop BNO08X_USE_GAME_ROTATION_VECTOR cua firmware dang nap.
         self.declare_parameter(
             'imu_orientation_report', DEFAULT_IMU_ORIENTATION_REPORT)
@@ -392,6 +397,9 @@ class Stm32BridgeNode(Node):
         self._imu_health = ImuHealth(
             stale_timeout=float(self.get_parameter('imu_stale_timeout').value),
             start=self._node_start_mono)
+        self._motor_alarm = (MotorAlarmHealth()
+                             if bool(self.get_parameter('enable_motor_alarm').value)
+                             else None)
 
         self._odom_pub = None
         self._tf_broadcaster = None
@@ -783,6 +791,9 @@ class Stm32BridgeNode(Node):
         rearm, reset_seen = parse_fb_counters(line)
         self._log_imu_events(self._imu_health.on_feedback(
             now_mono, yaw_rad is not None, rearm, reset_seen))
+        if self._motor_alarm is not None:
+            self._log_motor_alarm_events(self._motor_alarm.on_feedback(
+                now_mono, parse_fb_alarm(line)))
         now_ros = self.get_clock().now()
         now_ros_sec = now_ros.nanoseconds / 1e9
 
@@ -1159,6 +1170,15 @@ class Stm32BridgeNode(Node):
 
     _log_link_events = _log_imu_events  # same (level, text) event tuples
 
+    def _log_motor_alarm_events(self, events):
+        for level, text in events:
+            if level >= ALARM_ERROR:
+                self.get_logger().error(text)
+            elif level == ALARM_WARN:
+                self.get_logger().warn(text)
+            else:
+                self.get_logger().info(text)
+
     def _imu_health_callback(self):
         now = time.monotonic()
         alive = self._imu_feedback_alive(now)
@@ -1173,6 +1193,15 @@ class Stm32BridgeNode(Node):
         array = DiagnosticArray()
         array.header.stamp = self.get_clock().now().to_msg()
         array.status = [status, self._link_diagnostic_status(now)]
+        if self._motor_alarm is not None:
+            level, message, values = self._motor_alarm.status(now, alive)
+            alarm_status = DiagnosticStatus()
+            alarm_status.level = bytes([level])
+            alarm_status.name = f'{self.get_fully_qualified_name()}: motor_alarm'
+            alarm_status.message = message
+            alarm_status.hardware_id = self.port
+            alarm_status.values = [KeyValue(key=k, value=v) for k, v in values.items()]
+            array.status.append(alarm_status)
         self._diag_pub.publish(array)
 
     def _link_diagnostic_status(self, now: float) -> DiagnosticStatus:

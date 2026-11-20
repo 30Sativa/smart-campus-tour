@@ -4,6 +4,7 @@
 #include "head/head_core.h"
 #include "main.h"
 #include "motor/motor.h"
+#include "motor/motor_alarm_core.h"
 #include "imu/bno08x.h"
 #include "sonar/sr04t.h"
 #include "usb_rx_queue.h"
@@ -47,6 +48,9 @@ static ProtocolStatus protocol_status = PROTOCOL_STATUS_STOP;
 static uint32_t last_head_seq = 0U;
 /* Dong ERR dang cho gui (NULL = khong co). Chi giu loi moi nhat. */
 static const char *pending_error = NULL;
+/* Dong ALM,<seq>,... dang cho gui (lenh ALM tu nguoi van hanh). */
+static uint8_t alm_report_pending = 0U;
+static uint32_t alm_report_seq = 0U;
 
 #define ERR_BAD_COMMAND    "ERR,bad_command\r\n"
 #define ERR_HEAD_NOT_ZERO  "ERR,head_not_zeroed\r\n"
@@ -62,6 +66,7 @@ static void Protocol_ProcessHead(char *tokens[], uint8_t token_count);
 static uint8_t Protocol_ParseI32(const char *text, int32_t *value);
 static uint8_t Protocol_TrySendPendingError(void);
 static uint8_t Protocol_TrySendFeedback(uint32_t now_ms);
+static uint8_t Protocol_TrySendAlarmReport(void);
 static uint8_t Protocol_TrySendRaw(const char *text);
 static uint8_t Protocol_TrySendFormatted(const char *format, ...);
 static uint8_t Protocol_TokenizeCsv(char *line, char *tokens[], uint8_t max_tokens, uint8_t *token_count);
@@ -89,6 +94,7 @@ void Protocol_Init(void)
 	protocol_status = PROTOCOL_STATUS_STOP;
 	pending_error = NULL;
 	last_head_seq = 0U;
+	alm_report_pending = 0U;
 }
 
 void Protocol_Update(void)
@@ -104,6 +110,10 @@ void Protocol_Update(void)
 	 * blocking FB here turned a burst of dropped lines into seconds without
 	 * odometry, and the host then entered its feedback-timeout safe stop. */
 	if (Protocol_TrySendPendingError() != 0U)
+	{
+		return;
+	}
+	if (Protocol_TrySendAlarmReport() != 0U)
 	{
 		return;
 	}
@@ -285,6 +295,26 @@ void Protocol_ProcessLine(char *line)
 		last_seq = seq;
 		if (clear != 0U) BNO08x_ClearYawOffset();
 		else             BNO08x_SetYawDeg(yaw_deg);
+		return;
+	}
+
+	/* ALM,<seq> -> mot dong ALM,... mo ta chi tiet ALM hai driver HBS57H
+	 * (de nguoi doc khi han mach / chan doan; bridge khong gui lenh nay).
+	 * Khong blocking: dong tra loi duoc gui o Protocol_Update ke tiep.
+	 * Khong refresh watchdog motor: day khong phai lenh chuyen dong. */
+	if (Protocol_EqualsIgnoreCase(tokens[0], "ALM") != 0U)
+	{
+		uint32_t seq;
+
+		if ((token_count != 2U) || (Protocol_ParseU32(tokens[1], &seq) == 0U))
+		{
+			Protocol_ReportBadCommand();
+			return;
+		}
+
+		last_seq = seq;
+		alm_report_seq = seq;
+		alm_report_pending = 1U;
 		return;
 	}
 
@@ -638,13 +668,19 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	 *      <sonar1_mm>,<sonar1_valid>,<sonar2_mm>,<sonar2_valid>,
 	 *      <sonar3_mm>,<sonar3_valid>,<sonar4_mm>,<sonar4_valid>,<yaw_acc>,
  *      <imu_rearm>,<imu_reset_seen>,
-	 *      <head_seq>,<pan_cdeg>,<tilt_cdeg>,<head_state>,<contactor>
+	 *      <head_seq>,<pan_cdeg>,<tilt_cdeg>,<head_state>,<contactor>,
+	 *      <alm_left>,<alm_right>,<alm_left_trips>,<alm_right_trips>
 	 * yaw_acc 0..3: 0 = tu ke chua hieu chuan, heading co the sai hang chuc do.
 	 * imu_rearm / imu_reset_seen: bo dem tich luy tu luc boot (BNO08x_Service).
 	 * head_*: seq lenh HEAD cuoi duoc chap nhan, vi tri dem xung (centi-do),
 	 * trang thai 0=OFF 1=IDLE 2=MOVING 3=HOMING 4=NO_REF (head/head_core.h).
 	 * contactor: 1 = firmware dang xuat PA10 muc cao (lenh ON), khong phai
-	 * phan hoi tu tiep diem contactor. */
+	 * phan hoi tu tiep diem contactor.
+	 * alm_*: trang thai ALM HBS57H sau loc (motor/motor_alarm_core.h:
+	 * 0 DISABLED 1 UNKNOWN 2 OK 3 ALARM 4 NO_SIGNAL) va so lan vao ALARM tu
+	 * luc boot, de host khong bo sot mot lan loi ngan giua hai khung. */
+	MotorAlarmStatus alm_left;
+	MotorAlarmStatus alm_right;
 	uint8_t yaw_valid = 0U;
 	float   yaw_deg   = BNO08x_GetLastYaw(&yaw_valid);
 	long    yaw_cdeg  = (long)(yaw_deg * 100.0f);
@@ -653,9 +689,11 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	SR04T_GetReading(2U, &sonar3_mm, &sonar3_valid);
 	SR04T_GetReading(3U, &sonar4_mm, &sonar4_valid);
 	HeadCore_GetStatus(&head);
+	MotorAlarmCore_GetStatus(0U, &alm_left);
+	MotorAlarmCore_GetStatus(1U, &alm_right);
 
 	return Protocol_TrySendFormatted(
-		"FB,%lu,%ld,%ld,%lu,%s,%ld,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%ld,%ld,%u,%u\r\n",
+		"FB,%lu,%ld,%ld,%lu,%s,%ld,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%ld,%ld,%u,%u,%u,%u,%lu,%lu\r\n",
 		(unsigned long)last_seq,
 		(long)Motor_GetLeftCount(),
 		(long)Motor_GetRightCount(),
@@ -678,7 +716,51 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 		(long)head.pan_cdeg,
 		(long)head.tilt_cdeg,
 		(unsigned)head.state,
-		(unsigned)Contactor_IsCommandedOn());
+		(unsigned)Contactor_IsCommandedOn(),
+		(unsigned)alm_left.state,
+		(unsigned)alm_right.state,
+		(unsigned long)alm_left.trips,
+		(unsigned long)alm_right.trips);
+}
+
+/* ALM,<seq>,EN=<0|1>,ACT=<LOW|HIGH>,PROBE=<0|1>,DEB=<ms>,NOW=<ms>,
+ *     L=<state>,PU=<0|1>,PD=<0|1>,TRIPS=<n>,GLITCH=<n>,CHG=<ms>,TRIP=<ms>,
+ *     R=<state>,PU=...,TRIP=<ms>
+ * PU/PD: muc doc gan nhat voi pull-up / pull-down noi (khac nhau = tha noi).
+ * CHG/TRIP: HAL tick (ms tu boot) luc doi trang thai / vao ALARM gan nhat. */
+static uint8_t Protocol_TrySendAlarmReport(void)
+{
+	MotorAlarmStatus l;
+	MotorAlarmStatus r;
+
+	if (alm_report_pending == 0U)
+	{
+		return 0U;
+	}
+
+	MotorAlarmCore_GetStatus(0U, &l);
+	MotorAlarmCore_GetStatus(1U, &r);
+	if (Protocol_TrySendFormatted(
+			"ALM,%lu,EN=%u,ACT=%s,PROBE=%u,DEB=%u,NOW=%lu,"
+			"L=%s,PU=%u,PD=%u,TRIPS=%lu,GLITCH=%lu,CHG=%lu,TRIP=%lu,"
+			"R=%s,PU=%u,PD=%u,TRIPS=%lu,GLITCH=%lu,CHG=%lu,TRIP=%lu\r\n",
+			(unsigned long)alm_report_seq,
+			(unsigned)MotorAlarmCore_IsEnabled(),
+			(MOTOR_ALARM_ACTIVE_LEVEL != 0U) ? "HIGH" : "LOW",
+			(unsigned)MOTOR_ALARM_FLOAT_PROBE,
+			(unsigned)MOTOR_ALARM_DEBOUNCE_MS,
+			(unsigned long)HAL_GetTick(),
+			MotorAlarmCore_StateText(l.state), (unsigned)l.raw_pu, (unsigned)l.raw_pd,
+			(unsigned long)l.trips, (unsigned long)l.glitches,
+			(unsigned long)l.last_change_ms, (unsigned long)l.last_trip_ms,
+			MotorAlarmCore_StateText(r.state), (unsigned)r.raw_pu, (unsigned)r.raw_pd,
+			(unsigned long)r.trips, (unsigned long)r.glitches,
+			(unsigned long)r.last_change_ms, (unsigned long)r.last_trip_ms) != 0U)
+	{
+		alm_report_pending = 0U;
+		return 1U;
+	}
+	return 0U;
 }
 
 static uint8_t Protocol_TrySendRaw(const char *text)
