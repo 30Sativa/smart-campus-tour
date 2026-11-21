@@ -45,11 +45,28 @@ public sealed class EfStudentTourViewReader(ApplicationDbContext context) : IStu
             tour.CurrentPoiId, tour.LastArrivedPoiId, stops);
     }
 
-    public Task<AssistantPoi?> FindCurrentPoiAsync(Guid tourId, CancellationToken ct) =>
-        context.Tours.AsNoTracking()
-            .Where(t => t.Id == tourId && t.State == "RUNNING" && t.CurrentRouteStopId != null
-                && (t.CurrentStep == "PREPARING_VIEW" || t.CurrentStep == "OBSERVING"))
+    /// <summary>
+    /// The POI the robot stands at, or null while it drives or before the first arrival. A versioned Tour
+    /// (ADR-0043 D9) reports the stop it last arrived at with the id used by the Student view
+    /// (PoiProposalRevisionId); a legacy Tour reads its RouteStop.
+    /// </summary>
+    public async Task<AssistantPoi?> FindCurrentPoiAsync(Guid tourId, CancellationToken ct)
+    {
+        var tour = context.Tours.AsNoTracking()
+            .Where(t => t.Id == tourId && t.State == "RUNNING"
+                && (t.CurrentStep == "PREPARING_VIEW" || t.CurrentStep == "OBSERVING"));
+        if (await tour.AnyAsync(t => t.RouteRevisionId != null, ct))
+            return await CurrentRevisionPoiAsync(tour, ct);
+        return await tour.Where(t => t.CurrentRouteStopId != null)
             .Select(t => new AssistantPoi(t.CurrentRouteStop!.Poi.Id, t.CurrentRouteStop!.Poi.Name,
                 t.CurrentRouteStop!.Poi.Description, t.CurrentRouteStop!.Poi.NarrationText))
+            .SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>At a POI the robot stands at the stop it last arrived at; its content comes from the revision snapshot.</summary>
+    private static Task<AssistantPoi?> CurrentRevisionPoiAsync(IQueryable<Domain.Entities.Tour> tour, CancellationToken ct) =>
+        tour.Where(t => t.LastArrivedRevisionStopId != null)
+            .Select(t => new AssistantPoi(t.LastArrivedRevisionStop!.PoiProposalRevisionId, t.LastArrivedRevisionStop!.Name,
+                t.LastArrivedRevisionStop!.PoiProposalRevision.Description, t.LastArrivedRevisionStop!.NarrationText))
             .SingleOrDefaultAsync(ct);
 }
