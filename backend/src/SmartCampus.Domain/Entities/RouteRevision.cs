@@ -43,6 +43,8 @@ public partial class RouteRevision
 
     public DateTimeOffset CreatedAt { get; set; }
 
+    public bool ViewerChoosesNextStop { get; set; }
+
     public virtual User CreatedByUser { get; set; } = null!;
 
     public virtual MapVersion MapVersion { get; set; } = null!;

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using SmartCampus.Domain.Entities;
 using SmartCampus.Infrastructure.Persistence;
@@ -31,7 +31,7 @@ public sealed class DatabaseScaffoldMappingTests
                 "PoiProposalSubmissions", "PoiProposals", "PoiVerificationRecords", "Pois", "RefreshTokens",
                 "RobotCommands", "Robots", "RosterEmailChangeRequests", "RosterRows", "Routes", "RouteRevisions", "RouteRevisionStops",
                 "RouteRevisionSubmissions", "RouteTestRuns", "RouteStops", "RouteVariants", "TourAllowedBranches",
-                "TourEvents", "TourRobotReservations", "TourScheduleBlocks", "Tours", "UserRoles", "Users"
+                "TourEvents", "TourRobotReservations", "TourScheduleBlocks", "TourStopLocks", "TourStopVisits", "TourStopVotes", "Tours", "UserRoles", "Users"
             }.OrderBy(name => name),
             tables);
     }

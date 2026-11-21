@@ -108,4 +108,10 @@ public partial class Tour
     public virtual ICollection<TourAllowedBranch> TourAllowedBranches { get; set; } = new List<TourAllowedBranch>();
 
     public virtual ICollection<TourEvent> TourEvents { get; set; } = new List<TourEvent>();
+
+    public virtual ICollection<TourStopLock> TourStopLocks { get; set; } = new List<TourStopLock>();
+
+    public virtual ICollection<TourStopVisit> TourStopVisits { get; set; } = new List<TourStopVisit>();
+
+    public virtual ICollection<TourStopVote> TourStopVotes { get; set; } = new List<TourStopVote>();
 }

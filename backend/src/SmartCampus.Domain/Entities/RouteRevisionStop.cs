@@ -52,4 +52,12 @@ public partial class RouteRevisionStop
     public virtual ICollection<Tour> TourCurrentRevisionStops { get; set; } = new List<Tour>();
 
     public virtual ICollection<Tour> TourLastArrivedRevisionStops { get; set; } = new List<Tour>();
+
+    public virtual ICollection<TourStopLock> TourStopLocks { get; set; } = new List<TourStopLock>();
+
+    public virtual ICollection<TourStopVisit> TourStopVisitChosenRevisionStops { get; set; } = new List<TourStopVisit>();
+
+    public virtual ICollection<TourStopVisit> TourStopVisitRouteRevisionStops { get; set; } = new List<TourStopVisit>();
+
+    public virtual ICollection<TourStopVote> TourStopVotes { get; set; } = new List<TourStopVote>();
 }

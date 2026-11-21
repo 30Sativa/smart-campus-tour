@@ -45,6 +45,8 @@ public partial class RouteTestRun
 
     public string? MeasurementBasis { get; set; }
 
+    public string? TraversedStopIdsJson { get; set; }
+
     public virtual User CheckedByUser { get; set; } = null!;
 
     public virtual MapDeploymentCheck MapDeploymentCheck { get; set; } = null!;
