@@ -40,4 +40,6 @@ public partial class RosterRow
     public virtual ICollection<RosterEmailChangeRequest> EmailChangeRequests { get; set; } = new List<RosterEmailChangeRequest>();
 
     public virtual GroupRegistration Registration { get; set; } = null!;
+
+    public virtual ICollection<TourStopVote> TourStopVotes { get; set; } = new List<TourStopVote>();
 }

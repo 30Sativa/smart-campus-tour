@@ -78,6 +78,12 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<TourScheduleBlock> TourScheduleBlocks { get; set; }
 
+    public virtual DbSet<TourStopLock> TourStopLocks { get; set; }
+
+    public virtual DbSet<TourStopVisit> TourStopVisits { get; set; }
+
+    public virtual DbSet<TourStopVote> TourStopVotes { get; set; }
+
     public virtual DbSet<User> Users { get; set; }
 
     public virtual DbSet<UserRole> UserRoles { get; set; }
@@ -930,6 +936,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(32)
                 .IsFixedLength();
             entity.Property(e => e.Name).HasMaxLength(150);
+            entity.Property(e => e.ViewerChoosesNextStop).HasDefaultValue(false);
             entity.Property(e => e.NavigationFingerprint)
                 .HasMaxLength(32)
                 .IsFixedLength();
@@ -1055,6 +1062,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.EvidenceNote).HasMaxLength(2000);
             entity.Property(e => e.FailureReason).HasMaxLength(1000);
             entity.Property(e => e.MeasurementBasis).HasMaxLength(32);
+            entity.Property(e => e.TraversedStopIdsJson).HasMaxLength(1000);
             entity.Property(e => e.MapPackageSha256)
                 .HasMaxLength(32)
                 .IsFixedLength();
@@ -1325,6 +1333,96 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.TourId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_TourEvents_TourId");
+        });
+
+        modelBuilder.Entity<TourStopLock>(entity =>
+        {
+            entity.HasIndex(e => new { e.TourId, e.RouteRevisionStopId }, "UX_TourStopLocks_Active")
+                .IsUnique()
+                .HasFilter("([UnlockedAt] IS NULL)");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.LockedAt).HasPrecision(3);
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.UnlockReason).HasMaxLength(500);
+            entity.Property(e => e.UnlockedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.LockedByUser).WithMany(p => p.TourStopLockLockedByUsers)
+                .HasForeignKey(d => d.LockedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourStopLocks_LockedByUserId");
+
+            entity.HasOne(d => d.RouteRevisionStop).WithMany(p => p.TourStopLocks)
+                .HasForeignKey(d => d.RouteRevisionStopId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourStopLocks_RouteRevisionStopId");
+
+            entity.HasOne(d => d.Tour).WithMany(p => p.TourStopLocks)
+                .HasForeignKey(d => d.TourId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourStopLocks_TourId");
+
+            entity.HasOne(d => d.UnlockedByUser).WithMany(p => p.TourStopLockUnlockedByUsers)
+                .HasForeignKey(d => d.UnlockedByUserId)
+                .HasConstraintName("FK_TourStopLocks_UnlockedByUserId");
+        });
+
+        modelBuilder.Entity<TourStopVisit>(entity =>
+        {
+            entity.HasIndex(e => new { e.TourId, e.RouteRevisionStopId }, "UQ_TourStopVisits_TourStop").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.BallotClosedAt).HasPrecision(3);
+            entity.Property(e => e.BallotClosesAt).HasPrecision(3);
+            entity.Property(e => e.ChosenReason)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.OccurredAt).HasPrecision(3);
+            entity.Property(e => e.Outcome)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+
+            entity.HasOne(d => d.ChosenRevisionStop).WithMany(p => p.TourStopVisitChosenRevisionStops)
+                .HasForeignKey(d => d.ChosenRevisionStopId)
+                .HasConstraintName("FK_TourStopVisits_ChosenRevisionStopId");
+
+            entity.HasOne(d => d.RouteRevisionStop).WithMany(p => p.TourStopVisitRouteRevisionStops)
+                .HasForeignKey(d => d.RouteRevisionStopId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourStopVisits_RouteRevisionStopId");
+
+            entity.HasOne(d => d.Tour).WithMany(p => p.TourStopVisits)
+                .HasForeignKey(d => d.TourId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourStopVisits_TourId");
+        });
+
+        modelBuilder.Entity<TourStopVote>(entity =>
+        {
+            entity.HasIndex(e => new { e.StopVisitId, e.RosterRowId }, "UQ_TourStopVotes_VisitRow").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.UpdatedAt).HasPrecision(3);
+            entity.Property(e => e.VotedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.RosterRow).WithMany(p => p.TourStopVotes)
+                .HasForeignKey(d => d.RosterRowId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourStopVotes_RosterRowId");
+
+            entity.HasOne(d => d.RouteRevisionStop).WithMany(p => p.TourStopVotes)
+                .HasForeignKey(d => d.RouteRevisionStopId)
+                .HasConstraintName("FK_TourStopVotes_RouteRevisionStopId");
+
+            entity.HasOne(d => d.StopVisit).WithMany(p => p.TourStopVotes)
+                .HasForeignKey(d => d.StopVisitId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourStopVotes_StopVisitId");
+
+            entity.HasOne(d => d.Tour).WithMany(p => p.TourStopVotes)
+                .HasForeignKey(d => d.TourId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourStopVotes_TourId");
         });
 
         modelBuilder.Entity<User>(entity =>

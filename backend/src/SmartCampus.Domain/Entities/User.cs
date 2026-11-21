@@ -87,6 +87,10 @@ public partial class User
 
     public virtual ICollection<TourRobotReservation> TourRobotReservationReservedByUsers { get; set; } = new List<TourRobotReservation>();
 
+    public virtual ICollection<TourStopLock> TourStopLockLockedByUsers { get; set; } = new List<TourStopLock>();
+
+    public virtual ICollection<TourStopLock> TourStopLockUnlockedByUsers { get; set; } = new List<TourStopLock>();
+
     public virtual ICollection<TourScheduleBlock> TourScheduleBlockCreatedByUsers { get; set; } = new List<TourScheduleBlock>();
 
     public virtual ICollection<TourScheduleBlock> TourScheduleBlockRemovedByUsers { get; set; } = new List<TourScheduleBlock>();
