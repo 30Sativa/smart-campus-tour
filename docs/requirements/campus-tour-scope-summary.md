@@ -26,6 +26,11 @@ Prior Review 1 text remains in Git at `e70fb52`; no advisor approval is implied.
 - Resend keeps code/session; reissue/revoke invalidates old access. One session,
   same-device reconnect ≤2min, server invalid-code throttling. Delivery is
   separate from participation. Shared-screen rows do not list mere spectators.
+- On a route flagged "Cho Viewer chọn điểm tiếp theo" (3–4 POIs, first fixed,
+  dwell ≥30s, end returns to start) each invitation row votes at every POI for
+  the next one; the server decides (most votes, tie to route order) and the
+  Operator may lock a POI with a reason but never picks it (ADR-0065, replaces
+  branch requests). New route saves end at the last POI or the start pose.
 - Viewer Q&A matches only approved bank entries. Provider supports drafting.
   Instance queue: 8 executing /20 total; Busy only above total; 95% ≤10s includes
   waiting at defined load. Session rate limits alone do not implement this.
@@ -40,7 +45,7 @@ Prior Review 1 text remains in Git at `e70fb52`; no advisor approval is implied.
   two baselines; p95 <1s is evaluated per tested load before dashboard render.
   No advance claim for N=20. Publish 40-point capacity only after the declared
   two-Tour/viewer/Q&A test passes.
-- **Pending:** F-14, conflicting branch cutoff, YAML/frame mapping,
+- **Pending:** F-14, YAML/frame mapping,
   invalid-code defaults, voice-provider terms, research
   delivery/freshness thresholds and physical evidence. M2 command transport is
   selected by ADR-0042 and is implemented from M2.2.

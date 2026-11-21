@@ -14,7 +14,8 @@ the legacy POI catalog API, legacy Route authoring writes, aggregate registratio
 review, and direct Admin email correction have been removed from HTTP routing.
 Read-only legacy Route projections remain for the Tour slice that cannot yet
 consume RouteRevision. Admin account management remains available.
-F-14, conflicting branch cutoff and project YAML/frame mapping remain pending.
+F-14 and project YAML/frame mapping remain pending. Representative branch requests are replaced by the
+Viewer vote for the next POI ([ADR-0065](decisions/0065-viewer-vote-next-poi.md), §3.2.z); the cutoff question is closed.
 M2 command transport is selected by [ADR-0042](decisions/0042-m2-command-transport-and-start-readiness.md)
 and is implemented from M2.2; dispatch stays off until M2.3 safety evidence.
 Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; no command endpoint is enabled yet.
@@ -48,7 +49,7 @@ implemented under ADR-0042 (conditions in §3.2) for versioned Tours; a legacy
 Tour is refused READY. Start, Next, End Early, Retry leg and Reconcile are implemented
 at Application and Staff API level (M2.2-b, M2.2-c);
 the robot gets its commands through the Fleet Commands v1 endpoints (§3.6). No Finalize or
-branch-request endpoint is implemented here.
+branch-request endpoint is implemented here (branch requests are replaced by ADR-0065, §3.2.z).
 
 | Method | Path | Behavior |
 |---|---|---|
@@ -1146,7 +1147,8 @@ represent invited students without individual user accounts. An invitation
 references one roster row; browser sessions reference invitations. A
 registration also references a representative `User` and optionally a reviewing
 `User`. A branch request references a Tour, its selected TourAllowedBranch, its
-branch-point RouteStop and optionally a registration.
+branch-point RouteStop and optionally a registration. Since ADR-0065 `BranchRequests`
+and `TourAllowedBranches` are legacy tables with no runtime; nothing reads or writes them.
 `Tour.CreatedByUserId`, `TourEvent.ActorUserId`, and `AuditLog.ActorUserId`
 link their records to users. The diagram omits other optional event links to
 `Robot` and `Poi` for readability.
@@ -1235,7 +1237,7 @@ shared transport does not erase source or validation boundaries.
 SRS v0.2/ADR-0020 governs target authorization, incidents and End Early. Only the
 assigned Operator may operate. Movement requires telemetry age <=2s, no incident,
 no unresolved command, console connection and an attendant. End Early revokes
-live/fallback/Q&A including copied URLs, preserves Result, expires branch requests,
+live/fallback/Q&A including copied URLs, preserves Result, closes an open next-POI ballot (ADR-0065),
 requests active mission cancellation, prevents later Tour motion, and notifies
 accepted groups with audit (FR-48/BR-21/AC-11). No state or ACK proves physical stop.
 Historical FRONT/head sequencing below is supporting M2 design, not selected
@@ -1984,6 +1986,32 @@ Audit actions `ROSTER_PENDING_EXPIRED`, `REGISTRATION_EXPIRED` and `ROSTER_EXPIR
 
 A short-notice Tour replaces the 72-hour lead, the 48-hour close and the 24-hour review close. Its list closes with READY, the T-24h job skips it, and undecided rows still block READY and Start. Since ADR-0053 every new short-notice Tour is a quick Tour with no shift: Start, and `opensAt`, open when its robot hold opens (creation), `allViewersJoined` is shown before its latest Start (information only, ADR-0057), and every other Start check is the same as for any other Tour. The late limit and automatic cancellation run from its latest Start.
 
+### 3.2.z Viewer vote for the next POI (ADR-0065, schema v1.25, implementation in progress)
+
+Business rules are in [ADR-0065](decisions/0065-viewer-vote-next-poi.md) and
+`docs/requirements/campus-tour-scope.md` §7. A route revision without
+`viewerChoosesNextStop` runs exactly as before. Proposed 2026-11-21; this records
+the public contract the backend and web build against, not a finished
+implementation.
+
+| Surface | Contract |
+|---|---|
+| `POST /api/staff/routes/...revisions` (save) | Input gains `viewerChoosesNextStop`. Every new save: `EndMode` is `LAST_POI` or `POSE` equal to the start pose, else 409 `ROUTE_END_POSE_NOT_START` (revisions already saved with another end pose stay readable and runnable). With the flag: 409 `ROUTE_VOTE_STOP_COUNT` (POIs outside 3–4), `ROUTE_VOTE_DWELL_TOO_SHORT` (a dwell under `RouteRuleSettings.MinVoteDwellSeconds`, 30 s), `ROUTE_VOTE_END_MUST_RETURN` (end not the start pose), each with a Vietnamese message. `ROUTE_STOP_TOO_CLOSE` compares every pair of POIs. The flag is part of `ConfigurationFingerprint` and the shared-result path key. |
+| `RouteRevisionView` and route summaries | Add `viewerChoosesNextStop` and `legCoverage { requiredCount, coveredCount, missingLegs[{ fromStopId, fromName, toStopId, toName }] }` (`fromStopId` null for the start, `toStopId` null for the end). `VerificationStatus` may be `LEGS_INCOMPLETE`: the newest run is not FAIL but the PASS runs since the newest FAIL do not cover every leg (7 for 3 POIs, 13 for 4). `LEGS_INCOMPLETE` can neither create a Tour nor mark one READY. Estimated duration on a voting route is the longest valid order (first POI fixed). |
+| `POST /api/technical/routes/{routeId}/revisions/{revisionId}/test-runs` | Gains `traversedStopIds` (revision stop ids in the order driven), required on a voting route: starts with the first POI and names every POI exactly once. Stored in `RouteTestRuns.TraversedStopIdsJson`. |
+| `PUT /api/student/tours/{tourId}/vote` | `{ stopVisitId, stopId }` with the Viewer session cookie (as Q&A). Accepted only while the Tour is RUNNING, observing at a POI, `stopVisitId` is the current visit, its ballot is open and before `DwellDeadlineAt`, for a valid candidate; one vote per active roster row per ballot, changeable until close. 409 `VOTE_CLOSED` or `VOTE_CANDIDATE_INVALID` otherwise. Returns the ballot. |
+| `GET /api/student/tours/{tourId}/view` | Gains `ballot`. Each `StudentTourStop` gains `stopId`, `progress` (`VISITED`, `SKIPPED`, `CURRENT`, `NEXT`, `REMAINING`) and `lockReason`. `ballot` = `{ stopVisitId, open, closesAt, candidates[{ stopId, poiId, name, votes }], myVote, locked[{ stopId, name, reason }], decision{ stopId, name, reason, votes } \| null }`, `decision.reason` one of `VOTE`, `TIE_DEFAULT`, `NO_VOTES`, `LOCKED_FALLBACK`, `SINGLE_CANDIDATE`. A null `ballot` means the route does not vote or no POI is current. |
+| `GET /api/staff/manage/tours/{id}` | Gains the same `ballot`, plus `leadingStopId` and `nextTarget { kind (POI/END), stopId, name }` for the Next button label. |
+| `POST /api/staff/manage/tours/{id}/stops/{stopId}/lock`, `.../unlock` | `{ reason }`. Only the Tour's Operator, Tour RUNNING, POI not yet visited; 409 `STOP_LOCK_INVALID` otherwise. Locking during a ballot removes the POI and clears its votes; the reason is shown to every Viewer. TourEvents `STOP_LOCKED` / `STOP_UNLOCKED`. |
+| `POST .../next`, auto-advance, `POST .../skip` | On a voting route Next, auto-advance and the first departure from `INITIALIZING` go to the server's decided POI (`NEXT_STOP_CHOSEN` TourEvent with counts, winner and reason); Retry keeps its target; with no POI left the target is the end. Only locked POIs left: 409 `ALL_REMAINING_STOPS_LOCKED` (auto-advance writes `TOUR_AUTO_ADVANCE_BLOCKED`). Skip while an unlocked POI remains: 409 `SKIP_NOT_ALLOWED`; otherwise it drops all remaining POIs and goes to the end. |
+
+Live updates use the existing polling of the Viewer and Staff pages; no new
+transport. Ballot close and target choice happen in one transaction under the
+Tour root lock; the visited set comes from `TourStopVisits`, never from
+`StopOrder`, so it survives a restart. Schema v1.25 adds
+`RouteRevisions.ViewerChoosesNextStop`, `RouteTestRuns.TraversedStopIdsJson`,
+`TourStopVisits`, `TourStopVotes` and `TourStopLocks` (ADR-0065 §Schema).
+
 ### 3.3 State storage and realtime delivery
 
 When the backend receives robot pose/state, it is transient latest-state data
@@ -2489,7 +2517,11 @@ Backend configuration (opt-in, validated at startup; secrets outside Git):
 - `200` returns `BaseResponse` with
   `{ questionId, answer, outOfScope, poi: { id, name } | null, answeredAt }`.
   `poi` is the POI snapshot taken when the question was accepted; `null`
-  means general campus context.
+  means general campus context. While the Tour is RUNNING and OBSERVING (or
+  PREPARING_VIEW) it is the stop the robot stands at: on a route-revision Tour
+  the stop it last arrived at, with name and narration from its RouteRevisionStop
+  snapshot and `id` = its POI revision id (as `poiId` in the Student view); on a
+  legacy Tour the current RouteStop's POI.
 - Errors use `BaseResponse` with `Errors.code` where shown:
 
 | Status | Code | Meaning |
@@ -2738,7 +2770,7 @@ unrelated configurations retain their outcomes. Evidence is human-entered, not
 automatic physical proof; manual PASS is not tour scheduling, reservation,
 READY, or movement authorization. Approved narration/audio duration is not yet
 linked to versioned POI content, so API duration is explicitly incomplete and
-reports the dwell subtotal only. Branch authoring, branch requests/cutoff,
+reports the dwell subtotal only. Branch requests are replaced by the Viewer vote (ADR-0065);
 project POI YAML/frame mapping, Tour runtime and command transport remain staged
 or pending. See ADR-0023. ERD, preparation sequence and verification-state
 diagrams require member redraw/review and remain pending.

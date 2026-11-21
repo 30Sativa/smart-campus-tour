@@ -166,7 +166,7 @@ theo phiên, thay biến cố định `VITE_QUEST_WHEP_URL`. Server kiểm tra p
 cả live và fallback, kể cả URL bị copy; thu hồi/cấp lại phải dừng phát ≤10 s.
 Sau End Early: không còn live, fallback hay Q&A (web đã chỉ hiện màn kết quả).
 
-## W6. Vận hành, sự cố, rẽ nhánh, End Early
+## W6. Vận hành, sự cố, chọn điểm tiếp theo, End Early
 
 Web đã có contract và giao diện (`web/src/api/contracts/staff.ts`,
 `staff-realtime.ts`). Đề xuất làm **đúng contract này**:
@@ -195,20 +195,30 @@ Quy tắc web đã thể hiện ở giao diện, server cần áp dụng:
   `TourOperation`. Khi fallback: tắt tiếng live, tạm dừng thời gian dừng, bản đồ
   vẫn hiện robot thật; quay lại live tại POI đang chờ.
 - End Early: CANCELLED kèm người, thời điểm, lý do; thu hồi media/Q&A của mọi
-  phiên; yêu cầu rẽ nhánh đang chờ hết hạn; không cho di chuyển tiếp.
+  phiên; đóng phiếu chọn điểm tiếp theo đang mở; không cho di chuyển tiếp.
 
-**Rẽ nhánh.** Bảng `BranchRequest`, `TourAllowedBranch`, `RouteVariant` đã có.
+**Người xem chọn điểm tiếp theo** ([ADR-0065](../decisions/0065-viewer-vote-next-poi.md),
+đề xuất 21/11/2026, đang triển khai). Thay cho yêu cầu rẽ nhánh của Đại diện:
+`BranchRequests`, `TourAllowedBranches` chỉ còn là bảng cũ, không có runtime;
+các endpoint rẽ nhánh từng đề xuất ở đây bị bỏ. Hợp đồng chính thức ở
+`docs/architecture.md` §3.2.z; bảng dưới chỉ tóm tắt.
 
 | Method | Path | Mô tả |
 |---|---|---|
-| GET | `/api/representative/tours/{id}` | Thêm `branches[]` (chỉ nhánh đã test) và `branchRequest` của đoàn |
-| POST | `/api/representative/registrations/{id}/branch-request` | `{ tourAllowedBranchId }`; một yêu cầu mỗi đoàn |
-| GET | `/api/staff/tours/{id}/branch-requests` | Theo thứ tự đến, kèm gate `accept` |
-| POST | `/api/staff/branch-requests/{id}/accept` / `reject` | Tối đa một yêu cầu được nhận mỗi Tour |
+| POST | `/api/staff/routes/...revisions` | Thêm `viewerChoosesNextStop` (cờ "Cho Viewer chọn điểm tiếp theo"). Mọi lần lưu mới: kết thúc `LAST_POI` hoặc `POSE` trùng điểm bắt đầu, nếu không 409 `ROUTE_END_POSE_NOT_START`. Có cờ: 409 `ROUTE_VOTE_STOP_COUNT` (ngoài 3–4 POI), `ROUTE_VOTE_DWELL_TOO_SHORT` (dừng dưới 30 s), `ROUTE_VOTE_END_MUST_RETURN` |
+| GET | `RouteRevisionView`, danh sách tuyến | Thêm `viewerChoosesNextStop`, `legCoverage { requiredCount, coveredCount, missingLegs[{ fromStopId, fromName, toStopId, toName }] }` (`fromStopId` null là điểm bắt đầu, `toStopId` null là điểm kết thúc); `VerificationStatus` có thể là `LEGS_INCOMPLETE` (chưa tạo Tour, chưa READY được) |
+| POST | `/api/technical/routes/{routeId}/revisions/{revisionId}/test-runs` | Thêm `traversedStopIds` (thứ tự đã chạy), bắt buộc với tuyến có cờ: bắt đầu bằng POI đầu, mỗi POI đúng một lần |
+| PUT | `/api/student/tours/{tourId}/vote` | `{ stopVisitId, stopId }`, phiên Người xem (như Q&A). Trả `ballot`; 409 `VOTE_CLOSED` hoặc `VOTE_CANDIDATE_INVALID` |
+| GET | `/api/student/tours/{tourId}/view` | Thêm `ballot`; mỗi stop thêm `stopId`, `progress` (`VISITED`, `SKIPPED`, `CURRENT`, `NEXT`, `REMAINING`), `lockReason` |
+| GET | `/api/staff/manage/tours/{id}` | Thêm `ballot`, `leadingStopId`, `nextTarget { kind (POI/END), stopId, name }` cho nhãn nút Next ("Đi tới C") |
+| POST | `/api/staff/manage/tours/{id}/stops/{stopId}/lock` / `unlock` | `{ reason }`; chỉ người vận hành của Tour, Tour RUNNING, POI chưa đi; nếu không 409 `STOP_LOCK_INVALID` |
 
-**Hạn chót gửi yêu cầu rẽ nhánh đang mâu thuẫn trong SRS** (trước khi Tour
-khởi hành, hay trước khi robot rời điểm rẽ). Web sẽ không vẽ hạn chót cố định
-cho tới khi nhóm quyết định; gate do server trả.
+`ballot` = `{ stopVisitId, open, closesAt, candidates[{ stopId, poiId, name, votes }], myVote, locked[{ stopId, name, reason }], decision{ stopId, name, reason, votes } | null }`;
+`decision.reason` là `VOTE`, `TIE_DEFAULT`, `NO_VOTES`, `LOCKED_FALLBACK` hoặc
+`SINGLE_CANDIDATE`; `ballot` null khi tuyến không bình chọn hoặc không có POI
+hiện tại. Next/tự đi tiếp khi chỉ còn POI bị khóa: 409
+`ALL_REMAINING_STOPS_LOCKED`; Skip ("Bỏ qua các điểm còn lại") khi còn POI chưa
+khóa: 409 `SKIP_NOT_ALLOWED`. Cập nhật trực tiếp vẫn bằng polling như hiện nay.
 
 ---
 
@@ -217,4 +227,4 @@ cho tới khi nhóm quyết định; gate do server trả.
 1. Giữ đường dẫn `/api/admin/*` cho API chuẩn bị Tour hay đổi sang `/api/staff/*`?
 2. Mốc thời gian cho W1 (đang chặn Staff dùng các trang chuẩn bị) và W6 (demo 1).
 3. Fallback do server tự bật hay do người vận hành bấm?
-4. Hạn chót rẽ nhánh chọn phương án nào?
+4. ~~Hạn chót rẽ nhánh chọn phương án nào?~~ Đã đóng: rẽ nhánh được thay bằng bình chọn của Người xem (ADR-0065).

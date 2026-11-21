@@ -104,7 +104,7 @@ Phân loại sau khi đọc `docs/decisions/0043-m2-2-tour-orchestration-scope.m
 | Hạng mục | Mã SRS | Trạng thái | Căn cứ |
 |---|---|---|---|
 | Hold/Resume | Yêu cầu đợt này không nêu mã | Hoãn theo ADR-0043 | D12 và mục Out of scope ghi Hold chưa làm. Resume không có mục riêng, được tính cùng Hold vì không có Hold thì không có gì để tiếp tục. |
-| Yêu cầu đổi nhánh | BR-14 | Hoãn theo ADR-0043 | Mục Out of scope ghi branches. Riêng mốc chốt nhánh còn chờ quyết định. |
+| Yêu cầu đổi nhánh | BR-14 | Thay bằng ADR-0065 (21/11/2026) | Người xem bình chọn điểm tiếp theo thay cho yêu cầu đổi nhánh; câu hỏi mốc chốt nhánh đã đóng. |
 | Hệ quả của End Early: thu hồi phiên xem, email đoàn | FR-48 | Hoãn theo ADR-0043 | D14 ghi End Early của M2.2 chỉ có trạng thái và lệnh. Code hiện chưa thu hồi phiên và chưa gửi email. |
 | Cảnh báo quá giờ | BR-25 | Chưa làm | ADR-0043 không nhắc tới. `docs/lich-tour-theo-ca.md` mục 9 xếp vào việc để sau. |
 | Báo trễ | UC-TOUR-07 | Chưa làm | ADR-0043 không nhắc tới. Xem điểm cần xác nhận ở mục 5. |

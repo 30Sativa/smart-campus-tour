@@ -67,7 +67,7 @@ Dependencies are staged by wave W1–W6 below; AC references are targets only.
 | FR-32/33, BR-19; AI-01 | **StudentQuestionGate is per-session**, 6/min + one in flight; not global admission | **Backlog:** instance-wide atomic 8 executing/20 total queue, Busy only >20; latency includes wait; outcome metrics | W5 | AC-04, NFR-PERF-04, overload/isolation NFR-CAP-01 |
 | FR-35/37/43, NFR-SEC-04 | ADR-0019 Fleet Sync validates dedicated robot credentials and projects telemetry. Commands use the separate Fleet Commands v1 `poll` and `results` endpoints (ADR-0042), off by default; Fleet Sync stays telemetry-only | Retain telemetry contract; assess rotation/revocation lifecycle and target freshness separately. Command delivery is implemented; physical dispatch waits for M2.3 evidence | W6; M2.3 safety evidence | AC-09 partial robot auth; AC-01 Twin/command not passed by telemetry or fake-bridge tests |
 | FR-36/46, NFR-SAFE-03; OPS/BRN | Start, Next and Retry leg check the assigned Operator, `RowVersion` and the movement checks in `TourStartPreflight` (ADR-0043); a refusal creates no command | **Implemented in code; not enabled on a physical robot** (M2.3). There is no incident table: NEEDS_ASSISTANCE stands in for an open incident | W1/W2/W3/W6; M2.3 safety evidence | Fake-bridge API and SQL tests only; AC-10 and physical AC-01 not claimed |
-| FR-19, BR-14; BRN-01/02/03 | BranchRequest tables/indexes exist; no production branch workflow | Server order, one accepted change, verified branch; cutoff remains conflicting and unimplemented | W2/W6 + explicit cutoff decision | AC-01; cutoff cases blocked pending decision |
+| FR-19, BR-14; BRN-01/02/03 | BranchRequest tables/indexes exist as legacy schema with no runtime; nothing reads or writes them | Replaced by ADR-0065 (proposed 2026-11-21): Viewers vote for the next POI on a flagged route, server decides, Operator may lock a POI with a reason; the cutoff question is closed | Schema v1.25, route rules/test-run leg coverage, Tour runtime and web; owner acceptance and a real Workflow C run | AC-01; vote/lock/decision cases per ADR-0065 |
 | FR-21/27/47, BR-15/16 | RUNNING Tours move to NEEDS_ASSISTANCE on a failed, rejected, expired or unknown command and on backend restart; Retry leg and Reconcile exist (ADR-0043). No incident table | **Partly implemented:** the assistance state and the two recoveries above, nothing resumes by itself. **Not implemented:** fixed incident order and fallback audio/dwell/map/POI return. Hold is deferred by ADR-0043 D12 | W5/W6 + physical gate | Fake-bridge API and SQL tests only; AC-01/10, NFR-SAFE-01/02 and NFR-REL-01 not claimed |
 | FR-48, BR-21; OPS-07 | `POST /api/staff/manage/tours/{id}/end-early` is Operator-only: sets CANCELLED, withdraws or cancels the open command and keeps the robot held for inspection. Pre-Start cancel is separate | **Partly implemented (ADR-0043 D13/D14):** state and commands only. **Deferred by ADR-0043 D14:** all-session live/fallback/Q&A revoke and notifying accepted groups. A separate physical stop is still required | W4/W5/W6 + command transport | Fake-bridge API and SQL tests only; AC-11 not claimed; ACK never proves stop |
 | FR-20, BR-17 | No F-14 runtime exception | **Pending: do not implement**; disconnected assigned Operator unable to return only after advisor review | Advisor decision | AC-08/11 pending branch only |
@@ -102,7 +102,7 @@ approval/rejection rule.
 | W3 Scheduling, reservation, READY | Staff schedule/reschedule, buffered longest-path reservation, no overlap, exact pass, no pending decisions, locked snapshot | W1/W2; integrate W4 pending-row predicate before declaring READY complete; reservation/concurrency tests + AC-06 |
 | W4 Per-row registration/email/invitations/sessions | 10 rows, cutoff/holds, stable diff, row review, request/review email, credential preservation, reconnect and invalid-code limits | W1; coupled schema/writer/guards/transaction cluster; AC-02/08/09 and delivery retry cases |
 | W5 Approved-bank Q&A, admission and media | Staff approval, deterministic answer outcomes, global 8/20 queue, continuous live/fallback authorization | W2/W4; provider terms pending for voice; AC-04/07/09, overload tests |
-| W6 Operation, incident, End Early | Preflight/Start, command intent/dedup, movement guards, branches after cutoff decision, incident/recovery, FR-48 notifications/revoke, safe release | W1–W5 + command transport/physical integration decisions; AC-01/10/11; F-14 excluded until approved |
+| W6 Operation, incident, End Early | Preflight/Start, command intent/dedup, movement guards, next-POI vote (ADR-0065), incident/recovery, FR-48 notifications/revoke, safe release | W1–W5 + command transport/physical integration decisions; AC-01/10/11; F-14 excluded until approved |
 
 Wave C implements the backend row-registration slice as a separate branch and
 database v1.4 snapshot/patch. SQL integration results remain explicitly
@@ -124,8 +124,8 @@ while its pose, camera and map are unchanged, Technical Staff cannot lower it
 and a content-only revision does not re-enter the queue. Do not add a withdrawal
 flow without an owner decision; route evidence depends on POI PASS being stable.
 
-F-14, branch cutoff and YAML schema/frame conversion remain blocked on
-decisions; no stub may make them appear enabled. Command transport is selected
+F-14 and YAML schema/frame conversion remain blocked on decisions (the branch
+cutoff question is closed by ADR-0065); no stub may make them appear enabled. Command transport is selected
 by ADR-0042 and is implemented from M2.2. Other open source
 items: speech provider/terms, research delivery/freshness
 thresholds, pilot network/camera/safety evidence. Source SRS integrity wording

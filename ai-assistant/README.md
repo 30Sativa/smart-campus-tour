@@ -38,8 +38,9 @@ through a provider adapter). The backend exposes
 the chat while the Tour is RUNNING. Three campus content files are approved;
 the last live evaluation passed 63 of 64 gradable questions.
 
-Not done yet: nothing writes Tour progress, so the POI snapshot stays `null`; POI
-and school content files are still drafts, STT/TTS are undecided, and there is
+The POI snapshot is the stop the robot stands at (`OBSERVING`), taken from the
+route revision's stop; it is `null` while the robot drives or before the first
+arrival. Not done yet: POI and school content files are still drafts, STT/TTS are undecided, and there is
 no load test or container image. Local end-to-end run:
 `backend/docs/student-ai-local.md`.
 
