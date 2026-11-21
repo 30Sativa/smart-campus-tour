@@ -1,4 +1,4 @@
--- SQLCMD input: SchemaHash is the current v1.24 snapshot hash; prior hashes are used only for controlled upgrades.
+-- SQLCMD input: SchemaHash is the current v1.25 snapshot hash; prior hashes are used only for controlled upgrades.
 -- Upgrade paths preserve the original bootstrap hash and advance only CampusTourSchemaVersion.
 SET NOCOUNT ON;
 DECLARE @hash nvarchar(64) = (
@@ -13,6 +13,7 @@ DECLARE @v18 nvarchar(64) = N'$(SchemaHashV18)';
 DECLARE @v110 nvarchar(64) = N'$(SchemaHashV110)';
 DECLARE @v111 nvarchar(64) = N'$(SchemaHashV111)';
 DECLARE @v112 nvarchar(64) = N'$(SchemaHashV112)';
+DECLARE @v124 nvarchar(64) = N'$(SchemaHashV124)';
 DECLARE @v123 nvarchar(64) = N'$(SchemaHashV123)';
 DECLARE @v122 nvarchar(64) = N'$(SchemaHashV122)';
 DECLARE @v121 nvarchar(64) = N'$(SchemaHashV121)';
@@ -73,6 +74,7 @@ DECLARE @knownPriorHash bit = CASE WHEN @hash IN (
     @v115,
     @v116,
     @v117,
+    @v124,
     @v123,
     @v122,
     @v121,
@@ -252,8 +254,35 @@ DECLARE @v124ObjectsPresent bit = CASE WHEN @v123ObjectsPresent = 1 AND
         AND name=N'CK_Users_AvatarUrlHttps' AND is_disabled=0 AND is_not_trusted=0)
     THEN 1 ELSE 0 END;
 
-IF @schemaVersion = N'1.24' AND @v124ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
+-- v1.25 (ADR-0065): Viewers vote for the next POI at each stop.
+DECLARE @v125ObjectsPresent bit = CASE WHEN @v124ObjectsPresent = 1 AND
+    COL_LENGTH(N'dbo.RouteRevisions', N'ViewerChoosesNextStop') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RouteRevisions')
+        AND name=N'DF_RouteRevisions_ViewerChoosesNextStop') AND
+    COL_LENGTH(N'dbo.RouteTestRuns', N'TraversedStopIdsJson') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RouteTestRuns')
+        AND name=N'CK_RouteTestRuns_TraversedStopIdsJson' AND is_disabled=0 AND is_not_trusted=0) AND
+    OBJECT_ID(N'dbo.TourStopVisits', N'U') IS NOT NULL AND
+    OBJECT_ID(N'dbo.TourStopVotes', N'U') IS NOT NULL AND
+    OBJECT_ID(N'dbo.TourStopLocks', N'U') IS NOT NULL AND
+    (SELECT COUNT(*) FROM sys.check_constraints WHERE parent_object_id IN (OBJECT_ID(N'dbo.TourStopVisits'),
+        OBJECT_ID(N'dbo.TourStopVotes'), OBJECT_ID(N'dbo.TourStopLocks')) AND is_disabled=0 AND is_not_trusted=0) = 10 AND
+    (SELECT COUNT(*) FROM sys.foreign_keys WHERE parent_object_id IN (OBJECT_ID(N'dbo.TourStopVisits'),
+        OBJECT_ID(N'dbo.TourStopVotes'), OBJECT_ID(N'dbo.TourStopLocks')) AND is_disabled=0 AND is_not_trusted=0) = 11 AND
+    EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.TourStopVisits')
+        AND name=N'UQ_TourStopVisits_TourStop' AND is_unique=1) AND
+    EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.TourStopVotes')
+        AND name=N'UQ_TourStopVotes_VisitRow' AND is_unique=1) AND
+    EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.TourStopLocks')
+        AND name=N'UX_TourStopLocks_Active' AND is_unique=1 AND has_filter=1)
+    THEN 1 ELSE 0 END;
+
+IF @schemaVersion = N'1.25' AND @v125ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
     SELECT 'READY';
+ELSE IF @schemaVersion = N'1.25'
+    THROW 51001, 'Database schema version marker is 1.25 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+ELSE IF @schemaVersion = N'1.24' AND @v124ObjectsPresent = 1 AND (@hash = @v124 OR @knownPriorHash = 1)
+    SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.24'
     THROW 51001, 'Database schema version marker is 1.24 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
 ELSE IF @schemaVersion = N'1.23' AND @v123ObjectsPresent = 1 AND (@hash = @v123 OR @knownPriorHash = 1)
