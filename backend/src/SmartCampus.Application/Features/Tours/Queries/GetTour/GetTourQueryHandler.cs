@@ -12,7 +12,8 @@ namespace SmartCampus.Application.Features.Tours.Queries.GetTour;
 
 public sealed class GetTourQueryHandler(ITourManagementRepository repository, IRouteManagementRepository routes,
     IRouteRevisionRepository revisions, IRegistrationRepository registrations, IMapVersionRepository maps, TourStartPreflight preflight,
-    TourScheduleSettings settings, ITourAutoAdvanceStore autoAdvance, FleetCommandSettings fleet, TimeProvider clock)
+    TourScheduleSettings settings, ITourAutoAdvanceStore autoAdvance, FleetCommandSettings fleet, TimeProvider clock,
+    ITourVoteRepository votes)
     : IRequestHandler<GetTourQuery, TourDetails>
 {
     public async Task<TourDetails> Handle(GetTourQuery query, CancellationToken ct)
@@ -37,8 +38,9 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         {
             var revision = await RouteRevisionMapper.Load(revisions, tour.RouteId, revisionId, false, ct, settings);
             var target = await repository.GetTargetAsync(tour.Id, ct);
+            var (ballot, leading, next, progress) = await VotingAsync(tour, ct);
             return new(summary, null, null, tour.FallbackVideoUrl, tour.StartedAt, tour.EndedAt, tour.EndReason,
-                usage, permissions, revision, target.Operator, target.Reservation, execution, actions);
+                usage, permissions, revision, target.Operator, target.Reservation, execution, actions, ballot, leading, next, progress);
         }
         var route = await ReadRoute(tour.RouteId, ct);
         var active = tour.ActiveRouteId == tour.RouteId ? route : await ReadRoute(tour.ActiveRouteId, ct);
@@ -54,6 +56,28 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
             tour.CurrentRevisionStopId, tour.LastArrivedRevisionStopId, tour.DwellDeadlineAt,
             command is null ? null : new(command.Id, command.Kind, command.State, command.Outcome, command.ReasonCode, cancelRequested),
             new(autoAdvance.IsEnabled(tour.Id), autoAdvance.BlockedReason(tour.Id, tour.CurrentStopVisitId)));
+    }
+
+    /// <summary>
+    /// ADR-0065: the ballot of the current POI and the POI it leads with, on a voting route; and, while Next is possible from
+    /// the start or a POI, where it would go, for the button label. Reads only.
+    /// </summary>
+    private async Task<(TourBallotView? Ballot, Guid? Leading, TourNextTargetView? Next, IReadOnlyList<TourStopProgressView>? Progress)>
+        VotingAsync(Tour tour, CancellationToken ct)
+    {
+        if (tour.StartedAt is null || await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct) is not { } revision)
+            return (null, null, null, null);
+        var stops = await revisions.GetStopsAsync(revision.Id, ct);
+        var now = clock.GetUtcNow();
+        var state = revision.ViewerChoosesNextStop ? await TourVoting.LoadAsync(votes, tour, revision, stops, ct) : null;
+        var progress = state is null ? null : TourVoting.StopProgress(state, now);
+        if (tour.State != TourRuntime.Running || tour.CurrentStep is not (TourRuntime.Observing or TourRuntime.Initializing))
+            return (null, null, null, progress);
+        var (target, blocked, _) = await TourVoting.PreviewNextAsync(votes, tour, revision, stops, ct);
+        var next = blocked ? null
+            : target?.Stop is { } stop ? new TourNextTargetView("POI", stop.Id, stop.Name) : new TourNextTargetView("END", null, null);
+        return state is null ? (null, null, next, null)
+            : (TourVoting.Ballot(state, now, null), TourVoting.LeadingStopId(state, now), next, progress);
     }
 
     private async Task<TourActionAvailability> StartAsync(Tour tour, Guid? viewer, CancellationToken ct, bool holdAtStart = false)
@@ -78,8 +102,11 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         var map = revision is null ? null : await revisions.GetMapAsync(revision.MapVersionId, ct);
         if (revision is null || robot is null || map is null)
             return Refused("Không đọc được tuyến hoặc robot của Tour.", "TOUR_STATE_INVALID");
+        var (target, blocked, _) = await TourVoting.PreviewNextAsync(votes, tour, revision, await revisions.GetStopsAsync(revision.Id, ct), ct);
+        if (blocked)
+            return Refused("Mọi điểm tham quan còn lại đều đang bị khóa.", TourVoteCodes.AllRemainingLocked);
         // Ending at the last POI creates no command, so no movement check applies.
-        if (TourLegDispatch.NextTarget(tour, revision, await revisions.GetStopsAsync(revision.Id, ct)) is null)
+        if (target is null)
             return new(true, null, []);
         var checks = await preflight.EvaluateMovementAsync(tour, robot, map, ct);
         return checks.CanStart ? new(true, null, []) : new(false, "Chưa đủ điều kiện để robot di chuyển.", checks.BlockedBy);
@@ -107,9 +134,15 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         var map = revision is null ? null : await revisions.GetMapAsync(revision.MapVersionId, ct);
         if (revision is null || robot is null || map is null) return Refused("Không đọc được tuyến hoặc robot của Tour.", "TOUR_STATE_INVALID");
         var stops = await revisions.GetStopsAsync(revision.Id, ct);
-        if (SkipTourStopCommandHandler.SkippedStop(tour, revision, stops) is not { } skipped)
+        if (revision.ViewerChoosesNextStop)
+        {
+            try { SkipTourStopCommandHandler.VotingSkips(await TourVoting.LoadAsync(votes, tour, revision, stops, ct)); }
+            catch (ConflictException refused) { return Refused(refused.Message, refused.Code!); }
+            if (revision.EndMode != "POSE") return new(true, null, []);
+        }
+        else if (SkipTourStopCommandHandler.SkippedStop(tour, revision, stops) is not { } skipped)
             return Refused("Không còn điểm dừng nào phía trước để bỏ qua.", "NOTHING_TO_SKIP");
-        if (TourLegDispatch.After(skipped.StopOrder, revision, stops) is null) return new(true, null, []);
+        else if (TourLegDispatch.After(skipped.StopOrder, revision, stops) is null) return new(true, null, []);
         var checks = await preflight.EvaluateMovementAsync(tour, robot, map, ct);
         return checks.CanStart ? new(true, null, []) : new(false, "Chưa đủ điều kiện để robot di chuyển.", checks.BlockedBy);
     }

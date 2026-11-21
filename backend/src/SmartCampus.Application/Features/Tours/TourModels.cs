@@ -91,7 +91,9 @@ public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDet
     string? FallbackVideoUrl, DateTimeOffset? StartedAt, DateTimeOffset? EndedAt, string? EndReason,
     TourUsage Usage, TourPermissions Permissions, RouteRevisionView? RouteRevision,
     RouteTestParticipantView? Operator, TourReservationView? Reservation,
-    TourExecutionView? Execution = null, TourAllowedActions? AllowedActions = null);
+    TourExecutionView? Execution = null, TourAllowedActions? AllowedActions = null,
+    TourBallotView? Ballot = null, Guid? LeadingStopId = null, TourNextTargetView? NextTarget = null,
+    IReadOnlyList<TourStopProgressView>? StopProgress = null);
 /// <summary>The running state of a Tour: null fields until Start; <see cref="DwellDeadlineAt"/> is display only (ADR-0043 D12).</summary>
 public sealed record TourExecutionView(string State, string? OperationalStatus, string? AssistanceReason, string? CurrentStep,
     Guid? CurrentLegId, string? CurrentLegKind, Guid? CurrentRevisionStopId, Guid? LastArrivedRevisionStopId,
@@ -147,4 +149,8 @@ public static class TourLifecycleEvents
     public const string DispatchChanged = "ROBOT_DISPATCH_CHANGED";
     public const string CapacityChanged = "TOUR_CAPACITY_CHANGED";
     public const string OperatorChanged = "TOUR_OPERATOR_CHANGED";
+    /// <summary>ADR-0065: a voting Tour closed a ballot and chose its next POI; DataJson holds the counts, winner and reason.</summary>
+    public const string NextStopChosen = "NEXT_STOP_CHOSEN";
+    public const string StopLocked = "STOP_LOCKED";
+    public const string StopUnlocked = "STOP_UNLOCKED";
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Features.StreamRelay;
 using SmartCampus.Application.Features.StudentTour;
+using SmartCampus.Application.Features.Tours;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -18,6 +19,19 @@ public sealed class StudentTourController(ISender sender, IConfiguration configu
         var view = await sender.Send(new GetStudentTourViewQuery(tourId, Request.Cookies[StudentSessionCookie.Name(tourId)]), ct);
         Response.Headers.CacheControl = "no-store";
         return Ok(new BaseResponse<StudentTourView> { Success = true, Message = "OK", Data = view });
+    }
+
+    public sealed record VoteRequest(Guid StopVisitId, Guid StopId);
+
+    /// <summary>ADR-0065: the Viewer's vote for the next POI, one per roster row per ballot; returns the ballot.</summary>
+    [HttpPut("vote")]
+    public async Task<ActionResult<BaseResponse<TourBallotView>>> Vote(Guid tourId, VoteRequest request, CancellationToken ct)
+    {
+        StudentSessionCookie.EnsureAllowedOrigin(Request, configuration);
+        var ballot = await sender.Send(new CastStudentVoteCommand(tourId, Request.Cookies[StudentSessionCookie.Name(tourId)],
+            request.StopVisitId, request.StopId), ct);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new BaseResponse<TourBallotView> { Success = true, Message = "OK", Data = ballot });
     }
 
     /// <summary>ADR-0055: the relay URL and a short-lived token for this session; the page asks again before it expires.</summary>

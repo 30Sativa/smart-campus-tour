@@ -17,7 +17,7 @@ namespace SmartCampus.Application.Features.Tours.Commands.SkipTourStop;
 /// </summary>
 public sealed class SkipTourStopCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
     IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings,
-    TimeProvider clock) : IRequestHandler<SkipTourStopCommand, TourMutationResult>
+    TimeProvider clock, ITourVoteRepository votes) : IRequestHandler<SkipTourStopCommand, TourMutationResult>
 {
     public async Task<TourMutationResult> Handle(SkipTourStopCommand command, CancellationToken ct)
     {
@@ -41,9 +41,21 @@ public sealed class SkipTourStopCommandHandler(ITourManagementRepository reposit
         var revision = await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct)
             ?? throw new NotFoundException("Không tìm thấy phiên bản tuyến.");
         var stops = await revisions.GetStopsAsync(revision.Id, ct);
-        var skipped = SkippedStop(tour, revision, stops)
-            ?? throw new ConflictException("Không còn điểm dừng nào phía trước để bỏ qua.", "NOTHING_TO_SKIP");
-        var target = TourLegDispatch.After(skipped.StopOrder, revision, stops);
+        // ADR-0065 rule 8: a voting route skips only when every remaining POI is locked, and then skips them all to the end.
+        var voting = revision.ViewerChoosesNextStop ? await TourVoting.LoadAsync(votes, tour, revision, stops, ct) : null;
+        IReadOnlyList<RouteRevisionStop> skipped;
+        TourLegTarget? target;
+        if (voting is not null)
+        {
+            skipped = VotingSkips(voting);
+            target = revision.EndMode == "POSE" ? TourLegTarget.End(revision) : null;
+        }
+        else
+        {
+            var next = SkippedStop(tour, revision, stops) ?? throw NothingToSkip();
+            skipped = [next];
+            target = TourLegDispatch.After(next.StopOrder, revision, stops);
+        }
         var departing = tour.CurrentStep == TourRuntime.Initializing;
 
         var map = await revisions.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");
@@ -60,11 +72,20 @@ public sealed class SkipTourStopCommandHandler(ITourManagementRepository reposit
         }
 
         var now = clock.GetUtcNow();
-        repository.AddEvent(new TourEvent
+        foreach (var stop in skipped)
         {
-            TourId = tour.Id, EventType = TourLifecycleEvents.StopSkipped, OccurredAt = now, RobotId = robotId,
-            RouteId = tour.ActiveRouteId, TargetStopOrder = skipped.StopOrder, ActorUserId = command.Actor
-        });
+            repository.AddEvent(new TourEvent
+            {
+                TourId = tour.Id, EventType = TourLifecycleEvents.StopSkipped, OccurredAt = now, RobotId = robotId,
+                RouteId = tour.ActiveRouteId, TargetStopOrder = stop.StopOrder, ActorUserId = command.Actor
+            });
+            if (voting is not null)
+                votes.Add(new TourStopVisit
+                {
+                    Id = Guid.NewGuid(), TourId = tour.Id, RouteRevisionStopId = stop.Id, Outcome = TourStopVisitOutcomes.Skipped, OccurredAt = now
+                });
+        }
+        if (voting?.Current is { } visit && TourVoting.AtVisit(tour, visit)) TourVoting.CloseBallot(visit, now);
         if (departing)
             repository.AddEvent(new TourEvent
             {
@@ -75,6 +96,19 @@ public sealed class SkipTourStopCommandHandler(ITourManagementRepository reposit
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.Skip, fingerprint, now, "state");
         return new(tour.Id);
+    }
+
+    private static ConflictException NothingToSkip() => new("Không còn điểm dừng nào phía trước để bỏ qua.", "NOTHING_TO_SKIP");
+
+    /// <summary>The unvisited POIs of a voting route, all locked; otherwise Skip is refused (ADR-0065 rule 8).</summary>
+    internal static IReadOnlyList<RouteRevisionStop> VotingSkips(TourVotingState state)
+    {
+        var remaining = state.Stops.Where(stop => !state.Visited.Contains(stop.Id)).OrderBy(stop => stop.StopOrder).ToList();
+        if (remaining.Count == 0) throw NothingToSkip();
+        if (remaining.Any(stop => !state.Locked.Contains(stop.Id)))
+            throw new ConflictException("Tuyến cho Viewer chọn điểm tiếp theo chỉ bỏ qua được khi mọi điểm còn lại đều đang bị khóa.",
+                TourVoteCodes.SkipNotAllowed);
+        return remaining;
     }
 
     /// <summary>The robot is stopped and the Operator could otherwise go on: Next, or Retry/Resume of the stopped leg.</summary>

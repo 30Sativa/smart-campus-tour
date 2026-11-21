@@ -16,7 +16,7 @@ namespace SmartCampus.Application.Features.Tours.Commands.NextTourStop;
 /// </summary>
 public sealed class NextTourStopCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
     IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings,
-    TimeProvider clock)
+    TimeProvider clock, ITourVoteRepository votes)
     : IRequestHandler<NextTourStopCommand, TourMutationResult>
 {
     public async Task<TourMutationResult> Handle(NextTourStopCommand command, CancellationToken ct)
@@ -38,8 +38,12 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
 
         var revision = await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct)
             ?? throw new NotFoundException("Không tìm thấy phiên bản tuyến.");
-        var target = TourLegDispatch.NextTarget(tour, revision, await revisions.GetStopsAsync(revision.Id, ct));
         var departing = tour.CurrentStep == TourRuntime.Initializing;
+        var now = clock.GetUtcNow();
+        // ADR-0065: on a voting route this closes the ballot and stores the decision in this transaction.
+        var (target, blocked) = await TourVoting.NextAsync(repository, votes, tour, revision,
+            await revisions.GetStopsAsync(revision.Id, ct), command.Actor, now, ct);
+        if (blocked) throw TourVoting.AllLocked();
 
         var map = await revisions.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");
         Robot? robot = null;
@@ -54,7 +58,6 @@ public sealed class NextTourStopCommandHandler(ITourManagementRepository reposit
                     checks: checks.Checks, blockedBy: checks.BlockedBy);
         }
 
-        var now = clock.GetUtcNow();
         if (departing)
             repository.AddEvent(new TourEvent
             {
