@@ -467,7 +467,11 @@ public sealed class InitialAdminSeederTests
                 IsActive = isActive,
                 CreatedAt = DateTimeOffset.UtcNow
             };
-            context.Users.Add(user);
+            // v1.0 Users columns only, so the helper also works on older snapshots (no AvatarUrl before v1.24).
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO dbo.Users (Id, Username, NormalizedUsername, PasswordHash, FullName, IsActive, CreatedAt)
+                VALUES ({user.Id}, {user.Username}, {user.NormalizedUsername}, {user.PasswordHash}, {user.FullName}, {user.IsActive}, {user.CreatedAt});
+                """);
             foreach (var role in roles ?? (addAdminRole ? ["ADMIN"] : []))
                 context.UserRoles.Add(new UserRole { UserId = user.Id, Role = role });
             await context.SaveChangesAsync();
@@ -477,7 +481,14 @@ public sealed class InitialAdminSeederTests
         public async Task<User> GetOnlyUserAsync()
         {
             await using var context = CreateContext();
-            return await context.Users.SingleAsync();
+            return await context.Users
+                .Select(user => new User
+                {
+                    Id = user.Id, Username = user.Username, NormalizedUsername = user.NormalizedUsername,
+                    PasswordHash = user.PasswordHash, FullName = user.FullName, IsActive = user.IsActive,
+                    CreatedAt = user.CreatedAt, UpdatedAt = user.UpdatedAt
+                })
+                .SingleAsync();
         }
 
         public async Task<string> GetOnlyRoleAsync(Guid userId)

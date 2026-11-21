@@ -30,8 +30,8 @@ vẫn đọc và xếp lịch như cũ.
 | Số điểm dừng tối thiểu | 2 | `Routes:MinStops`, cho phép 1..100 |
 | Thời gian dừng mỗi điểm | 15–300 giây | Trước đây 1–3600. Tổng thời gian giữ đầu camera (head steps) vẫn phải nằm trong thời gian dừng |
 | Điểm bắt đầu cách mọi điểm dừng | ≥ 1.0 m | `Routes:MinStopSeparationMeters`, đo khoảng cách X/Y trên bản đồ |
-| Hai điểm dừng liền nhau cách nhau | ≥ 1.0 m | Cùng tham số |
-| Kết thúc "Về một vị trí riêng" cách điểm dừng cuối | ≥ 1.0 m | Gần hơn thì phải chọn "Dừng tại điểm dừng cuối" |
+| Hai điểm dừng liền nhau cách nhau | ≥ 1.0 m | Cùng tham số. Tuyến "Cho Viewer chọn điểm tiếp theo" so mọi cặp POI (ADR-0065) |
+| Kết thúc "Về một vị trí riêng" | Không còn cho lưu mới | Lần lưu mới chỉ được "Dừng tại điểm dừng cuối" hoặc "Quay về điểm bắt đầu" (409 `ROUTE_END_POSE_NOT_START`); phiên bản cũ vẫn chạy (ADR-0065) |
 | Kết thúc "Quay về điểm bắt đầu" | Luôn hợp lệ | Điểm bắt đầu đã qua quy tắc khoảng cách ở trên |
 | Tổng thời gian dừng | ≤ thời lượng tối đa của ca dài nhất (mục 4) | Chưa tính thời gian di chuyển, nên chỉ chặn những tuyến chắc chắn không vừa ca |
 
@@ -72,7 +72,8 @@ Trên form tạo/sửa tuyến:
 - Giá trị đem so là `ExpectedDurationSeconds`, **tự tính** (`TourSchedule.EstimatedDurationSeconds`): tổng thời gian
   dừng + ⌈quãng đường ÷ `Tours:EstimatedSpeedMetersPerSecond`⌉ (mặc định 0.25 m/s, phải > 0). Quãng đường là tổng các
   đoạn thẳng điểm bắt đầu → điểm dừng 1 → … → điểm dừng cuối → điểm kết thúc, theo toạ độ đã chụp ở điểm dừng của phiên
-  bản tuyến. `LAST_POI` không có đoạn cuối; `POSE` (kể cả quay về điểm bắt đầu) cộng đoạn tới `EndX/EndY`.
+  bản tuyến. `LAST_POI` không có đoạn cuối; `POSE` (kể cả quay về điểm bắt đầu) cộng đoạn tới `EndX/EndY`. Tuyến "Cho Viewer
+  chọn điểm tiếp theo" lấy thứ tự dài nhất trong mọi thứ tự hợp lệ (POI đầu cố định, tối đa 6 thứ tự) (ADR-0065).
 - Cột `MeasuredDurationSeconds` của `RouteTestRuns` và `TourRobotReservations` vẫn NOT NULL nên nhận cùng giá trị ước
   tính; `MeasurementBasis` vẫn ghi `TOTAL_WITH_DWELL` cho hợp CHECK nhưng không còn được đọc để xếp lịch. Hai cột này sẽ
   được dọn ở một phiên bản schema sau.
@@ -116,7 +117,9 @@ Với ca bị khoá, danh sách ca trống hiện lý do `SHIFT_BLOCKED`, còn t
 
 | Mã | Ở đâu | Nghĩa |
 |---|---|---|
-| `ROUTE_STOP_TOO_CLOSE` | 409 khi lưu tuyến | Điểm bắt đầu, điểm kết thúc hoặc hai điểm dừng liền nhau gần nhau dưới `MinStopSeparationMeters` |
+| `ROUTE_STOP_TOO_CLOSE` | 409 khi lưu tuyến | Điểm bắt đầu hoặc hai điểm dừng liền nhau (mọi cặp POI ở tuyến bầu chọn) gần nhau dưới `MinStopSeparationMeters` |
+| `ROUTE_END_POSE_NOT_START` | 409 khi lưu tuyến | Điểm kết thúc riêng không còn được lưu mới (ADR-0065) |
+| `ROUTE_VOTE_STOP_COUNT`, `ROUTE_VOTE_DWELL_TOO_SHORT`, `ROUTE_VOTE_END_MUST_RETURN` | 409 khi lưu tuyến bầu chọn | Ngoài 3–4 POI, dừng dưới 30 giây, hoặc không quay về điểm bắt đầu (ADR-0065) |
 | `ROUTE_TOO_LONG_FOR_SHIFT` | 409 khi lưu tuyến hoặc tạo Tour; lý do ở danh sách ca | Tuyến không vừa thời lượng tối đa của ca |
 | `SHIFT_BLOCKED` | 409 khi tạo Tour; lý do ở danh sách ca | Admin đã khoá ca hoặc ngày đó |
 | `SHIFT_HAS_TOURS` | 409 khi Admin khoá | Ca hoặc ngày đó đang có Tour chưa huỷ |
