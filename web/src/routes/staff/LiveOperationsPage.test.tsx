@@ -244,3 +244,108 @@ describe('live console without a running Tour', () => {
     expect(screen.getByRole('link', { name: /Xem lịch/ })).toHaveAttribute('href', '/staff/schedule')
   })
 })
+
+describe('Viewers choose the next stop (ADR-0065)', () => {
+  const stops = [STOP, { ...STOP, id: 'rrs-2', poiRevisionId: 'poi-rev-2', stopOrder: 2, name: 'Phòng B', x: 3 }, { ...STOP, id: 'rrs-3', poiRevisionId: 'poi-rev-3', stopOrder: 3, name: 'Phòng C', x: 5 }]
+  let lockReply: Reply | null
+  function voting(patch: Partial<TourDetails> = {}): TourDetails {
+    const base = running()
+    return {
+      ...base,
+      routeRevision: { ...REVISION, viewerChoosesNextStop: true, endX: 0, endY: 0, endYaw: 0, stops } as unknown as TourDetails['routeRevision'],
+      execution: { ...base.execution!, dwellDeadlineAt: new Date(Date.now() + 65_000).toISOString(), autoAdvance: { enabled: false, blockedReason: null } },
+      allowedActions: { ...base.allowedActions!, skip: { allowed: false, reason: 'SKIP_NOT_ALLOWED', blockedBy: [] } },
+      ballot: { stopVisitId: 'visit-1', open: true, closesAt: new Date(Date.now() + 65_000).toISOString(), myVote: null, locked: [], decision: null,
+        candidates: [{ stopId: 'rrs-2', poiId: 'p2', name: 'Phòng B', votes: 1 }, { stopId: 'rrs-3', poiId: 'p3', name: 'Phòng C', votes: 3 }] },
+      leadingStopId: 'rrs-3',
+      nextTarget: { kind: 'POI', stopId: 'rrs-3', name: 'Phòng C' },
+      stopProgress: [{ stopId: 'rrs-1', progress: 'CURRENT' }, { stopId: 'rrs-2', progress: 'REMAINING' }, { stopId: 'rrs-3', progress: 'REMAINING' }],
+      ...patch,
+    }
+  }
+  beforeEach(() => {
+    lockReply = null
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    vi.mocked(globalThis.fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input), 'http://localhost').pathname
+      if (lockReply && /\/stops\/[^/]+\/(lock|unlock)$/.test(path)) {
+        sent.push({ method: init?.method ?? 'GET', path, body: init?.body ? JSON.parse(String(init.body)) : null })
+        return json(lockReply.body, lockReply.status)
+      }
+      return base(input, init)
+    })
+  })
+  const panel = async () => within(await screen.findByRole('region', { name: 'Viewer chọn điểm tiếp theo' }))
+
+  it('labels Next with the server target, shows the ballot, the leader and the dwell left, and keeps the auto switch', async () => {
+    tour = voting()
+    renderAt('/staff/live/tour-1')
+    const situation = within(await screen.findByRole('region', { name: 'Tình hình hiện tại' }))
+    // By StopOrder the next POI would be Phòng B; the server says Phòng C.
+    expect(situation.getByRole('button', { name: /Đi tới Phòng C/ })).toBeInTheDocument()
+    expect(situation.queryByRole('button', { name: /Bỏ qua/ })).not.toBeInTheDocument()
+    expect(situation.getByRole('switch', { name: /Tự đi tiếp khi hết giờ dừng/ })).toBeInTheDocument()
+    expect(situation.getByText(/Học sinh đang bầu điểm tiếp theo/)).toBeInTheDocument()
+    const votes = within((await panel()).getByRole('table', { name: 'Số phiếu' }))
+    expect(votes.getByRole('row', { name: /Phòng C/ })).toHaveTextContent(/Phòng C\s*Đang dẫn đầu\s*3 phiếu/)
+    expect(votes.getByRole('row', { name: /Phòng B/ })).toHaveTextContent('1 phiếu')
+    expect((await panel()).getByRole('timer')).toHaveTextContent(/Còn 1:0\d thời gian dừng/)
+  })
+
+  it('locks a POI only after a reason, and sends it to the lock endpoint', async () => {
+    tour = voting()
+    renderAt('/staff/live/tour-1')
+    fireEvent.click((await panel()).getByRole('button', { name: 'Khóa Phòng B' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Khóa Phòng B?' }))
+    expect(dialog.getByText(/Mọi học sinh thấy lý do bạn nhập/)).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: 'Khóa điểm' })).toBeDisabled()
+    fireEvent.change(dialog.getByLabelText(/Lý do khóa/), { target: { value: 'Phòng đang có lớp' } })
+    fireEvent.click(dialog.getByRole('button', { name: 'Khóa điểm' }))
+    await waitFor(() => expect(sent.find(item => item.path.endsWith('/lock'))).toEqual({ method: 'POST', path: '/api/staff/manage/tours/tour-1/stops/rrs-2/lock', body: { reason: 'Phòng đang có lớp' } }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('keeps the dialog open with the refusal in words when the server refuses the lock', async () => {
+    tour = voting()
+    lockReply = conflict('STOP_LOCK_INVALID')
+    renderAt('/staff/live/tour-1')
+    fireEvent.click((await panel()).getByRole('button', { name: 'Khóa Phòng B' }))
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.change(dialog.getByLabelText(/Lý do khóa/), { target: { value: 'Phòng đang có lớp' } })
+    fireEvent.click(dialog.getByRole('button', { name: 'Khóa điểm' }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Không khóa hoặc mở khóa được điểm này')
+  })
+
+  it('offers unlock and Skip of the remaining POIs once every POI ahead is locked', async () => {
+    tour = voting({
+      ballot: null, leadingStopId: null, nextTarget: null,
+      stopProgress: [{ stopId: 'rrs-1', progress: 'CURRENT' }, { stopId: 'rrs-2', progress: 'REMAINING', lockReason: 'Đang sửa' }, { stopId: 'rrs-3', progress: 'REMAINING', lockReason: 'Có lớp' }],
+      allowedActions: { ...running().allowedActions!, next: { allowed: false, reason: 'ALL_REMAINING_STOPS_LOCKED', blockedBy: [] }, skip: { allowed: true, reason: null, blockedBy: [] } },
+    })
+    renderAt('/staff/live/tour-1')
+    const situation = within(await screen.findByRole('region', { name: 'Tình hình hiện tại' }))
+    expect(situation.getByText('Mọi điểm còn lại đang tạm khóa')).toBeInTheDocument()
+    expect(situation.getByRole('button', { name: /Bỏ qua các điểm còn lại/ })).toBeEnabled()
+    const list = await panel()
+    expect(list.getByText('Lý do: Đang sửa')).toBeInTheDocument()
+    fireEvent.click(list.getByRole('button', { name: 'Mở khóa Phòng B' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Mở khóa Phòng B?' }))
+    fireEvent.change(dialog.getByLabelText(/Lý do mở khóa/), { target: { value: 'Đã sửa xong' } })
+    fireEvent.click(dialog.getByRole('button', { name: 'Mở khóa' }))
+    await waitFor(() => expect(sent.some(item => item.path === '/api/staff/manage/tours/tour-1/stops/rrs-2/unlock')).toBe(true))
+  })
+
+  it('gives a non-Operator the ballot but no lock buttons', async () => {
+    tour = voting()
+    useAuthStore.getState().setAuth('test-token', { userId: 'staff-2', username: 'minh', role: 'Staff' })
+    renderAt('/staff/live/tour-1')
+    expect((await panel()).getByRole('table', { name: 'Số phiếu' })).toBeInTheDocument()
+    expect((await panel()).queryByRole('button', { name: /Khóa/ })).not.toBeInTheDocument()
+  })
+
+  it('leaves a fixed-order Tour exactly as before', async () => {
+    renderAt('/staff/live/tour-1')
+    expect(await screen.findByRole('region', { name: 'Tình hình hiện tại' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Viewer chọn điểm tiếp theo' })).not.toBeInTheDocument()
+  })
+})

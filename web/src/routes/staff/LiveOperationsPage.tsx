@@ -16,6 +16,7 @@ import { CommandCard, ExecutionPanel, RobotStatusCard, RobotTelemetryPanel, Rout
 import { actionGate, tourSituation, type ConsoleAction, type Situation } from '../../features/staff/operations/situation'
 import { AutoAdvanceToggle, ConsoleActionButton, EndEarlyAction } from '../../features/staff/operations/TourActions'
 import { TourStepper } from '../../features/staff/operations/TourStepper'
+import { VotePanel } from '../../features/staff/operations/VotePanel'
 import { useAuthStore } from '../../stores/auth-store'
 
 /**
@@ -97,6 +98,10 @@ function TourConsole({ tourId }: { tourId: string }) {
             <div className="p-3"><LiveCamera robotCode={reservation?.robotCode} /></div>
           </section>}
           <SituationCard detail={detail} isOperator={isOperator} stale={stale} now={now} />
+          {detail.routeRevision?.viewerChoosesNextStop && <section className={panelClass} aria-label="Viewer chọn điểm tiếp theo">
+            <PanelHead title="Viewer chọn điểm tiếp theo" />
+            <VotePanel detail={detail} isOperator={isOperator} now={now} />
+          </section>}
         </div>
         <aside className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           {running && <section className={`${panelClass} lg:order-1`} aria-label="Đầu camera">

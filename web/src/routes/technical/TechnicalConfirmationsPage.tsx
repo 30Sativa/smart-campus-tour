@@ -4,7 +4,7 @@ import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../co
 import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
-import { expectedDurationText, failedCheckNames, hasScheduledToursOnPath, resultSource, revisionTone, routeChanges, sharedResultLine } from '../../features/administration/routes/route-messages'
+import { expectedDurationText, failedCheckNames, hasScheduledToursOnPath, legCoverageText, missingLegsText, resultSource, revisionTone, routeChanges, sharedResultLine } from '../../features/administration/routes/route-messages'
 import { campusShortStamp } from '../../features/administration/tours/tour-calendar'
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
 import { RobotPicker } from '../../features/technical/RobotPicker'
@@ -85,7 +85,7 @@ export default function TechnicalConfirmationsPage() {
                   <td className={tdClass}><span className="font-semibold text-[#0f172a]">{route.name}</span>{retired && <> <ToneBadge tone="muted">Đã ngừng sử dụng</ToneBadge></>}<p className="text-[11.5px] text-[#64748b]">Phiên bản {route.revisionNumber}</p>{shared && <p className="mt-0.5 max-w-md text-[11.5px] text-[#8a5a06]">{shared}</p>}</td>
                   <td className={`${tdClass} font-mono text-xs`}>{route.mapKey}</td>
                   <td className={`${tdClass} text-xs text-[#64748b]`}>{route.stops.length} điểm · dừng {formatMinutesSeconds(route.dwellDurationSeconds)}</td>
-                  <td className={tdClass}><ToneBadge tone={rowFilter === 'passed' ? 'ok' : rowFilter === 'failed' ? 'danger' : 'warn'}>{revisionTone(true, route.verificationStatus).label}</ToneBadge>{source && <p className="mt-1 text-[11.5px] text-[#64748b]">Giữ kết quả từ bản {campusShortStamp(source.createdAt)}</p>}</td>
+                  <td className={tdClass}><ToneBadge tone={rowFilter === 'passed' ? 'ok' : rowFilter === 'failed' ? 'danger' : 'warn'}>{revisionTone(true, route.verificationStatus).label}</ToneBadge>{source && <p className="mt-1 text-[11.5px] text-[#64748b]">Giữ kết quả từ bản {campusShortStamp(source.createdAt)}</p>}{route.legCoverage && <p className="mt-1 text-[11.5px] text-[#64748b]">{legCoverageText(route.legCoverage)}</p>}</td>
                   <td className={`${tdClass} text-right`}>{rowFilter === 'pending'
                     ? <button type="button" className={buttonClass('primary', 'sm')} aria-label={`Ghi kết quả ${route.name}`} onClick={() => setDialog({ view: 'record', route })}>Ghi kết quả</button>
                     : <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Xem kết quả ${route.name}`} onClick={() => setDialog({ view: 'result', route })}>Xem kết quả</button>}</td>
@@ -122,6 +122,11 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const [touched, setTouched] = useState(false)
   const [failureReason, setFailureReason] = useState('')
   const [evidence, setEvidence] = useState('')
+  // ADR-0065: on a voting route the run names the order driven; the first POI is fixed, so it starts there.
+  const voting = Boolean(route.viewerChoosesNextStop)
+  const orderedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder)
+  const stopIdsKnown = orderedStops.every(stop => Boolean(stop.id))
+  const [driven, setDriven] = useState<string[]>(() => orderedStops[0]?.id ? [orderedStops[0].id] : [])
   // Stable across retries of the same input, so a lost response cannot record a second run.
   const [requestId, setRequestId] = useState(() => crypto.randomUUID())
 
@@ -148,6 +153,8 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
     pending && 'tick các mục đã kiểm tra',
     !pending && resultCode === 'FAIL' && !failureReason.trim() && 'nhập lý do không đạt',
     !evidence.trim() && 'nhập ghi chú bằng chứng',
+    voting && !stopIdsKnown && 'tải lại trang để lấy mã điểm dừng',
+    voting && stopIdsKnown && driven.length < orderedStops.length && 'chọn đủ thứ tự robot đã đi',
   ].filter((item): item is string => Boolean(item))
   const ready = missingToSave.length === 0
 
@@ -158,6 +165,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
       routeId: route.routeId, revisionId: route.revisionId, requestId, robotCode, participatingStaffUserId: staffUserId, resultCode,
       allStopsReached, safelyStopped, localizationPassed,
       failureReason: resultCode === 'FAIL' ? failureReason.trim() : null, evidenceNote: evidence.trim(),
+      ...(voting ? { traversedStopIds: driven } : {}),
     } }, { onSuccess: onClose })
   }
 
@@ -180,6 +188,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
         </div>
         {route.expectedDurationSeconds ? <p className="text-xs text-[#64748b]">{expectedDurationText(route.expectedDurationSeconds)}</p> : null}
         <RouteChangeSummary route={route} />
+        {voting && <DrivenOrderStep route={route} stops={orderedStops} known={stopIdsKnown} driven={driven} onChange={value => { setDriven(value); changed() }} />}
         {shared || route.scheduledTours?.length ? <div role="note" className="rounded-lg border border-[#f0d89f] bg-[#fff8e6] px-3 py-2 text-[13px] text-[#7d5310]">
           {route.scheduledTours?.length ? <p>Bản này có {route.scheduledTours.length} Tour đã lên lịch: {route.scheduledTours.map(tour => `${tour.name} · ${campusShortStamp(tour.scheduledStartAt)}`).join('; ')}.</p> : null}
           {shared && <p>{shared}.</p>}
@@ -216,6 +225,7 @@ function RouteResultModal({ route, onRecord, onClose }: { route: VersionedRoute;
           <ul className="mt-2 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-3">{[['Đi đủ các điểm dừng', run.allStopsReached], ['Dừng an toàn', run.safelyStopped], ['Định vị', run.localizationPassed]].map(([label, passed]) => <li key={String(label)}>{passed ? 'Đạt' : 'Không đạt'}: {label}</li>)}</ul>
           {run.resultCode === 'FAIL' && failedCheckNames(run).length > 0 && <p className="mt-1 text-xs text-[#b23e31]">Không đạt ở: {failedCheckNames(run).join(', ')}</p>}
           {run.routeRevisionId !== route.revisionId && <p className="mt-1 text-xs text-[#64748b]">Ghi trên một bản lưu khác có cùng đường đi.</p>}
+          {run.traversedStopIds?.length ? <p className="mt-1 text-xs text-[#334155]">Thứ tự đã đi: {drivenText(detail.data ?? route, run.traversedStopIds)}</p> : null}
           {run.failureReason && <p className="mt-2"><span className="font-medium">Lý do:</span> {run.failureReason}</p>}
           <p className="mt-2 whitespace-pre-wrap"><span className="font-medium">Bằng chứng:</span> {run.evidenceNote}</p>
         </section>)}
@@ -223,6 +233,35 @@ function RouteResultModal({ route, onRecord, onClose }: { route: VersionedRoute;
       </div>
     </Modal>
   )
+}
+
+/** "Bắt đầu → A → C → B → Kết thúc" for a recorded or chosen order of revision stop ids. */
+function drivenText(route: VersionedRoute, ids: string[]) {
+  const name = (id: string) => route.stops.find(stop => stop.id === id)?.name ?? 'POI'
+  return ['Bắt đầu', ...ids.map(name), 'Kết thúc'].join(' → ')
+}
+
+/**
+ * ADR-0065: the order the robot drove on a route where Viewers choose the next stop. The first POI is fixed; each
+ * button adds the POI the robot went to next. The legs still to cover come from the server.
+ */
+function DrivenOrderStep({ route, stops, known, driven, onChange }: {
+  route: VersionedRoute; stops: VersionedRoute['stops']; known: boolean; driven: string[]; onChange: (value: string[]) => void
+}) {
+  const missing = missingLegsText(route.legCoverage)
+  const remaining = stops.filter(stop => stop.id && !driven.includes(stop.id))
+  return <fieldset className="space-y-2 rounded-lg border border-[#e2e8f0] p-3">
+    <legend className="px-1 text-[13px] font-semibold text-[#0f172a]">Thứ tự robot đã đi</legend>
+    <p className="text-xs text-[#64748b]">Tuyến này cho Viewer chọn điểm tiếp theo. POI đầu là điểm cố định; bấm các POI theo đúng thứ tự robot đã tới trong lần chạy này.</p>
+    {route.legCoverage && <p className="text-xs text-[#334155]">{legCoverageText(route.legCoverage)}{missing ? '. ' + missing : '.'}</p>}
+    {!known ? <p role="alert" className="text-xs text-[#b23e18]">Máy chủ chưa trả mã điểm dừng nên chưa ghi được thứ tự. Tải lại trang rồi thử lại.</p> : <>
+      <p aria-label="Thứ tự đã chọn" className="text-[13px] font-medium text-[#0f172a]">{drivenText(route, driven).replace(/ → Kết thúc$/, remaining.length ? ' → …' : ' → Kết thúc')}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        {remaining.map(stop => <button key={stop.id} type="button" className={buttonClass('secondary', 'sm')} onClick={() => onChange([...driven, stop.id!])}>Tiếp theo: {stop.name}</button>)}
+        {driven.length > 1 && <button type="button" className={buttonClass('ghost', 'sm')} onClick={() => onChange(driven.slice(0, 1))}>Chọn lại</button>}
+      </div>
+    </>}
+  </fieldset>
 }
 
 /**

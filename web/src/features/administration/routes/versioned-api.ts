@@ -10,7 +10,12 @@ export type RouteTestRun = {
   measurementBasis: string | null
   /** Who recorded the run and who went with the robot; an older server omits them. */
   checkedByName?: string | null; participatingStaffName?: string | null
+  /** ADR-0065: the revision stop ids in the order driven, on a route where Viewers choose the next stop. */
+  traversedStopIds?: string[] | null
 }
+/** ADR-0065: one directed leg a voting route still has to drive in a PASS run. Null ids are the start and the end. */
+export type RouteMissingLeg = { fromStopId: string | null; fromName: string; toStopId: string | null; toName: string }
+export type RouteLegCoverage = { requiredCount: number; coveredCount: number; missingLegs: RouteMissingLeg[] }
 /** ADR-0023 addendum: another submitted save with the same path, which the applied result also covers. */
 export type RouteSharedResultRevision = { revisionId: string; revisionNumber: number; createdAt: string; scheduledTours: RouteScheduledTour[] }
 export type RouteScheduleFit = 'UNKNOWN' | 'FITS' | 'OVER_RECOMMENDED' | 'TOO_LONG_FOR_SHIFT'
@@ -32,12 +37,18 @@ export type VersionedRoute = {
   retiredPoiNames?: string[]
   /** Other submitted saves with this path, and the Tours still to run on this save. An older server omits them. */
   sharedResultRevisions?: RouteSharedResultRevision[]; scheduledTours?: RouteScheduledTour[]
+  /** ADR-0065: Viewers vote for the next POI; the order after the first POI is not fixed. An older server omits it. */
+  viewerChoosesNextStop?: boolean
+  /** ADR-0065: the legs the PASS runs since the newest FAIL drove; only on a voting route. */
+  legCoverage?: RouteLegCoverage | null
   testRuns: RouteTestRun[]; revisionHistory: Array<{ revisionId: string; revisionNumber: number; mapVersionId: string; mapPackageSha256: string; configurationFingerprint: string; isSubmitted: boolean; verificationStatus: string; effectiveTestRunId: string | null; createdAt: string }>; eligibilityIssues: string[]
 }
 export type VersionedRouteDraft = {
   requestId: string; expectedCurrentRevision: number; name: string; description: string | null; mapVersionId: string
   startX: number; startY: number; startYaw: number; endMode: 'POSE' | 'LAST_POI'
   endX: number | null; endY: number | null; endYaw: number | null
+  /** ADR-0065: an older server ignores it. */
+  viewerChoosesNextStop: boolean
   stops: Array<{ poiRevisionId: string; dwellSeconds: number; headSteps: Array<{ preset: 'FRONT' | 'LEFT' | 'RIGHT'; holdSeconds: number }> }>
 }
 

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { Link, MemoryRouter, Route, Routes } from 'react-router'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SESSION_CHECK_WATCHDOG_MS, StudentInvitationPage } from './StudentInvitationPage'
 import { ENTER_TOUR_LABEL } from './invitation-labels'
 import { QueryProvider } from '../../../app/providers/query-provider'
@@ -535,4 +535,81 @@ it.each([
   const timer = await screen.findByRole('timer')
   expect(timer.querySelector('b')!.textContent).toMatch(typeof label === 'string' ? new RegExp(`^${label}$`) : label)
   if (typeof label === 'string') expect(timer).toHaveAccessibleName(`${label} tới giờ bắt đầu`)
+})
+
+describe('the vote for the next POI (ADR-0065)', () => {
+  const running = { ...info, tourState: 'RUNNING' }
+  const stops = [
+    { order: 1, poiId: 'pa', stopId: 'sa', name: 'Sảnh A', description: null, narrationText: 'Sảnh chính.', audioUrl: null, narrationSeconds: 20, dwellSeconds: 40, progress: 'CURRENT', lockReason: null },
+    { order: 2, poiId: 'pb', stopId: 'sb', name: 'Phòng B', description: null, narrationText: null, audioUrl: null, narrationSeconds: null, dwellSeconds: 40, progress: 'REMAINING', lockReason: null },
+    { order: 3, poiId: 'pc', stopId: 'sc', name: 'Phòng C', description: null, narrationText: null, audioUrl: null, narrationSeconds: null, dwellSeconds: 40, progress: 'REMAINING', lockReason: null },
+  ]
+  const progress = { step: 'OBSERVING', currentPoiId: 'pa', lastArrivedPoiId: 'pa', needsAssistance: false, isHeld: false }
+  const ballot = (patch: Record<string, unknown> = {}) => ({
+    stopVisitId: 'visit-1', open: true, closesAt: new Date(Date.now() + 25_000).toISOString(),
+    candidates: [{ stopId: 'sb', poiId: 'pb', name: 'Phòng B', votes: 1 }, { stopId: 'sc', poiId: 'pc', name: 'Phòng C', votes: 2 }],
+    myVote: 'sc', locked: [], decision: null, ...patch,
+  })
+  type Init = RequestInit & { method?: string }
+  const serve = (current: unknown, vote: (body: unknown) => Response) => vi.stubGlobal('fetch', vi.fn(async (url: string, init?: Init) =>
+    url.endsWith('/vote') && init?.method === 'PUT' ? vote(JSON.parse(String(init.body)))
+      : url.endsWith('/view') ? response({ stops, progress, ballot: current }) : response(running)))
+
+  it('shows the candidates, live counts, the time left and the vote kept from before a reload, and changes it', async () => {
+    serve(ballot(), () => response(ballot({ myVote: 'sb', candidates: [{ stopId: 'sb', poiId: 'pb', name: 'Phòng B', votes: 2 }, { stopId: 'sc', poiId: 'pc', name: 'Phòng C', votes: 1 }] })))
+    mount()
+    const box = within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+    expect(box.getByRole('timer')).toHaveTextContent(/Còn 0:2\d để bầu/)
+    const c = box.getByRole('button', { name: /Phòng C/ })
+    expect(c).toHaveAttribute('aria-pressed', 'true')
+    expect(c).toHaveTextContent('2 phiếu')
+    expect(c).toHaveTextContent('Phiếu của bạn')
+    expect(box.getByText('Bạn đã bầu Phòng C.')).toBeInTheDocument()
+    fireEvent.click(box.getByRole('button', { name: /Phòng B/ }))
+    expect(await box.findByText('Bạn đã bầu Phòng B.')).toBeInTheDocument()
+    expect(box.getByRole('button', { name: /Phòng B/ })).toHaveTextContent('2 phiếu')
+    const put = (vi.mocked(globalThis.fetch).mock.calls as unknown as [string, Init][]).find(([url, init]) => url.endsWith('/vote') && init.method === 'PUT')!
+    expect(put[0]).toBe(`/api/student/tours/${tourId}/vote`)
+    expect(JSON.parse(String(put[1].body))).toEqual({ stopVisitId: 'visit-1', stopId: 'sb' })
+    expect(put[1].credentials).toBe('include')
+  })
+
+  it.each([
+    ['VOTE_CLOSED', 'Đã hết giờ bầu chọn ở điểm này, phiếu vừa gửi không được tính.'],
+    ['VOTE_CANDIDATE_INVALID', 'Điểm này không còn trong danh sách bầu, có thể vừa tạm khóa. Hãy chọn điểm khác.'],
+  ])('says why a vote was refused (%s)', async (code, text) => {
+    serve(ballot(), () => new Response(JSON.stringify({ success: false, data: null, errors: { code } }), { status: 409 }))
+    mount()
+    const box = within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+    fireEvent.click(box.getByRole('button', { name: /Phòng B/ }))
+    expect(await box.findByText(text)).toBeInTheDocument()
+  })
+
+  it.each([
+    [{ stopId: 'sc', name: 'Phòng C', reason: 'VOTE', votes: 2 }, 'Điểm tiếp theo: Phòng C (2 phiếu)', null],
+    [{ stopId: 'sb', name: 'Phòng B', reason: 'TIE_DEFAULT', votes: 1 }, 'Điểm tiếp theo: Phòng B', 'Hòa phiếu, đi theo thứ tự đã đặt'],
+    [{ stopId: 'sb', name: 'Phòng B', reason: 'NO_VOTES', votes: 0 }, 'Điểm tiếp theo: Phòng B', 'Không ai bầu, đi theo thứ tự đã đặt'],
+  ])('says the decision once the ballot closed', async (decision, title, note) => {
+    serve(ballot({ open: false, decision }), () => response(null))
+    mount()
+    const box = within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+    expect(box.getByText(title)).toBeInTheDocument()
+    if (note) expect(box.getByText(note)).toBeInTheDocument()
+    expect(box.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('names a locked POI and its reason, in the ballot and on the route', async () => {
+    serve(ballot({ candidates: [{ stopId: 'sb', poiId: 'pb', name: 'Phòng B', votes: 0 }], locked: [{ stopId: 'sc', name: 'Phòng C', reason: 'Đang có lớp học' }] }), () => response(null))
+    mount()
+    const box = within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+    expect(box.getByText('Tạm khóa Phòng C. Lý do: Đang có lớp học')).toBeInTheDocument()
+    expect(box.queryByRole('button', { name: /Phòng C/ })).not.toBeInTheDocument()
+  })
+
+  it('shows no ballot for a Tour whose route does not vote', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response({ ...view, progress: { ...progress, currentPoiId: 'p1', lastArrivedPoiId: 'p1' } }) : response(running)))
+    mount()
+    expect(await screen.findByText('Đang giới thiệu Thư viện trung tâm')).toBeVisible()
+    expect(screen.queryByRole('region', { name: 'Bầu chọn điểm tiếp theo' })).not.toBeInTheDocument()
+  })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appliedFail, dwellText, failedCheckNames, passedAt, resultSource, revisionTone, routeChanges, saveResultText, sharedResultLine, staffRouteStatus, type RoutePathShape } from './route-messages'
+import { appliedFail, dwellText, failedCheckNames, legCoverageText, missingLegsText, passedAt, resultSource, revisionTone, routeChanges, saveResultText, sharedResultLine, staffRouteStatus, type RoutePathShape } from './route-messages'
 import type { RouteTestRun, VersionedRoute } from './versioned-api'
 
 const run = (over: Partial<RouteTestRun>): RouteTestRun => ({
@@ -75,5 +75,28 @@ describe('what a save means for its run (B1)', () => {
     expect(dwellText(1800)).toBe('30 phút')
     expect(dwellText(75)).toBe('1 phút 15 giây')
     expect(dwellText(45)).toBe('45 giây')
+  })
+})
+
+describe('voting routes (ADR-0065)', () => {
+  it('names LEGS_INCOMPLETE on Technical and Staff screens', () => {
+    expect(revisionTone(true, 'LEGS_INCOMPLETE').label).toBe('Chạy thử chưa đủ chặng')
+    expect(staffRouteStatus({ isSubmitted: true, verificationStatus: 'LEGS_INCOMPLETE' }).label).toBe('Chạy thử chưa đủ chặng')
+    expect(saveResultText({ isSubmitted: true, verificationStatus: 'LEGS_INCOMPLETE' })).toMatch(/các chặng chưa đi/)
+  })
+
+  it('lists the missing legs from the server, naming the start and the end', () => {
+    expect(missingLegsText({ requiredCount: 7, coveredCount: 5, missingLegs: [
+      { fromStopId: null, fromName: '', toStopId: 's-b', toName: 'B' }, { fromStopId: 's-c', fromName: 'C', toStopId: null, toName: '' },
+    ] })).toBe('Còn thiếu 2 chặng: Điểm bắt đầu → B, C → Điểm kết thúc')
+    expect(missingLegsText({ requiredCount: 7, coveredCount: 7, missingLegs: [] })).toBeNull()
+    expect(missingLegsText(null)).toBeNull()
+    expect(legCoverageText({ requiredCount: 13, coveredCount: 4, missingLegs: [] })).toBe('Đã đi 4/13 chặng')
+  })
+
+  it('treats switching the vote as a path change', () => {
+    const shape: RoutePathShape = { mapVersionId: 'm', startX: 0, startY: 0, startYaw: 0, endMode: 'POSE', endX: 0, endY: 0, endYaw: 0, stops: [] }
+    expect(routeChanges(shape, { ...shape, viewerChoosesNextStop: true })).toEqual({ changes: ['bật cho Viewer chọn điểm tiếp theo'], pathChanged: true })
+    expect(routeChanges({ ...shape, viewerChoosesNextStop: false }, shape).pathChanged).toBe(false)
   })
 })

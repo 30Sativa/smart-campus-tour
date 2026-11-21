@@ -8,10 +8,12 @@ import { StudentWaitingRoom } from '../components/StudentWaitingRoom'
 import { StudentLiveView } from '../components/StudentLiveView'
 import { StudentEndScreen } from '../components/StudentEndScreen'
 import { LiveStudentAiAssistant } from '../components/LiveStudentAiAssistant'
+import { StudentBallotBox } from '../components/StudentBallotBox'
+import { readBallot } from '../../tour-vote/vote'
 import { useStudentFallbackAccess, useStudentStreamAccess } from '../../quest-stream/stream-access'
 import { formatDateTime } from '../../../components/ui/date-time'
 import { ENTER_TOUR_LABEL } from './invitation-labels'
-import { buildLiveSnapshot, getStudentTourView, type StudentTourInfo } from './student-tour-view'
+import { buildLiveSnapshot, getStudentTourView, studentTourViewKey, type StudentTourInfo } from './student-tour-view'
 import '../student.css'
 import '../student-expedition.css'
 import './invitation.css'
@@ -149,13 +151,18 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   if (sessionInfo && !hadSession) setHadSession(true)
   const ended = hadSession && refused
   // Route and progress; a failure only hides the stops, the session above stays the access authority.
-  const view = useQuery({ queryKey: ['student-tour-view', tourId], queryFn: ({ signal }) => getStudentTourView(tourId, signal),
+  const view = useQuery({ queryKey: studentTourViewKey(tourId), queryFn: ({ signal }) => getStudentTourView(tourId, signal),
     retry: false, enabled: !!info && !finished && !leave.isPending, refetchInterval: info?.tourState === 'RUNNING' ? 5000 : 30000 })
 
   const unchecked = !left && !info && ((session.isPending && slow) || (session.isError && uncheckedError(session.error)))
   const shared = info?.rowType === 'SHARED_VIEWING'
   const sessionLabel = shared ? 'Màn hình xem chung' : 'Phiên lời mời cá nhân'
   const snapshot = info ? buildLiveSnapshot(info, view.data) : null
+  // ADR-0065: the vote at the current POI and the POIs the Operator locked; none on a route that does not vote.
+  const ballot = readBallot(view.data?.ballot)
+  const locked = ballot?.locked.length ? ballot.locked
+    : (snapshot?.pois ?? []).filter(poi => poi.lockReason && poi.progress !== 'VISITED' && poi.progress !== 'SKIPPED')
+      .map(poi => ({ stopId: poi.stopId ?? poi.id, name: poi.title, reason: poi.lockReason ?? '' }))
   // ADR-0055: the relay URL and a short token, renewed while the Tour runs; refused once access ends.
   const quest = useStudentStreamAccess(tourId, snapshot?.tourState === 'Running' && !leave.isPending)
   // ADR-0063: the fallback video's token, held while the Tour runs so the player switches as soon as the live picture is lost.
@@ -217,6 +224,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         fallback={fallback}
         showMap={false}
         idleTitle="Buổi tham quan đang diễn ra"
+        notice={<StudentBallotBox tourId={tourId} ballot={ballot} locked={locked} shared={shared} />}
         narrationIdleText={snapshot.step === 'in_progress'
           ? 'Thuyết minh sẽ hiện khi robot tới từng điểm dừng. Trong lúc chờ, bạn xem thẻ Lộ trình hoặc hỏi Trợ lý AI nhé.'
           : undefined}

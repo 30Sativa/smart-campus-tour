@@ -91,7 +91,7 @@ export function ConsoleActionButton({ action, detail, frozen }: { action: Consol
     return <GatedAction id="next" label={label} icon={<ArrowRight size={18} aria-hidden="true" />} gate={gate} frozen={frozen}
       hint={targets.next ? 'Robot rời điểm dừng hiện tại khi bạn xác nhận.' : 'Đây là điểm dừng cuối của tuyến.'}
       dialog={{ title: `${label}?`, confirmLabel: targets.next ? 'Đi tiếp' : 'Kết thúc', busyLabel: 'Đang gửi…',
-        description: targets.next ? 'Kiểm tra đường đi phía trước robot thông thoáng rồi xác nhận.' : 'Tour hoàn thành tại điểm dừng này và robot được trả.' }}
+        description: targets.next ? `${targets.voting && detail.execution?.currentStep === 'OBSERVING' ? 'Bầu chọn đóng ngay khi bạn xác nhận; robot đi tới điểm máy chủ chốt theo số phiếu. ' : ''}Kiểm tra đường đi phía trước robot thông thoáng rồi xác nhận.` : 'Tour hoàn thành tại điểm dừng này và robot được trả.' }}
       mutation={next}
       submit={() => next.mutateAsync({ id: tour.id, requestId: requestId(`next:${tour.id}:${tour.rowVersion}`), rowVersion: tour.rowVersion })
         .then(() => notify({ title: targets.next ? `Đã cho robot đi tới ${targets.next}` : 'Tour đã hoàn thành' }))} />
@@ -104,6 +104,18 @@ export function ConsoleActionButton({ action, detail, frozen }: { action: Consol
     mutation={pause}
     submit={() => pause.mutateAsync({ id: tour.id, requestId: requestId(`pause:${tour.id}:${tour.rowVersion}`), rowVersion: tour.rowVersion })
       .then(() => notify({ title: 'Đã gửi yêu cầu tạm dừng', detail: 'Chờ robot báo đã dừng.' }))} />
+
+  if (action === 'skip' && targets.voting) {
+    // ADR-0065 rule 8: on a voting route Skip only drops every remaining (locked) POI and goes to the end.
+    const label = 'Bỏ qua các điểm còn lại'
+    return <GatedAction id="skip" label={label} icon={<SkipForward size={18} aria-hidden="true" />} gate={gate} frozen={frozen} variant="secondary"
+      hint="Robot không tới các điểm đang tạm khóa và về thẳng điểm kết thúc."
+      dialog={{ title: `${label}?`, confirmLabel: 'Bỏ qua', busyLabel: 'Đang gửi…',
+        description: 'Các điểm đang tạm khóa không được tham quan trong Tour. Robot về điểm kết thúc và Tour hoàn thành khi tới nơi.' }}
+      mutation={skip}
+      submit={() => skip.mutateAsync({ id: tour.id, requestId: requestId(`skip:${tour.id}:${tour.rowVersion}`), rowVersion: tour.rowVersion })
+        .then(() => notify({ title: 'Đã bỏ qua các điểm còn lại', detail: 'Robot về điểm kết thúc.' }))} />
+  }
 
   if (action === 'skip') {
     const where = targets.afterSkip ?? 'kết thúc Tour'

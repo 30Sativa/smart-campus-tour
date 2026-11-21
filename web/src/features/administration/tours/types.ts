@@ -77,7 +77,17 @@ export type TourDetails = {
   execution?: TourExecution | null
   /** Advisory for the caller; every write rechecks under the server's locks. */
   allowedActions?: TourAllowedActions | null
+  /**
+   * ADR-0065, a route where Viewers choose the next stop: the ballot at the current POI (read with `readBallot`), the
+   * candidate leading now, and where Next goes (`readNextTarget`). An older server, or a route that does not vote, omits them.
+   */
+  ballot?: unknown
+  leadingStopId?: string | null
+  nextTarget?: unknown
+  /** Each route stop's place in a voting Tour, with the lock reason; `order` is the visit order of a passed stop. */
+  stopProgress?: TourStopProgress[] | null
 }
+export type TourStopProgress = { stopId: string; progress: string; order?: number | null; lockReason?: string | null }
 /** One failing READY condition, in the backend's words. */
 export type TourBlocker = { code: string; message: string }
 /** `PAUSED`: the Operator paused a leg and the robot reported it ended; the robot stands still on purpose. */

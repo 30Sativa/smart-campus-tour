@@ -216,6 +216,8 @@ export type RouteTestRunInput = {
   routeId: string; revisionId: string; requestId: string; robotCode: string; participatingStaffUserId: string
   resultCode: 'PASS' | 'FAIL'; allStopsReached: boolean; safelyStopped: boolean; localizationPassed: boolean
   failureReason: string | null; evidenceNote: string
+  /** ADR-0065: required on a route where Viewers choose the next stop, the revision stop ids in the order driven. */
+  traversedStopIds?: string[]
 }
 
 type Envelope<T> = ApiResponse<T>

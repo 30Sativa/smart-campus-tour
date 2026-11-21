@@ -58,6 +58,11 @@ export const toursApi = {
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/end-early`, { method: 'POST', json: body }).then(() => id),
   retryLeg: (id: string, body: { requestId: string; expectedRowVersion: string }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/retry-leg`, { method: 'POST', json: body }).then(() => id),
+  /** ADR-0065: the Tour's Operator locks or unlocks a POI not yet visited, always with a reason every Viewer sees. */
+  lockStop: (id: string, stopId: string, reason: string) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/stops/${stopId}/lock`, { method: 'POST', json: { reason } }).then(() => id),
+  unlockStop: (id: string, stopId: string, reason: string) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/stops/${stopId}/unlock`, { method: 'POST', json: { reason } }).then(() => id),
   /** No row version: it targets one command, which the server locks and checks is still UNKNOWN. */
   reconcile: (id: string, commandId: string, body: { requestId: string; reason: string }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/commands/${commandId}/reconcile`, { method: 'POST', json: body }).then(() => id),

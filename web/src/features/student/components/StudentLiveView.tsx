@@ -2,7 +2,7 @@ import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { Bot, Captions, Check, Clock3, Compass, Flag, ListOrdered, MapPin, MessageSquare, Route } from 'lucide-react'
 import type { PoiDetail, StudentSession, StudentTourSnapshot } from '../student-types'
 import { getStudentStatusDisplay } from '../student-status'
-import { POI_PROGRESS_LABEL, poiMinutes, poiProgress } from '../student-route'
+import { poiMinutes, poiProgress, poiStatusText, stopPosition } from '../student-route'
 import { StudentVideoPlayer } from './StudentVideoPlayer'
 import type { QuestSource } from '../../quest-stream/stream-access'
 import { Student2DMap } from './Student2DMap'
@@ -60,7 +60,7 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
   const pois = [...snapshot.pois].sort((a, b) => a.order - b.order)
   const nextMinutes = snapshot.nextPoi ? poiMinutes(snapshot.nextPoi) : undefined
   const at = snapshot.currentPoi ?? snapshot.nextPoi
-  const stopLabel = snapshot.step === 'returning' ? 'Về đích' : at ? `Điểm ${at.order} / ${pois.length}` : 'Robot tham quan'
+  const stopLabel = snapshot.step === 'returning' ? 'Về đích' : at ? `Điểm ${stopPosition(at, pois)} / ${pois.length}` : 'Robot tham quan'
 
   const onTabKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
@@ -168,7 +168,7 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
                     <span>
                       <b>{poi.title}</b>
                       <small>
-                        {state === 'now' ? 'Bạn đang ở đây' : POI_PROGRESS_LABEL[state]}
+                        {state === 'now' ? 'Bạn đang ở đây' : poiStatusText(poi, state)}
                         {state === 'later' && minutes ? `, khoảng ${minutes} phút` : ''}
                       </small>
                     </span>
@@ -222,7 +222,7 @@ function JourneyRail({ pois, snapshot }: { pois: PoiDetail[]; snapshot: StudentT
           <li key={poi.id} className={`is-${states[index]}`} aria-current={states[index] === 'now' ? 'step' : undefined}>
             <b>{states[index] === 'done' ? <Check size={14} aria-hidden="true" /> : states[index] === 'now' ? <MapPin size={14} aria-hidden="true" /> : null}{String(poi.order).padStart(2, '0')}</b>
             <span>{poi.title.split(' & ')[0]}</span>
-            <small>{POI_PROGRESS_LABEL[states[index]]}</small>
+            <small>{poiStatusText(poi, states[index], true)}</small>
           </li>
         ))}
         <li className={snapshot.step === 'returning' ? 'is-now' : 'is-later'}><b><Flag size={12} aria-hidden="true" /> Đích</b><span>Về điểm cuối</span></li>

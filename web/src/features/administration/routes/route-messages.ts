@@ -2,7 +2,7 @@ import { ApiError, apiErrorDetail } from '../../../api/client'
 import { formatExpectedDuration } from '../../../components/ui/date-time'
 import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
-import type { RouteScheduledTour, RouteSharedResultRevision, RouteTestRun, VersionedRoute } from './versioned-api'
+import type { RouteLegCoverage, RouteMissingLeg, RouteScheduledTour, RouteSharedResultRevision, RouteTestRun, VersionedRoute } from './versioned-api'
 import { campusShortDate, campusShortStamp, campusTime } from '../tours/tour-calendar'
 
 const fitMinutes = formatExpectedDuration
@@ -25,6 +25,8 @@ export function revisionTone(submitted: boolean, status: string) {
   if (!submitted) return { label: 'Chưa gửi kiểm chứng', chip: 'border-[#dbe6f4] bg-[#f6f9fd] text-[#5d7085]' }
   if (status === 'PASS') return { label: 'Chạy thử đạt', chip: 'border-[#cde9dc] bg-[#effbf5] text-[#1f7a55]' }
   if (status === 'FAIL') return { label: 'Chạy thử không đạt', chip: 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]' }
+  // ADR-0065: a voting route whose PASS runs have not driven every leg yet; it cannot take a Tour.
+  if (status === 'LEGS_INCOMPLETE') return { label: 'Chạy thử chưa đủ chặng', chip: 'border-[#f0d89f] bg-[#fff8e6] text-[#8a5a06]' }
   return { label: 'Chưa chạy thử', chip: 'border-[#f0d89f] bg-[#fff8e6] text-[#8a5a06]' }
 }
 
@@ -36,6 +38,7 @@ export function staffRouteStatus(route: { isSubmitted: boolean; verificationStat
   const { chip } = revisionTone(route.isSubmitted, route.verificationStatus)
   if (!route.isSubmitted) return { label: 'Chưa gửi kiểm chứng', chip }
   if (route.verificationStatus === 'FAIL') return { label: 'Chạy thử không đạt', chip }
+  if (route.verificationStatus === 'LEGS_INCOMPLETE') return { label: 'Chạy thử chưa đủ chặng', chip }
   if (route.verificationStatus !== 'PASS') return { label: 'Chờ chạy thử', chip }
   return { label: 'Đã chạy thử đạt', chip }
 }
@@ -85,6 +88,22 @@ export const failedCheckNames = (run: Pick<RouteTestRun, 'allStopsReached' | 'sa
   [!run.allStopsReached && 'đi đủ điểm dừng', !run.safelyStopped && 'dừng an toàn', !run.localizationPassed && 'định vị']
     .filter((item): item is string => Boolean(item))
 
+/** "C → B", with the start and the end in words when the server sends no name for them. */
+export const legText = (leg: RouteMissingLeg) =>
+  `${leg.fromStopId ? leg.fromName : leg.fromName || 'Điểm bắt đầu'} → ${leg.toStopId ? leg.toName : leg.toName || 'Điểm kết thúc'}`
+
+/**
+ * ADR-0065: "Còn thiếu 2 chặng: C → B, B → Điểm kết thúc", or null when every leg is covered or the route does not
+ * vote. The legs come from the server; the web never works out which legs a route has.
+ */
+export function missingLegsText(coverage: RouteLegCoverage | null | undefined): string | null {
+  const missing = coverage?.missingLegs ?? []
+  return missing.length ? `Còn thiếu ${missing.length} chặng: ${missing.map(legText).join(', ')}` : null
+}
+
+/** "Đã đi 5/7 chặng". */
+export const legCoverageText = (coverage: RouteLegCoverage) => `Đã đi ${coverage.coveredCount}/${coverage.requiredCount} chặng`
+
 const tourLine = (tour: RouteScheduledTour) => `${tour.name} · ${campusShortStamp(tour.scheduledStartAt)}`
 
 /**
@@ -117,6 +136,7 @@ export function saveResultText(route: Pick<VersionedRoute, 'isSubmitted' | 'veri
   if (!route.isSubmitted) return 'Chưa gửi kiểm chứng. Bấm Gửi kiểm chứng tuyến để Kỹ thuật chạy thử.'
   if (route.verificationStatus === 'PASS') return 'Đường đi không đổi nên giữ kết quả chạy thử đạt. Dùng được để tạo Tour.'
   if (route.verificationStatus === 'FAIL') return 'Đường đi không đổi nên giữ kết quả chạy thử không đạt. Nếu lỗi do đường đi thì sửa rồi gửi lại; nếu không, nhờ Kỹ thuật chạy lại.'
+  if (route.verificationStatus === 'LEGS_INCOMPLETE') return 'Đường đi không đổi nên giữ các chặng đã chạy thử. Kỹ thuật còn phải chạy các chặng chưa đi trước khi tạo Tour.'
   return 'Đường đi đã đổi nên cần Kỹ thuật chạy thử lại. Chưa tạo được Tour cho tới khi chạy thử đạt.'
 }
 
@@ -174,7 +194,7 @@ export function stopIssue(stop: StopDraft): string | null {
 }
 
 /** What a save's run depends on, from a saved revision or a form draft. */
-export type RoutePathShape = Pick<VersionedRoute, 'mapVersionId' | 'startX' | 'startY' | 'startYaw' | 'endMode' | 'endX' | 'endY' | 'endYaw'> & {
+export type RoutePathShape = Pick<VersionedRoute, 'mapVersionId' | 'startX' | 'startY' | 'startYaw' | 'endMode' | 'endX' | 'endY' | 'endYaw' | 'viewerChoosesNextStop'> & {
   /** Not part of the path: a rename or a new description keeps the result. Compared trimmed, as saved. */
   name?: string; description?: string | null
   stops: Array<{ poiRevisionId: string; dwellSeconds: number; headSteps: Array<{ preset: string; holdSeconds: number }> }>
@@ -198,6 +218,9 @@ export function routeChanges(previous: RoutePathShape, current: RoutePathShape):
   if (kept.join() !== before.filter(id => after.includes(id)).join()) path.push('đổi thứ tự điểm dừng')
   if (previous.startX !== current.startX || previous.startY !== current.startY || previous.startYaw !== current.startYaw) path.push('đổi điểm bắt đầu')
   if (previous.endMode !== current.endMode || previous.endX !== current.endX || previous.endY !== current.endY || previous.endYaw !== current.endYaw) path.push('đổi điểm kết thúc')
+  // ADR-0065: the flag is part of the path fingerprint, so switching it needs a new run.
+  if (Boolean(previous.viewerChoosesNextStop) !== Boolean(current.viewerChoosesNextStop))
+    path.push(current.viewerChoosesNextStop ? 'bật cho Viewer chọn điểm tiếp theo' : 'tắt cho Viewer chọn điểm tiếp theo')
   const byId = new Map(previous.stops.map(stop => [stop.poiRevisionId, stop]))
   const heads = (steps: RoutePathShape['stops'][number]['headSteps']) => steps.map(step => `${step.preset}:${step.holdSeconds}`).join()
   if (current.stops.some(stop => byId.has(stop.poiRevisionId) && heads(byId.get(stop.poiRevisionId)!.headSteps) !== heads(stop.headSteps))) path.push('đổi góc nhìn camera')

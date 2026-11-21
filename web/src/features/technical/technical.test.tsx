@@ -1086,6 +1086,58 @@ describe('Technical Staff API integration', () => {
     await waitFor(() => expect(useToastStore.getState().toasts.at(-1)?.title).toBe('Đã ghi chạy thử đạt: Tuyến thư viện'))
   })
 
+  describe('a route where Viewers choose the next stop (ADR-0065)', () => {
+    const stop = (id: string, name: string, stopOrder: number) => ({ id, name, stopOrder, poiRevisionId: `poi-${id}`, dwellSeconds: 40, headSteps: [], x: stopOrder, y: 0, yaw: 0, cameraPreset: 'FRONT', sourcePoiVerificationRecordId: 'v' })
+    const votingRoute = {
+      ...routeFixture, verificationStatus: 'LEGS_INCOMPLETE', viewerChoosesNextStop: true,
+      stops: [stop('s-a', 'Sảnh A', 1), stop('s-b', 'Phòng B', 2), stop('s-c', 'Phòng C', 3)],
+      legCoverage: { requiredCount: 7, coveredCount: 5, missingLegs: [
+        { fromStopId: 's-c', fromName: 'Phòng C', toStopId: 's-b', toName: 'Phòng B' },
+        { fromStopId: 's-b', fromName: 'Phòng B', toStopId: null, toName: '' },
+      ] },
+    }
+
+    it('lists the route as not covering every leg yet, with the legs driven', async () => {
+      routeQueue = [votingRoute]
+      renderPage(<TechnicalConfirmationsPage />)
+      expect(await screen.findByText('Chạy thử chưa đủ chặng')).toBeInTheDocument()
+      expect(screen.getByText('Đã đi 5/7 chặng')).toBeInTheDocument()
+    })
+
+    it('asks for the order driven, starting at the fixed first POI, and sends it with the run', async () => {
+      routeQueue = [votingRoute]
+      renderPage(<TechnicalConfirmationsPage />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả Tuyến thư viện' }))
+      await screen.findByRole('option', { name: /AMR 01 · amr-01/ })
+      await screen.findByRole('option', { name: 'Lan Staff · lan' })
+      fireEvent.change(screen.getByLabelText('Robot vật lý'), { target: { value: 'amr-01' } })
+      fireEvent.change(screen.getByLabelText('Staff đi cùng'), { target: { value: 'staff-1' } })
+      fireEvent.change(screen.getByLabelText('Ghi chú bằng chứng'), { target: { value: 'Đã chạy thử.' } })
+      passAllRouteChecks()
+      const order = within(screen.getByRole('group', { name: 'Thứ tự robot đã đi' }))
+      expect(order.getByText('Đã đi 5/7 chặng. Còn thiếu 2 chặng: Phòng C → Phòng B, Phòng B → Điểm kết thúc')).toBeInTheDocument()
+      expect(order.getByLabelText('Thứ tự đã chọn')).toHaveTextContent('Bắt đầu → Sảnh A → …')
+      expect(screen.getByText(/chọn đủ thứ tự robot đã đi/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+      fireEvent.click(order.getByRole('button', { name: 'Tiếp theo: Phòng C' }))
+      fireEvent.click(order.getByRole('button', { name: 'Tiếp theo: Phòng B' }))
+      expect(order.getByLabelText('Thứ tự đã chọn')).toHaveTextContent('Bắt đầu → Sảnh A → Phòng C → Phòng B → Kết thúc')
+      expect(order.queryByRole('button', { name: /Tiếp theo:/ })).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
+      await waitFor(() => expect(testRunCalls()).toHaveLength(1))
+      expect(JSON.parse(String(testRunCalls()[0].init?.body))).toMatchObject({ resultCode: 'PASS', traversedStopIds: ['s-a', 's-c', 's-b'] })
+    })
+
+    it('sends no order for an ordinary route', async () => {
+      await openRouteTest()
+      passAllRouteChecks()
+      expect(screen.queryByRole('group', { name: 'Thứ tự robot đã đi' })).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
+      await waitFor(() => expect(testRunCalls()).toHaveLength(1))
+      expect(JSON.parse(String(testRunCalls()[0].init?.body)).traversedStopIds).toBeUndefined()
+    })
+  })
+
   it('names the other saves and Tours a result also decides, and warns on FAIL that those Tours stop', async () => {
     routeQueue = [{ ...routeFixture, sharedResultRevisions: [{ revisionId: 'rev-0', revisionNumber: 1, createdAt: '2026-11-16T05:23:00Z',
       scheduledTours: [{ id: 't1', name: 'TEST WF-A Tour thường', scheduledStartAt: '2026-11-20T04:15:00Z', state: 'SCHEDULED' }] }] }]

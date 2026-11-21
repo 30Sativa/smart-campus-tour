@@ -5,6 +5,7 @@
 import { apiClient } from '../../../api/client'
 import type { ApiResponse } from '../../../api/contracts/shared'
 import type { PoiDetail, StudentOperationalStep, StudentTourSnapshot, TourState } from '../student-types'
+import { readBallot, readProgress, type StopProgress, type TourBallot } from '../../tour-vote/vote'
 
 /** Returned by POST join/session for the per-Tour Student cookie. */
 export type StudentTourInfo = {
@@ -27,6 +28,10 @@ export type StudentTourStop = {
   audioUrl: string | null
   narrationSeconds: number | null
   dwellSeconds: number
+  /** ADR-0065: the revision stop, its place in a voting Tour and why the Operator locked it. An older server omits them. */
+  stopId?: string | null
+  progress?: StopProgress | string | null
+  lockReason?: string | null
 }
 
 /** Present only while the Tour is RUNNING. `step` is the Tour's CurrentStep, null until the first dispatch. */
@@ -38,7 +43,19 @@ export type StudentTourProgress = {
   isHeld: boolean
 }
 
-export type StudentTourView = { stops: StudentTourStop[]; progress: StudentTourProgress | null }
+/** `ballot` is read with `readBallot`: null for a route that does not vote or while no POI is current (ADR-0065). */
+export type StudentTourView = { stops: StudentTourStop[]; progress: StudentTourProgress | null; ballot?: unknown }
+
+export const studentTourViewKey = (tourId: string) => ['student-tour-view', tourId] as const
+
+/** ADR-0065: the roster row's vote at the current POI; changing it is the same call. Answers the ballot. */
+export async function voteForNextStop(tourId: string, stopVisitId: string, stopId: string): Promise<TourBallot | null> {
+  const response = await apiClient<ApiResponse<unknown>>(
+    `/api/student/tours/${encodeURIComponent(tourId)}/vote`,
+    { method: 'PUT', credentials: 'include', auth: false, json: { stopVisitId, stopId } },
+  )
+  return readBallot(response?.data)
+}
 
 export async function getStudentTourView(tourId: string, signal?: AbortSignal): Promise<StudentTourView | null> {
   const response = await apiClient<ApiResponse<StudentTourView>>(
@@ -80,6 +97,9 @@ function toPoi(stop: StudentTourStop): PoiDetail {
     description: stop.description ?? stop.narrationText ?? '',
     audioUrl: stop.audioUrl ?? undefined,
     dwellSeconds: stop.dwellSeconds || undefined,
+    stopId: stop.stopId ?? undefined,
+    progress: readProgress(stop.progress),
+    lockReason: stop.lockReason?.trim() || null,
   }
 }
 
@@ -93,8 +113,11 @@ export function buildLiveSnapshot(info: StudentTourInfo, view: StudentTourView |
   const tourState = TOUR_STATES[info.tourState] ?? 'Scheduled'
   const progress = tourState === 'Running' ? view?.progress ?? null : null
   const byId = (id: string | null | undefined) => (id ? pois.find((p) => p.id === id) : undefined)
-  const after = (poi: PoiDetail | undefined) =>
-    poi ? pois.find((p) => p.order > poi.order) : pois[0]
+  // ADR-0065: on a voting route the next POI is the one the server marked NEXT, never the next StopOrder.
+  const voting = pois.some((p) => p.progress)
+  const after = (poi: PoiDetail | undefined) => voting
+    ? pois.find((p) => p.progress === 'NEXT')
+    : poi ? pois.find((p) => p.order > poi.order) : pois[0]
 
   let step: StudentOperationalStep =
     tourState === 'Completed' ? 'ended_completed'
