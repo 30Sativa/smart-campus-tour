@@ -52,10 +52,10 @@ export const FLOW_NODES: readonly FlowNode[] = [
   { id: 'battery', label: 'Pin', detail: 'Nguồn chính', column: 'in', part: 'battery' },
   { id: 'pc', label: 'Mini PC', detail: 'Beelink · ROS 2 · Nav2', column: 'brain', part: 'pc' },
   { id: 'mcu', label: 'STM32G431', detail: 'Mạch điều khiển', column: 'brain', part: 'pcb' },
-  { id: 'driver', label: 'Driver HBS86H ×2', detail: 'STEP / DIR', column: 'out', part: 'driver' },
-  { id: 'motor', label: 'Động cơ 57HS22 ×2', detail: '2,2 N·m', column: 'out', part: 'motor' },
+  { id: 'driver', label: 'Driver HBS57H ×2', detail: 'STEP / DIR', column: 'out', part: 'driver' },
+  { id: 'motor', label: 'Động cơ 57EBP98ALC ×2', detail: 'Hộp số 10:1', column: 'out', part: 'motor' },
   { id: 'drv', label: 'Driver pan/tilt ×2', detail: 'STEP · nEN', column: 'out', part: 'drv' },
-  { id: 'pantilt', label: 'Đầu pan-tilt', detail: 'Pan 0,6° · tilt 1,8°/bước', column: 'out', part: 'pantilt' },
+  { id: 'pantilt', label: 'Đầu pan-tilt', detail: 'Pan 0,6° · tilt 0,36°/bước', column: 'out', part: 'pantilt' },
   { id: 'contactor', label: 'Contactor', detail: 'MOSFET · PA10', column: 'out', part: 'pcb' },
   { id: 'cloud', label: 'Trang tour', detail: 'WebRTC · học sinh', column: 'out', part: null },
 ]
@@ -100,14 +100,14 @@ export const FLOWS: readonly Flow[] = [
       },
       {
         title: 'Mạch điều khiển phát xung',
-        body: 'STM32 đổi tốc độ thành chuỗi [[xung STEP và chiều DIR|command]] cho hai [[driver HBS86H|command]], mỗi driver lo một bánh.',
+        body: 'STM32 đổi tốc độ thành chuỗi [[xung STEP và chiều DIR|command]] cho hai [[driver HBS57H|command]], mỗi driver lo một bánh.',
         signal: 'Mỗi xung STEP là một bước của động cơ; tần số xung quyết định tốc độ, mức DIR quyết định chiều quay.',
         links: [{ from: 'mcu', to: 'driver', kind: 'command', label: 'STEP / DIR' }],
       },
       {
         title: 'Động cơ quay bánh xe',
-        body: 'Mỗi [[HBS86H|command]] cấp dòng vào hai cuộn dây của một [[động cơ bước 57HS22|command]]. Dòng tới là trục động cơ quay từng bước, kéo [[bánh xe chủ động|command]] ở giữa quay theo; hai bánh quay khác tốc độ thì robot rẽ, bốn bánh phụ ở góc chỉ lăn theo.',
-        signal: 'Động cơ 57 mm, mô-men giữ 2,2 N·m; robot đi tối đa khoảng 0,20 m/s theo cấu hình Nav2. Điện cho driver đi qua contactor (xem Nguồn điện).',
+        body: 'Mỗi [[HBS57H|command]] cấp dòng vào hai cuộn dây của một [[động cơ bước 57EBP98ALC|command]]. Dòng tới là trục động cơ quay từng bước, kéo [[bánh xe chủ động|command]] ở giữa quay theo; hai bánh quay khác tốc độ thì robot rẽ, bốn bánh phụ ở góc chỉ lăn theo.',
+        signal: 'Động cơ bước 57 mm qua hộp số 10:1 tới bánh 194,5 mm: 16 000 xung cho một vòng bánh. Robot đi tối đa khoảng 0,20 m/s theo cấu hình Nav2. Điện cho driver đi qua contactor (xem Nguồn điện).',
         links: [{ from: 'driver', to: 'motor', kind: 'command', label: 'Dòng pha A/B' }],
         parts: ['wheel'],
         motion: 'wheels',
@@ -183,7 +183,7 @@ export const FLOWS: readonly Flow[] = [
       {
         title: 'Đầu quay theo',
         body: 'Motor trong [[cụm pan-tilt|command]] quay đầu tới góc đặt; [[kính Quest 3|command]] trên đầu quay theo nên góc nhìn của học sinh đổi theo.',
-        signal: 'Mỗi bước: pan 0,6° (hộp số 3:1), tilt 1,8°. Giới hạn mềm pan ±170°, tilt ±18°.',
+        signal: 'Mỗi bước đủ: pan 0,6° (hộp số 3:1), tilt 0,36° (hộp số 5:1). Giới hạn mềm pan ±170°, tilt ±18°.',
         links: [{ from: 'drv', to: 'pantilt', kind: 'command', label: 'Động cơ bước' }],
         parts: ['head', 'quest'],
         motion: 'head',
@@ -230,7 +230,7 @@ export const FLOWS: readonly Flow[] = [
     steps: [
       {
         title: 'Đường điện từ pin',
-        body: 'Điện đi ra từ [[pin|power]] tới [[Mini PC|power]], từ Mini PC qua cổng USB tới [[mạch STM32|power]]; STM32 bật [[contactor|command]] để điện đi tiếp tới hai [[driver HBS86H|power]].',
+        body: 'Điện đi ra từ [[pin|power]] tới [[Mini PC|power]], từ Mini PC qua cổng USB tới [[mạch STM32|power]]; STM32 bật [[contactor|command]] để điện đi tiếp tới hai [[driver HBS57H|power]].',
         signal: 'Mức pin được báo cho đội vận hành theo dõi trong suốt chuyến tham quan; contactor do chân PA10 của STM32 điều khiển.',
         links: [
           { from: 'battery', to: 'pc', kind: 'power', label: 'Nguồn' },
@@ -247,7 +247,7 @@ export const FLOWS: readonly Flow[] = [
       },
       {
         title: 'Động cơ có điện',
-        body: 'Qua contactor, điện tới hai [[driver HBS86H|power]] rồi tới động cơ. Lệnh dừng hay watchdog chỉ dừng động cơ, không tự ngắt contactor.',
+        body: 'Qua contactor, điện tới hai [[driver HBS57H|power]] rồi tới động cơ. Lệnh dừng hay watchdog chỉ dừng động cơ, không tự ngắt contactor.',
         signal: 'Muốn cắt hẳn điện động cơ thì máy tính gửi CONTACTOR,<seq>,OFF.',
         links: [{ from: 'contactor', to: 'driver', kind: 'power', label: 'Nguồn động cơ' }, { from: 'driver', to: 'motor', kind: 'power', label: 'Dòng pha' }],
       },

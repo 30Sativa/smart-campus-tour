@@ -31,6 +31,7 @@ import RouteErrorPage from './RouteErrorPage'
  */
 const PublicHomePage = lazy(() => import('../../routes/public/PublicHomePage'))
 const QuestAudioPage = lazy(() => import('../../routes/public/QuestAudioPage'))
+const RobotInsidePage = lazy(() => import('../../routes/public/RobotInsidePage'))
 const RobotDrivePage = lazy(() => import('../../routes/public/RobotDrivePage'))
 const NotFoundPage = lazy(() => import('../../routes/public/NotFoundPage'))
 
@@ -188,6 +189,7 @@ function MergedInto({ path, view }: { path: string; view?: string }) {
  */
 export const routes = [
   { path: '/quest/intercom', element: <Suspense fallback={<ShellFallback background="#f5f7f8" />}><QuestAudioPage /></Suspense> },
+  { path: '/ben-trong-robot', element: <Suspense fallback={<ShellFallback background="#f7faf6" />}><RobotInsidePage /></Suspense> },
   { path: '/lai-thu-robot', element: <Suspense fallback={<ShellFallback background="#060d11" />}><RobotDrivePage /></Suspense> },
   {
     path: '/',

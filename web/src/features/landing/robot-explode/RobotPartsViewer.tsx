@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Fog, Vector3 } from 'three'
-import { Expand, Gamepad2, PackageOpen, Shrink, X } from 'lucide-react'
+import { CircuitBoard, Expand, Gamepad2, PackageOpen, Shrink, X } from 'lucide-react'
 import { CASING, PART_GROUPS, partGroup, type PartGroupId } from './parts'
 import { CALLOUTS } from './callouts'
 import { ease, partCentre, projectCallouts, type CalloutFrame, type RobotParts } from './robot-rig'
@@ -14,6 +14,8 @@ import { WIDE, attachFog, freshDrive, isTyping, onFloor, setFog, slideFraming, t
 import ZoomControls from './ZoomControls'
 import { useZoom } from './zoom'
 import { studioWorld as world } from './worlds/studio-world'
+import { PART_TO_INSIDE } from '../robot-inside/wiring'
+import { ROBOT_INSIDE } from '../landing-content'
 
 /** Camera distance from the whole robot (together, apart) and from one part, metres. */
 const INSPECT = { together: 2.5, apart: 4.8, part: 1.5 } as const
@@ -112,15 +114,18 @@ function CalloutTracker({ rigRef, calloutsRef }: { rigRef: MutableRefObject<RigS
  * card the size of the screen. The camera comes in to it and it turns slowly
  * until the visitor turns it; they can take it apart, open its casing and pick
  * any part group from the robot, its callouts or the list. Only the parts here:
- * driving is on the test-drive page (`driveTo`, RobotDriveViewer). While
+ * driving is on the test-drive page (`driveTo`, RobotDriveViewer), the wiring
+ * on the inside page (`insideTo`), which opens on the picked part. While
  * `visible` is false nothing is drawn, though the model still loads.
  */
-export default function RobotPartsViewer({ visible = true, intro, driveTo }: {
+export default function RobotPartsViewer({ visible = true, intro, driveTo, insideTo }: {
   visible?: boolean
   /** The kicker, title and links, laid over the stage. */
   intro?: ReactNode
   /** The test-drive page. */
   driveTo: string
+  /** The inside page: the wiring drawing. */
+  insideTo?: string
 }) {
   const driveRef = useRef<DriveState>(freshDrive(world))
   const rigRef = useRef<RigState | null>(null)
@@ -142,6 +147,8 @@ export default function RobotPartsViewer({ visible = true, intro, driveTo }: {
   const opened = shellOpen || (picked !== null && isInside(picked))
   const highlight = useMemo(() => (picked ? [picked] : []), [picked])
   const info = picked ? partGroup(picked) : null
+  const insidePart = picked ? PART_TO_INSIDE[picked] : undefined
+  const insideHref = insideTo && (insidePart ? `${insideTo}?${ROBOT_INSIDE.partParam}=${insidePart}` : insideTo)
   // On a wide screen the title and panel stand in a column at the left (CSS: min(420px, 31%) from 28px);
   // the robot and its callouts have the room to the right of it. On a phone, above the bottom sheet.
   const sideSpace = wide ? 28 + Math.min(420, stageWidth * 0.31) + 40 : 14
@@ -246,7 +253,12 @@ export default function RobotPartsViewer({ visible = true, intro, driveTo }: {
               <span className="lp3-td__label"><i style={{ background: info.color }} aria-hidden="true" />{(model?.counts.get(info.id) ?? 0) > 1 ? `${model?.counts.get(info.id)} chi tiết` : 'Linh kiện'}{opened && isInside(info.id) ? ' · đã mở vỏ' : ''}</span>
               <h3>{info.label}</h3>
               <p>{info.body}</p>
-              <button type="button" className="lp3-td__link" onClick={() => setPicked(null)}><X size={13} aria-hidden="true" />Bỏ chọn</button>
+              <div className="lp3-td__links">
+                {insidePart && insideHref && (
+                  <Link to={insideHref} className="lp3-td__link lp3-td__link--inside"><CircuitBoard size={13} aria-hidden="true" />Xem đường dây bên trong</Link>
+                )}
+                <button type="button" className="lp3-td__link" onClick={() => setPicked(null)}><X size={13} aria-hidden="true" />Bỏ chọn</button>
+              </div>
             </>
           ) : (
             <>
@@ -274,6 +286,11 @@ export default function RobotPartsViewer({ visible = true, intro, driveTo }: {
           <ZoomControls level={zoom.level} onIn={zoom.zoomIn} onOut={zoom.zoomOut} onReset={zoom.reset} />
         </div>
         <div className="lp3-td__actions lp3-td__actions--go">
+          {insideHref && (
+            <Link to={insideHref} className="lp3-td__btn" title={insidePart && info ? `Mở sơ đồ đi dây ở ${info.label}` : 'Mở sơ đồ đi dây của robot'}>
+              <CircuitBoard size={15} aria-hidden="true" />{ROBOT_INSIDE.label}
+            </Link>
+          )}
           <Link to={driveTo} className="lp3-td__btn lp3-td__btn--lime"><Gamepad2 size={15} aria-hidden="true" />Lái thử robot trên bản đồ</Link>
         </div>
       </aside>

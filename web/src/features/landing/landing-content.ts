@@ -250,9 +250,15 @@ export const platformPillars: PlatformPillar[] = [
   },
 ]
 
-/** Nav order follows the order the sections appear on the page. */
 /** The test drive: the robot on the campus maps, its own page (section 04 shows the robot alone). */
 export const ROBOT_DRIVE = { to: '/lai-thu-robot', label: 'Lái thử robot' } as const
+/**
+ * Inside the robot: its wiring drawing and how each part works, its own page linked from section 04.
+ * `?linh-kien=<part>` opens the drawing on one part (`robot-inside/wiring.ts`).
+ */
+export const ROBOT_INSIDE = { to: '/ben-trong-robot', label: 'Bên trong robot', partParam: 'linh-kien' } as const
+
+/** Nav order follows the order the sections appear on the page. */
 
 export const navLinks = [
   { href: '#quy-trinh', label: 'Hành trình' },
