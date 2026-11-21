@@ -201,6 +201,40 @@ internal static class TourVoting
     }
 
     /// <summary>
+    /// The target of Retry/Resume (ADR-0065 rule 8). A route without the flag, a leg to the end and the first leg (no visit
+    /// yet) keep the old leg's target. On a voting route a leg to a POI goes to the decision of the visit the robot left:
+    /// normally the old target; the re-chosen POI once the old target was locked while the leg was stopped, even if it was
+    /// unlocked again since. <c>Blocked</c> when only locked POIs remain. With a <paramref name="repository"/> the decision
+    /// is stored (<see cref="Settle"/>); without one this only reads, for the Tour detail.
+    /// </summary>
+    public static async Task<(TourLegTarget Target, bool Blocked)> RetryAsync(ITourManagementRepository? repository, ITourVoteRepository votes,
+        Tour tour, RouteRevision revision, IReadOnlyList<RouteRevisionStop> stops, Guid? actor, DateTimeOffset now, CancellationToken ct)
+    {
+        var old = tour.CurrentRevisionStopId is { } stopId ? TourLegTarget.To(stops.Single(stop => stop.Id == stopId)) : TourLegTarget.End(revision);
+        if (!revision.ViewerChoosesNextStop || tour.CurrentLegKind != RobotLegKinds.ToPoi) return (old, false);
+        var state = await LoadAsync(votes, tour, revision, stops, ct);
+        if (state.Current is null) return (old, false);
+        var choice = repository is null ? Preview(state) : Settle(repository, state, actor, now);
+        return choice.Outcome switch
+        {
+            NextStopOutcome.AllRemainingLocked => (old, true),
+            NextStopOutcome.Chosen => (TourLegTarget.To(state.Stop(choice.WinnerStopId!.Value)), false),
+            _ => (old, false)
+        };
+    }
+
+    /// <summary>
+    /// The POI a leg to a POI leads to now: its target, unless the target was locked while the leg was stopped or the
+    /// visit's decision moved elsewhere since; then the visit's decision (null when only locked POIs remain).
+    /// </summary>
+    private static Guid? LegNext(TourVotingState state, Guid target)
+    {
+        if (state.Current is not { } visit || state.Tour.CurrentLegKind != RobotLegKinds.ToPoi) return target;
+        if (!state.Locked.Contains(target) && (visit.ChosenRevisionStopId is null || visit.ChosenRevisionStopId == target)) return target;
+        return Preview(state) is { Outcome: NextStopOutcome.Chosen } choice ? choice.WinnerStopId : null;
+    }
+
+    /// <summary>
     /// Closes an open ballot when the robot cannot leave by vote any more (restart, End Early). Pause needs nothing: it
     /// exists only on a leg, after Next or the automatic Next already closed the ballot. With
     /// <paramref name="decide"/> the decision is also stored from the votes already cast, so a later Next uses it.
@@ -272,7 +306,8 @@ internal static class TourVoting
         if (visit is not null)
             return visit.Outcome == TourStopVisitOutcomes.Skipped ? "SKIPPED" : AtVisit(tour, visit) ? "CURRENT" : "VISITED";
         if (tour.State != TourRuntime.Running) return "REMAINING";
-        if (tour.CurrentStep == TourRuntime.Navigating && tour.CurrentRevisionStopId == stopId) return "NEXT";
+        if (tour.CurrentStep == TourRuntime.Navigating && tour.CurrentRevisionStopId is { } target)
+            return LegNext(state, target) == stopId ? "NEXT" : "REMAINING";
         if (state.Current is { } current && AtVisit(tour, current) && !IsOpen(tour, current, now) &&
             Preview(state) is { Outcome: NextStopOutcome.Chosen } choice && choice.WinnerStopId == stopId) return "NEXT";
         return "REMAINING";

@@ -8,7 +8,9 @@ using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.AutoAdvanceTour;
 using SmartCampus.Application.Features.Tours.Commands.LockTourStop;
 using SmartCampus.Application.Features.Tours.Commands.NextTourStop;
+using SmartCampus.Application.Features.Tours.Commands.PauseTourLeg;
 using SmartCampus.Application.Features.Tours.Commands.RecoverTourAfterRestart;
+using SmartCampus.Application.Features.Tours.Commands.RetryTourLeg;
 using SmartCampus.Application.Features.Tours.Commands.SkipTourStop;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Domain.Entities;
@@ -273,6 +275,172 @@ public sealed class TourVotingSqlTests
         await using var db = w.H.Context();
         Assert.Empty(await db.TourStopVisits.ToListAsync());
         Assert.Empty(await db.TourEvents.Where(e => e.EventType == TourLifecycleEvents.NextStopChosen).ToListAsync());
+    }
+
+    // ADR-0065 rule 8, a POI locked while the robot stopped on its way there. First = A, Lab = B, Hall = C.
+
+    [SchemaV11Fact]
+    public async Task LockingTheTargetOfAPausedLeg_ReChoosesTheNextPoi_AndResumeGoesThere()
+    {
+        await using var w = await World.Create(enabled: true, twoStopsToEndPose: true);
+        var (route, first, ana) = await LegToHall(w);
+
+        // 1. The leg really runs: the target cannot be locked.
+        Assert.Equal(TourVoteCodes.StopLockInvalid, (await LockRefused(w, route.Hall)).Code);
+        var goTo = await Delivered(w);
+        Assert.Equal(TourVoteCodes.StopLockInvalid, (await LockRefused(w, route.Hall)).Code);
+
+        // 2. Pause asked, the robot has not reported yet: still running.
+        await Pause(w);
+        Assert.Equal("TOUR_PAUSE_PENDING", (await Operator(w)).AllowedActions!.Pause!.BlockedBy.Single());
+        Assert.Equal(TourVoteCodes.StopLockInvalid, (await LockRefused(w, route.Hall)).Code);
+
+        // 3. The robot stopped: the lock is taken and the visit it left decides again.
+        await Result(w, goTo, "TERMINAL", "CANCELLED");
+        Assert.Equal(TourRuntime.Paused, (await Operator(w)).Execution!.OperationalStatus);
+        await AssertReChosenToLab(w, route, first.Id, ana.Token);
+
+        // 4. Resume drives to the lab; the hall stays locked and unvisited.
+        await Retry(w);
+        var resumed = await Operator(w);
+        Assert.Equal((TourRuntime.Navigating, (Guid?)route.Lab), (resumed.Execution!.CurrentStep, resumed.Execution.CurrentRevisionStopId));
+        Assert.Equal(route.Lab, (await Current(w)).RouteRevisionStopId);
+        Assert.Null(resumed.RetryTarget);
+        await Arrive(w);
+        Assert.Equal(route.Lab, (await CurrentVisit(w)).RouteRevisionStopId);
+        await using var db = w.H.Context();
+        Assert.False(await db.TourStopVisits.AnyAsync(v => v.TourId == w.H.TourId && v.RouteRevisionStopId == route.Hall));
+        Assert.True(await db.TourStopLocks.AnyAsync(l => l.TourId == w.H.TourId && l.RouteRevisionStopId == route.Hall && l.UnlockedAt == null));
+    }
+
+    [SchemaV11Fact]
+    public async Task LockingTheTargetOfAFailedLeg_ReChoosesTheNextPoi_AndRetryGoesThere()
+    {
+        await using var w = await World.Create(enabled: true, twoStopsToEndPose: true);
+        var (route, first, ana) = await LegToHall(w);
+        await Result(w, await Delivered(w), "TERMINAL", "FAILED", "NAV2_ABORTED");
+        Assert.Equal(TourRuntime.NeedsAssistance, (await Operator(w)).Execution!.OperationalStatus);
+
+        await AssertReChosenToLab(w, route, first.Id, ana.Token);
+        await Retry(w);
+        Assert.Equal(route.Lab, (await Operator(w)).Execution!.CurrentRevisionStopId);
+        Assert.Equal(route.Lab, (await Current(w)).RouteRevisionStopId);
+    }
+
+    [SchemaV11Fact]
+    public async Task LockingTheLastRemainingPoiOfAStoppedLeg_RefusesRetry_AndSkipGoesToTheEnd()
+    {
+        await using var w = await World.Create(enabled: true, twoStopsToEndPose: true);
+        var route = await Voting(w);
+        await ArriveAtFirst(w);
+        await Next(w); // No votes: the lab, smallest StopOrder.
+        await Arrive(w);
+        await Next(w); // Only the hall is left.
+        Assert.Equal(route.Hall, (await Operator(w)).Execution!.CurrentRevisionStopId);
+        await Result(w, await Delivered(w), "TERMINAL", "FAILED", "NAV2_ABORTED");
+
+        await Lock(w, route.Hall, "Hành lang bị chắn");
+        await w.Report();
+        var detail = await Operator(w);
+        Assert.Null(detail.RetryTarget);
+        Assert.Equal([TourVoteCodes.AllRemainingLocked], detail.AllowedActions!.RetryLeg.BlockedBy);
+        Assert.True(detail.AllowedActions.Skip!.Allowed);
+        Assert.Equal(TourVoteCodes.AllRemainingLocked, (await Assert.ThrowsAsync<ConflictException>(() => Retry(w))).Code);
+
+        await Skip(w);
+        var skipped = await Operator(w);
+        Assert.Equal(TourRuntime.ReturningToEnd, skipped.Execution!.CurrentStep);
+        Assert.Equal("SKIPPED", skipped.StopProgress!.Single(p => p.StopId == route.Hall).Progress);
+    }
+
+    [SchemaV11Fact]
+    public async Task UnlockingTheOldTargetAfterTheReChoice_KeepsTheReChosenPoiForResume()
+    {
+        await using var w = await World.Create(enabled: true, twoStopsToEndPose: true);
+        var (route, first, _) = await LegToHall(w);
+        var goTo = await Delivered(w);
+        await Pause(w);
+        await Result(w, goTo, "TERMINAL", "CANCELLED");
+        await Lock(w, route.Hall, "Hành lang bị chắn");
+        await w.H.Send(new LockTourStopCommand(w.H.TourId, route.Hall, w.H.OperatorId, false, "Đã dọn hành lang"));
+
+        var detail = await Operator(w);
+        Assert.Equal(new TourNextTargetView("POI", route.Lab, (await Stop(w, route.Lab)).Name), detail.RetryTarget);
+        Assert.Equal("NEXT", detail.StopProgress!.Single(p => p.StopId == route.Lab).Progress);
+        Assert.Equal("REMAINING", detail.StopProgress!.Single(p => p.StopId == route.Hall).Progress);
+        await Retry(w);
+        Assert.Equal(route.Lab, (await Operator(w)).Execution!.CurrentRevisionStopId);
+        Assert.Equal((route.Lab, NextStopReasons.LockedFallback),
+            ((await Visit(w, first.Id)).ChosenRevisionStopId!.Value, (await Visit(w, first.Id)).ChosenReason));
+    }
+
+    [SchemaV11Fact]
+    public async Task RetryOnARouteWithoutTheFlag_KeepsTheOldTarget()
+    {
+        await using var w = await World.Create(enabled: true, twoStopsToEndPose: true);
+        await ArriveAtFirst(w);
+        await Next(w);
+        var target = (await Operator(w)).Execution!.CurrentRevisionStopId;
+        await Result(w, await Delivered(w), "TERMINAL", "FAILED", "NAV2_ABORTED");
+
+        var detail = await Operator(w);
+        Assert.Null(detail.RetryTarget);
+        Assert.Null(detail.StopProgress);
+        await Retry(w);
+        Assert.Equal(target, (await Operator(w)).Execution!.CurrentRevisionStopId);
+        await using var db = w.H.Context();
+        Assert.Empty(await db.TourStopVisits.Where(v => v.TourId == w.H.TourId).ToListAsync());
+    }
+
+    /// <summary>At A one Viewer votes for C, Next sends the leg to C (still PENDING).</summary>
+    private static async Task<(VotingRoute Route, TourStopVisit First, TestViewer Ana)> LegToHall(World w)
+    {
+        var route = await Voting(w);
+        var ana = await Viewer(w, "ana");
+        await ArriveAtFirst(w);
+        var first = await CurrentVisit(w);
+        await Vote(w, ana.Token, first.Id, route.Hall);
+        await Next(w);
+        Assert.Equal(route.Hall, (await Operator(w)).Execution!.CurrentRevisionStopId);
+        return (route, first, ana);
+    }
+
+    /// <summary>Locks C on a stopped leg and checks the re-choice of the visit at A, the Retry label and the progress.</summary>
+    private static async Task AssertReChosenToLab(World w, VotingRoute route, Guid firstVisit, string token)
+    {
+        await Lock(w, route.Hall, "Hành lang bị chắn");
+        var visit = await Visit(w, firstVisit);
+        Assert.Equal((route.Lab, NextStopReasons.LockedFallback), (visit.ChosenRevisionStopId!.Value, visit.ChosenReason));
+        var chosen = await Events(w, TourLifecycleEvents.NextStopChosen);
+        Assert.Equal([NextStopReasons.Vote, NextStopReasons.LockedFallback], chosen.Select(e => e.ReasonCode));
+        Assert.Equal(firstVisit, chosen[^1].StopVisitId);
+
+        await w.Report();
+        var detail = await Operator(w);
+        Assert.Equal(new TourNextTargetView("POI", route.Lab, (await Stop(w, route.Lab)).Name), detail.RetryTarget);
+        Assert.True(detail.AllowedActions!.RetryLeg.Allowed);
+        Assert.Equal(("NEXT", "REMAINING"), (detail.StopProgress!.Single(p => p.StopId == route.Lab).Progress,
+            detail.StopProgress!.Single(p => p.StopId == route.Hall).Progress));
+        var view = await w.H.Send(new GetStudentTourViewQuery(w.H.TourId, token));
+        Assert.Equal(("NEXT", "REMAINING"), (view.Stops.Single(s => s.StopId == route.Lab).Progress, view.Stops.Single(s => s.StopId == route.Hall).Progress));
+        Assert.Equal("Hành lang bị chắn", view.Stops.Single(s => s.StopId == route.Hall).LockReason);
+    }
+
+    private static Task<TourDetails> Operator(World w) => w.H.Send(new GetTourQuery(w.H.TourId, w.H.OperatorId));
+
+    private static async Task<RouteRevisionStop> Stop(World w, Guid id)
+    {
+        await using var db = w.H.Context();
+        return await db.RouteRevisionStops.AsNoTracking().SingleAsync(s => s.Id == id);
+    }
+
+    private static async Task Pause(World w) =>
+        await w.H.Send(new PauseTourLegCommand(w.H.TourId, w.H.OperatorId, new(Guid.NewGuid(), await w.H.Version())));
+
+    private static async Task Retry(World w)
+    {
+        await w.Report();
+        await w.H.Send(new RetryTourLegCommand(w.H.TourId, w.H.OperatorId, new(Guid.NewGuid(), await w.H.Version())));
     }
 
     private sealed record VotingRoute(Guid First, Guid Lab, Guid Hall);

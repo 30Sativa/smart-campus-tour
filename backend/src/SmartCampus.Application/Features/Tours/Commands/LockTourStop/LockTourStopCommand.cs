@@ -5,6 +5,7 @@ using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Routes;
+using SmartCampus.Application.Features.Tours.Commands.RetryTourLeg;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Tours.Commands.LockTourStop;
@@ -31,8 +32,9 @@ public sealed class LockTourStopCommandValidator : AbstractValidator<LockTourSto
 /// <summary>
 /// Locking takes the POI out of the open ballot and clears the votes for it (they stay stored with no stop). If it was the
 /// decided POI and the robot has not left, the decision is taken again (<c>LOCKED_FALLBACK</c>). Unlocking only makes the
-/// POI a candidate again; a decision already taken stays. The first POI is fixed, and a POI the robot is driving to cannot
-/// be locked. Every Viewer sees the reason.
+/// POI a candidate again; a decision already taken stays. The first POI is fixed. The target of the current leg can be
+/// locked only once that leg has really stopped (when Retry is allowed); the visit the robot left then decides again and
+/// Retry goes to its decision. Every Viewer sees the reason.
 /// </summary>
 public sealed class LockTourStopCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
     IRouteRevisionRepository revisions, ITourVoteRepository votes, TimeProvider clock)
@@ -57,7 +59,15 @@ public sealed class LockTourStopCommandHandler(ITourManagementRepository reposit
         var now = clock.GetUtcNow();
         var reason = command.Reason.Trim();
         var active = state.Records.ActiveLocks.SingleOrDefault(item => item.RouteRevisionStopId == stop.Id);
-        if (command.Locked) Lock(state, stop, active, reason, command.Actor, now);
+        if (command.Locked)
+        {
+            // The target of the current leg: refused while its GoTo still runs or is unknown (a pause asked but not yet
+            // reported included); allowed once the leg has really stopped, which is exactly when Retry is allowed.
+            var target = tour.CurrentStep == TourRuntime.Navigating && tour.CurrentRevisionStopId == stop.Id;
+            var previous = target && tour.CurrentLegId is { } legId ? await repository.FindLegCommandAsync(legId, ct) : null;
+            if (target && !RetryTourLegCommandHandler.CanRetry(tour, previous)) throw Invalid("Robot đang đi tới điểm tham quan này.");
+            Lock(state, stop, active, reason, command.Actor, now, stoppedTarget: target);
+        }
         else
         {
             if (active is null) throw Invalid("Điểm tham quan này đang không bị khóa.");
@@ -74,24 +84,29 @@ public sealed class LockTourStopCommandHandler(ITourManagementRepository reposit
         return new(tour.Id);
     }
 
-    private void Lock(TourVotingState state, RouteRevisionStop stop, TourStopLock? active, string reason, Guid actor, DateTimeOffset now)
+    private void Lock(TourVotingState state, RouteRevisionStop stop, TourStopLock? active, string reason, Guid actor, DateTimeOffset now,
+        bool stoppedTarget)
     {
         var tour = state.Tour;
         if (active is not null) throw Invalid("Điểm tham quan này đã bị khóa.");
         if (stop.StopOrder == state.Stops.Min(item => item.StopOrder))
             throw Invalid("Điểm tham quan đầu tiên là cố định, không khóa được.");
-        if (tour.CurrentStep == TourRuntime.Navigating && tour.OperationalStatus == TourRuntime.Normal && tour.CurrentRevisionStopId == stop.Id)
-            throw Invalid("Robot đang đi tới điểm tham quan này.");
+        if (stoppedTarget)
+        {
+            // ADR-0065 rule 8: the robot stopped on its way here, so the visit it left decides again (LOCKED_FALLBACK)
+            // and Retry goes there.
+            votes.Add(NewLock(tour, stop, reason, actor, now));
+            state.Locked.Add(stop.Id);
+            TourVoting.Settle(repository, state, actor, now);
+            return;
+        }
 
         var visit = state.Current is { } current && TourVoting.AtVisit(tour, current) ? current : null;
         var open = visit is not null && TourVoting.IsOpen(tour, visit, now);
         // A ballot already closed by time keeps the decision it had before the lock, so a re-choice says LOCKED_FALLBACK.
         if (visit is not null && !open) TourVoting.Settle(repository, state, actor, now);
 
-        votes.Add(new TourStopLock
-        {
-            Id = Guid.NewGuid(), TourId = tour.Id, RouteRevisionStopId = stop.Id, Reason = reason, LockedByUserId = actor, LockedAt = now
-        });
+        votes.Add(NewLock(tour, stop, reason, actor, now));
         state.Locked.Add(stop.Id);
         if (visit is null) return;
         if (open)
@@ -99,6 +114,11 @@ public sealed class LockTourStopCommandHandler(ITourManagementRepository reposit
                 (vote.RouteRevisionStopId, vote.UpdatedAt) = (null, now);
         if (visit.ChosenRevisionStopId == stop.Id) TourVoting.Settle(repository, state, actor, now);
     }
+
+    private static TourStopLock NewLock(Tour tour, RouteRevisionStop stop, string reason, Guid actor, DateTimeOffset now) => new()
+    {
+        Id = Guid.NewGuid(), TourId = tour.Id, RouteRevisionStopId = stop.Id, Reason = reason, LockedByUserId = actor, LockedAt = now
+    };
 
     private static ConflictException Invalid(string message) => new(message, TourVoteCodes.StopLockInvalid);
 }

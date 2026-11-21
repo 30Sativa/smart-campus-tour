@@ -38,9 +38,9 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         {
             var revision = await RouteRevisionMapper.Load(revisions, tour.RouteId, revisionId, false, ct, settings);
             var target = await repository.GetTargetAsync(tour.Id, ct);
-            var (ballot, leading, next, progress) = await VotingAsync(tour, ct);
+            var (ballot, leading, next, progress, retry) = await VotingAsync(tour, ct);
             return new(summary, null, null, tour.FallbackVideoUrl, tour.StartedAt, tour.EndedAt, tour.EndReason,
-                usage, permissions, revision, target.Operator, target.Reservation, execution, actions, ballot, leading, next, progress);
+                usage, permissions, revision, target.Operator, target.Reservation, execution, actions, ballot, leading, next, progress, retry);
         }
         var route = await ReadRoute(tour.RouteId, ct);
         var active = tour.ActiveRouteId == tour.RouteId ? route : await ReadRoute(tour.ActiveRouteId, ct);
@@ -60,25 +60,39 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
 
     /// <summary>
     /// ADR-0065: the ballot of the current POI and the POI it leads with, on a voting route; and, while Next is possible from
-    /// the start or a POI, where it would go, for the button label. Reads only.
+    /// the start or a POI, where it would go, for the button label; on a voting route with a stopped leg, where Retry would
+    /// go (ADR-0065 rule 8). Reads only.
     /// </summary>
-    private async Task<(TourBallotView? Ballot, Guid? Leading, TourNextTargetView? Next, IReadOnlyList<TourStopProgressView>? Progress)>
-        VotingAsync(Tour tour, CancellationToken ct)
+    private async Task<(TourBallotView? Ballot, Guid? Leading, TourNextTargetView? Next, IReadOnlyList<TourStopProgressView>? Progress,
+        TourNextTargetView? Retry)> VotingAsync(Tour tour, CancellationToken ct)
     {
         if (tour.StartedAt is null || await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct) is not { } revision)
-            return (null, null, null, null);
+            return (null, null, null, null, null);
         var stops = await revisions.GetStopsAsync(revision.Id, ct);
         var now = clock.GetUtcNow();
         var state = revision.ViewerChoosesNextStop ? await TourVoting.LoadAsync(votes, tour, revision, stops, ct) : null;
         var progress = state is null ? null : TourVoting.StopProgress(state, now);
         if (tour.State != TourRuntime.Running || tour.CurrentStep is not (TourRuntime.Observing or TourRuntime.Initializing))
-            return (null, null, null, progress);
+            return (null, null, null, progress, await RetryTargetAsync(tour, revision, stops, ct));
         var (target, blocked, _) = await TourVoting.PreviewNextAsync(votes, tour, revision, stops, ct);
-        var next = blocked ? null
-            : target?.Stop is { } stop ? new TourNextTargetView("POI", stop.Id, stop.Name) : new TourNextTargetView("END", null, null);
-        return state is null ? (null, null, next, null)
-            : (TourVoting.Ballot(state, now, null), TourVoting.LeadingStopId(state, now), next, progress);
+        var next = blocked ? null : View(target);
+        return state is null ? (null, null, next, null, null)
+            : (TourVoting.Ballot(state, now, null), TourVoting.LeadingStopId(state, now), next, progress, null);
     }
+
+    /// <summary>Where Retry would go on a voting route whose current leg has stopped; null otherwise or when only locked POIs remain.</summary>
+    private async Task<TourNextTargetView?> RetryTargetAsync(Tour tour, RouteRevision revision, IReadOnlyList<RouteRevisionStop> stops,
+        CancellationToken ct)
+    {
+        if (!revision.ViewerChoosesNextStop || tour.CurrentLegId is not { } legId ||
+            !RetryTourLegCommandHandler.CanRetry(tour, await repository.FindLegCommandAsync(legId, ct)))
+            return null;
+        var (target, blocked) = await TourVoting.RetryAsync(null, votes, tour, revision, stops, null, clock.GetUtcNow(), ct);
+        return blocked ? null : View(target);
+    }
+
+    private static TourNextTargetView View(TourLegTarget? target) =>
+        target?.Stop is { } stop ? new TourNextTargetView("POI", stop.Id, stop.Name) : new TourNextTargetView("END", null, null);
 
     private async Task<TourActionAvailability> StartAsync(Tour tour, Guid? viewer, CancellationToken ct, bool holdAtStart = false)
     {
@@ -162,7 +176,10 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         var revision = await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct);
         var robot = await TourTarget.FindReservedRobotAsync(revisions, tour.AssignedRobotId!.Value, ct);
         var map = revision is null ? null : await revisions.GetMapAsync(revision.MapVersionId, ct);
-        if (robot is null || map is null) return Refused("Không đọc được tuyến hoặc robot của Tour.", "TOUR_STATE_INVALID");
+        if (revision is null || robot is null || map is null) return Refused("Không đọc được tuyến hoặc robot của Tour.", "TOUR_STATE_INVALID");
+        if (revision.ViewerChoosesNextStop &&
+            (await TourVoting.RetryAsync(null, votes, tour, revision, await revisions.GetStopsAsync(revision.Id, ct), null, clock.GetUtcNow(), ct)).Blocked)
+            return Refused("Mọi điểm tham quan còn lại đều đang bị khóa.", TourVoteCodes.AllRemainingLocked);
         var checks = await preflight.EvaluateMovementAsync(tour, robot, map, ct);
         return checks.CanStart ? new(true, null, []) : new(false, "Chưa đủ điều kiện để robot di chuyển.", checks.BlockedBy);
     }

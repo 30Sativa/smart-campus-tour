@@ -93,7 +93,9 @@ public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDet
     RouteTestParticipantView? Operator, TourReservationView? Reservation,
     TourExecutionView? Execution = null, TourAllowedActions? AllowedActions = null,
     TourBallotView? Ballot = null, Guid? LeadingStopId = null, TourNextTargetView? NextTarget = null,
-    IReadOnlyList<TourStopProgressView>? StopProgress = null);
+    IReadOnlyList<TourStopProgressView>? StopProgress = null,
+    // ADR-0065 rule 8: on a voting route whose current leg has stopped, where Retry/Resume would go; null otherwise.
+    TourNextTargetView? RetryTarget = null);
 /// <summary>The running state of a Tour: null fields until Start; <see cref="DwellDeadlineAt"/> is display only (ADR-0043 D12).</summary>
 public sealed record TourExecutionView(string State, string? OperationalStatus, string? AssistanceReason, string? CurrentStep,
     Guid? CurrentLegId, string? CurrentLegKind, Guid? CurrentRevisionStopId, Guid? LastArrivedRevisionStopId,

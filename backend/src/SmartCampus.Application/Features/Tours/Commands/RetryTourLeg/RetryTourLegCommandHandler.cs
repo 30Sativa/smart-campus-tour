@@ -15,7 +15,8 @@ namespace SmartCampus.Application.Features.Tours.Commands.RetryTourLeg;
 /// MAP_MISMATCH rejection cannot retry in a loop.
 /// </summary>
 public sealed class RetryTourLegCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, TimeProvider clock)
+    IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings, TimeProvider clock,
+    ITourVoteRepository votes)
     : IRequestHandler<RetryTourLegCommand, TourMutationResult>
 {
     public async Task<TourMutationResult> Handle(RetryTourLegCommand command, CancellationToken ct)
@@ -43,11 +44,14 @@ public sealed class RetryTourLegCommandHandler(ITourManagementRepository reposit
             throw new ConflictException("Chưa đủ điều kiện để robot di chuyển.", TourStartPreflight.MovementFailedCode,
                 checks: checks.Checks, blockedBy: checks.BlockedBy);
 
-        var stop = tour.CurrentRevisionStopId is { } stopId
-            ? (await revisions.GetStopsAsync(revision.Id, ct)).Single(item => item.Id == stopId) : null;
         var now = clock.GetUtcNow();
+        // ADR-0065 rule 8: on a voting route a leg to a POI goes to the visit's decision, re-chosen if its target was locked
+        // while the leg was stopped; the decision is stored in this transaction, under the Tour lock.
+        var (target, blocked) = await TourVoting.RetryAsync(repository, votes, tour, revision,
+            await revisions.GetStopsAsync(revision.Id, ct), command.Actor, now, ct);
+        if (blocked) throw TourVoting.AllLocked();
         tour.ClearAssistance(now);
-        TourLegDispatch.Begin(repository, settings, tour, robotId, map, stop is null ? TourLegTarget.End(revision) : TourLegTarget.To(stop), command.Actor, now);
+        TourLegDispatch.Begin(repository, settings, tour, robotId, map, target, command.Actor, now);
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.LegRetried, fingerprint, now, "state");
         return new(tour.Id);

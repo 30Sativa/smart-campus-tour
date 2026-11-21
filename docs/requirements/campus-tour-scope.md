@@ -255,7 +255,10 @@ route each POI is visited exactly once; votes only change the order:
   Operator's Next does. The Operator never picks or changes the destination.
 - The Operator may lock or unlock a POI not yet visited, always with a reason
   every Viewer sees. Locking during a ballot removes the POI and its votes; if the
-  decided POI is locked before departure the decision is taken again. When only
+  decided POI is locked before departure the decision is taken again. The POI
+  the robot is driving to can be locked only once the robot has really stopped
+  on that leg (paused, or needing assistance after a failed leg); the next POI
+  is then chosen again by the same rule and Resume/Retry goes there. When only
   locked POIs remain, Next and auto-advance are refused and the robot waits until
   the Operator unlocks one or skips all remaining POIs to the end; on a voting
   route Skip is allowed only then.
