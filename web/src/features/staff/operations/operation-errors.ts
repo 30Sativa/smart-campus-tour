@@ -25,6 +25,9 @@ const MESSAGES: Record<string, string> = {
   TOUR_RETRY_NOT_ALLOWED: 'Máy chủ không cho thử lại chặng này: chỉ thử lại được chặng mà robot đã báo thất bại hoặc từ chối. Trạng thái mới đã được tải lại.',
   COMMAND_STATE_INVALID: 'Lệnh không còn ở trạng thái chưa rõ kết quả nên không đối soát được nữa. Trạng thái mới đã được tải lại.',
   IDEMPOTENCY_CONFLICT: 'Yêu cầu trùng mã với một thao tác khác. Tải lại trang rồi thử lại.',
+  ALL_REMAINING_STOPS_LOCKED: 'Mọi điểm còn lại đang tạm khóa nên robot không đi tiếp được. Mở khóa một điểm, hoặc bỏ qua các điểm còn lại để về điểm kết thúc.',
+  SKIP_NOT_ALLOWED: 'Tuyến cho Viewer chọn điểm tiếp theo chỉ bỏ qua được khi mọi điểm còn lại đang tạm khóa. Trạng thái mới đã được tải lại.',
+  STOP_LOCK_INVALID: 'Không khóa hoặc mở khóa được điểm này: điểm đã được tham quan, Tour không còn chạy, hoặc bạn không phải người vận hành. Trạng thái mới đã được tải lại.',
 }
 
 type Body = { errors?: { code?: unknown; checks?: unknown; blockedBy?: unknown; blockers?: unknown } }

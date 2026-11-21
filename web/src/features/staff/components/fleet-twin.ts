@@ -3,7 +3,8 @@ import { formatRelative } from '../../../components/ui/date-time'
 import type { StatusTone } from '../../../components/ui/status-tone'
 import type { TourDetails, TourSummary } from '../../administration/tours/types'
 import { mapConfigFor, mapToScenePose } from '../../digital-twin/map-config'
-import type { TwinRobot, TwinRoute } from '../../digital-twin/TwinScene'
+import type { TwinLeg, TwinRobot, TwinRoute } from '../../digital-twin/TwinScene'
+import { readNextTarget } from '../../tour-vote/vote'
 import { POSE_STALE_SECONDS } from '../attention'
 import type { FleetRobot } from '../operations/fleet-telemetry'
 import type { RunningTour } from '../operations/hooks'
@@ -104,8 +105,45 @@ export function tourTwinRoute(detail: TourDetails): TwinRoute | null {
   const last = revision.stops.at(-1)
   const end = revision.endMode === 'POSE' && revision.endX !== null && revision.endY !== null ? { x: revision.endX, y: revision.endY } : last ? { x: last.x, y: last.y } : { x: revision.startX, y: revision.startY }
   const returning = detail.execution?.currentStep === 'RETURNING_TO_END'
-  return {
+  const route: TwinRoute = {
     stops, endPoint: { name: 'Điểm kết thúc', position: end }, transform: scene.transform, groundY: scene.groundY, markerScale: scene.robotScale,
     targetIndex: current >= 0 && !returning ? current : null, heading: returning ? 'end' : current >= 0 ? 'poi' : 'none',
   }
+  return revision.viewerChoosesNextStop ? votingRoute(detail, route, end) : route
+}
+
+/**
+ * ADR-0065: on a voting Tour the StopOrder says nothing about what was driven or comes next, so the stops are marked and
+ * the legs drawn from the server: `stopProgress` (its `order` gives the order driven) and `nextTarget`.
+ */
+function votingRoute(detail: TourDetails, route: TwinRoute, end: { x: number; y: number }): TwinRoute {
+  const revision = detail.routeRevision!
+  const execution = detail.execution
+  const progress = detail.stopProgress ?? []
+  const point = (id: string | null | undefined) => {
+    const stop = revision.stops.find(item => same(item.id, id))
+    return stop ? { x: stop.x, y: stop.y } : null
+  }
+  const stops = route.stops.map(stop => {
+    const state = progress.find(item => same(item.stopId, stop.id))?.progress
+    return state ? { ...stop, status: state === 'VISITED' ? 'Completed' as const : state === 'SKIPPED' ? 'Skipped' as const : state === 'CURRENT' ? 'Current' as const : 'Upcoming' as const } : stop
+  })
+  // The order driven: the start, then each visited POI by its visit order. A server without `order` gives no order,
+  // so nothing driven is drawn and the next leg only from the POI the robot stands at.
+  const passed = progress.filter(item => item.progress === 'VISITED')
+  const orderKnown = passed.every(item => typeof item.order === 'number')
+  const visited = orderKnown ? [...passed].sort((a, b) => a.order! - b.order!).map(item => point(item.stopId)).filter(item => item !== null) : []
+  const chain = orderKnown ? [{ x: revision.startX, y: revision.startY }, ...visited] : []
+  const step = execution?.currentStep
+  const here = point(execution?.currentRevisionStopId)
+  // At a POI the robot stands at the current stop, which may not be marked VISITED yet.
+  const lastPoint = chain.at(-1)
+  if (step === 'OBSERVING' && here && !(lastPoint && lastPoint.x === here.x && lastPoint.y === here.y)) chain.push(here)
+  const legs: TwinLeg[] = chain.slice(1).map((to, index) => ({ from: chain[index], to, kind: 'visited' }))
+  const target = readNextTarget(detail.nextTarget)
+  const to = step === 'RETURNING_TO_END' ? end : step === 'NAVIGATING' ? here
+    : target ? target.kind === 'END' ? end : point(target.stopId) : null
+  const from = chain.at(-1)
+  if (from && to && step) legs.push({ from, to, kind: 'next' })
+  return { ...route, stops, legs }
 }

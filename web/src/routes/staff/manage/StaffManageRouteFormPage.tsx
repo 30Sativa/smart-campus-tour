@@ -31,19 +31,24 @@ import { clearanceMessage, poseClearance, yawDegrees } from '../../../features/a
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 
 type StopDraft = { poiRevisionId: string; dwellSeconds: number; headSteps: Array<{ preset: 'FRONT' | 'LEFT' | 'RIGHT'; holdSeconds: number }> }
-type Draft = { name: string; description: string; mapVersionId: string; startX: number | null; startY: number | null; startYaw: number | null; endMode: 'LAST_POI' | 'POSE'; endX: number | null; endY: number | null; endYaw: number | null }
+type Draft = { name: string; description: string; mapVersionId: string; startX: number | null; startY: number | null; startYaw: number | null; endMode: 'LAST_POI' | 'POSE'; endX: number | null; endY: number | null; endYaw: number | null; viewerChoosesNextStop: boolean }
 const moveButton = 'grid size-8 shrink-0 place-items-center rounded-lg text-[#2d78a9] hover:bg-[#e9f5ff] disabled:text-[#c3d0db] disabled:hover:bg-transparent'
 // A new route has no start until Staff places one; 0, 0, 0 used to be saved silently.
-const empty: Draft = { name: '', description: '', mapVersionId: '', startX: null, startY: null, startYaw: null, endMode: 'LAST_POI', endX: null, endY: null, endYaw: null }
+const empty: Draft = { name: '', description: '', mapVersionId: '', startX: null, startY: null, startYaw: null, endMode: 'LAST_POI', endX: null, endY: null, endYaw: null, viewerChoosesNextStop: false }
 const STEPS = ['Bản đồ và tên', 'Điểm dừng', 'Điểm bắt đầu và kết thúc', 'Xem lại và lưu'] as const
 const placed = (pose: PickerPose) => pose.x != null && pose.y != null && pose.yaw != null
 const samePose = (a: PickerPose, b: PickerPose) => a.x === b.x && a.y === b.y && a.yaw === b.yaw
-// START is still saved as endMode POSE; it only keeps the end pose following the start.
-type EndChoice = 'LAST_POI' | 'START' | 'POSE'
+// START is still saved as endMode POSE; it only keeps the end pose following the start. A separate end pose is no longer
+// offered (ADR-0065, ROUTE_END_POSE_NOT_START); a revision saved with one stays readable, but a new save chooses again.
+type EndChoice = 'LAST_POI' | 'START'
 const poseText = (pose: PickerPose) => placed(pose) ? `x ${pose.x!.toFixed(2)} m · y ${pose.y!.toFixed(2)} m · hướng ${yawDegrees(pose.yaw!)}°` : 'Chưa chọn'
 // docs/lich-tour-theo-ca.md §2. The server checks the same bounds; these only say so before Save.
 const MIN_DWELL_SECONDS = 15
 const MAX_DWELL_SECONDS = 300
+// ADR-0065 (RouteRuleSettings.MinVoteDwellSeconds and the 3-4 POI rule); the server checks the same and answers 409.
+const MIN_VOTE_DWELL_SECONDS = 30
+const MIN_VOTE_STOPS = 3
+const MAX_VOTE_STOPS = 4
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y)
 const metres = (value: number) => value.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 const durationText = formatMinutesSeconds
@@ -78,11 +83,13 @@ export default function StaffManageRouteFormPage() {
     name: source.data.name, description: source.data.description ?? '', mapVersionId: source.data.mapVersionId,
     startX: source.data.startX, startY: source.data.startY, startYaw: source.data.startYaw,
     endMode: source.data.endMode, endX: source.data.endX, endY: source.data.endY, endYaw: source.data.endYaw,
+    viewerChoosesNextStop: source.data.viewerChoosesNextStop ?? false,
   } : empty
   const draft: Draft = draftOverride ?? (source.data ? {
     name: source.data.name, description: source.data.description ?? '', mapVersionId: source.data.mapVersionId,
     startX: source.data.startX, startY: source.data.startY, startYaw: source.data.startYaw,
     endMode: source.data.endMode, endX: source.data.endX, endY: source.data.endY, endYaw: source.data.endYaw,
+    viewerChoosesNextStop: source.data.viewerChoosesNextStop ?? false,
   } : empty)
   const stops = stopsOverride ?? source.data?.stops.map(stop => ({
     poiRevisionId: stop.poiRevisionId, dwellSeconds: stop.dwellSeconds, headSteps: stop.headSteps,
@@ -126,8 +133,11 @@ export default function StaffManageRouteFormPage() {
   const clearance = chosenMap?.poiClearanceMeters
   const startPose = { x: draft.startX, y: draft.startY, yaw: draft.startYaw }
   const endPose = { x: draft.endX, y: draft.endY, yaw: draft.endYaw }
-  const endChoice: EndChoice = endChoiceOverride
-    ?? (draft.endMode === 'LAST_POI' ? 'LAST_POI' : placed(startPose) && samePose(endPose, startPose) ? 'START' : 'POSE')
+  const voting = draft.viewerChoosesNextStop
+  // Null: the edited revision ends at a separate pose, which a new save may not keep; Staff chooses one of the two.
+  const endChoice: EndChoice | null = voting ? 'START' : endChoiceOverride
+    ?? (draft.endMode === 'LAST_POI' ? 'LAST_POI' : placed(startPose) && samePose(endPose, startPose) ? 'START' : null)
+  const separateEndKept = endChoice === null && draft.endMode === 'POSE'
   // ADR-0040: the server refuses a newly written start or end pose without free floor around it; say so before Next.
   // Like the server (SaveRouteRevision), a pose kept unchanged on the same map is exempt: it may predate the rule.
   const saved = source.data && source.data.mapVersionId === draft.mapVersionId ? source.data : null
@@ -135,7 +145,6 @@ export default function StaffManageRouteFormPage() {
   const tooClose = (pose: PickerPose) => Boolean(raster.map && clearance != null && pose.x != null && pose.y != null
     && poseClearance(raster.map, raster.map.pixels ?? null, { x: pose.x, y: pose.y }, clearance) === 'blocked')
   const startTooClose = tooClose(startPose) && !kept(startPose, saved?.startX, saved?.startY)
-  const endTooClose = tooClose(endPose) && !kept(endPose, saved?.endX, saved?.endY)
   const poiName = (id: string) => stopPoi(id)?.name ?? 'POI không còn trong danh sách'
   // Both rules come with the map version from the server; without them the server alone decides.
   const minStops = chosenMap?.routeMinStops
@@ -150,10 +159,11 @@ export default function StaffManageRouteFormPage() {
     return near ? { name: near.name, meters: distance(point, near) } : null
   }
   const startNearStop = nearStop(startPose, stopPois)
-  // A separate end is measured from the last stop only; "Quay về điểm bắt đầu" is always allowed.
-  const endNearStop = endChoice === 'POSE' && !samePose(endPose, startPose) ? nearStop(endPose, stopPois.slice(-1)) : null
-  const closeStops = minSeparation == null ? null : stopPois.slice(1).map((poi, index) => [stopPois[index], poi] as const)
-    .find(([previous, poi]) => distance(previous, poi) < minSeparation) ?? null
+  // Neighbours in order, or, when Viewers choose the order, every pair of POIs (ADR-0065: any two may follow each other).
+  const stopPairs = voting
+    ? stopPois.flatMap((poi, index) => stopPois.slice(index + 1).map(other => [poi, other] as const))
+    : stopPois.slice(1).map((poi, index) => [stopPois[index], poi] as const)
+  const closeStops = minSeparation == null ? null : stopPairs.find(([previous, poi]) => distance(previous, poi) < minSeparation) ?? null
   // A POI without approved narration cannot be ticked; one kept from the revision being edited is named here,
   // so the problem shows before Save instead of as a refusal from the server.
   // Narration belongs to the POI, so a stop on an older revision needs the same approval.
@@ -166,7 +176,8 @@ export default function StaffManageRouteFormPage() {
   const [today] = useState(() => campusDateKey(Date.now()))
   const shiftsToday = useTourShifts(today, today, step === STEPS.length - 1)
   const stopPoints = stops.map(stop => { const poi = stopPoi(stop.poiRevisionId); return poi ? { x: poi.x, y: poi.y, dwellSeconds: stop.dwellSeconds } : null })
-  const estimate = stopPoints.every(point => point !== null) && placed(startPose)
+  // A voting route's length is the longest of its possible orders, which only the server computes (ADR-0065).
+  const estimate = !voting && stopPoints.every(point => point !== null) && placed(startPose)
     ? estimatedRouteSeconds({ x: startPose.x!, y: startPose.y! }, stopPoints.filter(point => point !== null),
       draft.endMode === 'POSE' && draft.endX != null && draft.endY != null ? { x: draft.endX, y: draft.endY } : null,
       shiftsToday.data?.estimatedSpeedMetersPerSecond)
@@ -175,19 +186,20 @@ export default function StaffManageRouteFormPage() {
   const missingByStep: string[][] = [
     [!draft.name.trim() && 'nhập tên tuyến', !draft.mapVersionId && 'chọn bản đồ', mapNotReady && 'chọn bản đồ còn đạt kiểm tra kỹ thuật'],
     [stops.length < (minStops ?? 1) && `chọn ít nhất ${minStops ?? 1} điểm dừng`,
+      voting && (stops.length < MIN_VOTE_STOPS || stops.length > MAX_VOTE_STOPS) && `chọn từ ${MIN_VOTE_STOPS} đến ${MAX_VOTE_STOPS} điểm dừng khi cho Viewer chọn điểm tiếp theo`,
+      voting && stops.some(stop => stop.dwellSeconds < MIN_VOTE_DWELL_SECONDS) && `thời gian dừng ít nhất ${MIN_VOTE_DWELL_SECONDS} giây khi cho Viewer chọn điểm tiếp theo`,
       stops.some(stop => !Number.isInteger(stop.dwellSeconds) || stop.dwellSeconds < MIN_DWELL_SECONDS || stop.dwellSeconds > MAX_DWELL_SECONDS) && `thời gian dừng từ ${MIN_DWELL_SECONDS} đến ${MAX_DWELL_SECONDS} giây`,
       closeStops && `${closeStops[0].name} và ${closeStops[1].name} quá gần nhau`,
       unapprovedStops.length > 0 && `bỏ chọn ${unapprovedStops.join(', ')} hoặc duyệt thuyết minh trước (chưa có thuyết minh đã duyệt)`,
       retiredStops.length > 0 && `bỏ điểm dừng ${retiredStops.join(', ')} (POI đã ngưng dùng) hoặc dùng lại POI`],
     [!placed(startPose) && 'chọn điểm bắt đầu và hướng', startTooClose && 'điểm bắt đầu quá sát vật cản',
       startNearStop && `điểm bắt đầu quá gần điểm dừng ${startNearStop.name}`,
-      endChoice === 'POSE' && !placed(endPose) && 'chọn điểm kết thúc và hướng', endChoice === 'POSE' && endTooClose && 'điểm kết thúc quá sát vật cản',
-      endNearStop && `điểm kết thúc quá gần điểm dừng cuối ${endNearStop.name}`],
+      endChoice === null && 'chọn điểm kết thúc'],
     [],
   ].map(list => list.filter((item): item is string => Boolean(item)))
   const firstOpen = missingByStep.findIndex(list => list.length > 0)
   // Red only for a real problem (too close, against an obstacle, a map that lost its check); what is simply still to do reads grey.
-  const problemByStep = [mapNotReady, Boolean(closeStops) || unapprovedStops.length > 0 || retiredStops.length > 0, Boolean(startTooClose || startNearStop || (endChoice === 'POSE' && endTooClose) || endNearStop), false]
+  const problemByStep = [mapNotReady, Boolean(closeStops) || unapprovedStops.length > 0 || retiredStops.length > 0, Boolean(startTooClose || startNearStop), false]
   const goTo = (index: number) => { setStep(index); setFurthest(current => Math.max(current, index)); setError(null) }
 
   const moveStop = (index: number, offset: number) => setStopsOverride(current => {
@@ -201,6 +213,11 @@ export default function StaffManageRouteFormPage() {
   // Swaps a stop onto its POI's newer revision; order, dwell and head steps stay.
   const swapToNewer = (oldRevisionId: string, newRevisionId: string) => setStopsOverride(current =>
     (current ?? stops).map(stop => stop.poiRevisionId === oldRevisionId ? { ...stop, poiRevisionId: newRevisionId } : stop))
+  // ADR-0065: a voting route always returns to its start, so turning the switch on chooses that end and locks it.
+  const setVoting = (on: boolean) => {
+    updateDraft(on ? { viewerChoosesNextStop: true, endMode: 'POSE', endX: draft.startX, endY: draft.startY, endYaw: draft.startYaw } : { viewerChoosesNextStop: false })
+    if (on) setEndChoice('START')
+  }
   const chooseMap = (mapVersionId: string) => {
     // Stops and poses belong to one map version, so another version starts them again.
     updateDraft({ mapVersionId, startX: null, startY: null, startYaw: null, endX: null, endY: null, endYaw: null })
@@ -291,14 +308,22 @@ export default function StaffManageRouteFormPage() {
         <label className="text-sm sm:col-span-2">Mô tả<textarea className={`${inputClass} mt-1`} rows={2} maxLength={1000} value={draft.description} onChange={e => updateDraft({ description: e.target.value })} /></label>
       </section>}
 
-      {step === 1 && <section aria-label={STEPS[1]} className={`${panelClass} p-4`}><h2 className="font-semibold">Điểm dừng</h2><p className="mt-1 text-xs text-[#64748b]">Tick POI hoặc bấm điểm trên bản đồ để chọn. Robot đi theo thứ tự đánh số, dùng mũi tên để đổi thứ tự.{minStops != null && ` Cần ít nhất ${minStops} điểm dừng.`} Mỗi điểm dừng từ {MIN_DWELL_SECONDS} đến {MAX_DWELL_SECONDS} giây.</p>
-        {closeStops && <p role="alert" className="mt-2 text-xs text-[#b23e18]">{closeStops[0].name} và {closeStops[1].name} cách nhau {metres(distance(closeStops[0], closeStops[1]))} m, cần ít nhất {metres(minSeparation!)} m. Đổi thứ tự hoặc bỏ bớt một điểm.</p>}
+      {step === 1 && <section aria-label={STEPS[1]} className={`${panelClass} p-4`}><h2 className="font-semibold">Điểm dừng</h2><p className="mt-1 text-xs text-[#64748b]">Tick POI hoặc bấm điểm trên bản đồ để chọn. {voting ? 'Robot tới POI số 1 trước, sau đó đi theo phiếu bầu; thứ tự các POI sau chỉ dùng khi hòa phiếu.' : 'Robot đi theo thứ tự đánh số, dùng mũi tên để đổi thứ tự.'}{minStops != null && ` Cần ít nhất ${minStops} điểm dừng.`} Mỗi điểm dừng từ {voting ? MIN_VOTE_DWELL_SECONDS : MIN_DWELL_SECONDS} đến {MAX_DWELL_SECONDS} giây.</p>
+        <div className="mt-3 rounded-xl border border-[#e2e8f0] px-3 py-2.5">
+          <label className="flex cursor-pointer items-center justify-between gap-3">
+            <span className="min-w-0"><span className="block text-sm font-semibold text-[#0f172a]">Cho Viewer chọn điểm tiếp theo</span>
+              <span className="block text-xs text-[#64748b]">Ở mỗi POI, học sinh bầu POI tiếp theo trong lúc robot dừng. Tuyến cần từ {MIN_VOTE_STOPS} đến {MAX_VOTE_STOPS} POI và luôn quay về điểm bắt đầu.</span></span>
+            <input type="checkbox" role="switch" className="size-5 shrink-0 accent-[#2563eb]" checked={voting} onChange={event => setVoting(event.target.checked)} />
+          </label>
+          {voting && <p className="mt-1.5 text-xs font-medium text-[#334155]">POI đầu là điểm cố định, các POI sau do học sinh bầu.</p>}
+        </div>
+        {closeStops && <p role="alert" className="mt-2 text-xs text-[#b23e18]">{closeStops[0].name} và {closeStops[1].name} cách nhau {metres(distance(closeStops[0], closeStops[1]))} m, cần ít nhất {metres(minSeparation!)} m. {voting ? 'Khi học sinh bầu, hai POI bất kỳ có thể đi liền nhau, nên bỏ bớt một điểm.' : 'Đổi thứ tự hoặc bỏ bớt một điểm.'}</p>}
         {rows.length ? <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><ol className="space-y-2">{rows.map(poi => {
           const index = stops.findIndex(stop => stop.poiRevisionId === poi.id)
           const selected = index >= 0
           const narration = narrationStatus(poi.proposal?.narration)
           // Unticking stays possible for a stop kept from the edited revision, so it can be removed.
-          const lockedOut = !narration.approved && !selected
+          const lockedOut = (!narration.approved || (voting && stops.length >= MAX_VOTE_STOPS)) && !selected
           // A stop on an older revision of a POI that has moved on (ADR-0061): never swapped by itself.
           const retired = selected && Boolean(poi.proposal?.retiredAt)
           const newer = selected && !retired && poi.proposal && poi.proposal.revision.id !== poi.id ? poi.proposal.revision : null
@@ -307,13 +332,18 @@ export default function StaffManageRouteFormPage() {
             <label className={`flex min-w-0 flex-1 basis-56 items-center gap-3 ${lockedOut ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
               <input type="checkbox" className="size-4 shrink-0 accent-[#2d719e]" checked={selected} disabled={lockedOut} aria-describedby={narration.approved ? undefined : `narration-${poi.id}`} onChange={() => toggle(poi.id)} />
               {selected && <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#173b5f] text-xs font-semibold text-white">{index + 1}</span>}
+              {selected && voting && index === 0 && <span className="shrink-0 rounded-full bg-[#eff6ff] px-2 py-px text-[11px] font-semibold text-[#1d4ed8]">Điểm cố định</span>}
               <span className="min-w-0 break-words"><span className={`font-semibold ${lockedOut ? 'text-[#64748b]' : 'text-[#0f172a]'}`}>{poi.name}</span>
                 {poi.proposal && <span id={`narration-${poi.id}`} className="ml-2 inline-block align-middle"><ToneBadge tone={narration.tone}>{narration.approved ? `Thuyết minh: ${narration.label}` : narration.label === 'Chờ duyệt' ? 'Thuyết minh chờ duyệt, chưa chọn được' : 'Chưa có thuyết minh, chưa chọn được'}</ToneBadge></span>}</span>
             </label>
             {selected && <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-xs text-[#64748b]">Dừng<span className="w-20 shrink-0"><input aria-label={`Thời gian dừng ${poi.name} (giây)`} className={inputClass} type="number" min={MIN_DWELL_SECONDS} max={MAX_DWELL_SECONDS} value={stops[index].dwellSeconds} onChange={e => setStopsOverride(current => (current ?? stops).map(stop => stop.poiRevisionId === poi.id ? { ...stop, dwellSeconds: Number(e.target.value) } : stop))} /></span>giây</label>
+              <label className="flex items-center gap-2 text-xs text-[#64748b]">Dừng<span className="w-20 shrink-0"><input aria-label={`Thời gian dừng ${poi.name} (giây)`} aria-describedby={voting ? `dwell-hint-${poi.id}` : undefined} className={inputClass} type="number" min={voting ? MIN_VOTE_DWELL_SECONDS : MIN_DWELL_SECONDS} max={MAX_DWELL_SECONDS} value={stops[index].dwellSeconds} onChange={e => setStopsOverride(current => (current ?? stops).map(stop => stop.poiRevisionId === poi.id ? { ...stop, dwellSeconds: Number(e.target.value) } : stop))} /></span>giây</label>
               <button type="button" className={moveButton} aria-label={`Đưa ${poi.name} lên`} disabled={index === 0} onClick={() => moveStop(index, -1)}><ChevronUp size={16} aria-hidden="true" /></button>
               <button type="button" className={moveButton} aria-label={`Đưa ${poi.name} xuống`} disabled={index === stops.length - 1} onClick={() => moveStop(index, 1)}><ChevronDown size={16} aria-hidden="true" /></button>
+            </div>}
+            {selected && voting && <div className="w-full text-xs">
+              {stops[index].dwellSeconds < MIN_VOTE_DWELL_SECONDS && <p role="alert" className="text-[#b23e18]">Cần dừng ít nhất {MIN_VOTE_DWELL_SECONDS} giây để học sinh kịp bầu.</p>}
+              <p id={`dwell-hint-${poi.id}`} className="text-[#64748b]">Nên bằng thời lượng thuyết minh cộng khoảng 20 giây để học sinh bầu.</p>
             </div>}
             {retired && <div role="alert" className="flex w-full flex-wrap items-center gap-2 rounded-lg bg-[#fbeeec] px-2.5 py-1.5 text-xs text-[#a4473d]">
               <span className="min-w-0 flex-1">POI này đã ngưng dùng. Bỏ điểm dừng này, hoặc dùng lại POI ở trang POI, rồi lưu tuyến.</span>
@@ -341,28 +371,23 @@ export default function StaffManageRouteFormPage() {
           nearStop={startNearStop} nearStopLabel="Điểm bắt đầu" minSeparation={minSeparation} placing="điểm bắt đầu" stops={stopPois} />
         <section aria-label="Điểm kết thúc" className={`${panelClass} space-y-3 p-4`}>
           <div><h2 className="font-semibold">Điểm kết thúc</h2><p className="mt-1 text-xs text-[#64748b]">Robot dừng ở đâu khi hết tuyến.</p></div>
-          <div role="radiogroup" aria-label="Điểm kết thúc" className="grid gap-2 sm:grid-cols-3">
+          {separateEndKept && <p role="status" className="rounded-lg bg-[#fffaf0] px-3 py-2 text-xs text-[#7d5310]">Bản đang dùng kết thúc ở một vị trí riêng. Tuyến lưu mới chỉ kết thúc tại điểm dừng cuối hoặc quay về điểm bắt đầu, hãy chọn một trong hai.</p>}
+          <div role="radiogroup" aria-label="Điểm kết thúc" className="grid gap-2 sm:grid-cols-2">
             {([
-              ['LAST_POI', 'Dừng tại điểm dừng cuối', stops.length ? poiName(stops[stops.length - 1].poiRevisionId) : '-'],
-              ['START', 'Quay về điểm bắt đầu', placed(startPose) ? 'Robot về lại đúng vị trí và hướng lúc xuất phát' : 'Chọn điểm bắt đầu trước'],
-              ['POSE', 'Về một vị trí riêng', 'Chọn trên bản đồ hoặc lấy từ một POI'],
+              ['LAST_POI', 'Dừng tại điểm dừng cuối', voting ? 'Không dùng được khi cho Viewer chọn điểm tiếp theo' : stops.length ? poiName(stops[stops.length - 1].poiRevisionId) : '-'],
+              ['START', 'Quay về điểm bắt đầu', voting ? 'Tuyến cho Viewer chọn điểm tiếp theo luôn quay về điểm bắt đầu' : placed(startPose) ? 'Robot về lại đúng vị trí và hướng lúc xuất phát' : 'Chọn điểm bắt đầu trước'],
             ] as const).map(([value, label, detail]) => (
-              <label key={value} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-sm ${endChoice === value ? 'border-[#2563eb] bg-[#eff6ff]' : 'border-[#e2e8f0]'}`}>
-                <input type="radio" name="route-end-mode" className="mt-0.5 accent-[#2563eb]" checked={endChoice === value} onChange={() => {
+              <label key={value} className={`flex items-start gap-2.5 rounded-xl border p-3 text-sm ${voting ? 'cursor-not-allowed' : 'cursor-pointer'} ${voting && value === 'LAST_POI' ? 'opacity-60' : ''} ${endChoice === value ? 'border-[#2563eb] bg-[#eff6ff]' : 'border-[#e2e8f0]'}`}>
+                <input type="radio" name="route-end-mode" className="mt-0.5 accent-[#2563eb]" checked={endChoice === value} disabled={voting} onChange={() => {
                   setEndChoice(value)
                   updateDraft(value === 'LAST_POI' ? { endMode: 'LAST_POI', endX: null, endY: null, endYaw: null }
-                    : value === 'START' ? { endMode: 'POSE', endX: draft.startX, endY: draft.startY, endYaw: draft.startYaw }
-                      : { endMode: 'POSE', endX: null, endY: null, endYaw: null })
+                    : { endMode: 'POSE', endX: draft.startX, endY: draft.startY, endYaw: draft.startYaw })
                 }} />
                 <span><span className="block font-medium text-[#0f172a]">{label}</span><span className="text-xs text-[#64748b]">{detail}</span></span>
               </label>
             ))}
           </div>
         </section>
-        {endChoice === 'POSE' && <PoseStep title="Vị trí kết thúc" help="Robot đi tới đây sau điểm dừng cuối."
-          pose={endPose} onChange={pose => updateDraft({ endX: pose.x, endY: pose.y, endYaw: pose.yaw })}
-          raster={raster} clearance={clearance} tooClose={endTooClose} pois={available} stopIds={takenPoiRevisions}
-          nearStop={endNearStop} nearStopLabel="Điểm kết thúc" minSeparation={minSeparation} placing="điểm kết thúc" stops={stopPois} />}
       </div>}
 
       {step === 3 && <section aria-label={STEPS[3]} className={`${panelClass} p-4`}>
@@ -372,15 +397,18 @@ export default function StaffManageRouteFormPage() {
           <ReviewRow label="Bản đồ" onEdit={() => goTo(0)}>{chosenMap ? mapLabel(chosenMap.map) : '-'}</ReviewRow>
           <ReviewRow label={`Điểm dừng (${stops.length})`} onEdit={() => goTo(1)}><ol className="list-inside list-decimal">{stops.map(stop => <li key={stop.poiRevisionId}>{poiName(stop.poiRevisionId)} · dừng {stop.dwellSeconds} giây</li>)}</ol></ReviewRow>
           <ReviewRow label="Điểm bắt đầu" onEdit={() => goTo(2)}><span className="font-mono text-xs">{poseText(startPose)}</span></ReviewRow>
-          <ReviewRow label="Điểm kết thúc" onEdit={() => goTo(2)}>{endChoice === 'LAST_POI' ? 'Dừng tại điểm dừng cuối' : endChoice === 'START' ? 'Quay về điểm bắt đầu' : <span className="font-mono text-xs">{poseText(endPose)}</span>}</ReviewRow>
+          <ReviewRow label="Viewer chọn điểm" onEdit={() => goTo(1)}>{voting ? 'Có. POI đầu là điểm cố định, các POI sau do học sinh bầu.' : 'Không, robot đi theo thứ tự đã đặt.'}</ReviewRow>
+          <ReviewRow label="Điểm kết thúc" onEdit={() => goTo(2)}>{endChoice === 'LAST_POI' ? 'Dừng tại điểm dừng cuối' : endChoice === 'START' ? 'Quay về điểm bắt đầu' : 'Chưa chọn'}</ReviewRow>
           <ReviewRow label="Lộ trình" onEdit={() => goTo(1)}>
-            <p aria-label="Lộ trình robot đi">{['Bắt đầu', ...stops.map((stop, index) => `${index + 1}. ${poiName(stop.poiRevisionId)}`),
-              endChoice === 'LAST_POI' ? 'Kết thúc tại điểm dừng cuối' : endChoice === 'START' ? 'Kết thúc tại điểm bắt đầu' : 'Kết thúc'].join(' → ')}</p>
+            <p aria-label="Lộ trình robot đi">{(voting && stops.length
+              ? ['Bắt đầu', `1. ${poiName(stops[0].poiRevisionId)}`, `các POI còn lại theo phiếu bầu (${stops.slice(1).map(stop => poiName(stop.poiRevisionId)).join(', ')})`, 'Kết thúc tại điểm bắt đầu']
+              : ['Bắt đầu', ...stops.map((stop, index) => `${index + 1}. ${poiName(stop.poiRevisionId)}`),
+                endChoice === 'LAST_POI' ? 'Kết thúc tại điểm dừng cuối' : endChoice === 'START' ? 'Kết thúc tại điểm bắt đầu' : 'Kết thúc']).join(' → ')}</p>
             <p className="mt-1">Tổng thời gian dừng: <span className="font-semibold">{durationText(totalDwell)}</span></p>
             {estimate != null
               ? <p className="mt-1">Thời lượng dự kiến khoảng <span className="font-semibold">{formatExpectedDuration(estimate)}</span>
                 <span className="block text-xs text-[#64748b]">Tính từ thời gian dừng và quãng đường robot đi.</span></p>
-              : <p className="mt-1 text-xs text-[#64748b]">{shiftsToday.isPending ? 'Đang tính thời lượng dự kiến…' : 'Chưa tính được thời lượng dự kiến. Hệ thống sẽ tính khi lưu.'}</p>}
+              : <p className="mt-1 text-xs text-[#64748b]">{voting ? 'Hệ thống tính thời lượng dự kiến khi lưu, theo thứ tự đi dài nhất có thể.' : shiftsToday.isPending ? 'Đang tính thời lượng dự kiến…' : 'Chưa tính được thời lượng dự kiến. Hệ thống sẽ tính khi lưu.'}</p>}
             <ShiftLengthWarning expectedSeconds={estimate} />
           </ReviewRow>
         </dl>
@@ -419,9 +447,19 @@ function ReviewRow({ label, onEdit, children }: { label: string; onEdit: () => v
   </div>
 }
 
+const VOTE_SAVE_ERRORS: Record<string, string> = {
+  ROUTE_VOTE_STOP_COUNT: `Tuyến cho Viewer chọn điểm tiếp theo cần từ ${MIN_VOTE_STOPS} đến ${MAX_VOTE_STOPS} điểm dừng. Thêm hoặc bỏ điểm ở bước 2 rồi lưu lại.`,
+  ROUTE_VOTE_DWELL_TOO_SHORT: `Tuyến cho Viewer chọn điểm tiếp theo cần dừng ít nhất ${MIN_VOTE_DWELL_SECONDS} giây ở mỗi điểm để học sinh kịp bầu. Sửa thời gian dừng ở bước 2 rồi lưu lại.`,
+  ROUTE_VOTE_END_MUST_RETURN: 'Tuyến cho Viewer chọn điểm tiếp theo phải quay về điểm bắt đầu. Chọn Quay về điểm bắt đầu ở bước 3 rồi lưu lại.',
+  ROUTE_END_POSE_NOT_START: 'Điểm kết thúc chỉ được là điểm dừng cuối hoặc điểm bắt đầu. Chọn lại ở bước 3 rồi lưu lại.',
+}
+
 /** Says why a route save was refused; a stop-distance refusal names the stop (docs/lich-tour-theo-ca.md §6). */
 function routeSaveError(cause: unknown) {
   const message = errorText(cause)
+  // ADR-0065 refusals; these also say where in the form to fix them.
+  const code = apiErrorCode(cause)
+  if (code && VOTE_SAVE_ERRORS[code]) return VOTE_SAVE_ERRORS[code]
   if (cause instanceof ApiError && cause.status === 409 && cause.body.includes('ROUTE_STOP_TOO_CLOSE'))
     return message.includes('cần ít nhất') ? message : 'Điểm bắt đầu, điểm kết thúc hoặc hai điểm dừng liền nhau đặt quá gần nhau. Sửa ở bước 2 hoặc 3 rồi lưu lại.'
   // The server names the POI in Vietnamese ("POI {tên} chưa có thuyết minh đã duyệt."); say what to do next.

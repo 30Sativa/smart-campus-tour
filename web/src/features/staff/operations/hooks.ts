@@ -150,6 +150,16 @@ export function useSetAutoAdvance() {
   })
 }
 
+/** ADR-0065: lock (`locked: true`) or unlock a POI of a voting Tour. */
+export function useStopLock() {
+  const onSettled = useRefreshTours()
+  return useMutation({
+    mutationFn: ({ id, stopId, reason, locked }: { id: string; stopId: string; reason: string; locked: boolean }) =>
+      locked ? toursApi.lockStop(id, stopId, reason) : toursApi.unlockStop(id, stopId, reason),
+    onSettled,
+  })
+}
+
 export function useRetryLeg() {
   const onSettled = useRefreshTours()
   return useMutation({

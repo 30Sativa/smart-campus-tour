@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
-import { expectedDurationText, failedCheckNames, historyResultSource, passedAt, routeAvailabilityError, saveResultText, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
+import { expectedDurationText, failedCheckNames, historyResultSource, legCoverageText, missingLegsText, passedAt, routeAvailabilityError, saveResultText, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
 import { RouteFailBanner } from '../../../features/administration/routes/RouteFailBanner'
 import { campusShortDate, campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
@@ -46,6 +46,7 @@ function routeNotice(route: VersionedRoute, hasUnverifiedPoi: boolean): RouteNot
     : { tone: 'info', text: 'Bản này chưa gửi kiểm chứng. Staff kiểm tra lại các điểm dừng rồi bấm Gửi kiểm chứng tuyến để Kỹ thuật chạy thử.' }
   // The fail banner says why and what to do.
   if (route.verificationStatus === 'FAIL') return null
+  if (route.verificationStatus === 'LEGS_INCOMPLETE') return { tone: 'warn', text: 'Chạy thử chưa đi đủ các chặng nên chưa tạo được Tour. Kỹ thuật cần chạy thêm theo thứ tự khác để đi các chặng còn thiếu.' }
   if (route.verificationStatus !== 'PASS') return { tone: 'info', text: 'Đã gửi kiểm chứng. Đang chờ Kỹ thuật chạy thử toàn tuyến trên robot và ghi kết quả.' }
   if (route.scheduleFit === 'TOO_LONG_FOR_SHIFT') return { tone: 'warn', text: `Chưa tạo được Tour: ${scheduleFitLabel(route)!.detail} Staff sửa tuyến cho ngắn hơn rồi gửi chạy thử lại.` }
   return { tone: 'ok', text: 'Dùng được để tạo Tour. Khi tạo, hệ thống còn kiểm tra bản đồ, robot và ca.', createTour: true }
@@ -131,6 +132,10 @@ export default function StaffManageRouteDetailsPage() {
         <div><dt className="text-xs text-[#64748b]">Số điểm dừng</dt><dd className="mt-0.5">{value.stops.length}</dd></div>
         <div><dt className="text-xs text-[#64748b]">Tổng thời gian dừng</dt><dd className="mt-0.5">{formatDuration(value.dwellDurationSeconds)}</dd></div>
       </dl>
+      {value.viewerChoosesNextStop && <div className="mt-3 space-y-1 text-[13px] text-[#334155]" aria-label="Viewer chọn điểm tiếp theo">
+        <p><span className="font-semibold">Viewer chọn điểm tiếp theo.</span> POI đầu là điểm cố định, các POI sau do học sinh bầu; robot luôn quay về điểm bắt đầu. Thời lượng dự kiến tính theo thứ tự đi dài nhất.</p>
+        {value.legCoverage && <p>{legCoverageText(value.legCoverage)}.{missingLegsText(value.legCoverage) ? ' ' + missingLegsText(value.legCoverage) + '.' : ' Đã đi đủ mọi chặng.'}</p>}
+      </div>}
       {value.expectedDurationSeconds ? <p className="mt-3 text-[13px] text-[#334155]">{expectedDurationText(value.expectedDurationSeconds)}</p> : null}
       <ShiftLengthWarning expectedSeconds={value.expectedDurationSeconds} />
     </section>

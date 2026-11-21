@@ -1,3 +1,5 @@
+import type { StopProgress } from '../tour-vote/vote'
+
 /**
  * Student Feature Types
  * CampusTour DT-AMR - Trải nghiệm học sinh tham quan từ xa
@@ -36,6 +38,10 @@ export interface PoiDetail {
   dwellSeconds?: number
   /** Optional photo of the stop, shown in the stop strip of the live view. */
   imageUrl?: string
+  /** ADR-0065, voting Tours only: the revision stop id, the server's progress for it and a lock reason. */
+  stopId?: string
+  progress?: StopProgress | null
+  lockReason?: string | null
 }
 
 export interface StudentRobotPose {

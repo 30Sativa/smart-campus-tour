@@ -55,6 +55,20 @@ describe('buildLiveSnapshot', () => {
     expect(buildLiveSnapshot(info, {} as StudentTourView).pois).toEqual([])
   })
 
+  it('takes the next POI of a voting Tour from the server progress, not the StopOrder (ADR-0065)', () => {
+    const progressed = (a: string, b: string, c: string) => ({ ...view({ step: 'OBSERVING', currentPoiId: 'a', lastArrivedPoiId: 'a' }),
+      stops: [{ ...stop(1, 'a', 'A'), progress: a }, { ...stop(2, 'b', 'B'), progress: b }, { ...stop(3, 'c', 'C'), progress: c, lockReason: ' Đang sửa ' }] })
+    const decided = buildLiveSnapshot(info, progressed('CURRENT', 'REMAINING', 'NEXT'))
+    expect(decided.currentPoi?.title).toBe('A')
+    expect(decided.nextPoi?.title).toBe('C')
+    expect(decided.pois.map(p => p.progress)).toEqual(['CURRENT', 'REMAINING', 'NEXT'])
+    expect(decided.pois[2].lockReason).toBe('Đang sửa')
+    // Before the decision nothing is next, even though B follows A in StopOrder.
+    expect(buildLiveSnapshot(info, progressed('CURRENT', 'REMAINING', 'REMAINING')).nextPoi).toBeUndefined()
+    // An unknown progress value reads as none.
+    expect(buildLiveSnapshot(info, progressed('LATER', 'LATER', 'LATER')).nextPoi?.title).toBe('B')
+  })
+
   it('never plays a stored fallback address: the fallback video comes from the relay (ADR-0063)', () => {
     expect(buildLiveSnapshot({ ...info, tourState: 'RUNNING', hasFallbackVideo: true }, null).videoStreamUrl).toBe('')
   })

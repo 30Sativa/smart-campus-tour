@@ -392,6 +392,12 @@ function stopMark(detail: TourDetails, stopId: string | undefined): StopMark | n
     if (execution.currentStep === 'NAVIGATING') return { label: 'Robot đang tới', tone: 'info' }
     if (execution.currentStep === 'OBSERVING') return { label: 'Đang dừng tại đây', tone: 'ok' }
   }
+  // ADR-0065: a voting Tour's order is not the StopOrder, so its passed, locked and next POIs come from the server.
+  const progress = detail.routeRevision?.viewerChoosesNextStop ? detail.stopProgress?.find(item => sameId(item.stopId, stopId)) : undefined
+  if (progress?.progress === 'VISITED') return { label: 'Đã tới', tone: 'muted' }
+  if (progress?.progress === 'SKIPPED') return { label: 'Đã bỏ qua', tone: 'muted' }
+  if (progress?.lockReason?.trim()) return { label: 'Tạm khóa', tone: 'warn' }
+  if (progress?.progress === 'NEXT') return { label: 'Điểm tiếp theo', tone: 'info' }
   return sameId(stopId, execution.lastArrivedRevisionStopId) ? { label: 'Đã tới', tone: 'muted' } : null
 }
 
@@ -409,7 +415,7 @@ export function RouteStopList({ detail }: { detail: TourDetails }) {
           const mark = marks[index]
           return <li key={`${stop.stopOrder}-${stop.poiRevisionId}`} aria-current={mark?.tone === 'info' || mark?.tone === 'ok' ? 'step' : undefined}
             className="flex items-baseline justify-between gap-3 py-2 text-[13px]">
-            <span className="min-w-0 font-semibold text-[#0f172a]">{stop.stopOrder}. {stop.name}</span>
+            <span className="min-w-0 font-semibold text-[#0f172a]">{stop.stopOrder}. {stop.name}{revision.viewerChoosesNextStop && stop.stopOrder === 1 && <span className="ml-1.5 text-xs font-normal text-muted">(điểm cố định)</span>}</span>
             <span className="flex shrink-0 items-baseline gap-2">
               {mark && <ToneBadge tone={mark.tone}>{mark.label}</ToneBadge>}
               <span className="text-xs text-[#64748b]">dừng {stop.dwellSeconds} giây</span>
@@ -421,6 +427,7 @@ export function RouteStopList({ detail }: { detail: TourDetails }) {
           {returning && <ToneBadge tone="info">Robot đang tới</ToneBadge>}
         </li>
       </ol>
+      {revision.viewerChoosesNextStop && <p className="mt-2 text-[11.5px] leading-5 text-muted">Học sinh bầu điểm tiếp theo ở mỗi POI; số thứ tự chỉ dùng khi hòa phiếu.</p>}
       {marked && <p className="mt-2 text-[11.5px] leading-5 text-muted">Đánh dấu theo trạng thái Tour trên máy chủ, không phải vị trí robot tự báo.</p>}
     </div>
   )

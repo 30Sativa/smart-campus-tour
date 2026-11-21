@@ -1,4 +1,4 @@
-import { AdaptiveDpr, Grid, Html, OrbitControls, PerformanceMonitor } from '@react-three/drei'
+import { AdaptiveDpr, Grid, Html, Line, OrbitControls, PerformanceMonitor } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { memo, useCallback, useEffect, useRef } from 'react'
 import type { MapPose, RouteStop } from '../../api/contracts/staff'
@@ -63,7 +63,13 @@ export type TwinRoute = {
   groundY?: number
   /** Size of the stop markers against the default; a model drawn smaller (NVH V3) shrinks them with its robots. */
   markerScale?: number
+  /**
+   * ADR-0065, a Tour where Viewers choose the next stop: the legs already driven, in the order driven, and the next one,
+   * from the server's progress. Absent on a fixed-order Tour, which draws no line.
+   */
+  legs?: TwinLeg[]
 }
+export type TwinLeg = { from: MapPose; to: MapPose; kind: 'visited' | 'next' }
 
 export type TwinSceneProps = {
   modelKey?: CampusModelKey
@@ -209,14 +215,19 @@ function Marker({ position, color, label, number, emphasis, showLabel, fixedLabe
 }
 
 /**
- * POIs in order, the end point, and the current target. No line is drawn
- * between POIs: the real Nav2 path is not known here, and a straight line
- * through walls would pretend it is (scope §11.3).
+ * POIs in order, the end point, and the current target. A fixed-order Tour draws no line between POIs: the real Nav2
+ * path is not known here, and a straight line through walls would pretend it is (scope §11.3). A voting Tour has no
+ * order to read from the numbers, so it draws thin straight connectors for the order driven and the next leg; they say
+ * which POI follows which, not the path the robot takes.
  */
 function Route({ route, selectedStopId, showLabels }: { route: TwinRoute; selectedStopId?: string | null; showLabels: boolean }) {
   const place = { transform: route.transform, groundY: route.groundY, scale: route.markerScale ?? 1 }
   return (
     <group>
+      {route.legs?.map((leg, index) => <Line key={`${leg.kind}-${index}`} name={`tour-leg-${leg.kind}`}
+        points={[ground(leg.from, route.transform, (route.groundY ?? 0) + 0.04), ground(leg.to, route.transform, (route.groundY ?? 0) + 0.04)]}
+        color={leg.kind === 'next' ? '#2f62b8' : '#2f8f6b'} lineWidth={leg.kind === 'next' ? 3 : 2} dashed={leg.kind === 'next'} dashSize={0.3} gapSize={0.2}
+        transparent opacity={leg.kind === 'next' ? 0.95 : 0.6} />)}
       {route.stops.map((stop, index) => (
         <Marker key={stop.id} position={stop.position} color={STOP_COLOR[stop.status]} label={stop.name} number={String(index + 1)} showLabel={showLabels} {...place} emphasis={stop.id === selectedStopId ? 'selected' : route.heading === 'poi' && route.targetIndex === index ? 'target' : null} />
       ))}

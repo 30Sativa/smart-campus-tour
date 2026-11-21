@@ -401,8 +401,9 @@ describe('Staff versioned Route workflow', () => {
     // A new route has no start until one is placed; nothing defaults to 0, 0, 0.
     expect(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).getByText('Chưa chọn')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
-    fireEvent.click(screen.getByRole('radio', { name: /Về một vị trí riêng/ }))
-    expect(screen.getByText('Cần: chọn điểm bắt đầu và hướng, chọn điểm kết thúc và hướng.')).toBeInTheDocument()
+    // ADR-0065: the end is the last stop or the start; a separate end pose is no longer offered.
+    expect(screen.queryByRole('radio', { name: /Về một vị trí riêng/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Cần: chọn điểm bắt đầu và hướng.')).toBeInTheDocument()
     startFromPoi('poi-rev-parking')
     // The copy select keeps naming the POI the start came from instead of falling back to its placeholder.
     expect(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).getByLabelText('Lấy vị trí có sẵn')).toHaveValue('poi-rev-parking')
@@ -457,10 +458,9 @@ describe('Staff versioned Route workflow', () => {
     expect(start.getByRole('option', { name: 'POI Verified entrance (đang là điểm dừng)' })).toBeDisabled()
     expect(start.getByRole('option', { name: 'POI Verified hall (đang là điểm dừng)' })).toBeDisabled()
     expect(start.getByRole('option', { name: 'POI Parking' })).toBeEnabled()
-    fireEvent.click(screen.getByRole('radio', { name: /Về một vị trí riêng/ }))
-    const end = within(screen.getByRole('region', { name: 'Vị trí kết thúc' }))
-    expect(end.getByRole('option', { name: 'POI Verified hall (đang là điểm dừng)' })).toBeDisabled()
-    expect(end.getByRole('option', { name: 'POI Parking' })).toBeEnabled()
+    // ADR-0065: no separate end pose to pick any more, so there is no second picker.
+    expect(screen.queryByRole('radio', { name: /Về một vị trí riêng/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Vị trí kết thúc' })).not.toBeInTheDocument()
   })
 
   it('flags a start too close to a stop on the spot and blocks Next', async () => {
@@ -472,13 +472,93 @@ describe('Staff versioned Route workflow', () => {
     expect(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).getByRole('alert')).toHaveTextContent('Điểm bắt đầu cách điểm dừng Verified hall 0,5 m, cần ít nhất 1 m.')
     expect(screen.getByText('Chưa sang bước tiếp được: điểm bắt đầu quá gần điểm dừng Verified hall.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
-    // A separate end near the last stop is refused the same way; "Quay về điểm bắt đầu" never is.
+    // "Quay về điểm bắt đầu" is never measured against the stops.
     startFromPoi('poi-rev-parking')
-    fireEvent.click(screen.getByRole('radio', { name: /Về một vị trí riêng/ }))
-    fireEvent.change(within(screen.getByRole('region', { name: 'Vị trí kết thúc' })).getByLabelText('Lấy vị trí có sẵn'), { target: { value: 'poi-rev-near' } })
-    expect(screen.getByText('Chưa sang bước tiếp được: điểm kết thúc quá gần điểm dừng cuối Verified hall.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: /Quay về điểm bắt đầu/ }))
     expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeEnabled()
+  })
+
+  describe('Viewer chooses the next stop (ADR-0065)', () => {
+    const gate = () => [{ ...proposals[0], id: 'p-gate', revision: { ...proposals[0].revision, id: 'poi-rev-gate', name: 'Gate', x: 14, y: 24 } }]
+    const saved = () => JSON.parse(String(requests.find(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')!.init?.body))
+
+    it('asks for 3 to 4 POIs and 30 s dwells, locks the return to the start and leaves the estimate to the server', async () => {
+      extraProposals = gate()
+      tourShifts = { days: [], recommendedMaxSeconds: 3600, quickTourWaitMinutes: 30, estimatedSpeedMetersPerSecond: 0.25 }
+      renderAt('/staff/manage/routes/new')
+      fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Vote tour' } })
+      fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+      next()
+      await screen.findByRole('checkbox', { name: /Verified entrance/ })
+      fireEvent.click(screen.getByRole('switch', { name: /Cho Viewer chọn điểm tiếp theo/ }))
+      expect(screen.getByText('POI đầu là điểm cố định, các POI sau do học sinh bầu.')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('checkbox', { name: /Verified entrance/ }))
+      fireEvent.click(screen.getByRole('checkbox', { name: /Verified hall/ }))
+      expect(screen.getByText(/chọn từ 3 đến 4 điểm dừng khi cho Viewer chọn điểm tiếp theo/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('checkbox', { name: /Parking/ }))
+      expect(screen.queryByText(/chọn từ 3 đến 4 điểm dừng/)).not.toBeInTheDocument()
+      expect(screen.getByText('Điểm cố định')).toBeInTheDocument()
+      expect(screen.getAllByText('Nên bằng thời lượng thuyết minh cộng khoảng 20 giây để học sinh bầu.')).toHaveLength(3)
+      fireEvent.change(screen.getByLabelText('Thời gian dừng Verified entrance (giây)'), { target: { value: '20' } })
+      expect(screen.getByText('Cần dừng ít nhất 30 giây để học sinh kịp bầu.')).toBeInTheDocument()
+      expect(screen.getByText(/thời gian dừng ít nhất 30 giây khi cho Viewer chọn điểm tiếp theo/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
+      fireEvent.change(screen.getByLabelText('Thời gian dừng Verified entrance (giây)'), { target: { value: '30' } })
+      next()
+      // The end is chosen and locked: a voting route always returns to its start.
+      expect(screen.getByRole('radio', { name: /Quay về điểm bắt đầu/ })).toBeChecked()
+      expect(screen.getByRole('radio', { name: /Quay về điểm bắt đầu/ })).toBeDisabled()
+      expect(screen.getByRole('radio', { name: /Dừng tại điểm dừng cuối/ })).toBeDisabled()
+      startFromPoi('poi-rev-gate')
+      next()
+      const review = within(screen.getByRole('region', { name: 'Xem lại và lưu' }))
+      expect(review.getByText('Có. POI đầu là điểm cố định, các POI sau do học sinh bầu.')).toBeInTheDocument()
+      expect(review.getByLabelText('Lộ trình robot đi')).toHaveTextContent('Bắt đầu → 1. Verified entrance → các POI còn lại theo phiếu bầu (Verified hall, Parking) → Kết thúc tại điểm bắt đầu')
+      // No second formula in the web: the longest order is the server's.
+      expect(review.getByText('Hệ thống tính thời lượng dự kiến khi lưu, theo thứ tự đi dài nhất có thể.')).toBeInTheDocument()
+      expect(review.queryByText(/Thời lượng dự kiến khoảng/)).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }))
+      await waitFor(() => expect(saved()).toMatchObject({ viewerChoosesNextStop: true, endMode: 'POSE', startX: 14, startY: 24, endX: 14, endY: 24 }))
+    })
+
+    it('sends the switch off on an ordinary route', async () => {
+      await fillNewRoute()
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }))
+      await waitFor(() => expect(saved()).toMatchObject({ viewerChoosesNextStop: false, endMode: 'LAST_POI' }))
+    })
+
+    it.each([
+      ['ROUTE_VOTE_STOP_COUNT', 'Tuyến cho Viewer chọn điểm tiếp theo cần từ 3 đến 4 điểm dừng. Thêm hoặc bỏ điểm ở bước 2 rồi lưu lại.'],
+      ['ROUTE_VOTE_DWELL_TOO_SHORT', 'Tuyến cho Viewer chọn điểm tiếp theo cần dừng ít nhất 30 giây ở mỗi điểm để học sinh kịp bầu. Sửa thời gian dừng ở bước 2 rồi lưu lại.'],
+      ['ROUTE_VOTE_END_MUST_RETURN', 'Tuyến cho Viewer chọn điểm tiếp theo phải quay về điểm bắt đầu. Chọn Quay về điểm bắt đầu ở bước 3 rồi lưu lại.'],
+      ['ROUTE_END_POSE_NOT_START', 'Điểm kết thúc chỉ được là điểm dừng cuối hoặc điểm bắt đầu. Chọn lại ở bước 3 rồi lưu lại.'],
+    ])('explains %s in Vietnamese', async (code, text) => {
+      createFailure = new Response(JSON.stringify({ success: false, message: 'Refused', data: null, errors: { code } }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+      await fillNewRoute()
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' }))
+      expect(await screen.findByText(text)).toBeInTheDocument()
+    })
+
+    it('asks to choose the end again for a revision saved with a separate end pose', async () => {
+      currentRoute = { ...route, endMode: 'POSE', endX: 13, endY: 23, endYaw: 0 } as unknown as typeof route
+      renderAt('/staff/manage/routes/route-1/edit')
+      await screen.findByLabelText('Tên tuyến')
+      fireEvent.click(screen.getByRole('button', { name: /Bước 3/ }))
+      expect(screen.getByText(/Bản đang dùng kết thúc ở một vị trí riêng/)).toBeInTheDocument()
+      expect(screen.getByText(/chọn điểm kết thúc\./)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('radio', { name: /Quay về điểm bắt đầu/ }))
+      expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeEnabled()
+    })
+
+    it('shows on the route page which legs the test runs still have to drive', async () => {
+      currentRoute = { ...route, isSubmitted: true, verificationStatus: 'LEGS_INCOMPLETE', viewerChoosesNextStop: true,
+        legCoverage: { requiredCount: 7, coveredCount: 6, missingLegs: [{ fromStopId: 'rrs-2', fromName: 'Verified hall', toStopId: 'rrs-1', toName: 'Verified entrance' }] } } as typeof route
+      renderAt('/staff/manage/routes/route-1')
+      expect(await screen.findByText('Đã đi 6/7 chặng. Còn thiếu 1 chặng: Verified hall → Verified entrance.')).toBeInTheDocument()
+      expect(screen.getAllByText('Chạy thử chưa đủ chặng').length).toBeGreaterThan(0)
+      expect(screen.getByText(/Chạy thử chưa đi đủ các chặng nên chưa tạo được Tour/)).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Tạo Tour' })).not.toBeInTheDocument()
+    })
   })
 
   it('warns before saving that the Tours scheduled on the route keep the current revision (ADR-0034)', async () => {

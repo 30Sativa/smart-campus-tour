@@ -66,3 +66,25 @@
   .st .st-x-rail__stops li { flex: 0 0 164px; }
   .st .st-e-grid { gap: 16px; }
 }
+
+/* ADR-0065: the ballot for the next POI, under the picture. */
+.st .st-vote { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--st-line); border-radius: var(--st-card-radius); background: var(--st-paper); box-shadow: var(--st-shadow); }
+.st .st-vote__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.st .st-vote__head h3 { display: inline-flex; align-items: center; gap: 8px; font-size: var(--st-font-md); font-weight: 600; }
+.st .st-vote__clock { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--st-sunk); color: var(--st-secondary); font-size: var(--st-font-xs); font-variant-numeric: tabular-nums; }
+.st .st-vote__hint, .st .st-vote__mine { color: var(--st-secondary); font-size: var(--st-font-sm); }
+.st .st-vote__list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.st .st-vote__option { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; width: 100%; min-height: 52px; padding: 10px 14px; border: 1px solid var(--st-field-line); border-radius: var(--st-radius); background: var(--st-paper); color: var(--st-ink); text-align: left; transition: border-color var(--st-duration) var(--st-ease), background-color var(--st-duration) var(--st-ease); }
+.st .st-vote__option:not(:disabled):hover { border-color: var(--st-primary); }
+.st .st-vote__option:disabled { cursor: not-allowed; opacity: .7; }
+.st .st-vote__option.is-mine { border-color: var(--st-primary); background: var(--st-selected); }
+.st .st-vote__option small { grid-column: 1 / -1; color: var(--st-primary); font-size: var(--st-font-xs); font-weight: 600; }
+.st .st-vote__name { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.st .st-vote__count { color: var(--st-secondary); font-size: var(--st-font-sm); font-variant-numeric: tabular-nums; }
+.st .st-vote__decision { display: grid; gap: 4px; }
+.st .st-vote__decision b { font-size: var(--st-font-md); font-weight: 600; }
+.st .st-vote__decision span { color: var(--st-secondary); font-size: var(--st-font-sm); }
+.st .st-vote__locked { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--st-radius); background: var(--st-warning-bg); color: var(--st-warning); font-size: var(--st-font-sm); }
+.st .st-vote__locked li { display: flex; align-items: flex-start; gap: 8px; }
+.st .st-vote__locked svg { flex: none; margin-top: 3px; }
+@media (prefers-reduced-motion: reduce) { .st .st-vote__option { transition: none; } }

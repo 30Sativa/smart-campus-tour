@@ -1,5 +1,6 @@
 import type { TourActionAvailability, TourDetails } from '../../administration/tours/types'
 import { STEP_LABEL, assistanceInfo, robotFaultText, robotReasonText } from './operation-labels'
+import { readBallot, readNextTarget, type NextTarget, type TourBallot } from '../../tour-vote/vote'
 
 /**
  * The console actions that a situation can point at. End Early has its own place and is never the suggested step.
@@ -29,6 +30,43 @@ export function actionGate(detail: TourDetails, action: ConsoleAction | 'endEarl
   return detail.allowedActions?.[key] ?? null
 }
 
+/** A POI of a voting Tour that has not been passed yet, and whether the Operator locked it. */
+export type VoteStop = { stopId: string; name: string; locked: boolean; reason: string; next: boolean }
+export type VoteState = {
+  voting: boolean; ballot: TourBallot | null; nextTarget: NextTarget | null; leadingStopId: string | null
+  /** The POIs still ahead (not visited, skipped or being driven to), from `stopProgress` or else the ballot. */
+  remaining: VoteStop[]
+  /** Every POI ahead is locked: Next and auto-advance are refused, only Skip leads on (ADR-0065 rule 8). */
+  allRemainingLocked: boolean
+}
+
+const sameStop = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase()
+
+/** ADR-0065: the vote of a Tour on a route where Viewers choose the next stop; `voting` false leaves the Tour as before. */
+export function voteState(detail: TourDetails): VoteState {
+  const voting = Boolean(detail.routeRevision?.viewerChoosesNextStop)
+  const ballot = voting ? readBallot(detail.ballot) : null
+  const stops = detail.routeRevision?.stops ?? []
+  const name = (id: string) => stops.find(stop => sameStop(stop.id, id))?.name ?? 'POI'
+  const lockOf = (id: string) => ballot?.locked.find(stop => sameStop(stop.stopId, id))
+  let remaining: VoteStop[] = []
+  if (voting && Array.isArray(detail.stopProgress)) {
+    remaining = detail.stopProgress.filter(stop => stop.progress === 'REMAINING' || stop.progress === 'NEXT').map(stop => {
+      const reason = stop.lockReason?.trim() || lockOf(stop.stopId)?.reason || ''
+      return { stopId: stop.stopId, name: name(stop.stopId), locked: Boolean(reason) || Boolean(lockOf(stop.stopId)), reason, next: stop.progress === 'NEXT' }
+    })
+  } else if (ballot) {
+    remaining = [
+      ...ballot.candidates.map(candidate => ({ stopId: candidate.stopId, name: candidate.name, locked: false, reason: '', next: false })),
+      ...ballot.locked.map(stop => ({ stopId: stop.stopId, name: stop.name, locked: true, reason: stop.reason, next: false })),
+    ]
+  }
+  return {
+    voting, ballot, nextTarget: voting || detail.nextTarget ? readNextTarget(detail.nextTarget) : null, leadingStopId: detail.leadingStopId ?? null,
+    remaining, allRemainingLocked: voting && remaining.length > 0 && remaining.every(stop => stop.locked),
+  }
+}
+
 /** Names for the places the Tour can go next, from the route revision the server returned. */
 export function tourTargets(detail: TourDetails) {
   const stops = detail.routeRevision?.stops ?? []
@@ -41,17 +79,24 @@ export function tourTargets(detail: TourDetails) {
   const current = execution?.currentLegKind === 'TO_END' ? 'điểm kết thúc' : byId(execution?.currentRevisionStopId)?.name ?? null
   const here = execution?.currentStep === 'INITIALIZING' ? 0 : byId(execution?.lastArrivedRevisionStopId)?.stopOrder ?? 0
   const currentOrder = byId(execution?.currentRevisionStopId)?.stopOrder ?? null
+  // ADR-0065: the server says where Next goes; on a voting route the StopOrder never does after the first POI.
+  const vote = voteState(detail)
+  const target = vote.nextTarget
+  const next = target ? target.kind === 'END' ? endsAtPose ? 'điểm kết thúc' : null : target.name || 'điểm được bầu'
+    : vote.voting && here !== 0 ? 'điểm được bầu' : placeAfter(here)
+  if (vote.voting) return { current, next, skipped: 'các điểm còn lại', afterSkip: 'điểm kết thúc', endsAtPose, voting: true }
   return {
     /** Where the leg the robot is on (or was stopped on) goes. */
     current,
     /** Where Next or the departure goes; null when the route ends at this POI. */
-    next: placeAfter(here),
+    next,
     /** The POI Skip passes over, and where the robot then goes. */
     skipped: execution?.currentStep === 'OBSERVING' || execution?.currentStep === 'INITIALIZING' ? after(here)?.name ?? null : current,
     afterSkip: execution?.currentStep === 'OBSERVING' || execution?.currentStep === 'INITIALIZING'
       ? (after(here) ? placeAfter(after(here)!.stopOrder) : null)
       : currentOrder !== null ? placeAfter(currentOrder) : null,
     endsAtPose,
+    voting: false,
   }
 }
 
@@ -77,6 +122,9 @@ export function tourSituation(detail: TourDetails, robot: RobotReport = null): S
   const unknownGoTo = command?.kind === 'GoTo' && command.state === 'UNKNOWN'
   const quiet = { action: null, secondary: [], onlyEndEarly: false } as const
   const targets = tourTargets(detail)
+  const vote = voteState(detail)
+  // On a voting route Skip is allowed only once every POI ahead is locked (SKIP_NOT_ALLOWED otherwise).
+  const skip: readonly ConsoleAction[] = !vote.voting || vote.allRemainingLocked ? ['skip'] : []
 
   if (state === 'COMPLETED')
     return { ...quiet, tone: 'ok', title: 'Tour đã hoàn thành', body: 'Robot đã báo tới điểm cuối của tuyến. Không còn thao tác nào trên Tour này.' }
@@ -107,7 +155,7 @@ export function tourSituation(detail: TourDetails, robot: RobotReport = null): S
     const retry = actionGate(detail, 'retryLeg')
     const retryable = Boolean(retry && (retry.allowed || !retry.blockedBy.includes('TOUR_RETRY_NOT_ALLOWED')))
     if (retryable) return {
-      tone: 'danger', title: `Robot đã dừng: ${reason.label}`, action: 'retryLeg', secondary: ['skip'], onlyEndEarly: false,
+      tone: 'danger', title: `Robot đã dừng: ${reason.label}`, action: 'retryLeg', secondary: skip, onlyEndEarly: false,
       body: `${causeOf(detail)} Xử lý tại chỗ (kết nối, vị trí, đường đi) rồi cho robot đi lại${targets.current ? ` tới ${targets.current}` : ''}, bỏ qua điểm này, hoặc kết thúc sớm.`,
     }
     return { tone: 'danger', title: `Cần hỗ trợ: ${reason.label}`, action: null, secondary: [], onlyEndEarly: true,
@@ -115,7 +163,7 @@ export function tourSituation(detail: TourDetails, robot: RobotReport = null): S
   }
 
   if (execution?.operationalStatus === 'PAUSED') return {
-    tone: 'warn', title: 'Đã tạm dừng', action: 'retryLeg', secondary: ['skip'], onlyEndEarly: false,
+    tone: 'warn', title: 'Đã tạm dừng', action: 'retryLeg', secondary: skip, onlyEndEarly: false,
     body: `Robot báo đã dừng${targets.current ? ` trên đường tới ${targets.current}` : ''}. Bấm Tiếp tục khi đường đi thông thoáng; robot đi một chặng mới, không tự chạy lại.`,
   }
 
@@ -125,10 +173,18 @@ export function tourSituation(detail: TourDetails, robot: RobotReport = null): S
     body: 'Tour đã mở, robot đứng yên ở điểm xuất phát. Kiểm tra camera, bản đồ và robot, đánh dấu 4 xác nhận tại chỗ rồi bấm Khởi hành.',
   }
   if (step === 'OBSERVING') {
+    if (vote.allRemainingLocked) return {
+      tone: 'warn', title: 'Mọi điểm còn lại đang tạm khóa', action: 'skip', secondary: [], onlyEndEarly: false,
+      body: 'Robot đứng chờ tại đây. Mở khóa một điểm để học sinh bầu và đi tiếp, hoặc bỏ qua các điểm còn lại để về điểm kết thúc.',
+    }
     const auto = execution?.autoAdvance
     const autoText = auto?.blockedReason ? 'Hết giờ dừng nhưng robot chưa đi được (xem lý do bên dưới); bấm khi sẵn sàng.'
       : auto?.enabled ? 'Robot tự đi tiếp khi hết giờ dừng. Tắt "Tự đi tiếp" để giữ robot ở đây.'
       : 'Bấm khi đoàn đã xem xong; robot không tự rời điểm dừng.'
+    if (vote.voting) {
+      const voteText = vote.ballot?.open ? 'Học sinh đang bầu điểm tiếp theo; bầu chọn đóng khi hết giờ dừng hoặc khi bạn cho robot đi. ' : ''
+      return { tone: 'info', title: 'Đang dừng tại điểm tham quan', action: 'next', secondary: [], onlyEndEarly: false, body: `${voteText}${autoText}` }
+    }
     return { tone: 'info', title: 'Đang dừng tại điểm tham quan', action: 'next', secondary: targets.skipped ? ['skip'] : [], onlyEndEarly: false, body: autoText }
   }
   const moving = step ? STEP_LABEL[step] : 'Đang chạy'

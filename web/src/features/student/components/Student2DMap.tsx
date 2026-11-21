@@ -39,6 +39,10 @@ export function Student2DMap({
 
   // Tuyến đường nối các POI
   const routePoints = pois.map((p) => `${scaleX(p.x)},${scaleY(p.y)}`).join(' ')
+  // ADR-0065: a voting Tour has no fixed order, so only the next leg is drawn, from where the robot is now.
+  const voting = pois.some((p) => p.progress)
+  const passed = (poi: PoiDetail) => poi.progress === 'VISITED' || poi.progress === 'SKIPPED'
+  const legFrom = voting && nextPoi ? currentPoi ?? (hasRobot ? robotPose : null) : null
 
   return (
     <div className="st-map">
@@ -89,8 +93,10 @@ export function Student2DMap({
           <rect x="720" y="440" width="180" height="160" rx="12" fill={C.building} stroke={C.buildingLine} strokeWidth="2" />
           <text x="810" y="525" fill={C.label} fontSize="13" textAnchor="middle">Khu Thể Thao</text>
 
-          {/* Tuyến đường */}
-          <polyline points={routePoints} fill="none" stroke={C.accent} strokeWidth="3" strokeDasharray="8 9" strokeLinecap="round" opacity="0.85" />
+          {/* Tuyến đường: cả tuyến theo thứ tự, hoặc chỉ chặng kế tiếp khi học sinh bầu điểm */}
+          {!voting && <polyline points={routePoints} fill="none" stroke={C.accent} strokeWidth="3" strokeDasharray="8 9" strokeLinecap="round" opacity="0.85" />}
+          {legFrom && nextPoi && <line data-testid="next-leg" x1={scaleX(legFrom.x)} y1={scaleY(legFrom.y)} x2={scaleX(nextPoi.x)} y2={scaleY(nextPoi.y)}
+            stroke={C.accent} strokeWidth="3" strokeDasharray="8 9" strokeLinecap="round" opacity="0.85" />}
 
           {/* Điểm POI */}
           {pois.map((poi) => {
@@ -100,7 +106,7 @@ export function Student2DMap({
             const py = scaleY(poi.y)
 
             return (
-              <g key={poi.id}>
+              <g key={poi.id} opacity={passed(poi) && !isCurrent ? 0.5 : 1} data-progress={poi.progress ?? undefined}>
                 {isCurrent && <circle cx={px} cy={py} r="16" fill={C.accent} opacity="0.35" className="st-map__ping" />}
                 <circle
                   cx={px}
@@ -141,7 +147,8 @@ export function Student2DMap({
           <span><i className="st-legend__current" />Điểm hiện tại</span>
           <span><i className="st-legend__next" />Điểm kế tiếp</span>
           <span><i className="st-legend__robot" />Robot AMR</span>
-          <span><i className="st-legend__route" />Tuyến đường</span>
+          {voting ? <><span><i className="st-legend__route" />Chặng tiếp theo</span><span>Điểm mờ: đã tham quan</span></>
+            : <span><i className="st-legend__route" />Tuyến đường</span>}
         </div>
         <span className="st-mono">Tọa độ thực từ ROS 2 Nav2</span>
       </div>
