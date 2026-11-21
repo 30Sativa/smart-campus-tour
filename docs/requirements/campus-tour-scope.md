@@ -18,7 +18,8 @@ A physical tour requires an assigned Operator and a separate safety attendant.
 The pilot has at least 3 POIs and 2 real navigation legs; prerecorded video is
 labelled fallback and does not prove physical navigation or avatar acceptance.
 Web is a five-role PWA. Vietnamese is the project language. No Viewer robot
-driving, arbitrary map navigation, voting, admissions CRM or routine recording.
+driving, arbitrary map navigation, admissions CRM or routine recording. The only
+Viewer vote is the choice of the next POI on a voting route (§7, ADR-0065).
 
 ## 2. Roles and authorization (FR-01–05, BR-01/08/16/17)
 
@@ -27,8 +28,8 @@ driving, arbitrary map navigation, voting, admissions CRM or routine recording.
 | Admin | Accounts/authorized role assignment, system configuration, administrative audit |
 | Technical Staff | Upload/version map packages; project-template POI import; physical POI verification and exact-version route test records |
 | Staff | Content/Q&A/fallback approval; POI proposals; route composition; row/email-request review; invitation support; scheduling/READY; assigned tour operation; business statistics |
-| Representative | Own registration/rows/invitations, review/delivery status, email-change and branch requests |
-| Viewer | Own invitation session, authorized tour viewing and private Q&A; no account |
+| Representative | Own registration/rows/invitations, review/delivery status and email-change requests |
+| Viewer | Own invitation session, authorized tour viewing, private Q&A and one vote per invitation row for the next POI on a voting route; no account |
 
 Tour Operator is Staff explicitly assigned to a Tour. CreatedByUserId is
 attribution, not assignment. Safety attendant is a physical participant without
@@ -81,9 +82,16 @@ and frame/unit conversion remain pending template-owner validation.
 
 Technical Staff physically verifies each POI, including one camera preset per
 POI revision (FR-49). Staff composes route revisions from same-map POI revisions,
-ordered stops, approved content, dwell and at most one permitted branch point.
-Technical Staff with the assigned Operator tests the whole route and permitted
-branches. A pass records exact map/POI/route/configuration, tester, Operator,
+ordered stops, approved content and dwell. A revision may set "Cho Viewer chọn
+điểm tiếp theo" (ADR-0065): then it has 3–4 POIs, the first POI is fixed, every
+dwell is at least 30 s and the end returns to the start pose. Every new save ends
+at the last POI or at a pose equal to the start ("Quay về điểm bắt đầu"); a
+custom end pose elsewhere is no longer accepted, while revisions already saved
+with one stay readable and runnable. Technical Staff with the assigned Operator
+tests the whole route; a voting route needs PASS runs that together cover every
+leg any vote order can drive (7 legs for 3 POIs, 13 for 4), otherwise it is
+`LEGS_INCOMPLETE` and cannot be scheduled or marked READY. A pass records exact
+map/POI/route/configuration, the driven stop order on a voting route, tester, Operator,
 time, evidence, measured duration and result. Staff cannot technically confirm.
 
 **POI result lifecycle.** Each immutable POI revision takes one technical result
@@ -223,16 +231,38 @@ not a backend test or fresh UI marker.
 
 UC-OPS-07/FR-48/BR-21: End Early changes RUNNING→CANCELLED with actor/time/reason;
 blocks live/fallback/Q&A for all sessions and copied URLs; preserves Ended/Result;
-expires PENDING branch requests with Tour-ended reason; requests active mission
+closes any open next-POI ballot; requests active mission
 cancellation, blocks later movement commands, notifies accepted groups and audits.
 CANCELLED/request/ACK is not proof of physical stop; inspection/safe release remain
 separate and no automatic resume is allowed.
 
-Branch uses verified options, server receipt order and at most one accepted
-change. **Cutoff remains conflicting**: Phiếu says before Tour departure;
-Report 1/historical flow says before leaving branch point. Do not settle or
-implement either policy without the pending decision. Admin End Early F-14
-also remains pending advisor review.
+**Next POI by Viewer vote (ADR-0065, proposed 2026-11-21).** This replaces the
+Representative branch requests (BR-14); the branch-request cutoff question is
+closed. A route without the voting flag runs in its fixed order. On a voting
+route each POI is visited exactly once; votes only change the order:
+
+- A ballot opens when the robot arrives at a POI and at least 2 POIs remain that
+  are neither visited (arrived or skipped) nor locked. With one candidate no
+  ballot opens and that POI is next.
+- It closes when the dwell ends, when the Operator leaves early (Next), when the
+  Tour is paused or ended early, or when the server restarts (votes already
+  stored still count).
+- Each active invitation row has one vote, a shared-screen row too, and may
+  change it until the ballot closes. The vote belongs to the row, not the browser
+  session; votes of a revoked row are not counted.
+- The server decides: most votes wins; a tie, including no votes, goes to the
+  smallest `StopOrder`. Auto-advance goes to the decided POI; otherwise the
+  Operator's Next does. The Operator never picks or changes the destination.
+- The Operator may lock or unlock a POI not yet visited, always with a reason
+  every Viewer sees. Locking during a ballot removes the POI and its votes; if the
+  decided POI is locked before departure the decision is taken again. When only
+  locked POIs remain, Next and auto-advance are refused and the robot waits until
+  the Operator unlocks one or skips all remaining POIs to the end; on a voting
+  route Skip is allowed only then.
+- After the last POI the robot returns to the start; arrival completes the Tour.
+
+Viewers cannot skip a POI, pick a POI outside the route or end the Tour. Admin
+End Early F-14 remains pending advisor review.
 
 ## 8. Research, capacity, privacy and acceptance
 
@@ -253,6 +283,6 @@ and research datasets; no student data to AI and no routine recording.
 
 Acceptance targets AC-01..11 are defined by the SRS and linked in the gap register.
 They are not test results. Voice-provider/data terms, YAML/frame mapping,
-F-14, branch cutoff, invalid-code defaults, research delivery/freshness
+F-14, invalid-code defaults, research delivery/freshness
 thresholds and physical pilot evidence remain open. Navigation command
 transport is selected by ADR-0042 and is implemented from M2.2.

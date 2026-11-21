@@ -39,5 +39,5 @@ they serve an implemented workflow. Admin account management remains Admin-only.
 - No database rows or schema were changed by API retirement.
 - The UI still redirects old browser `/admin/*` page URLs. Those are frontend
   navigation redirects, not backend API aliases.
-- Pending branch cutoff, F-14, project YAML/frame mapping, M2 transport and
-  diagram redraw remain unchanged.
+- Pending F-14, project YAML/frame mapping, M2 transport and diagram redraw
+  remain unchanged. Branch cutoff is closed: ADR-0065 replaces branch requests.

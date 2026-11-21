@@ -17,15 +17,15 @@ Use the SRS screen IDs exactly; components need not be separate routes.
 | SCR-ADMIN | Admin | Manage accounts, configuration and administrative audit; one supported role/account. The "Lịch vận hành" page closes a day or one shift with a reason, and reopens it (`docs/lich-tour-theo-ca.md`) |
 | SCR-TECH-MAP | Technical Staff | Upload a new or existing area version; use the complete area catalog, then choose any registered physical robot for manual deployment/localization evidence. A new PASS requires first accepted Fleet Sync under its current credential; FAIL remains available before confirmation. Keep upload distinct from check result. |
 | SCR-TECH-ROBOT | Technical Staff | Register a PHYSICAL identity using RobotCode and display name. Registration can be prepared independently of map creation/upload and does not require an online robot. Show persisted first accepted connection context separately from the latest in-memory sync; refresh while keeping map-check inputs. Credential provisioning and bridge setup remain separate deployment duties. |
-| SCR-TECH-POI | Technical Staff | Import robot pose-capture files (ADR-0038); verify exact POI/route revisions; project YAML templates/frame mapping pending. Filter POIs by pending, recheck and passed; a recorded result opens read-only with its history and offers no second result or withdrawal. A rejected revision shows it is waiting for Staff |
-| SCR-STAFF-CONTENT | Staff | Propose POIs, compose route revisions, approve Q&A/narration/fallback; no technical confirmation. Narration (ADR-0060): any Staff writes a POI draft, another Staff than its last editor approves it ("Duyệt bởi … lúc …"); route authoring accepts only POIs with approved narration (409 `POI_NARRATION_NOT_APPROVED`). Backend done, screens pending. Route authoring offers only maps with current technical evidence and at least one passed POI (ADR-0033); stop order is explicit and the saved revision states its next step |
+| SCR-TECH-POI | Technical Staff | Import robot pose-capture files (ADR-0038); verify exact POI/route revisions; project YAML templates/frame mapping pending. A test run of a voting route (ADR-0065) first records the stop order actually driven (it starts with the first POI and names every POI once); the route view shows how many required legs are covered and lists the missing legs ("Điểm bắt đầu"/"Điểm kết thúc" for the start and end) until PASS runs cover them all, and shows `LEGS_INCOMPLETE` meanwhile. Filter POIs by pending, recheck and passed; a recorded result opens read-only with its history and offers no second result or withdrawal. A rejected revision shows it is waiting for Staff |
+| SCR-STAFF-CONTENT | Staff | Propose POIs, compose route revisions, approve Q&A/narration/fallback; no technical confirmation. Narration (ADR-0060): any Staff writes a POI draft, another Staff than its last editor approves it ("Duyệt bởi … lúc …"); route authoring accepts only POIs with approved narration (409 `POI_NARRATION_NOT_APPROVED`). Backend done, screens pending. Route authoring offers only maps with current technical evidence and at least one passed POI (ADR-0033); stop order is explicit and the saved revision states its next step. The route form has the flag "Cho Viewer chọn điểm tiếp theo" (ADR-0065: 3–4 POIs, first POI fixed, dwell ≥30 s) and offers only two end choices, "Dừng tại điểm dừng cuối" and "Quay về điểm bắt đầu"; "Về một vị trí riêng" is no longer offered for a new save, a flagged route must return to the start, and each 409 (`ROUTE_END_POSE_NOT_START`, `ROUTE_VOTE_STOP_COUNT`, `ROUTE_VOTE_DWELL_TOO_SHORT`, `ROUTE_VOTE_END_MUST_RETURN`) shows its Vietnamese message |
 | SCR-STAFF-TOUR | Staff | Create a Tour from a tested route revision, one physical robot and one Operator, then chọn ngày rồi chọn một ca còn trống, and review the duration, robot hold and registration close before saving (ADR-0034, ADR-0035, `docs/lich-tour-theo-ca.md`); a locked shift shows why, and a clash at save refreshes the shifts. Time, route and robot change only by cancelling and recreating |
 | SCR-STAFF-REVIEW | Staff | Decide pending rows and requested email changes; tour SCHEDULED; ≤2-working-day target |
-| SCR-REP | Representative | Own registration/rows, status, email-change/branch requests; server ownership/cutoff checks |
+| SCR-REP | Representative | Own registration/rows, status, email-change requests; server ownership checks. No branch request (replaced by the Viewer vote, ADR-0065) |
 | SCR-INVITATION | Representative / Staff | Own rows / managed tours; accepted row; resend/reissue/revoke semantics differ |
 | SCR-SCHEDULE | Staff | Schedule, assign Operator, reserve robot, READY/reopen/reschedule/cancel; exact confirmation and no pending decisions |
-| SCR-OPS-TWIN | Assigned Staff Operator | Preflight/Start and guarded operation; role alone is insufficient |
-| SCR-VIEWER-QA | Viewer session | Join/wait/live/map/fallback/Q&A/result according to current credential/session/Tour state |
+| SCR-OPS-TWIN | Assigned Staff Operator | Preflight/Start and guarded operation; role alone is insufficient. On a voting route: ballot panel, Next labelled with the server's next target, lock/unlock with reason, "Bỏ qua các điểm còn lại" only when every remaining POI is locked (§5) |
+| SCR-VIEWER-QA | Viewer session | Join/wait/live/map/fallback/Q&A/result according to current credential/session/Tour state; on a voting route also the next-POI ballot (§4) |
 
 Safety attendant has no separate account/screen. TechnicalStaff account login
 alone does not mean SCR-TECH-MAP/SCR-TECH-POI exists. Research produces benchmark
@@ -51,7 +51,7 @@ not grant Staff Operator any SQL permission.
 (unverified) → Technical verifies POIs → Staff composes route/content while the
 map keeps current technical evidence (ADR-0033) →
 Technical + assigned Operator test exact tuple → Staff schedules and reserves
-15min + longest permitted path +15min → review all row/email decisions →
+15min + longest permitted path (on a voting route the longest vote order) +15min → review all row/email decisions →
 READY locks route/content/list → preflight at published time → Start while READY
 → validate guards/claim robot/commit RUNNING → dispatch first leg.
 
@@ -98,6 +98,19 @@ approved-bank Q&A. No Viewer account, arbitrary destination, robot/head control
 or access to another person's Q&A/roster. One shared-screen invitation is one
 viewing point, not a count of room spectators.
 
+**Next-POI ballot (ADR-0065).** On a voting route, when the robot arrives at a
+POI with at least two open candidates, the Viewer page shows the candidates with
+their vote counts and a countdown to `closesAt` (the dwell end). The invitation
+row votes once and may change its vote until the ballot closes; the page marks
+its own choice and survives reload without losing or adding a vote. A locked POI
+is shown as locked with the Operator's reason. When the ballot closes the page
+states the decision and why: most votes, a tie or no votes going to the earlier
+POI in route order, a re-decision because the chosen POI was locked, or the only
+remaining POI. The 2D map marks each POI visited, skipped, current, next or
+remaining and shows locked ones. A refused vote (`VOTE_CLOSED`,
+`VOTE_CANDIDATE_INVALID`) refreshes the ballot. Viewers cannot skip a POI, choose
+one outside the route or end the Tour.
+
 During fallback: label prerecorded media, mute live audio/pause dwell, map keeps
 the actual robot; return to live at a waiting POI and replay that guide.
 Revoke/reissue must stop existing/copied-URL playback ≤10s.
@@ -112,13 +125,24 @@ Current creator field is not operator assignment.
 
 Incident: safety stop → fallback → one state-appropriate recovery → End Early
 when unsafe/unrecoverable. No automatic resume after restart.
-End Early: CANCELLED with actor/time/reason; all Tour media/Q&A revoked; pending
-branches expired; active mission cancellation requested; later motion blocked;
+End Early: CANCELLED with actor/time/reason; all Tour media/Q&A revoked; an open
+next-POI ballot closed; active mission cancellation requested; later motion blocked;
 accepted groups notified/audited. Robot stop/inspection evidence remains separate.
 
-Pending F-14 cannot appear as a generally enabled Admin action. Branch cutoff
-remains conflicting (before Tour departure vs before leaving branch point);
-preserve the decision issue rather than drawing one settled guard.
+Pending F-14 cannot appear as a generally enabled Admin action.
+
+**Voting route operation (ADR-0065).** The Operator sees the same ballot as the
+Viewers with the leading POI. The Next button names the server's next target,
+for example "Đi tới C", or the end after the last POI; the Operator never picks
+or changes it. With auto-advance on the robot leaves at the dwell end for the decided POI;
+turning it off holds the robot until Next. The Operator may lock or unlock a POI
+not yet visited, always entering a reason that every Viewer sees; locking during
+a ballot removes that POI and its votes. When only locked POIs remain, Next and
+auto-advance are refused (`ALL_REMAINING_STOPS_LOCKED`): the Operator unlocks one
+or uses "Bỏ qua các điểm còn lại" to go to the end. Skip is refused
+(`SKIP_NOT_ALLOWED`) while an unlocked POI remains; a lock or unlock outside the
+rules is refused with `STOP_LOCK_INVALID`. The branch-request cutoff question is
+closed; there is no Representative branch request.
 
 ## 6. Integration status and frontend follow-up
 
