@@ -60,7 +60,7 @@ public sealed class ListAutoAdvanceDueQueryHandler(ITourManagementRepository rep
 /// </summary>
 public sealed class AutoAdvanceTourCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
     IRouteRevisionRepository revisions, TourStartPreflight preflight, FleetCommandSettings settings,
-    ITourAutoAdvanceStore store, TimeProvider clock) : IRequestHandler<AutoAdvanceTourCommand, bool>
+    ITourAutoAdvanceStore store, TimeProvider clock, ITourVoteRepository votes) : IRequestHandler<AutoAdvanceTourCommand, bool>
 {
     public const string NotReadyReason = "AUTO_ADVANCE_BLOCKED";
 
@@ -79,7 +79,10 @@ public sealed class AutoAdvanceTourCommandHandler(ITourManagementRepository repo
         var revision = await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct);
         var map = revision is null ? null : await revisions.GetMapAsync(revision.MapVersionId, ct);
         if (revision is null || map is null) return Blocked(tour, robotId, "Không đọc được tuyến của Tour.", now);
-        var target = TourLegDispatch.NextTarget(tour, revision, await revisions.GetStopsAsync(revision.Id, ct));
+        // ADR-0065: the dwell ended, so a voting route closes its ballot here and goes to the decided POI.
+        var (target, locked) = await TourVoting.NextAsync(repository, votes, tour, revision,
+            await revisions.GetStopsAsync(revision.Id, ct), null, now, ct);
+        if (locked) return Blocked(tour, robotId, TourVoteCodes.AllRemainingLocked, now);
         Robot? robot = null;
         if (target is not null)
         {

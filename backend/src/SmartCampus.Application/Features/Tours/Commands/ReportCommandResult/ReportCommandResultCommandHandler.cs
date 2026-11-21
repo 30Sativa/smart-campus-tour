@@ -15,7 +15,7 @@ namespace SmartCampus.Application.Features.Tours.Commands.ReportCommandResult;
 /// Accepted whatever <c>FleetCommands:Enabled</c> says: what the robot reports it did is never refused.
 /// </summary>
 public sealed class ReportCommandResultCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, TimeProvider clock)
+    IRouteRevisionRepository revisions, TimeProvider clock, ITourVoteRepository votes)
     : IRequestHandler<ReportCommandResultCommand, CommandResultAck>
 {
     public async Task<CommandResultAck> Handle(ReportCommandResultCommand result, CancellationToken ct)
@@ -106,6 +106,9 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
             var stop = stops.Single(item => item.Id == command.RouteRevisionStopId);
             // The robot turns its head to the POI's camera preset by itself (ADR-0045 addendum 14/11/2026).
             tour.ArriveAtStop(stop.Id, now.AddSeconds(stop.DwellSeconds), now);
+            // ADR-0065: a voting Tour records the visit and opens its ballot here.
+            if (await revisions.FindRevisionAsync(tour.RouteRevisionId.Value, ct) is { ViewerChoosesNextStop: true } revision)
+                await TourVoting.ArriveAsync(repository, votes, tour, revision, stops, stop.Id, now, ct);
         }
         // A CANCELLED nobody asked for during a running leg needs the Operator like a failure does.
         else if (command.State is RobotCommandStates.Failed or RobotCommandStates.Cancelled)

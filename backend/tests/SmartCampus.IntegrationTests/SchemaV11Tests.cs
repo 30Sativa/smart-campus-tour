@@ -1919,6 +1919,7 @@ public sealed class SchemaV11Tests
             services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();
             services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
             services.AddScoped<ITourManagementRepository, EfTourManagementRepository>();
+            services.AddScoped<ITourVoteRepository, EfTourVoteRepository>();
             services.AddScoped<IScheduleBlockRepository, EfScheduleBlockRepository>();
             services.AddScoped<ITourManagementTransaction, EfTourManagementTransaction>();
             services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();

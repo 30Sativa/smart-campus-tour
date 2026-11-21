@@ -141,6 +141,7 @@ public static class DependencyInjection
         services.AddScoped<IInvitationRepository, EfInvitationRepository>();
         services.AddScoped<IStudentAccessRepository, EfStudentAccessRepository>();
         services.AddScoped<IStudentTourViewReader, EfStudentTourViewReader>();
+        services.AddScoped<ITourVoteRepository, EfTourVoteRepository>();
         services.AddScoped<InitialAdminSeeder>();
         services.AddScoped<DemoPoiSeeder>();
 

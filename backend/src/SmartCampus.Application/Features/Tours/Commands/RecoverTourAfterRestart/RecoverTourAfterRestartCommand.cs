@@ -1,6 +1,7 @@
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Tours.Commands.RecoverTourAfterRestart;
@@ -18,7 +19,8 @@ public sealed class ListRunningToursQueryHandler(ITourManagementRepository repos
 /// withdrawn, a delivered one waits for its result or the sweeper. Nothing continues and no dwell timer comes back. A Tour
 /// already needing assistance keeps its reason, which says more than the restart does.
 /// </summary>
-public sealed class RecoverTourAfterRestartCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations, TimeProvider clock)
+public sealed class RecoverTourAfterRestartCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations, TimeProvider clock,
+    IRouteRevisionRepository revisions, ITourVoteRepository votes)
     : IRequestHandler<RecoverTourAfterRestartCommand, bool>
 {
     public async Task<bool> Handle(RecoverTourAfterRestartCommand recover, CancellationToken ct)
@@ -27,6 +29,8 @@ public sealed class RecoverTourAfterRestartCommandHandler(ITourManagementReposit
         if (tour is null || tour.State != TourRuntime.Running) return false;
         var now = clock.GetUtcNow();
         tour.InterruptByRestart(now);
+        // ADR-0065 rule 4: no dwell timer comes back, so an open ballot closes now with the votes already stored.
+        await TourVoting.CloseOpenBallotAsync(repository, votes, revisions, tour, decide: true, null, now, ct);
         repository.AddEvent(new TourEvent
         {
             TourId = tour.Id, EventType = TourLifecycleEvents.BackendRestarted, OccurredAt = now, RobotId = tour.AssignedRobotId,

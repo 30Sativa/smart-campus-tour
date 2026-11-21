@@ -1,6 +1,7 @@
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Domain.Entities;
 
@@ -12,7 +13,8 @@ namespace SmartCampus.Application.Features.Tours.Commands.EndTourEarly;
 /// inspection and stays held. A Tour with no open GoTo (stopped at the start, a POI or after a paused leg) releases the robot
 /// instead. FR-48 revocation and notices are a follow-up.
 /// </summary>
-public sealed class EndTourEarlyCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations, TimeProvider clock)
+public sealed class EndTourEarlyCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations, TimeProvider clock,
+    IRouteRevisionRepository revisions, ITourVoteRepository votes)
     : IRequestHandler<EndTourEarlyCommand, TourMutationResult>
 {
     public async Task<TourMutationResult> Handle(EndTourEarlyCommand command, CancellationToken ct)
@@ -35,6 +37,8 @@ public sealed class EndTourEarlyCommandHandler(ITourManagementRepository reposit
         var goTo = await repository.LockOpenGoToAsync(tour.Id, ct);
         if (goTo is not null)
             StopLeg(tour, goTo, command.Actor, reason, now);
+        // ADR-0065 rule 4: an open ballot closes; nothing is chosen since the robot does not go on.
+        await TourVoting.CloseOpenBallotAsync(repository, votes, revisions, tour, decide: false, command.Actor, now, ct);
         tour.EndEarly(reason, now);
         // Only a leg that may still be running leaves the robot's position unknown. With no open GoTo the robot is stopped
         // where its last result said (the start, a POI, or a stopped leg), so it is released like a normal end.

@@ -19,6 +19,7 @@ using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
 using SmartCampus.Application.Features.Tours.Commands.EndTourEarly;
 using SmartCampus.Application.Features.Tours.Commands.MarkTourReady;
+using SmartCampus.Application.Features.Tours.Commands.LockTourStop;
 using SmartCampus.Application.Features.Tours.Commands.NextTourStop;
 using SmartCampus.Application.Features.Tours.Commands.ReconcileRobotCommand;
 using SmartCampus.Application.Features.Tours.Commands.ReopenTour;
@@ -154,6 +155,15 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     [HttpPost("{id:guid}/pause")]
     public async Task<IActionResult> Pause(Guid id, [FromBody] PauseTourLegRequest request, CancellationToken ct) =>
         Success(await sender.Send(new PauseTourLegCommand(id, User.GetRequiredUserId(), request), ct), "Leg pause requested.");
+
+    /// <summary>ADR-0065: the Operator takes a not-yet-visited POI of a voting Tour out of the choice, with a reason Viewers see.</summary>
+    [HttpPost("{id:guid}/stops/{stopId:guid}/lock")]
+    public async Task<IActionResult> LockStop(Guid id, Guid stopId, [FromBody] TourStopLockRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new LockTourStopCommand(id, stopId, User.GetRequiredUserId(), true, request.Reason), ct), "Stop locked.");
+
+    [HttpPost("{id:guid}/stops/{stopId:guid}/unlock")]
+    public async Task<IActionResult> UnlockStop(Guid id, Guid stopId, [FromBody] TourStopLockRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new LockTourStopCommand(id, stopId, User.GetRequiredUserId(), false, request.Reason), ct), "Stop unlocked.");
 
     /// <summary>Skips the POI the robot would go to next while it stands still.</summary>
     [HttpPost("{id:guid}/skip")]

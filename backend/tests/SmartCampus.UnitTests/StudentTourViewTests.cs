@@ -24,7 +24,7 @@ public sealed class StudentTourViewTests
         ]);
 
     private static GetStudentTourViewQueryHandler Handler(FakeAccess access, FakeReader reader, bool enabled = true) =>
-        new(access, reader, new FakeCodes(), new InvitationSettings(enabled, 24), TimeProvider.System);
+        new(access, reader, new FakeCodes(), new InvitationSettings(enabled, 24), TimeProvider.System, new NoVotingRoute());
 
     [Fact]
     public async Task ValidSession_ReturnsStopsInOrder_AndNoProgressBeforeTheTourRuns()
@@ -105,6 +105,17 @@ public sealed class StudentTourViewTests
         public void Add(BrowserSession session) => throw new NotSupportedException();
         public Task<bool> HasEnteredAsync(Guid invitationId, CancellationToken ct) => throw new NotSupportedException();
         public void AddAudit(AuditLog audit) => throw new NotSupportedException();
+    }
+
+    /// <summary>None of these routes lets Viewers choose the next stop (ADR-0065), so the view has no ballot.</summary>
+    private sealed class NoVotingRoute : ITourVoteRepository
+    {
+        public Task<TourVotingRoute?> FindVotingRouteAsync(Guid tourId, CancellationToken ct) => Task.FromResult<TourVotingRoute?>(null);
+        public Task<TourVotingRecords> LoadAsync(Guid tourId, Guid? stopVisitId, CancellationToken ct) => throw new NotSupportedException();
+        public Task<Guid?> FindVoterRowAsync(Guid tourId, byte[] tokenHash, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
+        public void Add(TourStopVisit visit) => throw new NotSupportedException();
+        public void Add(TourStopVote vote) => throw new NotSupportedException();
+        public void Add(TourStopLock stopLock) => throw new NotSupportedException();
     }
 
     private sealed class FakeCodes : IInvitationCodeService
