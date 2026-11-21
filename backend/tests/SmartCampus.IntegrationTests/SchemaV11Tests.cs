@@ -783,6 +783,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.22-to-v1.23-poi-retirement.sql");
         await db.ApplyFileAsync("upgrade-v1.23-to-v1.24-user-avatar.sql");
         await db.ApplyFileAsync("upgrade-v1.23-to-v1.24-user-avatar.sql");
+        await db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql");
+        await db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -793,7 +795,9 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.24", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.25", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.RouteRevisions WHERE ViewerChoosesNextStop=1;"));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('TourStopVisits','TourStopVotes','TourStopLocks');"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Users') AND name='AvatarUrl' AND is_nullable=1;"));
         Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Users WHERE AvatarUrl IS NOT NULL;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='PoiNarrationRevisions';"));
@@ -835,6 +839,22 @@ public sealed class SchemaV11Tests
             Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourScheduleBlocks','OBJECT','UPDATE','RemovedByUserId','COLUMN');"));
             Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourScheduleBlocks','OBJECT','UPDATE','Reason','COLUMN');"));
             Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourScheduleBlocks','OBJECT','DELETE');"));
+            // Votes, stop visits and locks are inserted, have only their ballot, choice and unlock columns updated,
+            // and are never deleted; the new route columns stay insert-only.
+            foreach (var table in new[] { "TourStopVisits", "TourStopVotes", "TourStopLocks" })
+            {
+                Assert.Equal(1, await ScalarAsync<int>(connection, $"SELECT HAS_PERMS_BY_NAME('dbo.{table}','OBJECT','INSERT');"));
+                Assert.Equal(0, await ScalarAsync<int>(connection, $"SELECT HAS_PERMS_BY_NAME('dbo.{table}','OBJECT','UPDATE');"));
+                Assert.Equal(0, await ScalarAsync<int>(connection, $"SELECT HAS_PERMS_BY_NAME('dbo.{table}','OBJECT','DELETE');"));
+            }
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourStopVisits','OBJECT','UPDATE','ChosenRevisionStopId','COLUMN');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourStopVisits','OBJECT','UPDATE','RouteRevisionStopId','COLUMN');"));
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourStopVotes','OBJECT','UPDATE','RouteRevisionStopId','COLUMN');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourStopVotes','OBJECT','UPDATE','RosterRowId','COLUMN');"));
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourStopLocks','OBJECT','UPDATE','UnlockReason','COLUMN');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourStopLocks','OBJECT','UPDATE','Reason','COLUMN');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.RouteRevisions','OBJECT','UPDATE','ViewerChoosesNextStop','COLUMN');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.RouteTestRuns','OBJECT','UPDATE','TraversedStopIdsJson','COLUMN');"));
         }
         finally { await ExecuteAsync(connection, "REVERT;"); }
     }
@@ -1269,6 +1289,113 @@ public sealed class SchemaV11Tests
     }
 
     [SchemaV17Fact]
+    public async Task ViewerVoteUpgrade_MatchesTheSnapshot_ChangesNoRow_AndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.24.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.24';");
+        const string bootstrapHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{bootstrapHash}';");
+
+        await db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql");
+        await db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql");
+
+        Assert.Equal("1.25", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        await using var snapshot = await TestDatabase.CreateAsync();
+        const string tables = "('RouteRevisions','RouteTestRuns','TourStopVisits','TourStopVotes','TourStopLocks')";
+        var shapes = new[]
+        {
+            // Column order matters: a database upgraded by the patch must scaffold exactly like the snapshot.
+            $"SELECT STRING_AGG(CONCAT(OBJECT_NAME(object_id),'.',name,':',column_id,':',TYPE_NAME(system_type_id),':',max_length,':',precision,':',scale,':',is_nullable), N',') WITHIN GROUP (ORDER BY OBJECT_NAME(object_id), column_id) FROM sys.columns WHERE OBJECT_NAME(object_id) IN {tables};",
+            $"SELECT STRING_AGG(CONCAT(name,':',definition,':',is_not_trusted,':',is_disabled), N',') WITHIN GROUP (ORDER BY name) FROM sys.check_constraints WHERE OBJECT_NAME(parent_object_id) IN {tables};",
+            $"SELECT STRING_AGG(CONCAT(name,':',definition), N',') WITHIN GROUP (ORDER BY name) FROM sys.default_constraints WHERE OBJECT_NAME(parent_object_id) IN {tables};",
+            $"SELECT STRING_AGG(CONCAT(fk.name,':',OBJECT_NAME(fk.referenced_object_id),':',fk.is_not_trusted,':',COL_NAME(fkc.parent_object_id,fkc.parent_column_id)), N',') WITHIN GROUP (ORDER BY fk.name) FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id=fk.object_id WHERE OBJECT_NAME(fk.parent_object_id) IN {tables};",
+            $"SELECT STRING_AGG(CONCAT(i.name,':',i.is_unique,':',i.is_unique_constraint,':',i.is_primary_key,':',COALESCE(i.filter_definition,''),':',k.keys), N',') WITHIN GROUP (ORDER BY i.name) FROM sys.indexes i JOIN (SELECT ic.object_id, ic.index_id, STRING_AGG(COL_NAME(ic.object_id,ic.column_id),'+') WITHIN GROUP (ORDER BY ic.key_ordinal) AS keys FROM sys.index_columns ic GROUP BY ic.object_id, ic.index_id) k ON k.object_id=i.object_id AND k.index_id=i.index_id WHERE OBJECT_NAME(i.object_id) IN ('TourStopVisits','TourStopVotes','TourStopLocks');",
+        };
+        foreach (var shape in shapes)
+            Assert.Equal(await snapshot.ScalarAsync<string>(shape), await db.ScalarAsync<string>(shape));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RouteTestRuns') AND name='TraversedStopIdsJson' AND is_nullable=1 AND max_length=2000;"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.indexes WHERE name=N'UX_TourStopLocks_Active' AND is_unique=1 AND filter_definition=N'([UnlockedAt] IS NULL)';"));
+    }
+
+    [SchemaV17Fact]
+    public async Task ViewerVoteUpgrade_RefusesAnyOtherVersion()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.23.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.23';");
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql"));
+        Assert.Equal(51250, error.Number);
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('TourStopVisits','TourStopVotes','TourStopLocks');"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RouteRevisions') AND name='ViewerChoosesNextStop';"));
+    }
+
+    [SchemaV17Fact]
+    public async Task ViewerVoteUpgrade_RefusesAV125MarkerWithoutTheVoteTables()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.24.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.25';");
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql"));
+        Assert.Equal(51251, error.Number);
+    }
+
+    [SchemaV17Fact]
+    public async Task ViewerVoteSchema_EnforcesOneVisitPerStop_OneVotePerRow_OneActiveLock_AndConsistentColumns()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        // Constraint checks only: foreign keys are disabled for these synthetic rows, CHECKs and unique indexes stay on.
+        foreach (var table in new[] { "TourStopVisits", "TourStopVotes", "TourStopLocks" })
+            await db.ExecuteAsync($"ALTER TABLE dbo.{table} NOCHECK CONSTRAINT ALL; ALTER TABLE dbo.{table} WITH CHECK CHECK CONSTRAINT {(table == "TourStopVisits" ? "CK_TourStopVisits_Outcome, CK_TourStopVisits_ChosenReason, CK_TourStopVisits_Choice_Complete, CK_TourStopVisits_ChosenNotSelf, CK_TourStopVisits_BallotClosed, CK_TourStopVisits_BallotReason, CK_TourStopVisits_SkippedNoBallot" : table == "TourStopVotes" ? "CK_TourStopVotes_UpdatedAfterVoted" : "CK_TourStopLocks_Reason, CK_TourStopLocks_Unlock_Complete")};");
+        string tour = Id(1), stopA = Id(2), stopB = Id(3), stopC = Id(4), row = Id(5), user = Id(6);
+        string Visit(string id, string stop, string outcome = "ARRIVED", string closesAt = "NULL", string closedAt = "NULL", string chosen = "NULL", string reason = "NULL", string count = "NULL") =>
+            $"INSERT dbo.TourStopVisits(Id,TourId,RouteRevisionStopId,Outcome,OccurredAt,BallotClosesAt,BallotClosedAt,ChosenRevisionStopId,ChosenReason,ChosenVoteCount) VALUES('{id}','{tour}','{stop}','{outcome}',SYSDATETIMEOFFSET(),{closesAt},{closedAt},{chosen},{reason},{count});";
+        const string now = "SYSDATETIMEOFFSET()";
+
+        await db.ExecuteAsync(Visit(Id(10), stopA, closesAt: now, closedAt: now, chosen: $"'{stopB}'", reason: "'VOTE'", count: "3"));
+        await db.ExpectErrorAsync(2627, Visit(Id(11), stopA));
+        await db.ExpectErrorAsync(547, Visit(Id(12), stopB, outcome: "LEFT"));
+        await db.ExpectErrorAsync(547, Visit(Id(13), stopB, chosen: $"'{stopC}'"));
+        await db.ExpectErrorAsync(547, Visit(Id(14), stopB, chosen: $"'{stopC}'", reason: "'POPULAR'"));
+        await db.ExpectErrorAsync(547, Visit(Id(15), stopB, chosen: $"'{stopB}'", reason: "'SINGLE_CANDIDATE'"));
+        await db.ExpectErrorAsync(547, Visit(Id(16), stopB, closedAt: now));
+        await db.ExpectErrorAsync(547, Visit(Id(17), stopB, closesAt: now, chosen: $"'{stopC}'", reason: "'NO_VOTES'", count: "0"));
+        await db.ExpectErrorAsync(547, Visit(Id(18), stopB, outcome: "SKIPPED", closesAt: now));
+        await db.ExpectErrorAsync(547, Visit(Id(19), stopB, chosen: $"'{stopC}'", reason: "'SINGLE_CANDIDATE'", count: "-1"));
+        await db.ExecuteAsync(Visit(Id(20), stopB, chosen: $"'{stopC}'", reason: "'SINGLE_CANDIDATE'"));
+        await db.ExecuteAsync(Visit(Id(21), stopC, outcome: "SKIPPED"));
+
+        string Vote(string id, string updatedAt = now) =>
+            $"INSERT dbo.TourStopVotes(Id,TourId,StopVisitId,RosterRowId,RouteRevisionStopId,VotedAt,UpdatedAt) VALUES('{id}','{tour}','{Id(10)}','{row}','{stopB}',SYSDATETIMEOFFSET(),{updatedAt});";
+        await db.ExecuteAsync(Vote(Id(30)));
+        await db.ExpectErrorAsync(2627, Vote(Id(31)));
+        await db.ExpectErrorAsync(547, Vote(Id(32), "DATEADD(minute,-1,SYSDATETIMEOFFSET())").Replace(row, Id(7)));
+        await db.ExecuteAsync($"UPDATE dbo.TourStopVotes SET RouteRevisionStopId=NULL WHERE Id='{Id(30)}';");
+
+        string Lock(string id, string reason = "N'Khu vực đang sửa'") =>
+            $"INSERT dbo.TourStopLocks(Id,TourId,RouteRevisionStopId,Reason,LockedByUserId,LockedAt) VALUES('{id}','{tour}','{stopC}',{reason},'{user}',SYSDATETIMEOFFSET());";
+        await db.ExpectErrorAsync(547, Lock(Id(40), "N'   '"));
+        await db.ExecuteAsync(Lock(Id(41)));
+        await db.ExpectErrorAsync(2601, Lock(Id(42)));
+        await db.ExpectErrorAsync(547, $"UPDATE dbo.TourStopLocks SET UnlockedAt=SYSDATETIMEOFFSET() WHERE Id='{Id(41)}';");
+        await db.ExpectErrorAsync(547, $"UPDATE dbo.TourStopLocks SET UnlockedAt=SYSDATETIMEOFFSET(), UnlockedByUserId='{user}', UnlockReason=N' ' WHERE Id='{Id(41)}';");
+        await db.ExecuteAsync($"UPDATE dbo.TourStopLocks SET UnlockedAt=SYSDATETIMEOFFSET(), UnlockedByUserId='{user}', UnlockReason=N'Đã mở lại' WHERE Id='{Id(41)}';");
+        await db.ExecuteAsync(Lock(Id(43)));
+    }
+
+    [SchemaV17Fact]
+    public async Task RouteVoteColumns_DefaultToNoVote_AndRequireJsonStopOrder()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        Assert.Equal("((0))", await db.ScalarAsync<string>("SELECT definition FROM sys.default_constraints WHERE name=N'DF_RouteRevisions_ViewerChoosesNextStop';"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT CONVERT(int,is_nullable) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RouteRevisions') AND name='ViewerChoosesNextStop';"));
+        await db.ExecuteAsync("ALTER TABLE dbo.RouteTestRuns NOCHECK CONSTRAINT ALL; ALTER TABLE dbo.RouteTestRuns WITH CHECK CHECK CONSTRAINT CK_RouteTestRuns_TraversedStopIdsJson;");
+        string Run(string id, string json) =>
+            $"INSERT dbo.RouteTestRuns(Id,RouteRevisionId,NavigationFingerprint,MapVersionId,MapDeploymentCheckId,MapPackageSha256,RobotId,CheckedByUserId,ParticipatingStaffUserId,ResultCode,AllStopsReached,SafelyStopped,LocalizationPassed,MeasuredDurationSeconds,EvidenceNote,RequestId,RequestHash,CheckedAt,TraversedStopIdsJson) VALUES('{id}','{Id(1)}',0x00,'{Id(2)}','{Id(3)}',0x00,'{Id(4)}','{Id(5)}','{Id(6)}','PASS',1,1,1,60,N'ok',NEWID(),0x00,SYSDATETIMEOFFSET(),{json});";
+        await db.ExpectErrorAsync(547, Run(Id(50), "N'not json'"));
+        await db.ExecuteAsync(Run(Id(51), $"N'[\"{Id(7)}\",\"{Id(8)}\"]'"));
+        await db.ExecuteAsync(Run(Id(52), "NULL"));
+    }
+
+    [SchemaV17Fact]
     public async Task AvatarUpgrade_RefusesAnyOtherVersion()
     {
         await using var db = await TestDatabase.CreateAsync("snapshot-v1.22.sql");
@@ -1682,7 +1809,7 @@ public sealed class SchemaV11Tests
     [SchemaV12Fact]
     public async Task ConcurrentMapUploads_SerializeAreaVersioningAndIdempotentRetries()
     {
-        // The current snapshot (v1.24): MapVersions gained the v1.21 retirement columns (ADR-0041), which today's upload reads back.
+        // The current snapshot (v1.25): MapVersions gained the v1.21 retirement columns (ADR-0041), which today's upload reads back.
         await using var db = await TestDatabase.CreateAsync();
         await using var services = db.BuildFeatureServiceProvider();
         var package = CreateMapPackage();
@@ -1880,7 +2007,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.24.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.25.sql")
         {
             var db = new TestDatabase();
             try

@@ -302,9 +302,33 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV124SnapshotAndMarker()
+    public async Task Bootstrap_AcceptsVerifiedV125SnapshotAndMarker()
     {
-        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.24.sql", "1.24"));
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.25.sql", "1.25"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_AskForTheUpgradeOnAVerifiedV124Database()
+    {
+        Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.24.sql", "1.24"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_RefusesAV125MarkerWithoutTheTrustedViewerVoteStructure()
+    {
+        foreach (var sql in new[]
+        {
+            "ALTER TABLE dbo.RouteTestRuns DROP CONSTRAINT CK_RouteTestRuns_TraversedStopIdsJson;",
+            "ALTER TABLE dbo.TourStopVisits NOCHECK CONSTRAINT CK_TourStopVisits_Choice_Complete;",
+            "ALTER TABLE dbo.TourStopVotes NOCHECK CONSTRAINT FK_TourStopVotes_RosterRowId;",
+            "DROP INDEX UX_TourStopLocks_Active ON dbo.TourStopLocks;",
+        })
+        {
+            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.25.sql", "1.25", sql));
+            Assert.Equal(51001, error.Number);
+        }
+        var marker = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.24.sql", "1.25"));
+        Assert.Equal(51001, marker.Number);
     }
 
     [SchemaV11Fact]
@@ -486,7 +510,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     // Bootstraps the snapshot with its own hash and version markers, then runs the guard with every
-    // variable bound exactly as init-db.sh binds it for the current v1.24 release.
+    // variable bound exactly as init-db.sh binds it for the current v1.25 release.
     private static async Task<object?> RunCurrentGuardAsync(string snapshot, string version, string? alteration = null)
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync(snapshot);
@@ -516,7 +540,8 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV121)", await SnapshotHashAsync("snapshot-v1.21.sql"))
             .Replace("$(SchemaHashV122)", await SnapshotHashAsync("snapshot-v1.22.sql"))
             .Replace("$(SchemaHashV123)", await SnapshotHashAsync("snapshot-v1.23.sql"))
-            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.24.sql"));
+            .Replace("$(SchemaHashV124)", await SnapshotHashAsync("snapshot-v1.24.sql"))
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.25.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();
     }
@@ -549,6 +574,30 @@ public sealed class DeploymentDatabaseTests
         var error = await Assert.ThrowsAsync<SqlException>(() => RunCheckOnlyGrantsAsync(database));
 
         Assert.Equal(51007, error.Number);
+    }
+
+    [SchemaV17Fact]
+    public async Task CheckOnly_RefusesViewerVoteGrantsThatAreMissingOrTooBroad()
+    {
+        foreach (var sql in new[]
+        {
+            "REVOKE UPDATE (ChosenRevisionStopId) ON OBJECT::dbo.TourStopVisits FROM campus_tour_app;",
+            "REVOKE INSERT ON OBJECT::dbo.TourStopVotes FROM campus_tour_app;",
+            "REVOKE UPDATE (UnlockReason) ON OBJECT::dbo.TourStopLocks FROM campus_tour_app;",
+            "GRANT DELETE ON OBJECT::dbo.TourStopVotes TO campus_tour_app;",
+            "GRANT UPDATE ON OBJECT::dbo.TourStopLocks TO campus_tour_app;",
+            "GRANT UPDATE (RosterRowId) ON OBJECT::dbo.TourStopVotes TO campus_tour_app;",
+            "GRANT UPDATE (Outcome) ON OBJECT::dbo.TourStopVisits TO smartcampus_api;",
+            "GRANT UPDATE (Reason) ON OBJECT::dbo.TourStopLocks TO campus_tour_app;",
+        })
+        {
+            await using var database = await DatabaseWithReviewedGrantsAsync();
+            await database.ExecuteAsync(sql);
+
+            var error = await Assert.ThrowsAsync<SqlException>(() => RunCheckOnlyGrantsAsync(database));
+
+            Assert.Equal(51005, error.Number);
+        }
     }
 
     [SchemaV17Fact]

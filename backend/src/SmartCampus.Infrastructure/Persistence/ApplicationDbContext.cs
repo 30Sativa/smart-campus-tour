@@ -936,7 +936,6 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(32)
                 .IsFixedLength();
             entity.Property(e => e.Name).HasMaxLength(150);
-            entity.Property(e => e.ViewerChoosesNextStop).HasDefaultValue(false);
             entity.Property(e => e.NavigationFingerprint)
                 .HasMaxLength(32)
                 .IsFixedLength();

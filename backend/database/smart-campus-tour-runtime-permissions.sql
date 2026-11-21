@@ -42,6 +42,16 @@ GRANT UPDATE (CredentialHash, CredentialIssuedAt, CredentialIssuedByUserId, Cred
 GRANT SELECT, INSERT ON OBJECT::dbo.RobotCommands TO campus_tour_app;
 GRANT UPDATE (State, IsOpen, Outcome, DeliveredAt, DeliveredStreamId, AcceptedAt, CompletedAt, ReasonCode,
     ResolvedByUserId, ResolvedAt, ResolutionNote) ON OBJECT::dbo.RobotCommands TO campus_tour_app;
+-- v1.25 (ADR-0065): Viewers vote for the next POI. A stop visit, vote and lock keep their Tour, stop, voter, locker,
+-- times and reasons from INSERT; runtime closes a ballot and records its choice, changes a vote's choice (NULL when a
+-- lock clears it) and stamps an unlock. Nothing is deleted. RouteRevisions.ViewerChoosesNextStop and
+-- RouteTestRuns.TraversedStopIdsJson stay insert-only under the existing DENY UPDATE on those tables.
+GRANT SELECT, INSERT ON OBJECT::dbo.TourStopVisits TO campus_tour_app;
+GRANT UPDATE (BallotClosedAt, ChosenRevisionStopId, ChosenReason, ChosenVoteCount) ON OBJECT::dbo.TourStopVisits TO campus_tour_app;
+GRANT SELECT, INSERT ON OBJECT::dbo.TourStopVotes TO campus_tour_app;
+GRANT UPDATE (RouteRevisionStopId, UpdatedAt) ON OBJECT::dbo.TourStopVotes TO campus_tour_app;
+GRANT SELECT, INSERT ON OBJECT::dbo.TourStopLocks TO campus_tour_app;
+GRANT UPDATE (UnlockedByUserId, UnlockedAt, UnlockReason) ON OBJECT::dbo.TourStopLocks TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.TourAllowedBranches TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.BranchRequests TO campus_tour_app;
 GO
