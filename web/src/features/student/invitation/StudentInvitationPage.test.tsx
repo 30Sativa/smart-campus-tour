@@ -606,6 +606,17 @@ describe('the vote for the next POI (ADR-0065)', () => {
     expect(box.queryByRole('button', { name: /Phòng C/ })).not.toBeInTheDocument()
   })
 
+  it('lists the leg target the Operator locked mid-leg with its reason, and shows the re-chosen POI as next', async () => {
+    // The robot stopped on its way to Phòng C; the Operator locked it and the server re-chose Phòng B.
+    const leg = [{ ...stops[0], progress: 'VISITED' }, { ...stops[1], progress: 'NEXT' }, { ...stops[2], progress: 'REMAINING', lockReason: 'Đang có lớp học' }]
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view')
+      ? response({ stops: leg, progress: { ...progress, step: 'NAVIGATING', currentPoiId: 'pc', lastArrivedPoiId: 'pa' }, ballot: null }) : response(running)))
+    mount()
+    const box = within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+    expect(box.getByText('Tạm khóa Phòng C. Lý do: Đang có lớp học')).toBeInTheDocument()
+    expect(screen.getByText('Tiếp theo:').closest('span')).toHaveTextContent('Tiếp theo: Phòng B')
+  })
+
   it('shows no ballot for a Tour whose route does not vote', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response({ ...view, progress: { ...progress, currentPoiId: 'p1', lastArrivedPoiId: 'p1' } }) : response(running)))
     mount()

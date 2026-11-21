@@ -6,8 +6,8 @@ import { buttonClass, tdClass, thClass } from '../../../components/ui/ui-classes
 import type { TourDetails } from '../../administration/tours/types'
 import { clockText, decisionText, secondsLeft, votesText } from '../../tour-vote/vote'
 import { useStopLock } from './hooks'
-import { operationRefusal } from './operation-errors'
-import { voteState, type VoteStop } from './situation'
+import { ALL_REMAINING_LOCKED_TEXT, operationRefusal } from './operation-errors'
+import { currentLegStop, sameStop, voteState, type VoteStop } from './situation'
 import { ToneBadge } from './OperationParts'
 
 /**
@@ -19,11 +19,15 @@ export function VotePanel({ detail, isOperator, now }: { detail: TourDetails; is
   const vote = voteState(detail)
   const lock = useStopLock()
   // Holds the stop itself, so the dialog survives the row moving between lists while saving.
-  const [dialog, setDialog] = useState<{ stop: VoteStop; locked: boolean } | null>(null)
+  const [dialog, setDialog] = useState<{ stop: VoteStop; locked: boolean; legTarget: boolean } | null>(null)
   if (!vote.voting) return null
   const { ballot } = vote
   const running = detail.tour.state === 'RUNNING'
   const canLock = running && isOperator
+  // The POI the robot is driving to can be locked only once that leg has really stopped (Resume/Retry offered).
+  const leg = currentLegStop(detail)
+  const legTarget = (stop: VoteStop) => Boolean(leg && sameStop(leg.stopId, stop.stopId))
+  const underWay = (stop: VoteStop) => !stop.locked && !leg?.stopped && legTarget(stop)
   const left = ballot?.open ? secondsLeft(ballot.closesAt ?? detail.execution?.dwellDeadlineAt, now) : null
   const decision = ballot?.decision ? decisionText(ballot.decision) : null
   const refusal = lock.isError ? operationRefusal(lock.error, { operator: true }).message : null
@@ -51,19 +55,20 @@ export function VotePanel({ detail, isOperator, now }: { detail: TourDetails; is
         <span className="min-w-0"><span className="font-semibold text-[#0f172a]">{stop.name}</span>
           {stop.locked && <> <ToneBadge tone="warn">Tạm khóa</ToneBadge></>}{stop.next && <> <ToneBadge tone="info">Điểm tiếp theo</ToneBadge></>}
           {stop.locked && stop.reason && <span className="block text-xs text-muted">Lý do: {stop.reason}</span>}</span>
-        {canLock && <button type="button" className={buttonClass('secondary', 'sm')} disabled={lock.isPending}
-          onClick={() => { lock.reset(); setDialog({ stop, locked: !stop.locked }) }}>
+        {canLock && underWay(stop) && <span className="text-xs text-muted">Robot đang tới điểm này, chỉ khóa được khi robot đã dừng</span>}
+        {canLock && !underWay(stop) && <button type="button" className={buttonClass('secondary', 'sm')} disabled={lock.isPending}
+          onClick={() => { lock.reset(); setDialog({ stop, locked: !stop.locked, legTarget: legTarget(stop) }) }}>
           {stop.locked ? <><LockOpen size={14} aria-hidden="true" />Mở khóa {stop.name}</> : <><Lock size={14} aria-hidden="true" />Khóa {stop.name}</>}
         </button>}
       </li>)}</ul>
     </div>}
-    {vote.allRemainingLocked && <p className="text-[13px] font-semibold text-[#7d5310]">Mọi điểm còn lại đang tạm khóa. Mở khóa một điểm, hoặc bấm Bỏ qua các điểm còn lại để về điểm kết thúc.</p>}
+    {vote.allRemainingLocked && <p className="text-[13px] font-semibold text-[#7d5310]">{ALL_REMAINING_LOCKED_TEXT}</p>}
 
     <ConfirmationDialog open={dialog !== null} tone={dialog?.locked ? 'danger' : 'default'}
       title={dialog ? `${dialog.locked ? 'Khóa' : 'Mở khóa'} ${dialog.stop.name}?` : ''}
       confirmLabel={dialog?.locked ? 'Khóa điểm' : 'Mở khóa'} busyLabel="Đang gửi…" busy={lock.isPending} error={refusal}
       description={dialog?.locked
-        ? 'Điểm này bị bỏ khỏi bầu chọn và các phiếu đã bầu cho nó bị xóa. Mọi học sinh thấy lý do bạn nhập.'
+        ? `Điểm này bị bỏ khỏi bầu chọn và các phiếu đã bầu cho nó bị xóa. Mọi học sinh thấy lý do bạn nhập.${dialog.legTarget ? ' Robot sẽ đi tới điểm được bầu nhiều kế tiếp khi bạn cho đi tiếp.' : ''}`
         : 'Điểm này được học sinh bầu chọn lại. Mọi học sinh thấy lý do bạn nhập.'}
       withReason requireReason reasonLabel={dialog?.locked ? 'Lý do khóa' : 'Lý do mở khóa'}
       reasonPlaceholder={dialog?.locked ? 'Ví dụ: phòng 601 đang có lớp học, không vào được.' : 'Ví dụ: phòng 601 đã trống.'}

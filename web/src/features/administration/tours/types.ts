@@ -84,6 +84,11 @@ export type TourDetails = {
   ballot?: unknown
   leadingStopId?: string | null
   nextTarget?: unknown
+  /**
+   * Where Resume/Retry goes on a voting route once the current leg has stopped (same shape as `nextTarget`): the POI the
+   * server re-chose after the Operator locked the leg's target, or the end. Null or absent: the leg's own target.
+   */
+  retryTarget?: unknown
   /** Each route stop's place in a voting Tour, with the lock reason; `order` is the visit order of a passed stop. */
   stopProgress?: TourStopProgress[] | null
 }
