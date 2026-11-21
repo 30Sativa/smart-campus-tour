@@ -207,10 +207,10 @@ các endpoint rẽ nhánh từng đề xuất ở đây bị bỏ. Hợp đồng
 |---|---|---|
 | POST | `/api/staff/routes/...revisions` | Thêm `viewerChoosesNextStop` (cờ "Cho Viewer chọn điểm tiếp theo"). Mọi lần lưu mới: kết thúc `LAST_POI` hoặc `POSE` trùng điểm bắt đầu, nếu không 409 `ROUTE_END_POSE_NOT_START`. Có cờ: 409 `ROUTE_VOTE_STOP_COUNT` (ngoài 3–4 POI), `ROUTE_VOTE_DWELL_TOO_SHORT` (dừng dưới 30 s), `ROUTE_VOTE_END_MUST_RETURN` |
 | GET | `RouteRevisionView`, danh sách tuyến | Thêm `viewerChoosesNextStop`, `legCoverage { requiredCount, coveredCount, missingLegs[{ fromStopId, fromName, toStopId, toName }] }` (`fromStopId` null là điểm bắt đầu, `toStopId` null là điểm kết thúc); `VerificationStatus` có thể là `LEGS_INCOMPLETE` (chưa tạo Tour, chưa READY được) |
-| POST | `/api/technical/routes/{routeId}/revisions/{revisionId}/test-runs` | Thêm `traversedStopIds` (thứ tự đã chạy), bắt buộc với tuyến có cờ: bắt đầu bằng POI đầu, mỗi POI đúng một lần |
+| POST | `/api/technical/routes/{routeId}/revisions/{revisionId}/test-runs` | Thêm `traversedStopIds` (thứ tự đã chạy), bắt buộc với tuyến có cờ: bắt đầu bằng POI đầu, mỗi POI đúng một lần; thiếu hoặc sai là 409 `ROUTE_TEST_ORDER_INVALID`. Trả lại trong `testRuns[].traversedStopIds` |
 | PUT | `/api/student/tours/{tourId}/vote` | `{ stopVisitId, stopId }`, phiên Người xem (như Q&A). Trả `ballot`; 409 `VOTE_CLOSED` hoặc `VOTE_CANDIDATE_INVALID` |
 | GET | `/api/student/tours/{tourId}/view` | Thêm `ballot`; mỗi stop thêm `stopId`, `progress` (`VISITED`, `SKIPPED`, `CURRENT`, `NEXT`, `REMAINING`), `lockReason` |
-| GET | `/api/staff/manage/tours/{id}` | Thêm `ballot`, `leadingStopId`, `nextTarget { kind (POI/END), stopId, name }` cho nhãn nút Next ("Đi tới C") |
+| GET | `/api/staff/manage/tours/{id}` | Thêm `ballot`, `leadingStopId`, `nextTarget { kind (POI/END), stopId, name }` cho nhãn nút Next ("Đi tới C"), `stopProgress[{ stopId, order, progress, lockReason }]` |
 | POST | `/api/staff/manage/tours/{id}/stops/{stopId}/lock` / `unlock` | `{ reason }`; chỉ người vận hành của Tour, Tour RUNNING, POI chưa đi; nếu không 409 `STOP_LOCK_INVALID` |
 
 `ballot` = `{ stopVisitId, open, closesAt, candidates[{ stopId, poiId, name, votes }], myVote, locked[{ stopId, name, reason }], decision{ stopId, name, reason, votes } | null }`;

@@ -298,6 +298,21 @@ public sealed class TourVotingSqlTests
                 JOIN dbo.PoiVerificationRecords v ON v.ProposalRevisionId = p.Id
             WHERE s.RouteRevisionId = '{h.Route.RevisionId}' AND s.StopOrder = 1;
             UPDATE dbo.RouteRevisions SET ViewerChoosesNextStop = 1 WHERE Id = '{h.Route.RevisionId}';
+            -- A voting route needs PASS runs covering every leg (ADR-0065): first→lab→hall on the harness run, first→hall→lab
+            -- on a copy recorded a second later.
+            DECLARE @first NVARCHAR(36) = (SELECT CONVERT(NVARCHAR(36), Id) FROM dbo.RouteRevisionStops WHERE RouteRevisionId = '{h.Route.RevisionId}' AND StopOrder = 1);
+            DECLARE @lab NVARCHAR(36) = (SELECT CONVERT(NVARCHAR(36), Id) FROM dbo.RouteRevisionStops WHERE RouteRevisionId = '{h.Route.RevisionId}' AND StopOrder = 2);
+            DECLARE @hall NVARCHAR(36) = (SELECT CONVERT(NVARCHAR(36), Id) FROM dbo.RouteRevisionStops WHERE RouteRevisionId = '{h.Route.RevisionId}' AND StopOrder = 3);
+            UPDATE dbo.RouteTestRuns SET TraversedStopIdsJson = CONCAT('["', @first, '","', @lab, '","', @hall, '"]')
+            WHERE RouteRevisionId = '{h.Route.RevisionId}';
+            INSERT INTO dbo.RouteTestRuns (Id, RouteRevisionId, NavigationFingerprint, MapVersionId, MapDeploymentCheckId, MapPackageSha256,
+                RobotId, CheckedByUserId, ParticipatingStaffUserId, ResultCode, AllStopsReached, SafelyStopped, LocalizationPassed,
+                MeasuredDurationSeconds, FailureReason, EvidenceNote, RequestId, RequestHash, CheckedAt, MeasurementBasis, TraversedStopIdsJson)
+            SELECT TOP (1) NEWID(), RouteRevisionId, NavigationFingerprint, MapVersionId, MapDeploymentCheckId, MapPackageSha256,
+                RobotId, CheckedByUserId, ParticipatingStaffUserId, ResultCode, AllStopsReached, SafelyStopped, LocalizationPassed,
+                MeasuredDurationSeconds, FailureReason, EvidenceNote, NEWID(), RequestHash, DATEADD(SECOND, 1, CheckedAt), MeasurementBasis,
+                CONCAT('["', @first, '","', @hall, '","', @lab, '"]')
+            FROM dbo.RouteTestRuns WHERE RouteRevisionId = '{h.Route.RevisionId}' AND ResultCode = 'PASS' ORDER BY CheckedAt DESC;
             """);
         await using var check = h.Context();
         var stops = await check.RouteRevisionStops.AsNoTracking().Where(s => s.RouteRevisionId == h.Route.RevisionId)

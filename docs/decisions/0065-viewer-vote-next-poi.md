@@ -58,7 +58,8 @@ a Staff-to-Viewer channel, letting Viewers skip a POI, pick a POI outside the ro
   with a Vietnamese message. The minimum distance rule (`ROUTE_STOP_TOO_CLOSE`) compares every pair of POIs instead
   of only neighbours in `StopOrder`.
 - The flag is part of `ConfigurationFingerprint` and of the shared-result path key: switching it changes the path and
-  needs a new test run.
+  needs a new test run. It enters the fingerprint only when set, so routes without it keep their existing fingerprints.
+- A missing or invalid `traversedStopIds` on a voting route is 409 `ROUTE_TEST_ORDER_INVALID`.
 
 ## Estimated duration
 
@@ -86,6 +87,14 @@ null for the start, `toStopId` null for the end).
 - Closing the ballot and choosing the target happen in one transaction under the Tour root lock. A
   `NEXT_STOP_CHOSEN` TourEvent records the counts, the winner and the reason; `STOP_LOCKED` / `STOP_UNLOCKED` record
   locks. Auto-advance refused by locks writes `TOUR_AUTO_ADVANCE_BLOCKED` as today.
+- With exactly one candidate at arrival the choice is stored at once as `SINGLE_CANDIDATE` (no ballot). If a visit
+  opened no ballot and an unlock later adds candidates, the new choice is `LOCKED_FALLBACK`.
+- The first POI and the POI the robot is driving to cannot be locked. A caller who is not the Tour's Operator gets
+  403, as for Next and Skip.
+- The ballot closes by server time at `DwellDeadlineAt`; its stored close time is written when anything next acts on
+  it (Next, a lock, a restart) and records the deadline if that has passed. End Early closes an open ballot without a
+  choice; a restart closes it and stores the decision from the votes already cast. Pause needs a leg in progress, by
+  which time the ballot is already closed.
 
 ## Schema v1.25 (Database First)
 
@@ -115,8 +124,10 @@ null for the start, `toStopId` null for the end).
   `progress` (`VISITED`, `SKIPPED`, `CURRENT`, `NEXT`, `REMAINING`) and `lockReason`. `ballot`:
   `{ stopVisitId, open, closesAt, candidates[{ stopId, poiId, name, votes }], myVote, locked[{ stopId, name, reason }],
   decision{ stopId, name, reason, votes } | null }`. A null `ballot` means the route does not vote or no POI is current.
-- `GET /api/staff/manage/tours/{id}` gains the same `ballot` plus `leadingStopId` and `nextTarget { kind (POI/END),
-  stopId, name }` for the Next button label.
+- `GET /api/staff/manage/tours/{id}` gains the same `ballot` plus `leadingStopId`, `nextTarget { kind (POI/END),
+  stopId, name }` for the Next button label (also on routes without the flag, while the Tour is at the start or a
+  POI) and `stopProgress[{ stopId, order, progress, lockReason }]`.
+- `RouteRevisionView.testRuns[]` gains `traversedStopIds`.
 - `POST /api/staff/manage/tours/{id}/stops/{stopId}/lock` `{ reason }` and `.../unlock` `{ reason }`: only the
   Tour's Operator, Tour RUNNING, POI not yet visited; 409 `STOP_LOCK_INVALID` otherwise.
 - Next and auto-advance on a voting route with only locked POIs left: 409 `ALL_REMAINING_STOPS_LOCKED`. Skip on a

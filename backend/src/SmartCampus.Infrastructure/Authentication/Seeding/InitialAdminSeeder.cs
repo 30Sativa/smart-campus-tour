@@ -62,8 +62,12 @@ public sealed class InitialAdminSeeder(
 
         if (matchingUserIds.Length == 1)
         {
+            // Only the v1.0 Users columns: the seeder also runs on the shared user tables of older schemas,
+            // which lack later columns such as AvatarUrl (v1.24).
             var existingUser = await dbContext.Users
-                .SingleAsync(user => user.Id == matchingUserIds[0], cancellationToken);
+                .Where(user => user.Id == matchingUserIds[0])
+                .Select(user => new { user.Id, user.Username, user.NormalizedUsername, user.IsActive, user.FullName, user.PasswordHash })
+                .SingleAsync(cancellationToken);
 
             if (!string.Equals(existingUser.NormalizedUsername, normalizedUsername, StringComparison.Ordinal)
                 || !string.Equals(
@@ -100,19 +104,15 @@ public sealed class InitialAdminSeeder(
 
         if (!AccountPasswordPolicy.IsValid(password))
             throw new ArgumentException("Initial password must contain 12 to 128 characters.", nameof(password));
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Username = trimmedUsername,
-            NormalizedUsername = normalizedUsername,
-            PasswordHash = passwordHasher.Hash(password),
-            FullName = trimmedFullName,
-            IsActive = true,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        dbContext.Users.Add(user);
-        dbContext.UserRoles.Add(new UserRole { UserId = user.Id, Role = AdminRole });
+        var userId = Guid.NewGuid();
+        var passwordHash = passwordHasher.Hash(password);
+        var createdAt = DateTimeOffset.UtcNow;
+        // Inserted with the v1.0 columns only, for the same reason as the read above.
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO dbo.Users (Id, Username, NormalizedUsername, PasswordHash, FullName, IsActive, CreatedAt)
+            VALUES ({userId}, {trimmedUsername}, {normalizedUsername}, {passwordHash}, {trimmedFullName}, CAST(1 AS bit), {createdAt});
+            """, cancellationToken);
+        dbContext.UserRoles.Add(new UserRole { UserId = userId, Role = AdminRole });
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
