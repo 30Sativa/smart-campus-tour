@@ -443,16 +443,18 @@ public sealed partial class PoiImportSqlTests
     }
 
     [SchemaV11Fact]
-    public async Task RoutePose_TooCloseToAWall_IsRefusedForStartAndEnd()
+    public async Task RoutePose_TooCloseToAWall_IsRefusedForTheStart_AndTheEndCanOnlyReturnToIt()
     {
         await using var h = await Harness.Create();
         var poi = await h.ContentPoi("POI_A");
 
         AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.SaveRoute(poi, startX: 1.1m, startY: 0.5m)));
-        AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.SaveRoute(poi, endX: 1.1m, endY: 0.5m)));
+        // ADR-0065: a new save ends at the last POI or back at the start, so a separate end pose is refused first.
+        Assert.Equal("ROUTE_END_POSE_NOT_START", (await Assert.ThrowsAsync<ConflictException>(() => h.SaveRoute(poi, endX: 1.1m, endY: 0.5m))).Code);
+        Assert.Equal("ROUTE_END_POSE_NOT_START", (await Assert.ThrowsAsync<ConflictException>(() => h.SaveRoute(poi, endX: 3.5m, endY: 3.5m))).Code);
 
-        var route = await h.SaveRoute(poi, endX: 3.5m, endY: 3.5m);
-        Assert.Equal(3.5m, route.EndX);
+        var route = await h.SaveRoute(poi, endX: 2.5m, endY: 2.5m);
+        Assert.Equal(("POSE", 2.5m, 2.5m), (route.EndMode, route.EndX, route.EndY));
     }
 
     [SchemaV11Fact]

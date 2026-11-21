@@ -156,19 +156,38 @@ public static class TourSchedule
     /// A route's expected length: every stop's dwell plus the straight-line travel start -> stop 1 -> ... -> last stop ->
     /// end, at <paramref name="speedMetersPerSecond"/>, rounded up to a whole second. LAST_POI has no final leg; a POSE
     /// end (on the start it is "return to start") adds the leg to EndX/EndY. Stop positions are the revision's snapshot.
+    /// On a route whose Viewers vote for the next POI (ADR-0065) the order is not known in advance, so it is the longest
+    /// of every valid order: stop 1 first, the others in any order (at most 3! = 6 orders), then the end.
     /// </summary>
     public static int EstimatedDurationSeconds(RouteRevision revision, IEnumerable<RouteRevisionStop> stops, double speedMetersPerSecond)
     {
         if (!(speedMetersPerSecond > 0)) throw new ArgumentOutOfRangeException(nameof(speedMetersPerSecond));
         var ordered = stops.OrderBy(stop => stop.StopOrder).ToArray();
+        var meters = revision.ViewerChoosesNextStop && ordered.Length > 2
+            ? Orders(ordered[1..]).Max(rest => TravelMeters(revision, [ordered[0], .. rest]))
+            : TravelMeters(revision, ordered);
+        var travel = (long)Math.Ceiling(Math.Round(meters / speedMetersPerSecond, 6));
+        return (int)Math.Min(int.MaxValue, ordered.Sum(stop => (long)stop.DwellSeconds) + travel);
+    }
+
+    private static double TravelMeters(RouteRevision revision, IReadOnlyList<RouteRevisionStop> visitOrder)
+    {
         var points = new List<(decimal X, decimal Y)> { (revision.StartX, revision.StartY) };
-        points.AddRange(ordered.Select(stop => (stop.X, stop.Y)));
+        points.AddRange(visitOrder.Select(stop => (stop.X, stop.Y)));
         if (revision.EndMode == "POSE" && revision.EndX is { } endX && revision.EndY is { } endY) points.Add((endX, endY));
         double meters = 0;
         for (var index = 1; index < points.Count; index++)
             meters += (double)Routes.RouteRuleSettings.Distance(points[index - 1].X, points[index - 1].Y, points[index].X, points[index].Y);
-        var travel = (long)Math.Ceiling(Math.Round(meters / speedMetersPerSecond, 6));
-        return (int)Math.Min(int.MaxValue, ordered.Sum(stop => (long)stop.DwellSeconds) + travel);
+        return meters;
+    }
+
+    /// <summary>Every ordering of <paramref name="stops"/>; a voting route has at most 3 after its fixed first POI.</summary>
+    private static IEnumerable<RouteRevisionStop[]> Orders(RouteRevisionStop[] stops)
+    {
+        if (stops.Length <= 1) { yield return stops; yield break; }
+        for (var index = 0; index < stops.Length; index++)
+            foreach (var rest in Orders([.. stops[..index], .. stops[(index + 1)..]]))
+                yield return [stops[index], .. rest];
     }
 
     /// <summary>The estimate a test run and a reservation write into their MeasuredDurationSeconds column (CHECK 1..86400).</summary>

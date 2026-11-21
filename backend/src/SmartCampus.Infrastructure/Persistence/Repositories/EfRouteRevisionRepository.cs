@@ -190,7 +190,8 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
 
     public async Task<IReadOnlyList<RouteRevision>> ListSubmittedPendingAsync(CancellationToken ct) =>
         await db.RouteRevisions.AsNoTracking().Where(r => db.RouteRevisionSubmissions.Any(s => s.RouteRevisionId == r.Id) &&
-            !db.RouteTestRuns.Any(test => test.RouteRevisionId == r.Id))
+            // ADR-0065: a voting route stays while its runs still miss legs; the handler drops it once PASS or FAIL.
+            (r.ViewerChoosesNextStop || !db.RouteTestRuns.Any(test => test.RouteRevisionId == r.Id)))
             .OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).Take(100).ToArrayAsync(ct);
 
     public Task<string?> GetRobotCodeAsync(Guid robotId, CancellationToken ct) =>

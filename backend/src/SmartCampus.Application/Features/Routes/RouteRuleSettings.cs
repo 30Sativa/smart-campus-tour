@@ -8,6 +8,10 @@ public sealed class RouteRuleSettings
     public const int MinDwellSeconds = 15;
     public const int MaxDwellSeconds = 300;
     public const int MaxStops = 100;
+    /// <summary>ADR-0065: a route whose Viewers vote for the next POI has 3-4 POIs, each with a dwell long enough to vote.</summary>
+    public const int MinVoteStops = 3;
+    public const int MaxVoteStops = 4;
+    public const int MinVoteDwellSeconds = 30;
 
     public RouteRuleSettings(int? minStops, decimal? minStopSeparationMeters)
     {
