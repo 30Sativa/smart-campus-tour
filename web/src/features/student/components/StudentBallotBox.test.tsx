@@ -5,6 +5,7 @@ import type { TourBallot } from '../../tour-vote/vote'
 import { StudentBallotBox } from './StudentBallotBox'
 import { Student2DMap } from './Student2DMap'
 import type { PoiDetail } from '../student-types'
+import { buildLiveSnapshot } from '../invitation/student-tour-view'
 
 const start = Date.parse('2026-11-21T03:00:00Z')
 const ballot: TourBallot = {
@@ -48,6 +49,23 @@ describe('Student2DMap on a voting Tour (ADR-0065)', () => {
     const leg = screen.getByTestId('next-leg')
     expect([leg.getAttribute('x1'), leg.getAttribute('x2')]).toEqual(['500', '900'])
     expect(container.querySelector('[data-progress="VISITED"]')).toHaveAttribute('opacity', '0.5')
+  })
+
+  it('moves the next-point marker to the POI the server re-chose when the leg target was locked', () => {
+    const info = { tourId: 't', tourName: 'Tour', tourState: 'RUNNING', scheduledStartAt: '', invitationExpiresAt: '', rowType: 'INDIVIDUAL', hasFallbackVideo: false }
+    const stop = (order: number, poiId: string, progress: string, lockReason: string | null = null) =>
+      ({ order, poiId, name: poiId, description: null, narrationText: null, audioUrl: null, narrationSeconds: null, dwellSeconds: 60, progress, lockReason })
+    const snapshot = buildLiveSnapshot(info, {
+      stops: [stop(1, 'A', 'VISITED'), stop(2, 'B', 'NEXT'), stop(3, 'C', 'REMAINING', 'Có lớp')],
+      progress: { step: 'NAVIGATING', currentPoiId: 'C', lastArrivedPoiId: 'A', needsAssistance: false, isHeld: false },
+    })
+    const pois = snapshot.pois.map((p, index) => ({ ...p, x: [10, 50, 90][index] }))
+    const { container } = render(<Student2DMap pois={pois} currentPoi={snapshot.currentPoi} nextPoi={pois.find(p => p.id === snapshot.nextPoi?.id)}
+      robotPose={{ x: 30, y: 50, heading: 0, isStale: false, lastUpdatedAt: '' }} />)
+    expect(screen.getByTestId('next-leg').getAttribute('x2')).toBe('500')
+    const marker = (progress: string) => container.querySelector(`[data-progress="${progress}"] circle`)
+    expect(marker('NEXT')).toHaveAttribute('fill', 'var(--st-stage-ink)')
+    expect(marker('REMAINING')).toHaveAttribute('fill', 'var(--st-stage)')
   })
 
   it('keeps the StopOrder polyline for a fixed-order Tour', () => {

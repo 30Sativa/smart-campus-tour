@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RobotCommandState, TourActionAvailability, TourDetails } from '../../administration/tours/types'
-import { endEarlyEffect, tourSituation, tourTargets } from './situation'
+import { currentLegStop, endEarlyEffect, tourSituation, tourTargets } from './situation'
 
 const refuse = (...blockedBy: string[]): TourActionAvailability => ({ allowed: false, reason: 'no', blockedBy })
 const allow: TourActionAvailability = { allowed: true, reason: null, blockedBy: [] }
@@ -90,6 +90,24 @@ describe('the situation a Tour is in', () => {
     expect(ended.body).toMatch(/Nếu robot còn đang đi lúc kết thúc, nó được giữ lại/)
     expect(tourSituation(tour('CANCELLED', {}, undefined, {}, null)).title).toBe('Tour đã bị hủy trước khi bắt đầu')
     expect(tourSituation(tour('COMPLETED', {}, 'ARRIVED')).tone).toBe('ok')
+  })
+
+  it('says whether the leg to a POI has really stopped, which is when that POI may be locked (ADR-0065)', () => {
+    const leg = { currentRevisionStopId: 's2' }
+    for (const state of ['PENDING', 'DELIVERED', 'ACCEPTED'] as const) expect(currentLegStop(tour('RUNNING', leg, state))).toEqual({ stopId: 's2', stopped: false })
+    expect(currentLegStop(tour('RUNNING', { ...leg, ...assist('CommandUnknown') }, 'UNKNOWN', { retryLeg: allow }))?.stopped).toBe(false)
+    expect(currentLegStop(tour('RUNNING', { ...leg, operationalStatus: 'PAUSED' }, 'CANCELLED'))?.stopped).toBe(true)
+    expect(currentLegStop(tour('RUNNING', { ...leg, ...assist('NavigationFailed') }, 'FAILED', { retryLeg: allow }))?.stopped).toBe(true)
+    // Retry refused only because every POI ahead is locked is still a stopped leg.
+    expect(currentLegStop(tour('RUNNING', { ...leg, ...assist('NavigationFailed') }, 'FAILED', { retryLeg: refuse('ALL_REMAINING_STOPS_LOCKED') }))?.stopped).toBe(true)
+    expect(currentLegStop(tour('RUNNING', { ...leg, currentStep: 'OBSERVING' }, 'ARRIVED'))).toBeNull()
+  })
+
+  it('sends Resume/Retry to the POI the server re-chose, else to the leg\'s own target', () => {
+    const paused = tour('RUNNING', { operationalStatus: 'PAUSED', currentRevisionStopId: 's1' }, 'CANCELLED')
+    expect(tourTargets(paused)).toMatchObject({ current: 'Thư viện', retry: 'Thư viện' })
+    expect(tourTargets({ ...paused, retryTarget: { kind: 'POI', stopId: 's2', name: 'Phòng lab' } })).toMatchObject({ current: 'Thư viện', retry: 'Phòng lab' })
+    expect(tourTargets({ ...paused, retryTarget: { kind: 'END', stopId: null, name: null } }).retry).toBe('điểm kết thúc')
   })
 
   it('says what End Early does to the command the robot holds', () => {

@@ -130,7 +130,9 @@ export function buildLiveSnapshot(info: StudentTourInfo, view: StudentTourView |
     step = stepOf(progress)
     const current = byId(progress.currentPoiId)
     const last = byId(progress.lastArrivedPoiId)
-    if (step === 'navigating') nextPoi = current ?? after(last)
+    // A voting Tour follows NEXT here too: the Operator may lock the target of a stopped leg, and the server then
+    // marks the POI it re-chose while the leg (and `currentPoiId`) still names the locked one.
+    if (step === 'navigating') nextPoi = voting ? after(last) ?? (current?.lockReason ? undefined : current) : current ?? after(last)
     else if (progress.step === 'INITIALIZING') nextPoi = current ?? pois[0]
     else if (step === 'preparing_head' || step === 'narration' || step === 'holding') {
       currentPoi = current ?? last

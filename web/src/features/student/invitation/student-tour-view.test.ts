@@ -69,6 +69,19 @@ describe('buildLiveSnapshot', () => {
     expect(buildLiveSnapshot(info, progressed('LATER', 'LATER', 'LATER')).nextPoi?.title).toBe('B')
   })
 
+  it('follows the POI the server re-chose when the target of a stopped leg is locked (ADR-0065)', () => {
+    // The leg (and currentPoiId) still names C, which the Operator locked; the server marked B as NEXT.
+    const leg = (b: string, c: string) => ({ ...view({ step: 'NAVIGATING', currentPoiId: 'c', lastArrivedPoiId: 'a' }),
+      stops: [{ ...stop(1, 'a', 'A'), progress: 'VISITED' }, { ...stop(2, 'b', 'B'), progress: b }, { ...stop(3, 'c', 'C'), progress: c, lockReason: c === 'NEXT' ? null : 'Có lớp' }] })
+    expect(buildLiveSnapshot(info, leg('REMAINING', 'NEXT')).nextPoi?.title).toBe('C')
+    const rechosen = buildLiveSnapshot(info, leg('NEXT', 'REMAINING'))
+    expect(rechosen.step).toBe('navigating')
+    expect(rechosen.nextPoi?.title).toBe('B')
+    expect(rechosen.pois[2]).toMatchObject({ progress: 'REMAINING', lockReason: 'Có lớp' })
+    // Every POI ahead locked: nothing is next, not the locked leg target.
+    expect(buildLiveSnapshot(info, leg('REMAINING', 'REMAINING')).nextPoi).toBeUndefined()
+  })
+
   it('never plays a stored fallback address: the fallback video comes from the relay (ADR-0063)', () => {
     expect(buildLiveSnapshot({ ...info, tourState: 'RUNNING', hasFallbackVideo: true }, null).videoStreamUrl).toBe('')
   })

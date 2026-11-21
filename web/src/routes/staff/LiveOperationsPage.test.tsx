@@ -248,6 +248,7 @@ describe('live console without a running Tour', () => {
 describe('Viewers choose the next stop (ADR-0065)', () => {
   const stops = [STOP, { ...STOP, id: 'rrs-2', poiRevisionId: 'poi-rev-2', stopOrder: 2, name: 'Phòng B', x: 3 }, { ...STOP, id: 'rrs-3', poiRevisionId: 'poi-rev-3', stopOrder: 3, name: 'Phòng C', x: 5 }]
   let lockReply: Reply | null
+  let retryReply: Reply | null
   function voting(patch: Partial<TourDetails> = {}): TourDetails {
     const base = running()
     return {
@@ -265,17 +266,96 @@ describe('Viewers choose the next stop (ADR-0065)', () => {
   }
   beforeEach(() => {
     lockReply = null
+    retryReply = null
     const base = vi.mocked(globalThis.fetch).getMockImplementation()!
     vi.mocked(globalThis.fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input), 'http://localhost').pathname
-      if (lockReply && /\/stops\/[^/]+\/(lock|unlock)$/.test(path)) {
+      const reply = /\/stops\/[^/]+\/(lock|unlock)$/.test(path) ? lockReply : path.endsWith('/retry-leg') ? retryReply : null
+      if (reply) {
         sent.push({ method: init?.method ?? 'GET', path, body: init?.body ? JSON.parse(String(init.body)) : null })
-        return json(lockReply.body, lockReply.status)
+        return json(reply.body, reply.status)
       }
       return base(input, init)
     })
   })
   const panel = async () => within(await screen.findByRole('region', { name: 'Viewer chọn điểm tiếp theo' }))
+  const situation = async () => within(await screen.findByRole('region', { name: 'Tình hình hiện tại' }))
+  /** On the leg to Phòng C (rrs-3), after Thư viện; `execution` says whether the robot is still driving it. */
+  function onLeg(execution: Partial<NonNullable<TourDetails['execution']>>, patch: Partial<TourDetails> = {}): TourDetails {
+    const base = voting()
+    return voting({
+      ballot: null, leadingStopId: null, nextTarget: null,
+      execution: { ...base.execution!, currentStep: 'NAVIGATING', currentRevisionStopId: 'rrs-3', dwellDeadlineAt: null,
+        command: { id: 'cmd-2', kind: 'GoTo', state: 'ACCEPTED', outcome: null, reasonCode: null }, ...execution },
+      stopProgress: [{ stopId: 'rrs-1', progress: 'VISITED', order: 1 }, { stopId: 'rrs-2', progress: 'REMAINING' }, { stopId: 'rrs-3', progress: 'NEXT' }],
+      ...patch,
+    })
+  }
+  const stoppedLeg = { operationalStatus: 'PAUSED' as const, command: { id: 'cmd-2', kind: 'GoTo' as const, state: 'CANCELLED' as const, outcome: 'CANCELLED', reasonCode: null } }
+  const retryAllowed = { ...running().allowedActions!, next: { allowed: false, reason: null, blockedBy: ['TOUR_STATE_INVALID'] }, retryLeg: { allowed: true, reason: null, blockedBy: [] } }
+
+  it('offers no lock for the POI the robot is really driving to, and says why', async () => {
+    tour = onLeg({})
+    renderAt('/staff/live/tour-1')
+    const list = await panel()
+    expect(list.getByText('Robot đang tới điểm này, chỉ khóa được khi robot đã dừng')).toBeInTheDocument()
+    expect(list.queryByRole('button', { name: 'Khóa Phòng C' })).not.toBeInTheDocument()
+    expect(list.getByRole('button', { name: 'Khóa Phòng B' })).toBeInTheDocument()
+  })
+
+  it('offers the lock for the leg target once its leg has stopped, saying where the robot then goes', async () => {
+    tour = onLeg(stoppedLeg, { allowedActions: retryAllowed })
+    renderAt('/staff/live/tour-1')
+    expect((await situation()).getByRole('button', { name: /Tiếp tục tới Phòng C/ })).toBeInTheDocument()
+    const list = await panel()
+    expect(list.queryByText(/Robot đang tới điểm này/)).not.toBeInTheDocument()
+    fireEvent.click(list.getByRole('button', { name: 'Khóa Phòng C' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Khóa Phòng C?' }))
+    expect(dialog.getByText(/Robot sẽ đi tới điểm được bầu nhiều kế tiếp khi bạn cho đi tiếp\./)).toBeInTheDocument()
+    // Another POI's lock does not say so.
+    fireEvent.click(dialog.getByRole('button', { name: 'Quay lại' }))
+    fireEvent.click(list.getByRole('button', { name: 'Khóa Phòng B' }))
+    expect(within(screen.getByRole('dialog', { name: 'Khóa Phòng B?' })).queryByText(/Robot sẽ đi tới/)).not.toBeInTheDocument()
+  })
+
+  it('names the POI the server re-chose on Resume after the leg target was locked', async () => {
+    tour = onLeg(stoppedLeg, {
+      allowedActions: retryAllowed,
+      retryTarget: { kind: 'POI', stopId: 'rrs-2', name: 'Phòng B' },
+      stopProgress: [{ stopId: 'rrs-1', progress: 'VISITED', order: 1 }, { stopId: 'rrs-2', progress: 'NEXT' }, { stopId: 'rrs-3', progress: 'REMAINING', lockReason: 'Có lớp' }],
+    })
+    renderAt('/staff/live/tour-1')
+    const actions = await situation()
+    expect(actions.getByRole('button', { name: /Tiếp tục tới Phòng B/ })).toBeInTheDocument()
+    expect(actions.getByText(/lệnh mới tới Phòng B/)).toBeInTheDocument()
+    const list = await panel()
+    expect(list.getByText('Lý do: Có lớp')).toBeInTheDocument()
+    expect(list.getByRole('button', { name: 'Mở khóa Phòng C' })).toBeInTheDocument()
+  })
+
+  it('says every POI ahead is locked when the server refuses Retry for it, and offers Skip', async () => {
+    const allLocked = [{ stopId: 'rrs-1', progress: 'VISITED', order: 1 }, { stopId: 'rrs-2', progress: 'REMAINING', lockReason: 'Đang sửa' }, { stopId: 'rrs-3', progress: 'REMAINING', lockReason: 'Có lớp' }]
+    tour = onLeg({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'NavigationFailed', command: { id: 'cmd-2', kind: 'GoTo', state: 'FAILED', outcome: 'FAILED', reasonCode: null } }, {
+      stopProgress: allLocked,
+      allowedActions: { ...retryAllowed, retryLeg: { allowed: false, reason: 'Mọi điểm tham quan còn lại đều đang bị khóa.', blockedBy: ['ALL_REMAINING_STOPS_LOCKED'] }, skip: { allowed: true, reason: null, blockedBy: [] } },
+    })
+    renderAt('/staff/live/tour-1')
+    const actions = await situation()
+    expect(actions.getByRole('button', { name: /Cho robot đi lại tới Phòng C/ })).toBeDisabled()
+    expect(actions.getByText(/Mọi điểm còn lại đang tạm khóa\. Mở khóa một điểm, hoặc bấm Bỏ qua các điểm còn lại để về điểm kết thúc\./)).toBeInTheDocument()
+    expect(actions.getByRole('button', { name: /Bỏ qua các điểm còn lại/ })).toBeEnabled()
+  })
+
+  it('keeps the Retry dialog open with the same words when the server answers ALL_REMAINING_STOPS_LOCKED', async () => {
+    tour = onLeg({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'NavigationFailed', command: { id: 'cmd-2', kind: 'GoTo', state: 'FAILED', outcome: 'FAILED', reasonCode: null } }, { allowedActions: retryAllowed })
+    retryReply = conflict('ALL_REMAINING_STOPS_LOCKED')
+    renderAt('/staff/live/tour-1')
+    fireEvent.click((await situation()).getByRole('button', { name: /Cho robot đi lại tới Phòng C/ }))
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.click(dialog.getByRole('button', { name: 'Đi lại' }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Mọi điểm còn lại đang tạm khóa. Mở khóa một điểm, hoặc bấm Bỏ qua các điểm còn lại để về điểm kết thúc.')
+    expect(sent.some(item => item.path === '/api/staff/manage/tours/tour-1/retry-leg')).toBe(true)
+  })
 
   it('labels Next with the server target, shows the ballot, the leader and the dwell left, and keeps the auto switch', async () => {
     tour = voting()

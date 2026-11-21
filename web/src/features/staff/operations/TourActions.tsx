@@ -6,13 +6,14 @@ import { buttonClass } from '../../../components/ui/ui-classes'
 import type { StartConfirmation, TourActionAvailability, TourDetails } from '../../administration/tours/types'
 import { useEndTourEarly, useIntentRequestIds, useNextStop, usePauseLeg, useReconcileCommand, useRetryLeg, useSetAutoAdvance, useSkipStop } from './hooks'
 import { checkInfo } from './operation-labels'
-import { operationRefusal } from './operation-errors'
+import { ALL_REMAINING_LOCKED_TEXT, operationRefusal } from './operation-errors'
 import { CONFIRMATIONS, NO_CONFIRMATION, isConfirmed } from './onsite-confirmations'
 import { actionGate, endEarlyEffect, tourTargets, type ConsoleAction } from './situation'
 import { BlockerList } from './StartCheckList'
 
 /** The server's refusal in words: its reason, then the labels of the checks it named. */
 function gateText(gate: TourActionAvailability): string {
+  if (gate.blockedBy.includes('ALL_REMAINING_STOPS_LOCKED')) return ALL_REMAINING_LOCKED_TEXT
   const checks = gate.blockedBy.filter(id => checkInfo(id).group !== 'other').map(id => checkInfo(id).label)
   return [gate.reason, ...checks].filter(Boolean).join(' · ')
 }
@@ -130,9 +131,11 @@ export function ConsoleActionButton({ action, detail, frozen }: { action: Consol
   }
 
   if (action === 'retryLeg') {
-    const label = paused ? `Tiếp tục tới ${targets.current ?? 'điểm đích'}` : `Cho robot đi lại tới ${targets.current ?? 'điểm đích'}`
+    const label = paused ? `Tiếp tục tới ${targets.retry ?? 'điểm đích'}` : `Cho robot đi lại tới ${targets.retry ?? 'điểm đích'}`
+    // ADR-0065: the leg's target was locked after it stopped, so the server re-chose where the new command goes.
+    const rechosen = targets.retry !== targets.current
     return <GatedAction id="retry" label={label} icon={paused ? <Play size={18} aria-hidden="true" /> : <RotateCcw size={18} aria-hidden="true" />} gate={gate} frozen={frozen}
-      hint="Máy chủ tạo một lệnh mới tới cùng điểm đích; robot không tự chạy lại lệnh cũ."
+      hint={rechosen ? `Máy chủ tạo một lệnh mới tới ${targets.retry}; robot không tự chạy lại lệnh cũ.` : 'Máy chủ tạo một lệnh mới tới cùng điểm đích; robot không tự chạy lại lệnh cũ.'}
       dialog={{ title: `${label}?`, confirmLabel: paused ? 'Tiếp tục' : 'Đi lại', busyLabel: 'Đang gửi…',
         description: 'Kiểm tra đường đi phía trước robot thông thoáng và nguyên nhân dừng đã được xử lý tại chỗ.' }}
       mutation={retry}

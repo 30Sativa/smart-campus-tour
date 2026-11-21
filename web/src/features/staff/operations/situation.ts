@@ -40,7 +40,7 @@ export type VoteState = {
   allRemainingLocked: boolean
 }
 
-const sameStop = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase()
+export const sameStop = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase()
 
 /** ADR-0065: the vote of a Tour on a route where Viewers choose the next stop; `voting` false leaves the Tour as before. */
 export function voteState(detail: TourDetails): VoteState {
@@ -84,10 +84,15 @@ export function tourTargets(detail: TourDetails) {
   const target = vote.nextTarget
   const next = target ? target.kind === 'END' ? endsAtPose ? 'điểm kết thúc' : null : target.name || 'điểm được bầu'
     : vote.voting && here !== 0 ? 'điểm được bầu' : placeAfter(here)
-  if (vote.voting) return { current, next, skipped: 'các điểm còn lại', afterSkip: 'điểm kết thúc', endsAtPose, voting: true }
+  // ADR-0065: once a stopped leg's target was locked, the server re-chose where Resume/Retry goes.
+  const retryTarget = readNextTarget(detail.retryTarget)
+  const retry = retryTarget ? retryTarget.kind === 'END' ? 'điểm kết thúc' : retryTarget.name || 'điểm được bầu' : current
+  if (vote.voting) return { current, retry, next, skipped: 'các điểm còn lại', afterSkip: 'điểm kết thúc', endsAtPose, voting: true }
   return {
     /** Where the leg the robot is on (or was stopped on) goes. */
     current,
+    /** Where Resume/Retry goes: the leg's own target unless the server re-chose it. */
+    retry,
     /** Where Next or the departure goes; null when the route ends at this POI. */
     next,
     /** The POI Skip passes over, and where the robot then goes. */
@@ -156,7 +161,7 @@ export function tourSituation(detail: TourDetails, robot: RobotReport = null): S
     const retryable = Boolean(retry && (retry.allowed || !retry.blockedBy.includes('TOUR_RETRY_NOT_ALLOWED')))
     if (retryable) return {
       tone: 'danger', title: `Robot đã dừng: ${reason.label}`, action: 'retryLeg', secondary: skip, onlyEndEarly: false,
-      body: `${causeOf(detail)} Xử lý tại chỗ (kết nối, vị trí, đường đi) rồi cho robot đi lại${targets.current ? ` tới ${targets.current}` : ''}, bỏ qua điểm này, hoặc kết thúc sớm.`,
+      body: `${causeOf(detail)} Xử lý tại chỗ (kết nối, vị trí, đường đi) rồi cho robot đi lại${targets.retry ? ` tới ${targets.retry}` : ''}, bỏ qua điểm này, hoặc kết thúc sớm.`,
     }
     return { tone: 'danger', title: `Cần hỗ trợ: ${reason.label}`, action: null, secondary: [], onlyEndEarly: true,
       body: `${causeOf(detail)} Máy chủ không cho thử lại chặng này; kiểm tra robot tại chỗ, rồi kết thúc sớm Tour nếu không tiếp tục được.` }
@@ -203,6 +208,17 @@ export function tourSituation(detail: TourDetails, robot: RobotReport = null): S
     case 'ACCEPTED': return { ...pause, tone: 'info', title: moving + (targets.current ? `: ${targets.current}` : ''), body: 'Robot đang đi. Theo dõi camera và bản đồ; bấm Tạm dừng nếu cần dừng chặng này.' }
     default: return { ...quiet, tone: 'info', title: moving, body: 'Chờ máy chủ cập nhật trạng thái lệnh của chặng.' }
   }
+}
+
+/**
+ * The POI of the leg the robot is on, and whether that leg has really stopped: paused, or ended so Resume/Retry is
+ * offered. While it has not (its GoTo is open or unknown), the server refuses to lock that POI (STOP_LOCK_INVALID);
+ * once it has, locking it makes the server re-choose where Resume/Retry goes (ADR-0065).
+ */
+export function currentLegStop(detail: TourDetails): { stopId: string; stopped: boolean } | null {
+  const execution = detail.execution
+  if (detail.tour.state !== 'RUNNING' || execution?.currentStep !== 'NAVIGATING' || !execution.currentRevisionStopId) return null
+  return { stopId: execution.currentRevisionStopId, stopped: tourSituation(detail).action === 'retryLeg' }
 }
 
 /** What End Early does to the command the robot holds now, in the server's terms (ADR-0043 D13, D14). */

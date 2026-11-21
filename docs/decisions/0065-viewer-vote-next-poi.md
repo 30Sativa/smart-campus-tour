@@ -42,6 +42,17 @@ runtime. The group replaces it with a vote by the invited Viewers at each POI, d
    (`LOCKED_FALLBACK`). If only locked POIs remain, Next and auto-advance refuse (`ALL_REMAINING_STOPS_LOCKED`) and
    the robot waits: the Operator unlocks one, or uses Skip to drop all remaining POIs and go to the end. On a voting
    route Skip is allowed only in that case.
+   - **The target of the current leg.** While its leg really runs (the GoTo is open or its result unknown, a Pause
+     asked but not yet reported included; exactly when `RetryTourLegCommandHandler.CanRetry` is false) it cannot be
+     locked (`STOP_LOCK_INVALID`). Once the leg has really stopped (PAUSED, or NEEDS_ASSISTANCE after
+     FAILED/REJECTED/EXPIRED; `CanRetry` true) the Operator may lock it, with a reason as always. In the same
+     transaction the visit the robot left (`Tour.CurrentStopVisitId`) decides again by rule 6 (`LOCKED_FALLBACK`,
+     with a `NEXT_STOP_CHOSEN` event).
+   - **Retry/Resume on a voting route** goes to that visit's decision: normally the old target; the re-chosen POI
+     once the old target was locked; still the re-chosen POI if the old target is unlocked again (a decision taken
+     stays). With no candidate left Retry is refused (`ALL_REMAINING_STOPS_LOCKED`) and Skip is allowed, since the
+     old target is among the locked remaining POIs. A leg to the end, a route without the flag and the first leg from
+     the start (the first POI cannot be locked) keep the old target.
 9. **End.** After the last POI the robot returns to the end (= start). On arrival the Tour is COMPLETED and the robot
    is released as today (ADR-0043 D13).
 
@@ -89,8 +100,11 @@ null for the start, `toStopId` null for the end).
   locks. Auto-advance refused by locks writes `TOUR_AUTO_ADVANCE_BLOCKED` as today.
 - With exactly one candidate at arrival the choice is stored at once as `SINGLE_CANDIDATE` (no ballot). If a visit
   opened no ballot and an unlock later adds candidates, the new choice is `LOCKED_FALLBACK`.
-- The first POI and the POI the robot is driving to cannot be locked. A caller who is not the Tour's Operator gets
-  403, as for Next and Skip.
+- The first POI cannot be locked, nor the target of a leg that really runs (rule 8). A caller who is not the Tour's
+  Operator gets 403, as for Next and Skip.
+- `TourVoting.RetryAsync` gives the Retry target: it stores the decision through `Settle` in Retry's transaction and
+  only reads (`Preview`) for the Tour detail. A stopped leg's locked target is no longer `NEXT`; the re-chosen POI is,
+  on the Student page and in `stopProgress`.
 - The ballot closes by server time at `DwellDeadlineAt`; its stored close time is written when anything next acts on
   it (Next, a lock, a restart) and records the deadline if that has passed. End Early closes an open ballot without a
   choice; a restart closes it and stores the decision from the votes already cast. Pause needs a leg in progress, by
@@ -126,7 +140,9 @@ null for the start, `toStopId` null for the end).
   decision{ stopId, name, reason, votes } | null }`. A null `ballot` means the route does not vote or no POI is current.
 - `GET /api/staff/manage/tours/{id}` gains the same `ballot` plus `leadingStopId`, `nextTarget { kind (POI/END),
   stopId, name }` for the Next button label (also on routes without the flag, while the Tour is at the start or a
-  POI) and `stopProgress[{ stopId, order, progress, lockReason }]`.
+  POI), `stopProgress[{ stopId, order, progress, lockReason }]` and, on a voting route whose current leg has stopped,
+  `retryTarget { kind, stopId, name }` for the Retry/Resume label (null when only locked POIs remain; then
+  `allowedActions.retryLeg` is refused with `ALL_REMAINING_STOPS_LOCKED`).
 - `RouteRevisionView.testRuns[]` gains `traversedStopIds`.
 - `POST /api/staff/manage/tours/{id}/stops/{stopId}/lock` `{ reason }` and `.../unlock` `{ reason }`: only the
   Tour's Operator, Tour RUNNING, POI not yet visited; 409 `STOP_LOCK_INVALID` otherwise.
