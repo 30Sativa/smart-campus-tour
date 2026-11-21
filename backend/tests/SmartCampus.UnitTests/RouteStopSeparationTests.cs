@@ -7,7 +7,7 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.UnitTests;
 
-/// <summary>docs/lich-tour-theo-ca.md §2: distances between the start, the stops and a separate end pose.</summary>
+/// <summary>docs/lich-tour-theo-ca.md §2: distances between the start and the stops; ADR-0065: no separate end pose.</summary>
 public sealed class RouteStopSeparationTests
 {
     // Every POI made by Poi() is served back by the stub repository; declared first so it exists for the fields below.
@@ -43,17 +43,32 @@ public sealed class RouteStopSeparationTests
         Assert.Contains("Sảnh", error.Message);
     }
 
-    [Fact]
-    public async Task A_separate_end_pose_near_the_last_stop_is_refused()
+    // ADR-0065: a new save may no longer end at a separate pose, near the last stop or far from it.
+    [Theory]
+    [InlineData(4.5)]
+    [InlineData(5.0)]
+    public async Task A_separate_end_pose_is_refused_on_a_new_save(double endX)
     {
-        var error = await Save(Draft(0m, 0m, Library, Lab) with { EndMode = "POSE", EndX = 4.5m, EndY = 2m, EndYaw = 0m });
-        Assert.Equal("ROUTE_STOP_TOO_CLOSE", error?.Code);
-        Assert.Contains("Phòng lab", error!.Message);
+        var error = await Record.ExceptionAsync(() => Handler().Handle(new SaveRouteRevisionCommand(Guid.NewGuid(), null,
+            Draft(0m, 0m, Library, Lab) with { EndMode = "POSE", EndX = (decimal)endX, EndY = 2m, EndYaw = 0m }), default));
+        Assert.Equal("ROUTE_END_POSE_NOT_START", Assert.IsType<ConflictException>(error).Code);
     }
 
+    // ADR-0065: on a voting route any POI may follow any other, so POIs that are not neighbours in StopOrder count too.
     [Fact]
-    public async Task A_separate_end_pose_far_enough_from_the_last_stop_passes() =>
-        Assert.Null(await Save(Draft(0m, 0m, Library, Lab) with { EndMode = "POSE", EndX = 5m, EndY = 2m, EndYaw = 0m }));
+    public async Task A_voting_route_compares_every_pair_of_POIs()
+    {
+        var nearLibrary = Poi("Sảnh thư viện", 2.5m, 2m);
+        var draft = Draft(0m, 0m, Library, Lab, nearLibrary);
+        Assert.Null(await Save(draft));
+        var error = await Save(draft with { EndMode = "POSE", EndX = 0m, EndY = 0m, EndYaw = 0m, ViewerChoosesNextStop = true });
+        Assert.Equal("ROUTE_STOP_TOO_CLOSE", error?.Code);
+        Assert.Contains("Thư viện", error!.Message);
+        Assert.Contains("Sảnh thư viện", error.Message);
+    }
+
+    private static SaveRouteRevisionHandler Handler() => new(RouteRepository(), MapRepository(), new MapPoiSettings(null),
+        new RouteRuleSettings(null, null), TourShiftsFixture.Settings, TimeProvider.System);
 
     [Fact]
     public async Task Return_to_start_is_always_allowed() =>

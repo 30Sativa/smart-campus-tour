@@ -50,9 +50,14 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
     public async Task<RouteRevisionView> Handle(RecordRouteTestRunCommand c, CancellationToken ct)
     {
         var q = c.Request; var result = q.ResultCode.Trim().ToUpperInvariant();
-        var hash = SaveRouteRevisionHandler.Hash(new { c.RouteId, c.RevisionId, q.RobotCode, q.ParticipatingStaffUserId,
-            Result = result, q.AllStopsReached, q.SafelyStopped, q.LocalizationPassed,
-            q.FailureReason, q.EvidenceNote });
+        // The driven order joins the hash only when sent, so a fixed-route request hashes as it did before ADR-0065.
+        var hash = q.TraversedStopIds is null
+            ? SaveRouteRevisionHandler.Hash(new { c.RouteId, c.RevisionId, q.RobotCode, q.ParticipatingStaffUserId,
+                Result = result, q.AllStopsReached, q.SafelyStopped, q.LocalizationPassed,
+                q.FailureReason, q.EvidenceNote })
+            : SaveRouteRevisionHandler.Hash(new { c.RouteId, c.RevisionId, q.RobotCode, q.ParticipatingStaffUserId,
+                Result = result, q.AllStopsReached, q.SafelyStopped, q.LocalizationPassed,
+                q.FailureReason, q.EvidenceNote, q.TraversedStopIds });
         await repo.LockRequestAsync(c.ActorUserId, q.RequestId, "test", ct);
         var prior = await repo.FindTestRequestAsync(c.ActorUserId, q.RequestId, ct);
         if (prior is not null)
@@ -66,6 +71,7 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
             throw new ConflictException("Only a submitted route revision can be tested.", "ROUTE_NOT_SUBMITTED");
         await SubmitRouteRevisionHandler.EnsurePoisStillPass(repo, revision.Id, ct);
         var stops = await repo.GetStopsAsync(revision.Id, ct);
+        var traversed = revision.ViewerChoosesNextStop ? RequireTraversedOrder(stops, q.TraversedStopIds) : null;
         // Nobody types a duration any more: the run stores the estimate the schedule uses, until the column is dropped.
         var estimated = Tours.TourSchedule.EstimatedDurationSeconds(revision, stops, schedule.EstimatedSpeedMetersPerSecond);
         var staff = await repo.FindUserAsync(q.ParticipatingStaffUserId, ct);
@@ -101,7 +107,8 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
             ParticipatingStaffUserId = q.ParticipatingStaffUserId, ResultCode = result, AllStopsReached = q.AllStopsReached,
             SafelyStopped = q.SafelyStopped, LocalizationPassed = q.LocalizationPassed, MeasuredDurationSeconds = Tours.TourSchedule.StoredDurationSeconds(estimated),
             FailureReason = string.IsNullOrWhiteSpace(q.FailureReason) ? null : q.FailureReason.Trim(), EvidenceNote = q.EvidenceNote.Trim(),
-            RequestId = q.RequestId, RequestHash = hash, CheckedAt = now, MeasurementBasis = RouteMeasurementBasis.TotalWithDwell };
+            RequestId = q.RequestId, RequestHash = hash, CheckedAt = now, MeasurementBasis = RouteMeasurementBasis.TotalWithDwell,
+            TraversedStopIdsJson = RouteVerification.WriteTraversed(traversed) };
         repo.Add(run);
         repo.AddAudit(new AuditLog { ActorUserId = c.ActorUserId, RobotId = robot.Id, Action = result == "PASS" ? "ROUTE_TEST_PASSED" : "ROUTE_TEST_FAILED",
             EntityType = "RouteRevision", EntityId = revision.Id.ToString("D"), ResultCode = result, OccurredAt = now,
@@ -111,9 +118,27 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
             Convert.ToHexString(run.MapPackageSha256).ToLowerInvariant(), robot.RobotCode, run.CheckedByUserId,
             run.ParticipatingStaffUserId, run.ResultCode, run.AllStopsReached, run.SafelyStopped,
             run.LocalizationPassed, run.MeasuredDurationSeconds, run.FailureReason, run.EvidenceNote, run.CheckedAt, run.MeasurementBasis,
-            (await repo.FindUserAsync(c.ActorUserId, ct))?.FullName, staff.FullName);
+            (await repo.FindUserAsync(c.ActorUserId, ct))?.FullName, staff.FullName, traversed);
         // The new run is not committed yet, so the loaded view still describes the previous one.
-        return view with { VerificationStatus = result, EffectiveTestRunId = run.Id, TestRuns = [.. view.TestRuns, testView],
-            ScheduleFit = Tours.TourSchedule.ScheduleFit(schedule, estimated), ExpectedDurationSeconds = estimated };
+        var applied = RouteVerification.Evaluate(revision, stops,
+            [.. RouteVerification.RunsOnPath(routeRuns, targetNavigation), new RouteVerification.Run(run, stops)]);
+        return view with { VerificationStatus = applied.Status, EffectiveTestRunId = applied.Effective?.Id, TestRuns = [.. view.TestRuns, testView],
+            ScheduleFit = Tours.TourSchedule.ScheduleFit(schedule, estimated), ExpectedDurationSeconds = estimated,
+            LegCoverage = applied.LegCoverage };
+    }
+
+    public const string TraversedOrderInvalidCode = "ROUTE_TEST_ORDER_INVALID";
+
+    /// <summary>
+    /// ADR-0065: on a voting route the run names the revision's stops in the order driven, starting with the first POI
+    /// and naming every POI once; the legs it drove count towards the route's coverage.
+    /// </summary>
+    internal static IReadOnlyList<Guid> RequireTraversedOrder(IReadOnlyList<RouteRevisionStop> stops, IReadOnlyList<Guid>? stopIds)
+    {
+        var orderById = stops.ToDictionary(stop => stop.Id, stop => stop.StopOrder);
+        var order = stopIds?.Select(id => orderById.TryGetValue(id, out var stopOrder) ? stopOrder : 0).ToArray();
+        if (RouteLegCoverage.OrderProblem(stops.Count, order) is { } problem)
+            throw new ConflictException(problem, TraversedOrderInvalidCode);
+        return stopIds!.ToArray();
     }
 }

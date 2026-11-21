@@ -14,16 +14,17 @@ internal static class RouteNavigationConfigurationFactory
                 var poi = evidence[stop.PoiRevisionId].Revision;
                 return new RouteNavigationStopConfiguration(index + 1, poi.NavigationFingerprint,
                     poi.CameraPreset, stop.HeadSteps);
-            }).ToArray());
+            }).ToArray(), input.ViewerChoosesNextStop);
 
     public static RouteNavigationConfiguration FromRevision(RouteRevision revision, IReadOnlyList<RouteRevisionStop> stops) =>
         new(revision.MapVersionId, revision.MapPackageSha256, revision.StartX, revision.StartY, revision.StartYaw,
             revision.EndMode, revision.EndX, revision.EndY, revision.EndYaw,
             stops.OrderBy(stop => stop.StopOrder).Select(stop => new RouteNavigationStopConfiguration(
-                stop.StopOrder, stop.PoiNavigationFingerprint, stop.CameraPreset, Route.ReadHeadSteps(stop.HeadStepsJson))).ToArray());
+                stop.StopOrder, stop.PoiNavigationFingerprint, stop.CameraPreset, Route.ReadHeadSteps(stop.HeadStepsJson))).ToArray(),
+            revision.ViewerChoosesNextStop);
 
     public static bool SameNavigation(RouteNavigationConfiguration left, RouteNavigationConfiguration right) =>
-        left.MapVersionId == right.MapVersionId &&
+        left.MapVersionId == right.MapVersionId && left.ViewerChoosesNextStop == right.ViewerChoosesNextStop &&
         CryptographicOperations.FixedTimeEquals(left.MapPackageSha256, right.MapPackageSha256) &&
         left.StartX == right.StartX && left.StartY == right.StartY && left.StartYaw == right.StartYaw &&
         left.EndMode == right.EndMode && left.EndX == right.EndX && left.EndY == right.EndY && left.EndYaw == right.EndYaw &&

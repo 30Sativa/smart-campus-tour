@@ -333,7 +333,7 @@ public sealed class SchemaV11Tests
 
         // ADR-0060: passed POIs without approved narration cannot join a route.
         var unapproved = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), null,
-            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
+            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -1.5m, -0.5m, 0m,
                 [new(proposal.Revision.Id, 30, [new("FRONT", 30)]), LabStop()]))));
         Assert.Equal("POI_NARRATION_NOT_APPROVED", unapproved.Code);
         Assert.Equal("POI Library chưa có thuyết minh đã duyệt.", unapproved.Message);
@@ -341,7 +341,7 @@ public sealed class SchemaV11Tests
         // A draft waiting for approval is not enough either.
         await sender.Send(new SavePoiNarrationDraftCommand(Guid.Parse(Id(2)), lab.Id, new(Guid.NewGuid(), null, "Thuyết minh phòng lab", null)));
         var labDraftOnly = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), null,
-            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
+            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -1.5m, -0.5m, 0m,
                 [new(proposal.Revision.Id, 30, [new("FRONT", 30)]), LabStop()]))));
         Assert.Equal("POI_NARRATION_NOT_APPROVED", labDraftOnly.Code);
         Assert.Contains("POI Lab", labDraftOnly.Message);
@@ -349,7 +349,7 @@ public sealed class SchemaV11Tests
         await sender.Send(new ApprovePoiNarrationCommand(participatingStaffId, lab.Id, labDraft.RevisionNumber, new(Guid.NewGuid(), labDraft.RowVersion)));
 
         var draft1 = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), null,
-            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
+            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -1.5m, -0.5m, 0m,
                 [new(proposal.Revision.Id, 30, [new("FRONT", 30)]), LabStop()])));
         Assert.Equal("NOT_TESTED", draft1.VerificationStatus);
         Assert.Contains(await sender.Send(new ListRouteTestParticipantsQuery()), person => person.UserId == participatingStaffId);
@@ -398,7 +398,7 @@ public sealed class SchemaV11Tests
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         }
         var secondRoute = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), null,
-            new(Guid.NewGuid(), 0, "Pilot Secondary", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
+            new(Guid.NewGuid(), 0, "Pilot Secondary", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -1.5m, -0.5m, 0m,
                 [new(proposal.Revision.Id, 30, [new("FRONT", 30)]), LabStop()])));
         using (var pageOneRequest = new HttpRequestMessage(HttpMethod.Get, "/api/routes?page=1&size=1&sort=name"))
         using (var pageTwoRequest = new HttpRequestMessage(HttpMethod.Get, "/api/routes?page=2&size=1&sort=name"))
@@ -441,7 +441,7 @@ public sealed class SchemaV11Tests
         Assert.Equal("FAIL", failed.VerificationStatus);
 
         var draft2 = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId,
-            new(Guid.NewGuid(), 1, "Pilot", "Corrected start pose", map.Id, -1m, -0.4m, 0m, "POSE", -0.5m, -0.5m, 0m,
+            new(Guid.NewGuid(), 1, "Pilot", "Corrected start pose", map.Id, -1m, -0.4m, 0m, "POSE", -1m, -0.4m, 0m,
                 [new(proposal.Revision.Id, 30, [new("FRONT", 30)]), LabStop()])));
         Assert.Equal(2, draft2.RevisionNumber);
         Assert.Equal("NOT_TESTED", draft2.VerificationStatus);
@@ -492,7 +492,7 @@ public sealed class SchemaV11Tests
         Assert.NotEqual(tour.Id, later.Id);
 
         var dwellOnly = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId,
-            new(Guid.NewGuid(), 2, "Pilot", "Dwell adjustment only", map.Id, -1m, -0.4m, 0m, "POSE", -0.5m, -0.5m, 0m,
+            new(Guid.NewGuid(), 2, "Pilot", "Dwell adjustment only", map.Id, -1m, -0.4m, 0m, "POSE", -1m, -0.4m, 0m,
                 [new(proposal.Revision.Id, 45, [new("FRONT", 30)]), LabStop()])));
         Assert.Equal(3, dwellOnly.RevisionNumber);
         Assert.Equal("PASS", dwellOnly.VerificationStatus);
@@ -628,7 +628,7 @@ public sealed class SchemaV11Tests
         var newNarration = await NarrationSeed.ApproveAsync(request => sender.Send(request), participatingStaffId, Guid.Parse(Id(2)), proposal.Id, "Thuyết minh đã sửa");
         Assert.Equal(2, newNarration.RevisionNumber);
         var contentOnlyDraft = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId,
-            new(Guid.NewGuid(), 3, "Pilot", "Content wording update", map.Id, -1m, -0.4m, 0m, "POSE", -0.5m, -0.5m, 0m,
+            new(Guid.NewGuid(), 3, "Pilot", "Content wording update", map.Id, -1m, -0.4m, 0m, "POSE", -1m, -0.4m, 0m,
                 [new(proposal.Revision.Id, 45, [new("FRONT", 30)]), LabStop()])));
         Assert.Equal(4, contentOnlyDraft.RevisionNumber);
         Assert.Equal("FAIL", contentOnlyDraft.VerificationStatus);

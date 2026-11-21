@@ -246,6 +246,7 @@ public sealed class TourReadySqlTests
         public Guid TechnicalId => technicalId;
         public Guid TourId { get; private set; }
         public RouteRevisionView Route { get; private set; } = null!;
+        public Guid MapId { get; private set; }
         public DateTimeOffset Start { get; } =
             new(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)).ToDateTime(new TimeOnly(8, 15)), TimeSpan.FromHours(7));
         public ApplicationDbContext Context() => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options);
@@ -279,6 +280,7 @@ public sealed class TourReadySqlTests
         private async Task Prepare(bool twoStopsToEndPose)
         {
             var map = await Send(new CreateMapVersionCommand(technicalId, new("pilot", "Pilot", Guid.NewGuid(), MapPackage("ready"))));
+            MapId = map.Id;
             await using (var db = Context())
             {
                 var now = DateTimeOffset.UtcNow;
@@ -293,14 +295,18 @@ public sealed class TourReadySqlTests
             var stops = new List<RouteRevisionStopInput> { new(library, 30, [new("FRONT", 30)]),
                 new(await VerifiedPoi(map.Id, "Phòng lab", 2.5m, 1.5m), 45, [new("FRONT", 45)]) };
             var route = await Send(new SaveRouteRevisionCommand(staffId, null, new(Guid.NewGuid(), 0, "Tuyến READY", null, map.Id, 2.5m, 2.5m, 0m,
-                twoStopsToEndPose ? "POSE" : "LAST_POI", twoStopsToEndPose ? 1.5m : null, twoStopsToEndPose ? 2.5m : null, twoStopsToEndPose ? 0m : null, stops)));
+                twoStopsToEndPose ? "POSE" : "LAST_POI", twoStopsToEndPose ? 2.5m : null, twoStopsToEndPose ? 2.5m : null, twoStopsToEndPose ? 0m : null, stops)));
+            // ADR-0065: a new save may only return to the start, so the separate end pose (1.5, 2.5) these Tours drive to is
+            // written the way a revision saved before that rule holds it; such revisions keep running.
+            if (twoStopsToEndPose)
+                await database.ExecuteAsync($"UPDATE dbo.RouteRevisions SET EndX = 1.5 WHERE Id = '{route.RevisionId}';");
             await Send(new SubmitRouteRevisionCommand(staffId, route.RouteId, route.RevisionId, new(Guid.NewGuid(), 1)));
             Route = await Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
                 new(Guid.NewGuid(), Robot, staffId, "PASS", true, true, true, null, "Chạy thử đạt.")));
             TourId = await CreateTour(Start);
         }
 
-        private async Task<Guid> VerifiedPoi(Guid mapId, string name, decimal x, decimal y)
+        public async Task<Guid> VerifiedPoi(Guid mapId, string name, decimal x, decimal y)
         {
             var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(mapId, name, "Tham quan", null, x, y, 0m, "FRONT"))));
             var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));

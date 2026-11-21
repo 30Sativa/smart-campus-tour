@@ -65,8 +65,12 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
     public async Task<RouteRevisionView> Handle(SaveRouteRevisionCommand c, CancellationToken ct)
     {
         var i = c.Input;
-        var hash = Hash(new { c.RouteId, i.ExpectedCurrentRevision, i.Name, i.Description, i.MapVersionId,
-            i.StartX, i.StartY, i.StartYaw, i.EndMode, i.EndX, i.EndY, i.EndYaw, i.Stops });
+        // The flag joins the hash only when set, so a fixed-route request hashes as it did before ADR-0065.
+        var hash = i.ViewerChoosesNextStop
+            ? Hash(new { c.RouteId, i.ExpectedCurrentRevision, i.Name, i.Description, i.MapVersionId,
+                i.StartX, i.StartY, i.StartYaw, i.EndMode, i.EndX, i.EndY, i.EndYaw, i.Stops, i.ViewerChoosesNextStop })
+            : Hash(new { c.RouteId, i.ExpectedCurrentRevision, i.Name, i.Description, i.MapVersionId,
+                i.StartX, i.StartY, i.StartYaw, i.EndMode, i.EndX, i.EndY, i.EndYaw, i.Stops });
         await repo.LockRequestAsync(c.ActorUserId, i.RequestId, "save", ct);
         var prior = await repo.FindRequestAsync(c.ActorUserId, i.RequestId, ct);
         if (prior is not null)
@@ -74,6 +78,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             EnsureHash(prior.RequestHash, hash);
             return await RouteRevisionMapper.Load(repo, prior.RouteId, prior.Id, true, ct, schedule);
         }
+        EnsureRouteShape(i);
 
         Route? route;
         RouteRevision? current = null;
@@ -154,15 +159,13 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         var fingerprint = ConfigurationFingerprint(map.Id, map.PackageSha256, i, evidence);
         var targetNavigation = RouteNavigationConfigurationFactory.FromDraft(map.Id, map.PackageSha256, i, byId);
         var retainedRouteRuns = route is null ? Array.Empty<RouteTestRun>() : await repo.GetTestRunsForRouteAsync(route.Id, ct);
-        var inheritedRun = retainedRouteRuns
-            .Where(run => run.RouteRevision is not null && RouteNavigationConfigurationFactory.SameNavigation(
-                RouteNavigationConfigurationFactory.FromRevision(run.RouteRevision, run.RouteRevision.RouteRevisionStops.ToArray()), targetNavigation))
-            .OrderBy(run => run.CheckedAt).ThenBy(run => run.Id).LastOrDefault();
+        var inheritedRuns = RouteVerification.RunsOnPath(retainedRouteRuns, targetNavigation);
+        var inheritedRun = inheritedRuns.Count == 0 ? null : inheritedRuns[^1].Record;
         var revision = new RouteRevision
         {
             Id = Guid.NewGuid(), RouteId = routeId, RevisionNumber = number, Name = i.Name.Trim(), Description = Clean(i.Description),
             MapVersionId = map.Id, MapPackageSha256 = map.PackageSha256, StartX = i.StartX, StartY = i.StartY, StartYaw = i.StartYaw,
-            EndMode = i.EndMode, EndX = i.EndX, EndY = i.EndY, EndYaw = i.EndYaw,
+            EndMode = i.EndMode, EndX = i.EndX, EndY = i.EndY, EndYaw = i.EndYaw, ViewerChoosesNextStop = i.ViewerChoosesNextStop,
             NavigationFingerprint = fingerprint, RequestId = i.RequestId, RequestHash = hash,
             CreatedByUserId = c.ActorUserId, CreatedAt = now
         };
@@ -193,13 +196,15 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             await repo.GetRobotCodeAsync(inheritedRun.RobotId, ct) ?? "", inheritedRun.CheckedByUserId,
             inheritedRun.ParticipatingStaffUserId, inheritedRun.ResultCode, inheritedRun.AllStopsReached,
             inheritedRun.SafelyStopped, inheritedRun.LocalizationPassed, inheritedRun.MeasuredDurationSeconds,
-            inheritedRun.FailureReason, inheritedRun.EvidenceNote, inheritedRun.CheckedAt, inheritedRun.MeasurementBasis)];
+            inheritedRun.FailureReason, inheritedRun.EvidenceNote, inheritedRun.CheckedAt, inheritedRun.MeasurementBasis,
+            TraversedStopIds: RouteVerification.ReadTraversed(inheritedRun.TraversedStopIdsJson))];
         // docs/lich-tour-theo-ca.md §4: estimated from dwell and the stop positions, the same sum a reservation uses.
         var expected = Tours.TourSchedule.EstimatedDurationSeconds(revision, stopRows, schedule.EstimatedSpeedMetersPerSecond);
+        var applied = RouteVerification.Evaluate(revision, stopRows, inheritedRuns);
         return new RouteRevisionView(routeId, revision.Id, number, revision.Name, revision.Description, map.Id, map.MapKey,
             Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), revision.StartX, revision.StartY, revision.StartYaw,
             revision.EndMode, revision.EndX, revision.EndY, revision.EndYaw,
-            Convert.ToHexString(fingerprint).ToLowerInvariant(), false, inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id,
+            Convert.ToHexString(fingerprint).ToLowerInvariant(), false, applied.Status, applied.Effective?.Id,
             "INCOMPLETE_CONTENT_AUDIO_DATA", i.Stops.Sum(s => s.DwellSeconds),
             i.Stops.Select((s, index) =>
             {
@@ -210,8 +215,9 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                     null, selected.Revision.ProposalId);
             }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
-                inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], [],
-            ScheduleFit: Tours.TourSchedule.ScheduleFit(schedule, expected), ExpectedDurationSeconds: expected);
+                applied.Status, applied.Effective?.Id, revision.CreatedAt, revision.ViewerChoosesNextStop, applied.LegCoverage)], [],
+            ScheduleFit: Tours.TourSchedule.ScheduleFit(schedule, expected), ExpectedDurationSeconds: expected,
+            ViewerChoosesNextStop: revision.ViewerChoosesNextStop, LegCoverage: applied.LegCoverage);
     }
 
     private async Task EnsurePoisUsableAsync(IReadOnlyCollection<Guid> poiRevisionIds, CancellationToken ct)
@@ -241,8 +247,9 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
 
     public const string DuplicatePoiCode = "ROUTE_DUPLICATE_POI";
 
-    // docs/lich-tour-theo-ca.md §2: the start, each consecutive pair of stops and a separate end pose must be
-    // MinStopSeparationMeters apart. An end pose on the start is "return to start" and is always allowed.
+    // docs/lich-tour-theo-ca.md §2: the start and each consecutive pair of stops must be MinStopSeparationMeters apart.
+    // On a voting route any POI may follow any other, so every pair is compared (ADR-0065). The end is the last POI or
+    // the start itself (EnsureRouteShape), so it needs no check of its own.
     private void EnsureStopSeparation(RouteRevisionDraftInput i, IReadOnlyList<PoiProposalRevision> stops)
     {
         var min = rules.MinStopSeparationMeters;
@@ -250,16 +257,13 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             if (rules.TooClose(i.StartX, i.StartY, stop.X, stop.Y))
                 throw TooClose($"Điểm bắt đầu cách điểm dừng {stop.Name} {Meters(i.StartX, i.StartY, stop.X, stop.Y)} m, cần ít nhất {min} m. Chọn điểm bắt đầu khác.");
         for (var index = 1; index < stops.Count; index++)
-        {
-            var previous = stops[index - 1];
-            var stop = stops[index];
-            if (rules.TooClose(previous.X, previous.Y, stop.X, stop.Y))
-                throw TooClose($"Điểm dừng {previous.Name} và {stop.Name} cách nhau {Meters(previous.X, previous.Y, stop.X, stop.Y)} m, cần ít nhất {min} m.");
-        }
-        if (i.EndMode != "POSE" || i.EndX is not { } endX || i.EndY is not { } endY || (endX == i.StartX && endY == i.StartY)) return;
-        var last = stops[^1];
-        if (rules.TooClose(endX, endY, last.X, last.Y))
-            throw TooClose($"Điểm kết thúc cách điểm dừng cuối {last.Name} {Meters(endX, endY, last.X, last.Y)} m, cần ít nhất {min} m. Chọn \"Dừng tại điểm dừng cuối\" hoặc một vị trí xa hơn.");
+            for (var other = i.ViewerChoosesNextStop ? 0 : index - 1; other < index; other++)
+            {
+                var previous = stops[other];
+                var stop = stops[index];
+                if (rules.TooClose(previous.X, previous.Y, stop.X, stop.Y))
+                    throw TooClose($"Điểm dừng {previous.Name} và {stop.Name} cách nhau {Meters(previous.X, previous.Y, stop.X, stop.Y)} m, cần ít nhất {min} m.");
+            }
 
         static ConflictException TooClose(string message) => new(message, "ROUTE_STOP_TOO_CLOSE");
         static string Meters(decimal ax, decimal ay, decimal bx, decimal by) =>
@@ -274,6 +278,35 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
     }
 
     public const string UnchangedCode = "ROUTE_REVISION_UNCHANGED";
+    public const string EndPoseNotStartCode = "ROUTE_END_POSE_NOT_START";
+    public const string VoteStopCountCode = "ROUTE_VOTE_STOP_COUNT";
+    public const string VoteDwellTooShortCode = "ROUTE_VOTE_DWELL_TOO_SHORT";
+    public const string VoteEndMustReturnCode = "ROUTE_VOTE_END_MUST_RETURN";
+
+    /// <summary>
+    /// Rules on the shape of every new save (ADR-0065). The end is the last POI, or a POSE equal to the start pose
+    /// ("Quay về điểm bắt đầu"); revisions saved earlier with a separate end pose keep it and still run. A voting route
+    /// also needs 3-4 POIs, a dwell of at least <see cref="RouteRuleSettings.MinVoteDwellSeconds"/> s at each, and the
+    /// return to the start.
+    /// </summary>
+    public static void EnsureRouteShape(RouteRevisionDraftInput i)
+    {
+        var returnsToStart = i.EndMode == "POSE" && i.EndX == i.StartX && i.EndY == i.StartY && i.EndYaw == i.StartYaw;
+        if (i.ViewerChoosesNextStop)
+        {
+            if (i.Stops.Count is < RouteRuleSettings.MinVoteStops or > RouteRuleSettings.MaxVoteStops)
+                throw new ConflictException($"Tuyến cho Viewer chọn điểm tiếp theo cần từ {RouteRuleSettings.MinVoteStops} đến {RouteRuleSettings.MaxVoteStops} điểm dừng (đang có {i.Stops.Count}).",
+                    VoteStopCountCode);
+            if (i.Stops.Any(stop => stop.DwellSeconds < RouteRuleSettings.MinVoteDwellSeconds))
+                throw new ConflictException($"Tuyến cho Viewer chọn điểm tiếp theo cần dừng ít nhất {RouteRuleSettings.MinVoteDwellSeconds} giây ở mỗi điểm để Viewer kịp bình chọn.",
+                    VoteDwellTooShortCode);
+            if (!returnsToStart)
+                throw new ConflictException("Tuyến cho Viewer chọn điểm tiếp theo phải kết thúc bằng \"Quay về điểm bắt đầu\".", VoteEndMustReturnCode);
+        }
+        if (i.EndMode == "POSE" && !returnsToStart)
+            throw new ConflictException("Điểm kết thúc chỉ được là \"Dừng tại điểm dừng cuối\" hoặc \"Quay về điểm bắt đầu\". Chọn lại điểm kết thúc.",
+                EndPoseNotStartCode);
+    }
 
     /// <summary>
     /// Whether <paramref name="input"/> would save exactly <paramref name="current"/>: name, description, map, each stop's
@@ -287,7 +320,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         if (current.Name != input.Name.Trim() || current.Description != Clean(input.Description)) return false;
         if (current.MapVersionId != input.MapVersionId || current.StartX != input.StartX || current.StartY != input.StartY
             || current.StartYaw != input.StartYaw || current.EndMode != input.EndMode || current.EndX != input.EndX
-            || current.EndY != input.EndY || current.EndYaw != input.EndYaw) return false;
+            || current.EndY != input.EndY || current.EndYaw != input.EndYaw
+            || current.ViewerChoosesNextStop != input.ViewerChoosesNextStop) return false;
         var ordered = stops.OrderBy(stop => stop.StopOrder).ToArray();
         if (ordered.Length != input.Stops.Count) return false;
         for (var index = 0; index < ordered.Length; index++)
@@ -307,12 +341,20 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
     {
         if (!CryptographicOperations.FixedTimeEquals(prior, current)) throw new ConflictException("RequestId was already used with different route revision content.", "IDEMPOTENCY_CONFLICT");
     }
-    internal static byte[] ConfigurationFingerprint(Guid mapId, byte[] checksum, RouteRevisionDraftInput input, IReadOnlyList<RoutePoiRevisionEvidence> evidence) =>
-        Hash(new { mapId, Checksum = Convert.ToHexString(checksum), input.StartX, input.StartY, input.StartYaw, input.EndMode, input.EndX, input.EndY, input.EndYaw,
-            Stops = input.Stops.Select((s, index) =>
-            {
-                var poi = evidence.Single(e => e.Revision.Id == s.PoiRevisionId).Revision;
-                return new { NavigationFingerprint = Convert.ToHexString(poi.NavigationFingerprint),
-                    Order = index + 1, poi.CameraPreset, HeadSteps = s.HeadSteps };
-            }) });
+    /// <summary>The path fingerprint. The vote flag joins it only when set, so a fixed route keeps its earlier fingerprint.</summary>
+    internal static byte[] ConfigurationFingerprint(Guid mapId, byte[] checksum, RouteRevisionDraftInput input, IReadOnlyList<RoutePoiRevisionEvidence> evidence)
+    {
+        var checksumHex = Convert.ToHexString(checksum);
+        var stops = input.Stops.Select((s, index) =>
+        {
+            var poi = evidence.Single(e => e.Revision.Id == s.PoiRevisionId).Revision;
+            return new { NavigationFingerprint = Convert.ToHexString(poi.NavigationFingerprint),
+                Order = index + 1, poi.CameraPreset, HeadSteps = s.HeadSteps };
+        });
+        return input.ViewerChoosesNextStop
+            ? Hash(new { mapId, Checksum = checksumHex, input.StartX, input.StartY, input.StartYaw, input.EndMode, input.EndX, input.EndY, input.EndYaw,
+                Stops = stops, input.ViewerChoosesNextStop })
+            : Hash(new { mapId, Checksum = checksumHex, input.StartX, input.StartY, input.StartYaw, input.EndMode, input.EndX, input.EndY, input.EndYaw,
+                Stops = stops });
+    }
 }

@@ -8,12 +8,20 @@ public sealed record RouteRevisionDraftInput(
     Guid RequestId, int ExpectedCurrentRevision, string Name, string? Description, Guid MapVersionId,
     decimal StartX, decimal StartY, decimal StartYaw, string EndMode,
     decimal? EndX, decimal? EndY, decimal? EndYaw,
-    IReadOnlyList<RouteRevisionStopInput> Stops);
+    IReadOnlyList<RouteRevisionStopInput> Stops,
+    // ADR-0065 "Cho Viewer chọn điểm tiếp theo": 3-4 POIs, the first fixed, dwell >= 30 s, the end back at the start.
+    bool ViewerChoosesNextStop = false);
 public sealed record RouteRevisionRequest(Guid RequestId, int ExpectedCurrentRevision);
 public sealed record RouteRunRequest(
     Guid RequestId, string RobotCode, Guid ParticipatingStaffUserId,
     string ResultCode, bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed,
-    string? FailureReason, string EvidenceNote);
+    string? FailureReason, string EvidenceNote,
+    // ADR-0065: the revision stop ids in the order driven; required on a voting route, ignored on a fixed one.
+    IReadOnlyList<Guid>? TraversedStopIds = null);
+/// <summary>ADR-0065: how many of a voting route's legs the PASS runs since the newest FAIL have driven.</summary>
+public sealed record RouteLegCoverageView(int RequiredCount, int CoveredCount, IReadOnlyList<RouteMissingLegView> MissingLegs);
+/// <summary>A leg no PASS run has driven yet. <c>FromStopId</c> null is the start, <c>ToStopId</c> null the end.</summary>
+public sealed record RouteMissingLegView(Guid? FromStopId, string FromName, Guid? ToStopId, string ToName);
 
 /// <summary>One stop of a revision. <c>Id</c> is the <c>RouteRevisionStops.Id</c> that a Tour's execution stop ids name.</summary>
 public sealed record RouteRevisionStopView(Guid Id, Guid PoiRevisionId, Guid SourcePoiVerificationRecordId,
@@ -32,7 +40,9 @@ public sealed record RouteTestRunView(Guid Id, Guid RouteRevisionId, Guid MapVer
     bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed, int MeasuredDurationSeconds,
     string? FailureReason, string EvidenceNote, DateTimeOffset CheckedAt, string? MeasurementBasis,
     // Names for the Staff fail banner; null for a deleted account or a view built before the names were read.
-    string? CheckedByName = null, string? ParticipatingStaffName = null);
+    string? CheckedByName = null, string? ParticipatingStaffName = null,
+    // ADR-0065: the revision stop ids in the order driven, recorded on a voting route; null on a fixed one.
+    IReadOnlyList<Guid>? TraversedStopIds = null);
 /// <summary>
 /// Another submitted save of the same route with the same path (map, start, end, stop POIs and order, head steps): the
 /// newest run on any of them is their applied result (ADR-0023 addendum), so recording one changes them all.
@@ -44,7 +54,9 @@ public static class RouteMeasurementBasis { public const string TotalWithDwell =
 public sealed record RouteTestParticipantView(Guid UserId, string FullName, string Username);
 public sealed record RouteRevisionSummaryView(Guid RevisionId, int RevisionNumber, Guid MapVersionId,
     string MapPackageSha256, string ConfigurationFingerprint, bool IsSubmitted, string VerificationStatus,
-    Guid? EffectiveTestRunId, DateTimeOffset CreatedAt);
+    Guid? EffectiveTestRunId, DateTimeOffset CreatedAt,
+    // ADR-0065: VerificationStatus may then be LEGS_INCOMPLETE; LegCoverage is null on a fixed route.
+    bool ViewerChoosesNextStop = false, RouteLegCoverageView? LegCoverage = null);
 public sealed record RouteRevisionView(Guid RouteId, Guid RevisionId, int RevisionNumber, string Name,
     string? Description, Guid MapVersionId, string MapKey, string MapPackageSha256,
     decimal StartX, decimal StartY, decimal StartYaw, string EndMode, decimal? EndX, decimal? EndY,
@@ -59,7 +71,9 @@ public sealed record RouteRevisionView(Guid RouteId, Guid RevisionId, int Revisi
     IReadOnlyList<string>? RetiredPoiNames = null,
     // ADR-0023 addendum: the other submitted saves the applied result also covers, and the Tours still to run on this save.
     IReadOnlyList<RouteSharedResultRevisionView>? SharedResultRevisions = null,
-    IReadOnlyList<RouteScheduledTourView>? ScheduledTours = null);
+    IReadOnlyList<RouteScheduledTourView>? ScheduledTours = null,
+    // ADR-0065: a voting route; VerificationStatus may then be LEGS_INCOMPLETE. LegCoverage is null on a fixed route.
+    bool ViewerChoosesNextStop = false, RouteLegCoverageView? LegCoverage = null);
 public sealed record RouteAvailabilityRequest(Guid RequestId, string ExpectedRowVersion);
 /// <summary>A SCHEDULED or READY Tour on the route; the close of registration lets Staff screens label a quick Tour right.</summary>
 public sealed record RouteScheduledTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State,
@@ -72,7 +86,9 @@ public sealed record RouteNavigationStopConfiguration(int StopOrder, byte[] PoiN
     string CameraPreset, IReadOnlyList<RouteHeadStep> HeadSteps);
 public sealed record RouteNavigationConfiguration(Guid MapVersionId, byte[] MapPackageSha256,
     decimal StartX, decimal StartY, decimal StartYaw, string EndMode, decimal? EndX, decimal? EndY,
-    decimal? EndYaw, IReadOnlyList<RouteNavigationStopConfiguration> Stops);
+    decimal? EndYaw, IReadOnlyList<RouteNavigationStopConfiguration> Stops,
+    // ADR-0065: switching the vote flag changes the path, so it needs its own test runs.
+    bool ViewerChoosesNextStop = false);
 
 public interface IRouteRevisionRepository
 {

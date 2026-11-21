@@ -79,6 +79,10 @@ internal static class TourTarget
     /// </summary>
     internal static string RouteTestPassRequiredMessage(RouteRevisionView view)
     {
+        // ADR-0065: a voting route whose PASS runs have not yet driven every leg a vote could pick.
+        if (view.VerificationStatus == RouteLegCoverage.LegsIncomplete && view.LegCoverage is { } coverage)
+            return $"Tuyến cho Viewer chọn điểm tiếp theo còn {coverage.MissingLegs.Count}/{coverage.RequiredCount} chặng chưa chạy thử đạt: " +
+                $"{string.Join(", ", coverage.MissingLegs.Select(leg => $"{leg.FromName} → {leg.ToName}"))}. Ghi thêm lần chạy thử theo thứ tự khác.";
         if (view.VerificationStatus != "FAIL" || view.TestRuns.SingleOrDefault(item => item.Id == view.EffectiveTestRunId) is not { } failed)
             return "Phiên bản tuyến chưa có kết quả chạy thử đạt.";
         var at = failed.CheckedAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM HH:mm", System.Globalization.CultureInfo.InvariantCulture);
