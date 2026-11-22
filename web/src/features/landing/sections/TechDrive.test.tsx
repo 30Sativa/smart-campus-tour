@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { TechDrive } from './TechDrive'
-import { ROBOT_DRIVE } from '../landing-content'
+import { ROBOT_DRIVE, ROBOT_INSIDE } from '../landing-content'
 import { INTRO_CHAPTER_SECONDS, STORY_CHAPTERS } from '../robot-explode/story'
 
 const renderSection = () => render(<MemoryRouter><TechDrive /></MemoryRouter>)
@@ -26,8 +26,8 @@ describe('TechDrive (section 04)', () => {
     expect(video()).toHaveAttribute('poster', expect.stringContaining('videos/robot-intro'))
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Công nghệ đứng sau mỗi điểm dừng.')
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(`${STORY_CHAPTERS[0].title} ${STORY_CHAPTERS[0].after}`)
-    expect(screen.queryByRole('link', { name: /bên trong robot/i })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Lái thử robot/ })).toHaveAttribute('href', ROBOT_DRIVE.to)
+    expect(screen.getByRole('link', { name: /Bên trong robot/ })).toHaveAttribute('href', ROBOT_INSIDE.to)
     expect(screen.getByRole('button', { name: /Bỏ qua/ })).toBeInTheDocument()
     expect(document.getElementById('cong-nghe')).toHaveAttribute('data-phase', 'intro')
     // The 3D stage underneath is out of reach while the video covers it.
@@ -51,6 +51,7 @@ describe('TechDrive (section 04)', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Công nghệ đứng sau mỗi điểm dừng.')
     expect(screen.getByRole('status')).toHaveTextContent('Đang tải mô hình robot…')
     expect(screen.getByRole('link', { name: /Lái thử robot/ })).toHaveAttribute('href', ROBOT_DRIVE.to)
+    expect(screen.getByRole('link', { name: /Bên trong robot/ })).toHaveAttribute('href', '/ben-trong-robot')
     fireEvent.click(screen.getByRole('button', { name: 'Xem lại video' }))
     expect(document.getElementById('cong-nghe')).toHaveAttribute('data-phase', 'intro')
   })

@@ -12,7 +12,7 @@ describe('RobotFlowSection', () => {
     const steps = within(screen.getByRole('list', { name: /Các bước: Di chuyển/ })).getAllByRole('heading', { level: 3 })
     expect(steps.map(step => step.textContent)).toEqual(FLOWS[0].steps.map((step, index) => `Bước ${index + 1}/${FLOWS[0].steps.length}: ${step.title}`))
     expect(screen.getByText('Mini PC → STM32G431')).toBeInTheDocument()
-    expect(screen.queryByText('Driver HBS86H ×2 → Động cơ 57HS22 ×2')).not.toBeInTheDocument()
+    expect(screen.queryByText('Driver HBS57H ×2 → Động cơ 57EBP98ALC ×2')).not.toBeInTheDocument()
   })
 
   it('moves through the steps with the buttons, then on to the next function', () => {
@@ -22,7 +22,7 @@ describe('RobotFlowSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Bước tiếp' }))
     fireEvent.click(screen.getByRole('button', { name: 'Bước tiếp' }))
     expect(now()).toHaveTextContent('Di chuyển · Động cơ quay bánh xe')
-    expect(screen.getByText('Driver HBS86H ×2 → Động cơ 57HS22 ×2')).toBeInTheDocument()
+    expect(screen.getByText('Driver HBS57H ×2 → Động cơ 57EBP98ALC ×2')).toBeInTheDocument()
     expect(screen.getByText('Bước 3/3', { selector: '.lp3-flow__count' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Tiếp: Cảm biến & định vị' }))
     expect(screen.getByRole('tab', { name: /Cảm biến/ })).toHaveAttribute('aria-selected', 'true')

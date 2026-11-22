@@ -1,11 +1,11 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { Gamepad2, Play } from 'lucide-react'
+import { ArrowRight, CircuitBoard, Gamepad2, Play } from 'lucide-react'
 import { ViewerBoundary } from '../robot-explode/ViewerBoundary'
 import { canUseWebGL } from '../robot-explode/webgl'
 import { STORY_CHAPTERS } from '../robot-explode/story'
 import { prefersReducedMotion } from '../landing-motion'
-import { ROBOT_DRIVE } from '../landing-content'
+import { ROBOT_DRIVE, ROBOT_INSIDE } from '../landing-content'
 import { IntroVideo } from './IntroVideo'
 
 // three.js and the robot model load once section 04 comes near the screen and the intro video has enough to
@@ -13,6 +13,8 @@ import { IntroVideo } from './IntroVideo'
 const RobotPartsViewer = lazy(() => import('../robot-explode/RobotPartsViewer'))
 
 const Drive = () => <Link to={ROBOT_DRIVE.to} className="lp3-td__btn lp3-td__btn--lime lp3-td__drive"><Gamepad2 size={17} aria-hidden="true" />Lái thử robot</Link>
+/** The wiring drawing and how each part works, on its own page. */
+const Inside = () => <Link to={ROBOT_INSIDE.to} className="lp3-td__btn lp3-td__more"><CircuitBoard size={16} aria-hidden="true" />{ROBOT_INSIDE.label}<ArrowRight size={15} aria-hidden="true" /></Link>
 
 /** The section's title and links beside the robot's parts, and the way back to the video. */
 function Intro({ watched, onWatch }: { watched: boolean; onWatch: () => void }) {
@@ -23,9 +25,10 @@ function Intro({ watched, onWatch }: { watched: boolean; onWatch: () => void }) 
         <button type="button" className="lp3-td__replay" onClick={onWatch}><Play size={12} aria-hidden="true" />{watched ? 'Xem lại video' : 'Xem video giới thiệu'}</button>
       </div>
       <h2 className="lp3-td__title">Công nghệ đứng sau <em>mỗi điểm dừng.</em></h2>
-      <p className="lp3-td__lead">Xoay, bung và mở vỏ robot để xem từng linh kiện. Muốn tự cầm lái? Mở bản đồ lái thử.</p>
+      <p className="lp3-td__lead">Xoay, bung và mở vỏ robot để xem từng linh kiện, hoặc mở bên trong để xem dây điện chạy ra sao. Muốn tự cầm lái? Mở bản đồ lái thử.</p>
       <div className="lp3-td__go">
         <Drive />
+        <Inside />
       </div>
     </>
   )
@@ -42,6 +45,7 @@ function Chapter({ index }: { index: number }) {
       <p className="lp3-story__body">{chapter.body}</p>
       <div className="lp3-td__go">
         <Drive />
+        <Inside />
       </div>
     </div>
   )
@@ -54,7 +58,8 @@ const renderChapter = (index: number) => <Chapter index={index} />
  * of the robot (five chapters, their text over it, skippable); meanwhile the
  * 3D robot loads underneath, and at the end of the video the section turns to
  * its parts: the visitor turns it, takes it apart, opens its casing and picks
- * parts. "Lái thử robot" leads to the test-drive page with the maps. Visitors
+ * parts. "Lái thử robot" leads to the test-drive page with the maps, "Bên
+ * trong robot" to the wiring drawing (`/ben-trong-robot`). Visitors
  * who ask for reduced motion get the parts straight away, the video one click
  * off.
  *
@@ -119,7 +124,7 @@ export function TechDrive() {
                 ? (
                     <ViewerBoundary fallback={still('Không tải được mô hình 3D.', false)}>
                       <Suspense fallback={still('Đang tải mô hình robot…', true)}>
-                        <RobotPartsViewer visible={inView && !showingIntro} intro={intro} driveTo={ROBOT_DRIVE.to} />
+                        <RobotPartsViewer visible={inView && !showingIntro} intro={intro} driveTo={ROBOT_DRIVE.to} insideTo={ROBOT_INSIDE.to} />
                       </Suspense>
                     </ViewerBoundary>
                   )

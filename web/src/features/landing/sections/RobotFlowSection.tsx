@@ -34,9 +34,9 @@ function StepBody({ step }: { step: FlowStep }) {
  * runs along its path, and the wheels, sensors or head move when the current
  * reaches them.
  */
-export function RobotFlowSection({ asPage = false }: {
-  /** On its own page the heading is the page's h1. */
-  asPage?: boolean
+export function RobotFlowSection({ kicker = 'Bên trong robot' }: {
+  /** The small line above the heading. */
+  kicker?: string
 }) {
   const [flowIndex, setFlowIndex] = useState(0)
   const [stepIndex, setStepIndex] = useState(0)
@@ -79,11 +79,11 @@ export function RobotFlowSection({ asPage = false }: {
   const last = stepIndex === flow.steps.length - 1
 
   return (
-    <section className="lp3-flow lp3-section" id="ben-trong-robot" data-page={asPage ? 'true' : undefined}>
+    <section className="lp3-flow lp3-section" id="cach-hoat-dong">
       <div className="lp3-container">
         <div className="lp3-section-head">
-          <span className="lp3-kicker">{asPage ? 'Quy trình chi tiết' : 'Bên trong robot'}</span>
-          {asPage ? <h1>Dữ liệu chạy từ máy tính<br />tới từng bánh xe.</h1> : <h2>Dữ liệu chạy từ máy tính<br />tới từng bánh xe.</h2>}
+          <span className="lp3-kicker">{kicker}</span>
+          <h2>Dữ liệu chạy từ máy tính<br />tới từng bánh xe.</h2>
           <p>Chọn một chức năng rồi bấm qua từng bước: mỗi bước sáng lên đúng linh kiện đang làm việc, và tín hiệu chạy dọc đường dây như dòng điện.</p>
         </div>
 
