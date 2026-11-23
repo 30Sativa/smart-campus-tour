@@ -160,8 +160,20 @@ describe('route table', () => {
 
     it('keeps Staff out of the technical area', async () => {
       signIn('Staff')
-      const router = renderAt('/technical/confirmations')
+      const router = renderAt('/technical/route-tests')
       await settled(router, '/staff')
+    })
+
+    it.each([
+      ['/technical/poi-import?proposal=p-1', '/technical/pois', 'Kiểm chứng POI'],
+      ['/technical/poi-file-import?map=m-1', '/technical/pois/import', 'Nhập POI từ file'],
+      ['/technical/confirmations?route=r-1', '/technical/route-tests', 'Xác nhận chạy thử'],
+    ])('moves the old address %s to %s and keeps its query string', async (from, to, heading) => {
+      signIn('TechnicalStaff')
+      const router = renderAt(from)
+      await settled(router, to)
+      expect(router.state.location.search).toBe(`?${from.split('?')[1]}`)
+      expect(await screen.findByRole('heading', { name: heading, level: 1 })).toBeInTheDocument()
     })
 
     // SRS LI-09–14: viewers have no accounts, so the old visitor app is gone.

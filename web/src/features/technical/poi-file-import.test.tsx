@@ -91,7 +91,7 @@ describe('Technical POI file import', () => {
     const result = within(await screen.findByRole('region', { name: 'Kết quả nhập POI' }))
     expect(result.getByText('Chờ kiểm chứng')).toBeInTheDocument()
     expect(result.getByText(/1 POI chờ kiểm chứng nằm ở trang Kiểm chứng POI/)).toBeInTheDocument()
-    expect(result.getByRole('link', { name: 'Mở hàng chờ kiểm chứng' })).toHaveAttribute('href', '/technical/poi-import')
+    expect(result.getByRole('link', { name: 'Mở hàng chờ kiểm chứng' })).toHaveAttribute('href', '/technical/pois')
   })
 
   it('lists POIs that came from pose files, with their check and their narration state (ADR-0060)', async () => {

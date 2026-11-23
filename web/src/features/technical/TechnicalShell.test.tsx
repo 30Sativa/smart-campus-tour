@@ -78,7 +78,8 @@ describe('TechnicalShell', () => {
     expect(rows[0]).toHaveTextContent('Robot amr-01 chờ kiểm tra tại chỗ')
     expect(within(rows[0]).getByRole('link')).toHaveAttribute('href', '/technical/robots?robot=r1')
     expect(within(rows[1]).queryByRole('link')).not.toBeInTheDocument()
-    expect(within(panel).getByRole('link', { name: /2 POI chờ kiểm chứng/ })).toHaveAttribute('href', '/technical/poi-import')
+    // The server still names the old address; the link opens the page it moved to.
+    expect(within(panel).getByRole('link', { name: /2 POI chờ kiểm chứng/ })).toHaveAttribute('href', '/technical/pois')
   })
 
   it('says nothing is waiting only when the Dashboard answered, and says so when it failed', async () => {

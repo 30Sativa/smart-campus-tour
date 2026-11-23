@@ -91,7 +91,8 @@ describe('Technical dashboard and Mini PC monitoring', () => {
     renderAt(<TechnicalDashboardPage />, '/technical/dashboard')
     expect(await screen.findByText('1/1')).toBeInTheDocument()
     expect(screen.getByText('2 POI đang chờ kiểm chứng kỹ thuật')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Mở' })).toHaveAttribute('href', '/technical/poi-import')
+    // The server still names the old address; the link opens the page it moved to.
+    expect(screen.getByRole('link', { name: 'Mở' })).toHaveAttribute('href', '/technical/pois')
     const table = within(screen.getByRole('region', { name: 'Robot và Mini PC' }))
     expect(table.getByText('CPU 37% · 61 °C')).toBeInTheDocument()
     expect(table.getByText('Trực tuyến')).toBeInTheDocument()

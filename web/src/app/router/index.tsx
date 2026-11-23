@@ -14,7 +14,7 @@ import RouteErrorPage from './RouteErrorPage'
  *   `/`        public   marketing pages, no account
  *   `/staff/*` staff    tour preparation (`/staff/manage/*`) and operations, for Staff and Admin
  *   `/admin/*` admin    accounts and roles, Admin only
- *   `/technical/*`      Technical Staff: dashboard, robot/Mini PC monitoring, map versions, POI import, technical confirmation
+ *   `/technical/*`      Technical Staff: dashboard, robot/Mini PC monitoring, map versions, POI verification and import, route tests
  *   `/dai-dien/*`       school representative: register a group, roster, invitation
  *   `/tour/*`           students, no account: join, waiting room, live, end
  *
@@ -310,9 +310,13 @@ export const routes = [
       { path: 'monitoring', element: <TechnicalMonitoringPage /> },
       { path: 'maps', element: <TechnicalMapsPage /> },
       { path: 'robots', element: <TechnicalRobotsPage /> },
-      { path: 'poi-import', element: <TechnicalPoiImportPage /> },
-      { path: 'poi-file-import', element: <TechnicalPoiFileImportPage /> },
-      { path: 'confirmations', element: <TechnicalConfirmationsPage /> },
+      { path: 'pois', element: <TechnicalPoiImportPage /> },
+      { path: 'pois/import', element: <TechnicalPoiFileImportPage /> },
+      { path: 'route-tests', element: <TechnicalConfirmationsPage /> },
+      // Menu regrouped on 23/11/2026 (TECHNICAL_MOVED_PATHS): old bookmarks and server links keep their query string.
+      { path: 'poi-import', element: <MergedInto path="/technical/pois" /> },
+      { path: 'poi-file-import', element: <MergedInto path="/technical/pois/import" /> },
+      { path: 'confirmations', element: <MergedInto path="/technical/route-tests" /> },
       { path: 'profile', element: <TechnicalProfilePage /> },
       { path: '*', element: <Navigate to="/technical" replace /> },
     ],
