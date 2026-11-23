@@ -1,5 +1,5 @@
 import { ApiError, apiErrorDetail } from '../../api/client'
-import type { PhysicalRobotConnectionStatus, PhysicalRobotOption } from './api/technical'
+import type { PhysicalRobotConnectionStatus } from './api/technical'
 
 export const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => ({
   UNCONFIRMED: 'Chưa xác nhận kết nối',
@@ -29,6 +29,40 @@ export function apiErrorCode(error: unknown): string | null {
   } catch { return null }
 }
 
+/** The refusal's own `message`, which the server writes in Vietnamese for the readiness codes. */
+function serverMessage(error: unknown): string | null {
+  if (!(error instanceof ApiError) || !error.body) return null
+  try {
+    const message = (JSON.parse(error.body) as { message?: unknown }).message
+    return typeof message === 'string' && message.trim() ? message : null
+  } catch { return null }
+}
+
+/**
+ * Refusals that mean "this robot is not ready on this map". The server's sentence names the robot, the map and the
+ * missing condition, so it is shown as is; the fixed text is only for an older server that sent none.
+ */
+const readinessRefusals: Record<string, string> = {
+  ROBOT_MAP_NOT_ASSIGNED: 'Robot không đang gán bản đồ này. Đổi bản đồ cho robot ở trang Robot trước khi ghi kiểm tra.',
+  ROBOT_NOT_REPORTING: 'Robot chưa gửi dữ liệu theo bản đồ đang gán. Bật fleet_bridge với MapKey và FrameId của bản đồ này rồi bấm Cập nhật trạng thái.',
+  MAP_NOT_DEPLOYED: 'Robot chưa sẵn sàng trên bản đồ của POI này. Mở thiết lập robot để xem lý do.',
+  ROBOT_NOT_READY_FOR_ROUTE: 'Robot chưa sẵn sàng trên bản đồ của tuyến này. Mở thiết lập robot để xem lý do.',
+  ROBOT_CONNECTION_UNCONFIRMED: 'Robot này chưa xác nhận kết nối. Chạy bridge Fleet Sync bằng khóa hiện tại, bấm Cập nhật trạng thái rồi thử lại.',
+  MAP_NOT_CURRENTLY_DEPLOYED: 'Robot chưa sẵn sàng trên bản đồ và checksum của phiên bản tuyến này. Mở thiết lập robot để xem lý do.',
+  ROBOT_DEPLOYMENT_CHECK_REQUIRED: 'Robot chưa có kiểm tra triển khai đạt trên bản đồ đang gán.',
+  ROBOT_DEACTIVATED: 'Robot đã ngừng sử dụng.',
+}
+
+/** Vietnamese text for a readiness refusal, or null when the error is something else. */
+export function readinessRefusalText(error: unknown): string | null {
+  const code = apiErrorCode(error)
+  if (!code || !readinessRefusals[code]) return null
+  return serverMessage(error) ?? readinessRefusals[code]
+}
+
+/** A refused deployment check: the robot must hold this map, and a pass needs live data on it. */
+export const deploymentErrorText = (error: unknown) => readinessRefusalText(error) ?? errorText(error)
+
 const narrationConflicts: Record<string, string> = {
   NARRATION_SELF_APPROVAL_FORBIDDEN: 'Bạn là người sửa bản này lần cuối nên không duyệt được. Cần một Staff khác duyệt. Dữ liệu mới nhất đã được tải lại.',
   STALE_VERSION: 'Thuyết minh vừa được người khác thay đổi. Dữ liệu mới nhất đã được tải lại, hãy kiểm tra rồi thử lại.',
@@ -53,6 +87,8 @@ export function mapUploadFieldErrors(error: unknown): { areaKey?: string; areaNa
     const errors = payload.errors
     if (typeof errors === 'object' && errors !== null && 'code' in errors && errors.code === 'MAP_AREA_NAME_CONFLICT')
       return { areaKey: 'Mã khu vực này đã tồn tại. Hãy chuyển sang “Khu vực đã có” để giữ nguyên tên đã lưu.' }
+    if (typeof errors === 'object' && errors !== null && 'code' in errors && errors.code === 'MAP_AREA_NAME_TAKEN')
+      return { areaName: typeof payload.message === 'string' && payload.message.trim() ? payload.message : 'Đã có khu vực trùng tên. Chọn Khu vực đã có hoặc đặt tên khác.' }
     if (typeof errors === 'object' && errors !== null && 'code' in errors && errors.code === 'MAP_PACKAGE_DUPLICATE')
       return { package: typeof payload.message === 'string' ? payload.message : 'Gói này đã được tải lên ở khu vực này.' }
     if (!errors || typeof errors !== 'object') return { form: typeof payload.message === 'string' ? payload.message : 'Không upload được package map.' }
@@ -76,7 +112,6 @@ export function mapUploadFieldErrors(error: unknown): { areaKey?: string; areaNa
 export type PoiVerifyErrors = { robotCode?: string; reason?: string; evidenceNote?: string; form?: string }
 
 const poiVerifyConflicts: Record<string, PoiVerifyErrors> = {
-  MAP_NOT_DEPLOYED: { robotCode: 'Robot này chưa có kiểm tra triển khai đạt mới nhất trên đúng phiên bản map của POI. Ghi kết quả kiểm tra map cho robot trước rồi thử lại.' },
   STALE_VERSION: { form: 'POI vừa được Staff thay đổi. Đóng cửa sổ này và mở lại để kiểm tra phiên bản mới nhất.' },
   IDEMPOTENCY_CONFLICT: { form: 'Yêu cầu này đã được gửi với nội dung khác. Đóng cửa sổ này và mở lại.' },
 }
@@ -93,6 +128,8 @@ export function poiVerifyErrors(error: unknown): PoiVerifyErrors {
   const message = typeof payload.message === 'string' ? payload.message : ''
   const errors = typeof payload.errors === 'object' && payload.errors !== null ? payload.errors as Record<string, unknown> : {}
   if (error.status === 409) {
+    const notReady = readinessRefusalText(error)
+    if (notReady) return { robotCode: notReady }
     if (typeof errors.code === 'string' && poiVerifyConflicts[errors.code]) return poiVerifyConflicts[errors.code]
     if (message.includes('already exists')) return { form: 'Phiên bản POI này đã có kết quả kiểm chứng. Đóng cửa sổ này để tải lại danh sách.' }
   }
@@ -112,8 +149,6 @@ export function poiVerifyErrors(error: unknown): PoiVerifyErrors {
 export type RouteTestErrors = { robotCode?: string; staff?: string; form?: string }
 
 const routeTestConflicts: Record<string, RouteTestErrors> = {
-  ROBOT_CONNECTION_UNCONFIRMED: { robotCode: 'Robot này chưa xác nhận kết nối. Chạy bridge Fleet Sync bằng khóa hiện tại, bấm Cập nhật trạng thái rồi thử lại.' },
-  MAP_NOT_CURRENTLY_DEPLOYED: { robotCode: 'Lần kiểm tra triển khai mới nhất của robot này phải đạt trên đúng bản đồ và checksum của phiên bản tuyến.' },
   STAFF_PARTICIPANT_REQUIRED: { staff: 'Người đi cùng phải là tài khoản Staff đang hoạt động. Chọn lại Staff.' },
   SEPARATE_TEST_ROLES_REQUIRED: { staff: 'Người kiểm tra và Staff đi cùng phải là hai tài khoản khác nhau.' },
   ROUTE_NOT_SUBMITTED: { form: 'Phiên bản tuyến này chưa được gửi kiểm chứng.' },
@@ -126,6 +161,8 @@ export function routeTestErrors(error: unknown): RouteTestErrors {
   let payload: { errors?: unknown; message?: unknown } = {}
   try { payload = JSON.parse(error.body) as typeof payload } catch { /* Non-JSON responses use the text below. */ }
   const errors = typeof payload.errors === 'object' && payload.errors !== null ? payload.errors as { code?: unknown } : {}
+  const notReady = readinessRefusalText(error)
+  if (notReady) return { robotCode: notReady }
   if (typeof errors.code === 'string' && routeTestConflicts[errors.code]) return routeTestConflicts[errors.code]
   if (error.status === 404 && typeof payload.message === 'string' && payload.message.toLowerCase().includes('robot')) return { robotCode: 'Robot này không còn trong danh sách đã đăng ký. Chọn robot khác.' }
   if (error.status === 400) return { form: apiErrorDetail(error) ?? 'Máy chủ từ chối kết quả này. Đạt cần đủ cả ba mục; Không đạt cần lý do và ít nhất một mục chưa đạt.' }
@@ -152,15 +189,3 @@ export function releaseInspectionError(error: unknown) {
 }
 
 export const stamp =(iso: string | null) => iso ? new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '-'
-
-/** A robot is ready for a map when its latest deployment check passed on that exact map. The server rechecks on save. */
-export const readyOn = (robot: PhysicalRobotOption, mapKey: string) => robot.latestDeploymentPassed === true && robot.latestDeployedMapKey === mapKey
-
-/**
- * Why a robot cannot be used for a whole-route test on `mapKey`, or null when it can. The order is the business
- * order: connection confirmed first, then a passing deployment check on that exact map. The server rechecks both.
- */
-export const robotNotReadyReason = (robot: PhysicalRobotOption, mapKey: string) =>
-  robot.connectionStatus === 'UNCONFIRMED' ? 'chưa xác nhận kết nối'
-    : !readyOn(robot, mapKey) ? 'chưa kiểm tra triển khai đạt trên map này'
-      : null

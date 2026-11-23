@@ -37,15 +37,17 @@ const RESULT_CHOICES = [
  * Đạt / Không đạt as two visible buttons, so recording a failure is as obvious as recording a pass.
  * `null` means not chosen yet: an evidence form never starts on a result the checker did not pick.
  */
-export function ResultToggle({ id, value, onChange, hint }: { id: string; value: 'PASS' | 'FAIL' | null; onChange: (value: 'PASS' | 'FAIL') => void; hint?: ReactNode }) {
+export function ResultToggle({ id, value, onChange, hint, passDisabled = false }: { id: string; value: 'PASS' | 'FAIL' | null; onChange: (value: 'PASS' | 'FAIL') => void; hint?: ReactNode
+  /** Đạt cannot be recorded yet; the caller says why next to the toggle. */
+  passDisabled?: boolean }) {
   return (
     <div>
       <p id={id} className={labelClass}>Kết quả</p>
       <div role="group" aria-labelledby={id} className="mt-1 grid grid-cols-2 gap-2">
         {RESULT_CHOICES.map(choice => {
           const selected = value === choice.value
-          return <button key={choice.value} type="button" aria-pressed={selected} onClick={() => onChange(choice.value)}
-            className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] motion-reduce:transition-none ${selected ? choice.selectedClass : 'border-[#e2e8f0] bg-white text-[#334155] hover:border-[#cbd5e1]'}`}>
+          return <button key={choice.value} type="button" aria-pressed={selected} disabled={passDisabled && choice.value === 'PASS'} onClick={() => onChange(choice.value)}
+            className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none ${selected ? choice.selectedClass : 'border-[#e2e8f0] bg-white text-[#334155] hover:border-[#cbd5e1]'}`}>
             <choice.icon size={15} aria-hidden="true" />{choice.label}
           </button>
         })}

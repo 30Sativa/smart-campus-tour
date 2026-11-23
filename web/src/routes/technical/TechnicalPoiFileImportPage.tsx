@@ -8,6 +8,7 @@ import { RobotPicker } from '../../features/technical/RobotPicker'
 import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { mapCheckLabel, mapVersionLabel, narrationStatus, poiImportActionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { errorText } from '../../features/technical/technical-format'
+import { robotForMap } from '../../features/technical/robot-readiness'
 import { useImportPoiFiles, useMapVersions, usePhysicalRobots, usePoiProposals, usePreviewPoiImport } from '../../features/technical/technical-hooks'
 import type { MapVersionItem, PoiImportResult, PoiProposal } from '../../features/technical/api/technical'
 
@@ -46,6 +47,13 @@ export default function TechnicalPoiFileImportPage() {
     event.preventDefault()
     pickFiles(event.dataTransfer.files)
   }
+  // The robot ready on the chosen version is almost always the one that recorded the poses, so it starts chosen.
+  const chooseMap = (id: string) => {
+    setMapVersionId(id)
+    const ready = robotForMap(robots.data, id).ready
+    if (ready) setRobotCode(ready.robotCode)
+    changed()
+  }
   const runPreview = () => preview.mutate({ mapVersionId, robotCode, files })
   const runImport = () => importFiles.mutate({ requestId, mapVersionId, robotCode, evidenceNote: evidenceNote.trim(), files }, {
     onSuccess: result => { setImported(result); setRequestId(crypto.randomUUID()); setFiles([]); setEvidenceNote(''); preview.reset() },
@@ -64,7 +72,7 @@ export default function TechnicalPoiFileImportPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className={labelClass} htmlFor="import-map">Phiên bản bản đồ</label>
-            <select title="" id="import-map" className={`${inputClass} mt-1`} required value={mapVersionId} disabled={maps.isPending || maps.isError} onChange={event => { setMapVersionId(event.target.value); changed() }}>
+            <select title="" id="import-map" className={`${inputClass} mt-1`} required value={mapVersionId} disabled={maps.isPending || maps.isError} onChange={event => chooseMap(event.target.value)}>
               <option value="">Chọn phiên bản</option>
               {maps.data?.map(item => <option key={item.map.id} value={item.map.id}>{mapVersionLabel(item.map)}</option>)}
             </select>
@@ -72,7 +80,7 @@ export default function TechnicalPoiFileImportPage() {
             {selectedMap && <p className="mt-1.5"><ToneBadge tone={mapCheckTone(selectedMap.technicalCheckStatus)}>{mapCheckLabel(selectedMap.technicalCheckStatus)}</ToneBadge></p>}
           </div>
           <div>
-            <RobotPicker id="import-robot" label="Robot đã ghi pose" mapKey={selectedMap?.map.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký." />
+            <RobotPicker id="import-robot" label="Robot đã ghi pose" mapVersionId={selectedMap?.map.id} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký." />
           </div>
         </div>
 
@@ -117,6 +125,7 @@ export default function TechnicalPoiFileImportPage() {
               <label className={labelClass} htmlFor="import-evidence">Ghi chú bằng chứng</label>
               <textarea id="import-evidence" rows={3} className={`${inputClass} mt-1`} required maxLength={1700} value={evidenceNote} onChange={event => { setEvidenceNote(event.target.value); importFiles.reset() }} />
             </div>
+            {preview.data.robotReadiness && preview.data.robotReadiness.state !== 'READY' && <Note tone="warn">{preview.data.robotReadiness.reason ? `${preview.data.robotReadiness.reason} ` : ''}Các tệp sẽ vào hàng chờ kiểm chứng, không được ghi Đạt.</Note>}
             <Note>Tệp ghi verified: true được lưu là "{verificationMethodLabel.POSE_CAPTURE}", không ghi nhận robot đã tự chạy tới điểm. Tệp verified: false vào hàng chờ kiểm chứng.</Note>
             {importFiles.isError && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errorText(importFiles.error)}</p>}
             <div className="flex justify-end"><button type="button" className={buttonClass('primary')} disabled={!canImport} onClick={runImport}>{importFiles.isPending ? 'Đang nhập…' : 'Nhập'}</button></div>

@@ -49,6 +49,24 @@ export type RobotLifecycleResult = { id: string; robotCode: string; deactivatedA
 export type MapAreaOption = { areaKey: string; displayName: string }
 export type PhysicalRobotRegistration = { id: string; robotCode: string; displayName: string | null }
 export type PhysicalRobotConnectionStatus = 'UNCONFIRMED' | 'CONNECTED' | 'DISCONNECTED' | 'AWAITING_DATA'
+/**
+ * Whether the robot may be used on its assigned map version, judged by the server's one rule (not deactivated,
+ * connection confirmed, assigned to that version, and its latest deployment check passed there). The web never
+ * re-derives it; NOT_SET_UP means not assigned or connection not confirmed yet.
+ */
+export type RobotReadinessState = 'READY' | 'NOT_READY' | 'NOT_SET_UP'
+export type RobotReadiness = {
+  state: RobotReadinessState
+  reasonCode: string | null
+  reason: string | null
+  mapVersionId: string | null
+  /** "{area} · v{n}" of the assigned version. */
+  mapLabel: string | null
+  /** When the robot's latest deployment check was recorded, on any map. */
+  deploymentCheckedAt: string | null
+  /** Fleet Sync has fresh data from the robot sent after the assignment, so fleet_bridge runs the assigned map. Display only. */
+  reportingOnAssignedMap: boolean
+}
 export type PhysicalRobotOption = PhysicalRobotRegistration & {
   deactivatedAt?: string | null
   deactivationReason?: string | null
@@ -75,6 +93,7 @@ export type PhysicalRobotOption = PhysicalRobotRegistration & {
   currentTourState: string | null
   /** Tours may send commands to this robot (ADR-0049 Decision 8). Allowing it does not move the robot by itself. */
   isDispatchEnabled: boolean
+  readiness: RobotReadiness
 }
 export type SetRobotDispatchInput = { id: string; requestId: string; expectedRowVersion: string; enabled: boolean; reason: string; evidenceRef?: string }
 export type SetRobotDispatchResult = { robotId: string; isDispatchEnabled: boolean }
@@ -114,12 +133,17 @@ export type MapVersionItem = {
   preparationBlockReasonCode: string | null
   preparationBlockReason: string | null
   preparationEvidence: DeploymentCheck | null
+  /** Kept for older readers; the web shows `runningRobot` instead. */
   currentlyDeployedOn: Array<{ robotCode: string; checkedAt: string }>
+  /** The robot assigned to this version, with its readiness, or null. */
+  runningRobot: MapRunningRobot | null
   poiClearanceMeters: number
   // Route rules sent with the map, like the clearance, so the form never hard-codes them (docs/lich-tour-theo-ca.md §2).
   routeMinStops: number
   routeMinStopSeparationMeters: number
 }
+
+export type MapRunningRobot = { id: string; robotCode: string; displayName: string | null; readiness: RobotReadiness }
 
 export type PoiVerificationMethod = 'MANUAL_CHECK' | 'POSE_CAPTURE'
 
@@ -196,7 +220,9 @@ export type PoiImportPreviewFile = {
   x: number | null; y: number | null; yaw: number | null; verified: boolean | null
   action: PoiImportAction | null; errorCode: string | null; errorMessage: string | null
 }
-export type PoiImportPreview = { mapVersionId: string; robotCode: string; canImport: boolean; files: PoiImportPreviewFile[] }
+/** Whether the chosen robot may record a pass on the chosen map; when it may not, verified files go to the queue. */
+export type PoiImportRobotReadiness = { state: RobotReadinessState; reasonCode: string | null; reason: string | null }
+export type PoiImportPreview = { mapVersionId: string; robotCode: string; canImport: boolean; files: PoiImportPreviewFile[]; robotReadiness?: PoiImportRobotReadiness | null }
 export type PoiImportResult = {
   requestId: string; mapVersionId: string; createdProposalIds: string[]; updatedProposalIds: string[]
   files: { fileName: string; poiId: string; action: PoiImportAction; verified: boolean; proposalId: string; proposalRevisionId: string }[]
