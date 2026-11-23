@@ -7,6 +7,11 @@ The robot itself decides when it is at a POI. It reads the POI list, with each P
   - a goal succeeds near a POI    -> do that POI's preset (FRONT, LEFT, RIGHT, ANGLE:pan,tilt, SWEEP[:deg]);
                                      NONE leaves the head alone.
 
+A preset's PAN is measured from the robot's front as it stands on the POI's yaw. Nav2 accepts the goal up to
+`yaw_goal_tolerance` (0.30 rad, about 17 degrees) away from that yaw, so for FRONT, LEFT, RIGHT and ANGLE the PAN is
+corrected by (POI yaw - robot yaw), up to `max_yaw_correction_deg`, and the camera looks where Staff set it. A sweep
+starts from the current PAN and is not corrected.
+
 It works for every goal sender (Fleet Commands, RViz, bus_manager), so it does not depend on the backend dispatching
 the Tour. The backend only answers which POIs exist and whether automatic motion is on (`autoMotion`: Fleet Head
 enabled and the running Tour's head mode is AUTO). An Operator button always wins: this only acts on goal events.
@@ -53,6 +58,7 @@ class PoiTarget:
     x: float
     y: float
     preset: str
+    yaw: Optional[float] = None   # radians, map frame; None when the backend sent none
 
 
 @dataclass(frozen=True)
@@ -123,8 +129,16 @@ def parse_pois_response(body: object) -> PoiSnapshot:
         poi_id, name, preset = item.get('id'), item.get('name'), item.get('cameraPreset')
         if not isinstance(poi_id, str) or not isinstance(name, str) or not isinstance(preset, str):
             raise ValueError('poi id, name and cameraPreset must be strings')
-        pois.append(PoiTarget(poi_id, name, _number(item.get('x'), 'x'), _number(item.get('y'), 'y'), preset))
+        yaw = None if item.get('yaw') is None else _number(item.get('yaw'), 'yaw')
+        pois.append(PoiTarget(poi_id, name, _number(item.get('x'), 'x'), _number(item.get('y'), 'y'), preset, yaw))
     return PoiSnapshot(source, auto_motion, tuple(pois))
+
+
+def yaw_correction_deg(poi_yaw: Optional[float], robot_yaw: Optional[float]) -> Optional[float]:
+    """How far the robot stands clockwise of the POI's yaw, in degrees, wrapped to -180..180; None if unknown."""
+    if poi_yaw is None or robot_yaw is None or not (math.isfinite(poi_yaw) and math.isfinite(robot_yaw)):
+        return None
+    return math.degrees(math.atan2(math.sin(poi_yaw - robot_yaw), math.cos(poi_yaw - robot_yaw)))
 
 
 def nearest_poi(pois: tuple[PoiTarget, ...], x: float, y: float, radius_m: float) -> Optional[PoiTarget]:
@@ -139,11 +153,14 @@ def nearest_poi(pois: tuple[PoiTarget, ...], x: float, y: float, radius_m: float
 class PoiHeadDirector:
     """Turns Nav2 goal events into head commands. Thread-safe: status arrives on the executor, the list on a worker."""
 
-    def __init__(self, actuator: PoiHeadActuator, radius_m: float, on_log=None):
+    def __init__(self, actuator: PoiHeadActuator, radius_m: float, on_log=None, max_yaw_correction_deg: float = 30.0):
         if radius_m <= 0:
             raise ValueError('radius_m must be positive')
+        if not 0.0 <= max_yaw_correction_deg <= 90.0:
+            raise ValueError('max_yaw_correction_deg must be 0..90 (0 turns the correction off)')
         self._actuator = actuator
         self._radius_m = radius_m
+        self._max_yaw_correction_deg = max_yaw_correction_deg
         self._on_log = on_log or (lambda message: None)
         self._lock = threading.Lock()
         self._snapshot = EMPTY_SNAPSHOT
@@ -163,8 +180,11 @@ class PoiHeadDirector:
             state = 'on' if snapshot.auto_motion else 'off'
             self._on_log(f'POI head: {len(snapshot.pois)} POI from {snapshot.source}, automatic motion {state}.')
 
-    def on_goal_status(self, statuses: list[tuple[bytes, int]], pose: Optional[tuple[float, float]]) -> list[str]:
-        """Feed every navigate_to_pose status message. Returns what was done, for logs and tests."""
+    def on_goal_status(self, statuses: list[tuple[bytes, int]], pose: Optional[tuple]) -> list[str]:
+        """Feed every navigate_to_pose status message; `pose` is (x, y) or (x, y, yaw radians) in the map frame.
+
+        Returns what was done, for logs and tests.
+        """
         done: list[str] = []
         with self._lock:
             first = self._seen is None
@@ -190,7 +210,7 @@ class PoiHeadDirector:
             return ''
         return self._run(FRONT, 'new goal: head to the front')
 
-    def _arrival(self, snapshot: PoiSnapshot, pose: Optional[tuple[float, float]]) -> str:
+    def _arrival(self, snapshot: PoiSnapshot, pose: Optional[tuple]) -> str:
         if not snapshot.auto_motion:
             return ''
         if pose is None:
@@ -202,7 +222,21 @@ class PoiHeadDirector:
         action = preset_action(poi.preset)
         if action is None:
             return f'at {poi.name}: preset {poi.preset}, head left to the Operator'
-        return self._run(action, f'at {poi.name}: {poi.preset}')
+        what = f'at {poi.name}: {poi.preset}'
+        if action.kind == 'angle':
+            action, what = self._corrected(action, what, poi, pose[2] if len(pose) > 2 else None)
+        return self._run(action, what)
+
+    def _corrected(self, action: HeadAction, what: str, poi: PoiTarget, robot_yaw: Optional[float]):
+        error = yaw_correction_deg(poi.yaw, robot_yaw)
+        if error is None or self._max_yaw_correction_deg == 0.0 or abs(error) < 0.5:
+            return action, what
+        if abs(error) > self._max_yaw_correction_deg:
+            self._on_log(f'POI head: at {poi.name} the robot is {error:.0f} deg off the POI yaw, more than '
+                         f'{self._max_yaw_correction_deg:.0f}; PAN not corrected.')
+            return action, what
+        pan = max(-PAN_LIMIT_DEG, min(PAN_LIMIT_DEG, round(action.pan_deg + error, 1)))
+        return HeadAction('angle', pan, action.tilt_deg), f'{what}, PAN {pan:g} after a {error:+.0f} deg yaw correction'
 
     def _run(self, action: HeadAction, what: str) -> str:
         try:

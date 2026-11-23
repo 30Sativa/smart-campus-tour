@@ -50,7 +50,7 @@ polls and `bus_interfaces` is not imported. Independent of `commands_enabled`; t
 | `STEP` | publish `head/step` |
 | `JOG` | publish `head/jog` at 10 Hz until this robot's receipt time + `ttlMs`, then `0,0` once |
 | `STOP` | release a jog, call `head/stop` |
-| `ANGLE` | release a jog, send `head/set` (mode angle), fire and forget |
+| `ANGLE` | release a jog, send `head/set` (mode angle) without waiting; a goal stm32_bridge refuses (not referenced, limit) is logged |
 | `SWEEP` | release a jog, call `head/sweep` (`HeadSweep`, `amplitude_deg` = `sweepDeg` or 0 for the default); stm32_bridge runs the whole left -> right -> back sweep |
 | `HOME` | release a jog, send `head/set` (mode home): find the stops, back to 0/0 (Staff "Tự canh chỉnh đầu camera", also before Start) |
 
@@ -70,6 +70,9 @@ goal sender (RViz, bus_manager, Fleet Commands):
 3. A goal that starts `EXECUTING` -> `head/set` 0/0 (front). A goal that `SUCCEEDED` with the latest TF pose
    `map -> base_footprint` within `head_poi_radius_m` (0.6 m) of a POI -> that POI's preset
    (`head/set` angle, or `head/sweep`); `NONE` does nothing. Nothing happens while `autoMotion` is false.
+   Nav2 accepts the goal up to `yaw_goal_tolerance` (0.30 rad) off the POI yaw, so the PAN of `FRONT`, `LEFT`,
+   `RIGHT` and `ANGLE` is corrected by (POI yaw - robot yaw), up to `head_poi_max_yaw_correction_deg` (30; 0 = off),
+   and stays within ±170°. A sweep is not corrected.
 
 Code: `poi_head.py` (pure logic, `test/test_poi_head.py`), `head_worker.PoiListWorker`.
 

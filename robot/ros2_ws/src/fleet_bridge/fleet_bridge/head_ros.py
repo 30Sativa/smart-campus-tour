@@ -2,7 +2,7 @@
 
 Imported only when `head_enabled` is true, so the telemetry-only bridge needs no bus_interfaces.
   STEP  -> topic head/step (HeadStep)        JOG  -> topic head/jog (HeadJog), republished at 10 Hz until its TTL
-  STOP  -> service head/stop (Trigger)       ANGLE -> action head/set (SetHead, mode angle), fire and forget
+  STOP  -> service head/stop (Trigger)       ANGLE -> action head/set (SetHead, mode angle), refusals logged
   SWEEP -> service head/sweep (HeadSweep): automatic left -> right -> back, run by stm32_bridge; sweepDeg -> amplitude_deg
   HOME  -> action head/set (SetHead, mode home): find the stops, back to 0/0 (Staff button before Start)
 Feedback: topic head/state (HeadState) is sent back on the next poll.
@@ -75,7 +75,7 @@ class RosHeadActuator:
             raise RuntimeError('head/set unavailable')
         goal = SetHead.Goal()
         goal.mode = SetHead.Goal.MODE_HOME
-        self._set_client.send_goal_async(goal)
+        self._watch(self._set_client.send_goal_async(goal), 'HOME')
 
     def angle(self, pan_deg: float, tilt_deg: float) -> None:
         if not self._set_client.server_is_ready():
@@ -84,7 +84,34 @@ class RosHeadActuator:
         goal.mode = SetHead.Goal.MODE_ANGLE
         goal.pan_deg = float(pan_deg)
         goal.tilt_deg = float(tilt_deg)
-        self._set_client.send_goal_async(goal)
+        self._watch(self._set_client.send_goal_async(goal), f'angle {pan_deg:g},{tilt_deg:g}')
+
+    def _watch(self, send_future, what: str) -> None:
+        """Fire and forget, but say so when stm32_bridge refuses or fails the goal (not referenced, limit, busy)."""
+        def on_goal(future) -> None:
+            try:
+                handle = future.result()
+            except Exception as error:  # noqa: BLE001 - a failed call must not raise inside the executor
+                self._log.warning(f'Head {what}: send failed ({type(error).__name__}).')
+                return
+            if handle is None or not handle.accepted:
+                self._log.warning(f'Head {what}: goal not accepted by stm32_bridge.')
+                return
+            handle.get_result_async().add_done_callback(on_result)
+
+        def on_result(future) -> None:
+            try:
+                response = future.result()
+            except Exception as error:  # noqa: BLE001
+                self._log.warning(f'Head {what}: no result ({type(error).__name__}).')
+                return
+            result = getattr(response, 'result', None)
+            message = str(getattr(result, 'message', '') or '')
+            # A newer head command or a cancel ends the goal on purpose; that is not a fault.
+            if result is not None and not result.success and not message.startswith(('superseded', 'canceled')):
+                self._log.warning(f'Head {what} refused by stm32_bridge: {message or "no reason"}')
+
+        send_future.add_done_callback(on_goal)
 
 
 class RosHeadState:
