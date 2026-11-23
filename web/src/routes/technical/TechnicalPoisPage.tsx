@@ -42,7 +42,7 @@ function toRows(queue: PoiVerificationQueueItem[], proposals: PoiProposal[]): Po
  * opens a dialog bound to the exact revision and row version it was opened on,
  * and a recorded result opens read-only.
  */
-export default function TechnicalPoiImportPage() {
+export default function TechnicalPoisPage() {
   const proposals = usePoiVerificationQueue()
   const allProposals = usePoiProposals()
   // Holds the row itself: saving moves it between lists, and the dialog must not unmount mid-save.
@@ -66,7 +66,7 @@ export default function TechnicalPoiImportPage() {
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="Bản đồ & POI" title="Kiểm chứng POI" description="Ghi kết quả kiểm tra tại chỗ cho POI Staff đã gửi."
+      <PageHeader eyebrow="Chuẩn bị" title="POI" description="Kiểm chứng tại robot các POI Staff đã gửi, hoặc nhập POI từ tệp pose đã ghi trên robot."
         action={<Link className={buttonClass('secondary')} to="/technical/pois/import"><FileUp size={15} aria-hidden="true" />Nhập từ file</Link>} />
 
       {!proposals.isPending && !proposals.error && (
@@ -194,7 +194,7 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
   }
 
   return (
-    <Modal open size="lg" title={`Kiểm tra ${revision.name}`} description={`${mapName}, phiên bản POI ${revision.revisionNumber}, đầu camera ${headPresetLabel(revision.cameraPreset)}. Đạt khi cả bốn kiểm tra đều đạt.`} onClose={onClose}
+    <Modal open size="lg" title={`Kiểm chứng ${revision.name}`} description={`${mapName}, phiên bản POI ${revision.revisionNumber}, đầu camera ${headPresetLabel(revision.cameraPreset)}. Đạt khi cả bốn kiểm tra đều đạt.`} onClose={onClose}
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="poi-verify-form" className="space-y-3.5" onSubmit={submit}>
         <div>

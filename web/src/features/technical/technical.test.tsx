@@ -1,6 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router'
+import TechnicalRouteTestsPage from '../../routes/technical/TechnicalRouteTestsPage'
+import TechnicalPoisPage from '../../routes/technical/TechnicalPoisPage'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import TechnicalConfirmationsPage from '../../routes/technical/TechnicalConfirmationsPage'
 import TechnicalPoiImportPage from '../../routes/technical/TechnicalPoiImportPage'
@@ -883,7 +886,7 @@ describe('Technical Staff API integration', () => {
   })
 
   it('records a POI check against its submitted revision and row version', async () => {
-    renderPage(<TechnicalPoiImportPage />)
+    renderPage(<TechnicalPoisPage />)
     expect(await screen.findByText('Library')).toBeInTheDocument()
     expect(screen.queryByText('Giới thiệu thư viện.')).not.toBeInTheDocument()
     expect(screen.queryByText(/^1, 2, 0$/)).not.toBeInTheDocument()
@@ -916,14 +919,14 @@ describe('Technical Staff API integration', () => {
     const at = (id: string, name: string, submittedAt: string) =>
       ({ ...queueItem, proposalId: id, revision: { ...queueItem.revision, id: `rev-${id}`, name, submittedAt } })
     poiQueue = [at('old', 'Cổng cũ', '2026-11-04T07:15:00Z'), at('new', 'Sảnh mới', '2026-11-16T04:24:00Z'), at('mid', 'Thư viện', '2026-11-15T15:40:00Z')]
-    renderPage(<TechnicalPoiImportPage />)
+    renderPage(<TechnicalPoisPage />)
     await screen.findByText('Sảnh mới')
     const names = within(screen.getByRole('table')).getAllByRole('row').slice(1).map(row => within(row).getAllByRole('cell')[0].querySelector('span')?.textContent)
     expect(names).toEqual(['Sảnh mới', 'Thư viện', 'Cổng cũ'])
   })
 
   const openPoiCheck = async () => {
-    renderPage(<TechnicalPoiImportPage />)
+    renderPage(<TechnicalPoisPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
     await readyRobotLine()
     fireEvent.change(screen.getByLabelText('Ghi chú bằng chứng'), { target: { value: 'Đã kiểm tra.' } })
@@ -1041,6 +1044,25 @@ describe('Technical Staff API integration', () => {
       makePhysicalRobot({ id: 'robot-2', robotCode: 'amr-02', displayName: 'AMR 02', assignedMapVersionId: 'map-v2', readiness: { ...readyOnLibrary, mapVersionId: 'map-v2', mapLabel: 'Library · v2' } }),
       makePhysicalRobot(),
     ]
+    renderPage(<TechnicalPoisPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
+    await screen.findByRole('option', { name: /AMR 01 · amr-01/ })
+    const options = within(screen.getByLabelText('Robot vật lý')).getAllByRole('option').slice(1) as HTMLOptionElement[]
+    expect(options[0].textContent).toMatch(/^AMR 01 · amr-01/)
+    expect(options[0].disabled).toBe(false)
+    const others = options.slice(1)
+    expect(others.every(option => option.disabled)).toBe(true)
+    expect(others.find(option => option.value === 'amr-02')?.textContent).toMatch(/ · chưa kiểm tra triển khai đạt trên map này$/)
+    expect(others.find(option => option.value === 'amr-03')?.textContent).toMatch(/^AMR 03 · amr-03 · Chưa xác nhận kết nối$/)
+  })
+
+  it('points to the map deployment check when no robot can verify the POI', async () => {
+    physicalRobots = [makePhysicalRobot({ connectionStatus: 'UNCONFIRMED', latestDeployedMapKey: null, latestDeploymentPassed: null })]
+    renderPage(<TechnicalPoisPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
+    expect(await screen.findByText(/Chưa có robot nào dùng được trên library-v1/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ghi kiểm tra triển khai ở trang Bản đồ' })).toHaveAttribute('href', '/technical/maps')
+
     await openPoiCheck()
     passAllPoiChecks()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
@@ -1092,7 +1114,7 @@ describe('Technical Staff API integration', () => {
       { id: 'v1', proposalId: 'proposal-2', proposalRevisionId: 'revision-1a', revisionNumber: 1, mapKey: 'library-v1', robotCode: 'amr-01', resultCode: 'FAIL', reached: true, stopped: false, localizationPassed: true, cameraPresetConfirmed: true, reason: 'Lệch vị trí.', evidenceNote: 'Lần đầu.', checkedAt: '2026-10-27T10:00:00Z' },
       { id: 'v2', proposalId: 'proposal-2', proposalRevisionId: 'revision-2a', revisionNumber: 1, mapKey: 'library-v1', robotCode: 'amr-01', resultCode: 'PASS', reached: true, stopped: true, localizationPassed: true, cameraPresetConfirmed: true, reason: null, evidenceNote: 'Lần hai đạt.', checkedAt: '2026-10-28T10:00:00Z' },
     ] }
-    renderPage(<TechnicalPoiImportPage />)
+    renderPage(<TechnicalPoisPage />)
     expect(await screen.findByText('Library')).toBeInTheDocument()
     expect(screen.queryByText('Sảnh đã đạt')).not.toBeInTheDocument()
 
@@ -1113,7 +1135,7 @@ describe('Technical Staff API integration', () => {
 
   it('counts a rejected revision outside the queue as needing a recheck, without offering a second result', async () => {
     poiProposals = [{ id: 'proposal-3', currentRevision: 1, rowVersion: 'CCCCCCCCCCC=', revision: { ...proposal.revision, id: 'revision-3', name: 'POI không đạt', navigationStatus: 'FAIL', verificationSourceRevisionId: 'revision-3' } }]
-    renderPage(<TechnicalPoiImportPage />)
+    renderPage(<TechnicalPoisPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Cần kiểm tra lại\s*1/ }))
     expect(await screen.findByText('POI không đạt')).toBeInTheDocument()
     expect(screen.getByText('Chờ Staff sửa và gửi lại')).toBeInTheDocument()
@@ -1198,7 +1220,7 @@ describe('Technical Staff API integration', () => {
 
   const openRouteTest = async () => {
     routeQueue = [routeFixture]
-    renderPage(<TechnicalConfirmationsPage />)
+    renderPage(<TechnicalRouteTestsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả Tuyến thư viện' }))
     await readyRobotLine()
     await screen.findByRole('option', { name: 'Lan Staff · lan' })
@@ -1208,7 +1230,7 @@ describe('Technical Staff API integration', () => {
   const testRunCalls = () => requests.filter(item => item.url.pathname.endsWith('/test-runs'))
 
   it('states that a route record is human evidence and shows no result without a queue item', async () => {
-    renderPage(<TechnicalConfirmationsPage />)
+    renderPage(<TechnicalRouteTestsPage />)
     expect(screen.getByText('Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Kết quả do người kiểm tra nhập, hệ thống không tự xác minh robot đã chạy. Tuyến đạt thì Staff dùng được để tạo Tour.')).toBeInTheDocument()
     expect(await screen.findByText('Chưa có tuyến chờ chạy thử')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Ghi kết quả/ })).not.toBeInTheDocument()
@@ -1255,14 +1277,14 @@ describe('Technical Staff API integration', () => {
 
     it('lists the route as not covering every leg yet, with the legs driven', async () => {
       routeQueue = [votingRoute]
-      renderPage(<TechnicalConfirmationsPage />)
+      renderPage(<TechnicalRouteTestsPage />)
       expect(await screen.findByText('Chạy thử chưa đủ chặng')).toBeInTheDocument()
       expect(screen.getByText('Đã đi 5/7 chặng')).toBeInTheDocument()
     })
 
     it('asks for the order driven, starting at the fixed first POI, and sends it with the run', async () => {
       routeQueue = [votingRoute]
-      renderPage(<TechnicalConfirmationsPage />)
+      renderPage(<TechnicalRouteTestsPage />)
       fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả Tuyến thư viện' }))
       await readyRobotLine()
       await screen.findByRole('option', { name: 'Lan Staff · lan' })
@@ -1296,7 +1318,7 @@ describe('Technical Staff API integration', () => {
   it('names the other saves and Tours a result also decides, and warns on FAIL that those Tours stop', async () => {
     routeQueue = [{ ...routeFixture, sharedResultRevisions: [{ revisionId: 'rev-0', revisionNumber: 1, createdAt: '2026-11-16T05:23:00Z',
       scheduledTours: [{ id: 't1', name: 'TEST WF-A Tour thường', scheduledStartAt: '2026-11-20T04:15:00Z', state: 'SCHEDULED' }] }] }]
-    renderPage(<TechnicalConfirmationsPage />)
+    renderPage(<TechnicalRouteTestsPage />)
     expect(await screen.findByText('Kết quả này áp dụng cho cả: bản lưu 16/11 12:23 (1 Tour đã lên lịch: TEST WF-A Tour thường · 20/11 11:15)')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Ghi kết quả Tuyến thư viện' }))
     const dialog = await screen.findByRole('dialog')
@@ -1310,7 +1332,7 @@ describe('Technical Staff API integration', () => {
 
   // F1: the page's two notes match routeChanges: camera angles change the path, name and description do not.
   it('says which edits keep the path\'s result and which need a new run', async () => {
-    renderPage(<TechnicalConfirmationsPage />)
+    renderPage(<TechnicalRouteTestsPage />)
     expect(await screen.findByText(/đổi thứ tự điểm dừng, đổi góc nhìn camera, điểm đầu, điểm cuối hoặc bản đồ\) thì bản mới cần chạy thử lại\./)).toBeInTheDocument()
     expect(screen.getByText('Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh')).toBeInTheDocument()
   })
@@ -1320,7 +1342,7 @@ describe('Technical Staff API integration', () => {
       testRuns: [{ id: 'run-0', routeRevisionId: 'rev-0', resultCode: 'PASS', checkedAt: '2026-11-16T05:30:00Z' }],
       sharedResultRevisions: [{ revisionId: 'rev-0', revisionNumber: 1, createdAt: '2026-11-16T05:23:00Z', scheduledTours: [] }] }]
     routeCatalog = routeQueue
-    renderPage(<TechnicalConfirmationsPage />)
+    renderPage(<TechnicalRouteTestsPage />)
     expect(await screen.findByText('Chưa có tuyến chờ chạy thử')).toBeInTheDocument()
     fireEvent.click(await screen.findByRole('button', { name: /Đã đạt\s*1/ }))
     expect(await screen.findByText('Giữ kết quả từ bản 16/11 12:23')).toBeInTheDocument()
@@ -1409,7 +1431,7 @@ describe('Technical Staff API integration', () => {
       { ...routeFixture, routeId: 'route-old', revisionId: 'rev-old', name: 'Tuyến cũ', verificationStatus: 'PASS', isActive: false },
       { ...routeFixture, verificationStatus: 'PASS', isActive: true },
     ]
-    renderPage(<TechnicalConfirmationsPage />)
+    renderPage(<TechnicalRouteTestsPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Đã đạt\s*2/ }))
     const rows = (await screen.findAllByRole('row')).slice(1)
     expect(rows.map(row => within(row).getAllByRole('cell')[0].textContent)).toEqual([
@@ -1480,7 +1502,7 @@ describe('Technical Staff API integration', () => {
     const run = { id: 'run-1', robotCode: 'amr-01', participatingStaffUserId: 'staff-1', resultCode: 'FAIL', allStopsReached: false, safelyStopped: true, localizationPassed: true, measuredDurationSeconds: 300, failureReason: 'Lệch điểm 2.', evidenceNote: 'Lần một.', checkedAt: '2026-10-30T10:00:00Z' }
     routeCatalog = [{ ...routeFixture, verificationStatus: 'FAIL' }]
     routeDetail = { ...routeFixture, verificationStatus: 'FAIL', testRuns: [run], effectiveTestRunId: 'run-1' }
-    renderPage(<TechnicalConfirmationsPage />)
+    renderPage(<TechnicalRouteTestsPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Không đạt\s*1/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Xem kết quả Tuyến thư viện' }))
     const dialog = within(screen.getByRole('dialog'))

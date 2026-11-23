@@ -32,9 +32,9 @@ const byName = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' })
 /** File validity, the technical check and POI eligibility read as one answer: can this version be used yet? */
 function versionStatus(item: MapVersionItem): { tone: StatusTone; label: string; detail: string | null } {
   if (item.map.validationStatus !== 'VALID') return { tone: 'danger', label: 'Tệp không hợp lệ', detail: item.preparationBlockReason }
-  if (item.technicalCheckStatus === 'PENDING') return { tone: 'warn', label: 'Chờ kiểm tra', detail: item.preparationBlockReason }
-  if (item.technicalCheckStatus === 'FAILED') return { tone: 'danger', label: 'Kiểm tra chưa đạt', detail: item.preparationBlockReason }
-  return { tone: 'ok', label: 'Đạt kiểm tra', detail: item.canUseForPoiPreparation ? 'Dùng được để tạo POI' : item.preparationBlockReason }
+  if (item.technicalCheckStatus === 'PENDING') return { tone: 'warn', label: 'Chưa kiểm tra triển khai', detail: item.preparationBlockReason }
+  if (item.technicalCheckStatus === 'FAILED') return { tone: 'danger', label: 'Kiểm tra triển khai chưa đạt', detail: item.preparationBlockReason }
+  return { tone: 'ok', label: 'Đã kiểm tra triển khai đạt', detail: item.canUseForPoiPreparation ? 'Dùng được để soạn POI' : item.preparationBlockReason }
 }
 
 /** The "Tệp bản đồ" column: did the uploaded package pass the server's file checks. */
@@ -109,7 +109,7 @@ function MapVersionDetail({ area, itemId, onSelect, onClose, onUpload, onRetire 
       <MapPreview mapVersionId={map.id} label={mapVersionLabel(map)} />
       <dl className="mt-3 divide-y divide-[#f1f5f9]">
         <DetailFact label="Trạng thái"><ToneBadge tone={status.tone}>{status.label}</ToneBadge>{status.detail && <span className="mt-1 block text-xs text-[#64748b]">{status.detail}</span>}</DetailFact>
-        <DetailFact label="Kiểm tra gần nhất">{evidence ? formatDateTime(evidence.checkedAt) : 'Chưa có'}</DetailFact>
+        <DetailFact label="Kiểm tra triển khai gần nhất">{evidence ? formatDateTime(evidence.checkedAt) : 'Chưa có'}</DetailFact>
         <DetailFact label="Robot đang chạy">
           {runningRobot
             ? <span className="flex flex-wrap items-center gap-2"><Link to={robotSetupPath(runningRobot.id)} className="font-semibold text-[#1d4ed8] underline">{runningRobot.displayName ? `${runningRobot.displayName} · ` : ''}{runningRobot.robotCode}</Link><ReadinessBadge readiness={runningRobot.readiness} /></span>
