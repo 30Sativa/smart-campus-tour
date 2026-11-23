@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SmartCampus.Application;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
@@ -658,6 +659,8 @@ public sealed partial class PoiImportSqlTests
             services.AddApplication();
             services.AddSingleton<IConfiguration>(configuration);
             services.AddInfrastructure(configuration);
+            // ADR-0066: a deployment PASS reads live Fleet Sync data against this freshness (the Api registers it in production).
+            services.AddSingleton(new FleetSyncSettings(TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(5)));
             return services.BuildServiceProvider();
         }
 

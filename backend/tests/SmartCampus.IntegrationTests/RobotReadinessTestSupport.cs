@@ -13,14 +13,14 @@ namespace SmartCampus.IntegrationTests;
 internal static class RobotReadinessTestSupport
 {
     /// <summary>
-    /// Assigns the map in SQL (as of one second ago, on the harness clock) and reports on it now. A deactivated or unknown
-    /// robot is left unchanged.
+    /// Assigns the map in SQL (as of one second ago, on the harness clock) and, unless <paramref name="report"/> is false,
+    /// reports on it now. A deactivated or unknown robot is left unchanged.
     /// </summary>
     public static async Task AssignAndReportAsync(IServiceProvider services, string connectionString, string robotCode,
-        Guid mapVersionId, Guid actorUserId)
+        Guid mapVersionId, Guid actorUserId, bool report = true)
     {
         var now = services.GetRequiredService<TimeProvider>().GetUtcNow();
-        string mapKey, frameId;
+        string mapKey = "", frameId = "";
         await using (var connection = new SqlConnection(connectionString))
         {
             await connection.OpenAsync();
@@ -42,6 +42,7 @@ internal static class RobotReadinessTestSupport
                 update.Parameters.AddWithValue("@actor", actorUserId);
                 update.Parameters.AddWithValue("@code", robotCode);
                 if (Convert.ToInt32(await update.ExecuteScalarAsync()) != 1) return;
+                if (!report) return;
             }
             await using var read = new SqlCommand("SELECT MapKey, FrameId FROM dbo.MapVersions WHERE Id = @map;", connection);
             read.Parameters.AddWithValue("@map", mapVersionId);
@@ -62,10 +63,18 @@ internal static class RobotReadinessTestSupport
         await AssignAndReportAsync(services, connectionString, robotCode, mapVersionId, actorUserId);
     }
 
-    /// <summary>A fresh Fleet Sync snapshot on a new stream, received at <paramref name="receivedAt"/>.</summary>
-    public static Task ReportAsync(IServiceProvider services, string robotCode, string mapKey, string frameId, DateTimeOffset receivedAt) =>
-        services.GetRequiredService<IFleetTelemetryStore>().ApplyAsync(new(
+    /// <summary>
+    /// A fresh Fleet Sync snapshot on a new stream, received at <paramref name="receivedAt"/>. Its robot-side timestamp
+    /// repeats the current stream's (or the epoch), so neither this restart nor a harness's own later stream is refused
+    /// by the stream ordering policy.
+    /// </summary>
+    public static Task ReportAsync(IServiceProvider services, string robotCode, string mapKey, string frameId, DateTimeOffset receivedAt)
+    {
+        var store = services.GetRequiredService<IFleetTelemetryStore>();
+        var reportedAt = store.GetLatest().FirstOrDefault(item => item.Robot.RobotCode == robotCode)?.Report.ReportedAt ?? DateTimeOffset.UnixEpoch;
+        return store.ApplyAsync(new(
             new(robotCode, "PHYSICAL", null, false, mapKey, frameId),
-            new FleetTelemetryReport(robotCode, Guid.NewGuid(), 1, receivedAt, mapKey, frameId, null, "IDLE", null, true, true, null, 90),
+            new FleetTelemetryReport(robotCode, Guid.NewGuid(), 1, reportedAt, mapKey, frameId, null, "IDLE", null, true, true, null, 90),
             receivedAt), CancellationToken.None);
+    }
 }
