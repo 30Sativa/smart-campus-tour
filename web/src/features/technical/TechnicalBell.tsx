@@ -4,7 +4,6 @@ import { Link, useLocation } from 'react-router'
 import type { TechnicalActionItem } from './api/diagnostics-api'
 import { usePhysicalRobots, useTechnicalDashboard } from './technical-hooks'
 import { actionItemDescription, hasMapMismatch } from './robot-readiness'
-import { useTechnicalDashboard } from './technical-hooks'
 import { technicalInternalLink } from './technical-nav'
 
 /** The bell re-reads the Dashboard on its own; the Dashboard page polls faster while it is open. */
@@ -81,8 +80,6 @@ export function TechnicalBell() {
 }
 
 function BellRow({ item, description }: { item: TechnicalActionItem; description: string }) {
-  const to = internalLink(item.linkUrl)
-function BellRow({ item }: { item: TechnicalActionItem }) {
   const to = technicalInternalLink(item.linkUrl)
   const body = (
     <>
