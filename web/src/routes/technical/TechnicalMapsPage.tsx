@@ -27,7 +27,8 @@ export default function TechnicalMapsPage() {
   const items = (maps.data ?? []).filter(item => !isRetired(item))
   const retired = (maps.data ?? []).filter(isRetired)
   const passed = items.filter((item) => item.canUseForPoiPreparation).length
-  const running = items.filter(item => item.runningRobot).length
+  // A robot assigned but not ready cannot run anything on the map, so the figure counts only ready ones.
+  const ready = items.filter(item => item.runningRobot?.readiness.state === 'READY').length
   const unchecked = items.filter((item) => item.technicalCheckStatus === 'PENDING').length
 
   return (
@@ -44,7 +45,7 @@ export default function TechnicalMapsPage() {
           <StatStrip label="Tình trạng bản đồ" columns="sm:grid-cols-4">
             <StatTile icon={Layers} label="Phiên bản đã tải lên" value={items.length} />
             <StatTile icon={CircleCheck} label="Dùng được để soạn POI" value={passed} />
-            <StatTile icon={Bot} label="Có robot đang chạy" value={running} />
+            <StatTile icon={Bot} label="Có robot sẵn sàng" value={ready} />
             <StatTile icon={Activity} label="Chưa kiểm tra triển khai" value={unchecked} tone="warn" />
           </StatStrip>
         </div>

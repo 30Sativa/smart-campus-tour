@@ -48,15 +48,21 @@ export default function TechnicalRobotsPage() {
   const [registering, setRegistering] = useState(false)
   // `?robot=<id>` opens that robot's setup; with `&map=<version>` it opens the map step with that version chosen,
   // so the map page and the POI and route forms can send someone straight to the one place a map is changed.
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [dialog, setDialog] = useState<Dialog | null>(() => {
     const robotId = searchParams.get('robot')
     const mapVersionId = searchParams.get('map') ?? undefined
     return robotId ? { view: mapVersionId ? 'map' : 'detail', robotId, mapVersionId } : null
   })
+  // The link has done its job once its dialog closes; left in the URL, a reload would open the map step again.
+  const clearLink = () => {
+    if (!searchParams.has('robot') && !searchParams.has('map')) return
+    setSearchParams(current => { const next = new URLSearchParams(current); next.delete('robot'); next.delete('map'); return next }, { replace: true })
+  }
   // By id, so an open dialog follows refetches (row version, assignment, connection).
   const selected = robots.data?.find(robot => robot.id === dialog?.robotId)
-  const showDetail = () => setDialog(current => current && { view: 'detail', robotId: current.robotId })
+  const showDetail = () => { clearLink(); setDialog(current => current && { view: 'detail', robotId: current.robotId }) }
+  const closeDialog = () => { clearLink(); setDialog(null) }
   const visibleRobots = robots.data?.filter(robot => Boolean(robot.deactivatedAt) === showDeactivated)
   const deactivatedCount = robots.data?.filter(robot => robot.deactivatedAt).length ?? 0
   const heldCount = robots.data?.filter(robot => !robot.deactivatedAt && isHeld(robot)).length ?? 0
@@ -92,7 +98,7 @@ export default function TechnicalRobotsPage() {
         )}
       </section>
       <RegisterRobotModal open={registering} onClose={() => setRegistering(false)} />
-      {selected && dialog?.view === 'detail' && <RobotDetailModal robot={selected} refreshing={robots.isFetching} onRefresh={() => void robots.refetch()} onAssignMap={() => setDialog({ view: 'map', robotId: selected.id })} onManageKey={() => setDialog({ view: 'credential', robotId: selected.id })} onClose={() => setDialog(null)} />}
+      {selected && dialog?.view === 'detail' && <RobotDetailModal robot={selected} refreshing={robots.isFetching} onRefresh={() => void robots.refetch()} onAssignMap={() => setDialog({ view: 'map', robotId: selected.id })} onManageKey={() => setDialog({ view: 'credential', robotId: selected.id })} onClose={closeDialog} />}
       {selected && dialog?.view === 'credential' && <RobotCredentialPanel robotCode={selected.robotCode} onClose={showDetail} />}
       {selected && dialog?.view === 'map' && <RobotMapAssignmentModal robot={selected} otherRobots={robots.data ?? []} initialMapVersionId={dialog.mapVersionId} onClose={showDetail} />}
     </TechnicalPage>
@@ -169,7 +175,7 @@ function RobotDetailModal({ robot, refreshing, onRefresh, onAssignMap, onManageK
         {!robot.deactivatedAt && <section aria-label="Trạng thái sẵn sàng" className="space-y-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3.5">
           {robot.readiness && <div><ReadinessBadge readiness={robot.readiness} mapText={mapLabelOf(robot.readiness.mapVersionId)} />{robot.readiness.state !== 'READY' && robot.readiness.reason && <p className="mt-1 text-[13px] text-[#334155]">{robot.readiness.reason}</p>}</div>}
           {next && <div>{nextAction[next]}</div>}
-          <RobotSetupChecklist robot={robot} keyActive={keyActive} keyError={credential.isError} onAssignMap={onAssignMap} onManageKey={onManageKey} onCheck={openCheck} />
+          <RobotSetupChecklist robot={robot} keyActive={keyActive} keyError={credential.isError} onAssignMap={onAssignMap} onManageKey={onManageKey} />
         </section>}
         <DetailGroup title="Kết nối & khóa">
           <DetailSection title="Kết nối">
@@ -247,10 +253,11 @@ function RobotMapSteps({ robot, checking, deployStep, refreshButton, onAssignMap
 
 /**
  * The setup order from ADR-0039 as a checklist. It only reads what the robot list and key status already return;
- * the last step is the server's readiness, and its button opens the check form above instead of another page.
+ * the last step is the server's readiness. It has no button of its own: the next-step button above and step 3 below
+ * already open the check form, and a third button with the same words only made people wonder which one to press.
  */
-function RobotSetupChecklist({ robot, keyActive, keyError, onAssignMap, onManageKey, onCheck }: {
-  robot: PhysicalRobotOption; keyActive: boolean | undefined; keyError: boolean; onAssignMap: () => void; onManageKey: () => void; onCheck: () => void
+function RobotSetupChecklist({ robot, keyActive, keyError, onAssignMap, onManageKey }: {
+  robot: PhysicalRobotOption; keyActive: boolean | undefined; keyError: boolean; onAssignMap: () => void; onManageKey: () => void
 }) {
   const steps: SetupStep[] = [
     { label: 'Đăng ký robot', done: true, hint: '' },
@@ -259,8 +266,7 @@ function RobotSetupChecklist({ robot, keyActive, keyError, onAssignMap, onManage
     { label: 'Gán bản đồ', done: Boolean(robot.assignedMapVersionId), hint: 'Chọn khu vực và phiên bản bản đồ robot sẽ dùng, rồi nhập MapKey và FrameId trên MiniPC.',
       action: <button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />Chọn bản đồ</button> },
     { label: 'Robot kết nối lần đầu', done: Boolean(robot.firstAcceptedSyncAt), hint: 'Bật robot với khóa, MapKey và FrameId ở trên. Khi máy chủ nhận dữ liệu đầu tiên, bấm Cập nhật trạng thái.' },
-    { label: 'Kiểm tra triển khai đạt trên bản đồ được gán', done: isReady(robot), hint: 'Nạp đúng tệp bản đồ lên robot, kiểm tra định vị và hiển thị, rồi ghi kết quả ở bước Kiểm tra tại robot.',
-      action: <button type="button" className={buttonClass('secondary', 'sm')} onClick={onCheck}><ClipboardCheck size={13} aria-hidden="true" />Kiểm tra triển khai</button> },
+    { label: 'Kiểm tra triển khai đạt trên bản đồ được gán', done: isReady(robot), hint: 'Nạp đúng tệp bản đồ lên robot, kiểm tra định vị và hiển thị, rồi ghi kết quả ở bước 3. Kiểm tra tại robot.' },
   ]
   return <SetupSteps title="Thiết lập robot" steps={steps} />
 }

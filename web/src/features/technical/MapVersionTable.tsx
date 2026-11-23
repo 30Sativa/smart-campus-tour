@@ -8,7 +8,7 @@ import { usePagination } from '../../components/ui/use-pagination'
 import { useMapRaster } from '../administration/pois/map/use-map-raster'
 import { DetailFact, ToneBadge, ViewDetailButton } from './TechnicalUi'
 import type { MapAreaOption, MapRunningRobot, MapVersionItem } from './api/technical'
-import { mapVersionLabel } from './poi-labels'
+import { mapCheckLabel, mapVersionLabel } from './poi-labels'
 import { DeployToRobotDialog } from './DeployToRobotDialog'
 import { ReadinessBadge } from './ReadinessBadge'
 import { readinessView, robotSetupPath } from './robot-readiness'
@@ -34,7 +34,8 @@ function versionStatus(item: MapVersionItem): { tone: StatusTone; label: string;
   if (item.map.validationStatus !== 'VALID') return { tone: 'danger', label: 'Tệp không hợp lệ', detail: item.preparationBlockReason }
   if (item.technicalCheckStatus === 'PENDING') return { tone: 'warn', label: 'Chưa kiểm tra triển khai', detail: item.preparationBlockReason }
   if (item.technicalCheckStatus === 'FAILED') return { tone: 'danger', label: 'Kiểm tra triển khai chưa đạt', detail: item.preparationBlockReason }
-  return { tone: 'ok', label: 'Đã kiểm tra triển khai đạt', detail: item.canUseForPoiPreparation ? 'Dùng được để soạn POI' : item.preparationBlockReason }
+  // History (ADR-0028): a robot passed here once. Whether a robot can use it now is its readiness, not this label.
+  return { tone: 'ok', label: mapCheckLabel('PASSED'), detail: item.canUseForPoiPreparation ? 'Dùng được để soạn POI' : item.preparationBlockReason }
 }
 
 /** The "Tệp bản đồ" column: did the uploaded package pass the server's file checks. */
@@ -115,7 +116,9 @@ function MapVersionDetail({ area, itemId, onSelect, onClose, onUpload, onRetire 
             ? <span className="flex flex-wrap items-center gap-2"><Link to={robotSetupPath(runningRobot.id)} className="font-semibold text-[#1d4ed8] underline">{runningRobot.displayName ? `${runningRobot.displayName} · ` : ''}{runningRobot.robotCode}</Link><ReadinessBadge readiness={runningRobot.readiness} /></span>
             : area.running ? `Chưa có. ${robotLabel(area.running.robot)} đang chạy phiên bản ${area.running.versionNumber}.` : 'Chưa có robot'}
           {runningRobot && runningRobot.readiness.state !== 'READY' && runningRobot.readiness.reason && <span className="mt-1 block text-xs text-amber-800">{runningRobot.readiness.reason}</span>}
-          <span className="mt-1 block text-xs text-[#64748b]">Robot đang gán phiên bản này. Đổi bản đồ và kiểm tra triển khai trong hộp Thiết lập của robot.</span>
+          <span className="mt-1 block text-xs text-[#64748b]">{runningRobot
+            ? 'Robot đang gán phiên bản này. Đổi bản đồ và kiểm tra triển khai trong hộp Thiết lập của robot.'
+            : 'Chưa robot nào gán phiên bản này. Bấm Triển khai cho robot… để gán.'}</span>
         </DetailFact>
         <DetailFact label="Đã từng kiểm tra đạt">{passedChecks.length
           ? <span className="flex flex-col">{passedChecks.map(check => <span key={check.id}>{check.robotCode} · {formatDateTime(check.checkedAt)}</span>)}</span>

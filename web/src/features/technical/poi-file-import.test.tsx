@@ -60,6 +60,15 @@ describe('Technical POI file import', () => {
   })
   afterEach(() => vi.unstubAllGlobals())
 
+  // Round 2 W3: a passed check is history (ADR-0028), not proof a robot can use the map now.
+  it('reads the chosen map\'s passed check as Từng kiểm tra triển khai đạt', async () => {
+    renderPage()
+    await screen.findByRole('option', { name: 'Tầng 6 · floor6 · phiên bản 2' })
+    fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
+    expect(await screen.findByText('Từng kiểm tra triển khai đạt')).toBeInTheDocument()
+    expect(screen.queryByText('Đã kiểm tra triển khai đạt')).not.toBeInTheDocument()
+  })
+
   it('chooses the robot ready on the chosen version, and warns before import when another robot is chosen', async () => {
     renderPage()
     await screen.findByRole('option', { name: 'Tầng 6 · floor6 · phiên bản 2' })
@@ -173,7 +182,7 @@ describe('Technical POI file import', () => {
     }))
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><TechnicalPoisPage /></MemoryRouter></QueryClientProvider>)
 
-    fireEvent.click(await screen.findByRole('button', { name: /Đã đạt\s*1/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Đã đạt: 1/ }))
     expect(await screen.findByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Xem kết quả' }))
 
