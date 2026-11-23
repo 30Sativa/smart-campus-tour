@@ -13,7 +13,6 @@ import { formatDateTime } from '../../components/ui/date-time'
 import { usePhysicalRobots, useTechnicalDashboard } from '../../features/technical/technical-hooks'
 import { actionItemDescription, hasMapMismatch } from '../../features/technical/robot-readiness'
 import type { PhysicalRobotOption } from '../../features/technical/api/technical'
-import { useTechnicalDashboard } from '../../features/technical/technical-hooks'
 import { technicalInternalLink } from '../../features/technical/technical-nav'
 
 const REFRESH_MS = 15_000
@@ -75,8 +74,6 @@ function FleetHealth({ kpis }: { kpis: TechnicalKpiSummary }) {
 }
 
 function ActionItemRow({ item, description }: { item: TechnicalActionItem; description: string }) {
-  const to = internalLink(item.linkUrl)
-function ActionItemRow({ item }: { item: TechnicalActionItem }) {
   const to = technicalInternalLink(item.linkUrl)
   const label = severityLabel[item.severity]
   return (
