@@ -21,7 +21,7 @@ using SmartCampus.Infrastructure.Persistence;
 
 namespace SmartCampus.IntegrationTests;
 
-public sealed class RobotIntegritySqlTests
+public sealed partial class RobotIntegritySqlTests
 {
     private const string First = "amr_first";
     private const string Second = "amr_second";
@@ -358,6 +358,7 @@ public sealed class RobotIntegritySqlTests
         MapVersionView pilotMap, MapVersionView pilotMapV2, MapVersionView otherMap) : IAsyncDisposable
     {
         public InitialAdminSeederTests.EmptySchemaDatabase Database => database;
+        public IServiceProvider Services => provider;
         public Guid TechnicalId => technicalId;
         public MapVersionView PilotMap => pilotMap;
         public MapVersionView PilotMapV2 => pilotMapV2;
