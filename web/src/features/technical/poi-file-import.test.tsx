@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
 import TechnicalPoiFileImportPage from '../../routes/technical/TechnicalPoiFileImportPage'
-import TechnicalPoiImportPage from '../../routes/technical/TechnicalPoiImportPage'
+import TechnicalPoisPage from '../../routes/technical/TechnicalPoisPage'
 import { useAuthStore } from '../../stores/auth-store'
 import { useToastStore } from '../../components/ui/toast-store'
 
@@ -148,7 +148,7 @@ describe('Technical POI file import', () => {
       if (path === '/api/staff/poi-proposals/p-1/history') return envelope({ proposalId: 'p-1', revisions: [revision], verificationRecords: [record] })
       return realFetch(input, init)
     }))
-    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><TechnicalPoiImportPage /></MemoryRouter></QueryClientProvider>)
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><TechnicalPoisPage /></MemoryRouter></QueryClientProvider>)
 
     fireEvent.click(await screen.findByRole('button', { name: /Đã đạt\s*1/ }))
     expect(await screen.findByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()

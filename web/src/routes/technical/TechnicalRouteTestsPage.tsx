@@ -42,7 +42,7 @@ function toRows(queue: VersionedRoute[], routes: VersionedRoute[]): RouteRow[] {
  * Whole-route verification: the figure strip filters one table; a run is recorded
  * against the exact submitted revision, and a recorded run opens read-only.
  */
-export default function TechnicalConfirmationsPage() {
+export default function TechnicalRouteTestsPage() {
   const queue = useRouteTestQueue()
   const routes = useSubmittedRoutes()
   const [filter, setFilter] = useState<RouteFilter>('pending')

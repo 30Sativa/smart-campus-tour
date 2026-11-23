@@ -36,6 +36,6 @@ export const NAV_PAGE_PAIRS: NavPagePair[] = [
   { area: 'technical', path: '/technical/dashboard', file: 'technical/TechnicalDashboardPage.tsx', heading: 'PageHeader', pending: 'WS-F' },
   { area: 'technical', path: '/technical/robots', file: 'technical/TechnicalRobotsPage.tsx', heading: 'PageHeader', pending: 'WS-F' },
   { area: 'technical', path: '/technical/maps', file: 'technical/TechnicalMapsPage.tsx', heading: 'PageHeader', pending: 'WS-F' },
-  { area: 'technical', path: '/technical/pois', file: 'technical/TechnicalPoiImportPage.tsx', heading: 'PageHeader', pending: 'WS-F' },
-  { area: 'technical', path: '/technical/route-tests', file: 'technical/TechnicalConfirmationsPage.tsx', heading: 'PageHeader', pending: 'WS-F' },
+  { area: 'technical', path: '/technical/pois', file: 'technical/TechnicalPoisPage.tsx', heading: 'PageHeader', pending: 'WS-F' },
+  { area: 'technical', path: '/technical/route-tests', file: 'technical/TechnicalRouteTestsPage.tsx', heading: 'PageHeader', pending: 'WS-F' },
 ]

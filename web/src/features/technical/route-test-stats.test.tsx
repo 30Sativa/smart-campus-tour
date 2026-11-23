@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
-import TechnicalConfirmationsPage from '../../routes/technical/TechnicalConfirmationsPage'
+import TechnicalRouteTestsPage from '../../routes/technical/TechnicalRouteTestsPage'
 import { useAuthStore } from '../../stores/auth-store'
 
 const envelope = (data: unknown) => new Response(JSON.stringify({ success: true, message: 'OK', data, errors: null }), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -10,7 +10,7 @@ const route = { routeId: 'route-1', revisionId: 'rev-1', revisionNumber: 1, name
 
 function renderPage(client = new QueryClient()) {
   // The app's own QueryClient keeps TanStack's default retries; the stat tiles are judged with them on.
-  return render(<QueryClientProvider client={client}><MemoryRouter><TechnicalConfirmationsPage /></MemoryRouter></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><MemoryRouter><TechnicalRouteTestsPage /></MemoryRouter></QueryClientProvider>)
 }
 
 describe('route test stat tiles after an expired access token', () => {

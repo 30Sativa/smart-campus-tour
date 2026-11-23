@@ -42,7 +42,7 @@ function toRows(queue: PoiVerificationQueueItem[], proposals: PoiProposal[]): Po
  * opens a dialog bound to the exact revision and row version it was opened on,
  * and a recorded result opens read-only.
  */
-export default function TechnicalPoiImportPage() {
+export default function TechnicalPoisPage() {
   const proposals = usePoiVerificationQueue()
   const allProposals = usePoiProposals()
   // Holds the row itself: saving moves it between lists, and the dialog must not unmount mid-save.
