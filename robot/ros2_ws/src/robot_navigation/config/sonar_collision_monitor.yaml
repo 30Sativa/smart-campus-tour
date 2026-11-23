@@ -1,0 +1,87 @@
+# Sonar near-field guard: stock Nav2 Humble collision_monitor (1.1.20) fed by the
+# four SR04T only. Design, evidence and limits: robot/docs/sonar-perception.md.
+#
+# Where it sits (navigation.launch.py sonar_mode):
+#   enforce: controller/behavior -> cmd_vel_ctrl -> collision_monitor -> cmd_vel_sonar
+#            -> velocity_smoother -> cmd_vel_nav -> mode_manager -> cmd_vel
+#   shadow:  the same node, output on cmd_vel_sonar_shadow (nobody listens); the
+#            smoother keeps reading cmd_vel_ctrl. For logging what it would do.
+# Before the smoother, so a sonar slow-down and the restart after it both go
+# through the smoother's acceleration limits (no 0 -> 0.2 m/s step on the steppers).
+#
+# What it does: every controller command is simulated forward for
+# time_before_collision; if the PADDED footprint would reach a sonar point, the
+# whole command (v and w alike, so the curvature is kept) is scaled by
+# time_to_collision / time_before_collision. Nothing is cancelled: Nav2 keeps its
+# goal, and the command passes unchanged again as soon as the point is gone.
+# Motion away from the point, and turning on the spot (the corner sweep, radius
+# 0.56 m padded, never reaches a sonar point, which is at least 0.67 m out), are
+# not affected.
+#
+# What it does NOT do: it is not 360 deg protection (sonar-perception.md section 3).
+# Sonar is not in any costmap: no planning around sonar-only objects, and no
+# Nav2 failure because of them.
+
+/**/collision_monitor:
+  ros__parameters:
+    use_sim_time: false
+    base_frame_id: base_footprint
+    odom_frame_id: odom
+    cmd_vel_in_topic: cmd_vel_ctrl
+    # navigation.launch.py overrides this to cmd_vel_sonar_shadow in shadow mode.
+    cmd_vel_out_topic: cmd_vel_sonar
+    transform_tolerance: 0.2
+    # stm32_bridge republishes every sonar with each FB frame (~40 Hz) and the
+    # newest stamp, and sonar_memory publishes at 10 Hz; an older stamp means one of
+    # them is down (a dead bridge also stops the motors). A timed-out source is
+    # IGNORED (warning in the log): the robot falls back to LiDAR + depth, the
+    # pre-sonar baseline. Not fail-closed on purpose (ADR-0001: supplementary sensors
+    # never block navigation by being absent).
+    source_timeout: 1.0
+    # The stamps are FB receive times (the firmware sends no measurement time), so
+    # there is no older measurement time to correct for.
+    base_shift_correction: false
+    stop_pub_timeout: 2.0
+    polygons: ["SonarApproach"]
+    SonarApproach:
+      type: polygon
+      action_type: approach
+      # The costmap footprint padded by sonar_memory (launch: sonar_footprint_padding).
+      footprint_topic: sonar_guard/footprint
+      # At 0.20 m/s the slow-down starts 0.30 m before the padded footprint meets a
+      # sonar point. Covers the sonar data age (each SR04T is re-measured every
+      # 0.29-0.42 s), the 0.09 s bridge delay and the smoother's -0.5 m/s^2 decel.
+      time_before_collision: 1.5
+      simulation_time_step: 0.05
+      # More than this many points inside the simulated footprint = collision.
+      # One SR04T reading is an arc of ~31 points (field_of_view 0.52, 1 deg apart).
+      max_points: 2
+      visualize: true
+      polygon_pub_topic: sonar_guard/approach_polygon
+    observation_sources: ["sonar1", "sonar2", "sonar3", "sonar4", "memory"]
+    # Range source: the LIVE echo, an arc of points at the measured range across
+    # field_of_view (from the message); NaN / +-Inf / out of [min, max] = no points.
+    sonar1:
+      type: range
+      topic: ultrasonic/sonar1/range
+      obstacles_angle: 0.0175
+    sonar2:
+      type: range
+      topic: ultrasonic/sonar2/range
+      obstacles_angle: 0.0175
+    sonar3:
+      type: range
+      topic: ultrasonic/sonar3/range
+      obstacles_angle: 0.0175
+    sonar4:
+      type: range
+      topic: ultrasonic/sonar4/range
+      obstacles_angle: 0.0175
+    # sonar_memory: near echoes kept in the odom frame until a sonar sees through them,
+    # so an object that enters an SR04T's 0.20 m blind zone (reported as "no echo") is
+    # still there for the approach check. Points are published at z = 0.10.
+    memory:
+      type: pointcloud
+      topic: sonar_guard/memory
+      min_height: 0.0
+      max_height: 0.5

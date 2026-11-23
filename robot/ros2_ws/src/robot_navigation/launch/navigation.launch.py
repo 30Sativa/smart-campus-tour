@@ -147,6 +147,8 @@ def generate_launch_description():
     wheel_radius = LaunchConfiguration('wheel_radius')
     odom_linear_scale = LaunchConfiguration('odom_linear_scale')
     enable_camera = LaunchConfiguration('enable_camera')
+    sonar_mode = LaunchConfiguration('sonar_mode')
+    sonar_enforced = IfCondition(PythonExpression(["'", sonar_mode, "' == 'enforce'"]))
     rviz = LaunchConfiguration('rviz')
     auto_initial_pose = LaunchConfiguration('auto_initial_pose')
     pose_bootstrap_config = LaunchConfiguration('pose_bootstrap_config')
@@ -195,6 +197,11 @@ def generate_launch_description():
         FindPackageShare('robot_control'),
         'launch',
         'lidar.launch.py',
+    ])
+    sonar_guard_launch = PathJoinSubstitution([
+        FindPackageShare('robot_navigation'),
+        'launch',
+        'sonar_guard.launch.py',
     ])
 
     return LaunchDescription([
@@ -268,6 +275,23 @@ def generate_launch_description():
                                           'local costmap. Enable only after the '
                                           'camera mount has been calibrated.'),
         DeclareLaunchArgument(
+            'sonar_mode', default_value='off',
+            description='Four SR04T as a near-field speed guard (Nav2 collision_monitor, '
+                        'no costmap): off = the baseline, unchanged; shadow = runs and logs '
+                        'on cmd_vel_sonar_shadow without touching motion; enforce = '
+                        'cmd_vel_ctrl -> collision_monitor -> velocity_smoother. '
+                        'robot/docs/sonar-perception.md.'),
+        DeclareLaunchArgument(
+            'sonar_guard_max_range', default_value='6.0',
+            description='stm32_bridge sonar_max_range when sonar_mode is not off: valid '
+                        'echoes up to the firmware limit (6 m) are published so that '
+                        'sonar_memory can see through, and clear, old near echoes. With '
+                        'sonar_mode off the bridge keeps its own 2.0 m default.'),
+        DeclareLaunchArgument(
+            'sonar_footprint_padding', default_value='0.05',
+            description='Stand-off (m) the sonar guard keeps between the footprint and '
+                        'a sonar point.'),
+        DeclareLaunchArgument(
             'auto_initial_pose', default_value='false',
             description='Run pose_bootstrap: set AMCL\'s initial pose from the LiDAR scan '
                         '(saved pose / map homes, checked against the scan; nothing is published '
@@ -333,6 +357,9 @@ def generate_launch_description():
                 'wheel_base': wheel_base,
                 'wheel_radius': wheel_radius,
                 'odom_linear_scale': odom_linear_scale,
+                'sonar_max_range': PythonExpression([
+                    "'2.0' if '", sonar_mode, "' == 'off' else '",
+                    LaunchConfiguration('sonar_guard_max_range'), "'"]),
                 'require_motion_permit': LaunchConfiguration('require_motion_permit'),
                 'require_stm32_link': LaunchConfiguration('require_stm32_link'),
             }.items(),
@@ -458,6 +485,12 @@ def generate_launch_description():
             SetRemap(src='/tf', dst='/tf'),
             SetRemap(src='/tf_static', dst='/tf_static'),
 
+            # sonar_mode:=enforce only: the smoother reads collision_monitor's output
+            # instead of cmd_vel_ctrl (sonar_guard.launch.py). A node-name-scoped
+            # rule, placed first so it wins over the one below for this node only;
+            # controller_server and behavior_server still publish cmd_vel_ctrl.
+            SetRemap(src='velocity_smoother:cmd_vel', dst='cmd_vel_sonar',
+                     condition=sonar_enforced),
             SetRemap(src='cmd_vel', dst='cmd_vel_ctrl'),
             SetRemap(src='cmd_vel_smoothed', dst='cmd_vel_nav'),
 
@@ -475,6 +508,21 @@ def generate_launch_description():
             # In camera mode the params file goes through CAMERA_NAV2_REWRITES first.
             OpaqueFunction(function=_nav2, args=[nav2_launch, robot_id, use_sim_time,
                                                  nav2_params_file, enable_camera]),
+        ]),
+
+        # 4b) Optional sonar guard between the controller and the smoother (off by
+        #     default). Off launches nothing and leaves the chain above untouched.
+        GroupAction(scoped=True, actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(sonar_guard_launch),
+                launch_arguments={
+                    'robot_id': robot_id,
+                    'use_sim_time': use_sim_time,
+                    'sonar_mode': sonar_mode,
+                    'nav2_params_file': nav2_params_file,
+                    'sonar_footprint_padding': LaunchConfiguration('sonar_footprint_padding'),
+                }.items(),
+            ),
         ]),
 
         # 5) Optional: initial pose from the LiDAR instead of RViz (off by default).
