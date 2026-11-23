@@ -6,6 +6,7 @@ import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../co
 import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
+import { DeployToRobotDialog } from '../../features/technical/DeployToRobotDialog'
 import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
 import { robotForMap } from '../../features/technical/robot-readiness'
 import { CheckRow, ComputedResult, NoneChecked, DetailFact, Note, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
@@ -48,6 +49,8 @@ export default function TechnicalPoisPage() {
   // Holds the row itself: saving moves it between lists, and the dialog must not unmount mid-save.
   const [selected, setSelected] = useState<PoiRow | null>(null)
   const [viewing, setViewing] = useState<PoiRow | null>(null)
+  // The robot picker replaces the check form rather than opening inside its <form> (see ReadyRobotField).
+  const [assigning, setAssigning] = useState<{ mapVersionId: string; mapLabel: string } | null>(null)
   const maps = useMapVersions()
   // People read the area and version; the map key is only a fallback while the list loads.
   const mapName = (mapKey: string) => {
@@ -102,7 +105,9 @@ export default function TechnicalPoisPage() {
       </section>
 
       {viewing && <PoiDetailModal row={viewing} mapName={mapName(viewing.revision.mapKey)} onClose={() => setViewing(null)} onRecord={() => { setViewing(null); setSelected(viewing) }} />}
-      {selected?.recordable && <VerifyModal key={selected.proposalId} proposal={selected} mapName={mapName(selected.revision.mapKey)} onClose={() => setSelected(null)} />}
+      {selected?.recordable && <VerifyModal key={selected.proposalId} proposal={selected} mapName={mapName(selected.revision.mapKey)} onClose={() => setSelected(null)}
+        onAssignRobot={mapLabel => { setAssigning({ mapVersionId: selected.revision.mapVersionId, mapLabel }); setSelected(null) }} />}
+      {assigning && <DeployToRobotDialog mapVersionId={assigning.mapVersionId} mapLabel={assigning.mapLabel} onClose={() => setAssigning(null)} />}
       {selected && !selected.recordable && <PoiResultModal key={selected.proposalId} proposalId={selected.proposalId} revision={selected.revision} mapName={mapName(selected.revision.mapKey)} onClose={() => setSelected(null)} />}
     </TechnicalPage>
   )
@@ -139,7 +144,7 @@ function PoiDetailModal({ row, mapName, onClose, onRecord }: { row: PoiRow; mapN
   )
 }
 
-function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerificationQueueItem; mapName: string; onClose: () => void }) {
+function VerifyModal({ proposal, mapName, onClose, onAssignRobot }: { proposal: PoiVerificationQueueItem; mapName: string; onClose: () => void; onAssignRobot: (mapLabel: string) => void }) {
   const verify = useVerifyPoi()
   const robots = usePhysicalRobots()
   const maps = useMapVersions()
@@ -198,7 +203,7 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="poi-verify-form" className="space-y-3.5" onSubmit={submit}>
         <div>
-          <ReadyRobotField robots={robots} mapVersionId={revision.mapVersionId} map={maps.data?.find(item => item.map.id === revision.mapVersionId)?.map} />
+          <ReadyRobotField robots={robots} mapVersionId={revision.mapVersionId} map={maps.data?.find(item => item.map.id === revision.mapVersionId)?.map} onAssignRobot={onAssignRobot} />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
         </div>
         <div className="space-y-2">
