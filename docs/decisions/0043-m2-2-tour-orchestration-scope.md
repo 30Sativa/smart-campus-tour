@@ -48,6 +48,8 @@ A normal end (arrival at the end, or last POI with `EndMode = LAST_POI`) release
 
 Reason: a normal arrival proves where the robot is; End Early and unknown outcomes do not (§3.2 End Early row, §6).
 
+**Addendum (23/11/2026): the hold ends with the Tour.** When a Tour ends, normally or by End Early, its active robot hold (`TourRobotReservations`) ends at that moment in the same transaction: `EndsAt` becomes the Tour's `EndedAt` (never at or before `StartsAt`; at least one second after it, for `CK_TourRobotReservations_Window`), and only when that is earlier. `ReleasedAt` keeps its ADR-0047 meaning of a pre-Start cancel, so the calendar, list and detail still show the robot and hold of a Tour that ran, now ending at its real end. The end event (`TOUR_COMPLETED` / `TOUR_ENDED_EARLY`) records the previous end as `DataJson.holdEndsAtBefore`. After End Early with an open GoTo the robot is still blocked, by `NeedsInspection` and `CurrentTourId`, not by the hold. The runtime role gains column `UPDATE (EndsAt)` on `TourRobotReservations`; `StartsAt`, the robot and the durations stay write-once. Holds of Tours that ended before this change run to their old end.
+
 ### D14 — End Early in M2.2 is state and commands only
 
 End Early sets the Tour state, withdraws or cancels the open command and holds the robot. The FR-48 consequences (revoke live/fallback/Q&A, notify accepted groups) are a follow-up.

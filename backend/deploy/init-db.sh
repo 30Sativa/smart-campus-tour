@@ -98,6 +98,8 @@ if [[ "$mode" == --check-only ]]; then
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'MapAssignedByUserId',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.TourRobotReservations',N'OBJECT',N'INSERT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.TourRobotReservations',N'OBJECT',N'UPDATE',N'ReleasedAt',N'COLUMN') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.TourRobotReservations',N'OBJECT',N'UPDATE',N'EndsAt',N'COLUMN') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.TourRobotReservations',N'OBJECT',N'UPDATE',N'StartsAt',N'COLUMN') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiImportReceipts',N'OBJECT',N'SELECT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiImportReceipts',N'OBJECT',N'INSERT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiImportReceipts',N'OBJECT',N'UPDATE') = 1

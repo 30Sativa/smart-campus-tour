@@ -11,7 +11,7 @@ namespace SmartCampus.Application.Features.Tours.Commands.EndTourEarly;
 /// Ends a running Tour (ADR-0043 D13, D14). The command is withdrawn if the robot never received it, otherwise a Cancel is
 /// queued, also for an UNKNOWN GoTo (best effort); the leg's real result is still recorded when it arrives. Nothing here proves the robot stopped, so it needs
 /// inspection and stays held. A Tour with no open GoTo (stopped at the start, a POI or after a paused leg) releases the robot
-/// instead. FR-48 revocation and notices are a follow-up.
+/// instead. The robot hold ends now in both cases. FR-48 revocation and notices are a follow-up.
 /// </summary>
 public sealed class EndTourEarlyCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations, TimeProvider clock,
     IRouteRevisionRepository revisions, ITourVoteRepository votes)
@@ -44,10 +44,12 @@ public sealed class EndTourEarlyCommandHandler(ITourManagementRepository reposit
         // where its last result said (the start, a POI, or a stopped leg), so it is released like a normal end.
         if (goTo is not null) await repository.MarkRobotNeedsInspectionAsync(robotId, ct);
         else await repository.ReleaseRobotAsync(robotId, tour.Id, ct);
+        // Either way the hold ends now; a robot left for inspection stays blocked by NeedsInspection, not by the hold.
         repository.AddEvent(new TourEvent
         {
             TourId = tour.Id, EventType = TourLifecycleEvents.EndedEarly, OccurredAt = now, RobotId = robotId,
-            RouteId = tour.ActiveRouteId, ActorUserId = command.Actor, ReasonNote = reason
+            RouteId = tour.ActiveRouteId, ActorUserId = command.Actor, ReasonNote = reason,
+            DataJson = await TourLegDispatch.EndHoldAsync(repository, tour.Id, now, ct)
         });
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             TourLifecycleEvents.EndedEarly, fingerprint, now, "state");
