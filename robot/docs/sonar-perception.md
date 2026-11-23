@@ -219,7 +219,8 @@ từ topic `odom` của EKF (30 Hz) và mount sonar từ `/tf_static`, không d�
 | Sonar chết nhưng bridge sống (luôn `valid=0`) | không phân biệt được với "không có vật"; **không** có cảnh báo tự động. Phát hiện bằng `sonar_check.py` trước mỗi phiên (mục 8 H1). |
 | `collision_monitor` không active ở `enforce` | không có lệnh tới smoother: robot **đứng yên** (an toàn, mất khả dụng). Đã gặp 1 lần offline lúc CPU bận (phản hồi `configure` bị mất, lifecycle manager Humble chờ mãi); đã cho lifecycle manager khởi động trễ 3 s. Kiểm `--guard` trước goal. |
 | `sonar_memory` chết | mất bảo vệ vùng chết; guard vẫn chạy với echo trực tiếp. |
-| NaN / ±Inf / ngoài [min, max] | nguồn Range của collision_monitor bỏ qua (`range.cpp:81`). |
+| ±Inf / ngoài [min, max] | nguồn Range của collision_monitor bỏ qua (`range.cpp:81`). |
+| NaN | **lọt** qua `range.cpp:81` (mọi so sánh với NaN đều sai) và thành điểm NaN, nhưng phép thử tia trong `Polygon::isPointInside` không bao giờ coi điểm NaN là ở trong: hệ quả vẫn là bỏ qua. |
 
 ## 5. Thay đổi triển khai
 
@@ -232,7 +233,7 @@ từ topic `odom` của EKF (30 Hz) và mount sonar từ `/tf_static`, không d�
 | `robot_control/launch/manual_mode.launch.py` | chuyển tiếp `sonar_max_range` tới bridge (mặc định 2.0 như cũ; sonar mode = 6.0 để có echo xa làm bằng chứng thả) và `sonar_publish_mode` (mặc định `every_frame`) |
 | `stm32_bridge/stm32_bridge/sonar_publish.py`, `stm32_bridge_node.py`, `launch/stm32_bridge.launch.py` | tham số `sonar_publish_mode` (`every_frame` mặc định = y nguyên; `on_change` = chỉ khi (mm, valid) đổi + nhịp giữ `sonar_heartbeat_period` 0.2 s, đi theo khung FB chứ không theo timer) |
 | `robot/scripts/robot` | `robot nav --sonar off\|shadow\|enforce`, khoá profile `SONAR_MODE`; runtime cũ: shadow tự tắt kèm cảnh báo, enforce bị từ chối |
-| `robot/tools/sonar/` | `sonar_check.py` (kiểm tĩnh), `sonar_shadow_report.py` (đọc bag) |
+| `robot/tools/sonar/` | `sonar_watch.py` (T0: FB thô qua serial, chỉ đọc), `sonar_check.py` (kiểm tĩnh qua ROS), `sonar_shadow_report.py` (đọc bag) |
 | `robot/tools/ops/record_session.sh` | ghi thêm 4 topic sonar, `cmd_vel_sonar(_shadow)`, `sonar_guard/memory` |
 | `robot/tools/nav2_bench/sim/` | `NAVSIM_MAP`, wiring sonar trong `sim.launch.py`; `sim/sonar/` kịch bản |
 | `docs/architecture.md`, ADR-0066, `robot/AGENTS.md`, `robot_navigation/README.md` | vai trò sonar |
@@ -378,6 +379,10 @@ ghi đè): collision_monitor không nhớ (chạm −4.7 cm khi vật vào vùng
 Điều kiện chung: người đi kèm cầm E-stop; luôn ghi bag (`record_session.sh` đã có topic sonar);
 mỗi bước một thay đổi; rollback = `robot nav` không `--sonar` (hoặc `SONAR_MODE=off`).
 Chưa có runtime nào trên MiniPC chứa nhánh này: cần stage một overlay mới (`runtime-deploy.md`).
+
+**Trước hết: T0** ([sonar-t0-check.md](sonar-t0-check.md)). H0–H4 dưới đây là bản tóm tắt; T0 là
+quy trình chi tiết, chỉ đọc FB qua serial (`robot/tools/sonar/sonar_watch.py`), không cần runtime
+mới, không nạp firmware, và có bảng quyết định từ số đo sang tham số / thiết kế.
 
 **H0. Bánh kê / robot đứng yên, `robot nav --sonar shadow` (hoặc `manual`).**
 `python3 robot/tools/sonar/sonar_check.py --seconds 10`. Đạt: 4 sonar 2.4–3.5 new/s; msg/s ~40
