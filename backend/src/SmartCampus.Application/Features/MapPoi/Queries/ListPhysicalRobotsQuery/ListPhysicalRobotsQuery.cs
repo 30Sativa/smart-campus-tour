@@ -41,7 +41,8 @@ public sealed record PhysicalRobotStatus(
     Guid? CurrentTourId,
     string? CurrentTourName,
     string? CurrentTourState,
-    bool IsDispatchEnabled);
+    bool IsDispatchEnabled,
+    RobotReadinessView Readiness);
 
 /// <summary>Pickers never see a deactivated robot; only the robot page asks for them.</summary>
 public sealed record ListPhysicalRobotsQuery(bool IncludeDeactivated = false) : IRequest<IReadOnlyList<PhysicalRobotStatus>>;
@@ -68,7 +69,7 @@ public sealed class ListPhysicalRobotsQueryHandler(
                 ? "UNCONFIRMED"
                 : latest is null
                     ? "AWAITING_DATA"
-                    : latest.ReceivedAt >= now - fleetSyncSettings.SyncFreshness
+                    : FleetSyncFreshness.IsFresh(latest, now, fleetSyncSettings)
                         ? "CONNECTED"
                         : "DISCONNECTED";
             latestDeploymentByRobot.TryGetValue(robot.Id, out var latestDeployment);
@@ -89,7 +90,9 @@ public sealed class ListPhysicalRobotsQueryHandler(
                 latestDeployment is null ? null : latestDeployment.LocalizationPassed && latestDeployment.DisplayPassed,
                 robot.DeactivatedAt, robot.DeactivationReason,
                 robot.NeedsInspection, robot.CurrentTourId, robot.CurrentTour?.Name, robot.CurrentTour?.State,
-                robot.IsDispatchEnabled);
+                robot.IsDispatchEnabled,
+                RobotMapReadiness.ToView(robot, latestDeployment,
+                    RobotMapReadiness.IsReportingOnAssignedMap(robot, latest, now, fleetSyncSettings)));
         }).ToArray();
     }
 }

@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-using System.Security.Cryptography;
 using System.Text.Json;
 using FluentValidation;
 using MediatR;
@@ -32,16 +30,6 @@ public sealed class RecordRouteTestRunValidator : AbstractValidator<RecordRouteT
             (!c.Request.AllStopsReached || !c.Request.SafelyStopped || !c.Request.LocalizationPassed))
             .WithMessage("FAIL requires a reason and at least one failed route observation.");
     }
-}
-
-/// <summary>The robot's newest check across all maps must pass on the revision's exact map package.</summary>
-public static class RouteRobotDeployment
-{
-    public static bool IsCurrent([NotNullWhen(true)] MapDeploymentCheck? deployment, MapVersion map, RouteRevision revision) =>
-        deployment is not null && deployment.Id != Guid.Empty && deployment.MapVersionId == map.Id &&
-        deployment.LocalizationPassed && deployment.DisplayPassed &&
-        CryptographicOperations.FixedTimeEquals(deployment.PackageSha256, revision.MapPackageSha256) &&
-        CryptographicOperations.FixedTimeEquals(map.PackageSha256, revision.MapPackageSha256);
 }
 
 public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tours.TourScheduleSettings schedule, TimeProvider clock)
@@ -85,14 +73,11 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
         // Read again behind the lock: deactivation or a key reissue may have changed the robot meanwhile.
         var robot = await repo.FindPhysicalRobotAsync(found.RobotCode, ct) ?? throw new NotFoundException("Physical robot", found.RobotCode);
         RobotLifecycleRules.EnsureActive(robot);
-        // A key reissue clears the connection confirmation but keeps older deployment checks, so check it here too.
-        if (robot.FirstAcceptedSyncAt is null)
-            throw new ConflictException("Robot chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại rồi ghi lại kết quả chạy thử.",
-                "ROBOT_CONNECTION_UNCONFIRMED");
         var deployment = await repo.GetLatestDeploymentForRobotAsync(robot.Id, ct);
         var map = await repo.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Map version", revision.MapVersionId);
-        if (!RouteRobotDeployment.IsCurrent(deployment, map, revision))
-            throw new ConflictException("The robot's latest deployment check must match the exact map version and checksum in this revision.", "MAP_NOT_CURRENTLY_DEPLOYED");
+        // ADR-0066: the shared readiness rule; a key reissue clears the connection confirmation, which it checks too.
+        if (RobotMapReadiness.EvaluateForRoute(robot, deployment, map, revision) is { IsReady: false } readiness)
+            throw new ConflictException(readiness.Message!, readiness.Code!);
         var now = clock.GetUtcNow();
         var routeRuns = await repo.GetTestRunsForRouteAsync(route.Id, ct);
         var targetNavigation = RouteNavigationConfigurationFactory.FromRevision(revision, stops);
@@ -103,7 +88,7 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
         if (latestForConfiguration is not null && latestForConfiguration.CheckedAt >= now)
             now = latestForConfiguration.CheckedAt.AddMilliseconds(1);
         var run = new RouteTestRun { Id = Guid.NewGuid(), RouteRevisionId = revision.Id, NavigationFingerprint = revision.NavigationFingerprint,
-            MapVersionId = map.Id, MapDeploymentCheckId = deployment.Id, MapPackageSha256 = map.PackageSha256, RobotId = robot.Id, CheckedByUserId = c.ActorUserId,
+            MapVersionId = map.Id, MapDeploymentCheckId = deployment!.Id, MapPackageSha256 = map.PackageSha256, RobotId = robot.Id, CheckedByUserId = c.ActorUserId,
             ParticipatingStaffUserId = q.ParticipatingStaffUserId, ResultCode = result, AllStopsReached = q.AllStopsReached,
             SafelyStopped = q.SafelyStopped, LocalizationPassed = q.LocalizationPassed, MeasuredDurationSeconds = Tours.TourSchedule.StoredDurationSeconds(estimated),
             FailureReason = string.IsNullOrWhiteSpace(q.FailureReason) ? null : q.FailureReason.Trim(), EvidenceNote = q.EvidenceNote.Trim(),

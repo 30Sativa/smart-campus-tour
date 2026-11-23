@@ -91,12 +91,12 @@ internal static class TourTarget
             : $"Lần chạy thử mới nhất của đường đi này không đạt ({at}: lý do {failed.FailureReason}).";
     }
 
-    /// <summary>Null when this robot can run the revision. Create, slots and the robot list all ask here.</summary>
+    /// <summary>
+    /// Null when this robot can run the revision: the shared readiness rule (ADR-0066). Create, slots, the robot list, READY
+    /// and Start all ask here.
+    /// </summary>
     public static string? RobotBlockReason(Robot robot, MapDeploymentCheck? latestDeployment, MapVersion map, RouteRevision revision) =>
-        robot.IsDeactivated ? "Robot đã ngừng sử dụng."
-        : robot.FirstAcceptedSyncAt is null ? "Robot chưa xác nhận kết nối."
-        : RouteRobotDeployment.IsCurrent(latestDeployment, map, revision) ? null
-        : "Robot chưa triển khai đúng bản đồ của tuyến.";
+        RobotMapReadiness.EvaluateForRoute(robot, latestDeployment, map, revision).Message;
 
     /// <summary>The physical robot a reservation holds; null when it cannot be found.</summary>
     public static async Task<Robot?> FindReservedRobotAsync(IRouteRevisionRepository revisions, Guid robotId, CancellationToken ct) =>

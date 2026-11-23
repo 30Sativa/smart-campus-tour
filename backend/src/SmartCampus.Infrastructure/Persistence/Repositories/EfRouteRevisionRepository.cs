@@ -170,8 +170,9 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
             .Where(u => u.IsActive && u.UserRoles.Any(r => r.Role == ApplicationRoles.StaffCode))
             .OrderBy(u => u.FullName).ThenBy(u => u.Id).Take(200).ToArrayAsync(ct);
 
-    public Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken ct) =>
-        db.Robots.AsNoTracking().SingleOrDefaultAsync(r => r.RobotCode == robotCode && r.SourceType == "PHYSICAL", ct);
+    // The assigned map and area name the readiness sentence (ADR-0066).
+    public async Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken ct) =>
+        await MapVersionLabels.WithAssignedMapAsync(db, await db.Robots.AsNoTracking().SingleOrDefaultAsync(r => r.RobotCode == robotCode && r.SourceType == "PHYSICAL", ct), ct);
 
     public Task LockRobotDeploymentStateAsync(Guid robotId, CancellationToken ct) =>
         db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -181,9 +182,9 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
             IF @lockResult < 0 THROW 51022, 'Could not acquire robot deployment state lock.', 1;
             """, ct);
 
-    public Task<MapDeploymentCheck?> GetLatestDeploymentForRobotAsync(Guid robotId, CancellationToken ct) =>
-        db.MapDeploymentChecks.AsNoTracking().Where(c => c.RobotId == robotId)
-            .OrderByDescending(c => c.CheckedAt).ThenByDescending(c => c.Id).FirstOrDefaultAsync(ct);
+    public async Task<MapDeploymentCheck?> GetLatestDeploymentForRobotAsync(Guid robotId, CancellationToken ct) =>
+        await MapVersionLabels.WithMapAsync(db, await db.MapDeploymentChecks.AsNoTracking().Where(c => c.RobotId == robotId)
+            .OrderByDescending(c => c.CheckedAt).ThenByDescending(c => c.Id).FirstOrDefaultAsync(ct), ct);
 
     public Task<MapDeploymentCheck?> FindDeploymentAsync(Guid id, CancellationToken ct) =>
         db.MapDeploymentChecks.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, ct);
