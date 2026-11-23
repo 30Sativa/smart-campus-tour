@@ -64,6 +64,21 @@ internal static class RobotReadinessTestSupport
     }
 
     /// <summary>
+    /// Round 3's readiness sentence for a robot without a passing check on the map it holds, with the assignment time read
+    /// from SQL: "Robot {code} chưa kiểm tra triển khai trên {map} (gán lúc {dd/MM HH:mm})."
+    /// </summary>
+    public static async Task<string> NotCheckedOnAssignedMapAsync(string connectionString, string robotCode, string mapLabel)
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var read = new SqlCommand("SELECT MapAssignedAt FROM dbo.Robots WHERE RobotCode = @code;", connection);
+        read.Parameters.AddWithValue("@code", robotCode);
+        var assignedAt = (DateTimeOffset)(await read.ExecuteScalarAsync())!;
+        var at = assignedAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        return $"Robot {robotCode} chưa kiểm tra triển khai trên {mapLabel} (gán lúc {at}).";
+    }
+
+    /// <summary>
     /// A fresh Fleet Sync snapshot on a new stream, received at <paramref name="receivedAt"/>. Its robot-side timestamp
     /// repeats the current stream's (or the epoch), so neither this restart nor a harness's own later stream is refused
     /// by the stream ordering policy.

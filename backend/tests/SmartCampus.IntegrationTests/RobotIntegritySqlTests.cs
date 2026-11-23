@@ -203,7 +203,10 @@ public sealed partial class RobotIntegritySqlTests
         await h.RecordDeployment(h.PilotMap, First, passed: false);
 
         var failed = (await h.LatestDeployment(First)).CheckedAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM HH:mm", System.Globalization.CultureInfo.InvariantCulture);
-        await h.AssertBlocked(tested, First, $"Lần kiểm tra triển khai mới nhất của robot {First} không đạt ({failed}).");
+        // Round 3: every writer refuses with the sentence about the map First holds; the failed check is the robot list's detail.
+        await h.AssertBlocked(tested, First,
+            await RobotReadinessTestSupport.NotCheckedOnAssignedMapAsync(h.Database.ConnectionString, First, "Pilot · pilot · phiên bản 1"));
+        Assert.Equal($"Lần kiểm tra triển khai mới nhất của robot {First} không đạt ({failed}).", (await RobotStatus(h, First)).Readiness.Detail);
     }
 
     [SchemaV11Fact]

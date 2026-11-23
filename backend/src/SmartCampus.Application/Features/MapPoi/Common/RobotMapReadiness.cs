@@ -154,9 +154,14 @@ public static class RobotMapReadiness
         $"{map.AreaKeyNavigation?.DisplayName ?? map.AreaKey} · v{map.VersionNumber}";
 
     /// <summary>"Robot {code} chưa kiểm tra triển khai trên {M} (gán lúc {dd/MM HH:mm})."; M is the map the robot holds.</summary>
-    private static string NoPassMessage(Robot robot, MapVersion map) => robot.MapAssignedAt is { } assignedAt
-        ? $"Robot {robot.RobotCode} chưa kiểm tra triển khai trên {Label(map, map.Id)} (gán lúc {Time(assignedAt)})."
-        : $"Robot {robot.RobotCode} chưa kiểm tra triển khai trên {Label(map, map.Id)}.";
+    /// The robot's loaded assigned map (with its area name) is preferred, so every path names M the same way.
+    private static string NoPassMessage(Robot robot, MapVersion map)
+    {
+        var label = Label(robot.AssignedMapVersion is { AreaKeyNavigation: not null } held && held.Id == map.Id ? held : map, map.Id);
+        return robot.MapAssignedAt is { } assignedAt
+            ? $"Robot {robot.RobotCode} chưa kiểm tra triển khai trên {label} (gán lúc {Time(assignedAt)})."
+            : $"Robot {robot.RobotCode} chưa kiểm tra triển khai trên {label}.";
+    }
 
     private static string Time(DateTimeOffset at) =>
         at.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM HH:mm", CultureInfo.InvariantCulture);

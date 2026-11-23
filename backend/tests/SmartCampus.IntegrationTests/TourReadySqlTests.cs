@@ -114,7 +114,9 @@ public sealed class TourReadySqlTests
         await h.Database.ExecuteAsync(RobotIntegritySqlTests.LegacyCheckSql(other.Id, Robot));
 
         var blocker = Assert.Single((await h.Detail()).Permissions.ReadyBlockers!);
-        Assert.Equal(("ROBOT_NOT_READY_FOR_ROUTE", $"Lần kiểm tra triển khai mới nhất của robot {Robot} là trên Other · other · phiên bản 1."),
+        // Round 3: the reason names what to do on the map the robot holds; the Other check is only the robot page's detail.
+        Assert.Equal(("ROBOT_NOT_READY_FOR_ROUTE",
+                await RobotReadinessTestSupport.NotCheckedOnAssignedMapAsync(h.Database.ConnectionString, Robot, "Pilot · pilot · phiên bản 1")),
             (blocker.Code, blocker.Message));
         await h.AssertBlocked(["ROBOT_NOT_READY_FOR_ROUTE"], restoreSql: $"DELETE dbo.MapDeploymentChecks WHERE MapVersionId = '{other.Id}';");
         Assert.True((await h.Detail()).Permissions.CanMarkReady);

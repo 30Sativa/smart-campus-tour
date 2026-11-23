@@ -122,5 +122,14 @@ Additive JSON fields, recorded in `docs/architecture.md` §3.4.6:
   whose SCHEDULED or READY Tours (not yet running, starting within seven days) it could not run, by
   `TourTarget.RobotBlockReason` with the Tour's route revision. Several Tours of one robot make one item. The bell shows it
   like the other items. It is a read: nothing is cancelled or changed (`docs/architecture.md`, Technical dashboard).
+- **The reason says what to do next, and a wrong map is named (round 3, 23/11/2026).** On amr_01 the reason "Lần kiểm
+  tra triển khai mới nhất … là trên Betea" was true but did not say what to do, and the robot list said "Mất kết nối"
+  while the MiniPC was still sending `test123-v1` after the move to tang-6. The rule and its order are unchanged.
+  `readiness` adds `nextStep` (`ASSIGN_MAP`, `CONFIRM_CONNECTION`, `CONFIGURE_MINIPC`, `DEPLOYMENT_CHECK`, or null when
+  READY), display only; the main sentence becomes "Robot {code} chưa kiểm tra triển khai trên {M} (gán lúc {dd/MM
+  HH:mm})." and is what 409s say, while the history sentence moves to `detail`. Fleet Sync remembers in memory the
+  robot's newest report refused with `MAP_CONTEXT_MISMATCH`; while it is fresh by `SyncFreshness` and newer than the
+  newest accepted report, the connection is `WRONG_MAP` with `lastRejectedReport` instead of `DISCONNECTED`. No schema,
+  grant or Fleet Sync wire change (`docs/architecture.md` §3.4.6).
 - Deploy PR 1 together with PR 2 and PR 3: the web before PR 2 still offers the old free-form check, which the backend
   now refuses for an unassigned robot.

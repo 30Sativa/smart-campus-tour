@@ -114,11 +114,13 @@ public sealed partial class RobotIntegritySqlTests
         var tested = await h.TestedRoute();
         // The amr_01 data of 23/11: the robot holds A, but its newest check is a PASS on B written before ADR-0066.
         await h.Database.ExecuteAsync(LegacyCheckSql(h.OtherMap.Id, First));
-        var reason = $"Lần kiểm tra triển khai mới nhất của robot {First} là trên Other · other · phiên bản 1.";
+        // Round 3: the reason (and every 409) says what to do on the map First holds; the Other check is the detail.
+        var reason = await RobotReadinessTestSupport.NotCheckedOnAssignedMapAsync(h.Database.ConnectionString, First, "Pilot · pilot · phiên bản 1");
 
         var status = await RobotStatus(h, First);
         Assert.Equal(("NOT_READY", "ROBOT_DEPLOYMENT_CHECK_REQUIRED", reason),
             (status.Readiness.State, status.Readiness.ReasonCode, status.Readiness.Reason));
+        Assert.Equal($"Lần kiểm tra triển khai mới nhất của robot {First} là trên Other · other · phiên bản 1.", status.Readiness.Detail);
         var run = await Assert.ThrowsAsync<ConflictException>(() => h.RecordRouteTest(tested, First));
         Assert.Equal(("ROBOT_DEPLOYMENT_CHECK_REQUIRED", reason), (run.Code, run.Message));
         await h.AssertBlocked(tested, First, reason);
@@ -184,11 +186,14 @@ public sealed partial class RobotIntegritySqlTests
         Assert.Equal(("READY", "Pilot · v1", h.PilotMap.Id, true), (ready.State, ready.MapLabel, ready.MapVersionId, ready.ReportingOnAssignedMap));
         Assert.Equal((await h.LatestDeployment(First)).CheckedAt, ready.DeploymentCheckedAt);
         var notSetUp = (await RobotStatus(h, Second)).Readiness;
-        Assert.Equal(new RobotReadinessView("NOT_SET_UP", "ROBOT_MAP_NOT_ASSIGNED", $"Robot {Second} chưa được gán bản đồ.", null, null, null, false), notSetUp);
+        Assert.Equal(new RobotReadinessView("NOT_SET_UP", "ROBOT_MAP_NOT_ASSIGNED", $"Robot {Second} chưa được gán bản đồ.", null, null, null, false,
+            "ASSIGN_MAP"), notSetUp);
         await h.Assign(Second, h.OtherMap.Id);
         var notReady = (await RobotStatus(h, Second)).Readiness;
+        // Round 3: Second has not reported on Other since the assignment, so the next step is the MiniPC, not the check.
         Assert.Equal(new RobotReadinessView("NOT_READY", "ROBOT_DEPLOYMENT_CHECK_REQUIRED",
-            $"Robot {Second} chưa có kiểm tra triển khai đạt trên bản đồ đang gán.", h.OtherMap.Id, "Other · v1", null, false), notReady);
+            await RobotReadinessTestSupport.NotCheckedOnAssignedMapAsync(h.Database.ConnectionString, Second, "Other · other · phiên bản 1"),
+            h.OtherMap.Id, "Other · v1", null, false, "CONFIGURE_MINIPC"), notReady);
 
         var maps = await h.Send(new ListMapVersionsQuery(null, 50));
         RunningRobotView? Running(MapVersionView map) => Assert.Single(maps, item => item.Map.Id == map.Id).RunningRobot;

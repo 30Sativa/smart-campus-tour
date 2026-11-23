@@ -8,8 +8,8 @@ public sealed record FleetRejectedReportView(string MapKey, string FrameId, Date
 
 /// <summary>
 /// The robot list's connection column, shared by the robot list, the Technical dashboard and diagnostics. CONNECTED is
-/// <see cref="FleetSyncFreshness.IsFresh"/>. WRONG_MAP replaces AWAITING_DATA/DISCONNECTED when the robot is still sending
-/// but Fleet Sync refuses its reports for the wrong map (ADR-0066 round 3).
+/// <see cref="FleetSyncFreshness.IsFresh"/>. WRONG_MAP replaces CONNECTED/AWAITING_DATA/DISCONNECTED when the robot's
+/// newest report was refused for the wrong map within SyncFreshness (ADR-0066 round 3).
 /// </summary>
 public static class FleetConnectionStatus
 {
@@ -22,8 +22,9 @@ public static class FleetConnectionStatus
     public static string Of(Robot robot, FleetTelemetrySnapshot? latest, FleetRejectedReportView? lastRejected,
         DateTimeOffset now, FleetSyncSettings settings) =>
         robot.FirstAcceptedSyncAt is null ? Unconfirmed
-        : FleetSyncFreshness.IsFresh(latest, now, settings) ? Connected
+        // The refusal is newer than every accepted report, so the robot's current reports are the refused ones.
         : lastRejected is not null ? WrongMap
+        : FleetSyncFreshness.IsFresh(latest, now, settings) ? Connected
         : latest is null ? AwaitingData
         : Disconnected;
 
