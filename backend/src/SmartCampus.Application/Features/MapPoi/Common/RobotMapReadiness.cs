@@ -6,18 +6,25 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.MapPoi;
 
-/// <summary>Ready, or the first condition that failed with its code and Vietnamese sentence.</summary>
-public sealed record RobotMapReadinessResult(string? Code, string? Message)
+/// <summary>
+/// Ready, or the first condition that failed with its code and Vietnamese sentence. <see cref="Detail"/> is a smaller second
+/// sentence about the history behind it (the newest check was on another map or failed); writers' 409s use only
+/// <see cref="Message"/>.
+/// </summary>
+public sealed record RobotMapReadinessResult(string? Code, string? Message, string? Detail = null)
 {
     public static readonly RobotMapReadinessResult Ready = new(null, null);
 
     public bool IsReady => Code is null;
 }
 
-/// <summary>What a robot list row and a map's running robot show (ADR-0066).</summary>
+/// <summary>
+/// What a robot list row and a map's running robot show (ADR-0066). <see cref="NextStep"/> is the setup step to do next,
+/// for display only: it never changes <see cref="State"/>.
+/// </summary>
 public sealed record RobotReadinessView(
     string State, string? ReasonCode, string? Reason, Guid? MapVersionId, string? MapLabel,
-    DateTimeOffset? DeploymentCheckedAt, bool ReportingOnAssignedMap);
+    DateTimeOffset? DeploymentCheckedAt, bool ReportingOnAssignedMap, string? NextStep = null, string? Detail = null);
 
 public sealed record RunningRobotView(Guid Id, string RobotCode, string? DisplayName, RobotReadinessView Readiness);
 
@@ -38,6 +45,11 @@ public static class RobotMapReadiness
     public const string NotReady = "NOT_READY";
     public const string NotSetUp = "NOT_SET_UP";
 
+    public const string AssignMapStep = "ASSIGN_MAP";
+    public const string ConfirmConnectionStep = "CONFIRM_CONNECTION";
+    public const string ConfigureMiniPcStep = "CONFIGURE_MINIPC";
+    public const string DeploymentCheckStep = "DEPLOYMENT_CHECK";
+
     /// <summary>
     /// In this order: not deactivated, connection confirmed, assigned exactly to M, and the robot's newest deployment check
     /// across every map is a pass on M with M's package checksum.
@@ -50,16 +62,17 @@ public static class RobotMapReadiness
             return new(ConnectionUnconfirmedCode, $"Robot {robot.RobotCode} chưa xác nhận kết nối.");
         if (robot.AssignedMapVersionId != map.Id)
             return new(MapNotAssignedCode, NotAssignedMessage(robot));
+        // The sentence says what to do on the map the robot holds; the history behind it is the smaller detail.
         if (latestDeployment is null)
-            return new(DeploymentCheckRequiredCode, NoPassMessage(robot));
+            return new(DeploymentCheckRequiredCode, NoPassMessage(robot, map));
         if (latestDeployment.MapVersionId != map.Id)
-            return new(DeploymentCheckRequiredCode,
+            return new(DeploymentCheckRequiredCode, NoPassMessage(robot, map),
                 $"Lần kiểm tra triển khai mới nhất của robot {robot.RobotCode} là trên {Label(latestDeployment.MapVersion, latestDeployment.MapVersionId)}.");
         if (!latestDeployment.LocalizationPassed || !latestDeployment.DisplayPassed)
-            return new(DeploymentCheckRequiredCode,
+            return new(DeploymentCheckRequiredCode, NoPassMessage(robot, map),
                 $"Lần kiểm tra triển khai mới nhất của robot {robot.RobotCode} không đạt ({Time(latestDeployment.CheckedAt)}).");
         if (!CryptographicOperations.FixedTimeEquals(latestDeployment.PackageSha256, map.PackageSha256))
-            return new(DeploymentCheckRequiredCode, NoPassMessage(robot));
+            return new(DeploymentCheckRequiredCode, NoPassMessage(robot, map));
         return RobotMapReadinessResult.Ready;
     }
 
@@ -110,8 +123,20 @@ public static class RobotMapReadiness
         return new(state, result.Code, result.Message, robot.AssignedMapVersionId,
             assigned is null ? null : ShortLabel(assigned),
             latestDeployment is not null && latestDeployment.MapVersionId == robot.AssignedMapVersionId ? latestDeployment.CheckedAt : null,
-            reportingOnAssignedMap);
+            reportingOnAssignedMap, NextStep(robot, result, reportingOnAssignedMap), result.Detail);
     }
+
+    /// <summary>
+    /// The setup step to do next, for display only. A map comes first even before the connection is confirmed, because Fleet
+    /// Sync accepts nothing from a robot without one; then the connection; then the MiniPC must report on the assigned map
+    /// (a PASS needs it, decision 3); then the deployment check. Null when ready or deactivated.
+    /// </summary>
+    private static string? NextStep(Robot robot, RobotMapReadinessResult result, bool reportingOnAssignedMap) =>
+        result.IsReady || robot.IsDeactivated ? null
+        : robot.AssignedMapVersionId is null ? AssignMapStep
+        : robot.FirstAcceptedSyncAt is null ? ConfirmConnectionStep
+        : !reportingOnAssignedMap ? ConfigureMiniPcStep
+        : DeploymentCheckStep;
 
     public static string NotAssignedMessage(Robot robot) => robot.AssignedMapVersionId is null
         ? $"Robot {robot.RobotCode} chưa được gán bản đồ."
@@ -128,8 +153,10 @@ public static class RobotMapReadiness
     public static string ShortLabel(MapVersion map) =>
         $"{map.AreaKeyNavigation?.DisplayName ?? map.AreaKey} · v{map.VersionNumber}";
 
-    private static string NoPassMessage(Robot robot) =>
-        $"Robot {robot.RobotCode} chưa có kiểm tra triển khai đạt trên bản đồ đang gán.";
+    /// <summary>"Robot {code} chưa kiểm tra triển khai trên {M} (gán lúc {dd/MM HH:mm})."; M is the map the robot holds.</summary>
+    private static string NoPassMessage(Robot robot, MapVersion map) => robot.MapAssignedAt is { } assignedAt
+        ? $"Robot {robot.RobotCode} chưa kiểm tra triển khai trên {Label(map, map.Id)} (gán lúc {Time(assignedAt)})."
+        : $"Robot {robot.RobotCode} chưa kiểm tra triển khai trên {Label(map, map.Id)}.";
 
     private static string Time(DateTimeOffset at) =>
         at.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM HH:mm", CultureInfo.InvariantCulture);

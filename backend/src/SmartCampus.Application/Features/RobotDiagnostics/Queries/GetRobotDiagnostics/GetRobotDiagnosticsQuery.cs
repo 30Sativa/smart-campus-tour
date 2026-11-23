@@ -36,7 +36,8 @@ public sealed record RobotDiagnosticsDetailDto(
     MiniPcResourcesReport? MiniPc,
     Ros2SystemReport? Ros2,
     SensorHealthReport? Sensors,
-    bool IsDispatchEnabled);
+    bool IsDispatchEnabled,
+    FleetRejectedReportView? LastRejectedReport = null);
 
 public sealed class GetRobotDiagnosticsQueryHandler(
     IPhysicalRobotRepository robotRepository,
@@ -63,13 +64,9 @@ public sealed class GetRobotDiagnosticsQueryHandler(
 
         var now = clock.GetUtcNow();
 
-        var connectionStatus = robot.FirstAcceptedSyncAt is null
-            ? "UNCONFIRMED"
-            : telemetrySnapshot is null
-                ? "AWAITING_DATA"
-                : telemetrySnapshot.ReceivedAt >= now - fleetSyncSettings.SyncFreshness
-                    ? "CONNECTED"
-                    : "DISCONNECTED";
+        var lastRejected = FleetConnectionStatus.LastRejected(robot, telemetrySnapshot,
+            telemetryStore.GetLatestRejected(robot.RobotCode), now, fleetSyncSettings);
+        var connectionStatus = FleetConnectionStatus.Of(robot, telemetrySnapshot, lastRejected, now, fleetSyncSettings);
 
         var telemetryFresh = telemetrySnapshot is not null &&
             telemetrySnapshot.ReceivedAt >= now - fleetSyncSettings.SyncFreshness;
@@ -104,6 +101,7 @@ public sealed class GetRobotDiagnosticsQueryHandler(
             diagnosticsSnapshot?.MiniPc,
             diagnosticsSnapshot?.Ros2,
             diagnosticsSnapshot?.Sensors,
-            robot.IsDispatchEnabled);
+            robot.IsDispatchEnabled,
+            lastRejected);
     }
 }

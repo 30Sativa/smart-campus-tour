@@ -42,7 +42,8 @@ public sealed record PhysicalRobotStatus(
     string? CurrentTourName,
     string? CurrentTourState,
     bool IsDispatchEnabled,
-    RobotReadinessView Readiness);
+    RobotReadinessView Readiness,
+    FleetRejectedReportView? LastRejectedReport = null);
 
 /// <summary>Pickers never see a deactivated robot; only the robot page asks for them.</summary>
 public sealed record ListPhysicalRobotsQuery(bool IncludeDeactivated = false) : IRequest<IReadOnlyList<PhysicalRobotStatus>>;
@@ -65,13 +66,9 @@ public sealed class ListPhysicalRobotsQueryHandler(
         return robots.Where(robot => query.IncludeDeactivated || !robot.IsDeactivated).Select(robot =>
         {
             latestByRobot.TryGetValue(robot.RobotCode, out var latest);
-            var connectionStatus = robot.FirstAcceptedSyncAt is null
-                ? "UNCONFIRMED"
-                : latest is null
-                    ? "AWAITING_DATA"
-                    : FleetSyncFreshness.IsFresh(latest, now, fleetSyncSettings)
-                        ? "CONNECTED"
-                        : "DISCONNECTED";
+            var lastRejected = FleetConnectionStatus.LastRejected(robot, latest,
+                telemetryStore.GetLatestRejected(robot.RobotCode), now, fleetSyncSettings);
+            var connectionStatus = FleetConnectionStatus.Of(robot, latest, lastRejected, now, fleetSyncSettings);
             latestDeploymentByRobot.TryGetValue(robot.Id, out var latestDeployment);
             var credentialStatus = robot.CredentialHash is not null ? "ACTIVE"
                 : robot.CredentialRevokedAt is not null ? "REVOKED" : "NOT_ISSUED";
@@ -92,7 +89,8 @@ public sealed class ListPhysicalRobotsQueryHandler(
                 robot.NeedsInspection, robot.CurrentTourId, robot.CurrentTour?.Name, robot.CurrentTour?.State,
                 robot.IsDispatchEnabled,
                 RobotMapReadiness.ToView(robot, latestDeployment,
-                    RobotMapReadiness.IsReportingOnAssignedMap(robot, latest, now, fleetSyncSettings)));
+                    RobotMapReadiness.IsReportingOnAssignedMap(robot, latest, now, fleetSyncSettings)),
+                lastRejected);
         }).ToArray();
     }
 }
