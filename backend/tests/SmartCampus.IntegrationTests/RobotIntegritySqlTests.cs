@@ -456,10 +456,11 @@ public sealed partial class RobotIntegritySqlTests
             Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
                 new(Guid.NewGuid(), robot, staffId, "PASS", true, true, true, null, "Chạy thử lại.")));
 
-        public async Task<Guid> CreateTour(RouteRevisionView route, string robot)
+        /// <summary>A Tour at 08:15 (+07) <paramref name="daysAhead"/> days from today; four is the nearest the 72-hour lead allows.</summary>
+        public async Task<Guid> CreateTour(RouteRevisionView route, string robot, int daysAhead = 10, string name = "Tour robot")
         {
-            var start = new DateTimeOffset(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)).ToDateTime(new TimeOnly(8, 15)), TimeSpan.FromHours(7));
-            var created = await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new("Tour robot", null, route.RevisionId, robot, operatorId, start, null, 20))));
+            var start = new DateTimeOffset(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(daysAhead)).ToDateTime(new TimeOnly(8, 15)), TimeSpan.FromHours(7));
+            var created = await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new(name, null, route.RevisionId, robot, operatorId, start, null, 20))));
             await using var db = Context();
             return (await db.Tours.AsNoTracking().OrderByDescending(tour => tour.CreatedAt).FirstAsync()).Id;
         }
