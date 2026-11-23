@@ -288,7 +288,13 @@ public sealed partial class PoiImportSqlTests
         var preview = await h.Preview(File("a.yaml", "POI_A", verified: false), File("b.yaml", "POI_B"));
 
         Assert.Equal(PoiImportActions.Create, preview.Files[0].Action);
-        Assert.Equal("MAP_NOT_DEPLOYED", preview.Files[1].ErrorCode);
+        // ADR-0066: a verified file with a robot not ready on the map no longer fails; it waits in the verification queue.
+        Assert.Equal(PoiImportActions.Create, preview.Files[1].Action);
+        Assert.Null(preview.Files[1].ErrorCode);
+        Assert.False(preview.Files[1].Verified);
+        Assert.True(preview.CanImport);
+        Assert.False(preview.RobotReadiness.Ready);
+        Assert.Equal("ROBOT_DEPLOYMENT_CHECK_REQUIRED", preview.RobotReadiness.Code);
     }
 
     [SchemaV11Fact]
@@ -687,8 +693,12 @@ public sealed partial class PoiImportSqlTests
         public Task<PoiImportResult> Import(IReadOnlyList<PoiImportUpload> files, Guid? requestId = null) =>
             Send(new ImportPoiFilesCommand(technicalId, new(requestId ?? Guid.NewGuid(), MapId, Robot, Note, files)));
 
-        public Task RecordDeployment(bool passed, string robot = Robot) =>
-            Send(new RecordMapDeploymentCommand(technicalId, MapId, new(Guid.NewGuid(), robot, map.PackageSha256, passed, true, "Kiểm tra triển khai.")));
+        // ADR-0066: a check needs the robot to hold the map, and a PASS needs a report on it since.
+        public async Task RecordDeployment(bool passed, string robot = Robot)
+        {
+            await RobotReadinessTestSupport.AssignAndReportAsync(provider, database.ConnectionString, robot, MapId, technicalId);
+            await Send(new RecordMapDeploymentCommand(technicalId, MapId, new(Guid.NewGuid(), robot, map.PackageSha256, passed, true, "Kiểm tra triển khai.")));
+        }
 
         /// <summary>
         /// Staff names the imported POI (a content-only POI revision when the name changes) and its narration is

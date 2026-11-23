@@ -61,6 +61,10 @@ public sealed class DeploymentDatabaseTests
             // ADR-0049: the Technical Staff dispatch endpoint writes this column, so the runtime role now may; the provisioner still may not.
             await using (var dispatch = new SqlCommand("UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql'; UPDATE dbo.Robots SET IsDispatchEnabled=0 WHERE RobotCode=N'robot_registered_sql';", connection))
                 await dispatch.ExecuteNonQueryAsync();
+            // ADR-0066: changing or clearing a map assignment stops dispatch in the same statement. The runtime role already
+            // holds UPDATE on the assignment columns (ADR-0032) and on IsDispatchEnabled (ADR-0049), so no new grant is needed.
+            await using (var reassign = new SqlCommand("UPDATE dbo.Robots SET AssignedMapVersionId=NULL, AssignedAreaKey=NULL, MapAssignedAt=NULL, MapAssignedByUserId=NULL, IsDispatchEnabled=0 WHERE RobotCode=N'robot_registered_sql';", connection))
+                Assert.Equal(1, await reassign.ExecuteNonQueryAsync());
             await using (var credentialUpdate = new SqlCommand("UPDATE dbo.Robots SET CredentialHash=0x0102 WHERE RobotCode=N'robot_registered_sql';", connection))
                 Assert.Equal(1, await credentialUpdate.ExecuteNonQueryAsync());
         }

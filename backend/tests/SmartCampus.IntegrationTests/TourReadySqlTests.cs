@@ -105,6 +105,22 @@ public sealed class TourReadySqlTests
     }
 
     [SchemaV11Fact]
+    public async Task ALegacyNewestCheckOnAnotherMap_BlocksReady_WithTheReadinessReason()
+    {
+        await using var h = await Harness.Create();
+        await h.AddAcceptedRow();
+        var other = await h.Send(new CreateMapVersionCommand(h.TechnicalId, new("other", "Other", Guid.NewGuid(), MapPackage("other"))));
+        // ADR-0066: data from before the rule, the robot's newest check is a PASS on a map it does not hold.
+        await h.Database.ExecuteAsync(RobotIntegritySqlTests.LegacyCheckSql(other.Id, Robot));
+
+        var blocker = Assert.Single((await h.Detail()).Permissions.ReadyBlockers!);
+        Assert.Equal(("ROBOT_NOT_READY_FOR_ROUTE", $"Lần kiểm tra triển khai mới nhất của robot {Robot} là trên Other · other · phiên bản 1."),
+            (blocker.Code, blocker.Message));
+        await h.AssertBlocked(["ROBOT_NOT_READY_FOR_ROUTE"], restoreSql: $"DELETE dbo.MapDeploymentChecks WHERE MapVersionId = '{other.Id}';");
+        Assert.True((await h.Detail()).Permissions.CanMarkReady);
+    }
+
+    [SchemaV11Fact]
     public async Task ATourNobodyWasAcceptedFor_IsNotReady_UntilARowIsAccepted()
     {
         await using var h = await Harness.Create();
@@ -289,6 +305,8 @@ public sealed class TourReadySqlTests
                     CredentialHint = "abcd", CredentialIssuedAt = now, CredentialIssuedByUserId = technicalId });
                 await db.SaveChangesAsync();
             }
+            // ADR-0066: a check needs the robot to hold the map, and a PASS needs a report on it since.
+            await RobotReadinessTestSupport.AssignAndReportAsync(provider, database.ConnectionString, Robot, map.Id, technicalId);
             await Send(new RecordMapDeploymentCommand(technicalId, map.Id, new(Guid.NewGuid(), Robot, map.PackageSha256, true, true, "Kiểm tra triển khai.")));
             var library = await VerifiedPoi(map.Id, "Thư viện", 1.5m, 1.5m);
             // Every route has two stops (docs/lich-tour-theo-ca.md §2); twoStopsToEndPose now only adds the end pose.

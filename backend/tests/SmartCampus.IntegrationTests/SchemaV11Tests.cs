@@ -314,6 +314,7 @@ public sealed class SchemaV11Tests
         var sender = scope.ServiceProvider.GetRequiredService<ISender>();
         var map = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
             new("pilot", "Pilot Area", Guid.NewGuid(), CreateMapPackage("-2, -2, 0"))));
+        await RobotReadinessTestSupport.AssignAndReportAsync(services, "physical_1", map.Id, Guid.Parse(Id(1)));
         await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
             new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manual localization and display check.")));
         var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
@@ -423,15 +424,18 @@ public sealed class SchemaV11Tests
                 .GetProperty("routeId").GetGuid());
         }
 
-        // A later deployment of map B must block a route test for map A until A is deployed again.
+        // A later deployment of map B must block a route test for map A until A is deployed again. ADR-0066: deploying B
+        // needs the robot moved to B first, so the route test is refused for the assignment.
         var mapB = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
             new("pilot", "Pilot Area", Guid.NewGuid(), CreateMapPackage(marker: "map B"))));
+        await RobotReadinessTestSupport.AssignAndReportAsync(services, "physical_1", mapB.Id, Guid.Parse(Id(1)));
         await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), mapB.Id,
             new(Guid.NewGuid(), "physical_1", mapB.PackageSha256, true, true, "Manual check after deploying map B.")));
         var mapMismatch = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new RecordRouteTestRunCommand(technicalStaffId, draft1.RouteId, draft1.RevisionId,
             new(Guid.NewGuid(), "physical_1", participatingStaffId, "FAIL", false, true, true,
                 "Map A was not deployed.", "Expected rejection while map B is current."))));
-        Assert.Equal("MAP_NOT_CURRENTLY_DEPLOYED", mapMismatch.Code);
+        Assert.Equal("ROBOT_MAP_NOT_ASSIGNED", mapMismatch.Code);
+        await RobotReadinessTestSupport.AssignAndReportAsync(services, "physical_1", map.Id, Guid.Parse(Id(1)));
         await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
             new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manual check after restoring map A.")));
 
@@ -1655,6 +1659,7 @@ public sealed class SchemaV11Tests
         Assert.Equal("VALID", map.ValidationStatus);
         Assert.Null(await db.ScalarAsync<string>($"SELECT TOP(1) N'present' FROM dbo.MapDeploymentChecks WHERE MapVersionId='{map.Id}';"));
 
+        await RobotReadinessTestSupport.AssignAndReportAsync(services, "physical_1", map.Id, Guid.Parse(Id(1)));
         var deployment = await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
             new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manual localization and display check.")));
         Assert.True(deployment.Passed);
@@ -1758,20 +1763,20 @@ public sealed class SchemaV11Tests
             new("pilot", "Pilot Area", Guid.NewGuid(), CreateMapPackage())));
         var mapB = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
             new("pilot", "Pilot Area", Guid.NewGuid(), CreateMapPackage(marker: "map B"))));
-        await RecordDeploymentAsync(sender, mapA);
+        await RecordDeploymentAsync(services, sender, mapA);
 
         var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
             new(Guid.NewGuid(), new(mapA.Id, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT"))));
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 1, proposal.RowVersion)));
-        await RecordDeploymentAsync(sender, mapB);
+        await RecordDeploymentAsync(services, sender, mapB);
 
         var rejected = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 1,
             new(Guid.NewGuid(), 1, proposal.RowVersion, "physical_1", "PASS", true, true, true, true, null, "Manual check."))));
         Assert.Equal("MAP_NOT_DEPLOYED", rejected.Code);
         Assert.Equal(0, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.PoiVerificationRecords WHERE ProposalRevisionId=(SELECT Id FROM dbo.PoiProposalRevisions WHERE ProposalId='{proposal.Id}' AND RevisionNumber=1);"));
 
-        await RecordDeploymentAsync(sender, mapA);
+        await RecordDeploymentAsync(services, sender, mapA);
         var verified = await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 1,
             new(Guid.NewGuid(), 1, proposal.RowVersion, "physical_1", "PASS", true, true, true, true, null, "Manual check after redeploying map A.")));
         Assert.Equal("PASS", verified.ResultCode);
@@ -2054,6 +2059,8 @@ public sealed class SchemaV11Tests
             services.AddScoped<IStudentTourViewReader, EfStudentTourViewReader>();
             services.AddSingleton<TimeProvider>(Clock);
             services.AddSingleton<IFleetTelemetryStore, InMemoryFleetTelemetryStore>();
+            // ADR-0066: a deployment PASS and the readiness views read live Fleet Sync data against this freshness.
+            services.AddSingleton(new FleetSyncSettings(TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(5)));
             services.AddSingleton<IOperatorConsolePresence, UnavailableOperatorConsolePresence>();
             // GET Tour reads the Operator's auto-advance switch (ADR-0059); registered like AddInfrastructure does.
             services.AddSingleton<SmartCampus.Application.Common.Abstractions.Tours.ITourAutoAdvanceStore,
@@ -2206,16 +2213,21 @@ public sealed class SchemaV11Tests
             new("pilot", "Pilot Area", requestId, package)));
     }
 
+    // ADR-0066: each check first moves the robot to the map and reports on it, as a Technical Staff would.
     private static async Task<MapDeploymentCheckView> SendDeploymentAsync(IServiceProvider services, MapVersionView map)
     {
+        await RobotReadinessTestSupport.AssignAndReportAsync(services, "physical_1", map.Id, Guid.Parse(Id(1)));
         await using var scope = services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ISender>().Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
             new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manually recorded localization and display check.")));
     }
 
-    private static Task<MapDeploymentCheckView> RecordDeploymentAsync(ISender sender, MapVersionView map) =>
-        sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
+    private static async Task<MapDeploymentCheckView> RecordDeploymentAsync(IServiceProvider services, ISender sender, MapVersionView map)
+    {
+        await RobotReadinessTestSupport.AssignAndReportAsync(services, "physical_1", map.Id, Guid.Parse(Id(1)));
+        return await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
             new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manually recorded localization and display check.")));
+    }
 
     private static async Task<PoiProposalView> SendCreateAndSubmitProposalAsync(IServiceProvider services, Guid mapVersionId)
     {

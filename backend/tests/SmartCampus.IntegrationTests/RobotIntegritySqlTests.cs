@@ -21,7 +21,7 @@ using SmartCampus.Infrastructure.Persistence;
 
 namespace SmartCampus.IntegrationTests;
 
-public sealed class RobotIntegritySqlTests
+public sealed partial class RobotIntegritySqlTests
 {
     private const string First = "amr_first";
     private const string Second = "amr_second";
@@ -167,7 +167,7 @@ public sealed class RobotIntegritySqlTests
         var tested = await h.TestedRoute();
         await h.Database.ExecuteAsync($"UPDATE dbo.Robots SET FirstAcceptedSyncAt=NULL, FirstAcceptedMapKey=NULL, FirstAcceptedFrameId=NULL WHERE RobotCode=N'{First}';");
 
-        await h.AssertBlocked(tested, First, "Robot chưa xác nhận kết nối.");
+        await h.AssertBlocked(tested, First, $"Robot {First} chưa xác nhận kết nối.");
     }
 
     [SchemaV11Fact]
@@ -187,9 +187,10 @@ public sealed class RobotIntegritySqlTests
     {
         await using var h = await Harness.Create();
         var tested = await h.TestedRoute();
+        // ADR-0066: a check on another map needs the robot to hold that map first, so it now names the assignment.
         await h.RecordDeployment(h.OtherMap, First, passed: true);
 
-        await h.AssertBlocked(tested, First, "Robot chưa triển khai đúng bản đồ của tuyến.");
+        await h.AssertBlocked(tested, First, $"Robot {First} đang gán Other · other · phiên bản 1, không phải bản đồ này.");
     }
 
     [SchemaV11Fact]
@@ -201,7 +202,8 @@ public sealed class RobotIntegritySqlTests
         await h.RecordDeployment(h.PilotMap, Second, passed: true);
         await h.RecordDeployment(h.PilotMap, First, passed: false);
 
-        await h.AssertBlocked(tested, First, "Robot chưa triển khai đúng bản đồ của tuyến.");
+        var failed = (await h.LatestDeployment(First)).CheckedAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        await h.AssertBlocked(tested, First, $"Lần kiểm tra triển khai mới nhất của robot {First} không đạt ({failed}).");
     }
 
     [SchemaV11Fact]
@@ -215,7 +217,7 @@ public sealed class RobotIntegritySqlTests
         var slots = await Assert.ThrowsAsync<ConflictException>(() => h.Slots(tested, First));
 
         Assert.Equal("ROBOT_NOT_READY_FOR_ROUTE", create.Code);
-        Assert.Equal("Robot đã ngừng sử dụng.", create.Message);
+        Assert.Equal($"Robot {First} đã ngừng sử dụng.", create.Message);
         Assert.Equal("ROBOT_NOT_READY_FOR_ROUTE", slots.Code);
         Assert.DoesNotContain(await h.TourRobots(tested), robot => robot.RobotCode == First);
     }
@@ -356,6 +358,7 @@ public sealed class RobotIntegritySqlTests
         MapVersionView pilotMap, MapVersionView pilotMapV2, MapVersionView otherMap) : IAsyncDisposable
     {
         public InitialAdminSeederTests.EmptySchemaDatabase Database => database;
+        public IServiceProvider Services => provider;
         public Guid TechnicalId => technicalId;
         public MapVersionView PilotMap => pilotMap;
         public MapVersionView PilotMapV2 => pilotMapV2;
@@ -423,8 +426,12 @@ public sealed class RobotIntegritySqlTests
             return await Send(new DeactivatePhysicalRobotCommand(robot.Id, technicalId, new(Guid.NewGuid(), Convert.ToBase64String(robot.RowVersion), "Hỏng động cơ")));
         }
 
-        public Task RecordDeployment(MapVersionView map, string robot, bool passed) =>
-            Send(new RecordMapDeploymentCommand(technicalId, map.Id, new(Guid.NewGuid(), robot, map.PackageSha256, passed, true, "Kiểm tra triển khai.")));
+        // ADR-0066: a check needs the robot to hold the map, and a PASS needs a report on it since.
+        public async Task RecordDeployment(MapVersionView map, string robot, bool passed)
+        {
+            await RobotReadinessTestSupport.AssignAndReportAsync(provider, database.ConnectionString, robot, map.Id, technicalId);
+            await Send(new RecordMapDeploymentCommand(technicalId, map.Id, new(Guid.NewGuid(), robot, map.PackageSha256, passed, true, "Kiểm tra triển khai.")));
+        }
 
         public async Task<RouteRevisionView> TestedRoute()
         {
@@ -461,6 +468,13 @@ public sealed class RobotIntegritySqlTests
         {
             var day = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10));
             return Send(new GetTourSlotsQuery(route.RevisionId, robot, day, day));
+        }
+
+        public async Task<MapDeploymentCheck> LatestDeployment(string code)
+        {
+            await using var db = Context();
+            return await db.MapDeploymentChecks.AsNoTracking().Where(check => check.Robot.RobotCode == code)
+                .OrderByDescending(check => check.CheckedAt).ThenByDescending(check => check.Id).FirstAsync();
         }
 
         public Task<IReadOnlyList<TourRobotOption>> TourRobots(RouteRevisionView route) => Send(new ListTourRobotsQuery(route.RevisionId));
