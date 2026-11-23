@@ -17,8 +17,13 @@ const DASHBOARD = {
   robots: [],
 }
 
+/** The bell reads the robot list too when a map mismatch is waiting, for the robot's own readiness reason. */
+const ROBOTS = [{ id: 'r1', robotCode: 'amr-01', readiness: { state: 'NOT_READY', reasonCode: 'ROBOT_DEPLOYMENT_CHECK_REQUIRED', reason: 'Lần kiểm tra triển khai mới nhất của robot amr-01 là trên Betea · v1.', mapVersionId: 'm1', mapLabel: 'Tầng 6 · v1', deploymentCheckedAt: null, reportingOnAssignedMap: true } }]
+
 function stubDashboard(body: unknown, status = 200) {
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status })))
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/api/technical/physical-robots')
+    ? new Response(JSON.stringify({ success: true, data: ROBOTS }), { status: 200 })
+    : new Response(JSON.stringify(body), { status })))
 }
 
 function renderShell(path = '/technical/dashboard') {
@@ -80,6 +85,9 @@ describe('TechnicalShell', () => {
     expect(within(rows[1]).queryByRole('link')).not.toBeInTheDocument()
     // The server still names the old address; the link opens the page it moved to.
     expect(within(panel).getByRole('link', { name: /2 POI chờ kiểm chứng/ })).toHaveAttribute('href', '/technical/pois')
+    // "Lệch cấu hình bản đồ" says what is wrong in the robot's readiness words, not the dashboard's key comparison.
+    expect(await within(rows[1]).findByText('Lần kiểm tra triển khai mới nhất của robot amr-01 là trên Betea · v1.')).toBeInTheDocument()
+    expect(within(rows[1]).queryByText('Kiểm tra lại bản đồ trên robot.')).not.toBeInTheDocument()
   })
 
   it('says nothing is waiting only when the Dashboard answered, and says so when it failed', async () => {
