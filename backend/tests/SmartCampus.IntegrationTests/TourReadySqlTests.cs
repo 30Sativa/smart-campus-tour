@@ -289,6 +289,8 @@ public sealed class TourReadySqlTests
                     CredentialHint = "abcd", CredentialIssuedAt = now, CredentialIssuedByUserId = technicalId });
                 await db.SaveChangesAsync();
             }
+            // ADR-0066: a check needs the robot to hold the map, and a PASS needs a report on it since.
+            await RobotReadinessTestSupport.AssignAndReportAsync(provider, database.ConnectionString, Robot, map.Id, technicalId);
             await Send(new RecordMapDeploymentCommand(technicalId, map.Id, new(Guid.NewGuid(), Robot, map.PackageSha256, true, true, "Kiểm tra triển khai.")));
             var library = await VerifiedPoi(map.Id, "Thư viện", 1.5m, 1.5m);
             // Every route has two stops (docs/lich-tour-theo-ca.md §2); twoStopsToEndPose now only adds the end pose.
