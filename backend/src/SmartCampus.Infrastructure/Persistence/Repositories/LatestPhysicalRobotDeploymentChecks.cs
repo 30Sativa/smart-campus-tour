@@ -19,6 +19,6 @@ internal static class LatestPhysicalRobotDeploymentChecks
         return dbContext.MapDeploymentChecks.AsNoTracking()
             .Where(check => latestCheckIds.Contains(check.Id))
             .Include(check => check.Robot)
-            .Include(check => check.MapVersion);
+            .Include(check => check.MapVersion).ThenInclude(map => map.AreaKeyNavigation);
     }
 }

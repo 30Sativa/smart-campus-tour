@@ -1,11 +1,14 @@
 using MediatR;
+using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Common.Exceptions;
 
 namespace SmartCampus.Application.Features.MapPoi;
 
 public sealed record GetMapVersionQuery(Guid Id) : IRequest<MapVersionListItem>;
-public sealed class GetMapVersionQueryHandler(IMapVersionRepository repository, MapPoiSettings settings, Routes.RouteRuleSettings routeRules)
+public sealed class GetMapVersionQueryHandler(IMapVersionRepository repository, MapPoiSettings settings, Routes.RouteRuleSettings routeRules,
+    IFleetTelemetryStore telemetryStore, FleetSyncSettings fleetSyncSettings, TimeProvider timeProvider)
     : IRequestHandler<GetMapVersionQuery, MapVersionListItem>
 {
     public async Task<MapVersionListItem> Handle(GetMapVersionQuery query, CancellationToken ct)
@@ -19,6 +22,8 @@ public sealed class GetMapVersionQueryHandler(IMapVersionRepository repository, 
             eligibility.CanUseForPoiPreparation, eligibility.BlockReasonCode, eligibility.BlockReason,
             eligibility.Evidence is null ? null : MapPoiReadModelMapper.ToDeploymentView(eligibility.Evidence),
             MapCurrentlyDeployedOn.ForMap(map, currentDeployments), settings.PoiClearanceMeters,
-            routeRules.MinStops, routeRules.MinStopSeparationMeters);
+            routeRules.MinStops, routeRules.MinStopSeparationMeters,
+            MapRunningRobot.ForMap(map, await repository.ListAssignedPhysicalRobotsAsync(ct), currentDeployments,
+                telemetryStore.GetLatest(), timeProvider.GetUtcNow(), fleetSyncSettings));
     }
 }

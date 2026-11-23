@@ -162,7 +162,7 @@ function ImportResult({ result }: { result: PoiImportResult }) {
       <div className="space-y-2 border-t border-[#eef1f4] p-4 text-sm text-[#334155]">
         {waiting > 0 && <p>{waiting} POI chờ kiểm chứng nằm ở trang Kiểm chứng POI, cần cho robot chạy tới điểm rồi ghi kết quả.</p>}
         <p>Tour Staff thấy các POI này ở Quản lý POI, trên đúng phiên bản bản đồ đã chọn, để đặt tên và viết thuyết minh. Chưa có thuyết minh thì POI chưa đưa vào tuyến được.</p>
-        {waiting > 0 && <Link className={buttonClass('secondary', 'sm')} to="/technical/poi-import">Mở hàng chờ kiểm chứng</Link>}
+        {waiting > 0 && <Link className={buttonClass('secondary', 'sm')} to="/technical/pois">Mở hàng chờ kiểm chứng</Link>}
       </div>
     </section>
   )

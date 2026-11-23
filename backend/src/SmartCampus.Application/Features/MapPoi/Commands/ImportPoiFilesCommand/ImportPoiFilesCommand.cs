@@ -82,7 +82,7 @@ public sealed class ImportPoiFilesCommandHandler(
         await mapRepository.LockRobotDeploymentStateAsync(robot.Id, cancellationToken);
         RobotLifecycleRules.EnsureActive(robot);
 
-        var planned = await PoiImportPlanner.PlanAsync(importRepository, mapRepository, map, robot, parsed, settings, cancellationToken);
+        var planned = (await PoiImportPlanner.PlanAsync(importRepository, mapRepository, map, robot, parsed, settings, cancellationToken)).Files;
         var failures = planned.Where(file => file.ErrorCode is not null).ToArray();
         if (failures.Length > 0)
             throw new ConflictException($"Không nhập tệp nào vì {failures.Length} tệp lỗi. Sửa các tệp lỗi rồi thử lại.", "POI_IMPORT_INVALID",
@@ -156,7 +156,7 @@ public sealed class ImportPoiFilesCommandHandler(
             OccurredAt = now
         });
 
-        if (capture.Verified)
+        if (file.Verified)
         {
             verificationRepository.Add(new PoiVerificationRecord
             {
@@ -239,7 +239,7 @@ public sealed class ImportPoiFilesCommandHandler(
         FileSha256 = file.File.Sha256,
         SourcePoiId = file.File.Capture!.Id,
         Action = action,
-        Verified = file.File.Capture.Verified,
+        Verified = action == PoiImportActions.NoChange ? file.PriorReceipt?.Verified ?? file.Verified : file.Verified,
         ProposalId = proposalId,
         ProposalRevisionId = revisionId,
         ImportedAt = now

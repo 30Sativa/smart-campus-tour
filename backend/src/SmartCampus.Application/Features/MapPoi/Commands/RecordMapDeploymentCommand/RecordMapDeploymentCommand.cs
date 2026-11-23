@@ -2,9 +2,11 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using FluentValidation;
 using MediatR;
+using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.MapPoi;
@@ -27,6 +29,8 @@ public sealed class RecordMapDeploymentCommandValidator : AbstractValidator<Reco
 public sealed class RecordMapDeploymentCommandHandler(
     IMapVersionRepository repository,
     IMapPoiRequestLock requestLock,
+    IFleetTelemetryStore telemetryStore,
+    FleetSyncSettings fleetSyncSettings,
     TimeProvider timeProvider)
     : IRequestHandler<RecordMapDeploymentCommand, MapDeploymentCheckView>
 {
@@ -61,11 +65,28 @@ public sealed class RecordMapDeploymentCommandHandler(
         await MapRetirement.EnsureActiveAsync(repository, map.Id, cancellationToken);
         await repository.LockRobotDeploymentStateAsync(robot.Id, cancellationToken);
         RobotLifecycleRules.EnsureActive(robot);
+        // ADR-0066: a check (PASS or FAIL) on a map the robot does not hold would become its newest check and take it off
+        // its real map. Read again behind the lock, which assignment changes take too.
+        var current = await repository.ReadRobotForReadinessAsync(robot.Id, cancellationToken)
+            ?? throw new NotFoundException("Physical robot", robot.RobotCode);
+        if (current.AssignedMapVersionId != map.Id)
+            throw new ConflictException(
+                $"{RobotMapReadiness.NotAssignedMessage(current)} Đổi bản đồ cho robot ở trang Robot trước khi ghi kiểm tra.",
+                RobotMapReadiness.MapNotAssignedCode);
+        var passed = request.LocalizationPassed && request.DisplayPassed;
         var connectionConfirmed = await repository.LockAndReadConnectionConfirmationAsync(robot.Id, cancellationToken);
-        if (request.LocalizationPassed && request.DisplayPassed && !connectionConfirmed)
+        if (passed && !connectionConfirmed)
             throw new ConflictException(
                 "Robot chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại rồi thử ghi PASS lại.",
-                "ROBOT_CONNECTION_UNCONFIRMED");
+                RobotMapReadiness.ConnectionUnconfirmedCode);
+        // PASS needs live data sent on the assigned map since the assignment: Fleet Sync accepts only that map's key.
+        var snapshot = telemetryStore.GetLatest()
+            .FirstOrDefault(item => string.Equals(item.Robot.RobotCode, current.RobotCode, StringComparison.Ordinal));
+        if (passed && !RobotMapReadiness.IsReportingOnAssignedMap(current, snapshot, timeProvider.GetUtcNow(), fleetSyncSettings))
+            throw new ConflictException(
+                $"Robot {current.RobotCode} chưa gửi dữ liệu theo bản đồ {map.AreaKeyNavigation.DisplayName} · v{map.VersionNumber}. " +
+                $"Bật fleet_bridge với MapKey {map.MapKey}, FrameId {map.FrameId} rồi bấm Cập nhật trạng thái.",
+                RobotMapReadiness.NotReportingCode);
         var latestDeployment = await repository.GetLatestDeploymentCheckForRobotAsync(robot.Id, cancellationToken);
         var now = timeProvider.GetUtcNow();
         if (latestDeployment is not null && now < latestDeployment.CheckedAt.AddMilliseconds(1))

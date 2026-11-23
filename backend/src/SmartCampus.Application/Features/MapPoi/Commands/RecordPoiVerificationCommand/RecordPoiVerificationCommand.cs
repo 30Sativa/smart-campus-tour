@@ -75,8 +75,10 @@ public sealed class RecordPoiVerificationCommandHandler(
         var latestDeployment = await mapRepository.GetLatestDeploymentCheckForRobotAsync(robot.Id, cancellationToken);
         var map = await mapRepository.FindMapVersionAsync(revision.MapVersionId, includePackage: true, cancellationToken)
             ?? throw new NotFoundException("Map version", revision.MapVersionId);
-        if (!PoiProposalRules.IsDeployedOn(latestDeployment, map))
-            throw new ConflictException("The exact map version must have a current successful localization/display deployment check on this robot.", "MAP_NOT_DEPLOYED");
+        // ADR-0066: read again behind the lock, since an assignment change holds it too.
+        var current = await mapRepository.ReadRobotForReadinessAsync(robot.Id, cancellationToken) ?? robot;
+        if (RobotMapReadiness.Evaluate(current, latestDeployment, map) is { IsReady: false } readiness)
+            throw new ConflictException(readiness.Message!, "MAP_NOT_DEPLOYED");
 
         PoiProposalRules.ValidatePosition(map, new PoiProposalDraft(
             revision.MapVersionId, revision.Name, revision.Purpose, revision.Description,

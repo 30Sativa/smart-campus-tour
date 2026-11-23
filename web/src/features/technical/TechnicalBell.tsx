@@ -4,15 +4,14 @@ import { Link, useLocation } from 'react-router'
 import type { TechnicalActionItem } from './api/diagnostics-api'
 import { usePhysicalRobots, useTechnicalDashboard } from './technical-hooks'
 import { actionItemDescription, hasMapMismatch } from './robot-readiness'
+import { useTechnicalDashboard } from './technical-hooks'
+import { technicalInternalLink } from './technical-nav'
 
 /** The bell re-reads the Dashboard on its own; the Dashboard page polls faster while it is open. */
 const POLL_MS = 60_000
 
 const RANK: Record<string, number> = { DANGER: 0, WARNING: 1 }
 const DOT: Record<string, string> = { DANGER: 'bg-[#dc2626]', WARNING: 'bg-[#f59e0b]' }
-
-/** Only links into this area are followed, as on the Dashboard. */
-const internalLink = (url: string | null) => (url && url.startsWith('/technical/') ? url : null)
 
 /**
  * The Technical bell: the work items the Dashboard already lists (held robots,
@@ -83,6 +82,8 @@ export function TechnicalBell() {
 
 function BellRow({ item, description }: { item: TechnicalActionItem; description: string }) {
   const to = internalLink(item.linkUrl)
+function BellRow({ item }: { item: TechnicalActionItem }) {
+  const to = technicalInternalLink(item.linkUrl)
   const body = (
     <>
       <span aria-hidden="true" className={`mt-1.5 size-2 shrink-0 rounded-full ${DOT[item.severity] ?? 'bg-[#3b82f6]'}`} />

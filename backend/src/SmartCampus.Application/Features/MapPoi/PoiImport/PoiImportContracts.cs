@@ -24,7 +24,11 @@ public sealed record PoiImportPreviewFile(
     string FileName, string FileSha256, string? PoiId, string? Name, decimal? X, decimal? Y, decimal? Yaw,
     bool? Verified, string? Action, string? ErrorCode, string? ErrorMessage);
 
-public sealed record PoiImportPreview(Guid MapVersionId, string RobotCode, bool CanImport, IReadOnlyList<PoiImportPreviewFile> Files);
+/// <summary>Ready false: files that ask for PASS are imported for the verification queue instead (ADR-0066).</summary>
+public sealed record PoiImportRobotReadiness(bool Ready, string? Code, string? Message);
+
+public sealed record PoiImportPreview(Guid MapVersionId, string RobotCode, bool CanImport, IReadOnlyList<PoiImportPreviewFile> Files,
+    PoiImportRobotReadiness RobotReadiness);
 
 public sealed record PoiImportedFile(
     string FileName, string PoiId, string Action, bool Verified, Guid ProposalId, Guid ProposalRevisionId);

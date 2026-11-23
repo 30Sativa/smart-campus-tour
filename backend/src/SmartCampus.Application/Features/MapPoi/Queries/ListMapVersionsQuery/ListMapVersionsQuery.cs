@@ -1,11 +1,14 @@
 using MediatR;
+using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Common.Exceptions;
 
 namespace SmartCampus.Application.Features.MapPoi;
 
 public sealed record ListMapVersionsQuery(string? AreaKey, int Take, bool IncludeRetired = false) : IRequest<IReadOnlyList<MapVersionListItem>>;
-public sealed class ListMapVersionsQueryHandler(IMapVersionRepository repository, MapPoiSettings settings, Routes.RouteRuleSettings routeRules)
+public sealed class ListMapVersionsQueryHandler(IMapVersionRepository repository, MapPoiSettings settings, Routes.RouteRuleSettings routeRules,
+    IFleetTelemetryStore telemetryStore, FleetSyncSettings fleetSyncSettings, TimeProvider timeProvider)
     : IRequestHandler<ListMapVersionsQuery, IReadOnlyList<MapVersionListItem>>
 {
     public async Task<IReadOnlyList<MapVersionListItem>> Handle(ListMapVersionsQuery query, CancellationToken ct)
@@ -13,6 +16,9 @@ public sealed class ListMapVersionsQueryHandler(IMapVersionRepository repository
         if (query.Take is < 1 or > 100) throw new FluentValidation.ValidationException("Take must be between 1 and 100.");
         var maps = await repository.ListMapVersionsAsync(query.AreaKey, query.Take, query.IncludeRetired, ct);
         var currentDeployments = await repository.ListLatestDeploymentChecksForPhysicalRobotsAsync(ct);
+        var assignedRobots = await repository.ListAssignedPhysicalRobotsAsync(ct);
+        var telemetry = telemetryStore.GetLatest();
+        var now = timeProvider.GetUtcNow();
         var result = new List<MapVersionListItem>(maps.Count);
         foreach (var map in maps)
         {
@@ -22,7 +28,8 @@ public sealed class ListMapVersionsQueryHandler(IMapVersionRepository repository
                 eligibility.CanUseForPoiPreparation, eligibility.BlockReasonCode, eligibility.BlockReason,
                 eligibility.Evidence is null ? null : MapPoiReadModelMapper.ToDeploymentView(eligibility.Evidence),
                 MapCurrentlyDeployedOn.ForMap(map, currentDeployments), settings.PoiClearanceMeters,
-                routeRules.MinStops, routeRules.MinStopSeparationMeters));
+                routeRules.MinStops, routeRules.MinStopSeparationMeters,
+                MapRunningRobot.ForMap(map, assignedRobots, currentDeployments, telemetry, now, fleetSyncSettings)));
         }
         return result;
     }

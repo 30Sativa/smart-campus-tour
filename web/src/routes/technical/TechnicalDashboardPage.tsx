@@ -13,6 +13,8 @@ import { formatDateTime } from '../../components/ui/date-time'
 import { usePhysicalRobots, useTechnicalDashboard } from '../../features/technical/technical-hooks'
 import { actionItemDescription, hasMapMismatch } from '../../features/technical/robot-readiness'
 import type { PhysicalRobotOption } from '../../features/technical/api/technical'
+import { useTechnicalDashboard } from '../../features/technical/technical-hooks'
+import { technicalInternalLink } from '../../features/technical/technical-nav'
 
 const REFRESH_MS = 15_000
 
@@ -29,9 +31,6 @@ const FLEET_PARTS = [
 ] as const
 
 const quietLinkClass = 'inline-flex min-h-8 shrink-0 items-center gap-0.5 rounded-lg px-2 text-[13px] font-semibold text-[#1d4ed8] transition-colors hover:bg-[#eff6ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]'
-
-/** Only links into this area are followed; anything else the server sends is shown as text. */
-const internalLink = (url: string | null) => (url && url.startsWith('/technical/') ? url : null)
 
 function SectionTitle({ title, note, children }: { title: string; note?: string; children?: ReactNode }) {
   return (
@@ -77,6 +76,8 @@ function FleetHealth({ kpis }: { kpis: TechnicalKpiSummary }) {
 
 function ActionItemRow({ item, description }: { item: TechnicalActionItem; description: string }) {
   const to = internalLink(item.linkUrl)
+function ActionItemRow({ item }: { item: TechnicalActionItem }) {
+  const to = technicalInternalLink(item.linkUrl)
   const label = severityLabel[item.severity]
   return (
     <li className="flex items-center gap-3 px-4 py-2.5">
