@@ -1,3 +1,4 @@
+using System.Globalization;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Messaging;
@@ -5,6 +6,8 @@ using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
+using SmartCampus.Application.Features.Tours;
+using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.RobotDiagnostics.Queries.GetTechnicalDashboard;
 
@@ -29,7 +32,7 @@ public sealed record TechnicalKpiSummary(
     int RouteRerunsCount = 0);
 
 public sealed record TechnicalActionItem(
-    string Type, // "HELD_ROBOT", "MAP_MISMATCH", "POI_QUEUE", "ROUTE_QUEUE", "ROUTE_RERUN"
+    string Type, // "HELD_ROBOT", "MAP_MISMATCH", "TOUR_ROBOT_NOT_READY", "POI_QUEUE", "ROUTE_QUEUE", "ROUTE_RERUN"
     string Severity, // "DANGER", "WARNING", "INFO"
     string Title,
     string Description,
@@ -74,6 +77,9 @@ public sealed class GetTechnicalDashboardQueryHandler(
     FleetSyncSettings fleetSyncSettings,
     TimeProvider clock) : IRequestHandler<GetTechnicalDashboardQuery, TechnicalDashboardDto>
 {
+    /// <summary>How far ahead a Tour whose robot is not ready is reported (TOUR_ROBOT_NOT_READY, ADR-0066).</summary>
+    public static readonly TimeSpan UpcomingTourWindow = TimeSpan.FromDays(7);
+
     public async Task<TechnicalDashboardDto> Handle(
         GetTechnicalDashboardQuery request,
         CancellationToken cancellationToken)
@@ -157,7 +163,7 @@ public sealed class GetTechnicalDashboardQueryHandler(
                     "HELD_ROBOT",
                     "WARNING",
                     $"Robot {robot.RobotCode} đang chờ kiểm tra tại chỗ",
-                    $"Robot bị giữ {(robot.CurrentTour != null ? $"sau Tour {robot.CurrentTour.Name}" : "cần kiểm tra")}. Cần kiểm tra tại chỗ và giải phóng.",
+                    $"Robot bị giữ {(robot.CurrentTour != null ? $"sau Tour {robot.CurrentTour.Name}" : "cần kiểm tra")}. Cần kiểm tra tại chỗ rồi trả robot.",
                     robot.Id.ToString(),
                     $"/technical/robots?robot={robot.Id}"));
             }
@@ -168,7 +174,9 @@ public sealed class GetTechnicalDashboardQueryHandler(
                     "MAP_MISMATCH",
                     "WARNING",
                     $"Lệch cấu hình bản đồ robot {robot.RobotCode}",
-                    $"Bản đồ được gán ({assignedMapKey}) khác với bản đồ kiểm tra gần nhất ({deployedMapKey}).",
+                    // The robot list's readiness sentence (ADR-0066), so every screen says the same thing.
+                    RobotMapReadiness.EvaluateOnAssignedMap(robot, deployment).Message ??
+                        $"Bản đồ được gán ({assignedMapKey}) khác với bản đồ kiểm tra gần nhất ({deployedMapKey}).",
                     robot.Id.ToString(),
                     $"/technical/robots?robot={robot.Id}"));
             }
@@ -206,6 +214,8 @@ public sealed class GetTechnicalDashboardQueryHandler(
                 robot.IsDispatchEnabled));
         }
 
+        actionItems.AddRange(await UpcomingToursNotReadyAsync(robots, deploymentChecks, now, cancellationToken));
+
         if (poiQueue.Count > 0)
         {
             actionItems.Add(new TechnicalActionItem(
@@ -214,7 +224,7 @@ public sealed class GetTechnicalDashboardQueryHandler(
                 $"{poiQueue.Count} POI đang chờ kiểm chứng kỹ thuật",
                 "Có đề xuất POI mới từ nhân viên vận hành đang chờ đo đạc và kiểm tra.",
                 null,
-                "/technical/poi-import"));
+                "/technical/pois"));
         }
 
         if (routeQueue.Count > 0)
@@ -225,7 +235,7 @@ public sealed class GetTechnicalDashboardQueryHandler(
                 $"{routeQueue.Count} tuyến đang chờ chạy thử",
                 "Có bản sửa đổi tuyến đang chờ xác nhận kỹ thuật và chạy thử trên thực tế.",
                 null,
-                "/technical/confirmations"));
+                "/technical/route-tests"));
         }
 
         if (routeReruns.Count > 0)
@@ -236,7 +246,7 @@ public sealed class GetTechnicalDashboardQueryHandler(
                 $"{routeReruns.Count} tuyến cần chạy lại",
                 "Lần chạy đạt của các tuyến này đo theo cách cũ nên chưa xếp lịch được. Cần ghi một lần chạy mới.",
                 null,
-                "/technical/confirmations"));
+                "/technical/route-tests"));
         }
 
         var kpis = new TechnicalKpiSummary(
@@ -253,4 +263,41 @@ public sealed class GetTechnicalDashboardQueryHandler(
 
         return new TechnicalDashboardDto(now, kpis, actionItems, robotSummaries);
     }
+
+    /// <summary>
+    /// One TOUR_ROBOT_NOT_READY item per robot whose SCHEDULED or READY Tours in the next seven days it cannot run, judged by
+    /// the rule READY and Start use (<see cref="TourTarget.RobotBlockReason"/>), so Technical Staff hear of it before Staff do.
+    /// </summary>
+    private async Task<IEnumerable<TechnicalActionItem>> UpcomingToursNotReadyAsync(IReadOnlyList<Robot> robots,
+        IReadOnlyDictionary<Guid, MapDeploymentCheck> deploymentChecks, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var robotsById = robots.ToDictionary(robot => robot.Id);
+        var blocked = new List<(UpcomingTourTarget Tour, Robot Robot, string Reason)>();
+        foreach (var tour in await robotRepository.ListUpcomingTourTargetsAsync(now, now + UpcomingTourWindow, cancellationToken))
+        {
+            if (!robotsById.TryGetValue(tour.RobotId, out var robot)) continue;
+            if (TourTarget.RobotBlockReason(robot, deploymentChecks.GetValueOrDefault(robot.Id), tour.Map, tour.Revision) is { } reason)
+                blocked.Add((tour, robot, reason));
+        }
+        return blocked.GroupBy(item => item.Robot.Id)
+            .Select(group => group.OrderBy(item => item.Tour.ScheduledStartAt).ToArray())
+            .OrderBy(group => group[0].Tour.ScheduledStartAt)
+            .Select(group =>
+            {
+                var (first, robot, reason) = group[0];
+                var firstTour = $"Tour {first.TourName} {LocalTime(first.ScheduledStartAt)}";
+                return new TechnicalActionItem(
+                    "TOUR_ROBOT_NOT_READY",
+                    "WARNING",
+                    group.Length == 1
+                        ? $"{firstTour} chưa chạy được"
+                        : $"{group.Length} Tour sắp tới của robot {robot.RobotCode} chưa chạy được",
+                    group.Length == 1 ? reason : $"{reason} Sớm nhất: {firstTour}.",
+                    robot.Id.ToString(),
+                    $"/technical/robots?robot={robot.Id}");
+            });
+    }
+
+    private static string LocalTime(DateTimeOffset at) =>
+        at.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM HH:mm", CultureInfo.InvariantCulture);
 }

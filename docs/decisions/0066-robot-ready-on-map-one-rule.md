@@ -117,5 +117,10 @@ Additive JSON fields, recorded in `docs/architecture.md` §3.4.6:
   wait for a report, then record the check. The web moves the check into the robot setup dialog (PR 2).
 - POIs already passed on a map the robot did not hold remain PASS (decision 5); Staff may make a new POI revision and
   have it checked again.
+- **Blocked Tours show up early (round 2, 23/11/2026).** Because one rule decides READY and Start, the Technical
+  dashboard can ask it ahead of time: `GET /api/technical/dashboard` adds a `TOUR_ROBOT_NOT_READY` warning for each robot
+  whose SCHEDULED or READY Tours (not yet running, starting within seven days) it could not run, by
+  `TourTarget.RobotBlockReason` with the Tour's route revision. Several Tours of one robot make one item. The bell shows it
+  like the other items. It is a read: nothing is cancelled or changed (`docs/architecture.md`, Technical dashboard).
 - Deploy PR 1 together with PR 2 and PR 3: the web before PR 2 still offers the old free-form check, which the backend
   now refuses for an unassigned robot.

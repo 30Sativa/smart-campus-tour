@@ -1147,7 +1147,18 @@ node list or Nav2 state (see `robot/ros2_ws/src/fleet_bridge/README.md`).
 records with the latest in-memory Fleet Sync and diagnostics snapshots. Missing
 or stale telemetry and diagnostics remain independently visible. The dashboard
 includes action items and counts for robot connection state, inspection holds,
-POI verification and route-test queues.
+POI verification and route-test queues. Each action item is
+`{type, severity, title, description, targetId, linkUrl}`; `type` is
+`HELD_ROBOT`, `MAP_MISMATCH`, `TOUR_ROBOT_NOT_READY`, `POI_QUEUE`, `ROUTE_QUEUE`
+or `ROUTE_RERUN`. `MAP_MISMATCH` describes the robot with its
+`readiness.reason` sentence. `TOUR_ROBOT_NOT_READY` (WARNING, ADR-0066) is one
+item per robot whose SCHEDULED or READY Tours, not yet running and starting
+within seven days, its reserved robot cannot run by `TourTarget.RobotBlockReason`.
+It is titled `Tour {name} {dd/MM HH:mm} chưa chạy được`, or
+`{n} Tour sắp tới của robot {code} chưa chạy được` when there are several, with
+the readiness sentence as description, `targetId` = robot id and `linkUrl`
+`/technical/robots?robot={robotId}`. Queue links are `/technical/pois` and
+`/technical/route-tests`.
 
 `GET /api/admin/infrastructure/health` requires the `Admin` role and reports
 the API process host/runtime, a bounded database connectivity check, Docker
