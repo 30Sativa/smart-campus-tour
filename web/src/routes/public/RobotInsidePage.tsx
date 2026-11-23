@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { ArrowLeft, ArrowRight, Gamepad2 } from 'lucide-react'
 import { SiteNav } from '../../features/landing/sections/SiteNav'
 import { SiteFooter } from '../../features/landing/sections/SiteFooter'
-import { RobotFlowSection } from '../../features/landing/sections/RobotFlowSection'
+import { RobotFlowWorkbench } from '../../features/landing/sections/RobotFlowWorkbench'
 import { WiringMap, type Selection } from '../../features/landing/robot-inside/WiringMap'
 import { WireTable } from '../../features/landing/robot-inside/WireTable'
 import { isInsideId } from '../../features/landing/robot-inside/wiring'
@@ -24,7 +24,8 @@ const FIGURES = [
 /**
  * "/ben-trong-robot": inside the robot. A drawing of every part in its place
  * with the cables between them (power, commands, readings, video) and what
- * each part does; then the robot's functions step by step in 3D; then every
+ * each part does; then the robot's functions step by step on the 3D model
+ * (RobotFlowWorkbench, `?flow=&step=`); then every
  * cable as a table with its pins. Opened from section 04 of the home page,
  * `?linh-kien=<part>` opening the drawing on one part.
  */
@@ -93,7 +94,7 @@ export default function RobotInsidePage() {
           </div>
         </section>
 
-        <RobotFlowSection kicker="02 / Cách hoạt động" />
+        <RobotFlowWorkbench kicker="02 / Cách hoạt động" />
 
         <section className="lp3-inside__table lp3-section" id="bang-di-day" aria-labelledby="bang-di-day-title">
           <div className="lp3-container">
