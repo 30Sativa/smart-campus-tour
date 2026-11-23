@@ -226,8 +226,27 @@ public sealed class RobotDiagnosticsTests
         var result = await Dashboard(new TestRobotRepository([robot], [check]), new TestSender());
 
         var item = Assert.Single(result.ActionItems, item => item.Type == "MAP_MISMATCH");
-        Assert.Equal("Lần kiểm tra triển khai mới nhất của robot amr_01 là trên Betea · betea · phiên bản 1.", item.Description);
+        // Round 3: the readiness sentence names the map the robot holds; the Betea history is only its detail.
+        Assert.Equal("Robot amr_01 chưa kiểm tra triển khai trên Tầng 6 · test123 · phiên bản 1 (gán lúc 04/11 15:00).", item.Description);
         Assert.Equal(RobotMapReadiness.EvaluateOnAssignedMap(robot, check).Message, item.Description);
+    }
+
+    [Fact]
+    public async Task GetTechnicalDashboard_RobotRefusedForTheWrongMap_IsWrongMapNotDisconnected()
+    {
+        var robot = AssignedRobot("amr_01", TestMap);
+        var telemetry = new TestTelemetryStore([new FleetTelemetrySnapshot(TestIdentity("amr_01"),
+            new FleetTelemetryReport("amr_01", Guid.NewGuid(), 1, Now.AddMinutes(-5), "test123-v1", "map", null, "IDLE", null, true, true, null, 80),
+            Now.AddMinutes(-5))]);
+        telemetry.RecordRejected("amr_01", new FleetRejectedReport("betea-v1", "map", Now.AddSeconds(-3)));
+
+        var result = await new GetTechnicalDashboardQueryHandler(new TestRobotRepository([robot], []), new TestMapRepository([]), telemetry,
+            new TestDiagnosticsStore(), new TestSender(), Settings, new FixedTimeProvider(Now)).Handle(new GetTechnicalDashboardQuery(), CancellationToken.None);
+
+        var summary = Assert.Single(result.Robots);
+        Assert.Equal("WRONG_MAP", summary.ConnectionStatus);
+        Assert.Equal("betea-v1", summary.LastRejectedReport?.MapKey);
+        Assert.Equal((1, 0), (result.Kpis.WrongMapRobots, result.Kpis.DisconnectedRobots));
     }
 
     [Fact]
@@ -361,8 +380,9 @@ public sealed class RobotDiagnosticsTests
         public Task<FleetTelemetryApplyResult> ApplyAsync(FleetTelemetrySnapshot snapshot, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public IReadOnlyList<FleetTelemetrySnapshot> GetLatest() => snapshots;
-        public void RecordRejected(string robotCode, FleetRejectedReport report) => throw new NotSupportedException();
-        public FleetRejectedReport? GetLatestRejected(string robotCode) => null;
+        private readonly Dictionary<string, FleetRejectedReport> rejected = new(StringComparer.Ordinal);
+        public void RecordRejected(string robotCode, FleetRejectedReport report) => rejected[robotCode] = report;
+        public FleetRejectedReport? GetLatestRejected(string robotCode) => rejected.GetValueOrDefault(robotCode);
     }
 
     private sealed class TestDiagnosticsStore : IRobotDiagnosticsStore

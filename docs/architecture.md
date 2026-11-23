@@ -789,6 +789,31 @@ robot list, READY, the Start preflight and enabling dispatch all use it:
   v{n}") name the assigned version; `deploymentCheckedAt` is the newest check's time
   when it is on the assigned version; `reportingOnAssignedMap` is the live-data test
   above, informational only.
+- Round 3 (ADR-0066, 23/11/2026) adds `readiness.nextStep` and `readiness.detail`.
+  `nextStep` is `ASSIGN_MAP` (no map; first even before the connection is
+  confirmed, since Fleet Sync accepts nothing without one), `CONFIRM_CONNECTION`,
+  `CONFIGURE_MINIPC` (assigned, `reportingOnAssignedMap` false), `DEPLOYMENT_CHECK`
+  (reporting on the assigned map, no passing check on it), or null when READY or
+  deactivated; it is display only and never changes `state`. When the robot holds
+  M and its newest check is not a PASS on M (none, another map, failed, other
+  package), `reason` and every writer's 409 message are "Robot {code} chưa kiểm tra
+  triển khai trên {khu vực} · {mã} · phiên bản {n} (gán lúc {dd/MM HH:mm})." (the
+  time in campus time, omitted without `MapAssignedAt`). `detail` keeps the history:
+  "Lần kiểm tra triển khai mới nhất của robot {code} là trên {bản đồ khác}." or
+  "… không đạt ({dd/MM HH:mm})."; otherwise null. Codes are unchanged.
+- Robot list items (and the Staff connection list), dashboard `robots[]` and
+  diagnostics: `connectionStatus` adds `WRONG_MAP`, with `lastRejectedReport`
+  `{ mapKey, frameId, at, message }` or null. Fleet Sync keeps, in process memory
+  beside the telemetry store, the newest report it refused with
+  `MAP_CONTEXT_MISMATCH`. It is shown while it is within `SyncFreshness`, arrived at
+  or after `MapAssignedAt`, and is newer than the newest accepted report; `message`
+  is "Robot đang gửi dữ liệu theo {mapKey gửi}, bị từ chối vì đang gán {mapKey
+  được gán}. Đổi MapKey/FrameId trên MiniPC." (a FrameId-only mismatch names the
+  frames). Status order: `UNCONFIRMED` (no confirmed connection; the report may
+  still be shown), `WRONG_MAP`, `CONNECTED` (`FleetSyncFreshness`),
+  `AWAITING_DATA`, `DISCONNECTED`. Dashboard `kpis` add `wrongMapRobots`. The
+  memory clears on restart; the Start preflight is unchanged (its telemetry row
+  already fails without an accepted report).
 - `GET /api/maps/versions` and `GET /api/maps/versions/{id}` items add
   `runningRobot`: `{ id, robotCode, displayName, readiness }` for the active robot
   assigned to that version, or null. `currentlyDeployedOn` is kept for

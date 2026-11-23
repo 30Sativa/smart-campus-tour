@@ -65,22 +65,37 @@ public sealed class RobotMapReadinessTests
         Assert.Equal("Robot amr_01 đang gán Tầng 6 · tang-6 · phiên bản 1, không phải bản đồ này.", result.Message);
     }
 
+    // Round 3: the sentence says what to do on the map the robot holds, with its assignment time in campus time.
+    private const string NoCheckOnMapA = "Robot amr_01 chưa kiểm tra triển khai trên Tầng 6 · tang-6 · phiên bản 1 (gán lúc 23/11 09:55).";
+
     [Fact]
     public void No_check_at_all_needs_a_deployment_check()
     {
-        Assert.Equal(new RobotMapReadinessResult("ROBOT_DEPLOYMENT_CHECK_REQUIRED",
-            "Robot amr_01 chưa có kiểm tra triển khai đạt trên bản đồ đang gán."), RobotMapReadiness.Evaluate(Robot(MapA), null, MapA));
+        Assert.Equal(new RobotMapReadinessResult("ROBOT_DEPLOYMENT_CHECK_REQUIRED", NoCheckOnMapA),
+            RobotMapReadiness.Evaluate(Robot(MapA), null, MapA));
     }
 
     [Fact]
-    public void A_newest_check_on_another_map_names_that_map()
+    public void Without_an_assignment_time_the_sentence_leaves_it_out()
     {
+        var robot = Robot(MapA);
+        robot.MapAssignedAt = null;
+
+        Assert.Equal("Robot amr_01 chưa kiểm tra triển khai trên Tầng 6 · tang-6 · phiên bản 1.",
+            RobotMapReadiness.Evaluate(robot, null, MapA).Message);
+    }
+
+    [Fact]
+    public void A_newest_check_on_another_map_says_what_to_do_and_keeps_that_map_as_detail()
+    {
+        // The amr_01 case of 23/11: assigned Tầng 6 · tang-6 · v1, newest check a PASS on Betea.
         var robot = Robot(MapA);
 
         var result = RobotMapReadiness.Evaluate(robot, Check(robot, MapB), MapA);
 
         Assert.Equal("ROBOT_DEPLOYMENT_CHECK_REQUIRED", result.Code);
-        Assert.Equal("Lần kiểm tra triển khai mới nhất của robot amr_01 là trên Betea · betea · phiên bản 1.", result.Message);
+        Assert.Equal(NoCheckOnMapA, result.Message);
+        Assert.Equal("Lần kiểm tra triển khai mới nhất của robot amr_01 là trên Betea · betea · phiên bản 1.", result.Detail);
     }
 
     [Fact]
@@ -91,7 +106,8 @@ public sealed class RobotMapReadinessTests
         var result = RobotMapReadiness.Evaluate(robot, Check(robot, MapA, passed: false), MapA);
 
         Assert.Equal("ROBOT_DEPLOYMENT_CHECK_REQUIRED", result.Code);
-        Assert.Equal("Lần kiểm tra triển khai mới nhất của robot amr_01 không đạt (23/11 09:59).", result.Message);
+        Assert.Equal(NoCheckOnMapA, result.Message);
+        Assert.Equal("Lần kiểm tra triển khai mới nhất của robot amr_01 không đạt (23/11 09:59).", result.Detail);
     }
 
     [Fact]
@@ -101,7 +117,8 @@ public sealed class RobotMapReadinessTests
         var check = Check(robot, MapA);
         check.PackageSha256 = Enumerable.Repeat((byte)0x99, 32).ToArray();
 
-        Assert.Equal("ROBOT_DEPLOYMENT_CHECK_REQUIRED", RobotMapReadiness.Evaluate(robot, check, MapA).Code);
+        Assert.Equal(new RobotMapReadinessResult("ROBOT_DEPLOYMENT_CHECK_REQUIRED", NoCheckOnMapA),
+            RobotMapReadiness.Evaluate(robot, check, MapA));
     }
 
     [Fact]
@@ -157,6 +174,38 @@ public sealed class RobotMapReadinessTests
         Assert.Null(notReady.DeploymentCheckedAt);
         Assert.Equal(new RobotReadinessView("READY", null, null, MapA.Id, "Tầng 6 · v1", Now.AddMinutes(-1), true), ready);
     }
+
+    [Fact]
+    public void Next_step_follows_the_setup_order_and_never_changes_the_state()
+    {
+        var robot = Robot(MapA);
+        var deactivated = Robot(MapA);
+        deactivated.DeactivatedAt = Now;
+
+        Assert.Equal(("NOT_SET_UP", "ASSIGN_MAP"), StateAndStep(RobotMapReadiness.ToView(Robot(null), null, false)));
+        // Fleet Sync accepts nothing without a map, so the map comes first even before the connection is confirmed.
+        Assert.Equal(("NOT_SET_UP", "ASSIGN_MAP"), StateAndStep(RobotMapReadiness.ToView(Robot(null, confirmed: false), null, false)));
+        Assert.Equal(("NOT_SET_UP", "CONFIRM_CONNECTION"), StateAndStep(RobotMapReadiness.ToView(Robot(MapA, confirmed: false), null, false)));
+        Assert.Equal(("NOT_READY", "CONFIGURE_MINIPC"), StateAndStep(RobotMapReadiness.ToView(robot, Check(robot, MapB), false)));
+        Assert.Equal(("NOT_READY", "DEPLOYMENT_CHECK"), StateAndStep(RobotMapReadiness.ToView(robot, Check(robot, MapB), true)));
+        Assert.Equal(("READY", null), StateAndStep(RobotMapReadiness.ToView(robot, Check(robot, MapA), true)));
+        // A PASS already recorded stays READY even while the bridge is quiet: nextStep is display only.
+        Assert.Equal(("READY", null), StateAndStep(RobotMapReadiness.ToView(robot, Check(robot, MapA), false)));
+        Assert.Equal(("NOT_READY", null), StateAndStep(RobotMapReadiness.ToView(deactivated, null, false)));
+    }
+
+    [Fact]
+    public void The_view_carries_the_main_sentence_and_its_detail()
+    {
+        var robot = Robot(MapA);
+
+        var view = RobotMapReadiness.ToView(robot, Check(robot, MapB), false);
+
+        Assert.Equal(NoCheckOnMapA, view.Reason);
+        Assert.Equal("Lần kiểm tra triển khai mới nhất của robot amr_01 là trên Betea · betea · phiên bản 1.", view.Detail);
+    }
+
+    private static (string, string?) StateAndStep(RobotReadinessView view) => (view.State, view.NextStep);
 
     private static MapVersion Map(string areaKey, string areaName, int version, byte sha) => new()
     {

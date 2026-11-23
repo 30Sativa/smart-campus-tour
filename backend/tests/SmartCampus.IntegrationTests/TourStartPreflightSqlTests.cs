@@ -65,7 +65,9 @@ public sealed class TourStartPreflightSqlTests
         var checks = await w.AssertBlocked(["robotEligibleForRoute"], RobotIntegritySqlTests.LegacyCheckSql(other.Id, TourReadySqlTests.Robot),
             $"DELETE dbo.MapDeploymentChecks WHERE MapVersionId = '{other.Id}';");
 
-        Assert.Equal($"Lần kiểm tra triển khai mới nhất của robot {TourReadySqlTests.Robot} là trên Other · other · phiên bản 1.",
+        // Round 3: the reason names what to do on the map the robot holds.
+        Assert.Equal(await RobotReadinessTestSupport.NotCheckedOnAssignedMapAsync(w.H.Database.ConnectionString, TourReadySqlTests.Robot,
+                "Pilot · pilot · phiên bản 1"),
             Assert.Single(checks.Checks, check => check.Id == "robotEligibleForRoute").Detail);
     }
 
