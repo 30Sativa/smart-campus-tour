@@ -233,8 +233,14 @@ public sealed class DeploymentDatabaseTests
             await using var command = new SqlCommand(statement, connection);
             Assert.Equal(229, (await Assert.ThrowsAsync<SqlException>(() => command.ExecuteNonQueryAsync())).Number);
         }
-        await using (var column = new SqlCommand("UPDATE dbo.TourRobotReservations SET EndsAt=EndsAt WHERE 1=0", connection))
+        // A Tour that ends shortens its hold (ADR-0043 D13 addendum); where the hold starts and whose robot it is never change.
+        await using (var ends = new SqlCommand("UPDATE dbo.TourRobotReservations SET EndsAt=EndsAt WHERE 1=0", connection))
+            await ends.ExecuteNonQueryAsync();
+        foreach (var statement in new[] { "UPDATE dbo.TourRobotReservations SET StartsAt=StartsAt WHERE 1=0", "UPDATE dbo.TourRobotReservations SET RobotId=RobotId WHERE 1=0" })
+        {
+            await using var column = new SqlCommand(statement, connection);
             Assert.Equal(230, (await Assert.ThrowsAsync<SqlException>(() => column.ExecuteNonQueryAsync())).Number);
+        }
         await using var revert = new SqlCommand("REVERT;", connection);
         await revert.ExecuteNonQueryAsync();
     }
