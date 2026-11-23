@@ -91,7 +91,12 @@ public sealed class SyncFleetTelemetryHandler(
             throw new ServiceUnavailableException("Robot map context is not configured.", "MAP_CONTEXT_UNCONFIGURED");
         if (!string.Equals(request.Report.MapKey, request.Robot.AssignedMapKey, StringComparison.Ordinal) ||
             !string.Equals(request.Report.FrameId, request.Robot.AssignedFrameId, StringComparison.Ordinal))
+        {
+            // The robot list shows WRONG_MAP from this instead of a silent DISCONNECTED (ADR-0066 round 3).
+            store.RecordRejected(request.Robot.RobotCode,
+                new FleetRejectedReport(request.Report.MapKey, request.Report.FrameId, clock.GetUtcNow()));
             throw new ConflictException("Telemetry map/frame context does not match robot configuration.", "MAP_CONTEXT_MISMATCH");
+        }
 
         var now = clock.GetUtcNow();
         var state = new FleetTelemetrySnapshot(request.Robot, request.Report, now);

@@ -361,6 +361,8 @@ public sealed class RobotDiagnosticsTests
         public Task<FleetTelemetryApplyResult> ApplyAsync(FleetTelemetrySnapshot snapshot, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public IReadOnlyList<FleetTelemetrySnapshot> GetLatest() => snapshots;
+        public void RecordRejected(string robotCode, FleetRejectedReport report) => throw new NotSupportedException();
+        public FleetRejectedReport? GetLatestRejected(string robotCode) => null;
     }
 
     private sealed class TestDiagnosticsStore : IRobotDiagnosticsStore

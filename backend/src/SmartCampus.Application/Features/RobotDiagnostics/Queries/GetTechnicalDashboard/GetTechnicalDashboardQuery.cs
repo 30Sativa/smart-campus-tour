@@ -29,7 +29,8 @@ public sealed record TechnicalKpiSummary(
     int PendingPoiVerificationsCount,
     int PendingRouteTestsCount,
     int ActiveMapVersionsCount,
-    int RouteRerunsCount = 0);
+    int RouteRerunsCount = 0,
+    int WrongMapRobots = 0);
 
 public sealed record TechnicalActionItem(
     string Type, // "HELD_ROBOT", "MAP_MISMATCH", "TOUR_ROBOT_NOT_READY", "POI_QUEUE", "ROUTE_QUEUE", "ROUTE_RERUN"
@@ -66,7 +67,8 @@ public sealed record TechnicalRobotSummaryDto(
     double? CpuTemperatureCelsius,
     string? LidarStatus,
     string? ImuStatus,
-    bool IsDispatchEnabled);
+    bool IsDispatchEnabled,
+    FleetRejectedReportView? LastRejectedReport = null);
 
 public sealed class GetTechnicalDashboardQueryHandler(
     IPhysicalRobotRepository robotRepository,
@@ -106,6 +108,7 @@ public sealed class GetTechnicalDashboardQueryHandler(
         int awaitingCount = 0;
         int disconnectedCount = 0;
         int unconfirmedCount = 0;
+        int wrongMapCount = 0;
         int heldCount = 0;
 
         foreach (var robot in robots.Where(r => !r.IsDeactivated))
@@ -114,13 +117,10 @@ public sealed class GetTechnicalDashboardQueryHandler(
             var diagnostics = diagnosticsStore.GetLatest(robot.RobotCode);
             deploymentChecks.TryGetValue(robot.Id, out var deployment);
 
-            var connectionStatus = robot.FirstAcceptedSyncAt is null
-                ? "UNCONFIRMED"
-                : telemetry is null
-                    ? "AWAITING_DATA"
-                    : telemetry.ReceivedAt >= now - fleetSyncSettings.SyncFreshness
-                        ? "CONNECTED"
-                        : "DISCONNECTED";
+            // The robot list's rule, so a robot refused for the wrong map reads WRONG_MAP here too.
+            var lastRejected = FleetConnectionStatus.LastRejected(robot, telemetry,
+                telemetryStore.GetLatestRejected(robot.RobotCode), now, fleetSyncSettings);
+            var connectionStatus = FleetConnectionStatus.Of(robot, telemetry, lastRejected, now, fleetSyncSettings);
 
             switch (connectionStatus)
             {
@@ -135,6 +135,9 @@ public sealed class GetTechnicalDashboardQueryHandler(
                     break;
                 case "UNCONFIRMED":
                     unconfirmedCount++;
+                    break;
+                case "WRONG_MAP":
+                    wrongMapCount++;
                     break;
             }
 
@@ -211,7 +214,8 @@ public sealed class GetTechnicalDashboardQueryHandler(
                 diagnostics?.MiniPc?.CpuTemperatureCelsius,
                 diagnostics?.Sensors?.Lidar?.Status,
                 diagnostics?.Sensors?.Imu?.Status,
-                robot.IsDispatchEnabled));
+                robot.IsDispatchEnabled,
+                lastRejected));
         }
 
         actionItems.AddRange(await UpcomingToursNotReadyAsync(robots, deploymentChecks, now, cancellationToken));
@@ -259,7 +263,8 @@ public sealed class GetTechnicalDashboardQueryHandler(
             PendingPoiVerificationsCount: poiQueue.Count,
             PendingRouteTestsCount: routeQueue.Count,
             ActiveMapVersionsCount: activeMaps.Count(m => m.ValidationStatus == "VALID"),
-            RouteRerunsCount: routeReruns.Count);
+            RouteRerunsCount: routeReruns.Count,
+            WrongMapRobots: wrongMapCount);
 
         return new TechnicalDashboardDto(now, kpis, actionItems, robotSummaries);
     }
