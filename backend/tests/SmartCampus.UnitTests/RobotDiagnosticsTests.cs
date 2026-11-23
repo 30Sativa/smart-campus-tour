@@ -227,6 +227,7 @@ public sealed class RobotDiagnosticsTests
         public Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken cancellationToken) => Task.FromResult<Robot?>(null);
         public Task<IReadOnlyList<Robot>> ListAssignedPhysicalRobotsAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Robot>>([]);
         public Task<Robot?> ReadRobotForReadinessAsync(Guid robotId, CancellationToken cancellationToken) => Task.FromResult<Robot?>(null);
+        public Task LockNewAreaNamesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
         public Task LockRobotDeploymentStateAsync(Guid robotId, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<bool> LockAndReadConnectionConfirmationAsync(Guid robotId, CancellationToken cancellationToken) => Task.FromResult(true);
         public Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken) => Task.FromResult<MapDeploymentCheck?>(null);

@@ -2,6 +2,7 @@ using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.FleetSync;
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
 
@@ -103,9 +104,10 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
             else
             {
                 list.Add("robotEligibleForRoute", "DB", robotIssue is null, robotIssue ?? "Robot dùng được cho phiên bản tuyến.");
+                // The assignment part of the readiness rule (ADR-0066), kept as its own row for the UI.
                 list.Add("robotMapMatchesRoute", "DB", robot.AssignedMapVersionId == revision.MapVersionId,
                     robot.AssignedMapVersionId == revision.MapVersionId ? "Robot được gán đúng bản đồ của tuyến."
-                    : robot.AssignedMapVersionId is null ? "Robot chưa được gán bản đồ." : "Robot được gán bản đồ khác bản đồ của tuyến.");
+                    : RobotMapReadiness.NotAssignedMessage(robot));
             }
             list.Add("robotNotNeedsInspection", "DB", !robot.NeedsInspection,
                 robot.NeedsInspection ? "Robot đang chờ kiểm tra tại chỗ." : "Robot không chờ kiểm tra.");

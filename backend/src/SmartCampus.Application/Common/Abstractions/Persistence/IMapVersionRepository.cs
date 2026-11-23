@@ -8,6 +8,8 @@ public interface IMapVersionRepository
 {
     Task<IReadOnlyList<MapArea>> ListMapAreasAsync(CancellationToken cancellationToken);
     Task<MapArea?> LockAreaAsync(string areaKey, CancellationToken cancellationToken);
+    /// <summary>Serializes creating new areas, taken after the area key lock, so two cannot claim one name (ADR-0066).</summary>
+    Task LockNewAreaNamesAsync(CancellationToken cancellationToken);
     Task<MapArea?> GetAreaAsync(string areaKey, CancellationToken cancellationToken);
     Task<MapVersion?> FindMapUploadRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken);
     Task<int> GetNextMapVersionAsync(string areaKey, CancellationToken cancellationToken);
