@@ -305,9 +305,16 @@ public sealed class TourReadySqlTests
                     CredentialHint = "abcd", CredentialIssuedAt = now, CredentialIssuedByUserId = technicalId });
                 await db.SaveChangesAsync();
             }
-            // ADR-0066: a check needs the robot to hold the map, and a PASS needs a report on it since.
-            await RobotReadinessTestSupport.AssignAndReportAsync(provider, database.ConnectionString, Robot, map.Id, technicalId);
-            await Send(new RecordMapDeploymentCommand(technicalId, map.Id, new(Guid.NewGuid(), Robot, map.PackageSha256, true, true, "Kiểm tra triển khai.")));
+            // ADR-0066: the robot holds the map and has a passing check on it. The check is written in SQL, not through the
+            // command: a PASS needs a live report, and these Tour tests start with a robot that has not reported yet.
+            await RobotReadinessTestSupport.AssignAndReportAsync(provider, database.ConnectionString, Robot, map.Id, technicalId, report: false);
+            await database.ExecuteAsync($"""
+                INSERT dbo.MapDeploymentChecks(Id, MapVersionId, RobotId, PackageSha256, LocalizationPassed, DisplayPassed, EvidenceNote,
+                    CheckedByUserId, RequestId, RequestHash, CheckedAt)
+                SELECT NEWID(), map.Id, robot.Id, map.PackageSha256, 1, 1, N'Kiểm tra triển khai.', '{technicalId}', NEWID(),
+                    HASHBYTES('SHA2_256', N'deployment-check'), '{provider.GetRequiredService<TimeProvider>().GetUtcNow():O}'
+                FROM dbo.MapVersions map CROSS JOIN dbo.Robots robot WHERE map.Id = '{map.Id}' AND robot.RobotCode = N'{Robot}';
+                """);
             var library = await VerifiedPoi(map.Id, "Thư viện", 1.5m, 1.5m);
             // Every route has two stops (docs/lich-tour-theo-ca.md §2); twoStopsToEndPose now only adds the end pose.
             var stops = new List<RouteRevisionStopInput> { new(library, 30, [new("FRONT", 30)]),
