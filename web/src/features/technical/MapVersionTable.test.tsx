@@ -52,7 +52,7 @@ describe('MapVersionTable', () => {
     const { onUpload } = show([later, version('a', 'A', 1)])
     fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A · a · phiên bản 2' }))
     const detail = screen.getByRole('dialog', { name: 'A · a · phiên bản 2' })
-    expect(detail).toHaveTextContent('Dùng được để tạo POI')
+    expect(detail).toHaveTextContent('Dùng được để soạn POI')
     expect(detail).toHaveTextContent('a-v2.zip')
     expect(detail).toHaveTextContent('a'.repeat(64))
     // The deployment check is recorded in the robot's setup now; the detail hands the version over to a robot.

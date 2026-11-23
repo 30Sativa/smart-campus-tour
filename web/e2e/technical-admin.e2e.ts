@@ -8,9 +8,9 @@ import type { MapVersionItem } from '../src/features/technical/api/technical'
 
 test('technical: POI verification form starts with nothing ticked', async ({ page }) => {
   await mockApi(page, 'TechnicalStaff', technicalHandlers())
-  await page.goto('/technical/poi-import')
-  await expect(page.getByRole('heading', { level: 1, name: 'Kiểm chứng POI' })).toBeVisible()
-  await capturePage(page, 'technical', 'poi-queue', { title: 'Kiểm chứng POI', technical: true })
+  await page.goto('/technical/pois')
+  await expect(page.getByRole('heading', { level: 1, name: 'POI' })).toBeVisible()
+  await capturePage(page, 'technical', 'poi-queue', { title: 'POI', technical: true })
 
   await page.getByRole('button', { name: 'Ghi kết quả' }).first().click()
   const dialog = page.getByRole('dialog')
@@ -18,7 +18,7 @@ test('technical: POI verification form starts with nothing ticked', async ({ pag
   const boxes = dialog.getByRole('checkbox')
   expect(await boxes.count(), 'POI form has its check boxes').toBeGreaterThan(0)
   for (const box of await boxes.all()) await expect(box, 'no check is ticked by default').not.toBeChecked()
-  await capturePage(page, 'technical', 'poi-verify-form', { title: 'Kiểm chứng POI', technical: true })
+  await capturePage(page, 'technical', 'poi-verify-form', { title: 'POI', technical: true })
 })
 
 test('admin: audit log has no "Thao tác khác"', async ({ page }) => {
