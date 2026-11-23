@@ -39,7 +39,9 @@ test('technical: assigning a robot from the POI check opens the robot setup with
   await picker.getByLabel('Robot').selectOption('robot-1')
   await picker.getByRole('button', { name: 'Tiếp tục' }).click()
 
-  await expect(page).toHaveURL(new RegExp(`/technical/robots\\?robot=robot-1&map=${MAP_ID}$`))
+  // Round 3 W2: the robot page also carries the POI to come back to.
+  await expect(page).toHaveURL(new RegExp(`/technical/robots\\?robot=robot-1&map=${MAP_ID}&returnTo=%2Ftechnical%2Fpois%3Fpoi%3D[^&]+$`))
+  await expect(page.getByRole('note', { name: 'Quay lại' })).toContainText('Quay lại POI')
   const assignment = page.getByRole('dialog', { name: 'Bản đồ của AMR-01' })
   await expect(assignment.getByLabel('Phiên bản bản đồ')).toHaveValue(MAP_ID)
   await capturePage(page, 'technical', 'assign-from-poi-check', { title: 'Robot', technical: true })

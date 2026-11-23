@@ -6,7 +6,44 @@ export const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => 
   CONNECTED: 'Đã xác nhận · Đang kết nối',
   DISCONNECTED: 'Đã xác nhận · Mất kết nối',
   AWAITING_DATA: 'Đã xác nhận · Chưa nhận dữ liệu',
+  WRONG_MAP: 'Sai bản đồ',
 })[status]
+
+/**
+ * WRONG_MAP: the robot is sending, but on another map than the one it holds. The server's own sentence is used (it
+ * also covers a FrameId-only mismatch); this text is for a report that carries none.
+ */
+export const wrongMapText = (report: { mapKey: string; message?: string | null }, assignedMapKey: string | null) =>
+  report.message?.trim() || `Robot đang gửi dữ liệu theo ${report.mapKey}, bị từ chối vì đang gán ${assignedMapKey ?? 'bản đồ khác'}. Đổi MapKey/FrameId trên MiniPC.`
+
+/** The robot line of the POI check and route test forms (round 3, W1). */
+export const robotFieldText = {
+  assignedLine: (robotCode: string, at: string) => `Gán bản đồ: ${robotCode} · gán lúc ${at}`,
+  reportingLine: (mapKey: string) => `MiniPC báo về theo ${mapKey}`,
+  reportingWrongMap: (sentMapKey: string) => `đang gửi ${sentMapKey}`,
+  deploymentLine: 'Kiểm tra triển khai',
+  nextStep: {
+    ASSIGN_MAP: (robotCode: string) => `Gán bản đồ cho ${robotCode}`,
+    CONFIRM_CONNECTION: (robotCode: string) => `Kết nối MiniPC cho ${robotCode}`,
+    CONFIGURE_MINIPC: (robotCode: string) => `Cấu hình MiniPC cho ${robotCode}`,
+    DEPLOYMENT_CHECK: (robotCode: string) => `Kiểm tra triển khai ${robotCode}`,
+  },
+  openSetup: (robotCode: string) => `Mở thiết lập ${robotCode}`,
+  noRobot: 'Chưa có robot nào chạy bản đồ này.',
+  otherMap: (robotCode: string, running: string, subject: string, own: string) => `${robotCode} đang chạy ${running}, khác bản đồ của ${subject} này (${own}).`,
+  assignConsequence: 'Robot sẽ rời bản đồ đang chạy, Tour trên bản đồ đó không chạy được với robot này, điều phối tự tắt.',
+  wrongMapPoi: 'Nếu POI đặt nhầm bản đồ, nhờ Staff xoá POI và tạo lại trên bản đồ robot đang chạy.',
+  wrongMapRoute: 'Nếu tuyến đặt nhầm bản đồ, nhờ Staff tạo phiên bản tuyến mới trên bản đồ robot đang chạy.',
+}
+
+/** The strip on the robot page when it was opened from a POI check or a route test (round 3, W2). */
+export const returnStripText = {
+  preparing: (target: { kind: 'poi' | 'route'; name: string | null } | null) => !target?.name ? 'Đang chuẩn bị robot'
+    : target.kind === 'poi' ? `Đang chuẩn bị robot để kiểm chứng POI ${target.name}` : `Đang chuẩn bị robot để chạy thử tuyến ${target.name}`,
+  back: (target: { kind: 'poi' | 'route'; name: string | null } | null) => !target?.name ? 'Quay lại' : target.kind === 'poi' ? 'Quay lại POI' : 'Quay lại tuyến',
+  ready: (target: { kind: 'poi' | 'route'; name: string | null } | null) => !target?.name ? 'Robot đã sẵn sàng · Quay lại'
+    : target.kind === 'poi' ? `Robot đã sẵn sàng · Quay lại kiểm chứng POI ${target.name}` : `Robot đã sẵn sàng · Quay lại chạy thử tuyến ${target.name}`,
+}
 
 export function errorText(error: unknown) {
   const detail = apiErrorDetail(error)

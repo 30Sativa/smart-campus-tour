@@ -10,10 +10,13 @@ import { robotSetupPath } from './robot-readiness'
  * "Triển khai cho robot…": choose the robot, then continue in that robot's setup dialog with this version chosen.
  * Assigning and the deployment check happen there, so the robot keeps one place where its map is changed.
  */
-export function DeployToRobotDialog({ mapVersionId, mapLabel, preselectRobotId, onClose }: {
+export function DeployToRobotDialog({ mapVersionId, mapLabel, preselectRobotId, returnTo, onClose }: {
   mapVersionId: string; mapLabel: string
   /** The robot already holding this area, if any: an area holds one robot, so it is the usual choice. */
   preselectRobotId?: string
+  /** Opened from a POI check or route test: the robot page offers to go back there. */
+  returnTo?: string
+  /** Hủy, Escape or the close button. A form that opened this reopens itself, so its context is not lost. */
   onClose: () => void
 }) {
   const robots = usePhysicalRobots()
@@ -22,7 +25,7 @@ export function DeployToRobotDialog({ mapVersionId, mapLabel, preselectRobotId, 
   const [robotId, setRobotId] = useState(preselectRobotId ?? '')
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (robotId) navigate(robotSetupPath(robotId, mapVersionId))
+    if (robotId) navigate(robotSetupPath(robotId, mapVersionId, returnTo))
   }
   return (
     <Modal open title={`Triển khai ${mapLabel} cho robot`} description="Chọn robot, rồi gán bản đồ và kiểm tra triển khai trong hộp Thiết lập của robot đó." onClose={onClose}

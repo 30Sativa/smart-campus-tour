@@ -127,7 +127,7 @@ describe('Technical dashboard and Mini PC monitoring', () => {
     expect(rows[0]).toHaveTextContent('1 tuyến cần chạy lại')
     expect(within(rows[0]).getByText('Cảnh báo')).toBeInTheDocument()
     expect(rows[1]).toHaveTextContent('2 POI đang chờ')
-    expect(within(screen.getByRole('region', { name: 'Tình trạng robot' })).getByRole('img', { name: 'Trực tuyến: 1, Ngoại tuyến: 0, Chưa nhận dữ liệu: 0, Chưa xác nhận kết nối: 0' })).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Tình trạng robot' })).getByRole('img', { name: 'Trực tuyến: 1, Sai bản đồ: 0, Ngoại tuyến: 0, Chưa nhận dữ liệu: 0, Chưa xác nhận kết nối: 0' })).toBeInTheDocument()
   })
 
   // Round 2 F2: the backend warns about upcoming Tours the robot cannot run. The Dashboard renders it like any item.
