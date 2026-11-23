@@ -40,6 +40,7 @@ export const mapVersion: MapVersionItem = {
   preparationBlockReasonCode: null, preparationBlockReason: null, preparationEvidence: null,
   currentlyDeployedOn: [{ robotCode: 'AMR-01', checkedAt: at(-10 * 24 * 60) }], poiClearanceMeters: 0.5,
   routeMinStops: 2, routeMinStopSeparationMeters: 1,
+  runningRobot: { id: 'robot-1', robotCode: 'AMR-01', displayName: 'Robot số 1', readiness: { state: 'READY', reasonCode: null, reason: null, mapVersionId: MAP_ID, mapLabel: 'Campus Hồ Chí Minh · v2', deploymentCheckedAt: at(-10 * 24 * 60), reportingOnAssignedMap: true } },
 }
 
 export const mapHandlers: Handler[] = [

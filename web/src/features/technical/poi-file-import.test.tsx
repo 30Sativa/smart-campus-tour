@@ -8,7 +8,11 @@ import { useAuthStore } from '../../stores/auth-store'
 import { useToastStore } from '../../components/ui/toast-store'
 
 const map = { id: 'map-v1', areaKey: 'floor6', areaName: 'Tầng 6', versionNumber: 2, mapKey: 'floor6-v2' }
-const robot = { id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', connectionStatus: 'CONNECTED', latestDeployedMapKey: 'floor6-v2', latestDeploymentPassed: true }
+const robot = { id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', connectionStatus: 'CONNECTED', latestDeployedMapKey: 'floor6-v2', latestDeploymentPassed: true,
+  readiness: { state: 'READY', reasonCode: null, reason: null, mapVersionId: 'map-v1', mapLabel: 'Tầng 6 · v2', deploymentCheckedAt: '2026-11-20T03:00:00Z', reportingOnAssignedMap: true } }
+const otherRobot = { ...robot, id: 'robot-2', robotCode: 'amr-02', displayName: 'AMR 02',
+  readiness: { ...robot.readiness, state: 'NOT_READY', reasonCode: 'ROBOT_MAP_NOT_ASSIGNED', reason: 'Robot amr-02 đang gán Betea · betea · phiên bản 1, không phải bản đồ này.', mapVersionId: 'map-betea' } }
+let previewReadiness: unknown = { ready: true, code: null, message: null }
 const okFile = { fileName: 'poi_02.yaml', fileSha256: 'a'.repeat(64), poiId: 'POI_02', name: 'POI 02', x: 29.692, y: -5.439, yaw: -0.291, verified: true, action: 'CREATE', errorCode: null, errorMessage: null }
 const badFile = { ...okFile, fileName: 'poi_03.yaml', fileSha256: 'b'.repeat(64), poiId: 'POI_03', action: null, errorCode: 'FRAME_MISMATCH', errorMessage: 'Tệp dùng frame odom, phiên bản bản đồ dùng frame map.' }
 
@@ -36,6 +40,7 @@ async function pickEverything() {
 describe('Technical POI file import', () => {
   beforeEach(() => {
     previewFiles = [okFile]
+    previewReadiness = { ready: true, code: null, message: null }
     importedFiles = [{ ...okFile, proposalId: 'p-1', proposalRevisionId: 'p-1-r1' }]
     proposals = []
     importRefusal = null
@@ -46,14 +51,32 @@ describe('Technical POI file import', () => {
       const path = new URL(String(input), 'http://test.local').pathname
       requests.push({ path, body: init?.body as FormData })
       if (path === '/api/maps/versions') return envelope([{ map, technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, currentlyDeployedOn: [] }])
-      if (path === '/api/technical/physical-robots') return envelope([robot])
-      if (path === '/api/technical/poi-imports/preview') return envelope({ mapVersionId: map.id, robotCode: robot.robotCode, canImport: previewFiles.every(file => !(file as typeof okFile).errorCode), files: previewFiles })
+      if (path === '/api/technical/physical-robots') return envelope([otherRobot, robot])
+      if (path === '/api/technical/poi-imports/preview') return envelope({ mapVersionId: map.id, robotCode: robot.robotCode, canImport: previewFiles.every(file => !(file as typeof okFile).errorCode), files: previewFiles, robotReadiness: previewReadiness })
       if (path === '/api/technical/poi-imports') return importRefusal ?? envelope({ requestId: 'r', mapVersionId: map.id, createdProposalIds: ['p-1'], updatedProposalIds: [], files: importedFiles })
       if (path === '/api/staff/poi-proposals') return envelope(proposals)
       return envelope(null, 404)
     }))
   })
   afterEach(() => vi.unstubAllGlobals())
+
+  it('chooses the robot ready on the chosen version, and warns before import when another robot is chosen', async () => {
+    renderPage()
+    await screen.findByRole('option', { name: 'Tầng 6 · floor6 · phiên bản 2' })
+    await waitFor(() => expect(requests.some(item => item.path === '/api/technical/physical-robots')).toBe(true))
+    await screen.findByRole('option', { name: /amr-01/ })
+    fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
+    expect(screen.getByLabelText('Robot đã ghi pose')).toHaveValue('amr-01')
+    expect(screen.getByRole('option', { name: /amr-01 .* · sẵn sàng trên bản đồ này$/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /amr-02 .* · chưa sẵn sàng trên bản đồ này$/ })).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Robot đã ghi pose'), { target: { value: 'amr-02' } })
+    previewReadiness = { ready: false, code: 'ROBOT_MAP_NOT_ASSIGNED', message: 'Robot amr-02 đang gán Betea · betea · phiên bản 1, không phải bản đồ này.' }
+    const input = document.getElementById('import-files') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [new File(['id: POI_02'], 'poi_02.yaml')] } })
+    fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }))
+    expect(await screen.findByText('Robot amr-02 đang gán Betea · betea · phiên bản 1, không phải bản đồ này. Các tệp sẽ vào hàng chờ kiểm chứng, không được ghi Đạt.')).toBeInTheDocument()
+  })
 
   it('previews the server verdict, then imports with the evidence note', async () => {
     await pickEverything()

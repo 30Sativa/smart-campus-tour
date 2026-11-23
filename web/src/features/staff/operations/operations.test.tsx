@@ -99,6 +99,12 @@ describe('operation refusals', () => {
     expect(refusal.message).toMatch(/từ chối bắt đầu/)
   })
 
+  it('shows the server sentence when the robot is not ready on the route map, with a fallback', () => {
+    const worded = new ApiError(409, JSON.stringify({ message: 'Robot amr-01 đang gán Betea · betea · phiên bản 1, không phải bản đồ này.', errors: { code: 'ROBOT_NOT_READY_FOR_ROUTE' } }))
+    expect(operationRefusal(worded).message).toBe('Robot amr-01 đang gán Betea · betea · phiên bản 1, không phải bản đồ này.')
+    expect(operationRefusal(new ApiError(409, JSON.stringify({ errors: { code: 'ROBOT_NOT_READY_FOR_ROUTE' } }))).message).toMatch(/^Robot chưa sẵn sàng trên bản đồ của tuyến này/)
+  })
+
   it('words a 403 by who may act', () => {
     const error = new ApiError(403, '')
     expect(operationRefusal(error, { operator: true }).message).toMatch(/người vận hành được giao/)
