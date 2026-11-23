@@ -2,9 +2,10 @@ import { useState, type FormEvent } from 'react'
 import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
 import { CheckRow, ResultToggle, SaveBlockedHint } from './TechnicalUi'
 import type { MapVersion, PhysicalRobotOption } from './api/technical'
-import { useRecordDeployment } from './technical-hooks'
+import { useDuplicateAreaNames, useRecordDeployment } from './technical-hooks'
 import { deploymentErrorText } from './technical-format'
 import { notReportingText } from './robot-readiness'
+import { mapShortLabel } from './poi-labels'
 
 const shortSha = (sha: string) => (sha.length > 16 ? `${sha.slice(0, 8)}…${sha.slice(-4)}` : sha)
 
@@ -15,6 +16,7 @@ const shortSha = (sha: string) => (sha.length > 16 ? `${sha.slice(0, 8)}…${sha
  */
 export function DeploymentCheckForm({ robot, map, onDone, onCancel }: { robot: PhysicalRobotOption; map: MapVersion; onDone: () => void; onCancel: () => void }) {
   const deployment = useRecordDeployment()
+  const duplicates = useDuplicateAreaNames()
   const [note, setNote] = useState('')
   // Nothing is chosen or ticked up front. The server derives the result from the two ticks, so the chosen
   // result only has to agree with them: Đạt needs both, Không đạt needs at least one left unticked.
@@ -39,9 +41,9 @@ export function DeploymentCheckForm({ robot, map, onDone, onCancel }: { robot: P
   }
   return (
     <form aria-label="Kiểm tra triển khai" className="space-y-3" onSubmit={submit}>
-      <p className="text-[13px] text-[#334155]">Robot <span className="font-semibold">{robot.robotCode}</span> · bản đồ <span className="font-semibold">{map.areaName} · v{map.versionNumber}</span>. Chỉ ghi khi robot đã nạp đúng tệp này (checksum {shortSha(map.packageSha256)}).</p>
+      <p className="text-[13px] text-[#334155]">Robot <span className="font-semibold">{robot.robotCode}</span> · bản đồ <span className="font-semibold">{mapShortLabel(map, duplicates)}</span>. Chỉ ghi khi robot đã nạp đúng tệp này (checksum {shortSha(map.packageSha256)}).</p>
       <ResultToggle id="deploy-check-result" value={resultCode} passDisabled={!reporting} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do vào bằng chứng." />
-      {!reporting && <p role="status" className="text-[13px] text-amber-800">{notReportingText(robot.robotCode, map)}</p>}
+      {!reporting && <p role="status" className="text-[13px] text-amber-800">{notReportingText(robot.robotCode, map, duplicates)}</p>}
       <div className="space-y-2"><CheckRow checked={localizationPassed} onChange={value => { setLocalizationPassed(value); changed() }}>Định vị đạt</CheckRow><CheckRow checked={displayPassed} onChange={value => { setDisplayPassed(value); changed() }}>Bản đồ hiển thị đúng</CheckRow></div>
       <div><label className={labelClass} htmlFor="deploy-check-note">Bằng chứng kiểm tra</label><textarea id="deploy-check-note" rows={3} className={`${inputClass} mt-1`} required maxLength={2000} value={note} onChange={event => { setNote(event.target.value); changed() }} placeholder="Ghi nhận quan sát thực tế, sai lệch, ảnh chụp màn hình đã lưu ở đâu…" /></div>
       {deployment.error && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{deploymentErrorText(deployment.error)}</p>}

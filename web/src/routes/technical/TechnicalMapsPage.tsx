@@ -6,7 +6,7 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
 import { MapVersionTable } from '../../features/technical/MapVersionTable'
 import { TechnicalPage } from '../../features/technical/TechnicalUi'
-import { mapVersionLabel } from '../../features/technical/poi-labels'
+import { areaLabel, duplicateAreaNames, mapVersionLabel, sameAreaName } from '../../features/technical/poi-labels'
 import { RetireMapDialog } from '../../features/technical/RetireMapDialog'
 import { formatDateTime } from '../../components/ui/date-time'
 import { useAllMapVersions, useMapAreas, useReopenMap, useUploadMap } from '../../features/technical/technical-hooks'
@@ -112,8 +112,10 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
   const uploadErrors = upload.error ? mapUploadFieldErrors(upload.error) : {}
   const matchingArea = areas.data?.find(area => area.areaKey === areaKey)
   const duplicateNewKey = mode === 'new' && Boolean(matchingArea)
-  const areaReady = !areas.isPending && !areas.isError && (mode === 'new' ? !duplicateNewKey && Boolean(areaKey && areaName.trim()) : Boolean(matchingArea))
-  const missing = !packageFile ? 'Chọn tệp bản đồ (.zip) để tải lên.' : !areaReady && !duplicateNewKey ? (mode === 'new' ? 'Nhập tên khu vực.' : 'Chọn khu vực.') : null
+  // The server refuses a new area whose name, trimmed and ignoring case, another area has (MAP_AREA_NAME_TAKEN); say so while typing.
+  const takenNameArea = mode === 'new' && areaName.trim() ? areas.data?.find(area => sameAreaName(area.displayName, areaName)) : undefined
+  const areaReady = !areas.isPending && !areas.isError && (mode === 'new' ? !duplicateNewKey && !takenNameArea && Boolean(areaKey && areaName.trim()) : Boolean(matchingArea))
+  const missing = !packageFile ? 'Chọn tệp bản đồ (.zip) để tải lên.' : !areaReady && !duplicateNewKey && !takenNameArea ? (mode === 'new' ? 'Nhập tên khu vực.' : 'Chọn khu vực.') : null
   const fieldChanged = () => { upload.reset(); setRequestId(crypto.randomUUID()) }
   const switchMode = (next: 'new' | 'existing') => { setMode(next); setAreaKey(''); setAreaName(''); setKeyEdited(false); fieldChanged() }
   const pickFile = (file: File | null | undefined) => { setPackageFile(file ?? null); fieldChanged() }
@@ -127,7 +129,7 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
   }
   const segment = (active: boolean) => `flex-1 cursor-pointer rounded-md px-3 py-1.5 text-center text-[13px] font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#2563eb] ${active ? 'bg-white text-[#0f172a] shadow-sm' : 'text-[#64748b] hover:text-[#334155]'}`
   return (
-    <Modal open={open} title={initialArea ? `Tải phiên bản mới · ${initialArea.displayName}` : 'Tải lên bản đồ mới'} description="Sau khi tải lên, mở chi tiết bản đồ và bấm Triển khai cho robot." onClose={close}
+    <Modal open={open} title={initialArea ? `Tải phiên bản mới · ${areaLabel(initialArea.displayName, initialArea.areaKey, duplicateAreaNames((areas.data ?? []).map(area => ({ areaKey: area.areaKey, name: area.displayName }))))}` : 'Tải lên bản đồ mới'} description="Sau khi tải lên, mở chi tiết bản đồ và bấm Triển khai cho robot." onClose={close}
       footer={<div className="flex items-center justify-end gap-3">{missing && <p className="mr-auto text-xs text-[#64748b]">{missing}</p>}<button type="button" className={buttonClass('secondary')} onClick={close}>Hủy</button><button type="submit" form="map-upload-form" className={buttonClass('primary')} disabled={!packageFile || !areaReady || upload.isPending}>{upload.isPending ? 'Đang tải…' : 'Tải lên bản đồ'}</button></div>}>
       <form id="map-upload-form" className="space-y-4" onSubmit={submit}>
         <fieldset>
@@ -146,10 +148,10 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
             <option value="">Chọn khu vực</option>{areas.data?.map(area => <option key={area.areaKey} value={area.areaKey}>{area.displayName} · {area.areaKey}</option>)}
           </select>{areaKey && <p className="mt-1 text-xs text-[#64748b]">Bản đồ sẽ được lưu thành phiên bản mới của khu vực này.</p>}
         </div> : <div className="grid gap-3 sm:grid-cols-[1.4fr_1fr]">
-          <div><label className={labelClass} htmlFor="map-area-name">Tên khu vực</label><input id="map-area-name" aria-invalid={Boolean(uploadErrors.areaName)} className={`${inputClass} mt-1`} required maxLength={150} value={areaName} onChange={event => { const value = event.target.value; setAreaName(value); if (!keyEdited) setAreaKey(areaKeyFrom(value)); fieldChanged() }} placeholder="Thư viện tầng 1" />{uploadErrors.areaName && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{uploadErrors.areaName}</p>}</div>
+          <div><label className={labelClass} htmlFor="map-area-name">Tên khu vực</label><input id="map-area-name" aria-invalid={Boolean(uploadErrors.areaName) || Boolean(takenNameArea)} className={`${inputClass} mt-1`} required maxLength={150} value={areaName} onChange={event => { const value = event.target.value; setAreaName(value); if (!keyEdited) setAreaKey(areaKeyFrom(value)); fieldChanged() }} placeholder="Thư viện tầng 1" />{takenNameArea ? <p role="alert" className="mt-1 text-xs text-[#b23e18]">Đã có khu vực tên {takenNameArea.displayName} ({takenNameArea.areaKey}). Chọn Khu vực đã có hoặc đặt tên khác.</p> : uploadErrors.areaName && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{uploadErrors.areaName}</p>}</div>
           <div><label className={labelClass} htmlFor="map-area-key">Mã khu vực</label><input id="map-area-key" aria-describedby="map-area-key-help" aria-invalid={Boolean(uploadErrors.areaKey) || duplicateNewKey} className={`${inputClass} mt-1 font-mono`} required maxLength={80} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={areaKey} onChange={event => { setAreaKey(event.target.value); setKeyEdited(true); fieldChanged() }} placeholder="thu-vien-tang-1" /><p id="map-area-key-help" className="mt-1 text-xs text-[#64748b]">Tự tạo từ tên, có thể sửa.</p></div>
           {uploadErrors.areaKey && <p role="alert" className="text-xs text-[#b23e18] sm:col-span-2">{uploadErrors.areaKey}</p>}
-          {duplicateNewKey && <p role="alert" className="text-xs text-[#b23e18] sm:col-span-2">Mã khu vực đã tồn tại. Chuyển sang “Khu vực đã có” và chọn {matchingArea?.displayName} · {matchingArea?.areaKey}.</p>}
+          {duplicateNewKey && matchingArea !== takenNameArea && <p role="alert" className="text-xs text-[#b23e18] sm:col-span-2">Mã khu vực đã tồn tại. Chuyển sang “Khu vực đã có” và chọn {matchingArea?.displayName} · {matchingArea?.areaKey}.</p>}
         </div>}
         <div>
           <span className={labelClass} id="map-package-label">Tệp bản đồ (.zip)</span>

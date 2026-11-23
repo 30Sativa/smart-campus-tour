@@ -7,7 +7,7 @@ import { Modal } from '../../components/ui/Drawer'
 import { notify } from '../../components/ui/toast-store'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { Note, SetupSteps, TechnicalPage, ToneBadge, type SetupStep } from '../../features/technical/TechnicalUi'
-import { useActivateRobot, useAllMapVersions, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useReleaseRobotInspection, useRobotAffectedTours, useRobotCredential, useSetRobotDispatch } from '../../features/technical/technical-hooks'
+import { useActivateRobot, useAllMapVersions, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapShortLabel, useMapVersions, useRegisterPhysicalRobot, useReleaseRobotInspection, useRobotAffectedTours, useRobotCredential, useSetRobotDispatch } from '../../features/technical/technical-hooks'
 import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour } from '../../features/technical/api/technical'
 import { connectionStatusLabel, errorText, releaseInspectionError } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
@@ -43,6 +43,7 @@ type Dialog = { view: 'detail' | 'map' | 'credential'; robotId: string; mapVersi
  */
 export default function TechnicalRobotsPage() {
   const robots = useAllPhysicalRobots()
+  const mapLabelOf = useMapShortLabel()
   const [showDeactivated, setShowDeactivated] = useState(false)
   const [registering, setRegistering] = useState(false)
   // `?robot=<id>` opens that robot's setup; with `&map=<version>` it opens the map step with that version chosen,
@@ -78,7 +79,7 @@ export default function TechnicalRobotsPage() {
               {visibleRobots?.map(robot => <tr key={robot.id} className={rowClass}>
                 <td className={tdClass}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p>{isHeld(robot) && <p className="mt-1"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}{robot.isDispatchEnabled && <p className="mt-1">{isReady(robot) ? <ToneBadge tone="info">Đã cho phép điều phối</ToneBadge> : <ToneBadge tone="warn">Cho phép điều phối · chưa sẵn sàng</ToneBadge>}</p>}{isBusy(robot) && <p className="mt-1"><ToneBadge tone="info">{robot.currentTourName ? `Đang chạy Tour ${robot.currentTourName}` : 'Đang chạy Tour'}</ToneBadge></p>}</td>
                 <td className={tdClass}><ConnectionBadge robot={robot} /><p className="mt-0.5 text-[11.5px] text-[#64748b]">Dữ liệu gần nhất: {formatDateTime(robot.lastSyncReceivedAt)}</p></td>
-                <td className={tdClass}>{robot.readiness ? <ReadinessSummary readiness={robot.readiness} /> : <span className="text-[13px] text-[#64748b]">-</span>}</td>
+                <td className={tdClass}>{robot.readiness ? <ReadinessSummary readiness={robot.readiness} mapText={mapLabelOf(robot.readiness.mapVersionId)} /> : <span className="text-[13px] text-[#64748b]">-</span>}</td>
                 <td className={tdClass}><div className="flex flex-wrap items-center justify-center gap-2">
                   <Link to={`/technical/monitoring?robot=${encodeURIComponent(robot.robotCode)}`} aria-label={`Giám sát ${robot.robotCode}`} className={buttonClass('secondary', 'sm')}>Giám sát</Link>
                   <button type="button" aria-label={`Thiết lập ${robot.robotCode}`} className={buttonClass('secondary', 'sm')} onClick={() => setDialog({ view: 'detail', robotId: robot.id })}>Thiết lập</button>
@@ -144,6 +145,7 @@ function RobotDetailModal({ robot, refreshing, onRefresh, onAssignMap, onManageK
   robot: PhysicalRobotOption; refreshing: boolean; onRefresh: () => void; onAssignMap: () => void; onManageKey: () => void; onClose: () => void
 }) {
   const credential = useRobotCredential(robot.robotCode, !robot.deactivatedAt)
+  const mapLabelOf = useMapShortLabel()
   const [checking, setChecking] = useState(false)
   const [releasing, setReleasing] = useState(false)
   const deployStep = useRef<HTMLElement>(null)
@@ -165,7 +167,7 @@ function RobotDetailModal({ robot, refreshing, onRefresh, onAssignMap, onManageK
       <div className="space-y-4">
         {robot.deactivatedAt && <Note tone="warn">Ngừng sử dụng từ {formatDateTime(robot.deactivatedAt)}. Lý do: {robot.deactivationReason}. Sau khi kích hoạt lại cần cấp khóa mới và gán lại bản đồ.</Note>}
         {!robot.deactivatedAt && <section aria-label="Trạng thái sẵn sàng" className="space-y-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3.5">
-          {robot.readiness && <div><ReadinessBadge readiness={robot.readiness} />{robot.readiness.state !== 'READY' && robot.readiness.reason && <p className="mt-1 text-[13px] text-[#334155]">{robot.readiness.reason}</p>}</div>}
+          {robot.readiness && <div><ReadinessBadge readiness={robot.readiness} mapText={mapLabelOf(robot.readiness.mapVersionId)} />{robot.readiness.state !== 'READY' && robot.readiness.reason && <p className="mt-1 text-[13px] text-[#334155]">{robot.readiness.reason}</p>}</div>}
           {next && <div>{nextAction[next]}</div>}
           <RobotSetupChecklist robot={robot} keyActive={keyActive} keyError={credential.isError} onAssignMap={onAssignMap} onManageKey={onManageKey} onCheck={openCheck} />
         </section>}
@@ -203,6 +205,7 @@ function RobotMapSteps({ robot, checking, deployStep, refreshButton, onAssignMap
   onAssignMap: () => void; onCheck: () => void; onCheckDone: () => void
 }) {
   const maps = useAllMapVersions()
+  const mapLabelOf = useMapShortLabel()
   const assigned = Boolean(robot.assignedMapVersionId)
   const map = maps.data?.find(item => item.map.id === robot.assignedMapVersionId)?.map
   const reporting = robot.readiness?.reportingOnAssignedMap === true
@@ -210,7 +213,7 @@ function RobotMapSteps({ robot, checking, deployStep, refreshButton, onAssignMap
   const previous = assigned && robot.latestDeploymentPassed !== null && robot.latestDeployedMapKey === robot.assignedMapKey
     ? { passed: robot.latestDeploymentPassed, at: robot.readiness?.deploymentCheckedAt ?? null } : null
   return <>
-    <DetailSection title="1. Chọn bản đồ" subject={assigned ? `${robot.assignedAreaName} · phiên bản ${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Đổi bản đồ' : 'Gán bản đồ'}</button>}>
+    <DetailSection title="1. Chọn bản đồ" subject={assigned ? mapLabelOf(robot.assignedMapVersionId) ?? `${robot.assignedAreaName} · v${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Đổi bản đồ' : 'Gán bản đồ'}</button>}>
       {!assigned ? <p className="text-[13px] text-amber-800">Chưa gán bản đồ.</p>
         : robot.mapAssignedAt ? <p className="text-xs text-[#64748b]">Gán lúc {formatDateTime(robot.mapAssignedAt)}{robot.mapAssignedByName ? ` bởi ${robot.mapAssignedByName}` : ''}.</p> : null}
     </DetailSection>

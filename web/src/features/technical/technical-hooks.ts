@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { notify, type ToastInput } from '../../components/ui/toast-store'
 import { versionedRoutesApi } from '../administration/routes/versioned-api'
 import { technicalApi, type ReleaseRobotInspectionInput, type RouteTestRunInput, type SetRobotDispatchInput } from './api/technical'
 import { diagnosticsApi } from './api/diagnostics-api'
+import { duplicateAreaNames, mapShortLabel } from './poi-labels'
 
 const keys = {
   maps: ['technical', 'maps'] as const,
@@ -31,6 +33,25 @@ export function useMapRetirementImpact(mapVersionId: string | undefined) {
 
 export function useMapAreas(enabled = true) {
   return useQuery({ queryKey: ['technical', 'map-areas'], queryFn: technicalApi.listMapAreas, enabled })
+}
+
+/** Area names that more than one area uses; only those print their area key beside the name. Empty until the list loads. */
+export function useDuplicateAreaNames() {
+  const areas = useMapAreas()
+  return useMemo(() => duplicateAreaNames((areas.data ?? []).map(area => ({ areaKey: area.areaKey, name: area.displayName }))), [areas.data])
+}
+
+/** "{area} · v{n}" of a map version by id, with the area key when the name is shared; null while the version is unknown. */
+export function useMapShortLabel() {
+  const maps = useAllMapVersions()
+  const duplicates = useDuplicateAreaNames()
+  return useMemo(() => {
+    const byId = new Map((maps.data ?? []).map(item => [item.map.id, item.map]))
+    return (mapVersionId: string | null | undefined) => {
+      const map = mapVersionId ? byId.get(mapVersionId) : undefined
+      return map ? mapShortLabel(map, duplicates) : null
+    }
+  }, [maps.data, duplicates])
 }
 
 export function usePhysicalRobots(enabled = true) {

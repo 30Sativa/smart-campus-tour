@@ -84,11 +84,15 @@ export const poiObservationLabels = (cameraPreset: string): [string, string, str
   `Đầu camera làm đúng: ${headPresetLabel(cameraPreset)}`,
 ]
 
+/** An area name as the server compares it for MAP_AREA_NAME_TAKEN: trimmed, case ignored. */
+const normalizedAreaName = (name: string) => name.trim().toLocaleLowerCase('vi')
+export const sameAreaName = (a: string, b: string) => normalizedAreaName(a) === normalizedAreaName(b)
+
 /** Display names used by more than one area key. Only those need the key beside the name to be told apart. */
 export function duplicateAreaNames(areas: Array<{ areaKey: string; name: string }>): Set<string> {
   const keysByName = new Map<string, Set<string>>()
   for (const { areaKey, name } of areas) {
-    const normalized = name.trim().toLocaleLowerCase('vi')
+    const normalized = normalizedAreaName(name)
     keysByName.set(normalized, (keysByName.get(normalized) ?? new Set()).add(areaKey))
   }
   return new Set([...keysByName].filter(([, keys]) => keys.size > 1).map(([name]) => name))
@@ -96,4 +100,8 @@ export function duplicateAreaNames(areas: Array<{ areaKey: string; name: string 
 
 /** "Tầng 6", or "Tầng 6 · tang-6" when another area shares the name. */
 export const areaLabel = (name: string, areaKey: string, duplicates: Set<string>) =>
-  duplicates.has(name.trim().toLocaleLowerCase('vi')) ? `${name} · ${areaKey}` : name
+  duplicates.has(normalizedAreaName(name)) ? `${name.trim()} · ${areaKey}` : name.trim()
+
+/** A map version in running text: "Tầng 6 · v1", or "Tầng 6 · tang-6 · v1" when another area shares the name. */
+export const mapShortLabel = (map: { areaName: string; areaKey: string; versionNumber: number }, duplicates: Set<string>) =>
+  `${areaLabel(map.areaName, map.areaKey, duplicates)} · v${map.versionNumber}`
