@@ -1,6 +1,7 @@
 # ADR-0032: Store each robot's Fleet Sync map context in the database
 
 - Status: accepted by the owner for implementation
+- Partially superseded by ADR-0066 (23/11/2026): the assignment is now a condition for recording a deployment check, and changing or clearing it also turns dispatch off in the same transaction.
 - Scope: physical robot map assignment, Fleet Sync context validation and Technical Staff management UI
 - Supersedes: only the per-robot `FleetSync:RobotContexts` configuration source described in ADR-0019; ADR-0029's persisted first-accepted context remains historical confirmation for the current credential.
 

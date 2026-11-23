@@ -1,6 +1,7 @@
 # ADR-0039: One robot per map area, usable robots for Tours, and robot deactivation
 
 - **Status:** Accepted by the repository owner, 2026-11-01, through the task brief for this change and its correction on deactivation. No physical behavior was tested by this change.
+- **Partially superseded by ADR-0066** (23/11/2026): a usable robot for a Tour must also hold the route's map; the definition now lives in ADR-0066's single readiness rule.
 - **Related:** ADR-0029 (connection confirmation), ADR-0030 (credential lifecycle), ADR-0032 (robot map assignment), ADR-0034 and ADR-0035 (Tours from a tested revision).
 
 ## Context

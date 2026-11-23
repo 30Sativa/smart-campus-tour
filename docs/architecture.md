@@ -751,6 +751,53 @@ Under ADR-0062 (schema v1.23), which amends that rule:
   detail and list, and `routeRevision` in Tour detail) add `retiredPoiNames` at the
   end: the stop names whose POI is retired or discarded now.
 
+Under ADR-0066 (no schema change), "robot R is ready on map version M" is one rule:
+R is not deactivated, its connection is confirmed (`FirstAcceptedSyncAt`), it is
+assigned to M, and its newest deployment check on any map passes on M with M's
+package checksum. POI verification and import, route test runs, Tour create/slots/
+robot list, READY, the Start preflight and enabling dispatch all use it:
+
+- Readiness reason codes, in check order: `ROBOT_DEACTIVATED`,
+  `ROBOT_CONNECTION_UNCONFIRMED`, `ROBOT_MAP_NOT_ASSIGNED`,
+  `ROBOT_DEPLOYMENT_CHECK_REQUIRED`, each with a Vietnamese sentence naming the
+  robot and the map ("{khu vực} · {mã khu vực} · phiên bản {n}"). POI verification
+  keeps 409 `MAP_NOT_DEPLOYED` and Tours keep `ROBOT_NOT_READY_FOR_ROUTE`, now with
+  that sentence as message; a route test run and enabling dispatch return the
+  readiness code itself (`MAP_NOT_CURRENTLY_DEPLOYED` is no longer returned). The
+  Start preflight row `robotMapMatchesRoute` stays.
+- `POST /api/technical/map-versions/{id}/deployment-checks` (PASS or FAIL) for a
+  robot not assigned to that version: 409 `ROBOT_MAP_NOT_ASSIGNED` (the readiness
+  sentence plus "Đổi bản đồ cho robot ở trang Robot trước khi ghi kiểm tra."). A
+  PASS also needs a Fleet Sync report no older than `SyncFreshness`, received after
+  `MapAssignedAt`, with the assigned `mapKey`; otherwise 409 `ROBOT_NOT_REPORTING`
+  ("Robot {code} chưa gửi dữ liệu theo bản đồ {khu vực} · v{n}. Bật fleet_bridge
+  với MapKey {mapKey}, FrameId {frameId} rồi bấm Cập nhật trạng thái."). Replays of
+  a stored request still return it.
+- Changing or clearing a map assignment sets `IsDispatchEnabled = false` in the
+  same transaction and audits `ROBOT_DISPATCH_CHANGED` (`enabled: false`, reason
+  "Tự tắt vì đổi bản đồ", `automatic: true`). Assigning the version already held
+  changes nothing.
+- Creating a map version for a new area whose name (trimmed, any case) is already
+  used: 409 `MAP_AREA_NAME_TAKEN` ("Đã có khu vực tên {tên} ({mã}). Chọn Khu vực đã
+  có hoặc đặt tên khác."). New versions of an existing area are unaffected.
+- `GET /api/technical/physical-robots` items add `readiness`:
+  `{ state, reasonCode, reason, mapVersionId, mapLabel, deploymentCheckedAt,
+  reportingOnAssignedMap }`. `state` is `READY`, `NOT_READY` (deactivated, or
+  assigned and connected but the deployment-check condition fails) or `NOT_SET_UP`
+  (no map or no confirmed connection). `mapVersionId`/`mapLabel` ("{khu vực} ·
+  v{n}") name the assigned version; `deploymentCheckedAt` is the newest check's time
+  when it is on the assigned version; `reportingOnAssignedMap` is the live-data test
+  above, informational only.
+- `GET /api/maps/versions` and `GET /api/maps/versions/{id}` items add
+  `runningRobot`: `{ id, robotCode, displayName, readiness }` for the active robot
+  assigned to that version, or null. `currentlyDeployedOn` is kept for
+  compatibility, but the web no longer uses it for the running-robot column.
+- `POST` POI import preview adds `robotReadiness`: `{ ready, code, message }`. When
+  the robot is not ready on the chosen version, files with `verified: true` are
+  imported without a PASS and wait in the verification queue (formerly a
+  `MAP_NOT_DEPLOYED` file error). A preview or result file's `verified` is what is,
+  or will be, recorded.
+
 Under ADR-0041 (schema v1.21), TechnicalStaff retire a map version instead of
 deleting it: `POST /api/technical/map-versions/{id}/retire` with
 `{ reason, expectedRowVersion }` and `POST /api/technical/map-versions/{id}/reopen`
