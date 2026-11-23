@@ -42,6 +42,9 @@ permission to execute it.
 - [Depth camera](depth-camera.md) — Astra Pro depth in the local costmap beside the LiDAR
   (`robot nav --camera`, off by default): CAD mount, lean driver, measured cost, offline costmap
   check, why it does not stop the robot for a low obstacle ahead, hardware test plan.
+- [Sonar perception](sonar-perception.md) — why the SR04T costmap layer failed goals (root cause),
+  the opt-in `sonar_mode` speed guard (Nav2 collision_monitor + blind-zone memory, ADR-0066),
+  what the four corner sonars can and cannot see, offline scenarios, hardware acceptance.
 - [Runtime deploy and rollback](runtime-deploy.md) — how the MiniPC runtime
   differs from source today, staging an immutable overlay from one commit, and
   rolling back by sourcing the previous overlay.

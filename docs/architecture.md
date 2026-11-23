@@ -298,7 +298,8 @@ RPLiDAR A3M1        -> /scan                 -> local + global costmap, AMCL, SL
 STM32 STEP counts   -> /wheel/odom -\
 BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
 Astra Pro (depth)   -> /camera/depth/points  -> LOCAL costmap ONLY
-4x SR04T sonar      -> /ultrasonic/sonarN/range -> LOCAL costmap ONLY
+4x SR04T sonar      -> /ultrasonic/sonarN/range -> no costmap; opt-in speed guard
+                       (Nav2 collision_monitor, ADR-0066)
 Astra Pro (RGB)     -> person detection      -> Nav2 speed limit
                        (`robot_perception`, not the AI tour guide)
 ```
