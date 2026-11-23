@@ -288,6 +288,13 @@ def generate_launch_description():
                         'sonar_memory can see through, and clear, old near echoes. With '
                         'sonar_mode off the bridge keeps its own 2.0 m default.'),
         DeclareLaunchArgument(
+            'sonar_guard_publish_mode', default_value='on_change',
+            description='stm32_bridge sonar_publish_mode when sonar_mode is not off: '
+                        'on_change publishes a sonar only when its reading changes, plus '
+                        'a 0.2 s heartbeat (~7x fewer Range messages for the guard '
+                        'nodes); every_frame = as with sonar_mode off. With sonar_mode '
+                        'off the bridge keeps every_frame.'),
+        DeclareLaunchArgument(
             'sonar_footprint_padding', default_value='0.05',
             description='Stand-off (m) the sonar guard keeps between the footprint and '
                         'a sonar point.'),
@@ -360,6 +367,9 @@ def generate_launch_description():
                 'sonar_max_range': PythonExpression([
                     "'2.0' if '", sonar_mode, "' == 'off' else '",
                     LaunchConfiguration('sonar_guard_max_range'), "'"]),
+                'sonar_publish_mode': PythonExpression([
+                    "'every_frame' if '", sonar_mode, "' == 'off' else '",
+                    LaunchConfiguration('sonar_guard_publish_mode'), "'"]),
                 'require_motion_permit': LaunchConfiguration('require_motion_permit'),
                 'require_stm32_link': LaunchConfiguration('require_stm32_link'),
             }.items(),

@@ -66,11 +66,12 @@ def run_probe(robot_id):
     v3 = str(SRC / 'robot_control/config/nav2_params_v3.yaml')
     with mock.patch.object(FindPackageShare, 'find', find_share), \
             mock.patch.object(PythonLaunchDescriptionSource, '_get_launch_description', load_source):
-        for mode in ('off', 'shadow', 'enforce', 'Enforce'):
+        for mode, extra in (('off', {}), ('shadow', {}), ('enforce', {}), ('Enforce', {}),
+                            ('enforce', {'sonar_guard_publish_mode': 'every_frame'})):
             context = LaunchContext()
             context.launch_configurations.update(
                 robot_id=robot_id, sonar_mode=mode, rviz='false', nav2_params_file=v3,
-                map=str(SRC / 'robot_navigation/maps/warehouse_12x12.yaml'))
+                map=str(SRC / 'robot_navigation/maps/warehouse_12x12.yaml'), **extra)
             nodes = {}
             shutdowns = []
 
@@ -110,8 +111,12 @@ def run_probe(robot_id):
                 assert smoother_in == 'cmd_vel_ctrl'
                 assert not {'collision_monitor', 'sonar_memory', 'lifecycle_manager_sonar'} & set(nodes)
                 assert bridge['sonar_max_range'] == 2.0
+                assert bridge['sonar_publish_mode'] == 'every_frame'   # the baseline, unchanged
                 continue
             assert bridge['sonar_max_range'] == 6.0
+            # The guard's rclpy nodes get a new reading + a 0.2 s heartbeat, not 40 Hz copies;
+            # sonar_guard_publish_mode:=every_frame rolls that back.
+            assert bridge['sonar_publish_mode'] == extra.get('sonar_guard_publish_mode', 'on_change')
             cm_node, cm, _ = nodes['collision_monitor']
             assert cm_node.expanded_node_namespace == ('/' + robot_id if robot_id else '/')
             # cmd_vel_in_topic and the rest come from the YAML (test_collision_monitor_config_contract);

@@ -44,6 +44,8 @@ def generate_launch_description():
     sonar_min_range = LaunchConfiguration('sonar_min_range')
     sonar_max_range = LaunchConfiguration('sonar_max_range')
     sonar_field_of_view = LaunchConfiguration('sonar_field_of_view')
+    sonar_publish_mode = LaunchConfiguration('sonar_publish_mode')
+    sonar_heartbeat_period = LaunchConfiguration('sonar_heartbeat_period')
     feedback_timeout = LaunchConfiguration('feedback_timeout')
     feedback_recovery_time = LaunchConfiguration('feedback_recovery_time')
     serial_write_stall_timeout = LaunchConfiguration('serial_write_stall_timeout')
@@ -269,6 +271,21 @@ def generate_launch_description():
             default_value='0.52',
             description='SR04T field of view in radians.'),
         DeclareLaunchArgument(
+            'sonar_publish_mode',
+            default_value='every_frame',
+            description='every_frame = each sonar Range with every FB frame '
+                        '(~40 Hz). on_change = only when its (mm, valid) '
+                        'changes, plus a heartbeat every '
+                        'sonar_heartbeat_period; navigation.launch.py uses it '
+                        'with the sonar guard (robot/docs/sonar-perception.md).'),
+        DeclareLaunchArgument(
+            'sonar_heartbeat_period',
+            default_value='0.2',
+            description='on_change only: an unchanged sonar reading is '
+                        'published again on the first FB frame this many '
+                        'seconds after the last one, (0, 0.5]. Keeps it well '
+                        'inside collision_monitor source_timeout (1.0 s).'),
+        DeclareLaunchArgument(
             'feedback_timeout',
             default_value='0.4',
             description='Hold the wheels (STOP only) if no STM32 feedback '
@@ -357,6 +374,10 @@ def generate_launch_description():
                     sonar_max_range, value_type=float),
                 'sonar_field_of_view': ParameterValue(
                     sonar_field_of_view, value_type=float),
+                'sonar_publish_mode': ParameterValue(
+                    sonar_publish_mode, value_type=str),
+                'sonar_heartbeat_period': ParameterValue(
+                    sonar_heartbeat_period, value_type=float),
                 'feedback_timeout': ParameterValue(
                     feedback_timeout, value_type=float),
                 'feedback_recovery_time': ParameterValue(

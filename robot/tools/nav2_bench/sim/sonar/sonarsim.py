@@ -11,9 +11,13 @@ the map frame).
 - Sonars: the four URDF mounts (sensors.xacro), a physical beam of +-NAVSIM_SONAR_BEAM
   deg (default 20), firmware sr04t.c timing (one sensor at a time, echo time, 60 ms
   gap, 45 ms echo timeout) and semantics (< 200 mm or no echo = invalid). Published
-  like stm32_bridge: every sensor at 40 Hz with the newest stamp, range NaN unless
+  like stm32_bridge on 40 Hz "FB frames" with the frame's stamp, range NaN unless
   valid and in [0.20, NAVSIM_SONAR_MAX] (default 2.0, the bridge default; the sonar
-  guard launch raises it to 6.0), field_of_view 0.52.
+  guard launch raises it to 6.0), field_of_view 0.52. NAVSIM_SONAR_PUBLISH is the
+  bridge's sonar_publish_mode and uses its own gate (stm32_bridge/sonar_publish.py):
+  every_frame (default: every sensor with every frame) or on_change (a new reading +
+  0.2 s heartbeat, what navigation.launch.py uses with sonar_mode; sonar_run.sh picks
+  it for shadow/enforce). The number of Range messages sent is logged at exit.
 - Faults: NAVSIM_SONAR_SPURIOUS (probability that a measurement is a random valid
   0.25-0.80 m echo), NAVSIM_SONAR_SILENT_AT (seconds after goal start; the "bridge"
   stops publishing sonar), NAVSIM_SONAR_OFF=1 (no sonar at all).
@@ -99,6 +103,9 @@ class SonarSim(Node):
         self.silent_at = env_f('NAVSIM_SONAR_SILENT_AT', 1e9)
         self.sonar_off = os.environ.get('NAVSIM_SONAR_OFF', '0') == '1'
         self.pub_max = env_f('NAVSIM_SONAR_MAX', 2.0)
+        from stm32_bridge.sonar_publish import SonarPublishGate
+        self.gate = SonarPublishGate(os.environ.get('NAVSIM_SONAR_PUBLISH', 'every_frame'))
+        self.sent, self.t_start = 0, None
         self.rng = np.random.default_rng(int(os.environ.get('NAVSIM_SEED', '0')))
         self.out = os.environ['NAVSIM_SONAR_OUT']
         self.pose = None
@@ -202,9 +209,13 @@ class SonarSim(Node):
         tg = self.tg()
         if self.sonar_off or (tg is not None and tg >= self.silent_at):
             return
-        stamp = self.get_clock().now().to_msg()
+        now = self.get_clock().now()
+        stamp, t = now.to_msg(), now.nanoseconds * 1e-9
+        self.t_start = t if self.t_start is None else self.t_start
         for i in range(4):
             mm, valid = self.readings[i]
+            if not self.gate.due(i, (mm, valid), t):
+                continue
             d = mm / 1000.0
             m = Range()
             m.header.stamp, m.header.frame_id = stamp, f'sonar{i + 1}_link'
@@ -212,6 +223,7 @@ class SonarSim(Node):
             m.range = d if valid and PUB_MIN <= d <= self.pub_max else float('nan')
             self.published[i] = m.range
             self.range_pub[i].publish(m)
+            self.sent += 1
 
     # -- LiDAR: tall obstacles join the map scan --------------------------------
     def on_scan(self, m):
@@ -262,6 +274,10 @@ def main():
     except (KeyboardInterrupt, Exception):
         pass
     n.dump()
+    if n.t_start is not None:
+        span = n.now() - n.t_start
+        print(f'sonarsim: {n.gate.mode}: {n.sent} Range in {span:.1f} s = {n.sent / span:.1f} msg/s',
+              flush=True)
 
 
 if __name__ == '__main__':

@@ -58,7 +58,25 @@ def summarise(run):
             d = np.hypot(np.diff(a[:, 1]), np.diff(a[:, 2]))
             out['path_m'] = round(float(d.sum()), 2)
             out['end_xy'] = [round(float(a[-1, 1]), 2), round(float(a[-1, 2]), 2)]
+            out.update(cpu_during_goal(run, a[0, 0], a[-1, 0]))
+    m = re.search(r'sonarsim: (\w+): \d+ Range in [\d.]+ s = ([\d.]+) msg/s', log)
+    if m:
+        out['sonar_publish'], out['range_msg_s'] = m.group(1), float(m.group(2))
     return out
+
+
+def cpu_during_goal(run, t0, t1):
+    """Mean CPU (% of one core) per process over the cpu_log.py rows inside the goal."""
+    path = os.path.join(run, 'cpu.csv')
+    if not os.path.exists(path):
+        return {}
+    with open(path) as f:
+        names = f.readline().strip().split(',')[1:]
+        rows = [[float(v) for v in line.split(',')] for line in f if line.strip()]
+    rows = [r for r in rows if t0 + 2.0 <= r[0] <= t1]   # the first sample has no delta
+    if not rows:
+        return {}
+    return {f'cpu_{n}': round(sum(r[i + 1] for r in rows) / len(rows), 1) for i, n in enumerate(names)}
 
 
 def main(argv):
@@ -70,9 +88,10 @@ def main(argv):
     keys = ['result', 't_goal', 'rpp_collision', 'patience', 'no_progress', 'clear_local', 'spin', 'wait',
             'rsl_timeout', 'cm_approach', 'cm_source_stale', 'guard_scaled_s', 'guard_stop_s', 'memory_hold',
             'clear_low', 'clear_tall',
-            'clear_wall', 't_in_collision_low', 'path_m']
+            'clear_wall', 't_in_collision_low', 'path_m', 'sonar_publish', 'range_msg_s']
     for r in rows:
-        print(r['run'] + ': ' + ', '.join(f'{k}={r.get(k)}' for k in keys if k in r))
+        cpu = [k for k in r if k.startswith('cpu_')]
+        print(r['run'] + ': ' + ', '.join(f'{k}={r.get(k)}' for k in keys + cpu if k in r))
 
 
 if __name__ == '__main__':

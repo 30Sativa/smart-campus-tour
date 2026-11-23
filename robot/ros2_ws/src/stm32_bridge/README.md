@@ -63,7 +63,17 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,<yaw_cdeg>,<yaw_valid>,<son
 ```
 
 `sonar*_valid=0` means no valid echo was received; the bridge publishes NaN for
-that `sensor_msgs/msg/Range` sample. The schematic mapping is `SONAR1 PB0/PB1`,
+that `sensor_msgs/msg/Range` sample. The firmware repeats each sensor's last
+reading in every frame (~40 Hz) but re-measures it only every 0.29-0.42 s.
+`sonar_publish_mode:=every_frame` (default) publishes one Range per sonar per
+frame. `on_change` publishes a sonar only when its `(mm, valid)` differs from
+the last one published, plus a heartbeat: an unchanged reading goes out again on
+the first frame `sonar_heartbeat_period` (0.2 s) after the previous one. Both
+stamp a message with the receive time of the frame that carries it, and a new
+reading is published on the same frame in both modes. The heartbeat rides on
+frames, not on a timer, so a lost link still goes silent.
+`navigation.launch.py` uses `on_change` when the sonar guard runs
+(`robot/docs/sonar-perception.md`). The schematic mapping is `SONAR1 PB0/PB1`,
 `SONAR2 PB11/PB12`, `SONAR3 PB13/PB14`, and `SONAR4 PB15/PA6` (echo on GPIOA
 for SONAR4 only), with connector pin 2 as TRIG and pin 3 as ECHO (SONAR4's
 TRIG is on connector pin 1 per the schematic).

@@ -28,6 +28,7 @@ def generate_launch_description():
     wheel_radius = LaunchConfiguration('wheel_radius')
     odom_linear_scale = LaunchConfiguration('odom_linear_scale')
     sonar_max_range = LaunchConfiguration('sonar_max_range')
+    sonar_publish_mode = LaunchConfiguration('sonar_publish_mode')
     max_wheel_speed_mm_s = LaunchConfiguration('max_wheel_speed_mm_s')
     speed_scale = LaunchConfiguration('speed_scale')
     invert_left = LaunchConfiguration('invert_left')
@@ -100,6 +101,11 @@ def generate_launch_description():
                               description='stm32_bridge: longest sonar echo published as a '
                                           'range (NaN beyond). navigation.launch.py raises it '
                                           'with sonar_mode (robot/docs/sonar-perception.md).'),
+        DeclareLaunchArgument('sonar_publish_mode', default_value='every_frame',
+                              description='stm32_bridge: every_frame (each FB frame, ~40 Hz) or '
+                                          'on_change (a new reading + 0.2 s heartbeat). '
+                                          'navigation.launch.py picks on_change with '
+                                          'sonar_mode (robot/docs/sonar-perception.md).'),
         DeclareLaunchArgument(
             'speed_scale', default_value='1.0',
             description='Real-robot command scale; 1.0 applies no hidden scaling.'),
@@ -172,6 +178,7 @@ def generate_launch_description():
                     'wheel_radius': wheel_radius,
                     'odom_linear_scale': odom_linear_scale,
                     'sonar_max_range': sonar_max_range,
+                    'sonar_publish_mode': sonar_publish_mode,
                     'max_wheel_speed_mm_s': max_wheel_speed_mm_s,
                     'speed_scale': speed_scale,
                     'invert_left': invert_left,

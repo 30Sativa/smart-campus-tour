@@ -27,13 +27,21 @@ The build is overlaid on a runtime that has `robot_nav_plugins` (LatchedGoalChec
 | `shadow` | V3 | collision_monitor + sonar_memory, output not used | 6.0 |
 | `enforce` | V3 | collision_monitor + sonar_memory between the controller and the smoother | 6.0 |
 
+The simulated bridge uses stm32_bridge's own publish gate (`stm32_bridge/sonar_publish.py`)
+with `sonar_publish_mode` as `navigation.launch.py` sets it: `every_frame` (each sonar with
+every frame, 160 Range/s) for `off` and `legacy`, `on_change` (a new reading + 0.2 s
+heartbeat) for `shadow` and `enforce`. `NAVSIM_SONAR_PUBLISH=every_frame|on_change`
+overrides it, e.g. for a CPU A/B. Results before 23/11 15:00 were all `every_frame`.
+`cpu_log.py` writes `cpu.csv` (per process, % of one core, 1 s); `sonar_report.py` prints
+the mean over the goal (`cpu_*`) and the Range rate (`range_msg_s`).
+
 ## World and scenarios
 
 `sonar_world.py` writes the map: a 1.6 m wide L corridor with a 0.9 m doorway. The
 robot goes from (0, 0) east, turns left at the corner and passes the doorway to
 (6.8, 6.0). `sonarsim.py` adds obstacles that are NOT in the map, the four SR04T
 (URDF mounts, +-20 deg beam, firmware timing and `< 200 mm = no echo`, bridge
-republishing at 40 Hz) and logs the footprint clearance.
+publishing on 40 Hz FB frames) and logs the footprint clearance.
 
 | scenario | what happens |
 |---|---|
