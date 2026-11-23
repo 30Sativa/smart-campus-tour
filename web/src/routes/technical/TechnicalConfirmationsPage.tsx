@@ -7,12 +7,13 @@ import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from 
 import { expectedDurationText, failedCheckNames, hasScheduledToursOnPath, legCoverageText, missingLegsText, resultSource, revisionTone, routeChanges, sharedResultLine } from '../../features/administration/routes/route-messages'
 import { campusShortStamp } from '../../features/administration/tours/tour-calendar'
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
-import { RobotPicker } from '../../features/technical/RobotPicker'
+import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
+import { robotForMap } from '../../features/technical/robot-readiness'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
 import { CheckRow, ComputedResult, NoneChecked, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { errorText, robotNotReadyReason, routeTestErrors } from '../../features/technical/technical-format'
+import { errorText, routeTestErrors } from '../../features/technical/technical-format'
 import { formatDateTime, formatMinutesSeconds } from '../../components/ui/date-time'
-import { usePhysicalRobots, usePreviousRevision, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
+import { useMapVersions, usePhysicalRobots, usePreviousRevision, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 
 type RouteFilter = 'pending' | 'passed' | 'failed'
 type RouteRow = { route: VersionedRoute; filter: RouteFilter }
@@ -112,8 +113,8 @@ export default function TechnicalConfirmationsPage() {
 function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClose: () => void }) {
   const record = useRecordRouteTest()
   const robots = usePhysicalRobots()
+  const maps = useMapVersions()
   const participants = useRouteTestParticipants()
-  const [robotCode, setRobotCode] = useState('')
   const [staffUserId, setStaffUserId] = useState('')
   const [allStopsReached, setAllStopsReached] = useState(false)
   const [safelyStopped, setSafelyStopped] = useState(false)
@@ -138,17 +139,15 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   // The result follows the ticks: all three ticked is Đạt, any left unticked is Không đạt and needs a reason.
   const resultCode: 'PASS' | 'FAIL' = checks.every(check => check.checked) ? 'PASS' : 'FAIL'
   const pending = !touched && checks.every(check => !check.checked)
-  const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
-  // The server refuses this either way, so save waits for a fresh robot list showing the robot confirmed and passing on this map.
-  const robotNotReady = selectedRobot ? robotNotReadyReason(selectedRobot, route.mapKey) : null
+  // Not chosen: the one robot the server calls ready on the route's map version records the run.
+  const robotCode = robotForMap(robots.data, route.mapVersionId).ready?.robotCode ?? ''
   const errors = record.error ? routeTestErrors(record.error) : {}
   // ADR-0023 addendum: the result applies to every save with this path, so the Tours it decides are named before saving.
   const shared = sharedResultLine(route)
   const failStopsTours = !pending && resultCode === 'FAIL' && hasScheduledToursOnPath(route)
   const changed = () => { record.reset(); setRequestId(crypto.randomUUID()) }
   const missingToSave = [
-    !robotCode && 'chọn robot',
-    robotNotReady && `robot ${robotNotReady}`,
+    !robotCode && 'cần một robot sẵn sàng trên bản đồ này',
     !staffUserId && 'chọn Staff đi cùng',
     pending && 'tick các mục đã kiểm tra',
     !pending && resultCode === 'FAIL' && !failureReason.trim() && 'nhập lý do không đạt',
@@ -174,9 +173,8 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} failed={failedCheckNames({ allStopsReached, safelyStopped, localizationPassed })} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="route-test-form" className="space-y-3.5" onSubmit={submit}>
         <div>
-          <RobotPicker id="route-test-robot" label="Robot vật lý" mapKey={route.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} requireReady emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
+          <ReadyRobotField robots={robots} mapVersionId={route.mapVersionId} map={maps.data?.find(item => item.map.id === route.mapVersionId)?.map} />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
-          {robotNotReady && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">{selectedRobot?.connectionStatus === 'UNCONFIRMED' ? 'Robot này chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại' : `Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên ${route.mapKey}. Ghi kiểm tra triển khai đạt ở trang Bản đồ`} rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
         <div>
           <label className={labelClass} htmlFor="route-test-staff">Staff đi cùng</label>

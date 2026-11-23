@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Bell, CheckCheck, ChevronRight } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import type { TechnicalActionItem } from './api/diagnostics-api'
-import { useTechnicalDashboard } from './technical-hooks'
+import { usePhysicalRobots, useTechnicalDashboard } from './technical-hooks'
+import { actionItemDescription, hasMapMismatch } from './robot-readiness'
 
 /** The bell re-reads the Dashboard on its own; the Dashboard page polls faster while it is open. */
 const POLL_MS = 60_000
@@ -22,6 +23,7 @@ const internalLink = (url: string | null) => (url && url.startsWith('/technical/
 export function TechnicalBell() {
   const dashboard = useTechnicalDashboard(POLL_MS)
   const items = [...(dashboard.data?.actionItems ?? [])].sort((a, b) => (RANK[a.severity] ?? 2) - (RANK[b.severity] ?? 2))
+  const robots = usePhysicalRobots(hasMapMismatch(items))
   const urgent = items.filter((item) => item.severity === 'DANGER').length
 
   const [open, setOpen] = useState(false)
@@ -64,7 +66,7 @@ export function TechnicalBell() {
           </div>
           <div className="max-h-[min(520px,70vh)] overflow-y-auto">
             {items.length > 0 ? (
-              <ul className="divide-y divide-[#f3f4f6]">{items.map((item, index) => <BellRow key={`${item.type}-${item.targetId ?? index}`} item={item} />)}</ul>
+              <ul className="divide-y divide-[#f3f4f6]">{items.map((item, index) => <BellRow key={`${item.type}-${item.targetId ?? index}`} item={item} description={actionItemDescription(item, robots.data)} />)}</ul>
             ) : dashboard.isError ? (
               <p className="px-4 py-4 text-sm font-semibold text-[#b45309]">Không đọc được việc đang chờ. Bảng này sẽ tự thử lại; mở Tổng quan để kiểm tra.</p>
             ) : dashboard.isPending ? (
@@ -79,14 +81,14 @@ export function TechnicalBell() {
   )
 }
 
-function BellRow({ item }: { item: TechnicalActionItem }) {
+function BellRow({ item, description }: { item: TechnicalActionItem; description: string }) {
   const to = internalLink(item.linkUrl)
   const body = (
     <>
       <span aria-hidden="true" className={`mt-1.5 size-2 shrink-0 rounded-full ${DOT[item.severity] ?? 'bg-[#3b82f6]'}`} />
       <span className="min-w-0 flex-1">
         <span className="block text-[13px] leading-5 font-semibold text-[#111827]">{item.title}</span>
-        <span className="mt-0.5 line-clamp-2 block text-xs text-[#6b7280]">{item.description}</span>
+        <span className="mt-0.5 line-clamp-2 block text-xs text-[#6b7280]">{description}</span>
         {to && <span className="mt-1 inline-flex items-center gap-0.5 text-xs font-bold text-[#2d719e] group-hover:underline">Mở<ChevronRight size={13} aria-hidden="true" /></span>}
       </span>
     </>

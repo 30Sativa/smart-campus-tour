@@ -1,0 +1,41 @@
+import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router'
+import { Modal } from '../../components/ui/Drawer'
+import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
+import { usePhysicalRobots } from './technical-hooks'
+import { errorText } from './technical-format'
+import { robotSetupPath } from './robot-readiness'
+
+/**
+ * "Triển khai cho robot…": choose the robot, then continue in that robot's setup dialog with this version chosen.
+ * Assigning and the deployment check happen there, so the robot keeps one place where its map is changed.
+ */
+export function DeployToRobotDialog({ mapVersionId, mapLabel, preselectRobotId, onClose }: {
+  mapVersionId: string; mapLabel: string
+  /** The robot already holding this area, if any: an area holds one robot, so it is the usual choice. */
+  preselectRobotId?: string
+  onClose: () => void
+}) {
+  const robots = usePhysicalRobots()
+  const navigate = useNavigate()
+  const [robotId, setRobotId] = useState(preselectRobotId ?? '')
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (robotId) navigate(robotSetupPath(robotId, mapVersionId))
+  }
+  return (
+    <Modal open title={`Triển khai ${mapLabel} cho robot`} description="Chọn robot, rồi gán bản đồ và kiểm tra triển khai trong hộp Thiết lập của robot đó." onClose={onClose}
+      footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Hủy</button><button type="submit" form="deploy-to-robot-form" className={buttonClass('primary')} disabled={!robotId}>Tiếp tục</button></div>}>
+      <form id="deploy-to-robot-form" onSubmit={submit}>
+        <label className={labelClass} htmlFor="deploy-robot">Robot</label>
+        <select title="" id="deploy-robot" className={`${inputClass} mt-1`} required value={robotId} disabled={robots.isPending || robots.isError} onChange={event => setRobotId(event.target.value)}>
+          <option value="">Chọn robot</option>
+          {robots.data?.map(robot => <option key={robot.id} value={robot.id}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}{robot.assignedAreaName ? ` · đang gán ${robot.assignedAreaName} · phiên bản ${robot.assignedVersionNumber}` : ' · chưa gán bản đồ'}</option>)}
+        </select>
+        {robots.isPending && <p role="status" className="mt-1 text-sm text-[#64748b]">Đang tải danh sách robot…</p>}
+        {robots.isError && <div role="alert" className="mt-1 text-sm text-[#b23e18]"><p>{errorText(robots.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void robots.refetch()}>Tải lại danh sách robot</button></div>}
+        {robots.data?.length === 0 && <p role="status" className="mt-1 text-sm text-[#b23e18]">Chưa có robot vật lý được đăng ký.</p>}
+      </form>
+    </Modal>
+  )
+}

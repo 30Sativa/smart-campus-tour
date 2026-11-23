@@ -5,7 +5,8 @@ import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../co
 import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
-import { RobotPicker } from '../../features/technical/RobotPicker'
+import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
+import { robotForMap } from '../../features/technical/robot-readiness'
 import { CheckRow, ComputedResult, NoneChecked, DetailFact, Note, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
 import { mapVersionLabel, narrationStatus, poiObservationLabels, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { headPresetLabel } from '../../features/technical/head-camera-preset'
@@ -139,7 +140,7 @@ function PoiDetailModal({ row, mapName, onClose, onRecord }: { row: PoiRow; mapN
 function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerificationQueueItem; mapName: string; onClose: () => void }) {
   const verify = useVerifyPoi()
   const robots = usePhysicalRobots()
-  const [robotCode, setRobotCode] = useState('')
+  const maps = useMapVersions()
   const [evidence, setEvidence] = useState('')
   const [reason, setReason] = useState('')
   // Nothing is ticked up front: every observation is one the checker made on purpose.
@@ -161,12 +162,10 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
   // The result follows the ticks: all four ticked is Đạt, any left unticked is Không đạt and needs a reason.
   const resultCode: 'PASS' | 'FAIL' = checks.every(check => check.checked) ? 'PASS' : 'FAIL'
   const pending = !touched && checks.every(check => !check.checked)
-  const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
-  // The server refuses this either way (MAP_NOT_DEPLOYED), so save waits for a fresh robot list that shows a pass on this map.
-  const robotElsewhere = selectedRobot && (selectedRobot.latestDeployedMapKey !== revision.mapKey || selectedRobot.latestDeploymentPassed === false)
+  // Not chosen: the one robot the server calls ready on this exact version records the result (MAP_NOT_DEPLOYED otherwise).
+  const robotCode = robotForMap(robots.data, revision.mapVersionId).ready?.robotCode ?? ''
   const missingToSave = [
-    !robotCode && 'chọn robot',
-    robotElsewhere && 'robot chưa kiểm tra triển khai đạt trên map này',
+    !robotCode && 'cần một robot sẵn sàng trên bản đồ này',
     pending && 'tick các mục đã kiểm tra',
     !pending && resultCode === 'FAIL' && !reason.trim() && 'nhập lý do không đạt',
     !evidence.trim() && 'nhập ghi chú bằng chứng',
@@ -197,9 +196,8 @@ function VerifyModal({ proposal, mapName, onClose }: { proposal: PoiVerification
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="poi-verify-form" className="space-y-3.5" onSubmit={submit}>
         <div>
-          <RobotPicker id="verify-robot" label="Robot vật lý" mapKey={revision.mapKey} requireReady value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả kiểm chứng." />
+          <ReadyRobotField robots={robots} mapVersionId={revision.mapVersionId} map={maps.data?.find(item => item.map.id === revision.mapVersionId)?.map} />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
-          {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {revision.mapKey}. Ghi kiểm tra triển khai đạt ở trang Bản đồ rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
         <div className="space-y-2">
           <p className="text-xs text-[#64748b]">Tick mục đã đạt. Còn mục chưa tick thì kết quả là Không đạt.</p>

@@ -191,9 +191,11 @@ export const useImportPoiFiles = () => useTechnicalMutation(technicalApi.importP
   detail: 'Staff cần bổ sung tên và thuyết minh cho POI mới.',
 }))
 
+/** A check changes the robot's readiness as well as the map's, so both lists reload. */
 export const useRecordDeployment = () => useTechnicalMutation(technicalApi.recordDeployment, keys.maps, (input, check) => check?.passed
-  ? { title: `Đã ghi kiểm tra trên ${input.robotCode}: đạt`, detail: 'Localization và hiển thị map đều đạt.' }
-  : { tone: 'info', title: `Đã ghi kiểm tra trên ${input.robotCode}: chưa đạt`, detail: 'Version này chưa dùng được cho tới khi kiểm tra lại đạt.' })
+  ? { title: `Đã ghi kiểm tra triển khai trên ${input.robotCode}: đạt`, detail: 'Định vị và hiển thị bản đồ đều đạt.' }
+  : { tone: 'info', title: `Đã ghi kiểm tra triển khai trên ${input.robotCode}: không đạt`, detail: 'Robot chưa sẵn sàng trên bản đồ này cho tới khi kiểm tra lại đạt.' },
+[keys.physicalRobots])
 
 export const useRegisterPhysicalRobot = () => useTechnicalMutation(technicalApi.registerPhysicalRobot, keys.physicalRobots, (_input, robot) => ({
   title: `Đã đăng ký ${robot.robotCode}`,
