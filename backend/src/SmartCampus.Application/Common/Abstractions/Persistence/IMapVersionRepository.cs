@@ -15,6 +15,13 @@ public interface IMapVersionRepository
     Task<MapVersion?> FindMapVersionAsync(Guid id, bool includePackage, CancellationToken cancellationToken);
     Task<IReadOnlyList<MapVersion>> ListMapVersionsAsync(string? areaKey, int take, bool includeRetired, CancellationToken cancellationToken);
     Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksForPhysicalRobotsAsync(CancellationToken cancellationToken);
+    /// <summary>Active physical robots holding a map, with that map and its area (ADR-0066 running robot).</summary>
+    Task<IReadOnlyList<Robot>> ListAssignedPhysicalRobotsAsync(CancellationToken cancellationToken);
+    /// <summary>
+    /// A fresh untracked read of the robot with its assigned map and area. Callers take
+    /// <see cref="LockRobotDeploymentStateAsync"/> first: assignment, deactivation and key changes hold that lock.
+    /// </summary>
+    Task<Robot?> ReadRobotForReadinessAsync(Guid robotId, CancellationToken cancellationToken);
     Task<MapDeploymentCheck?> FindDeploymentRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken);
     Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken cancellationToken);
     Task LockRobotDeploymentStateAsync(Guid robotId, CancellationToken cancellationToken);

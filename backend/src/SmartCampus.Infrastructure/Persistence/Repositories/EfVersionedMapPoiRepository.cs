@@ -79,6 +79,17 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
     public async Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksForPhysicalRobotsAsync(CancellationToken cancellationToken) =>
         await LatestPhysicalRobotDeploymentChecks.Query(dbContext).ToArrayAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Robot>> ListAssignedPhysicalRobotsAsync(CancellationToken cancellationToken) =>
+        await dbContext.Robots.AsNoTracking()
+            .Where(robot => robot.SourceType == "PHYSICAL" && robot.DeactivatedAt == null && robot.AssignedMapVersionId != null)
+            .Include(robot => robot.AssignedMapVersion).ThenInclude(map => map!.AreaKeyNavigation)
+            .ToArrayAsync(cancellationToken);
+
+    public Task<Robot?> ReadRobotForReadinessAsync(Guid robotId, CancellationToken cancellationToken) =>
+        dbContext.Robots.AsNoTracking()
+            .Include(robot => robot.AssignedMapVersion).ThenInclude(map => map!.AreaKeyNavigation)
+            .SingleOrDefaultAsync(robot => robot.Id == robotId && robot.SourceType == "PHYSICAL", cancellationToken);
+
     public Task<MapDeploymentCheck?> FindDeploymentRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken) =>
         dbContext.MapDeploymentChecks.Include(check => check.Robot)
             .SingleOrDefaultAsync(check => check.CheckedByUserId == actorUserId && check.RequestId == requestId, cancellationToken);
@@ -177,6 +188,7 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
 
     public Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken) =>
         dbContext.MapDeploymentChecks.AsNoTracking().Include(check => check.Robot)
+            .Include(check => check.MapVersion).ThenInclude(map => map.AreaKeyNavigation)
             .Where(check => check.RobotId == robotId)
             .OrderByDescending(check => check.CheckedAt).ThenByDescending(check => check.Id)
             .FirstOrDefaultAsync(cancellationToken);

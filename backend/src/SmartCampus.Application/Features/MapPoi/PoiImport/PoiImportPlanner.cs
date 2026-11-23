@@ -7,15 +7,18 @@ namespace SmartCampus.Application.Features.MapPoi;
 
 internal sealed record PoiImportParsedFile(PoiImportSource Source, byte[] Sha256, PoiCaptureFile? Capture, string? ErrorCode, string? ErrorMessage);
 
+/// <summary>Verified: the file asked for PASS and the robot is ready on the map (ADR-0066); otherwise it waits in the queue.</summary>
 internal sealed record PoiImportPlannedFile(
     PoiImportParsedFile File, decimal? X, decimal? Y, decimal? Yaw, string? Action, string? ErrorCode, string? ErrorMessage,
-    PoiImportReceipt? PriorReceipt, PoiProposal? Proposal)
+    PoiImportReceipt? PriorReceipt, PoiProposal? Proposal, bool Verified = false)
 {
     public string FileSha256 => Convert.ToHexString(File.Sha256).ToLowerInvariant();
 
     public PoiImportPreviewFile ToPreview() => new(File.Source.FileName, FileSha256, File.Capture?.Id, File.Capture?.Name,
-        X, Y, Yaw, File.Capture?.Verified, Action, ErrorCode, ErrorMessage);
+        X, Y, Yaw, File.Capture is null ? null : PriorReceipt?.Verified ?? Verified, Action, ErrorCode, ErrorMessage);
 }
+
+internal sealed record PoiImportPlan(IReadOnlyList<PoiImportPlannedFile> Files, RobotMapReadinessResult RobotReadiness);
 
 /// <summary>The one validation pass behind preview and import, so they cannot disagree.</summary>
 internal static class PoiImportPlanner
@@ -26,7 +29,7 @@ internal static class PoiImportPlanner
     public static IReadOnlyList<PoiImportParsedFile> Parse(IReadOnlyList<PoiImportSource> sources) =>
         sources.Select(ParseFile).ToArray();
 
-    public static async Task<IReadOnlyList<PoiImportPlannedFile>> PlanAsync(
+    public static async Task<PoiImportPlan> PlanAsync(
         IPoiImportRepository importRepository, IMapVersionRepository mapRepository, MapVersion map, Robot robot,
         IReadOnlyList<PoiImportParsedFile> files, MapPoiSettings settings, CancellationToken cancellationToken)
     {
@@ -38,12 +41,16 @@ internal static class PoiImportPlanner
         var applied = (await importRepository.ListAppliedImportReceiptsAsync(map.Id, cancellationToken))
             .ToDictionary(receipt => Convert.ToHexString(receipt.FileSha256));
         var eligibility = (await MapPreparationEligibility.LoadAsync(mapRepository, map, cancellationToken)).WithRetirement(map);
-        var deployed = PoiProposalRules.IsDeployedOn(await mapRepository.GetLatestDeploymentCheckForRobotAsync(robot.Id, cancellationToken), map);
+        // A fresh read: the import holds the robot deployment lock here, and assignment changes take it too.
+        var current = await mapRepository.ReadRobotForReadinessAsync(robot.Id, cancellationToken) ?? robot;
+        var readiness = RobotMapReadiness.Evaluate(current,
+            await mapRepository.GetLatestDeploymentCheckForRobotAsync(robot.Id, cancellationToken), map);
         var package = MapPackageValidator.Validate(map.PackageBytes);
 
         var sourceCounts = files.Where(file => file.Capture is not null).GroupBy(file => file.Capture!.Id, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
-        return files.Select(file => PlanFile(file, map, package, settings, eligibility, deployed, sourceCounts, proposalBySource, currentCameras, applied)).ToArray();
+        return new(files.Select(file => PlanFile(file, map, package, settings, eligibility, readiness.IsReady, sourceCounts,
+            proposalBySource, currentCameras, applied)).ToArray(), readiness);
     }
 
     private static PoiImportParsedFile ParseFile(PoiImportSource source)
@@ -64,7 +71,7 @@ internal static class PoiImportPlanner
     }
 
     private static PoiImportPlannedFile PlanFile(PoiImportParsedFile file, MapVersion map, ValidatedMapPackage package, MapPoiSettings settings,
-        MapPreparationEligibility eligibility, bool deployed, Dictionary<string, int> sourceCounts,
+        MapPreparationEligibility eligibility, bool robotReady, Dictionary<string, int> sourceCounts,
         Dictionary<string, PoiProposal> proposalBySource, IReadOnlyDictionary<Guid, string> currentCameras,
         Dictionary<string, PoiImportReceipt> applied)
     {
@@ -101,8 +108,6 @@ internal static class PoiImportPlanner
         {
             return Failed("POSE_NOT_FREE", "Pose nằm ngoài bản đồ, sai góc yaw, hoặc không rơi vào ô trống.");
         }
-        if (capture.Verified && !deployed)
-            return Failed("MAP_NOT_DEPLOYED", "Robot đã chọn chưa có kiểm tra triển khai đạt mới nhất trên đúng phiên bản bản đồ này.");
 
         var proposal = proposalBySource.GetValueOrDefault(capture.Id);
         // The source id stays reserved by the discarded proposal (UX_PoiProposals_Source), and a new revision must not revive it.
@@ -114,7 +119,9 @@ internal static class PoiImportPlanner
         // A new capture carries the current camera preset forward, and a file cannot choose one.
         if (proposal is not null && !PoiCameraPresets.IsValid(currentCameras.GetValueOrDefault(proposal.Id)))
             return Failed(MapPoiErrorCodes.CameraPresetInvalid, $"{PoiCameraPresets.InvalidMessage} Staff cần chọn lại hướng camera của POI này trước khi nhập tệp.");
-        return new(file, x, y, yaw, proposal is null ? PoiImportActions.Create : PoiImportActions.NewRevision, null, null, null, proposal);
+        // ADR-0066: a robot not ready on this map cannot vouch for the pose, so the file is imported for the verification queue.
+        return new(file, x, y, yaw, proposal is null ? PoiImportActions.Create : PoiImportActions.NewRevision, null, null, null, proposal,
+            capture.Verified && robotReady);
     }
 
     private static double YawDifference(double first, double second)
