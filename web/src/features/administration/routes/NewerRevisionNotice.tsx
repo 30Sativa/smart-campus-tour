@@ -8,11 +8,14 @@ import { versionedRoutesApi } from './versioned-api'
 /**
  * A Tour runs the exact route revision it was created on (ADR-0034); saving the route makes a new revision and leaves
  * the Tour as it was. Says so on a Tour still to run whose route has moved on, because its stop list alone reads as
- * "the route", and a Tour cannot be moved to the new revision: it has to be cancelled and created again. Recreating
+ * "the route". A new revision with the Tour's path and only newer narration can be taken from the Tour page
+ * (ADR-0067); any other change means cancelling the Tour and creating it again. Recreating
  * is advised only when the new revision has another path and can take a new Tour; a pass recorded on the Tour's own
  * path unblocks it without that.
  */
-export function NewerRevisionNotice({ routeId, revisionId, tourRevisionFailed = false }: { routeId: string; revisionId: string; tourRevisionFailed?: boolean }) {
+export function NewerRevisionNotice({ routeId, revisionId, tourRevisionFailed = false, narrationRefreshable = false }: { routeId: string; revisionId: string; tourRevisionFailed?: boolean
+  /** ADR-0067: the newer revision has the Tour's path and only newer narration, which the Tour can take without being recreated. */
+  narrationRefreshable?: boolean }) {
   const current = useQuery({ queryKey: ['versioned-routes', routeId], queryFn: () => versionedRoutesApi.get(routeId) })
   // Only an answer naming a revision says anything; a failed or odd read must not take the Tour page down with it.
   const latest = current.data
@@ -24,7 +27,9 @@ export function NewerRevisionNotice({ routeId, revisionId, tourRevisionFailed = 
   // ADR-0062: a new Tour is refused on a save with a retired POI, so recreating helps only when the new save is usable.
   const latestRetired = Boolean(latest.retiredPoiNames?.length)
   const latestUsable = latest.verificationStatus === 'PASS' && !latestRetired
-  const advice = tourRevisionFailed
+  const advice = narrationRefreshable && !tourRevisionFailed
+    ? 'Bản mới có cùng đường đi, chỉ khác lời thuyết minh: bấm "Cập nhật lời thuyết minh mới" ở mục Lời thuyết minh, không cần tạo lại Tour.'
+    : tourRevisionFailed
     ? samePath ? 'Khi Kỹ thuật ghi một lần chạy đạt cho đường đi này, Tour chốt được lại, không cần tạo lại Tour.'
       : latestUsable ? 'Bản mới có đường đi khác và đã chạy thử đạt: muốn Tour đi theo bản mới, hủy Tour rồi tạo lại. Hoặc giữ Tour và chờ Kỹ thuật ghi một lần chạy đạt cho đường đi của bản Tour đang dùng.'
         : 'Khi Kỹ thuật ghi một lần chạy đạt cho đường đi của bản Tour đang dùng, Tour chốt được lại, không cần tạo lại Tour.'

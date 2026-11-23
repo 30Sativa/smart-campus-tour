@@ -1,6 +1,6 @@
 import { apiClient } from '../../../../api/client'
 import type { ApiResponse, PagedApiResponse } from '../../../../api/contracts/shared'
-import type { CreateTourInput, StartConfirmation, TourDetails, TourInput, TourListQuery, TourOperator, TourRobotOption, TourShifts, TourSlots,TourStartChecks, TourSummary } from '../types'
+import type { CreateTourInput, StartConfirmation, TourDetails, TourInput, TourListQuery, TourNarrationRefreshResult, TourNarrationStatus, TourOperator, TourRobotOption, TourShifts, TourSlots,TourStartChecks, TourSummary } from '../types'
 
 type Mutation = ApiResponse<{ id: string }>
 
@@ -39,6 +39,12 @@ export const toursApi = {
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/capacity`, { method: 'POST', json: body }).then(() => id),
   changeOperator: (id: string, body: { requestId: string; expectedRowVersion: string; operatorUserId: string }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/operator`, { method: 'POST', json: body }).then(() => id),
+  /** ADR-0067: each stop's narration in the Tour against the newest approved one. */
+  narration: (id: string) =>
+    apiClient<ApiResponse<TourNarrationStatus>>(`/api/staff/manage/tours/${id}/narration`).then(r => r.data!),
+  /** ADR-0067: before Start, move the Tour to its route's same-path revision with the newest approved narration. */
+  refreshNarration: (id: string, body: { requestId: string; expectedRowVersion: string }) =>
+    apiClient<ApiResponse<TourNarrationRefreshResult>>(`/api/staff/manage/tours/${id}/narration/refresh`, { method: 'POST', json: body }).then(r => r.data!),
   /** `holdAtStart`: the checks for opening the Tour without its first leg. */
   startChecks: (id: string, holdAtStart = false) =>
     apiClient<ApiResponse<TourStartChecks>>(`/api/staff/manage/tours/${id}/start-checks${holdAtStart ? '?holdAtStart=true' : ''}`).then(r => r.data!),

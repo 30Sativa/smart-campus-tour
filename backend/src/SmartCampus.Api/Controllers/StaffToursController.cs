@@ -28,6 +28,7 @@ using SmartCampus.Application.Features.Tours.Commands.StartTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Application.Features.Tours.Commands.ChangeTourCapacity;
 using SmartCampus.Application.Features.Tours.Commands.ChangeTourOperator;
+using SmartCampus.Application.Features.Tours.Commands.RefreshTourNarration;
 using SmartCampus.Application.Features.Tours.Commands.AutoAdvanceTour;
 using SmartCampus.Application.Features.Tours.Commands.PauseTourLeg;
 using SmartCampus.Application.Features.Tours.Commands.SkipTourStop;
@@ -35,6 +36,7 @@ using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
 using SmartCampus.Application.Features.Tours.Queries.GetTourStartChecks;
+using SmartCampus.Application.Features.Tours.Queries.GetTourNarration;
 using SmartCampus.Application.Features.Tours.Queries.ListTourRobots;
 using SmartCampus.Application.Features.Tours.Queries.GetTours;
 using SmartCampus.Application.Features.TourCoverImage;
@@ -117,6 +119,18 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     [HttpPost("{id:guid}/operator")]
     public async Task<IActionResult> ChangeOperator(Guid id, [FromBody] ChangeTourOperatorRequest request, CancellationToken ct) =>
         Success(await sender.Send(new ChangeTourOperatorCommand(id, User.GetRequiredUserId(), request), ct), "Tour operator changed.");
+
+    /// <summary>ADR-0067: each stop's narration in the Tour against the newest approved one, and whether Staff may refresh.</summary>
+    [HttpGet("{id:guid}/narration")]
+    public async Task<IActionResult> Narration(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<TourNarrationStatus> { Success = true, Message = "Tour narration retrieved.",
+            Data = await sender.Send(new GetTourNarrationQuery(id), ct) });
+
+    /// <summary>ADR-0067: before Start, move the Tour to a revision of its route with the same path and the newest approved narration.</summary>
+    [HttpPost("{id:guid}/narration/refresh")]
+    public async Task<IActionResult> RefreshNarration(Guid id, [FromBody] RefreshTourNarrationRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<TourNarrationRefreshResult> { Success = true, Message = "Tour narration refreshed.",
+            Data = await sender.Send(new RefreshTourNarrationCommand(id, User.GetRequiredUserId(), request), ct) });
 
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelTourRequest request, CancellationToken ct) =>

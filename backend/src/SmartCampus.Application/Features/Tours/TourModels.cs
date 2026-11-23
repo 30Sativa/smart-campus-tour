@@ -52,7 +52,9 @@ public sealed record TourUsage(bool HasRegistrations, bool HasAllowedBranches, b
 /// <summary><see cref="ReadyBlockers"/> lists every READY condition the Tour fails now; empty when it can be marked READY.</summary>
 public sealed record TourPermissions(bool CanEditMetadata, bool CanChangeScheduleAndRoute, bool CanCancel, bool CanDelete = false,
     bool CanMarkReady = false, bool CanReopen = false, IReadOnlyList<ConflictBlocker>? ReadyBlockers = null,
-    bool CanChangeCapacity = false, bool CanChangeOperator = false, int MaxCapacity = 0);
+    bool CanChangeCapacity = false, bool CanChangeOperator = false, int MaxCapacity = 0,
+    // ADR-0067: before Start a versioned Tour may take the newest approved narration of its POIs.
+    bool CanRefreshNarration = false);
 public sealed record TourReservationView(string RobotCode, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
     int MeasuredDurationSeconds, DateTimeOffset? ReleasedAt, int ExpectedDurationSeconds);
 /// <summary>One shift on one day: <see cref="Time"/> is the Tour start, the reservation is the whole shift.</summary>
@@ -151,6 +153,8 @@ public static class TourLifecycleEvents
     public const string DispatchChanged = "ROBOT_DISPATCH_CHANGED";
     public const string CapacityChanged = "TOUR_CAPACITY_CHANGED";
     public const string OperatorChanged = "TOUR_OPERATOR_CHANGED";
+    /// <summary>ADR-0067: the Tour moved to a revision of its route that differs only in approved narration.</summary>
+    public const string NarrationRefreshed = "TOUR_NARRATION_REFRESHED";
     /// <summary>ADR-0065: a voting Tour closed a ballot and chose its next POI; DataJson holds the counts, winner and reason.</summary>
     public const string NextStopChosen = "NEXT_STOP_CHOSEN";
     public const string StopLocked = "STOP_LOCKED";

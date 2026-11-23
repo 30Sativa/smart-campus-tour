@@ -49,7 +49,8 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
             a.Action == TourLifecycleEvents.Started || a.Action == TourLifecycleEvents.Next ||
             a.Action == TourLifecycleEvents.EndedEarly || a.Action == TourLifecycleEvents.LegRetried ||
             a.Action == TourLifecycleEvents.CommandReconciled ||
-            a.Action == TourLifecycleEvents.CapacityChanged || a.Action == TourLifecycleEvents.OperatorChanged), ct);
+            a.Action == TourLifecycleEvents.CapacityChanged || a.Action == TourLifecycleEvents.OperatorChanged ||
+            a.Action == TourLifecycleEvents.NarrationRefreshed), ct);
 
     public async Task<PagedResult<TourSummary>> ListAsync(TourListRequest request, CancellationToken ct)
     {

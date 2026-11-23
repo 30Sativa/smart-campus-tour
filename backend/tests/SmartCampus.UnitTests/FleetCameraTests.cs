@@ -314,6 +314,39 @@ public sealed class FleetCameraTests
         Assert.Equal("asleep", status.Screen);
     }
 
+    [Fact]
+    public async Task Poll_DuringARunningTour_CarriesTheStopAndNarrationForTheHeadsetMc()
+    {
+        var stop = new QuestTourStopFacts(Guid.NewGuid(), "OBSERVING", false, Guid.NewGuid(), Guid.NewGuid(), 2, "Thư viện",
+            "Đây là thư viện.");
+        var demand = await new PollCameraDemandHandler(new FakeStore(), new FakeRobots(new RobotCameraFacts(Robot, true)),
+            new FleetCameraSettings(), new Clock(Now), new FakeTourStops(stop)).Handle(new PollCameraDemand(Robot), default);
+
+        Assert.Equal(new QuestTourStop(stop.TourId, "OBSERVING", false, stop.VisitId, stop.StopId, 2, "Thư viện",
+            "Đây là thư viện."), demand.Tour);
+    }
+
+    [Fact]
+    public async Task Poll_WithoutARunningTour_NeverReadsOrSendsAStop()
+    {
+        var stops = new FakeTourStops(new QuestTourStopFacts(Guid.NewGuid(), "OBSERVING", false, null, null, null, null, null));
+        var demand = await new PollCameraDemandHandler(new FakeStore(), new FakeRobots(new RobotCameraFacts(Robot, false)),
+            new FleetCameraSettings(), new Clock(Now), stops).Handle(new PollCameraDemand(Robot), default);
+
+        Assert.Null(demand.Tour);
+        Assert.Equal(0, stops.Reads);
+    }
+
+    private sealed class FakeTourStops(QuestTourStopFacts? facts) : IQuestTourStopReader
+    {
+        public int Reads { get; private set; }
+        public Task<QuestTourStopFacts?> GetRunningAsync(string robotCode, CancellationToken cancellationToken)
+        {
+            Reads++;
+            return Task.FromResult(facts);
+        }
+    }
+
     private static readonly FleetCameraSettings Settings = new(robotListeningWithinSeconds: 20);
 
     private static Task<CameraDemand> ReportHeadset(ICameraDemandStore store, IRobotCameraReader robots, TimeProvider clock,
