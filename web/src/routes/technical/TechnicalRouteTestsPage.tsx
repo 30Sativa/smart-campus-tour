@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router'
 import { CircleCheck, CircleX, Clock3, LoaderCircle } from 'lucide-react'
 import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
@@ -9,7 +10,7 @@ import { campusShortStamp } from '../../features/administration/tours/tour-calen
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
 import { DeployToRobotDialog } from '../../features/technical/DeployToRobotDialog'
 import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
-import { robotForMap } from '../../features/technical/robot-readiness'
+import { robotForMap, routeReturnPath } from '../../features/technical/robot-readiness'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
 import { CheckRow, ComputedResult, NoneChecked, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { errorText, routeTestErrors } from '../../features/technical/technical-format'
@@ -48,10 +49,23 @@ export default function TechnicalRouteTestsPage() {
   const routes = useSubmittedRoutes()
   const [filter, setFilter] = useState<RouteFilter>('pending')
   const [dialog, setDialog] = useState<Dialog | null>(null)
-  // The robot picker replaces the test form rather than opening inside its <form> (see ReadyRobotField).
-  const [assigning, setAssigning] = useState<{ mapVersionId: string; mapLabel: string } | null>(null)
+  // The robot picker replaces the test form rather than opening inside its <form> (see ReadyRobotField); it keeps
+  // the route so Hủy reopens that form.
+  const [assigning, setAssigning] = useState<{ mapVersionId: string; mapLabel: string; preselectRobotId?: string; route: VersionedRoute } | null>(null)
+  // `?route=<revisionId>` is where the robot page sends someone back to: it reopens that route's test or its result.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [linkedRoute, setLinkedRoute] = useState(() => searchParams.get('route'))
+  useEffect(() => {
+    if (searchParams.has('route')) setSearchParams(current => { const next = new URLSearchParams(current); next.delete('route'); return next }, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const rows = useMemo(() => toRows(queue.data ?? [], routes.data?.data ?? []), [queue.data, routes.data])
+  // Opened once both lists are in, then held like any other dialog so a save does not unmount it.
+  if (linkedRoute && queue.isSuccess && !routes.isPending) {
+    const row = rows.find(item => item.route.revisionId === linkedRoute)
+    setLinkedRoute(null)
+    if (row) setDialog({ view: row.filter === 'pending' ? 'record' : 'result', route: row.route })
+  }
   // A route Staff stopped using stays listed with its result, below the routes still in use.
   const visible = rows.filter(row => row.filter === filter).sort((a, b) => Number(a.route.isActive === false) - Number(b.route.isActive === false))
   const count = (value: RouteFilter) => rows.filter(row => row.filter === value).length
@@ -109,14 +123,15 @@ export default function TechnicalRouteTestsPage() {
       </div>
 
       {dialog?.view === 'record' && <RecordRouteTestModal key={dialog.route.revisionId} route={dialog.route} onClose={() => setDialog(null)}
-        onAssignRobot={mapLabel => { setAssigning({ mapVersionId: dialog.route.mapVersionId, mapLabel }); setDialog(null) }} />}
-      {assigning && <DeployToRobotDialog mapVersionId={assigning.mapVersionId} mapLabel={assigning.mapLabel} onClose={() => setAssigning(null)} />}
+        onAssignRobot={(mapLabel, preselectRobotId) => { setAssigning({ mapVersionId: dialog.route.mapVersionId, mapLabel, preselectRobotId, route: dialog.route }); setDialog(null) }} />}
+      {assigning && <DeployToRobotDialog mapVersionId={assigning.mapVersionId} mapLabel={assigning.mapLabel} preselectRobotId={assigning.preselectRobotId} returnTo={routeReturnPath(assigning.route.revisionId)}
+        onClose={() => { setDialog({ view: 'record', route: assigning.route }); setAssigning(null) }} />}
       {dialog?.view === 'result' && <RouteResultModal key={dialog.route.revisionId} route={dialog.route} onRecord={() => setDialog({ view: 'record', route: dialog.route })} onClose={() => setDialog(null)} />}
     </TechnicalPage>
   )
 }
 
-function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: VersionedRoute; onClose: () => void; onAssignRobot: (mapLabel: string) => void }) {
+function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: VersionedRoute; onClose: () => void; onAssignRobot: (mapLabel: string, preselectRobotId?: string) => void }) {
   const record = useRecordRouteTest()
   const robots = usePhysicalRobots()
   const maps = useMapVersions()
@@ -179,7 +194,7 @@ function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: Versio
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} failed={failedCheckNames({ allStopsReached, safelyStopped, localizationPassed })} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="route-test-form" className="space-y-3.5" onSubmit={submit}>
         <div>
-          <ReadyRobotField robots={robots} mapVersionId={route.mapVersionId} map={maps.data?.find(item => item.map.id === route.mapVersionId)?.map} onAssignRobot={onAssignRobot} />
+          <ReadyRobotField robots={robots} mapVersionId={route.mapVersionId} map={maps.data?.find(item => item.map.id === route.mapVersionId)?.map} subject="tuyến" returnTo={routeReturnPath(route.revisionId)} onAssignRobot={onAssignRobot} />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
         </div>
         <div>

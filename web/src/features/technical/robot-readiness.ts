@@ -1,6 +1,7 @@
 import type { StatusTone } from '../../components/ui/status-tone'
 import type { MapVersion, PhysicalRobotOption, RobotReadiness } from './api/technical'
 import { mapShortLabel } from './poi-labels'
+import { technicalReturnPath } from './technical-nav'
 
 /**
  * The one chip for "may this robot be used on its map", from the server's readiness; the web never re-derives it.
@@ -24,9 +25,18 @@ export function robotForMap(robots: PhysicalRobotOption[] | undefined, mapVersio
   return { ready, assigned: assigned ?? ready }
 }
 
-/** Where to set this robot up; `map` opens the assignment step with that version already chosen. */
-export const robotSetupPath = (robotId: string, mapVersionId?: string) =>
-  `/technical/robots?robot=${encodeURIComponent(robotId)}${mapVersionId ? `&map=${encodeURIComponent(mapVersionId)}` : ''}`
+/**
+ * Where to set this robot up; `map` opens the assignment step with that version already chosen, and `returnTo` (a
+ * path inside the Technical area only) is where the robot page offers to go back to.
+ */
+export function robotSetupPath(robotId: string, mapVersionId?: string, returnTo?: string) {
+  const back = technicalReturnPath(returnTo)
+  return `/technical/robots?robot=${encodeURIComponent(robotId)}${mapVersionId ? `&map=${encodeURIComponent(mapVersionId)}` : ''}${back ? `&returnTo=${encodeURIComponent(back)}` : ''}`
+}
+
+/** The return paths of the two forms that send someone to the robot page. */
+export const poiReturnPath = (proposalId: string) => `/technical/pois?poi=${encodeURIComponent(proposalId)}`
+export const routeReturnPath = (revisionId: string) => `/technical/route-tests?route=${encodeURIComponent(revisionId)}`
 
 /** The sentence of the server's ROBOT_NOT_REPORTING refusal, shown before anyone tries. */
 export const notReportingText = (robotCode: string, map: Pick<MapVersion, 'areaName' | 'areaKey' | 'versionNumber' | 'mapKey' | 'frameId'>, duplicates: Set<string> = new Set()) =>

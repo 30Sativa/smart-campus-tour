@@ -48,17 +48,26 @@ export type RobotAffectedTour = { tourId: string; name: string; scheduledStartAt
 export type RobotLifecycleResult = { id: string; robotCode: string; deactivatedAt: string | null; deactivationReason: string | null; rowVersion: string; affectedTours: RobotAffectedTour[] }
 export type MapAreaOption = { areaKey: string; displayName: string }
 export type PhysicalRobotRegistration = { id: string; robotCode: string; displayName: string | null }
-export type PhysicalRobotConnectionStatus = 'UNCONFIRMED' | 'CONNECTED' | 'DISCONNECTED' | 'AWAITING_DATA'
+/** WRONG_MAP: the robot is sending fresh data, refused because it names another map than the assigned one (F2). */
+export type PhysicalRobotConnectionStatus = 'UNCONFIRMED' | 'CONNECTED' | 'DISCONNECTED' | 'AWAITING_DATA' | 'WRONG_MAP'
+/** The newest Fleet Sync report refused with MAP_CONTEXT_MISMATCH, kept in memory by the server while it is fresh. */
+export type RejectedFleetReport = { mapKey: string; frameId: string; at: string; /** The server's sentence: what was sent, what is assigned, what to change. */ message?: string | null }
 /**
  * Whether the robot may be used on its assigned map version, judged by the server's one rule (not deactivated,
  * connection confirmed, assigned to that version, and its latest deployment check passed there). The web never
  * re-derives it; NOT_SET_UP means not assigned or connection not confirmed yet.
  */
 export type RobotReadinessState = 'READY' | 'NOT_READY' | 'NOT_SET_UP'
+/** What to do next on the robot's assigned map, from the server; display only, null when READY. */
+export type RobotReadinessNextStep = 'ASSIGN_MAP' | 'CONFIRM_CONNECTION' | 'CONFIGURE_MINIPC' | 'DEPLOYMENT_CHECK'
 export type RobotReadiness = {
   state: RobotReadinessState
   reasonCode: string | null
+  /** The main sentence: what is missing on the assigned map. */
   reason: string | null
+  /** A secondary fact, such as where the newest deployment check was recorded; shown small in the setup dialog. */
+  detail?: string | null
+  nextStep?: RobotReadinessNextStep | null
   mapVersionId: string | null
   /** "{area} · v{n}" of the assigned version. */
   mapLabel: string | null
@@ -94,6 +103,8 @@ export type PhysicalRobotOption = PhysicalRobotRegistration & {
   /** Tours may send commands to this robot (ADR-0049 Decision 8). Allowing it does not move the robot by itself. */
   isDispatchEnabled: boolean
   readiness: RobotReadiness
+  /** Set with WRONG_MAP: what the refused report named. */
+  lastRejectedReport?: RejectedFleetReport | null
 }
 export type SetRobotDispatchInput = { id: string; requestId: string; expectedRowVersion: string; enabled: boolean; reason: string; evidenceRef?: string }
 export type SetRobotDispatchResult = { robotId: string; isDispatchEnabled: boolean }

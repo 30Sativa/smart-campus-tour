@@ -16,9 +16,9 @@ const map = {
   imageWidth: 100, imageHeight: 80, resolution: 0.05, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-27T10:00:00Z',
 }
 /** The server's readiness; the default robot is ready on Library v1 and reporting on it. */
-const readyOnLibrary: RobotReadiness = { state: 'READY', reasonCode: null, reason: null, mapVersionId: 'map-v1', mapLabel: 'Library · v1', deploymentCheckedAt: '2026-10-27T10:00:00Z', reportingOnAssignedMap: true }
-const notReady = (reason: string, overrides: Partial<RobotReadiness> = {}): RobotReadiness => ({ ...readyOnLibrary, state: 'NOT_READY', reasonCode: 'ROBOT_DEPLOYMENT_CHECK_REQUIRED', reason, ...overrides })
-const notSetUp = (reason: string): RobotReadiness => ({ state: 'NOT_SET_UP', reasonCode: 'ROBOT_MAP_NOT_ASSIGNED', reason, mapVersionId: null, mapLabel: null, deploymentCheckedAt: null, reportingOnAssignedMap: false })
+const readyOnLibrary: RobotReadiness = { state: 'READY', reasonCode: null, reason: null, mapVersionId: 'map-v1', mapLabel: 'Library · v1', deploymentCheckedAt: '2026-10-27T10:00:00Z', reportingOnAssignedMap: true, nextStep: null, detail: null }
+const notReady = (reason: string, overrides: Partial<RobotReadiness> = {}): RobotReadiness => ({ ...readyOnLibrary, state: 'NOT_READY', reasonCode: 'ROBOT_DEPLOYMENT_CHECK_REQUIRED', reason, nextStep: 'DEPLOYMENT_CHECK', ...overrides })
+const notSetUp = (reason: string): RobotReadiness => ({ state: 'NOT_SET_UP', reasonCode: 'ROBOT_MAP_NOT_ASSIGNED', reason, mapVersionId: null, mapLabel: null, deploymentCheckedAt: null, reportingOnAssignedMap: false, nextStep: 'ASSIGN_MAP', detail: null })
 const mapItem = { map, runningRobot: { id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', readiness: readyOnLibrary }, latestDeployment: null, technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, preparationBlockReasonCode: null, preparationBlockReason: null,
   preparationEvidence: { id: 'check-1', mapVersionId: map.id, robotCode: 'amr-01', packageSha256: 'a'.repeat(64), localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Fixture evidence', checkedAt: '2026-10-27T10:00:00Z' },
   currentlyDeployedOn: [{ robotCode: 'amr-01', checkedAt: '2026-10-27T10:00:00Z' }] }
@@ -499,7 +499,9 @@ describe('Technical Staff API integration', () => {
     const cases: Array<[Partial<PhysicalRobotOption>, RobotCredentialView['status'], string[]]> = [
       [{}, 'NOT_ISSUED', ['Cấp khóa']],
       [{ assignedMapVersionId: null, readiness: notSetUp('Robot amr-01 chưa được gán bản đồ.') }, 'ACTIVE', ['Gán bản đồ']],
-      [{ firstAcceptedSyncAt: null, connectionStatus: 'UNCONFIRMED', readiness: { ...notSetUp('Robot amr-01 chưa xác nhận kết nối.'), mapVersionId: 'map-v1' } }, 'ACTIVE', ['Cập nhật trạng thái']],
+      [{ firstAcceptedSyncAt: null, connectionStatus: 'UNCONFIRMED', readiness: { ...notSetUp('Robot amr-01 chưa xác nhận kết nối.'), mapVersionId: 'map-v1', nextStep: 'CONFIRM_CONNECTION' } }, 'ACTIVE', ['Cập nhật trạng thái']],
+      // Round 3 W3: the server's nextStep; no Kiểm tra triển khai before the robot reports on its map.
+      [{ readiness: notReady('Robot amr-01 chưa kiểm tra triển khai trên Library · library · phiên bản 1.', { reportingOnAssignedMap: false, nextStep: 'CONFIGURE_MINIPC' }) }, 'ACTIVE', ['Cấu hình MiniPC']],
       [{ readiness: notReady('Robot amr-01 chưa có kiểm tra triển khai đạt trên bản đồ đang gán.') }, 'ACTIVE', ['Kiểm tra triển khai']],
       [{ needsInspection: true }, 'ACTIVE', ['Trả robot']],
       [{}, 'ACTIVE', []],
@@ -1134,12 +1136,24 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByRole('dialog', { name: 'Triển khai Library · library · v1 cho robot' })).toBeInTheDocument()
   })
 
-  it('names why the assigned robot is not ready and opens its setup, for either result', async () => {
-    physicalRobots = [makePhysicalRobot({ readiness: notReady('Lần kiểm tra triển khai mới nhất của robot amr-01 là trên Betea · v1.') })]
+  // Round 3 W1: the amr_01 case of 23/11. The robot holds the POI map but its MiniPC still sends the old map, so the
+  // form lists what is done for this map and offers the server's next step, with the way back to this POI.
+  it('lists the three steps for the POI map and opens the robot setup at the next step, for either result', async () => {
+    physicalRobots = [makePhysicalRobot({
+      connectionStatus: 'WRONG_MAP', lastRejectedReport: { mapKey: 'test123-v1', frameId: 'map', at: '2026-10-27T10:05:00Z', message: 'Robot đang gửi dữ liệu theo test123-v1, bị từ chối vì đang gán library-v1. Đổi MapKey/FrameId trên MiniPC.' },
+      latestDeployedMapKey: 'betea-v1',
+      readiness: notReady('Robot amr-01 chưa kiểm tra triển khai trên Library · library · phiên bản 1 (gán lúc 27/10 17:00).', { reportingOnAssignedMap: false, nextStep: 'CONFIGURE_MINIPC', detail: 'Lần kiểm tra triển khai mới nhất của robot amr-01 là trên Betea · betea · phiên bản 1.' }),
+    })]
     renderPage(<TechnicalPoisPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
-    expect(await screen.findByText('Lần kiểm tra triển khai mới nhất của robot amr-01 là trên Betea · v1.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Mở thiết lập amr-01' })).toHaveAttribute('href', '/technical/robots?robot=robot-1')
+    const steps = within(await screen.findByRole('list', { name: 'Chuẩn bị amr-01' })).getAllByRole('listitem')
+    expect(steps).toHaveLength(3)
+    expect(steps[0]).toHaveTextContent(/^Xong: Gán bản đồ: amr-01 · gán lúc /)
+    expect(steps[1]).toHaveTextContent('Chưa xong: MiniPC báo về theo library-v1 (đang gửi test123-v1)')
+    expect(steps[2]).toHaveTextContent('Chưa xong: Kiểm tra triển khai')
+    // The Betea sentence is history, shown only in the setup dialog.
+    expect(screen.queryByText(/Betea/)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Cấu hình MiniPC cho amr-01' })).toHaveAttribute('href', `/technical/robots?robot=robot-1&returnTo=${encodeURIComponent('/technical/pois?poi=proposal-1')}`)
     fireEvent.change(screen.getByLabelText('Ghi chú bằng chứng'), { target: { value: 'Đã kiểm tra.' } })
     fireEvent.click(screen.getByLabelText('Robot dừng đúng vị trí'))
     fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch vị trí.' } })
@@ -1556,10 +1570,9 @@ describe('Technical Staff API integration', () => {
     await openRouteTest()
     passAllRouteChecks()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeEnabled()
-    physicalRobots = [makePhysicalRobot({ connectionStatus: 'UNCONFIRMED', firstAcceptedSyncAt: null, readiness: { ...notSetUp('Robot amr-01 chưa xác nhận kết nối.'), mapVersionId: 'map-v1' } })]
+    physicalRobots = [makePhysicalRobot({ connectionStatus: 'UNCONFIRMED', firstAcceptedSyncAt: null, readiness: { ...notSetUp('Robot amr-01 chưa xác nhận kết nối.'), mapVersionId: 'map-v1', nextStep: 'CONFIRM_CONNECTION' } })]
     fireEvent.click(screen.getByRole('button', { name: 'Cập nhật trạng thái' }))
-    expect(await screen.findByText('Robot amr-01 chưa xác nhận kết nối.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Mở thiết lập amr-01' })).toHaveAttribute('href', '/technical/robots?robot=robot-1')
+    expect(await screen.findByRole('link', { name: 'Kết nối MiniPC cho amr-01' })).toHaveAttribute('href', `/technical/robots?robot=robot-1&returnTo=${encodeURIComponent('/technical/route-tests?route=rev-1')}`)
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
   })
 

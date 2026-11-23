@@ -50,3 +50,25 @@ export function technicalInternalLink(url: string | null): string | null {
   const [path, query] = url.split(/(?=[?#])/, 2)
   return `${TECHNICAL_MOVED_PATHS[path] ?? path}${query ?? ''}`
 }
+
+/**
+ * Where the robot page goes back to after preparing a robot for a POI check or a route test. Only a path inside this
+ * area is kept, by the same check as `technicalInternalLink`; a `..` segment or a backslash could leave it, so those
+ * are refused too.
+ */
+export function technicalReturnPath(path: string | null | undefined): string | null {
+  const link = technicalInternalLink(path ?? null)
+  if (!link || link.includes('\\') || link.split(/[?#]/, 1)[0].split('/').includes('..')) return null
+  return link
+}
+
+/** The POI check or route test a return path reopens, read from the query the POI and route-test pages accept. */
+export function returnTarget(path: string | null): { kind: 'poi' | 'route'; id: string } | null {
+  if (!path) return null
+  const url = new URL(path, 'http://technical.local')
+  const poi = url.searchParams.get('poi')
+  if (url.pathname === '/technical/pois' && poi) return { kind: 'poi', id: poi }
+  const route = url.searchParams.get('route')
+  if (url.pathname === '/technical/route-tests' && route) return { kind: 'route', id: route }
+  return null
+}

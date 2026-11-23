@@ -1,14 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { CircleCheck, Clock3, FileUp, LoaderCircle, RotateCcw } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { DeployToRobotDialog } from '../../features/technical/DeployToRobotDialog'
 import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
-import { robotForMap } from '../../features/technical/robot-readiness'
+import { poiReturnPath, robotForMap } from '../../features/technical/robot-readiness'
 import { CheckRow, ComputedResult, NoneChecked, DetailFact, Note, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
 import { mapVersionLabel, narrationStatus, poiObservationLabels, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { headPresetLabel } from '../../features/technical/head-camera-preset'
@@ -49,8 +49,15 @@ export default function TechnicalPoisPage() {
   // Holds the row itself: saving moves it between lists, and the dialog must not unmount mid-save.
   const [selected, setSelected] = useState<PoiRow | null>(null)
   const [viewing, setViewing] = useState<PoiRow | null>(null)
-  // The robot picker replaces the check form rather than opening inside its <form> (see ReadyRobotField).
-  const [assigning, setAssigning] = useState<{ mapVersionId: string; mapLabel: string } | null>(null)
+  // The robot picker replaces the check form rather than opening inside its <form> (see ReadyRobotField); it keeps
+  // the row so Hủy reopens that form.
+  const [assigning, setAssigning] = useState<{ mapVersionId: string; mapLabel: string; preselectRobotId?: string; row: PoiRow } | null>(null)
+  // `?poi=<proposalId>` is where the robot page sends someone back to: it reopens that POI's check or its result.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [linkedPoi, setLinkedPoi] = useState(() => searchParams.get('poi'))
+  useEffect(() => {
+    if (searchParams.has('poi')) setSearchParams(current => { const next = new URLSearchParams(current); next.delete('poi'); return next }, { replace: true })
+  }, [searchParams, setSearchParams])
   const maps = useMapVersions()
   // People read the area and version; the map key is only a fallback while the list loads.
   const mapName = (mapKey: string) => {
@@ -60,6 +67,13 @@ export default function TechnicalPoisPage() {
   const [filter, setFilter] = useState<PoiFilter>('pending')
 
   const rows = useMemo(() => toRows(proposals.data ?? [], allProposals.data ?? []), [proposals.data, allProposals.data])
+  // Opened once both lists are in, then held like any other selection so a save does not unmount it.
+  if (linkedPoi && proposals.isSuccess && !allProposals.isPending) {
+    const row = rows.find(item => item.proposalId === linkedPoi)
+    setLinkedPoi(null)
+    if (row) setSelected(row)
+  }
+  const reopen = (row: PoiRow) => setSelected(rows.find(item => item.proposalId === row.proposalId) ?? row)
   // Newest submission first; a revision without a submit time goes last.
   const visible = rows.filter(row => row.filter === filter)
     .sort((a, b) => (b.revision.submittedAt ? Date.parse(b.revision.submittedAt) : -Infinity) - (a.revision.submittedAt ? Date.parse(a.revision.submittedAt) : -Infinity) || 0)
@@ -106,8 +120,9 @@ export default function TechnicalPoisPage() {
 
       {viewing && <PoiDetailModal row={viewing} mapName={mapName(viewing.revision.mapKey)} onClose={() => setViewing(null)} onRecord={() => { setViewing(null); setSelected(viewing) }} />}
       {selected?.recordable && <VerifyModal key={selected.proposalId} proposal={selected} mapName={mapName(selected.revision.mapKey)} onClose={() => setSelected(null)}
-        onAssignRobot={mapLabel => { setAssigning({ mapVersionId: selected.revision.mapVersionId, mapLabel }); setSelected(null) }} />}
-      {assigning && <DeployToRobotDialog mapVersionId={assigning.mapVersionId} mapLabel={assigning.mapLabel} onClose={() => setAssigning(null)} />}
+        onAssignRobot={(mapLabel, preselectRobotId) => { setAssigning({ mapVersionId: selected.revision.mapVersionId, mapLabel, preselectRobotId, row: selected }); setSelected(null) }} />}
+      {assigning && <DeployToRobotDialog mapVersionId={assigning.mapVersionId} mapLabel={assigning.mapLabel} preselectRobotId={assigning.preselectRobotId} returnTo={poiReturnPath(assigning.row.proposalId)}
+        onClose={() => { reopen(assigning.row); setAssigning(null) }} />}
       {selected && !selected.recordable && <PoiResultModal key={selected.proposalId} proposalId={selected.proposalId} revision={selected.revision} mapName={mapName(selected.revision.mapKey)} onClose={() => setSelected(null)} />}
     </TechnicalPage>
   )
@@ -144,7 +159,7 @@ function PoiDetailModal({ row, mapName, onClose, onRecord }: { row: PoiRow; mapN
   )
 }
 
-function VerifyModal({ proposal, mapName, onClose, onAssignRobot }: { proposal: PoiVerificationQueueItem; mapName: string; onClose: () => void; onAssignRobot: (mapLabel: string) => void }) {
+function VerifyModal({ proposal, mapName, onClose, onAssignRobot }: { proposal: PoiVerificationQueueItem; mapName: string; onClose: () => void; onAssignRobot: (mapLabel: string, preselectRobotId?: string) => void }) {
   const verify = useVerifyPoi()
   const robots = usePhysicalRobots()
   const maps = useMapVersions()
@@ -203,7 +218,7 @@ function VerifyModal({ proposal, mapName, onClose, onAssignRobot }: { proposal: 
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="poi-verify-form" className="space-y-3.5" onSubmit={submit}>
         <div>
-          <ReadyRobotField robots={robots} mapVersionId={revision.mapVersionId} map={maps.data?.find(item => item.map.id === revision.mapVersionId)?.map} onAssignRobot={onAssignRobot} />
+          <ReadyRobotField robots={robots} mapVersionId={revision.mapVersionId} map={maps.data?.find(item => item.map.id === revision.mapVersionId)?.map} subject="POI" returnTo={poiReturnPath(proposal.proposalId)} onAssignRobot={onAssignRobot} />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
         </div>
         <div className="space-y-2">
