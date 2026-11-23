@@ -78,6 +78,9 @@ public sealed class PhysicalRobotRegistrationTests
         public Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<MapDeploymentCheck>>([]);
 
+        public Task<IReadOnlyList<UpcomingTourTarget>> ListUpcomingTourTargetsAsync(DateTimeOffset from, DateTimeOffset to,
+            CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<UpcomingTourTarget>>([]);
+
         public Task<bool> RobotCodeExistsAsync(string robotCode, CancellationToken cancellationToken) =>
             Task.FromResult(CodeExists);
 
