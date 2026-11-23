@@ -90,6 +90,19 @@ describe('TechnicalShell', () => {
     expect(within(rows[1]).queryByText('Kiểm tra lại bản đồ trên robot.')).not.toBeInTheDocument()
   })
 
+  // Round 2 F2: an upcoming Tour the robot cannot run shows in the bell like the other items.
+  it('lists an upcoming Tour whose robot is not ready in the bell, linking to the robot', async () => {
+    stubDashboard({ success: true, data: { ...DASHBOARD, actionItems: [
+      { type: 'TOUR_ROBOT_NOT_READY', severity: 'WARNING', title: '3 Tour sắp tới của robot amr_01 chưa chạy được', description: 'Robot amr_01 đang gán Tầng 6 · test123 · phiên bản 1, không phải bản đồ này.', targetId: 'r1', linkUrl: '/technical/robots?robot=r1' },
+    ] } })
+    renderShell()
+    fireEvent.click(await screen.findByRole('button', { name: 'Thông báo, 1 việc đang chờ' }))
+    const row = within(within(screen.getByRole('region', { name: 'Bảng thông báo' })).getByRole('listitem'))
+    expect(row.getByText('3 Tour sắp tới của robot amr_01 chưa chạy được')).toBeInTheDocument()
+    expect(row.getByText('Robot amr_01 đang gán Tầng 6 · test123 · phiên bản 1, không phải bản đồ này.')).toBeInTheDocument()
+    expect(row.getByRole('link')).toHaveAttribute('href', '/technical/robots?robot=r1')
+  })
+
   it('says nothing is waiting only when the Dashboard answered, and says so when it failed', async () => {
     stubDashboard({ success: false, message: 'down' }, 500)
     renderShell()

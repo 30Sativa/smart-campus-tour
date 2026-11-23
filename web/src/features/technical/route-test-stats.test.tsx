@@ -38,8 +38,8 @@ describe('route test stat tiles after an expired access token', () => {
     }))
 
     renderPage()
-    expect(await screen.findByRole('button', { name: /Đã đạt\s*1/ }, { timeout: 500 })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Không đạt\s*0/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Đã đạt: 1/ }, { timeout: 500 })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Không đạt: 0/ })).toBeInTheDocument()
     expect(refreshes).toBeGreaterThan(0)
   })
 
@@ -53,14 +53,14 @@ describe('route test stat tiles after an expired access token', () => {
     }))
 
     renderPage(new QueryClient({ defaultOptions: { queries: { retry: false } } }))
-    expect(await screen.findByRole('button', { name: /Đã đạt\s*-/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Không đạt\s*-/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Đã đạt: -' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Không đạt: -' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Chờ chạy thử/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('alert')).toHaveTextContent('Chưa tải được số tuyến đã đạt và không đạt.')
 
     catalogFails = false
     fireEvent.click(screen.getByRole('button', { name: 'Tải lại' }))
-    expect(await screen.findByRole('button', { name: /Đã đạt\s*1/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Đã đạt: 1/ })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

@@ -1,10 +1,8 @@
-import { useState } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 import { Link } from 'react-router'
 import { formatDateTime } from '../../components/ui/date-time'
 import { buttonClass, labelClass } from '../../components/ui/ui-classes'
-import { DeployToRobotDialog } from './DeployToRobotDialog'
 import type { MapVersion, PhysicalRobotOption } from './api/technical'
 import { robotForMap, robotSetupPath } from './robot-readiness'
 import { errorText } from './technical-format'
@@ -17,12 +15,17 @@ const exactMapLabel = (map: Pick<MapVersion, 'areaName' | 'areaKey' | 'versionNu
  * robot the server calls ready on this exact version may record a result. When there is none, the form says why
  * and offers the one place that fixes it.
  */
-export function ReadyRobotField({ robots, mapVersionId, map }: {
+export function ReadyRobotField({ robots, mapVersionId, map, onAssignRobot }: {
   robots: UseQueryResult<PhysicalRobotOption[]>; mapVersionId: string
   /** The version the POI or route is on, for the label; the robot's own readiness label is used while it loads. */
   map?: Pick<MapVersion, 'areaName' | 'areaKey' | 'versionNumber'>
+  /**
+   * "Gán robot cho bản đồ này". The page closes the form and opens `DeployToRobotDialog` itself: rendered here it sat
+   * inside the form's <form>, and Chrome stops a nested form's submit before React's root listener sees it, so
+   * "Tiếp tục" reloaded the page instead of opening the robot setup.
+   */
+  onAssignRobot: (mapLabel: string) => void
 }) {
-  const [deploying, setDeploying] = useState(false)
   const { ready, assigned } = robotForMap(robots.data, mapVersionId)
   const refresh = !robots.isPending && !robots.isError && <button type="button" className={buttonClass('secondary', 'sm')} disabled={robots.isFetching} onClick={() => void robots.refetch()}><RefreshCw size={13} aria-hidden="true" />{robots.isFetching ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button>
   const mapText = map ? exactMapLabel(map) : ready?.readiness.mapLabel ?? 'bản đồ này'
@@ -40,9 +43,8 @@ export function ReadyRobotField({ robots, mapVersionId, map }: {
         </div>
         : <div role="status" className="mt-1 space-y-1.5 rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
           <p>Chưa có robot nào chạy bản đồ này.</p>
-          <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setDeploying(true)}>Gán robot cho bản đồ này</button>
+          <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => onAssignRobot(mapText)}>Gán robot cho bản đồ này</button>
         </div>}
-      {deploying && <DeployToRobotDialog mapVersionId={mapVersionId} mapLabel={mapText} onClose={() => setDeploying(false)} />}
     </div>
   )
 }

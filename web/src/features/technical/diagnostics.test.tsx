@@ -130,6 +130,23 @@ describe('Technical dashboard and Mini PC monitoring', () => {
     expect(within(screen.getByRole('region', { name: 'Tình trạng robot' })).getByRole('img', { name: 'Trực tuyến: 1, Ngoại tuyến: 0, Chưa nhận dữ liệu: 0, Chưa xác nhận kết nối: 0' })).toBeInTheDocument()
   })
 
+  // Round 2 F2: the backend warns about upcoming Tours the robot cannot run. The Dashboard renders it like any item.
+  it('lists an upcoming Tour whose robot is not ready as a warning linking to that robot', async () => {
+    dashboard = {
+      ...dashboardFixture([robotSummary()]),
+      actionItems: [
+        { type: 'POI_QUEUE', severity: 'INFO', title: '2 POI đang chờ', description: 'POI mới.', targetId: null, linkUrl: '/technical/pois' },
+        { type: 'TOUR_ROBOT_NOT_READY', severity: 'WARNING', title: 'Tour Tham quan lầu 6 nvh sinh viên 26/11 16:15 chưa chạy được', description: 'Robot amr_01 đang gán Tầng 6 · test123 · phiên bản 1, không phải bản đồ này.', targetId: 'robot-1', linkUrl: '/technical/robots?robot=robot-1' },
+      ],
+    }
+    renderAt(<TechnicalDashboardPage />, '/technical/dashboard')
+    const rows = within(await screen.findByRole('region', { name: 'Việc cần xử lý' })).getAllByRole('listitem')
+    expect(rows[0]).toHaveTextContent('Tour Tham quan lầu 6 nvh sinh viên 26/11 16:15 chưa chạy được')
+    expect(rows[0]).toHaveTextContent('Robot amr_01 đang gán Tầng 6 · test123 · phiên bản 1, không phải bản đồ này.')
+    expect(within(rows[0]).getByText('Cảnh báo')).toBeInTheDocument()
+    expect(within(rows[0]).getByRole('link')).toHaveAttribute('href', '/technical/robots?robot=robot-1')
+  })
+
   it('shows one robot\'s live diagnostics with unknown and not-applicable readings labelled', async () => {
     renderAt(<TechnicalMonitoringPage />, '/technical/monitoring?robot=amr-01')
     const resources = within(await screen.findByRole('region', { name: 'Tài nguyên Mini PC' }))

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import TechnicalRouteTestsPage from '../../routes/technical/TechnicalRouteTestsPage'
 import TechnicalPoisPage from '../../routes/technical/TechnicalPoisPage'
 import TechnicalMapsPage from '../../routes/technical/TechnicalMapsPage'
@@ -81,6 +81,12 @@ const passAllRouteChecks = () => { for (const label of ROUTE_CHECKS) fireEvent.c
 const readyRobotLine = (robotCode = 'amr-01') => screen.findByText((_, element) => element?.tagName === 'P' && (element.textContent ?? '').startsWith(`Robot: ${robotCode} · sẵn sàng trên Library · library · v1`))
 /** The result a POI or route form will save, worked out from its ticks and shown beside the save button. */
 const computedResult = () => within(screen.getByRole('dialog')).getByText(/^Kết quả:/)
+
+/** The current address, for links a page rewrites in place. */
+function LocationText() {
+  const location = useLocation()
+  return <output data-testid="location">{location.pathname}{location.search}</output>
+}
 
 /** The map page and the robot page together, so a hand-over between them can be followed. */
 function renderTechnicalRoutes(path: string) {
@@ -222,7 +228,7 @@ describe('Technical Staff API integration', () => {
     expect(screen.getByText('AMR 01')).toBeInTheDocument()
     expect(screen.getByText('Sẵn sàng · Library · v1')).toBeInTheDocument()
     expect(screen.getByText('Dùng được để soạn POI')).toBeInTheDocument()
-    expect(screen.getByText('Có robot đang chạy')).toBeInTheDocument()
+    expect(screen.getByText('Có robot sẵn sàng')).toBeInTheDocument()
     expect(screen.queryByText('Đủ điều kiện tạo POI')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ghi kết quả kiểm tra' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Library · library · phiên bản 1' }))
@@ -242,6 +248,42 @@ describe('Technical Staff API integration', () => {
     renderPage(<TechnicalMapsPage />)
     expect(await screen.findByText('Chưa có robot')).toBeInTheDocument()
     expect(screen.queryByText('AMR 01')).not.toBeInTheDocument()
+  })
+
+  // Round 2 W3: the subline under "Robot đang chạy" said a robot held the version when none did.
+  it('says no robot holds the version and how to assign one, and keeps the sentence when one does', async () => {
+    runningRobot = null
+    renderPage(<TechnicalMapsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết Library · library · phiên bản 1' }))
+    const detail = within(await screen.findByRole('dialog', { name: 'Library · library · phiên bản 1' }))
+    expect(detail.getByText('Chưa robot nào gán phiên bản này. Bấm Triển khai cho robot… để gán.')).toBeInTheDocument()
+    expect(detail.queryByText(/^Robot đang gán phiên bản này/)).not.toBeInTheDocument()
+  })
+
+  it('keeps "Robot đang gán phiên bản này" when a robot holds it', async () => {
+    renderPage(<TechnicalMapsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết Library · library · phiên bản 1' }))
+    const detail = within(await screen.findByRole('dialog', { name: 'Library · library · phiên bản 1' }))
+    expect(detail.getByText('Robot đang gán phiên bản này. Đổi bản đồ và kiểm tra triển khai trong hộp Thiết lập của robot.')).toBeInTheDocument()
+    expect(detail.queryByText(/Chưa robot nào gán/)).not.toBeInTheDocument()
+  })
+
+  // W3 counting choice: the figure counts ready robots only; an assigned robot that is not ready runs nothing.
+  it('counts only ready robots in Có robot sẵn sàng, and reads a passed check as history', async () => {
+    runningRobot = { ...mapItem.runningRobot, readiness: notReady('Robot amr-01 chưa kiểm tra triển khai trên bản đồ này.') }
+    renderPage(<TechnicalMapsPage />)
+    const figures = within(await screen.findByRole('region', { name: 'Tình trạng bản đồ' }))
+    expect(figures.getByText('Có robot sẵn sàng').closest('div')).toHaveTextContent(/^Có robot sẵn sàng0$/)
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Library · library · phiên bản 1' }))
+    const detail = within(await screen.findByRole('dialog', { name: 'Library · library · phiên bản 1' }))
+    expect(within(detail.getByText('Trạng thái').closest('div')!).getByText('Từng kiểm tra triển khai đạt')).toBeInTheDocument()
+    expect(screen.queryByText('Đã kiểm tra triển khai đạt')).not.toBeInTheDocument()
+  })
+
+  it('counts a ready robot in Có robot sẵn sàng', async () => {
+    renderPage(<TechnicalMapsPage />)
+    const figures = within(await screen.findByRole('region', { name: 'Tình trạng bản đồ' }))
+    expect(figures.getByText('Có robot sẵn sàng').closest('div')).toHaveTextContent(/^Có robot sẵn sàng1$/)
   })
 
   it('hands "Triển khai cho robot…" to the robot setup with that version already chosen', async () => {
@@ -355,17 +397,23 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByRole('dialog', { name: /khóa/i })).toBeInTheDocument()
   })
 
-  // Step 5 used to link to /technical/maps; it now opens the check form in the same dialog (W2).
-  it('opens the deployment check form from step 5 of the checklist, without leaving the dialog', async () => {
+  // Round 2 W2: the dialog had three "Kiểm tra triển khai" buttons. Step 5 of the checklist is text now; the next-step
+  // button and step 3 still open the check form in the same dialog.
+  it('keeps two Kiểm tra triển khai buttons, the next step and step 3, and step 5 points at step 3 in words', async () => {
     credentialStatus = { ...credentialStatus, status: 'ACTIVE', hint: 'ab12' }
     physicalRobots = [makePhysicalRobot({ latestDeployedMapKey: 'library-v2', latestDeployedFrameId: 'map_v2', latestDeploymentPassed: true, readiness: notReady('Lần kiểm tra triển khai mới nhất của robot amr-01 là trên Library · v2.') })]
     renderPage(<TechnicalRobotsPage />)
     await openRobotDetail()
     const checklist = within(await screen.findByRole('region', { name: 'Thiết lập robot' }))
     await waitFor(() => expect(checklist.getByText('4/5 bước')).toBeInTheDocument())
-    expect(checklist.getByRole('listitem', { current: 'step' })).toHaveTextContent('Kiểm tra triển khai đạt trên bản đồ được gán')
+    const step5 = checklist.getByRole('listitem', { current: 'step' })
+    expect(step5).toHaveTextContent('Kiểm tra triển khai đạt trên bản đồ được gán')
+    expect(step5).toHaveTextContent('ghi kết quả ở bước 3. Kiểm tra tại robot')
+    expect(within(step5).queryByRole('button')).not.toBeInTheDocument()
     expect(checklist.queryByRole('link')).not.toBeInTheDocument()
-    fireEvent.click(checklist.getByRole('button', { name: 'Kiểm tra triển khai' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'AMR 01' }))
+    expect(dialog.getAllByRole('button', { name: 'Kiểm tra triển khai' })).toHaveLength(2)
+    fireEvent.click(dialog.getAllByRole('button', { name: 'Kiểm tra triển khai' })[0])
     const form = within(await screen.findByRole('form', { name: 'Kiểm tra triển khai' }))
     // Robot and map are fixed: the assigned version, no picker.
     expect(form.queryByRole('combobox')).not.toBeInTheDocument()
@@ -395,6 +443,31 @@ describe('Technical Staff API integration', () => {
     expect(assignment.getByLabelText('Phiên bản bản đồ')).toHaveValue('map-v1')
     fireEvent.click(assignment.getAllByRole('button', { name: 'Đóng' })[0])
     expect(await screen.findByRole('dialog', { name: 'AMR 01' })).toBeInTheDocument()
+  })
+
+  // Round 2 W4: closing the dialogs a link opened leaves a clean URL, so a reload does not reopen the map step.
+  it('drops robot and map from the URL when the linked dialogs close', async () => {
+    physicalRobots = [makePhysicalRobot({ assignedMapVersionId: null, assignedAreaName: null, assignedVersionNumber: null, assignedMapKey: null, assignedFrameId: null, readiness: notSetUp('Robot amr-01 chưa được gán bản đồ.') })]
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={['/technical/robots?robot=robot-1&map=map-v1&keep=1']}>
+      <LocationText /><Routes><Route path="/technical/robots" element={<TechnicalRobotsPage />} /></Routes>
+    </MemoryRouter></QueryClientProvider>)
+    const assignment = within(await screen.findByRole('dialog', { name: 'Bản đồ của amr-01' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/technical/robots?robot=robot-1&map=map-v1&keep=1')
+    fireEvent.click(assignment.getAllByRole('button', { name: 'Đóng' })[0])
+    const detail = within(await screen.findByRole('dialog', { name: 'AMR 01' }))
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/technical\/robots\?keep=1$/)
+    fireEvent.click(detail.getAllByRole('button', { name: 'Đóng' })[0])
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/technical\/robots\?keep=1$/)
+  })
+
+  it('drops robot from the URL when the setup dialog a link opened closes', async () => {
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={['/technical/robots?robot=robot-1']}>
+      <LocationText /><Routes><Route path="/technical/robots" element={<TechnicalRobotsPage />} /></Routes>
+    </MemoryRouter></QueryClientProvider>)
+    const detail = within(await screen.findByRole('dialog', { name: 'AMR 01' }))
+    fireEvent.click(detail.getAllByRole('button', { name: 'Đóng' })[0])
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/technical\/robots$/))
   })
 
   it('shows Sẵn sàng with the map when the server says the robot is ready', async () => {
@@ -1096,8 +1169,8 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByText('Library')).toBeInTheDocument()
     expect(screen.queryByText('Sảnh đã đạt')).not.toBeInTheDocument()
 
-    fireEvent.click(await screen.findByRole('button', { name: /Đã đạt\s*1/ }))
-    expect(screen.getByRole('button', { name: /Đã đạt\s*1/ })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(await screen.findByRole('button', { name: /Đã đạt: 1/ }))
+    expect(screen.getByRole('button', { name: /Đã đạt: 1/ })).toHaveAttribute('aria-pressed', 'true')
     expect(await screen.findByText('Sảnh đã đạt')).toBeInTheDocument()
     expect(screen.queryByText('Library')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ghi kết quả' })).not.toBeInTheDocument()
@@ -1114,7 +1187,7 @@ describe('Technical Staff API integration', () => {
   it('counts a rejected revision outside the queue as needing a recheck, without offering a second result', async () => {
     poiProposals = [{ id: 'proposal-3', currentRevision: 1, rowVersion: 'CCCCCCCCCCC=', revision: { ...proposal.revision, id: 'revision-3', name: 'POI không đạt', navigationStatus: 'FAIL', verificationSourceRevisionId: 'revision-3' } }]
     renderPage(<TechnicalPoisPage />)
-    fireEvent.click(await screen.findByRole('button', { name: /Cần kiểm tra lại\s*1/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Cần kiểm tra lại: 1/ }))
     expect(await screen.findByText('POI không đạt')).toBeInTheDocument()
     expect(screen.getByText('Chờ Staff sửa và gửi lại')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ghi kết quả' })).not.toBeInTheDocument()
@@ -1206,6 +1279,20 @@ describe('Technical Staff API integration', () => {
     fireEvent.change(screen.getByLabelText('Ghi chú bằng chứng'), { target: { value: 'Đã chạy thử.' } })
   }
   const testRunCalls = () => requests.filter(item => item.url.pathname.endsWith('/test-runs'))
+
+  // Round 2 W5: the clickable figures had no name of their own; a screen reader read only "button".
+  it('names each clickable figure with its label and number on the route test and POI pages', async () => {
+    routeQueue = [routeFixture]
+    routeCatalog = [{ ...routeFixture, revisionId: 'rev-9', verificationStatus: 'PASS' }]
+    const { unmount } = renderPage(<TechnicalRouteTestsPage />)
+    expect(await screen.findByRole('button', { name: 'Đã đạt: 1' })).toHaveAttribute('aria-label', 'Đã đạt: 1')
+    expect(screen.getByRole('button', { name: 'Chờ chạy thử: 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Không đạt: 0' })).toBeInTheDocument()
+    unmount()
+    renderPage(<TechnicalPoisPage />)
+    expect(await screen.findByRole('button', { name: 'Chờ kiểm chứng: 1' })).toHaveAttribute('aria-label', 'Chờ kiểm chứng: 1')
+    expect(await screen.findByRole('button', { name: 'Đã đạt: 0' })).toBeInTheDocument()
+  })
 
   it('states that a route record is human evidence and shows no result without a queue item', async () => {
     renderPage(<TechnicalRouteTestsPage />)
@@ -1322,7 +1409,7 @@ describe('Technical Staff API integration', () => {
     routeCatalog = routeQueue
     renderPage(<TechnicalRouteTestsPage />)
     expect(await screen.findByText('Chưa có tuyến chờ chạy thử')).toBeInTheDocument()
-    fireEvent.click(await screen.findByRole('button', { name: /Đã đạt\s*1/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Đã đạt: 1/ }))
     expect(await screen.findByText('Giữ kết quả từ bản 16/11 12:23')).toBeInTheDocument()
     expect(screen.getByText('Chạy thử đạt')).toBeInTheDocument()
   })
@@ -1342,7 +1429,7 @@ describe('Technical Staff API integration', () => {
     routeCatalog = [{ ...routeFixture, verificationStatus: 'PASS' }]
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(await screen.findByRole('button', { name: /Đã đạt\s*1/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Đã đạt: 1/ })).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
@@ -1354,7 +1441,7 @@ describe('Technical Staff API integration', () => {
     poiProposals = [{ ...proposal, revision: { ...proposal.revision, navigationStatus: 'PASS' } }]
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(await screen.findByRole('button', { name: /Đã đạt\s*1/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Đã đạt: 1/ })).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
@@ -1410,7 +1497,7 @@ describe('Technical Staff API integration', () => {
       { ...routeFixture, verificationStatus: 'PASS', isActive: true },
     ]
     renderPage(<TechnicalRouteTestsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: /Đã đạt\s*2/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Đã đạt: 2/ }))
     const rows = (await screen.findAllByRole('row')).slice(1)
     expect(rows.map(row => within(row).getAllByRole('cell')[0].textContent)).toEqual([
       expect.stringMatching(/^Tuyến thư viện/), expect.stringMatching(/^Tuyến cũ Đã ngừng sử dụng/),
@@ -1481,7 +1568,7 @@ describe('Technical Staff API integration', () => {
     routeCatalog = [{ ...routeFixture, verificationStatus: 'FAIL' }]
     routeDetail = { ...routeFixture, verificationStatus: 'FAIL', testRuns: [run], effectiveTestRunId: 'run-1' }
     renderPage(<TechnicalRouteTestsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: /Không đạt\s*1/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Không đạt: 1/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Xem kết quả Tuyến thư viện' }))
     const dialog = within(screen.getByRole('dialog'))
     expect(await dialog.findByText(/Lần một/)).toBeInTheDocument()
