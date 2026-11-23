@@ -43,7 +43,7 @@ function serverMessage(error: unknown): string | null {
  * missing condition, so it is shown as is; the fixed text is only for an older server that sent none.
  */
 const readinessRefusals: Record<string, string> = {
-  ROBOT_MAP_NOT_ASSIGNED: 'Robot không đang gán bản đồ này. Đổi bản đồ cho robot ở trang Robot trước khi ghi kiểm tra.',
+  ROBOT_MAP_NOT_ASSIGNED: 'Robot không đang gán bản đồ này. Đổi bản đồ cho robot ở trang Robot trước khi ghi kiểm tra triển khai.',
   ROBOT_NOT_REPORTING: 'Robot chưa gửi dữ liệu theo bản đồ đang gán. Bật fleet_bridge với MapKey và FrameId của bản đồ này rồi bấm Cập nhật trạng thái.',
   MAP_NOT_DEPLOYED: 'Robot chưa sẵn sàng trên bản đồ của POI này. Mở thiết lập robot để xem lý do.',
   ROBOT_NOT_READY_FOR_ROUTE: 'Robot chưa sẵn sàng trên bản đồ của tuyến này. Mở thiết lập robot để xem lý do.',

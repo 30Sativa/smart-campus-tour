@@ -248,7 +248,7 @@ export function useClearRobotMap() {
 }
 
 export const useVerifyPoi = () => useTechnicalMutation(technicalApi.verifyPoi, keys.poiProposals, (input) => input.resultCode === 'PASS'
-  ? { title: 'Đã ghi POI đạt', detail: `Kiểm tra cùng robot ${input.robotCode}, gắn với phiên bản POI ${input.revisionNumber}.` }
+  ? { title: 'Đã ghi POI đạt', detail: `Kiểm chứng cùng robot ${input.robotCode}, gắn với phiên bản POI ${input.revisionNumber}.` }
   : { tone: 'info', title: 'Đã ghi POI không đạt', detail: 'Staff cần chỉnh POI rồi gửi lại để kiểm chứng.' })
 
 /**

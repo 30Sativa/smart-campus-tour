@@ -56,7 +56,7 @@ export default function TechnicalRouteTestsPage() {
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="Tuyến" title="Xác nhận chạy thử" description="Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Kết quả do người kiểm tra nhập, hệ thống không tự xác minh robot đã chạy. Tuyến đạt thì Staff dùng được để tạo Tour." />
+      <PageHeader eyebrow="Chuẩn bị" title="Chạy thử tuyến" description="Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Kết quả do người kiểm tra nhập, hệ thống không tự xác minh robot đã chạy. Tuyến đạt thì Staff dùng được để tạo Tour." />
 
       {!queue.isPending && !queue.error && (
         <div className="mb-3">

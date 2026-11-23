@@ -119,7 +119,7 @@ function BatteryCell({ robot }: { robot: TechnicalRobotSummary }) {
 function MapFacts({ robot, readiness }: { robot: TechnicalRobotSummary; readiness: PhysicalRobotOption['readiness'] | undefined }) {
   return <>
     <span className="font-mono text-[12.5px] text-[#334155]">{robot.assignedMapKey ?? 'Chưa gán bản đồ'}</span>
-    {robot.contextMismatch && <p className="mt-0.5 text-[11.5px] text-amber-800">{readiness?.reason ?? 'Khác bản đồ kiểm tra gần nhất'}</p>}
+    {robot.contextMismatch && <p className="mt-0.5 text-[11.5px] text-amber-800">{readiness?.reason ?? 'Khác bản đồ kiểm tra triển khai gần nhất'}</p>}
     {robot.needsInspection && <p className="mt-0.5"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}
   </>
 }

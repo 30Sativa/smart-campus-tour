@@ -322,11 +322,11 @@ function RobotDispatchSection({ robot }: { robot: PhysicalRobotOption }) {
         : <button type="button" className={buttonClass('primary', 'sm')} onClick={() => setConfirming('on')}>Cho phép điều phối</button>}>
       <p className="text-[13px] text-[#475569]">{enabled
         ? 'Tour bắt đầu trên web có thể gửi lệnh di chuyển cho robot này, khi máy chủ đã bật gửi lệnh và robot chạy fleet_bridge có nhận lệnh.'
-        : 'Tour trên web chưa gửi được lệnh cho robot này. Bật khi chuẩn bị chạy thử, tắt khi xong.'}</p>
+        : 'Tour trên web chưa gửi được lệnh cho robot này. Bật khi chuẩn bị chạy thử tuyến, tắt khi xong.'}</p>
       {enabled && !isReady(robot) && <p role="status" className="mt-1 text-[13px] text-amber-800">Đang cho phép, nhưng robot chưa sẵn sàng nên Tour chưa bắt đầu được.</p>}
     </DetailSection>
     {confirming && <ConfirmationDialog open requireReason tone={confirming === 'on' ? 'default' : 'danger'}
-      reasonLabel={confirming === 'on' ? 'Ghi chú buổi chạy thử' : 'Lý do tắt'}
+      reasonLabel={confirming === 'on' ? 'Ghi chú buổi chạy thử tuyến' : 'Lý do tắt'}
       reasonPlaceholder={confirming === 'on' ? 'Ví dụ: demo đồ án 12/11, khu vực trống, có người đứng ở nút dừng khẩn.' : 'Ví dụ: xong buổi demo.'}
       title={confirming === 'on' ? `Cho phép điều phối ${robot.robotCode}?` : `Tắt điều phối ${robot.robotCode}?`}
       description={confirming === 'on'

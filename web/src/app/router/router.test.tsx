@@ -165,9 +165,9 @@ describe('route table', () => {
     })
 
     it.each([
-      ['/technical/poi-import?proposal=p-1', '/technical/pois', 'Kiểm chứng POI'],
+      ['/technical/poi-import?proposal=p-1', '/technical/pois', 'POI'],
       ['/technical/poi-file-import?map=m-1', '/technical/pois/import', 'Nhập POI từ file'],
-      ['/technical/confirmations?route=r-1', '/technical/route-tests', 'Xác nhận chạy thử'],
+      ['/technical/confirmations?route=r-1', '/technical/route-tests', 'Chạy thử tuyến'],
     ])('moves the old address %s to %s and keeps its query string', async (from, to, heading) => {
       signIn('TechnicalStaff')
       const router = renderAt(from)

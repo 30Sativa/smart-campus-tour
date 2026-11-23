@@ -33,7 +33,7 @@ export default function TechnicalMapsPage() {
   return (
     <TechnicalPage>
       <PageHeader
-        eyebrow="Bản đồ & POI"
+        eyebrow="Chuẩn bị"
         title="Bản đồ"
         description="Tải bản đồ lên rồi triển khai cho robot. Kiểm tra triển khai làm trong hộp Thiết lập của robot."
         action={<button type="button" className={buttonClass('primary')} onClick={() => setUploading(true)}><Upload size={15} aria-hidden="true" />Tải lên bản đồ mới</button>}
@@ -45,7 +45,7 @@ export default function TechnicalMapsPage() {
             <StatTile icon={Layers} label="Phiên bản đã tải lên" value={items.length} />
             <StatTile icon={CircleCheck} label="Dùng được để soạn POI" value={passed} />
             <StatTile icon={Bot} label="Có robot đang chạy" value={running} />
-            <StatTile icon={Activity} label="Chờ kỹ thuật kiểm tra" value={unchecked} tone="warn" />
+            <StatTile icon={Activity} label="Chưa kiểm tra triển khai" value={unchecked} tone="warn" />
           </StatStrip>
         </div>
       )}

@@ -70,7 +70,7 @@ export function routeUseLine(proposal: PoiProposal): { usable: boolean; text: st
 /** Two areas may share a display name, so the area key keeps map choices apart. */
 export const mapVersionLabel = (map: { areaName: string; areaKey: string; versionNumber: number }) => `${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`
 
-export const mapCheckLabel = (status: string) => status === 'PASSED' ? 'Đạt kiểm tra' : status === 'FAILED' ? 'Kiểm tra không đạt' : 'Chờ kỹ thuật kiểm tra'
+export const mapCheckLabel = (status: string) => status === 'PASSED' ? 'Đã kiểm tra triển khai đạt' : status === 'FAILED' ? 'Kiểm tra triển khai chưa đạt' : 'Chưa kiểm tra triển khai'
 
 /**
  * The four on-site observations of a manual POI check, in the order the API stores them
