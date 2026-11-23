@@ -45,6 +45,9 @@ permission to execute it.
 - [Sonar perception](sonar-perception.md) — why the SR04T costmap layer failed goals (root cause),
   the opt-in `sonar_mode` speed guard (Nav2 collision_monitor + blind-zone memory, ADR-0066),
   what the four corner sonars can and cannot see, offline scenarios, hardware acceptance.
+- [Sonar FB status proposal](sonar-fb-status-proposal.md) — **proposal, not implemented**: FB
+  fields 33–40 (per-sonar result code + measurement counter), REP-117 values in `stm32_bridge`,
+  direct "too close" in `sonar_memory`; first a hardware test of what the SR04T outputs at 0.05–0.25 m.
 - [Runtime deploy and rollback](runtime-deploy.md) — how the MiniPC runtime
   differs from source today, staging an immutable overlay from one commit, and
   rolling back by sourcing the previous overlay.
