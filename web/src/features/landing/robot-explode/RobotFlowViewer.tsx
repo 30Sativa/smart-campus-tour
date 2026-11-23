@@ -199,9 +199,13 @@ function runWaves(waves: (Mesh | null)[], time: number) {
 }
 
 /** Sound waves from the four ultrasonic heads, while the step is about them. */
-function SonarWaves({ model, color }: { model: FlowModel; color: string }) {
+function SonarWaves({ model, color, paused }: { model: FlowModel; color: string; paused: boolean }) {
   const waves = useRef<(Mesh | null)[]>([])
-  useFrame(state => runWaves(waves.current, state.clock.elapsedTime))
+  const time = useRef(0)
+  useFrame((_, delta) => {
+    if (!paused) time.current += Math.min(delta, 0.1)
+    runWaves(waves.current, time.current)
+  })
   const heads = useMemo(() => model.anchors('sonar'), [model])
   return (
     <>
@@ -315,11 +319,12 @@ function breathe(halo: Mesh | null, time: number | null) {
  * colour, and sparks of current with fading tails running along it from the
  * sender to the receiver.
  */
-function SignalPath({ curve, color, lead }: {
+function SignalPath({ curve, color, lead, paused }: {
   curve: QuadraticBezierCurve3
   color: string
   /** Length of the chain before this path (m): the current sets off along it only when it has run that far. */
   lead: number
+  paused: boolean
 }) {
   const points = useMemo(() => curve.getPoints(SEGMENTS), [curve])
   const length = useMemo(() => curve.getLength(), [curve])
@@ -328,11 +333,11 @@ function SignalPath({ curve, color, lead }: {
   const layers = useRef<(Dashed | null)[]>([])
   const halo = useRef<Mesh>(null)
   const travelled = useRef(0)
-  useFrame((state, delta) => {
-    travelled.current += delta * CURRENT.speed
+  useFrame((_, delta) => {
+    if (!paused) travelled.current += Math.min(delta, 0.1) * CURRENT.speed
     const front = travelled.current - lead
     runCurrent(wire.current, layers.current, front, length, SEGMENTS)
-    breathe(halo.current, front >= length ? state.clock.elapsedTime : null)
+    breathe(halo.current, front >= length ? travelled.current / CURRENT.speed : null)
   })
   return (
     <group>
@@ -389,13 +394,16 @@ function stepFocus(model: FlowModel, step: FlowStep | null) {
 function ZoomRig({ zoom, focus }: { zoom: number; focus: Vector3 }) {
   const controls = useThree(state => state.controls) as unknown as { target: Vector3; update: () => void } | null
   const camera = useThree(state => state.camera)
+  const invalidate = useThree(state => state.invalidate)
   const scratch = useMemo(() => new Vector3(), [])
   useFrame((_, delta) => {
     if (!controls) return
-    const blend = 1 - Math.exp(-4 * delta)
+    const blend = 1 - Math.exp(-4 * Math.min(delta, 0.1))
     slideTo(camera.position, controls.target, focus, blend, scratch)
     dollyTo(camera.position, controls.target, HOME_DISTANCE * zoom, blend, scratch)
     controls.update()
+    // Demand rendering still eases the camera when the simulation is paused.
+    if (controls.target.distanceTo(focus) > 0.001 || Math.abs(camera.position.distanceTo(controls.target) - HOME_DISTANCE * zoom) > 0.001) invalidate()
   })
   return null
 }
@@ -437,31 +445,33 @@ function easeDrive(drive: { current: number }, on: boolean, delta: number) {
   drive.current += ((on ? 1 : 0) - drive.current) * Math.min(1, delta * 2.2)
 }
 
-function Robot({ step, zoom }: { step: FlowStep | null; zoom: number }) {
+function Robot({ step, zoom, paused }: { step: FlowStep | null; zoom: number; paused: boolean }) {
   const model = useFlowModel()
   const focus = useMemo(() => stepFocus(model, step), [model, step])
   const styled = useRef<FlowStep | null | undefined>(undefined)
   const curves = useMemo(() => chainCurves(model, step), [model, step])
   const motorsAt = useMemo(() => motorsStartAt(curves), [curves])
   const started = useRef(0)
+  const time = useRef(0)
   const drive = useRef(0)
   const wheelCentres = useMemo(() => model.wheels.map(wheel => wheel.position), [model])
-  useFrame((state, delta) => {
-    const time = state.clock.elapsedTime
+  useFrame((_, frameDelta) => {
+    const delta = paused ? 0 : Math.min(frameDelta, 0.1)
+    time.current += delta
     if (styled.current !== step) {
       styled.current = step
-      started.current = time
+      started.current = time.current
       styleModel(model, step)
     }
-    easeDrive(drive, step?.motion === 'wheels' && motorsAt !== null && time - started.current >= motorsAt, delta)
-    moveParts(model, step?.motion, delta, time, drive.current)
+    easeDrive(drive, step?.motion === 'wheels' && motorsAt !== null && time.current - started.current >= motorsAt, delta)
+    moveParts(model, step?.motion, delta, time.current, drive.current)
   })
   return (
     <>
       <primitive object={model.root} />
-      {curves.map(item => <SignalPath key={item.key} curve={item.curve} color={item.color} lead={item.lead} />)}
-      <WheelAura centres={wheelCentres} color={signalColor(step?.links[0].kind ?? 'command')} drive={() => drive.current} angle={() => model.wheels[0]?.rotation.x ?? 0} />
-      {step?.motion === 'sonar' && <SonarWaves model={model} color={signalColor('feedback')} />}
+      {curves.map(item => <SignalPath key={item.key} curve={item.curve} color={item.color} lead={item.lead} paused={paused} />)}
+      <WheelAura centres={wheelCentres} color={signalColor(step?.links[0].kind ?? 'command')} drive={() => drive.current} angle={() => model.wheels[0]?.rotation.x ?? 0} paused={paused} />
+      {step?.motion === 'sonar' && <SonarWaves model={model} color={signalColor('feedback')} paused={paused} />}
       {step?.motion === 'head' && <PanTiltAxes model={model} />}
       <ZoomRig zoom={zoom} focus={focus} />
     </>
@@ -473,20 +483,20 @@ function Robot({ step, zoom }: { step: FlowStep | null; zoom: number }) {
  * on it: the parts that work in the step light up, each link runs as a
  * coloured path with current running along it, and the wheels, the LiDAR
  * or the pan-tilt head (with its two motor axes drawn) move when the step is
- * about them. Signals and moving parts are what this view explains, so they
- * keep moving even when the system asks for reduced motion.
+ * about them. A paused simulation uses demand rendering so orbit and zoom
+ * remain available without continuously animating the robot.
  */
-export default function RobotFlowViewer({ step, visible = true }: { step: FlowStep | null; visible?: boolean }) {
+export default function RobotFlowViewer({ step, visible = true, paused = false }: { step: FlowStep | null; visible?: boolean; paused?: boolean }) {
   const colour = useMemo(() => new Color('#ffffff'), [])
   const stage = useRef<HTMLDivElement>(null)
   const zoom = useZoom(stage)
   return (
     <div className="lp3-flow__zoomable" ref={stage}>
-      <Canvas className="lp3-flow__canvas" frameloop={visible ? 'always' : 'never'} shadows dpr={[1, 1.75]} camera={{ position: [...CAMERA.position], fov: 34, near: 0.05, far: 30 }}>
+      <Canvas className="lp3-flow__canvas" frameloop={visible ? paused ? 'demand' : 'always' : 'never'} shadows dpr={[1, 1.75]} camera={{ position: [...CAMERA.position], fov: 34, near: 0.05, far: 30 }}>
         <hemisphereLight args={[colour, '#8a9aa4', 1.3]} />
         <directionalLight position={[2.5, 4, 3]} intensity={2} castShadow shadow-mapSize={[1024, 1024]} />
         <directionalLight position={[-3, 2, -2]} intensity={0.7} />
-        <Robot step={step} zoom={zoom.level} />
+        <Robot step={step} zoom={zoom.level} paused={paused} />
         <Grid position={[0, -0.001, 0]} args={[10, 10]} cellSize={0.1} cellThickness={0.6} cellColor="#9fb0b8" sectionSize={0.5} sectionThickness={1} sectionColor="#7d939d" fadeDistance={6} fadeStrength={2.2} infiniteGrid />
         <ContactShadows position={[0, 0, 0]} opacity={0.3} scale={2.4} blur={2.4} far={1.2} />
         <OrbitControls makeDefault target={[...CAMERA.target]} enablePan={false} enableZoom={false} minPolarAngle={Math.PI * 0.2} maxPolarAngle={Math.PI * 0.49} />

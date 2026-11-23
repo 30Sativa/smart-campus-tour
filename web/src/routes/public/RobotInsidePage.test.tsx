@@ -23,7 +23,7 @@ describe('RobotInsidePage', () => {
 
   it('keeps the step-by-step functions and the table of cables below the drawing', () => {
     renderAt()
-    expect(screen.getByRole('heading', { level: 2, name: /Dữ liệu chạy từ máy tính/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: /Chọn chức năng/ })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /Di chuyển/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getAllByRole('row').length).toBeGreaterThan(WIRES.length)
   })

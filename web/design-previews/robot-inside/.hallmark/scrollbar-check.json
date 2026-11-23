@@ -1,0 +1,27 @@
+{
+  "desktop": [
+    {
+      "class": "lp3-td__panel",
+      "scheme": "dark",
+      "width": "thin",
+      "color": "color(srgb 0.933333 0.956863 0.964706 / 0.28) rgba(0, 0, 0, 0)",
+      "scrollTop": 0,
+      "scrollHeight": 357,
+      "clientHeight": 357
+    },
+    {
+      "class": "lp3-td__parts",
+      "scheme": "dark",
+      "width": "thin",
+      "color": "color(srgb 0.933333 0.956863 0.964706 / 0.28) rgba(0, 0, 0, 0)",
+      "scrollTop": 70,
+      "scrollHeight": 362,
+      "clientHeight": 149
+    }
+  ],
+  "mobile": {
+    "scroll": 80,
+    "width": 2761,
+    "client": 344
+  }
+}
