@@ -42,6 +42,9 @@
     head_poi_radius_m: 0.6
     head_poi_refresh_sec: 5.0
     head_poi_nav_action: navigate_to_pose
+    # Nav2 stops within yaw_goal_tolerance (0.30 rad, ~17 deg) of the POI yaw; the PAN of FRONT/LEFT/RIGHT/ANGLE is
+    # corrected by that error up to this many degrees, so the camera looks where Staff set it. 0 turns it off.
+    head_poi_max_yaw_correction_deg: 30.0
     # Mini PC diagnostics report: CPU, RAM, disk, CPU temperature, sensor topic rates and the stm32_bridge
     # IMU diagnostic, sent to POST /api/fleet/v1/diagnostics. Observation only; never affects Fleet Sync.
     # Topics resolve inside robot_namespace; set one to "" for a sensor this robot does not have.

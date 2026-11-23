@@ -68,6 +68,7 @@ class FleetBridgeNode(Node):
         self.declare_parameter('head_poi_radius_m', 0.6)
         self.declare_parameter('head_poi_refresh_sec', 5.0)
         self.declare_parameter('head_poi_nav_action', 'navigate_to_pose')
+        self.declare_parameter('head_poi_max_yaw_correction_deg', 30.0)
         # Mini PC diagnostics report (POST /api/fleet/v1/diagnostics): observation only, own HTTPS thread.
         self.declare_parameter('diagnostics_enabled', True)
         self.declare_parameter('diagnostics_url', '')
@@ -201,10 +202,11 @@ class FleetBridgeNode(Node):
                 from .head_ros import subscribe_poi_head
                 from .head_worker import PoiListWorker
                 from .poi_head import PoiHeadDirector
-                director = PoiHeadDirector(head_actuator, float(self.get_parameter('head_poi_radius_m').value),
-                                           self.get_logger().info)
+                director = PoiHeadDirector(
+                    head_actuator, float(self.get_parameter('head_poi_radius_m').value), self.get_logger().info,
+                    float(self.get_parameter('head_poi_max_yaw_correction_deg').value))
                 subscribe_poi_head(self, director, str(self.get_parameter('head_poi_nav_action').value),
-                                   self._latest_xy)
+                                   self._latest_pose)
                 self._poi_worker = PoiListWorker(
                     head_client, director, float(self.get_parameter('head_poi_refresh_sec').value),
                     self.get_logger().warning)
@@ -376,8 +378,8 @@ class FleetBridgeNode(Node):
                 self.get_logger().info('Fleet pose TF is fresh.')
             self._last_logged_pose_reason = observation.reason
 
-    def _latest_xy(self) -> tuple[float, float] | None:
-        """Map-frame position for the POI head: the latest valid map->base TF, whatever its stamp's age.
+    def _latest_pose(self) -> tuple[float, float, float] | None:
+        """Map-frame (x, y, yaw) for the POI head: the latest valid map->base TF, whatever its stamp's age.
 
         It is read when Nav2 has just reported a goal SUCCEEDED, so localization was running; the wall-clock age
         check used for telemetry would refuse every pose in Gazebo, where TF carries simulation time.
@@ -385,7 +387,7 @@ class FleetBridgeNode(Node):
         with self._observation_lock:
             if self._pose is None:
                 return None
-            return float(self._pose['x']), float(self._pose['y'])
+            return float(self._pose['x']), float(self._pose['y']), float(self._pose['yaw'])
 
     def _snapshot(self) -> dict[str, object]:
         with self._observation_lock:

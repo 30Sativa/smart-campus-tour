@@ -73,6 +73,9 @@ PROFILE_KEYS = {
     # fleet service (robot/docs/fleet-service.md): auto = commands exactly while "robot nav --fleet" runs
     # (the ADR-0049 motion gate is up), telemetry otherwise; off = telemetry only, always.
     'FLEET_SERVICE_COMMANDS': 'auto',
+    # Camera head (ADR-0045): true = every fleet_bridge this launcher starts takes the Operator head buttons and turns
+    # the head to each POI's preset when Nav2 reaches it (fleet_bridge head_enabled). Needs FleetHead on the backend.
+    'FLEET_HEAD_ENABLED': 'false',
     'SCT_LOG_ROOT': '~/amr_logs/runs', 'LOG_KEEP_DAYS': '30', 'LOG_MAX_MB': '2000', 'MIN_FREE_GB': '5',
 }
 NODE_PATTERNS = {
@@ -518,6 +521,10 @@ def read_fleet_env(p):
     return values
 
 
+def fleet_head_wanted(p):
+    return p['FLEET_HEAD_ENABLED'].strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 def fleet_argv(p, env, values, commands):
     params = share_file(env, 'fleet_bridge', 'config', 'fleet_bridge.yaml')
     if not params:
@@ -526,6 +533,8 @@ def fleet_argv(p, env, values, commands):
             '--params-file', params, '-p', f'backend_url:={values["FLEET_SYNC_URL"]}',
             '-p', f'robot_code:={values["FLEET_ROBOT_CODE"]}', '-p', f'map_key:={values["FLEET_ROBOT_MAP_KEY"]}',
             '-p', f'frame_id:={values["FLEET_ROBOT_FRAME_ID"]}']
+    if fleet_head_wanted(p):
+        argv += ['-p', 'head_enabled:=true']
     if commands:
         # ADR-0049: commands only together with the motion permit; report period below 2 s.
         argv += ['-p', 'commands_enabled:=true', '-p', 'report_period_sec:=0.5',
