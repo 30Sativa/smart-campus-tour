@@ -11,7 +11,9 @@ One process, two jobs:
   whether the Quest is attached / authorised and reads its battery with
   ``adb shell dumpsys battery`` (separate short adb calls; the video pipeline
   is not touched);
-* a small HTTP server (stdlib only) with ``/status``, ``/device`` and ``/health``.
+* a small HTTP server (stdlib only) with ``/status``, ``/device`` and ``/health``;
+* with a control URL, the tour bridge (tour_bridge.py): ``/quest/events`` on port 8890 tells the MC character
+  in the headset when the robot reaches a stop and what to say there.
 
 Browsers never talk to this process for video: MediaMTX serves the path over
 WebRTC (WHEP, ``http://<NUC>:8889/quest/whep``). Nothing is written to disk
@@ -45,6 +47,8 @@ from typing import Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
+
+from tour_bridge import TourBridge, UsbReverse, read_mediamtx_tls, start_bridge_server
 
 MODULE_DIR = Path(__file__).resolve().parent
 
@@ -130,6 +134,16 @@ class Config:
     # but capture whenever the Quest is plugged in, as without a control URL.
     camera_on_demand: bool = True
 
+    # Tour bridge for the MC character in the headset (tour_bridge.py). Needs control_url: the Tour comes with the
+    # camera poll. 0 = off. Without cert/key it serves plain HTTP (Unity Editor tests only: the headset app pins
+    # the certificate and needs HTTPS); empty cert/key = MediaMTX's MTX_WEBRTCSERVERCERT/KEY from mediamtx.env.
+    bridge_port: int = 8890
+    bridge_host: str = "0.0.0.0"
+    bridge_token: str = ""
+    bridge_cert: str = ""
+    bridge_key: str = ""
+    bridge_usb_reverse: bool = True
+
     # Output: where FFmpeg publishes (MediaMTX RTSP) and how often a keyframe
     # is sent (a new WebRTC viewer starts on the next keyframe).
     publish_url: str = "rtsp://127.0.0.1:8554/quest"
@@ -192,6 +206,13 @@ class Config:
         cfg.control_failsafe = _env("QUEST_CONTROL_FAILSAFE", "on").lower() in ("1", "on", "true", "yes")
         cfg.control_grace = _env_float("QUEST_CONTROL_GRACE", 60.0)
         cfg.camera_on_demand = _env("QUEST_CAMERA_ON_DEMAND", "on").lower() in ("1", "on", "true", "yes")
+        cfg.bridge_port = _env_int("QUEST_BRIDGE_PORT", 8890)
+        cfg.bridge_host = _env("QUEST_BRIDGE_HOST", "0.0.0.0")
+        cfg.bridge_token = _env("QUEST_BRIDGE_TOKEN", "")
+        mtx = read_mediamtx_tls(Path(_env("QUEST_MEDIAMTX_ENV", str(MODULE_DIR / "mediamtx.env"))))
+        cfg.bridge_cert = _env("QUEST_BRIDGE_CERT", "") or mtx.get("cert", "")
+        cfg.bridge_key = _env("QUEST_BRIDGE_KEY", "") or mtx.get("key", "")
+        cfg.bridge_usb_reverse = _env("QUEST_BRIDGE_USB_REVERSE", "on").lower() in ("1", "on", "true", "yes")
         cfg.validate()
         return cfg
 
@@ -230,6 +251,10 @@ class Config:
             raise SystemExit("CONFIG_ERROR QUEST_DEVICE_POLL must be between 2 and 60 seconds")
         if not 0.2 <= self.keyframe_interval <= 10:
             raise SystemExit("CONFIG_ERROR QUEST_KEYFRAME_INTERVAL must be between 0.2 and 10 seconds")
+        if not 0 <= self.bridge_port <= 65535:
+            raise SystemExit("CONFIG_ERROR QUEST_BRIDGE_PORT must be 0 (off) or a TCP port")
+        if bool(self.bridge_cert) != bool(self.bridge_key):
+            raise SystemExit("CONFIG_ERROR QUEST_BRIDGE_CERT and QUEST_BRIDGE_KEY go together")
 
     @property
     def publish_endpoint(self) -> Tuple[str, int]:
@@ -678,7 +703,8 @@ class CameraDemand(threading.Thread):
     by default the camera keeps running, so a backend outage never blacks out a running Tour.
     """
 
-    def __init__(self, cfg: Config, opener=urlopen, clock=time.time, report=None, on_headset_command=None):
+    def __init__(self, cfg: Config, opener=urlopen, clock=time.time, report=None, on_headset_command=None,
+                 on_tour=None):
         super().__init__(name="camera-demand", daemon=True)
         self.cfg = cfg
         # Polling (and the headset report) runs with a control URL; deciding the camera also needs camera_on_demand.
@@ -686,6 +712,7 @@ class CameraDemand(threading.Thread):
         self.enabled = self.polling and cfg.camera_on_demand
         self._report = report  # () -> dict sent as the poll body (ADR-0056), or None
         self._on_headset_command = on_headset_command  # (id, action) -> None: a Staff wake/sleep press, or None
+        self._on_tour = on_tour  # (dict | None) -> None: the running Tour for the headset MC (tour_bridge), or None
         self.changed = threading.Event()
         self.stop_event = threading.Event()
         self._opener = opener
@@ -743,6 +770,7 @@ class CameraDemand(threading.Thread):
                 if isinstance(poll, (int, float)) and 1 <= poll <= 60:
                     self._poll = float(poll)
             self._headset_command(data.get("headsetCommand"))
+            self._tour(data.get("tour"))
         except HTTPError as exc:
             why = (f"HTTP {exc.code}: the robot credential was refused (check {self.cfg.robot_credential_file})"
                    if exc.code in (401, 403) else f"HTTP {exc.code}")
@@ -765,6 +793,15 @@ class CameraDemand(threading.Thread):
             self._on_headset_command(command_id, action)
         except Exception as exc:  # noqa: BLE001 - a press never stops the camera poll
             log.warning("HEADSET_COMMAND not started: %s", exc)
+
+    def _tour(self, tour) -> None:
+        """Hands the running Tour (or None) to the tour bridge; a bridge error never stops the camera poll."""
+        if self._on_tour is None:
+            return
+        try:
+            self._on_tour(tour if isinstance(tour, dict) else None)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("TOUR_BRIDGE update failed: %s", exc)
 
     def _body(self) -> bytes:
         """The headset report as JSON; a failing report never stops the poll itself."""
@@ -1443,7 +1480,7 @@ class Supervisor(threading.Thread):
 # --------------------------------------------------------------------------
 
 
-def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = None, demand=None):
+def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = None, demand=None, bridge=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "QuestStream/2.0"
 
@@ -1484,6 +1521,8 @@ def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = N
                 body = status.snapshot(cfg)
                 if demand is not None:
                     body["camera"] = demand.snapshot()
+                if bridge is not None:
+                    body["tourBridge"] = bridge.snapshot()
                 return self._json(200, body)
             if path == "/device":
                 # The headset (adb + battery) and the video, kept apart: a
@@ -1544,11 +1583,34 @@ def main() -> int:
     device = DeviceStatus()
     monitor = DeviceMonitor(cfg, device)
     headset = HeadsetControl(cfg, device)
-    demand = CameraDemand(cfg, report=lambda: headset_report(device, status), on_headset_command=headset.submit)
+    bridge = TourBridge() if cfg.bridge_port and cfg.control_url else None
+    demand = CameraDemand(cfg, report=lambda: headset_report(device, status), on_headset_command=headset.submit,
+                          on_tour=bridge.update if bridge else None)
     supervisor = Supervisor(cfg, status, demand)
+    bridge_httpd = None
+    usb_reverse = None
+    if bridge is not None:
+        try:
+            bridge_httpd = start_bridge_server(bridge, cfg.bridge_host, cfg.bridge_port, cfg.bridge_token,
+                                               cfg.bridge_cert, cfg.bridge_key)
+        except (OSError, ValueError) as exc:
+            log.error("TOUR_BRIDGE cannot listen on %s:%s: %s", cfg.bridge_host, cfg.bridge_port, exc)
+            bridge = None
+        else:
+            log.info("TOUR_BRIDGE headset MC events on %s://%s:%s/quest/events%s", "https" if cfg.bridge_cert else "http",
+                     cfg.bridge_host, cfg.bridge_port, "" if cfg.bridge_token else " (no token: anyone on the LAN can read)")
+            if not cfg.bridge_cert:
+                log.warning("TOUR_BRIDGE plain HTTP: the headset app needs HTTPS (set QUEST_BRIDGE_CERT/KEY or "
+                            "MTX_WEBRTCSERVERCERT/KEY in mediamtx.env)")
+            if cfg.bridge_usb_reverse:
+                usb_reverse = UsbReverse(cfg.adb, cfg.bridge_port, lambda: device.snapshot()["serial"]
+                                         if device.snapshot()["connection"] == "connected" else "")
+                usb_reverse.start()
+    elif cfg.bridge_port:
+        log.info("TOUR_BRIDGE off: it needs QUEST_CONTROL_URL (the running Tour comes with the camera poll)")
 
     try:
-        httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status, device, demand))
+        httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status, device, demand, bridge))
     except OSError as exc:
         log.error("HTTP_ERROR cannot listen on %s:%s: %s", cfg.host, cfg.port, exc)
         return 3
@@ -1559,6 +1621,10 @@ def main() -> int:
         supervisor.stop()
         monitor.stop()
         demand.stop()
+        if usb_reverse is not None:
+            usb_reverse.stop()
+        if bridge_httpd is not None:
+            threading.Thread(target=bridge_httpd.shutdown, daemon=True).start()
         threading.Thread(target=httpd.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, shutdown)
