@@ -67,6 +67,9 @@ permission to execute it.
   bridge, safeguards and staged transition.
 Dated evidence (true for its date; later pages supersede it):
 
+- [PCB V2 decision 2026-11-20](pcb-v2-decision-2026-11-20.md) — why the right
+  encoder moves to TIM1 PA8/PA9 (PB8 only BOOT0), alternatives rejected, the
+  electrical changes and the checks before ordering.
 - [Encoder bench 2026-11-20](encoder-bench-2026-11-20.md) — HBS57H encoders
   read through AM26LV32E (TIM3/TIM8): 2.5 counts/STEP both wheels, signs,
   TERR 0; NRST with PB8 high boots DFU (FAIL); final PCB V2 pin map and
