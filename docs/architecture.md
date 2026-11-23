@@ -598,10 +598,11 @@ Normal API startup requires `Authentication:Jwt:SigningKey` from environment,
 User Secrets, or another external configuration source. It must contain at
 least 32 UTF-8 bytes. The explicit initial-admin seed command exits before
 starting HTTP and does not require the signing key. Isolated development
-SimulationPreview also skips JWT middleware and persistence setup. Repository-
-dependent Application handlers fail service validation before the host starts
-in this mode, so it does not serve Auth or account API controllers; use normal
-API mode for those endpoints. In Development, CORS allows the explicit
+SimulationPreview also skips JWT middleware and persistence setup. It turns off
+build-time service validation so the host still starts; repository-dependent
+Application handlers stay unavailable and fail per request in this mode, so it
+does not serve Auth, account or other database-backed API controllers; use
+normal API mode for those endpoints. Every other mode keeps validation on. In Development, CORS allows the explicit
 `http://localhost:5173` origin with credentials; production origins must be
 configured explicitly, with no wildcard.
 
