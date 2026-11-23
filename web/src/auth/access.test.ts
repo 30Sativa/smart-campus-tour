@@ -21,7 +21,7 @@ describe('area access', () => {
     expect(areaById('staff').allows('TechnicalStaff')).toBe(false)
     expect(areaById('admin').allows('TechnicalStaff')).toBe(false)
     expect(homePathForRole('TechnicalStaff')).toBe('/technical')
-    expect(landingPathAfterLogin('TechnicalStaff', '/technical/confirmations')).toBe('/technical/confirmations')
+    expect(landingPathAfterLogin('TechnicalStaff', '/technical/route-tests')).toBe('/technical/route-tests')
     expect(landingPathAfterLogin('TechnicalStaff', '/staff')).toBe('/technical')
   })
 

@@ -64,6 +64,8 @@ export default function TechnicalConfirmationsPage() {
             <StatTile icon={CircleCheck} label="Đã đạt" value={recordedCount('passed')} onClick={() => setFilter('passed')} pressed={filter === 'passed'} />
             <StatTile icon={CircleX} label="Không đạt" value={recordedCount('failed')} tone="danger" onClick={() => setFilter('failed')} pressed={filter === 'failed'} />
           </StatStrip>
+          {/* Đã đạt and Không đạt count the catalog, so its failure is shown under the figures whatever the filter. */}
+          {routes.isError && <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 rounded-2xl border border-[#f5c8c2] bg-[#fff4f2] p-3 text-[13px] text-[#b23e31]"><p>Chưa tải được số tuyến đã đạt và không đạt.</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void routes.refetch()}>Tải lại</button></div>}
         </div>
       )}
 
@@ -71,7 +73,6 @@ export default function TechnicalConfirmationsPage() {
 
       <section className={panelClass} aria-label="Danh sách kiểm chứng tuyến">
         <PanelHead title={filterText[filter].title} />
-        {filter !== 'pending' && routes.isError && <div role="alert" className="space-y-2 border-b border-[#eef1f4] p-4 text-[13px] text-[#b23e31]"><p>{errorText(routes.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void routes.refetch()}>Tải lại danh sách tuyến</button></div>}
         {queue.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p> : queue.error ? <div role="alert" className="space-y-2 p-4 text-[13px] text-[#b23e31]"><p>{errorText(queue.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void queue.refetch()}>Tải lại danh sách chờ</button></div> : (
           <div className="relative overflow-x-auto">
             <table className="w-full min-w-[720px] text-left">

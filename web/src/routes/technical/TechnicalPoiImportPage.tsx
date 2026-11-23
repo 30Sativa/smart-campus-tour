@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { CircleCheck, Clock3, LoaderCircle, RotateCcw } from 'lucide-react'
+import { CircleCheck, Clock3, FileUp, LoaderCircle, RotateCcw } from 'lucide-react'
+import { Link } from 'react-router'
 import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -64,7 +65,8 @@ export default function TechnicalPoiImportPage() {
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="Bản đồ & POI" title="Kiểm chứng POI" description="Ghi kết quả kiểm tra tại chỗ cho POI Staff đã gửi." />
+      <PageHeader eyebrow="Bản đồ & POI" title="Kiểm chứng POI" description="Ghi kết quả kiểm tra tại chỗ cho POI Staff đã gửi."
+        action={<Link className={buttonClass('secondary')} to="/technical/pois/import"><FileUp size={15} aria-hidden="true" />Nhập từ file</Link>} />
 
       {!proposals.isPending && !proposals.error && (
         <div className="mb-3">
