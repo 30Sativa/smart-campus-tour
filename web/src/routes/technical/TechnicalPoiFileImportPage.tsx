@@ -125,7 +125,7 @@ export default function TechnicalPoiFileImportPage() {
               <label className={labelClass} htmlFor="import-evidence">Ghi chú bằng chứng</label>
               <textarea id="import-evidence" rows={3} className={`${inputClass} mt-1`} required maxLength={1700} value={evidenceNote} onChange={event => { setEvidenceNote(event.target.value); importFiles.reset() }} />
             </div>
-            {preview.data.robotReadiness && preview.data.robotReadiness.state !== 'READY' && <Note tone="warn">{preview.data.robotReadiness.reason ? `${preview.data.robotReadiness.reason} ` : ''}Các tệp sẽ vào hàng chờ kiểm chứng, không được ghi Đạt.</Note>}
+            {preview.data.robotReadiness && !preview.data.robotReadiness.ready && <Note tone="warn">{preview.data.robotReadiness.message ? `${preview.data.robotReadiness.message} ` : ''}Các tệp sẽ vào hàng chờ kiểm chứng, không được ghi Đạt.</Note>}
             <Note>Tệp ghi verified: true được lưu là "{verificationMethodLabel.POSE_CAPTURE}", không ghi nhận robot đã tự chạy tới điểm. Tệp verified: false vào hàng chờ kiểm chứng.</Note>
             {importFiles.isError && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errorText(importFiles.error)}</p>}
             <div className="flex justify-end"><button type="button" className={buttonClass('primary')} disabled={!canImport} onClick={runImport}>{importFiles.isPending ? 'Đang nhập…' : 'Nhập'}</button></div>

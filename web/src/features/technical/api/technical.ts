@@ -221,7 +221,8 @@ export type PoiImportPreviewFile = {
   action: PoiImportAction | null; errorCode: string | null; errorMessage: string | null
 }
 /** Whether the chosen robot may record a pass on the chosen map; when it may not, verified files go to the queue. */
-export type PoiImportRobotReadiness = { state: RobotReadinessState; reasonCode: string | null; reason: string | null }
+export type PoiImportRobotReadiness = { ready: boolean; code: string | null; message: string | null }
+/** `robotReadiness` is optional only for an older server that did not send it. */
 export type PoiImportPreview = { mapVersionId: string; robotCode: string; canImport: boolean; files: PoiImportPreviewFile[]; robotReadiness?: PoiImportRobotReadiness | null }
 export type PoiImportResult = {
   requestId: string; mapVersionId: string; createdProposalIds: string[]; updatedProposalIds: string[]
