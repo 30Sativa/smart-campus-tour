@@ -2,8 +2,8 @@
 
 CHI DUNG TRONG MO PHONG. Bat chuoc nhung gi firmware head_core.h + stm32_bridge head/* lam ma mot phan mem
 ben ngoai thay duoc: gioi han mem PAN +/-170, TILT +/-18; vat can PAN 174 ben phai, TILT 20 cui; HOME tim vat
-can roi ve 0; toc do 60 do/s (goc), 30 do/s (giu nut, quet), 20 do/s (tim vat can); 1 buoc du PAN 0.6 do
-(hop so 3:1), TILT 0.36 do (hop so 5:1). Khong mo phong mat buoc, gia toc hay luc giu.
+can roi ve 0; toc do 60 do/s (goc), 30 do/s (giu nut, quet), 20 do/s (tim vat can); 1 buoc du PAN 0.45 do
+(hop so 4:1), TILT 0.1125 do (hop so 16:1). Khong mo phong mat buoc, gia toc hay luc giu.
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ ANGLE_DPS = 60.0
 JOG_DPS = 30.0
 SWEEP_DPS = 30.0
 HOME_DPS = 20.0
-PAN_DEG_PER_STEP = 1.8 / 3.0
-TILT_DEG_PER_STEP = 1.8 / 5.0
+PAN_DEG_PER_STEP = 1.8 / 4.0
+TILT_DEG_PER_STEP = 1.8 / 16.0
 JOG_DEADMAN_S = 0.3            # firmware: deadman 300 ms neu nut khong duoc gui lai
 
 

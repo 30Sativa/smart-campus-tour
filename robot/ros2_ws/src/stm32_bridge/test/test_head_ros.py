@@ -192,9 +192,10 @@ class FakeFirmware:
         if not ref:
             return self._err('head_not_zeroed')
         if p[2] == 'STEP':
-            # Nhu firmware: cong vao dich, chan o gioi han mem (PAN 0.6 do/buoc, TILT 0.36 do/buoc qua hop so 5:1).
-            pan = max(-17000, min(17000, self.target[0] + int(p[3]) * 60))
-            tilt = max(-1800, min(1800, self.target[1] + int(p[4]) * 36))
+            # Nhu firmware: cong vao dich, chan o gioi han mem (PAN 0.45 do/buoc qua hop so 4:1, TILT 0.1125 do/buoc
+            # qua hop so 16:1).
+            pan = max(-17000, min(17000, self.target[0] + int(p[3]) * 45))
+            tilt = max(-1800, min(1800, self.target[1] + round(int(p[4]) * 11.25)))
             self.target = (pan, tilt)
             self.state, self.busy_until = hl.STATE_MOVING, now + self.move_s
         self.head_seq = seq
@@ -534,7 +535,7 @@ def test_sweep_goes_left_then_right_then_back_to_where_it_started():
         resp = _sweep(node)
         assert resp.success and resp.message == 'started'
         assert _wait(lambda: not iface._sweep_thread.is_alive(), 5.0)
-        assert _steps(fw) == ['STEP,225,0', 'STEP,-450,0', 'STEP,225,0']   # 135 do = 225 buoc 0.6 do
+        assert _steps(fw) == ['STEP,300,0', 'STEP,-600,0', 'STEP,300,0']   # 135 do = 300 buoc 0.45 do
         assert fw.pan == 0 and fw.state == hl.STATE_IDLE
     finally:
         fw.stop()
@@ -546,8 +547,8 @@ def test_sweep_shrinks_a_side_instead_of_hitting_the_soft_limit_and_still_return
         assert run_goal(iface, FakeGoalHandle(mode=0, pan=100.0)).success
         assert _sweep(node).success
         assert _wait(lambda: not iface._sweep_thread.is_alive(), 5.0)
-        # Con 70 do toi +170: 116 buoc (69.6 do) sang trai, du 225 buoc sang phai.
-        assert _steps(fw) == ['STEP,116,0', 'STEP,-341,0', 'STEP,225,0']
+        # Con 70 do toi +170: 155 buoc (69.75 do) sang trai, du 300 buoc sang phai.
+        assert _steps(fw) == ['STEP,155,0', 'STEP,-455,0', 'STEP,300,0']
         assert fw.pan == 10000
         # Ve dung cho cu bang STEP: khong can lenh goc sua sai (HEAD,<seq>,<pan>,<tilt> co 3 dau phay).
         assert not any(s.startswith('HEAD,') and s.count(',') == 3 for s in fw.sent[-3:])
@@ -564,7 +565,7 @@ def test_a_manual_button_stops_the_sweep_and_nothing_follows_it():
         assert _wait(lambda: not iface._sweep_thread.is_alive(), 3.0)
         after_jog = fw.sent[fw.sent.index(next(s for s in fw.sent if ',JOG,-1,0' in s)):]
         assert not any(',STEP,' in s for s in after_jog[1:])
-        assert _steps(fw) == ['STEP,225,0']
+        assert _steps(fw) == ['STEP,300,0']
     finally:
         fw.stop()
 
@@ -633,8 +634,8 @@ def test_a_manual_step_during_a_sweep_stops_the_running_segment_before_stepping(
         step_i = next(i for i, s in enumerate(fw.sent) if s.endswith(',STEP,-5,0'))
         assert stop_i == step_i - 1
         assert _wait(lambda: fw.state == hl.STATE_IDLE, 2.0)
-        assert fw.pan == -300, 'dung tai cho roi nhich phai 5 buoc, khong chay toi 135 do trai'
-        assert _steps(fw) == ['STEP,225,0', 'STEP,-5,0']
+        assert fw.pan == -225, 'dung tai cho roi nhich phai 5 buoc (5 x 45 cdeg), khong chay toi 135 do trai'
+        assert _steps(fw) == ['STEP,300,0', 'STEP,-5,0']
     finally:
         fw.stop()
 
@@ -789,10 +790,10 @@ def test_a_poi_amplitude_replaces_the_default_and_zero_keeps_it():
         resp = node.services['head/sweep'](SimpleNamespace(amplitude_deg=90.0), SimpleNamespace())
         assert resp.success
         assert _wait(lambda: not iface._sweep_thread.is_alive(), 5.0)
-        assert _steps(fw) == ['STEP,150,0', 'STEP,-300,0', 'STEP,150,0']      # 90 do = 150 buoc 0.6 do
+        assert _steps(fw) == ['STEP,200,0', 'STEP,-400,0', 'STEP,200,0']      # 90 do = 200 buoc 0.45 do
         assert node.services['head/sweep'](SimpleNamespace(amplitude_deg=0.0), SimpleNamespace()).success
         assert _wait(lambda: not iface._sweep_thread.is_alive(), 5.0)
-        assert _steps(fw)[3:] == ['STEP,225,0', 'STEP,-450,0', 'STEP,225,0']   # 0 = head_sweep_deg (135)
+        assert _steps(fw)[3:] == ['STEP,300,0', 'STEP,-600,0', 'STEP,300,0']   # 0 = head_sweep_deg (135)
     finally:
         fw.stop()
 
