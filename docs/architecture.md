@@ -1554,7 +1554,8 @@ POI head motion is robot-side (ADR-0045 addendum 14/11/2026): `fleet_bridge` (`h
 every 5 s and watches `navigate_to_pose/_action/status`; a goal that starts executing turns the head to `ANGLE 0/0`,
 a goal that succeeds within 0.6 m of a POI runs that POI's preset (`ANGLE` or `SWEEP`), only while `autoMotion`. The
 backend no longer queues head commands on `ARRIVED` or Next. Head hardware since 14/11/2026: DRV8825 1/4 microstep on
-both axes, PAN 3:1 and TILT 5:1 planetary gearboxes; soft limits unchanged (PAN ±170°, TILT ±18°).
+both axes, PAN 3:1 and TILT 5:1 planetary gearboxes; soft limits unchanged (PAN ±170°, TILT ±18°). From 24/11/2026 the gearboxes are PAN 4:1 and TILT 16:1 (firmware `HEAD_*_GEAR_RATIO`); one
+`HeadStep` full step is then PAN 0.45° and TILT 0.1125°. Wire formats are unchanged.
 
 **Quest camera on demand (ADR-0052, proposed 09/11/2026; robot side opt-in).**
 The robot's Quest stream runs only while a Tour assigned to it is `RUNNING` or a Staff

@@ -110,8 +110,8 @@ describe('live console camera head (ADR-0045)', () => {
     fireEvent.click(within(panel).getByRole('button', { name: /Quét xung quanh/ }))
     await waitFor(() => expect(headCommands()).toHaveLength(4))
     expect(headCommands().map(item => item.body)).toEqual([
-      { kind: 'STEP', panSteps: 15, tiltSteps: 0 },
-      { kind: 'STEP', panSteps: 0, tiltSteps: 15 },
+      { kind: 'STEP', panSteps: 20, tiltSteps: 0 },
+      { kind: 'STEP', panSteps: 0, tiltSteps: 20 },
       { kind: 'ANGLE', panDeg: 0, tiltDeg: 0 },
       { kind: 'SWEEP' },
     ])

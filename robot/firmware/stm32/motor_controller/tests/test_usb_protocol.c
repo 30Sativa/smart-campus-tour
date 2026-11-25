@@ -460,7 +460,7 @@ static void test_head_home_step_jog(void)
     CHECK(fb_field(22) == 1 && fb_field(20) == 0 && fb_field(21) == 0, "HOME completes despite STOP at 20 Hz: IDLE at 0/0");
 
     rx("HEAD,43,STEP,1,-1\r\n"); run_ms(500);
-    /* 1 buoc du tai truc ra = 36000 / (200 * hop so) centi-do: PAN 60 (3:1), TILT 36 (5:1). */
+    /* 1 buoc du tai truc ra = 36000 / (200 * hop so) centi-do: PAN 45 (4:1), TILT 11.25 -> 11 (16:1). */
     CHECK(fb_field(19) == 43 && fb_field(20) == lroundf(36000.0f / (HEAD_MOTOR_STEPS_PER_REV * HEAD_PAN_GEAR_RATIO)) &&
           fb_field(21) == -lroundf(36000.0f / (HEAD_MOTOR_STEPS_PER_REV * HEAD_TILT_GEAR_RATIO)),
           "STEP,1,-1 -> PAN +1 full step, TILT -1 full step at the output shaft");
