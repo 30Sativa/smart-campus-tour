@@ -2735,29 +2735,6 @@ only (ADR-0011). The LLM provider is an external processor; see ADR-0016 for
 the data-use condition of the provider tier.
 
 
-### 7.2 Viewer engagement report (ADR-0069, implemented)
-
-Decision record: [ADR-0069](decisions/0069-viewer-engagement-report.md). Staff-only, read-only, aggregates only:
-no response carries a display name, email, class, roster row id, session, token or question text.
-
-- `GET /api/staff/engagement?from=&to=` → `EngagementOverviewView`: ended Tours that started in `[from, to)`
-  (`from < to`, at most 366 days, else 400; at most 300 Tours, `truncated` when more), `tourCount`, `joinRate`,
-  `questionsPerTour`, `audience[]` (`rowType`, `acceptedRows`, `joinedRows`, `votedRows`, `questions`),
-  `questions` totals, `pois[]` per POI proposal (`visits`, `skips`, `questions`, `questionsPerVisit`,
-  `averageDwellSeconds`, `averagePlannedDwellSeconds`, `votesReceived`, `viewersLeft`, `signals[]`) and `tours[]`.
-- `GET /api/staff/manage/tours/{id}/engagement` → `TourEngagementView` (404 for an unknown Tour): the same audience
-  and totals, `viewersLeftDuringTour` and `stops[]` in planned order (`outcome` VISITED/SKIPPED/NOT_REACHED,
-  `visitOrder`, `arrivedAt`, `actualDwellSeconds`, `plannedDwellSeconds`, `questions`, `ballotVoters`,
-  `votesReceived`, `viewersLeft`, `signals[]`).
-- Signals: `MOST_QUESTIONS`, `MOST_LEFT`, `MOST_VOTED`, `OVER_DWELL`, `SHORT_DWELL`, `SKIPPED`, `NO_QUESTIONS`.
-
-New Tour events (no schema change): `STOP_ARRIVED` on each POI arrival (`StopVisitId`, `TargetStopOrder`,
-`DataJson {"stopId"}`) and `STUDENT_QUESTION_ASKED` per answered question (`StopVisitId` of the observed visit or
-null, `DataJson {"phase","rowType","outOfScope"}`). The §7.1 rule stands: question text is never logged or stored.
-`STUDENT_QUESTION_ASKED` is not operational history for schedule/route locking.
-
----
-
 ### 7.2 Tour talk between the Operator and the Viewers (implemented; device verification pending)
 
 ADR-0070. The Tour's Operator speaks to every Viewer as text (≤ 500 characters) or a recorded voice clip (≤ 30 s,
