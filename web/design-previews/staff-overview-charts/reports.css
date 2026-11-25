@@ -1,0 +1,51 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · scope: app · data: sample · nav: kept Staff shell · signature: original Tour overview with added report charts · states: full loading empty error · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V3 · weakest: V, preserve the old layout by user request and add only reporting charts */
+/* Hallmark · dismissed 74 · --text-primary keeps the exact Staff ink from the original preview, whose appearance the user asked to retain */
+.report-addition { margin-bottom: 24px; }
+.report-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.report-heading h2 { font-size: 17px; line-height: 1.4; }
+.report-heading p { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
+.report-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.report-period { display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--color-rule); border-radius: var(--radius-input); background: var(--color-subtle); }
+.report-period button { border: 0; border-radius: 4px; background: var(--color-clear); color: var(--text-muted); min-height: 32px; padding: 4px 12px; font-size: 12px; white-space: nowrap; }
+.report-period button[aria-pressed="true"] { background: var(--bg-primary); color: var(--text-primary); }
+.report-period button:hover { background: var(--color-accent-soft); }
+.report-field { display: grid; gap: 4px; font-size: 11px; color: var(--text-muted); }
+.report-field select { min-height: 40px; padding: 8px 12px; border: 1px solid var(--color-field); border-radius: var(--radius-input); background: var(--bg-primary); color: var(--text-primary); font: 400 12px var(--font-body); cursor: pointer; }
+.report-field select:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 4px; }
+.report-charts { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 20px; }
+.report-charts .panel-head { align-items: start; }
+.report-charts h3 { font-size: 14px; line-height: 1.5; }
+.report-unit { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.report-chart { padding: 16px 20px 0; overflow-x: auto; }
+.report-chart svg { display: block; width: 100%; height: auto; stroke: none; min-width: 640px; }
+.report-grid { stroke: var(--color-rule); stroke-width: 1; }
+.report-axis { fill: var(--text-muted); font: 11px var(--font-body); font-variant-numeric: tabular-nums; }
+.report-mark { fill: var(--color-accent); }
+.report-value { fill: var(--text-primary); font: 11px var(--font-body); font-variant-numeric: tabular-nums; }
+.report-months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); width: calc(100% - 48px); min-width: 592px; margin-left: 36px; }
+.report-months button { min-height: 36px; padding: 0; border: 0; background: var(--color-clear); color: var(--text-muted); font-size: 11px; }
+.report-months button:hover { background: var(--color-accent-soft); color: var(--color-accent); }
+.report-caption { padding: 12px 20px 16px; font-size: 12px; color: var(--text-muted); }
+.report-scroll-hint { display: none; }
+.report-state-chart { padding: 20px; }
+.report-total { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+.report-total strong { font-size: 28px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; margin-right: 8px; }
+.report-stack { display: flex; gap: 2px; height: 12px; background: var(--color-subtle); margin-bottom: 20px; }
+.report-stack span { border-radius: 2px; }
+.report-completed { background: var(--color-accent); }
+.report-cancelled { background: var(--color-accent-mid); }
+.report-pending { background: var(--color-field); }
+.report-state-list { display: grid; gap: 12px; font-size: 12px; }
+.report-state-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.report-state-list dt { display: flex; align-items: center; gap: 8px; color: var(--color-body); }
+.report-state-list i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
+.report-state-list dd { margin: 0; font-variant-numeric: tabular-nums; }
+.report-rate { border-top: 1px solid var(--color-rule); margin-top: 20px; padding-top: 12px; font-size: 12px; color: var(--text-muted); }
+.report-rate strong { font-weight: 600; color: var(--text-primary); }
+.report-rate small { display: block; margin-top: 4px; font-size: 12px; }
+.report-disclosure { margin-top: 12px; font-size: 12px; color: var(--text-muted); }
+#report-message { overflow: clip; }
+@media (max-width: 1250px) { .report-charts { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; } }
+@media (max-width: 700px) { .report-charts { grid-template-columns: minmax(0, 1fr); gap: 16px; } .report-heading { align-items: start; } .report-controls { width: 100%; } .report-period { flex: 1; } .report-period button { flex: 1; } .report-chart { padding-inline: 16px; } .report-caption { padding-inline: 16px; } .report-scroll-hint { display: block; padding: 8px 16px 0; font-size: 11px; color: var(--text-muted); } .report-field select { font-size: 13px; } }
+@media (prefers-reduced-motion: reduce) { .report-addition *, .report-addition *::before, .report-addition *::after { animation: none; transition: none; } }

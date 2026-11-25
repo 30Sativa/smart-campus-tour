@@ -12,6 +12,7 @@ import { isTourStale, useDayTours, useOperationTour, useRunningTours, useUpcomin
 import { HeadControlPanel } from '../../features/staff/operations/live/HeadControlPanel'
 import { LiveCamera } from '../../features/staff/operations/live/LiveCamera'
 import { LiveMiniMap } from '../../features/staff/operations/live/LiveMiniMap'
+import { VoteHeadTabs } from '../../features/staff/operations/live/VoteHeadTabs'
 import { CommandCard, ExecutionPanel, RobotStatusCard, RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { actionGate, tourSituation, type ConsoleAction, type Situation } from '../../features/staff/operations/situation'
 import { AutoAdvanceToggle, ConsoleActionButton, EndEarlyAction } from '../../features/staff/operations/TourActions'
@@ -23,7 +24,8 @@ import { useAuthStore } from '../../stores/auth-store'
 /**
  * Live operations of one Tour: while it runs, everything the Operator needs is
  * on this page. The main column holds the camera, then what is happening and
- * the one suggested step; the side column the Viewers' vote, the camera head,
+ * the one suggested step; the side column the Viewers' vote and the camera head
+ * (one card with a switch when the Tour has both),
  * the map, the robot and End Early. Below 1024px the page reads in DOM order:
  * camera, situation, vote, head, End Early, map, robot, route. Without an id it opens the running Tour,
  * the one needing help first.
@@ -101,15 +103,26 @@ function TourConsole({ tourId }: { tourId: string }) {
           <SituationCard detail={detail} isOperator={isOperator} stale={stale} now={now} />
         </div>
         <aside className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-          {/* The vote heads the side column, beside the camera, so the Operator reads it without scrolling. */}
-          {detail.routeRevision?.viewerChoosesNextStop && <section className={`${panelClass} ${voteOpen(detail) ? 'border-[#93c5fd] ring-2 ring-[#dbeafe]' : ''}`} aria-label="Viewer chọn điểm tiếp theo">
-            <PanelHead title="Viewer chọn điểm tiếp theo" />
-            <VotePanel detail={detail} isOperator={isOperator} now={now} />
-          </section>}
-          {running && <section className={`${panelClass} lg:order-1`} aria-label="Đầu camera">
-            <PanelHead title="Đầu camera" />
-            <div className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} /></div>
-          </section>}
+          {/* The vote heads the side column, beside the camera, so the Operator reads it without scrolling.
+              With a running voting Tour the vote and the camera head share one card with a switch. */}
+          {(() => {
+            const vote = detail.routeRevision?.viewerChoosesNextStop ? <section aria-label="Viewer chọn điểm tiếp theo">
+              <VotePanel detail={detail} isOperator={isOperator} now={now} />
+            </section> : null
+            const head = running ? <section aria-label="Đầu camera">
+              <div className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} /></div>
+            </section> : null
+            if (vote && head) return <VoteHeadTabs voteOpen={voteOpen(detail)} vote={vote} head={head} />
+            if (vote) return <section className={`${panelClass} ${voteOpen(detail) ? 'border-[#93c5fd] ring-2 ring-[#dbeafe]' : ''}`} aria-label="Viewer chọn điểm tiếp theo">
+              <PanelHead title="Viewer chọn điểm tiếp theo" />
+              <VotePanel detail={detail} isOperator={isOperator} now={now} />
+            </section>
+            if (head) return <section className={`${panelClass} lg:order-1`} aria-label="Đầu camera">
+              <PanelHead title="Đầu camera" />
+              <div className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} /></div>
+            </section>
+            return null
+          })()}
           {running && isOperator && <section className={`${panelClass} border-[#f5c8c2] lg:order-4`} aria-label="Kết thúc sớm">
             <PanelHead title="Kết thúc sớm" description="Khi Tour không thể hoặc không nên đi tiếp." />
             <div className="p-4"><EndEarlyAction detail={detail} /></div>

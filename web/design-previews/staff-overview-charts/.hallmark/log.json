@@ -1,0 +1,15 @@
+[
+  {
+    "date": "2026-11-25",
+    "mode": "extension",
+    "scope": "app",
+    "theme": "brand",
+    "shape": "kept original Staff overview",
+    "entry": "web/design-previews/staff-overview-charts/index.html",
+    "signature": "original Tour route plus added monthly and daily charts",
+    "data": "sample",
+    "preserve": "original markup, four source files byte-identical",
+    "waived": [],
+    "verification": "0 FAIL, 0 REFLEX, 0 WARN; original token retained; TypeScript, ESLint and interaction checks passed"
+  }
+]

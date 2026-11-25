@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { pickVietnameseVoice, splitForSpeech, useNarrationVoice, type NarrationSource } from './use-narration-voice'
+import { NARRATION_RATE, pickVietnameseVoice, splitForSpeech, useNarrationVoice, type NarrationSource } from './use-narration-voice'
 
 class FakeUtterance {
   lang = ''
@@ -58,6 +58,7 @@ describe('useNarrationVoice', () => {
     flush()
     expect(spoken.map((u) => u.text)).toEqual(['Đây là thư viện.', 'Mở cửa từ 7 giờ.'])
     expect(spoken[0].lang).toBe('vi-VN')
+    expect(spoken.every((u) => u.rate === NARRATION_RATE && u.rate < 1)).toBe(true)
     expect(result.current.speaking).toBe(true)
 
     rerender({ n: at('lib') }) // next poll, same stop
