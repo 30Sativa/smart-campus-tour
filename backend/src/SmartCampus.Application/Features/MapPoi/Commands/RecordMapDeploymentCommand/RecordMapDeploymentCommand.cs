@@ -12,7 +12,7 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Application.Features.MapPoi;
 
 public sealed record RecordMapDeploymentCommand(Guid ActorUserId, Guid MapVersionId, RecordMapDeploymentRequest Request)
-    : IPoiMutationCommand<MapDeploymentCheckView>;
+    : IPoiMutationCommand<MapDeploymentCheckView>, SmartCampus.Application.Features.StaffNotifications.IStaffNoticeCommand;
 
 public sealed class RecordMapDeploymentCommandValidator : AbstractValidator<RecordMapDeploymentCommand>
 {

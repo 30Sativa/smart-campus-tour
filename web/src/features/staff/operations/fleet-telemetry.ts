@@ -6,6 +6,7 @@ import type { RealtimeConnectionState } from '../../../api/contracts/staff-realt
 import { useAuthStore } from '../../../stores/auth-store'
 import { tourKeys } from '../../administration/tours/hooks'
 import { applyBallotSignal, BALLOT_UPDATED } from './ballot-live'
+import { STAFF_NOTIFICATIONS_UPDATED, staffNotificationKeys } from '../notifications/notifications-api'
 
 /**
  * Live robot telemetry from the Staff-only `/hubs/operations` SignalR hub
@@ -93,9 +94,12 @@ export function useFleetTelemetrySync() {
     connection.on(TOUR_UPDATED, refreshTours)
     // A Viewer's vote committed: the ballot comes with the signal, so the vote panel moves without a round trip.
     connection.on(BALLOT_UPDATED, (payload: unknown) => { applyBallotSignal(client, payload) })
+    // Technical Staff recorded an outcome (no payload): the bell re-reads its notices now; its poll stays the fallback.
+    const refreshNotices = () => void client.invalidateQueries({ queryKey: staffNotificationKeys.list })
+    connection.on(STAFF_NOTIFICATIONS_UPDATED, refreshNotices)
     connection.onreconnecting(() => setState('reconnecting'))
     // Signals sent while the socket was down are gone, so catch up once.
-    connection.onreconnected(() => { setState('connected'); refreshTours() })
+    connection.onreconnected(() => { setState('connected'); refreshTours(); refreshNotices() })
     connection.onclose(() => { if (!disposed) { setState('disconnected'); schedule() } })
     start()
     return () => {
@@ -104,6 +108,7 @@ export function useFleetTelemetrySync() {
       connection.off('FleetUpdated')
       connection.off(TOUR_UPDATED)
       connection.off(BALLOT_UPDATED)
+      connection.off(STAFF_NOTIFICATIONS_UPDATED)
       void connection.stop()
     }
   }, [client, setState])

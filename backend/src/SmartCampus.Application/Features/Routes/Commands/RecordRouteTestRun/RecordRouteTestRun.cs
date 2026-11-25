@@ -11,7 +11,7 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Application.Features.Routes;
 
 public sealed record RecordRouteTestRunCommand(Guid ActorUserId, Guid RouteId, Guid RevisionId, RouteRunRequest Request)
-    : IRouteMutationCommand<RouteRevisionView>;
+    : IRouteMutationCommand<RouteRevisionView>, SmartCampus.Application.Features.StaffNotifications.IStaffNoticeCommand;
 public sealed class RecordRouteTestRunValidator : AbstractValidator<RecordRouteTestRunCommand>
 {
     public RecordRouteTestRunValidator()

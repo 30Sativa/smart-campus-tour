@@ -17,7 +17,11 @@ export type StaffNotification = {
 }
 
 export const STAFF_NOTIFICATION_SIZE = 30
-/** No push event exists for these, so the bell re-reads; a Technical decision is not seconds-critical. */
+/**
+ * Sent on `/hubs/operations` after a Technical Staff outcome committed (no payload, docs/architecture.md §3.1.2);
+ * the Staff shell's hub subscription re-reads the bell on it. The poll stays as the fallback for a lost signal.
+ */
+export const STAFF_NOTIFICATIONS_UPDATED = 'StaffNotificationsUpdated'
 const POLL_MS = 20_000
 
 export const staffNotificationKeys = { list: ['staff', 'notifications'] as const }

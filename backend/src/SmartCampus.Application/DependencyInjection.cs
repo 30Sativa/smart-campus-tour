@@ -21,6 +21,7 @@ namespace SmartCampus.Application
                 // Outermost: tells after every transaction below has committed.
                 config.AddOpenBehavior(typeof(TourBallotNotificationBehavior<,>));
                 config.AddOpenBehavior(typeof(TourChangeNotificationBehavior<,>));
+                config.AddOpenBehavior(typeof(StaffNoticeNotificationBehavior<,>));
                 config.AddOpenBehavior(typeof(ValidationBehavior<,>));
                 config.AddOpenBehavior(typeof(AccountTransactionBehavior<,>));
                 config.AddOpenBehavior(typeof(PoiMutationTransactionBehavior<,>));
@@ -38,6 +39,9 @@ namespace SmartCampus.Application
             services.TryAddSingleton<SmartCampus.Application.Features.Tours.ITourBallotNotifier,
                 SmartCampus.Application.Features.Tours.NoTourBallotNotifier>();
             services.AddScoped<SmartCampus.Application.Features.Tours.TourBallotSignalQueue>();
+            // A Technical Staff outcome tells the Staff bells to re-read (StaffNotificationsUpdated); Api replaces the default.
+            services.TryAddSingleton<SmartCampus.Application.Features.StaffNotifications.IStaffNoticeNotifier,
+                SmartCampus.Application.Features.StaffNotifications.NoStaffNoticeNotifier>();
             services.AddScoped<SmartCampus.Application.Features.Invitations.InvitationIssuer>();
             services.AddScoped<SmartCampus.Application.Features.Tours.TourStartPreflight>();
             services.AddSingleton<SmartCampus.Application.Features.StudentQuestions.StudentQuestionGate>();

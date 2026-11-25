@@ -65,7 +65,7 @@ branch-request endpoint is implemented here (branch requests are replaced by ADR
 | POST | `/api/admin/schedule-blocks` | Admin only. `{requestId, date, shiftCode, reason}`; null `shiftCode` closes the whole day; returns `{id, scope, reason}`. 400 for a date before today (Vietnam date), an unknown shift or a blank reason. 409 `SCHEDULE_BLOCK_EXISTS` for a duplicate block, or a whole-day block and a single-shift block on one day; 409 `SHIFT_HAS_TOURS` with `errors.blockers` naming each uncancelled Tour. Takes the same per-date lock as Tour create. Audited as `SCHEDULE_BLOCK_CREATED`. |
 | POST | `/api/admin/schedule-blocks/{id}/remove` | Admin only. `{requestId}`; allowed for past dates too. 404 when missing, 409 `SCHEDULE_BLOCK_ALREADY_REMOVED`. Audited as `SCHEDULE_BLOCK_REMOVED`. |
 | GET | `/api/admin/system-audit-logs` | Admin only. Paged audit entries, newest first, filtered by `action`, `actor`, `from`, `to`. Safe columns only, never `DataJson`. A `Route` row adds `routeName`, a `RouteRevision` row (e.g. a test run) `routeName` and `routeRevisionSavedAt` (additive, null otherwise), so it is named by its route rather than the robot. |
-| GET | `/api/staff/notifications` | Staff only (Admin/TechnicalStaff 403). `size` 1-50 (default 30). The newest audit rows of Technical Staff outcomes Staff acts on, newest first: `POI_TECHNICAL_VERIFIED`, `POI_POSE_CAPTURE_VERIFIED`, `POI_TECHNICAL_REJECTED`, `ROUTE_TEST_PASSED`, `ROUTE_TEST_FAILED`, `MAP_DEPLOYMENT_CHECK_RECORDED` (`resultCode` PASS/FAIL) and `ROBOT_INSPECTION_RELEASED`. Each row is `{id, occurredAt, action, resultCode, targetId, subject, revisionNumber, robotCode, actorName}`; `targetId` is the POI proposal, Route, map version or robot to open, null with `subject` when the target is gone. A read projection of the audit log: no new table, never `DataJson`. Read state is the browser's (per account); there is no push event, the web polls. |
+| GET | `/api/staff/notifications` | Staff only (Admin/TechnicalStaff 403). `size` 1-50 (default 30). The newest audit rows of Technical Staff outcomes Staff acts on, newest first: `POI_TECHNICAL_VERIFIED`, `POI_POSE_CAPTURE_VERIFIED`, `POI_TECHNICAL_REJECTED`, `ROUTE_TEST_PASSED`, `ROUTE_TEST_FAILED`, `MAP_DEPLOYMENT_CHECK_RECORDED` (`resultCode` PASS/FAIL) and `ROBOT_INSPECTION_RELEASED`. Each row is `{id, occurredAt, action, resultCode, targetId, subject, revisionNumber, robotCode, actorName}`; `targetId` is the POI proposal, Route, map version or robot to open, null with `subject` when the target is gone. A read projection of the audit log: no new table, never `DataJson`. Read state is the browser's (per account). After a command that may write one of these actions commits, `/hubs/operations` sends `StaffNotificationsUpdated` (no payload, §3.1.2) and the bell re-reads; the web keeps its 20 s poll as the fallback. |
 | GET | `/api/staff/manage/tours/operators` | Active single-role Staff accounts a new Tour can name as Operator (ADR-0034). |
 | POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. The schedule must be exactly the Tour start of a configured shift (409 `TOUR_SLOT_NOT_ALLOWED`), at least 72 hours ahead (409 `TOUR_LEAD_TIME_TOO_SHORT`). The shift must hold the revision's estimated duration (total dwell plus straight-line travel at `Tours:EstimatedSpeedMetersPerSecond`, default 0.25); `ROUTE_TEST_REMEASURE_REQUIRED` is no longer returned. Creates a SCHEDULED Tour on one exact tested revision and holds the robot for the whole shift (`docs/lich-tour-theo-ca.md`); 409 `ROUTE_TOO_LONG_FOR_SHIFT`, `SHIFT_BLOCKED`, `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
 | PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`; cancel and recreate instead. Cancelling releases the reservation. |
@@ -1152,6 +1152,8 @@ remains valid until expiry under current API authentication. Its legacy
 `TourUpdated` (no payload, since 2026-11-07) follows any committed command of the Tours feature, robot command reports included. It is a hint to re-read Tours, coalesced to at most one send per second and possibly lost; clients keep polling as the fallback and re-read after reconnecting. A `tourId`/revision payload remains planned.
 
 `BallotUpdated` (since 2026-11-25, ADR-0065 addendum) follows each committed Viewer vote with a payload `{ tourId, ballot, leadingStopId, votesCast, viewers { accepted, joined }, at }`: the ballot as Staff see it (`myVote` always null), the leader by rule 6 and the turnout. It is sent at once, never delayed; votes that arrive while a send is in flight are folded into one send of that Tour's newest ballot. The Staff console patches the cached Tour detail with it (a push for another stop visit makes it re-read the Tour; an older `at` is ignored) and keeps the 3 s poll as the fallback.
+
+`StaffNotificationsUpdated` (no payload, since 2026-11-25) follows any committed command that may append a Staff notification action (`GET /api/staff/notifications`): a POI verification or rejection, an imported pose capture, a Route test run, a map deployment check and a robot inspection release. It is a hint to re-read the Staff bell, coalesced to at most one send per second and possibly lost; the web keeps its 20 s poll and re-reads after reconnecting.
 `syncFresh`, `poseFresh`, execution status, `localized`, and `motionReady`
 remain separate. Neither a new sync nor a pose sample implies localization or
 motion readiness. No command is emitted by v1.
@@ -2119,7 +2121,7 @@ Backend-to-browser realtime uses the Staff-authorized `/hubs/operations`
 boundary. `FleetUpdated` now carries the current fleet telemetry projection on
 connect, after new sync reports, and when freshness changes. The backend
 projection matches the existing `AmrStatus` shape and adds explicit sync/pose
-freshness and readiness fields. `TourUpdated` is sent without payload as a re-read hint (§3.1.2); its
+freshness and readiness fields. `TourUpdated` and `StaffNotificationsUpdated` are sent without payload as re-read hints (§3.1.2); the Tour
 `(tourId, revision)` payload and `AssistanceRequired` remain planned. The web still selects its mock
 realtime provider; wiring production auth, reconnect/refetch, and Staff data
 flows is separate work. This decision does not approve or implement the
@@ -2731,6 +2733,28 @@ cookies, service keys or provider request/response bodies. Logs and metrics
 keep `requestId`, latency, status, error class, cache hit and `outOfScope`
 only (ADR-0011). The LLM provider is an external processor; see ADR-0016 for
 the data-use condition of the provider tier.
+
+
+### 7.2 Viewer engagement report (ADR-0069, implemented)
+
+Decision record: [ADR-0069](decisions/0069-viewer-engagement-report.md). Staff-only, read-only, aggregates only:
+no response carries a display name, email, class, roster row id, session, token or question text.
+
+- `GET /api/staff/engagement?from=&to=` → `EngagementOverviewView`: ended Tours that started in `[from, to)`
+  (`from < to`, at most 366 days, else 400; at most 300 Tours, `truncated` when more), `tourCount`, `joinRate`,
+  `questionsPerTour`, `audience[]` (`rowType`, `acceptedRows`, `joinedRows`, `votedRows`, `questions`),
+  `questions` totals, `pois[]` per POI proposal (`visits`, `skips`, `questions`, `questionsPerVisit`,
+  `averageDwellSeconds`, `averagePlannedDwellSeconds`, `votesReceived`, `viewersLeft`, `signals[]`) and `tours[]`.
+- `GET /api/staff/manage/tours/{id}/engagement` → `TourEngagementView` (404 for an unknown Tour): the same audience
+  and totals, `viewersLeftDuringTour` and `stops[]` in planned order (`outcome` VISITED/SKIPPED/NOT_REACHED,
+  `visitOrder`, `arrivedAt`, `actualDwellSeconds`, `plannedDwellSeconds`, `questions`, `ballotVoters`,
+  `votesReceived`, `viewersLeft`, `signals[]`).
+- Signals: `MOST_QUESTIONS`, `MOST_LEFT`, `MOST_VOTED`, `OVER_DWELL`, `SHORT_DWELL`, `SKIPPED`, `NO_QUESTIONS`.
+
+New Tour events (no schema change): `STOP_ARRIVED` on each POI arrival (`StopVisitId`, `TargetStopOrder`,
+`DataJson {"stopId"}`) and `STUDENT_QUESTION_ASKED` per answered question (`StopVisitId` of the observed visit or
+null, `DataJson {"phase","rowType","outOfScope"}`). The §7.1 rule stands: question text is never logged or stored.
+`STUDENT_QUESTION_ASKED` is not operational history for schedule/route locking.
 
 ---
 
