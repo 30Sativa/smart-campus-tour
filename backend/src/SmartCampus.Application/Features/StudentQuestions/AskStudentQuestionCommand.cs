@@ -29,6 +29,24 @@ public static class StudentQuestionText
     public static string Normalize(string? text) => (text ?? "").Normalize(NormalizationForm.FormC).Trim();
 }
 
+/// <summary>
+/// When a Viewer may ask (docs/architecture.md §7.1): while the Tour is RUNNING, and in the waiting room from
+/// <see cref="WaitingRoomLead"/> before the scheduled start of a SCHEDULED or READY Tour, so the group can ask about the
+/// school while it waits. Earlier the waiting room only counts down; an ended or cancelled Tour never answers.
+/// </summary>
+public static class StudentQuestionWindow
+{
+    public static readonly TimeSpan WaitingRoomLead = TimeSpan.FromMinutes(15);
+    public const string OpensLaterCode = "AI_OPENS_LATER";
+    public const string NotRunningCode = "TOUR_NOT_RUNNING";
+
+    public static bool InWaitingRoom(string tourState) => tourState is "SCHEDULED" or "READY";
+
+    public static bool IsOpen(StudentQuestionAccess access, DateTimeOffset now) =>
+        access.TourState == "RUNNING" ||
+        InWaitingRoom(access.TourState) && access.ScheduledStartAt is { } start && now >= start - WaitingRoomLead;
+}
+
 public sealed class AskStudentQuestionCommandValidator : AbstractValidator<AskStudentQuestionCommand>
 {
     public AskStudentQuestionCommandValidator()
@@ -87,9 +105,13 @@ public sealed class AskStudentQuestionCommandHandler(IStudentAccessRepository re
 
     private async Task<StudentQuestionAccess> CheckAsync(Guid tourId, byte[] tokenHash, CancellationToken ct)
     {
-        var access = await repository.FindQuestionAccessAsync(tourId, tokenHash, clock.GetUtcNow(), ct) ?? throw Invalid();
-        if (access.TourState != "RUNNING")
-            throw new ConflictException("Trợ lý AI chỉ dùng được khi buổi tham quan đang diễn ra.", "TOUR_NOT_RUNNING");
-        return access;
+        var now = clock.GetUtcNow();
+        var access = await repository.FindQuestionAccessAsync(tourId, tokenHash, now, ct) ?? throw Invalid();
+        if (StudentQuestionWindow.IsOpen(access, now)) return access;
+        if (StudentQuestionWindow.InWaitingRoom(access.TourState))
+            throw new ConflictException(
+                $"Trợ lý AI mở từ {StudentQuestionWindow.WaitingRoomLead.TotalMinutes:0} phút trước giờ bắt đầu buổi tham quan.",
+                StudentQuestionWindow.OpensLaterCode);
+        throw new ConflictException("Trợ lý AI chỉ dùng được khi buổi tham quan đang diễn ra.", StudentQuestionWindow.NotRunningCode);
     }
 }

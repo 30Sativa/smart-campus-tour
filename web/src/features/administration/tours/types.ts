@@ -85,6 +85,8 @@ export type TourDetails = {
    */
   ballot?: unknown
   leadingStopId?: string | null
+  /** While a ballot shows: invited Viewers accepted and in the room now, for the vote turnout (read with `readTurnout`). */
+  viewers?: unknown
   nextTarget?: unknown
   /**
    * Where Resume/Retry goes on a voting route once the current leg has stopped (same shape as `nextTarget`): the POI the

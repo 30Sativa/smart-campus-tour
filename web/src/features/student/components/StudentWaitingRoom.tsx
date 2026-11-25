@@ -21,9 +21,11 @@ interface StudentWaitingRoomProps {
   showMicCheck?: boolean
   /** Extra content under the welcome card, e.g. a fallback video link. */
   children?: ReactNode
+  /** Full width under the cards: the AI chat of the invited page, open from 15 minutes before the start. */
+  assistant?: ReactNode
 }
 
-export function StudentWaitingRoom({ session, snapshot, heading, intro, meta, showMicCheck = true, children }: StudentWaitingRoomProps) {
+export function StudentWaitingRoom({ session, snapshot, heading, intro, meta, showMicCheck = true, children, assistant }: StudentWaitingRoomProps) {
   const [isPlayingTestAudio, setIsPlayingTestAudio] = useState(false)
   const [audioTested, setAudioTested] = useState(false)
   const [micStatus, setMicStatus] = useState<'idle' | 'testing' | 'granted' | 'denied'>('idle')
@@ -141,6 +143,8 @@ export function StudentWaitingRoom({ session, snapshot, heading, intro, meta, sh
           </ol>}
         </div>
       </div>
+
+      {assistant}
 
       <p className="st-foot-note">
         <Bot size={16} />

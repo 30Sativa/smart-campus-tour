@@ -5,6 +5,7 @@ import { createHubConnection } from '../../../api/signalr'
 import type { RealtimeConnectionState } from '../../../api/contracts/staff-realtime'
 import { useAuthStore } from '../../../stores/auth-store'
 import { tourKeys } from '../../administration/tours/hooks'
+import { applyBallotSignal, BALLOT_UPDATED } from './ballot-live'
 
 /**
  * Live robot telemetry from the Staff-only `/hubs/operations` SignalR hub
@@ -90,6 +91,8 @@ export function useFleetTelemetrySync() {
     // the next poll. Polling stays as the fallback, since a signal may be coalesced or lost.
     const refreshTours = () => void client.invalidateQueries({ queryKey: tourKeys.all })
     connection.on(TOUR_UPDATED, refreshTours)
+    // A Viewer's vote committed: the ballot comes with the signal, so the vote panel moves without a round trip.
+    connection.on(BALLOT_UPDATED, (payload: unknown) => { applyBallotSignal(client, payload) })
     connection.onreconnecting(() => setState('reconnecting'))
     // Signals sent while the socket was down are gone, so catch up once.
     connection.onreconnected(() => { setState('connected'); refreshTours() })
@@ -100,6 +103,7 @@ export function useFleetTelemetrySync() {
       window.clearTimeout(restart)
       connection.off('FleetUpdated')
       connection.off(TOUR_UPDATED)
+      connection.off(BALLOT_UPDATED)
       void connection.stop()
     }
   }, [client, setState])

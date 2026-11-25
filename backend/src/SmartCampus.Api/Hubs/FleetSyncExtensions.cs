@@ -23,6 +23,10 @@ public static class FleetSyncExtensions
         services.AddSingleton<TourChangeBroadcaster>();
         services.AddSingleton<SmartCampus.Application.Common.Abstractions.Tours.ITourChangeNotifier>(provider => provider.GetRequiredService<TourChangeBroadcaster>());
         services.AddHostedService(provider => provider.GetRequiredService<TourChangeBroadcaster>());
+        // Replaces the Application default: a committed vote reaches the consoles at once (BallotUpdated, ADR-0065 addendum).
+        services.AddSingleton<TourBallotBroadcaster>();
+        services.AddSingleton<SmartCampus.Application.Features.Tours.ITourBallotNotifier>(provider => provider.GetRequiredService<TourBallotBroadcaster>());
+        services.AddHostedService(provider => provider.GetRequiredService<TourBallotBroadcaster>());
         services.AddAuthorization(options => options.AddPolicy(
             FleetOperationsAuthorization.StaffPolicy,
             policy => policy.RequireRole(ApplicationRoles.Staff)));

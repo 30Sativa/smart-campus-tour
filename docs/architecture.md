@@ -1146,6 +1146,8 @@ Account deactivation does not immediately revoke an already-issued JWT; it
 remains valid until expiry under current API authentication. Its legacy
 `connectionState: Live|Stale` describes recent HTTPS sync, not an open socket.
 `TourUpdated` (no payload, since 2026-11-07) follows any committed command of the Tours feature, robot command reports included. It is a hint to re-read Tours, coalesced to at most one send per second and possibly lost; clients keep polling as the fallback and re-read after reconnecting. A `tourId`/revision payload remains planned.
+
+`BallotUpdated` (since 2026-11-25, ADR-0065 addendum) follows each committed Viewer vote with a payload `{ tourId, ballot, leadingStopId, votesCast, viewers { accepted, joined }, at }`: the ballot as Staff see it (`myVote` always null), the leader by rule 6 and the turnout. It is sent at once, never delayed; votes that arrive while a send is in flight are folded into one send of that Tour's newest ballot. The Staff console patches the cached Tour detail with it (a push for another stop visit makes it re-read the Tour; an older `at` is ignored) and keeps the 3 s poll as the fallback.
 `syncFresh`, `poseFresh`, execution status, `localized`, and `motionReady`
 remain separate. Neither a new sync nor a pose sample implies localization or
 motion readiness. No command is emitted by v1.
@@ -2575,7 +2577,8 @@ Implementation: `ai-assistant/` (service), backend
 `Infrastructure/Integrations/Assistant/HttpAiAssistantClient.cs` and
 `Api/Controllers/StudentQuestionsController.cs`, and the web panel on the invited
 Student page (`web/src/features/student/components/LiveStudentAiAssistant.tsx`,
-shown only while the Tour is `RUNNING`, in the live view's "Hỏi AI" tab). The labelled demo Tour page keeps its
+shown while the Tour is `RUNNING`, in the live view's "Hỏi AI" tab, and in the waiting room from 15 minutes before the
+scheduled start, where answers use general campus content). The labelled demo Tour page keeps its
 simulated answers. Voice input is off on the live page until server-side STT
 (P1-01).
 
@@ -2614,7 +2617,8 @@ Backend configuration (opt-in, validated at startup; secrets outside Git):
 |---|---|---|
 | 400 | (validation errors, existing `BaseResponse` format) | Empty/too long text, missing/empty `questionId`, too many or too long turns |
 | 401 | — | No, expired, closed or revoked session; same generic body as §3.2.3 |
-| 409 | `TOUR_NOT_RUNNING` | Tour is not `RUNNING` at acceptance or at answer time |
+| 409 | `AI_OPENS_LATER` | Tour is `SCHEDULED`/`READY` and more than 15 minutes before its scheduled start (the waiting room asks from 15 minutes before; since 2026-11-25) |
+| 409 | `TOUR_NOT_RUNNING` | Tour is neither `RUNNING` nor in its waiting-room window (ended or cancelled) at acceptance or at answer time |
 | 409 | `QUESTION_ID_REUSED` | Same `questionId` with different text |
 | 429 | `RATE_LIMITED` | More than 6 questions/minute or a second in-flight question for this session |
 | 503 | `AI_UNAVAILABLE` | Assistant unreachable, overloaded or its circuit is open |

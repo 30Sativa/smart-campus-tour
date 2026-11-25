@@ -39,8 +39,10 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
             var revision = await RouteRevisionMapper.Load(revisions, tour.RouteId, revisionId, false, ct, settings);
             var target = await repository.GetTargetAsync(tour.Id, ct);
             var (ballot, leading, next, progress, retry) = await VotingAsync(tour, ct);
+            var viewers = ballot is null ? null : await repository.GetViewerPresenceAsync(tour.Id, clock.GetUtcNow(), ct);
             return new(summary, null, null, tour.FallbackVideoUrl, tour.StartedAt, tour.EndedAt, tour.EndReason,
-                usage, permissions, revision, target.Operator, target.Reservation, execution, actions, ballot, leading, next, progress, retry);
+                usage, permissions, revision, target.Operator, target.Reservation, execution, actions, ballot, leading, next, progress, retry,
+                viewers);
         }
         var route = await ReadRoute(tour.RouteId, ct);
         var active = tour.ActiveRouteId == tour.RouteId ? route : await ReadRoute(tour.ActiveRouteId, ct);

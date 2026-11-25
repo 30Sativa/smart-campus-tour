@@ -124,11 +124,13 @@ it('labels the shared-screen session and hides voice input on the live page', ()
   expect(screen.queryByRole('button', { name: /Micro/ })).not.toBeInTheDocument()
 })
 
-it('shows the assistant on the invited page only while the Tour is RUNNING', async () => {
-  const info = { tourId, tourName: 'Tour được mời', scheduledStartAt: '2026-10-20T02:00:00Z',
-    invitationExpiresAt: '2026-10-21T02:00:00Z', rowType: 'INDIVIDUAL', hasFallbackVideo: false }
-  for (const [tourState, visible] of [['SCHEDULED', false], ['RUNNING', true]] as const) {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ success: true, data: { ...info, tourState } }), { status: 200 })))
+it('shows the assistant while the Tour is RUNNING, and in the waiting room only from 15 minutes before the start', async () => {
+  const info = { tourId, tourName: 'Tour được mời', invitationExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+    rowType: 'INDIVIDUAL', hasFallbackVideo: false }
+  const startIn = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString()
+  for (const [tourState, scheduledStartAt, visible] of [['SCHEDULED', startIn(120), false], ['READY', startIn(10), true],
+    ['RUNNING', startIn(-5), true]] as const) {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ success: true, data: { ...info, tourState, scheduledStartAt } }), { status: 200 })))
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const view = render(<QueryClientProvider client={client}><StudentInvitationPage tourId={tourId} /></QueryClientProvider>)
     await screen.findByText('Tour được mời')

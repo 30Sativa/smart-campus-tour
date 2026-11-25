@@ -53,6 +53,7 @@ export function describeAskError(error: unknown): { text: string; retryable: boo
     if (error.status === 401) return { text: 'Phiên của bạn đã hết hạn hoặc mã truy cập đã bị thu hồi. Tải lại trang để nhập lại mã truy cập.', retryable: false }
     if (error.status === 403) return { text: 'Nguồn truy cập không được phép. Liên hệ đại diện đoàn để được hỗ trợ.', retryable: false }
     if (error.status === 409 && code === 'TOUR_NOT_RUNNING') return { text: 'Trợ lý AI chỉ dùng được khi buổi tham quan đang diễn ra.', retryable: false }
+    if (error.status === 409 && code === 'AI_OPENS_LATER') return { text: 'Trợ lý AI mở từ 15 phút trước giờ bắt đầu buổi tham quan.', retryable: false }
     if (error.status === 409 && code === 'QUESTION_ID_REUSED') return { text: 'Câu hỏi này bị trùng mã với câu khác. Hãy gửi lại thành câu hỏi mới.', retryable: false }
     if (error.status === 429) return { text: 'Bạn hỏi hơi nhanh. Đợi một chút rồi hỏi tiếp nhé.', retryable: true }
     // SRS v1.9: over the instance limit (8 executing, 20 queued) the backend answers busy. Busy is not an answer.
