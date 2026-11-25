@@ -4,12 +4,11 @@ import { Link } from 'react-router'
 import { formatDateTime } from '../../components/ui/date-time'
 import { buttonClass, labelClass } from '../../components/ui/ui-classes'
 import type { MapVersion, PhysicalRobotOption } from './api/technical'
+import { exactMapLabel } from './poi-labels'
 import { robotForMap, robotSetupPath } from './robot-readiness'
 import { useAllMapVersions } from './technical-hooks'
 import { errorText, robotFieldText } from './technical-format'
 
-/** "{area} · {key} · v{n}": the read-only robot line always names the map exactly. */
-const exactMapLabel = (map: Pick<MapVersion, 'areaName' | 'areaKey' | 'versionNumber'>) => `${map.areaName} · ${map.areaKey} · v${map.versionNumber}`
 const sameName = (a: string | null | undefined, b: string | null | undefined) =>
   Boolean(a && b) && a!.normalize('NFC').trim().toLocaleLowerCase('vi') === b!.normalize('NFC').trim().toLocaleLowerCase('vi')
 

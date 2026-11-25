@@ -13,7 +13,7 @@ import { connectionStatusLabel, errorText, releaseInspectionError, returnStripTe
 import { returnTarget, technicalReturnPath } from '../../features/technical/technical-nav'
 import { formatDateTime } from '../../components/ui/date-time'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { areaLabel, duplicateAreaNames, mapCheckLabel } from '../../features/technical/poi-labels'
+import { areaLabel, duplicateAreaNames, exactMapLabel, mapCheckLabel } from '../../features/technical/poi-labels'
 import { DeploymentCheckForm } from '../../features/technical/DeploymentCheckForm'
 import { ReadinessBadge, ReadinessSummary } from '../../features/technical/ReadinessBadge'
 import { RobotCredentialPanel } from './RobotCredentialPanel'
@@ -118,33 +118,43 @@ export default function TechnicalRobotsPage() {
 
 /**
  * The top of the setup and map dialogs when the robot page was opened from a POI check or a route test: what the robot
- * is being prepared for and the way back, which becomes the main button once the server calls the robot ready.
+ * is being prepared for and the way back, which becomes the main button once the server calls the robot ready on the
+ * map of that POI or route. Ready on another map is said as such: it is usually the map this dialog is about to leave.
  */
 function ReturnStrip({ returnTo, robot }: { returnTo: string; robot: PhysicalRobotOption }) {
   const target = returnTarget(returnTo)
-  const name = useReturnTargetName(target)
-  const labelled = target ? { kind: target.kind, name } : null
-  const ready = robot.readiness?.state === 'READY'
+  const found = useReturnTarget(target)
+  const maps = useAllMapVersions()
+  const mapLabelOf = useMapShortLabel()
+  const labelled = target ? { kind: target.kind, name: found?.name ?? null } : null
+  const readyOn = robot.readiness?.state === 'READY' ? robot.readiness.mapVersionId : null
+  const ready = Boolean(found && readyOn && readyOn === found.mapVersionId)
+  const targetMap = found && maps.data?.find(item => item.map.id === found.mapVersionId)?.map
+  const otherMap = target && found && readyOn && !ready
+    ? returnStripText.otherMap({ kind: target.kind, name: found.name }, robot.robotCode, targetMap ? exactMapLabel(targetMap) : null, mapLabelOf(readyOn) ?? robot.readiness?.mapLabel ?? 'bản đồ khác')
+    : null
   return (
     <div role="note" aria-label="Quay lại" className={`mb-3 flex flex-wrap items-center gap-x-1 gap-y-2 rounded-lg px-3 py-2 text-[13px] ${ready ? 'bg-[#f0fdf4] text-[#166534]' : 'bg-[#eff6ff] text-[#1e293b]'}`}>
       {ready
         ? <Link to={returnTo} className={buttonClass('primary', 'sm')}><ArrowLeft size={13} aria-hidden="true" />{returnStripText.ready(labelled)}</Link>
-        : <><span>{returnStripText.preparing(labelled)} ·</span> <Link to={returnTo} className="font-semibold text-[#1d4ed8] underline-offset-2 hover:underline">{returnStripText.back(labelled)}</Link></>}
+        : <><span>{otherMap ?? returnStripText.preparing(labelled)} ·</span> <Link to={returnTo} className="font-semibold text-[#1d4ed8] underline-offset-2 hover:underline">{returnStripText.back(labelled)}</Link></>}
     </div>
   )
 }
 
-/** The POI or route name, from the lists the POI and route-test pages already load; null when it is not found. */
-function useReturnTargetName(target: { kind: 'poi' | 'route'; id: string } | null): string | null {
+/** The POI or route and its map version, from the lists the POI and route-test pages already load; null when it is not found. */
+function useReturnTarget(target: { kind: 'poi' | 'route'; id: string } | null): { name: string; mapVersionId: string } | null {
   const poiQueue = usePoiVerificationQueue()
   const poiProposals = usePoiProposals()
   const routeQueue = useRouteTestQueue()
   const routes = useSubmittedRoutes()
   if (!target) return null
-  if (target.kind === 'poi') return poiQueue.data?.find(item => item.proposalId === target.id)?.revision.name
-    ?? poiProposals.data?.find(item => item.id === target.id)?.revision.name ?? null
-  return routeQueue.data?.find(route => route.revisionId === target.id)?.name
-    ?? routes.data?.data.find(route => route.revisionId === target.id)?.name ?? null
+  if (target.kind === 'poi') {
+    const revision = poiQueue.data?.find(item => item.proposalId === target.id)?.revision ?? poiProposals.data?.find(item => item.id === target.id)?.revision
+    return revision ? { name: revision.name, mapVersionId: revision.mapVersionId } : null
+  }
+  const route = routeQueue.data?.find(item => item.revisionId === target.id) ?? routes.data?.data.find(item => item.revisionId === target.id)
+  return route ? { name: route.name, mapVersionId: route.mapVersionId } : null
 }
 
 function DetailSection({ title, subject, action, sectionRef, children }: { title: string; subject?: string; action?: ReactNode; sectionRef?: RefObject<HTMLElement | null>; children?: ReactNode }) {
