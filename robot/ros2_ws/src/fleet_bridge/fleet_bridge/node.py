@@ -10,6 +10,7 @@ import rclpy
 from rclpy.duration import Duration
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos_event import SubscriptionEventCallbacks
 from tf2_ros import (
     Buffer,
     ConnectivityException,
@@ -242,6 +243,18 @@ class FleetBridgeNode(Node):
             'Fleet Bridge started with commands enabled; do not run another goal sender on this robot.'
             if self._command_worker is not None else
             'Fleet Bridge started in telemetry-only mode; HTTPS runs on a background thread.')
+
+    def create_subscription(self, *args, event_callbacks=None, **kwargs):
+        """Every subscription here, TF's included, skips rclpy's default incompatible-QoS handler.
+
+        The Humble executor rebuilds its whole wait set on each wake-up and every handler is one more waitable in
+        it: with ~24 subscriptions and ~200 messages/s that rebuild was most of this node's CPU on the J5005.
+        rclcpp/rclpy publishers still log a mismatch with their own default handler (rcl_action status
+        publishers have none; their QoS is fixed by rcl_action). A caller that passes event callbacks keeps them.
+        """
+        if event_callbacks is None:
+            event_callbacks = SubscriptionEventCallbacks(use_default_callbacks=False)
+        return super().create_subscription(*args, event_callbacks=event_callbacks, **kwargs)
 
     def _create_readiness_monitor(self):
         # Imported only here: the telemetry-only bridge keeps reporting null readiness.
