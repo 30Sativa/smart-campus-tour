@@ -28,8 +28,14 @@ class AlarmFields(NamedTuple):
     trips: Tuple[int, int]
 
 
+# A 28-field frame whose ALM fields are not numbers / negative counters. Not
+# "older firmware": the last good ALM state is kept (see on_feedback).
+MALFORMED = AlarmFields((-1, -1), (-1, -1))
+
+
 def parse_fb_alarm(line: str) -> Optional[AlarmFields]:
-    """FB fields 24-27, or None for firmware older than the 28-field frame."""
+    """FB fields 24-27; None for firmware older than the 28-field frame,
+    MALFORMED (compare with ``is``) when the fields are present but unreadable."""
     parts = line.split(',')
     if len(parts) < FB_ALARM_MIN_FIELDS or parts[0] != 'FB':
         return None
@@ -37,9 +43,9 @@ def parse_fb_alarm(line: str) -> Optional[AlarmFields]:
         states = (int(parts[24]), int(parts[25]))
         trips = (int(parts[26]), int(parts[27]))
     except ValueError:
-        return None
+        return MALFORMED
     if any(t < 0 for t in trips):
-        return None
+        return MALFORMED
     return AlarmFields(states, trips)
 
 
@@ -56,10 +62,20 @@ class MotorAlarmHealth:
         self._has_fields: Optional[bool] = None   # None = no FB yet
         self._alarm_since: List[Optional[float]] = [None, None]
         self._last_alarm: List[Optional[float]] = [None, None]
+        self._malformed_run = 0
 
     # -- input -------------------------------------------------------------
     def on_feedback(self, now: float, fields: Optional[AlarmFields]) -> List[Tuple[int, str]]:
         events: List[Tuple[int, str]] = []
+        if fields is MALFORMED:
+            # One bad frame must not look like "firmware without ALM" or a
+            # cleared alarm: keep the last state, say so once per run.
+            if self._malformed_run == 0:
+                events.append((WARN, 'Ignoring FB frame(s) with malformed HBS57H ALM fields; '
+                                     'keeping the last ALM state'))
+            self._malformed_run += 1
+            return events
+        self._malformed_run = 0
         if fields is None:
             if self._has_fields is not False:
                 events.append((OK, 'STM32 firmware does not report HBS57H ALM '
@@ -104,9 +120,12 @@ class MotorAlarmHealth:
                 self._last_alarm[i] = now
                 events.append((ERROR, f'HBS57H {wheel} driver had a short ALARM between FB frames '
                                       f'(trips since MCU boot={fields.trips[i]})'))
-            if state == NO_SIGNAL and old not in (None, NO_SIGNAL):
+            if state not in STATE_NAMES and old != state:
+                events.append((WARN, f'HBS57H {wheel} ALM state code {state} is unknown to this '
+                                     'bridge (firmware newer than the bridge?)'))
+            elif state == NO_SIGNAL and old not in (None, NO_SIGNAL):
                 events.append((WARN, f'HBS57H {wheel} ALM input lost its signal '
-                                     '(STM32 pin floating: wire not connected or broken)'))
+                                     '(STM32 pin floating: 10k/1k not fitted or STM32-side lead broken)'))
             elif state == ALM_OK and old == NO_SIGNAL:
                 events.append((OK, f'HBS57H {wheel} ALM input now connected, driver OK'))
         return events
@@ -130,6 +149,9 @@ class MotorAlarmHealth:
         if alarm:
             return ERROR, ('HBS57H ALARM: ' + ', '.join(alarm)
                            + ' (monitoring only, wheels not stopped)'), values
+        unknown = [f'{WHEELS[i]}={f.states[i]}' for i in range(2) if f.states[i] not in STATE_NAMES]
+        if unknown:
+            return WARN, 'unknown ALM state code: ' + ', '.join(unknown), values
         no_signal = [WHEELS[i] for i in range(2) if f.states[i] == NO_SIGNAL]
         if no_signal:
             return WARN, 'ALM input not connected: ' + ', '.join(no_signal), values
