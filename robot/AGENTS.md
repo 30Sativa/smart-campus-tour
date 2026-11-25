@@ -62,7 +62,7 @@ BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
 Astra Pro (depth)   -> /camera/depth/points   -> LOCAL costmap; camera mode also global (ADR-0068)
 Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
 4x SR04T sonar      -> ultrasonic/sonarN/range -> NO costmap; opt-in collision_monitor
-                                                 speed guard (ADR-0066, docs/sonar-perception.md)
+                                                 speed guard (ADR-0069, docs/sonar-perception.md)
 ```
 
 - The Astra Pro is a **supplementary** obstacle sensor. Do not make it a

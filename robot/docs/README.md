@@ -44,7 +44,7 @@ permission to execute it.
   check, why it does not stop the robot for a low obstacle ahead, hardware test plan; camera mode
   also in the global costmap with recoveries that keep the robot's surroundings (ADR-0068).
 - [Sonar perception](sonar-perception.md) — why the SR04T costmap layer failed goals (root cause),
-  the opt-in `sonar_mode` speed guard (Nav2 collision_monitor + blind-zone memory, ADR-0066),
+  the opt-in `sonar_mode` speed guard (Nav2 collision_monitor + blind-zone memory, ADR-0069),
   what the four corner sonars can and cannot see, offline scenarios, hardware acceptance.
 - [Sonar T0 check](sonar-t0-check.md) — measure the four SR04T on the robot before any sonar
   change: read-only FB capture (`sonar_watch.py`), steps T0.0–T0.10, what needs external

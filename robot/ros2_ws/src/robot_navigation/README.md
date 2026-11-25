@@ -64,7 +64,7 @@ LiDAR và depth giữ nguyên. Bridge vẫn publish Range để quan sát; đây
 lệnh tắt nguồn cảm biến. **Không nạp lại `sonar_layer`**: nguyên nhân gốc và lý do
 nằm ở `robot/docs/sonar-perception.md` mục 2. Sonar vào navigation bằng đường khác,
 tuỳ chọn: `sonar_mode:=shadow|enforce` (Nav2 `collision_monitor` giữa controller và
-velocity_smoother, không costmap, không huỷ goal; ADR-0066). Mặc định `off` = baseline.
+velocity_smoother, không costmap, không huỷ goal; ADR-0069). Mặc định `off` = baseline.
 
 ### Remote RViz trên laptop (workaround/debug)
 
