@@ -289,6 +289,21 @@ grep SCRCPY_START logs/adb.log | tail -1
 #     video_codec_options=profile:int=1,i-frame-interval:float=0.5,frame-rate:float=30
 ```
 
+Đo 25/11/2026 trên NUC7PJYH với Quest 3 thật, stack robot tắt (live = luồng thật qua
+MediaMTX và relay; bench = mẫu ghi từ kính, `~/amr_logs/tools_quest/bench_encoders.py`):
+
+| | libx264 (cũ) | `copy` |
+|---|---|---|
+| FFmpeg trên NUC (% một nhân) | 83.4 live, 90.2 bench | 0.8 live, 0.6 bench |
+| Cả chuỗi Quest: FFmpeg, adb, server.py, relay, MediaMTX | khoảng 90 | khoảng 10 |
+| Kính gửi NUC | 12.9 Mbit/s, 1494x1600 High | 1.24 Mbit/s, 1280x720 Baseline 3.1 |
+| Keyframe | 20 s | 0.50 s |
+| Từ lúc FFmpeg mở tới khung đầu ra | khoảng 20 s | khoảng 2 s |
+
+Bản cũ khởi động chậm vì `-fflags nobuffer` bỏ keyframe đầu (lúc dò luồng) và keyframe kế
+tiếp của kính tới sau 20 s. Bitrate thật cao hơn mục tiêu khoảng 25 % (encoder kính, VBR).
+Độ trễ kính → web chưa đo.
+
 Khung giống bản libx264: `QUEST_CROP_KEEP` chiều rộng một mắt, tỉ lệ đầu ra, ở giữa
 (+ `QUEST_CROP_OFFSET_X/Y`), làm tròn xuống bội của 16x9 để ra đúng 1280x720;
 `QUEST_SCRCPY_CROP` (nếu đặt) vẫn là vùng một mắt, khung được cắt trong đó.
