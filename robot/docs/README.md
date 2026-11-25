@@ -46,6 +46,9 @@ permission to execute it.
 - [Sonar perception](sonar-perception.md) — why the SR04T costmap layer failed goals (root cause),
   the opt-in `sonar_mode` speed guard (Nav2 collision_monitor + blind-zone memory, ADR-0069),
   what the four corner sonars can and cannot see, offline scenarios, hardware acceptance.
+- [Sonar FB status proposal](sonar-fb-status-proposal.md) — **proposal, not implemented**: FB
+  fields 33–40 (per-sonar result code + measurement counter), REP-117 values in `stm32_bridge`,
+  direct "too close" in `sonar_memory`; first a hardware test of what the SR04T outputs at 0.05–0.25 m.
 - [Sonar T0 check](sonar-t0-check.md) — measure the four SR04T on the robot before any sonar
   change: read-only FB capture (`sonar_watch.py`), steps T0.0–T0.10, what needs external
   equipment, and which result decides memory, FB status, TX buffer and compatibility.
