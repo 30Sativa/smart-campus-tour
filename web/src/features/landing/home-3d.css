@@ -959,7 +959,8 @@ html[data-theme-wave]::view-transition-new(root) {
   .lp3-td[data-mode="showcase"] { --td-col: min(420px, 31%); }
   .lp3-td[data-mode="showcase"][data-view="inspect"] .lp3-td__intro { left: 28px; width: var(--td-col); }
   .lp3-td[data-mode="showcase"][data-view="inspect"] .lp3-td__lead { display: none; }
-  .lp3-td[data-mode="showcase"] .lp3-td__panel { left: 28px; right: auto; bottom: 24px; width: var(--td-col); max-height: calc(100% - 262px); }
+  /* Under the title column, wherever it ends (RobotPartsViewer measures it): the two links may wrap to two rows. */
+  .lp3-td[data-mode="showcase"] .lp3-td__panel { left: 28px; right: auto; bottom: 24px; width: var(--td-col); max-height: calc(100% - 40px - var(--td-intro-bottom, 222px)); }
   .lp3-td[data-mode="showcase"] .lp3-td__hint { left: calc(50% + var(--td-side, 0px) / 2 - 16px); }
   .lp3-td[data-mode="showcase"] .lp3-td__scrim { background: linear-gradient(90deg, rgba(10, 18, 24, .72) 0%, rgba(10, 18, 24, .3) 30%, rgba(10, 18, 24, 0) 46%); }
 }

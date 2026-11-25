@@ -132,6 +132,7 @@ export default function RobotPartsViewer({ visible = true, intro, driveTo, insid
   const calloutsRef = useRef<CalloutFrame | null>(null)
   const focusRef = useRef(INSPECT.together * world.scale)
   const stageRef = useRef<HTMLDivElement>(null)
+  const introRef = useRef<HTMLDivElement>(null)
   const inViewRef = useRef(false)
   const zoom = useZoom(stageRef)
   const [picked, setPicked] = useState<PartGroupId | null>(null)
@@ -166,6 +167,19 @@ export default function RobotPartsViewer({ visible = true, intro, driveTo, insid
       })
       resize.observe(node)
       observers.push(resize)
+    }
+    // The panel stands under the title column: it starts where the title, its buttons and the replay link end,
+    // however many rows the buttons wrap to (CSS reads --td-intro-bottom).
+    const introNode = introRef.current
+    if (introNode && typeof ResizeObserver !== 'undefined') {
+      const measure = () => {
+        const bottom = introNode.getBoundingClientRect().bottom - node.getBoundingClientRect().top
+        if (bottom > 0) node.style.setProperty('--td-intro-bottom', `${Math.ceil(bottom)}px`)
+      }
+      const introResize = new ResizeObserver(measure)
+      introResize.observe(introNode)
+      introResize.observe(node)
+      observers.push(introResize)
     }
     if (typeof IntersectionObserver !== 'undefined') {
       const watch = new IntersectionObserver(([entry]) => { inViewRef.current = (entry?.intersectionRatio ?? 0) > 0.55 }, { threshold: [0, 0.55, 1] })
@@ -239,7 +253,7 @@ export default function RobotPartsViewer({ visible = true, intro, driveTo, insid
 
       <CalloutLabels frameRef={calloutsRef} shown={shown} state={calloutState} side={picked ? 'left' : undefined} top={wide ? 110 : 150} bottom={wide ? 40 : 360} left={sideSpace} right={wide ? 32 : 14} onHover={setHovered} onPick={pickPart} />
 
-      <div className="lp3-td__intro">{intro}</div>
+      <div className="lp3-td__intro" ref={introRef}>{intro}</div>
       {hint && <p className="lp3-td__hint" aria-hidden="true">{hint}</p>}
 
       <aside className="lp3-td__panel" aria-label="Cấu tạo robot">
