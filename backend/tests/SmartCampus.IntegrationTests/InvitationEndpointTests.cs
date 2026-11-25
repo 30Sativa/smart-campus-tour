@@ -5,7 +5,10 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SmartCampus.Api.Invitations;
 using SmartCampus.Application;
+using SmartCampus.Application.Common.Abstractions.Invitations;
+using SmartCampus.Application.Features.Invitations;
 using SmartCampus.Infrastructure;
 using SmartCampus.Infrastructure.Integrations.Invitations;
 using SmartCampus.Application.Features.Invitations.Commands.DeliverEmail;
@@ -1191,5 +1194,156 @@ public sealed class InvitationEndpointTests
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitationId}/revoke", Write(current, Guid.NewGuid()))).Status);
         Assert.Equal(HttpStatusCode.Unauthorized, (await AskAsync(host.Client, f.TourId, cookie, "Câu sau thu hồi?")).Status);
         Assert.Equal(2, assistant.Requests.Count);
+    }
+
+    private sealed class RevokeNoticeSender : IInvitationEmailSender
+    {
+        public List<InvitationRevokedEmail> Sent { get; } = [];
+        public Task<EmailSendResult> SendAsync(InvitationEmail email, CancellationToken ct) => throw new NotSupportedException();
+        public Task<EmailSendResult> SendTourCancelledAsync(TourCancelEmail email, CancellationToken ct) => throw new NotSupportedException();
+        public Task<EmailSendResult> SendRosterExpiredAsync(RosterExpiredEmail email, CancellationToken ct) => throw new NotSupportedException();
+        public Task<EmailSendResult> SendInvitationRevokedAsync(InvitationRevokedEmail email, CancellationToken ct)
+        {
+            Sent.Add(email);
+            return Task.FromResult(new EmailSendResult("ACCEPTED", "RESEND_ACCEPTED"));
+        }
+    }
+
+    private static ServiceProvider RevokeNoticeServices(Fixture f, RevokeNoticeSender sender)
+    {
+        var values = InvitationPrimitiveTests.ConfigurationValues().Select(p => new KeyValuePair<string, string?>(p.Key, p.Value))
+            .Append(new("ConnectionStrings:DefaultConnection", f.Database.ConnectionString));
+        var services = new ServiceCollection(); services.AddLogging(); services.AddApplication();
+        services.AddInfrastructure(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
+        services.AddSingleton<IInvitationEmailSender>(sender);
+        services.AddSingleton<InvitationRevokeNoticeDispatcher>();
+        return services.BuildServiceProvider();
+    }
+
+    private static async Task<string[]> RevokeNoticeTargetsAsync(Fixture f)
+    {
+        await using var db = f.Context();
+        return await db.AuditLogs.Where(a => a.Action == InvitationRevokeNotice.Requested).Select(a => a.EntityId).OrderBy(e => e).ToArrayAsync();
+    }
+
+    private static async Task AssertNoAuditHoldsAnAddressAsync(Fixture f)
+    {
+        await using var db = f.Context();
+        Assert.All(await db.AuditLogs.ToArrayAsync(), a => Assert.DoesNotContain("@", a.DataJson ?? ""));
+    }
+
+    [SchemaV11Fact]
+    public async Task Revoke_QueuesOneNoticeInItsCommit_SentOnlyToThatRow_AndReplayOrASecondRevokeQueuesNothing()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
+        var invitationId = item.GetProperty("id").GetGuid();
+        var request = Guid.NewGuid();
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitationId}/revoke", Write(item, request))).Status);
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitationId}/revoke", Write(item, request))).Status);
+        Assert.Equal([invitationId.ToString("D")], await RevokeNoticeTargetsAsync(f));
+
+        var sender = new RevokeNoticeSender();
+        await using var provider = RevokeNoticeServices(f, sender);
+        var dispatcher = provider.GetRequiredService<InvitationRevokeNoticeDispatcher>();
+        await dispatcher.DispatchPendingAsync(CancellationToken.None);
+        var email = Assert.Single(sender.Sent);
+        await using (var db = f.Context())
+        {
+            var row = await db.RosterRows.AsNoTracking().SingleAsync(r => r.Invitation!.Id == invitationId);
+            Assert.Equal((row.Email, row.DisplayName, row.RowType == "SHARED_VIEWING", f.TourId),
+                (email.Recipient, email.RecipientName, email.SharedViewing, email.TourId));
+            var result = await db.AuditLogs.SingleAsync(a => a.Action == InvitationRevokeNotice.Result);
+            Assert.Equal("ACCEPTED", result.ResultCode);
+            Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.Action == InvitationRevokeNotice.Started));
+        }
+        await dispatcher.DispatchPendingAsync(CancellationToken.None);
+        Assert.Single(sender.Sent);
+
+        var current = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("id").GetGuid() == invitationId);
+        Assert.Equal(HttpStatusCode.Conflict, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitationId}/revoke", Write(current, Guid.NewGuid()))).Status);
+        Assert.Single(await RevokeNoticeTargetsAsync(f));
+        await AssertNoAuditHoldsAnAddressAsync(f);
+    }
+
+    [SchemaV11Fact]
+    public async Task ReissueBeforeTheNoticeGoesOut_SkipsIt()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
+        var invitationId = item.GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitationId}/revoke", Write(item, Guid.NewGuid()))).Status);
+        await f.Database.ExecuteAsync("UPDATE dbo.AuditLogs SET OccurredAt=DATEADD(minute,-2,OccurredAt) WHERE Action='EMAIL_SEND_REQUESTED';");
+        var current = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("id").GetGuid() == invitationId);
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitationId}/reissue", Write(current, Guid.NewGuid()))).Status);
+
+        var sender = new RevokeNoticeSender();
+        await using var provider = RevokeNoticeServices(f, sender);
+        await provider.GetRequiredService<InvitationRevokeNoticeDispatcher>().DispatchPendingAsync(CancellationToken.None);
+        Assert.Empty(sender.Sent);
+        await using var db = f.Context();
+        var result = await db.AuditLogs.SingleAsync(a => a.Action == InvitationRevokeNotice.Result);
+        Assert.Equal("SKIPPED", result.ResultCode);
+        Assert.Contains("ACCESS_RESTORED", result.DataJson);
+    }
+
+    [SchemaV11Fact]
+    public async Task RosterRemovalAndRegistrationCancel_QueueANoticeOnlyForCodesTheyRevoke()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var items = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items").EnumerateArray().ToArray();
+        var revokedFirst = items[0].GetProperty("id").GetGuid();
+        var removedLive = items[1].GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{revokedFirst}/revoke", Write(items[0], Guid.NewGuid()))).Status);
+
+        // Both rows leave the roster; only the one still usable gets a notice for it.
+        var detail = await f.DataAsync($"/registrations/{id}");
+        var tour = await f.DataAsync($"/tours/{f.TourId}");
+        var input = Input(tour, "Group", "viewer@example.test") with { Roster = [new(6, "INDIVIDUAL", "New viewer", "new@example.test", null)] };
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Put, $"/registrations/{id}", new { input, expectedRowVersion = Version(detail) })).Status);
+        Assert.Equal(new[] { revokedFirst, removedLive }.Select(i => i.ToString("D")).Order().ToArray(), await RevokeNoticeTargetsAsync(f));
+
+        // Cancelling the registration afterwards revokes nothing new, so it queues nothing.
+        detail = await f.DataAsync($"/registrations/{id}");
+        tour = await f.DataAsync($"/tours/{f.TourId}");
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, $"/registrations/{id}/cancel",
+            new { expectedRowVersion = Version(detail), expectedTourRowVersion = tour.GetProperty("rowVersion").GetString() })).Status);
+        Assert.Equal(2, (await RevokeNoticeTargetsAsync(f)).Length);
+
+        var sender = new RevokeNoticeSender();
+        await using var provider = RevokeNoticeServices(f, sender);
+        await provider.GetRequiredService<InvitationRevokeNoticeDispatcher>().DispatchPendingAsync(CancellationToken.None);
+        await using var db = f.Context();
+        var expected = await db.Invitations.AsNoTracking().Where(i => i.Id == revokedFirst || i.Id == removedLive)
+            .Select(i => i.RosterRow.Email).OrderBy(e => e).ToArrayAsync();
+        Assert.Equal(expected, sender.Sent.Select(e => e.Recipient).Order().ToArray());
+        await AssertNoAuditHoldsAnAddressAsync(f);
+    }
+
+    [SchemaV11Fact]
+    public async Task RegistrationCancel_QueuesANoticeForEachLiveCode()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var ids = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("id").GetGuid().ToString("D")).Order().ToArray();
+        var detail = await f.DataAsync($"/registrations/{id}");
+        var tour = await f.DataAsync($"/tours/{f.TourId}");
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, $"/registrations/{id}/cancel",
+            new { expectedRowVersion = Version(detail), expectedTourRowVersion = tour.GetProperty("rowVersion").GetString() })).Status);
+        Assert.Equal(ids, await RevokeNoticeTargetsAsync(f));
     }
 }

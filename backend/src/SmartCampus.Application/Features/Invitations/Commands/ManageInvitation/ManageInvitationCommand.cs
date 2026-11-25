@@ -70,6 +70,7 @@ public sealed class ManageInvitationCommandHandler(IRegistrationRepository regis
                 {
                     InvitationIssuer.CloseSessions(invitation, now);
                     invitation.RevokedAt = now;
+                    InvitationRevokeNotice.Queue(repository, settings, invitation, tour.Id, command.Actor, now);
                 }
                 else await issuer.ReissueAsync(invitation, now, ct);
             }

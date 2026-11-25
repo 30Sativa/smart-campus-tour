@@ -181,6 +181,54 @@ public sealed class InvitationPrimitiveTests
         AssertNoLongDash(subject, html, text);
     }
 
+    [Fact]
+    public async Task RevokedEmail_GoesOnlyToTheRow_WithoutCodeOrLink_AndPlainTextMatchesHtml()
+    {
+        var config = Configuration();
+        var handler = new CaptureHandler(200, "{\"id\":\"preview\"}");
+        using var http = new HttpClient(handler);
+        var tour = Guid.NewGuid(); var invitation = Guid.NewGuid(); var attempt = Guid.NewGuid();
+        // 18:00 UTC on 20/11 is already 21/11 in Asia/Ho_Chi_Minh.
+        var result = await new ResendInvitationEmailSender(http, config, new InvitationCodeService(config)).SendInvitationRevokedAsync(new(
+            tour, invitation, attempt, "viewer@example.test", RiskyTour, new DateTimeOffset(2026, 11, 20, 18, 0, 0, TimeSpan.Zero),
+            "Nguyễn <An>", false), default);
+        Assert.Equal("ACCEPTED", result.Status);
+        Assert.Equal($"campus-tour/invitation-revoked/{attempt:D}", handler.IdempotencyKey);
+        using (var json = JsonDocument.Parse(handler.Body!))
+            Assert.Equal("viewer@example.test", Assert.Single(json.RootElement.GetProperty("to").EnumerateArray()).GetString());
+        var (subject, html, text) = Payload(handler);
+        Assert.Equal($"Mã truy cập của bạn đã bị thu hồi: {RiskyTour}, 21/11", subject);
+        Assert.Contains("Khoa &lt;CNTT&gt; &amp; &quot;AI&quot;", html); Assert.DoesNotContain("<CNTT>", html);
+        Assert.Contains("Nguyễn &lt;An&gt;", html); Assert.DoesNotContain("<An>", html);
+        Assert.Contains("LỜI MỜI DÀNH CHO", Visible(html)); Assert.Contains("Lời mời dành cho: Nguyễn <An>", text);
+        AssertBothBodies(html, text, ["Mã truy cập của bạn đã bị thu hồi", "Nguyễn <An>", RiskyTour,
+            "21/11/2026 01:00", "Mã truy cập trong email mời trước đây không còn dùng được",
+            "hãy liên hệ người đại diện của trường", "support@example.test", Footer]);
+        foreach (var body in new[] { html, text })
+        {
+            Assert.DoesNotContain("https://", body);
+            Assert.DoesNotContain("/tour/", body);
+            Assert.DoesNotContain(tour.ToString(), body);
+            Assert.DoesNotContain(invitation.ToString(), body);
+        }
+        AssertNoLongDash(subject, html, text);
+    }
+
+    [Fact]
+    public async Task RevokedEmail_ForSharedViewing_NamesTheRoom()
+    {
+        var config = Configuration();
+        var handler = new CaptureHandler(200, "{\"id\":\"preview\"}");
+        using var http = new HttpClient(handler);
+        await new ResendInvitationEmailSender(http, config, new InvitationCodeService(config)).SendInvitationRevokedAsync(new(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "room@example.test", RiskyTour,
+            new DateTimeOffset(2026, 11, 20, 2, 0, 0, TimeSpan.Zero), "Phòng chiếu A", true), default);
+        var (_, html, text) = Payload(handler);
+        Assert.Contains("PHÒNG XEM CHUNG", Visible(html)); Assert.Contains("Phòng xem chung: Phòng chiếu A", text);
+        AssertBothBodies(html, text, ["Phòng chiếu A",
+            "Mã truy cập của phòng xem chung này không còn dùng được", Footer]);
+    }
+
     private static async Task<(string Subject, string Html, string Text)> SendInvitation(string recipientName, string group, string school,
         bool sharedViewing, DateTimeOffset start)
     {

@@ -63,7 +63,12 @@ responses. Retain the same request UUID after an uncertain HTTP response.
 
 - Gửi lại email: same current code/expiry, no session interruption.
 - Thu hồi và cấp mã mới: close sessions, replace code, keep expiry and ID.
-- Thu hồi mã: invalidate code/sessions without sending mail.
+- Thu hồi mã: invalidate code/sessions; the row's own address gets one "Mã truy cập
+  của bạn đã bị thu hồi" email without any code or link. Removing a row from the
+  roster or cancelling the registration sends the same notice for each code it
+  revokes. If the code is reissued before the notice goes out, it is skipped
+  (`ACCESS_RESTORED`). Audit codes `INVITATION_REVOKE_NOTICE_REQUESTED/_STARTED/_RESULT`,
+  Idempotency-Key `campus-tour/invitation-revoked/{attemptId}` (docs/architecture.md §3.2.3).
 - Sending failure keeps APPROVED. Resend after the one-minute cooldown.
 - ACCEPTED means service acceptance; no delivery/read or attendance claim.
 - UNKNOWN means inconclusive delivery; do not treat it as FAILED or ACCEPTED.

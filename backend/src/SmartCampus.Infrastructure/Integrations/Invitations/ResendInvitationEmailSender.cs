@@ -24,6 +24,13 @@ public sealed class ResendInvitationEmailSender(HttpClient client, InvitationCon
             TourCancelEmailTemplate.Subject(email), html, text, ct);
     }
 
+    public async Task<EmailSendResult> SendInvitationRevokedAsync(InvitationRevokedEmail email, CancellationToken ct)
+    {
+        var (html, text) = InvitationRevokedEmailTemplate.Render(email, configuration.SupportEmail);
+        return await PostAsync($"campus-tour/invitation-revoked/{email.AttemptId:D}", email.Recipient,
+            InvitationRevokedEmailTemplate.Subject(email), html, text, ct);
+    }
+
     public async Task<EmailSendResult> SendRosterExpiredAsync(RosterExpiredEmail email, CancellationToken ct)
     {
         var (html, text) = RosterExpiredEmailTemplate.Render(email, configuration.SupportEmail);

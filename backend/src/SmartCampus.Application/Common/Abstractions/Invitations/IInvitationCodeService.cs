@@ -16,6 +16,12 @@ public sealed record InvitationSettings(bool Enabled, int ExpiryHoursAfterStart,
 public sealed record InvitationEmail(Guid TourId, Guid InvitationId, Guid AttemptId, string Recipient, string TourName,
     DateTimeOffset ScheduledStartAt, DateTimeOffset ExpiresAt, int AccessVersion, byte[] ProtectedCode,
     string RecipientName, string GroupName, string SchoolName, bool SharedViewing);
+/// <summary>
+/// A notice that one invitation's access code was revoked. Goes only to that row's own address; carries no code or
+/// link and nothing about other rows. RecipientName is the row display name; SharedViewing marks a projector-room row.
+/// </summary>
+public sealed record InvitationRevokedEmail(Guid TourId, Guid InvitationId, Guid AttemptId, string Recipient, string TourName,
+    DateTimeOffset ScheduledStartAt, string RecipientName, bool SharedViewing);
 /// <summary>One recipient of a cancellation notice. Carries no code or link: the Tour no longer grants access.</summary>
 public sealed record TourCancelEmail(Guid TourId, Guid AttemptId, Guid RegistrationId, string Recipient, string TourName,
     DateTimeOffset ScheduledStartAt, string Reason);
@@ -39,4 +45,6 @@ public interface IInvitationEmailSender
     Task<EmailSendResult> SendTourCancelledAsync(TourCancelEmail email, CancellationToken ct);
     /// <summary>Same delivery contract as <see cref="SendAsync"/>, for items that expired at T-24h (BR-05).</summary>
     Task<EmailSendResult> SendRosterExpiredAsync(RosterExpiredEmail email, CancellationToken ct);
+    /// <summary>Same delivery contract as <see cref="SendAsync"/>, for a notice that the recipient's code was revoked.</summary>
+    Task<EmailSendResult> SendInvitationRevokedAsync(InvitationRevokedEmail email, CancellationToken ct);
 }
