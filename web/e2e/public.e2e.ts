@@ -29,10 +29,10 @@ test('student tour: wrong access code', async ({ page }) => {
 test('student tour: hanging session check offers Thử lại', async ({ page }) => {
   await mockApi(page, null, hangingSessionHandlers)
   await page.goto(`/tour/${STUDENT_TOUR_ID}`)
-  await expect(page.getByText('Đang kiểm tra phiên')).toBeVisible()
+  await expect(page.getByText('Đang kiểm tra lời mời')).toBeVisible()
   // The watchdog is 8 s (SESSION_CHECK_WATCHDOG_MS); move the page clock past it.
   await page.clock.runFor(8_500)
-  await expect(page.getByText('Chưa kiểm tra được phiên')).toBeVisible()
+  await expect(page.getByText('Chưa kiểm tra được lời mời')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Thử lại' })).toBeVisible()
   await capturePage(page, 'student', 'session-retry', { title: 'Tham gia Tour được mời' })
 })

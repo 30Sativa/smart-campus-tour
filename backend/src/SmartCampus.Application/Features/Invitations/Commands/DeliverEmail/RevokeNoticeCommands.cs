@@ -22,7 +22,7 @@ public sealed class ClaimRevokeNoticeCommandHandler(IInvitationRepository reposi
         if (command.Interrupted)
         {
             // It may already be out, so it is reported and never sent twice.
-            if (started) repository.AddAudit(Audit(request.TourId.Value, request, "UNKNOWN", "INTERRUPTED", now));
+            if (started) repository.AddAudit(ResultAudit(request.TourId.Value, request, "UNKNOWN", "INTERRUPTED", now));
             return null;
         }
         if (started || tour is null) return null;
@@ -30,7 +30,7 @@ public sealed class ClaimRevokeNoticeCommandHandler(IInvitationRepository reposi
         var invitation = await repository.FindInvitationAsync(Guid.Parse(request.EntityId), ct);
         if (invitation is null || invitation.RevokedAt is null || invitation.AccessVersion != InvitationAudit.Version(request))
         {
-            repository.AddAudit(Audit(tour.Id, request, "SKIPPED", "ACCESS_RESTORED", now));
+            repository.AddAudit(ResultAudit(tour.Id, request, "SKIPPED", "ACCESS_RESTORED", now));
             return null;
         }
         repository.AddAudit(InvitationAudit.Create(tour.Id, request.ActorUserId, InvitationRevokeNotice.Started,
@@ -40,7 +40,7 @@ public sealed class ClaimRevokeNoticeCommandHandler(IInvitationRepository reposi
             row.DisplayName, row.RowType == "SHARED_VIEWING");
     }
 
-    internal static Domain.Entities.AuditLog Audit(Guid tourId, Domain.Entities.AuditLog request, string status, string code, DateTimeOffset now) =>
+    internal static Domain.Entities.AuditLog ResultAudit(Guid tourId, Domain.Entities.AuditLog request, string status, string code, DateTimeOffset now) =>
         InvitationAudit.Create(tourId, request.ActorUserId, InvitationRevokeNotice.Result, request.EntityId,
             request.CorrelationId!.Value, now, status, new { code });
 }
@@ -54,7 +54,7 @@ public sealed class RecordRevokeNoticeResultCommandHandler(IInvitationRepository
         if (request is null) return Unit.Value;
         _ = await registrations.LockTourAsync(request.TourId!.Value, ct);
         if (!await repository.HasRevokeNoticeResultAsync(command.AttemptId, ct))
-            repository.AddAudit(ClaimRevokeNoticeCommandHandler.Audit(request.TourId.Value, request, command.Status, command.Code, clock.GetUtcNow()));
+            repository.AddAudit(ClaimRevokeNoticeCommandHandler.ResultAudit(request.TourId.Value, request, command.Status, command.Code, clock.GetUtcNow()));
         return Unit.Value;
     }
 }
