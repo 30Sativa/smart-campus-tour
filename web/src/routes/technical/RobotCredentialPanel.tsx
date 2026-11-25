@@ -9,7 +9,8 @@ import { formatDateTime } from '../../components/ui/date-time'
 import { technicalApi, type RobotCredentialSecret } from '../../features/technical/api/technical'
 import { useRobotCredential } from '../../features/technical/technical-hooks'
 
-export function RobotCredentialPanel({ robotCode, onClose }: { robotCode: string; onClose: () => void }) {
+/** `step` names where this sits in the robot setup (for example "Bước 2/5"), so the dialog does not feel like a detour. */
+export function RobotCredentialPanel({ robotCode, step, onClose }: { robotCode: string; step?: string; onClose: () => void }) {
   const queryClient = useQueryClient()
   const credential = useRobotCredential(robotCode)
   const [pending, setPending] = useState(false)
@@ -46,7 +47,7 @@ export function RobotCredentialPanel({ robotCode, onClose }: { robotCode: string
     } finally { setPending(false) }
   }
 
-  return <><Modal open title={`Khóa Fleet Sync · ${robotCode}`} description="Quản lý khóa của robot. Bí mật chỉ xuất hiện trong phản hồi cấp hoặc cấp lại." onClose={clearAndClose}
+  return <><Modal open title={`Khóa Fleet Sync · ${robotCode}`} description={`${step ? `${step} trong thiết lập robot. ` : ''}Quản lý khóa của robot. Bí mật chỉ xuất hiện trong phản hồi cấp hoặc cấp lại.`} onClose={clearAndClose}
     footer={<div className="flex justify-end"><button type="button" className={buttonClass('secondary')} onClick={clearAndClose}>Đóng</button></div>}>
     {credential.isPending ? <p role="status" className="p-4">Đang tải trạng thái khóa…</p> : credential.isError ? <div role="alert" className="p-4 text-sm text-red-700">{errorText(credential.error)} <button className="underline" onClick={() => void credential.refetch()}>Thử lại</button></div> : credential.data && <div className="space-y-4">
       <section className="rounded-lg border border-slate-200 p-3 text-sm">

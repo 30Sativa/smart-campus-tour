@@ -100,7 +100,7 @@ it('does not claim a successful leave on network failure and recovers a missing 
   }))
   mount()
   await screen.findByText('Bạn đã vào phòng chờ')
-  fireEvent.click(screen.getByRole('button', { name: 'Thoát phiên' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Rời buổi xem' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Không kết nối được hệ thống')
   expect(screen.getByText('Bạn đã vào phòng chờ')).toBeVisible()
   await act(async () => { await client.refetchQueries({ queryKey: key }) })
@@ -109,8 +109,8 @@ it('does not claim a successful leave on network failure and recovers a missing 
 })
 
 it.each([
-  [400, 'Mã truy cập không hợp lệ'], [401, 'Mã hoặc phiên đã hết hạn'],
-  [403, 'Nguồn truy cập không được phép'], [409, 'Lời mời đang được dùng'], [429, 'Bạn đã thử quá nhiều lần'],
+  [400, 'Mã truy cập không hợp lệ'], [401, 'Mã đã hết hạn'],
+  [403, 'Nguồn truy cập không được phép'], [409, 'Mã này đang được dùng'], [429, 'Bạn đã thử quá nhiều lần'],
 ])('handles join HTTP %s without refreshing or logging out an account', async (status, message) => {
   const fetch = vi.fn(async (url: string) => response(null, url.endsWith('/join') ? status as number : 401))
   vi.stubGlobal('fetch', fetch)
@@ -141,10 +141,10 @@ it('retains stale room information during a network failure and allows explicit 
   connected = false
   await act(async () => { await client.refetchQueries({ queryKey: key }) })
   expect(screen.getByText('Bạn đã vào phòng chờ')).toBeVisible()
-  expect(await screen.findByRole('alert')).toHaveTextContent('thông tin hiển thị có thể đã cũ')
+  expect(await screen.findByRole('alert')).toHaveTextContent('Hình và thông tin trên trang có thể chưa cập nhật')
   expect(screen.getByRole('alert')).not.toHaveTextContent('10 phút')
   connected = true
-  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra lại phiên' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Kết nối lại' }))
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
 })
 
@@ -183,7 +183,7 @@ it('cancels a pending heartbeat before leave and keeps the room cache empty', as
   let pending!: Promise<void>
   act(() => { pending = client.refetchQueries({ queryKey: key }) })
   await waitFor(() => expect(sessions).toBe(2))
-  fireEvent.click(screen.getByRole('button', { name: 'Thoát phiên' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Rời buổi xem' }))
   await screen.findByLabelText('Mã truy cập')
   await act(async () => { heartbeat.resolve(response()); await pending })
   expect(client.getQueryData(key)).toBeNull()
@@ -197,7 +197,7 @@ it('checks the new Tour session after leaving another Tour instead of carrying o
     <Link to={'/tour/' + otherTour}>Tour khác</Link><Routes><Route path="/tour/:tourId" element={<StudentTourPage />} /></Routes>
   </MemoryRouter></QueryClientProvider>)
   await screen.findByText('Bạn đã vào phòng chờ')
-  fireEvent.click(screen.getByRole('button', { name: 'Thoát phiên' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Rời buổi xem' }))
   await screen.findByLabelText('Mã truy cập')
   fireEvent.click(screen.getByRole('link', { name: 'Tour khác' }))
   expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
@@ -280,7 +280,7 @@ it.each([['CANCELLED', 'Buổi tham quan đã kết thúc sớm'], ['COMPLETED',
     vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response({ ...info, tourState })))
     mount()
     expect(await screen.findByRole('heading', { name: title })).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Thoát phiên' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Rời buổi xem' })).toBeEnabled()
   })
 
 it('stops live playback within 10 s after the invitation is revoked or reissued', async () => {
@@ -358,7 +358,7 @@ it('re-checks the session when an account sign-out clears the query cache mid-ch
   vi.stubGlobal('fetch', fetch)
   render(<QueryProvider><StudentInvitationPage tourId={tourId} /></QueryProvider>)
   await waitFor(() => expect(sessions).toBe(1))
-  expect(screen.getByText('Đang kiểm tra phiên…')).toBeInTheDocument()
+  expect(screen.getByText('Đang kiểm tra lời mời…')).toBeInTheDocument()
   act(() => { useAuthStore.getState().logout() })
   expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
   expect(sessions).toBe(2)
@@ -376,11 +376,11 @@ it('offers the code form and a retry after 8 s without a session answer', async 
       return ++sessions === 1 ? hanging.promise : response()
     }))
     mount()
-    expect(screen.getByText('Đang kiểm tra phiên…')).toBeInTheDocument()
+    expect(screen.getByText('Đang kiểm tra lời mời…')).toBeInTheDocument()
     act(() => { vi.advanceTimersByTime(SESSION_CHECK_WATCHDOG_MS - 100) })
     expect(screen.queryByLabelText('Mã truy cập')).not.toBeInTheDocument()
     act(() => { vi.advanceTimersByTime(200) })
-    expect(screen.getByRole('status')).toHaveTextContent('Chưa kiểm tra được phiên')
+    expect(screen.getByRole('status')).toHaveTextContent('Chưa kiểm tra được lời mời')
     expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
     expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
@@ -394,7 +394,7 @@ it.each([
   ['offline', () => { throw new TypeError('offline') }],
   ['cancelled', () => { throw new DOMException('The user aborted a request.', 'AbortError') }],
   ['server error', () => response(null, 503)],
-])('shows the code form with "Chưa kiểm tra được phiên" when the check fails (%s)', async (_name, fail) => {
+])('shows the code form with "Chưa kiểm tra được lời mời" when the check fails (%s)', async (_name, fail) => {
   let sessions = 0
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url.endsWith('/talk')) return response(talkFeed)
@@ -402,9 +402,9 @@ it.each([
     return ++sessions === 1 ? fail() : response()
   }))
   mount()
-  expect(await screen.findByRole('status')).toHaveTextContent('Chưa kiểm tra được phiên')
+  expect(await screen.findByRole('status')).toHaveTextContent('Chưa kiểm tra được lời mời')
   expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
-  expect(screen.queryByRole('button', { name: 'Kiểm tra lại phiên' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Kết nối lại' })).not.toBeInTheDocument()
   expect(screen.queryByText(/Không kết nối được hệ thống/)).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
   expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
@@ -472,7 +472,7 @@ it('stops polling the session after RECONNECT_WINDOW_EXPIRED and waits for the v
   }
 })
 
-const SESSION_ENDED = 'Phiên xem đã kết thúc. Mã có thể đã bị thu hồi hoặc thay bằng mã mới; kiểm tra email mới nhất rồi nhập lại mã, hoặc liên hệ đại diện đoàn.'
+const SESSION_ENDED = 'Bạn đã bị thoát khỏi buổi xem. Có thể mã cũ đã được thay bằng mã mới: mở email mời mới nhất rồi nhập lại mã, hoặc hỏi thầy cô phụ trách đoàn.'
 
 /** The backend's 409 for a proven viewer of a Tour that is over (docs/architecture.md, AccessTour). */
 function tourEndedReply(tourState: 'COMPLETED' | 'CANCELLED') {
@@ -494,9 +494,9 @@ it('keeps the end screen when the session check of a RUNNING Tour turns into 409
   expect(screen.queryByLabelText('Mã truy cập')).not.toBeInTheDocument()
   expect(screen.queryByText(SESSION_ENDED)).toBeNull()
   expect(screen.queryByText(/Đang mất kết nối/)).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Kiểm tra lại phiên' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Kết nối lại' })).toBeNull()
   // Leaving the ended Tour needs no server call: its session is already gone.
-  fireEvent.click(screen.getAllByRole('button', { name: 'Thoát phiên' })[0])
+  fireEvent.click(screen.getAllByRole('button', { name: 'Rời buổi xem' })[0])
   expect(await screen.findByLabelText('Mã truy cập')).toBeVisible()
   expect(screen.queryByRole('alert')).toBeNull()
   expect(fetchCalls().some(url => url.endsWith('/leave'))).toBe(false)
@@ -542,7 +542,7 @@ it('says the Tour has ended, not that the code was revoked, when a reload finds 
   expect(await screen.findByRole('alert')).toHaveTextContent('Buổi tham quan đã kết thúc.')
   expect(screen.getByLabelText('Mã truy cập')).toBeVisible()
   expect(screen.queryByText(SESSION_ENDED)).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Kiểm tra lại phiên' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Kết nối lại' })).toBeNull()
 })
 
 it('says why the room closed when a session this tab held is refused with 401', async () => {

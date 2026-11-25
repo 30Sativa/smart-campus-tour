@@ -16,6 +16,13 @@ function choose(body: string, name?: string) {
 const header = 'LoaiDong,HoTen,Email,Lop\n'
 
 describe('roster file picker validation and replacement confirmation', () => {
+  it('explains each column in plain words and what an unknown row type should be', async () => {
+    render(<ExcelUploader accepted={null} onAccept={vi.fn()} />)
+    expect(screen.getByText(/nếu một học sinh xem trên máy riêng/)).toBeInTheDocument()
+    expect(screen.getByText(/nếu cả phòng xem chung một màn hình/)).toBeInTheDocument()
+    choose(header + 'CANHAN,Học sinh,student@example.test,12A', 'typo.csv')
+    expect(await screen.findByText('Ghi CA_NHAN (một học sinh xem trên máy riêng) hoặc DIEM_XEM_CHUNG (cả phòng xem chung một màn hình).')).toBeInTheDocument()
+  })
   it('uses explicit acceptance and retains the last accepted list after an invalid or unreadable file', async () => {
     const accept = vi.fn()
     function Harness() {

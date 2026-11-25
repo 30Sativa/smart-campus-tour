@@ -1247,6 +1247,7 @@ describe('Technical Staff API integration', () => {
     await openRobotDetail()
     fireEvent.click(screen.getByRole('button', { name: 'Quản lý khóa' }))
     expect(await screen.findByRole('dialog', { name: 'Khóa Fleet Sync · amr-01' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Khóa Fleet Sync · amr-01' })).toHaveTextContent('Bước 2/5 trong thiết lập robot.')
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
     fireEvent.click(screen.getAllByRole('button', { name: 'Đóng' })[0])
     expect(screen.getByRole('dialog', { name: 'AMR 01' })).toBeInTheDocument()

@@ -105,7 +105,7 @@ export default function AdminInfrastructurePage() {
               value={data.host.cpuPercent !== null ? `${data.host.cpuPercent}%` : '-'}
               note={
                 data.host.cpuPercent !== null
-                  ? `${data.host.processorCount} vCPUs`
+                  ? `${data.host.processorCount} lõi xử lý`
                   : 'Chưa đo được (lần đo đầu hoặc không hỗ trợ)'
               }
               tone={
@@ -170,10 +170,10 @@ export default function AdminInfrastructurePage() {
                   <dt className="text-[#64748b]">Hệ điều hành</dt>
                   <dd className="text-[#334155]">{data.host.osDescription} ({data.host.osArchitecture})</dd>
                   <dt className="text-[#64748b]">Số lõi vi xử lý</dt>
-                  <dd className="text-[#334155]">{data.host.processorCount} vCPUs</dd>
+                  <dd className="text-[#334155]">{data.host.processorCount} lõi</dd>
                   {data.host.loadAverages && (
                     <>
-                      <dt className="text-[#64748b]">Tải trung bình</dt>
+                      <dt className="text-[#64748b]" title="Số việc đang chờ CPU, tính trung bình">Tải trung bình</dt>
                       <dd className="font-mono text-[#334155]">
                         {data.host.loadAverages.map((l) => l.toFixed(2)).join(' · ')} (1, 5, 15 phút)
                       </dd>
@@ -181,7 +181,7 @@ export default function AdminInfrastructurePage() {
                   )}
                   {memory && memory.swapTotalBytes !== null && memory.swapTotalBytes > 0 && (
                     <>
-                      <dt className="text-[#64748b]">Bộ nhớ Swap</dt>
+                      <dt className="text-[#64748b]" title="Phần ổ đĩa dùng tạm khi RAM đầy (swap)">Bộ nhớ tạm trên ổ đĩa</dt>
                       <dd className="text-[#334155]">
                         {formatBytes(memory.swapUsedBytes)} / {formatBytes(memory.swapTotalBytes)} ({memory.swapUsedPercent}%)
                       </dd>
@@ -198,23 +198,23 @@ export default function AdminInfrastructurePage() {
             {/* Backend Runtime & Process */}
             <section className={panelClass} aria-label="Tiến trình Backend API">
               <PanelHead
-                title="Tiến trình API Backend (.NET)"
+                title="Dịch vụ API của hệ thống (.NET)"
                 description={`Chạy liên tục: ${formatDuration(data.runtime.processUptimeSeconds)}`}
                 action={<ToneBadge tone="info">{data.runtime.environment}</ToneBadge>}
               />
               <div className="p-4 space-y-3">
                 <dl className="grid grid-cols-[minmax(0,9rem)_1fr] gap-x-3 gap-y-2 text-[13px]">
-                  <dt className="text-[#64748b]">Runtime .NET</dt>
+                  <dt className="text-[#64748b]">Phiên bản .NET</dt>
                   <dd className="font-medium text-[#0f172a]">{data.runtime.frameworkVersion}</dd>
-                  <dt className="text-[#64748b]">Bộ nhớ Working Set</dt>
+                  <dt className="text-[#64748b]" title="Working set: RAM tiến trình API đang chiếm">RAM API đang dùng</dt>
                   <dd className="font-mono text-[#334155]">{formatBytes(data.runtime.workingSetBytes)}</dd>
-                  <dt className="text-[#64748b]">Bộ nhớ Managed (GC)</dt>
+                  <dt className="text-[#64748b]" title="Managed heap do bộ dọn rác (GC) quản lý">Bộ nhớ dữ liệu của API</dt>
                   <dd className="font-mono text-[#334155]">{formatBytes(data.runtime.gcTotalMemoryBytes)}</dd>
-                  <dt className="text-[#64748b]">Số luồng xử lý (Threads)</dt>
-                  <dd className="text-[#334155]">{data.runtime.threadCount} threads</dd>
-                  <dt className="text-[#64748b]">Provider Database</dt>
+                  <dt className="text-[#64748b]" title="Threads">Số luồng xử lý</dt>
+                  <dd className="text-[#334155]">{data.runtime.threadCount} luồng</dd>
+                  <dt className="text-[#64748b]">Loại cơ sở dữ liệu</dt>
                   <dd className="text-[#334155] font-mono text-xs">{data.database.provider}</dd>
-                  <dt className="text-[#64748b]">Độ trễ truy vấn DB</dt>
+                  <dt className="text-[#64748b]">Thời gian phản hồi cơ sở dữ liệu</dt>
                   <dd className="text-[#334155] font-semibold">
                     {data.database.latencyMs !== null ? `${data.database.latencyMs} ms` : 'Không phản hồi'}
                   </dd>
@@ -226,7 +226,7 @@ export default function AdminInfrastructurePage() {
           {/* Docker & Containers */}
           <section className={panelClass} aria-label="Docker và Container">
             <PanelHead
-              title="Docker & Container Stack"
+              title="Các dịch vụ chạy trên máy chủ (Docker)"
               description="Trạng thái các container phục vụ dịch vụ CampusTour trên máy chủ."
               action={
                 <ToneBadge tone={data.docker.status === 'ONLINE' ? 'ok' : 'muted'}>
@@ -254,7 +254,7 @@ export default function AdminInfrastructurePage() {
                   <table className="w-full min-w-[600px] text-left">
                     <thead className="border-b border-[#e2e8f0]">
                       <tr>
-                        <th className={thClass}>Tên Container</th>
+                        <th className={thClass}>Tên dịch vụ (container)</th>
                         <th className={thClass}>Trạng thái</th>
                         <th className={thClass}>Sức khỏe</th>
                         <th className={thClass}>Khởi động lại</th>

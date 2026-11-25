@@ -31,9 +31,9 @@ async function access(tourId: string, action: string, code?: string, signal?: Ab
 }
 const RECONNECT_WINDOW_EXPIRED = 'RECONNECT_WINDOW_EXPIRED'
 // Also said when the session simply expired (a tab asleep past its lease), so it names revocation only as a possibility.
-const SESSION_ENDED = 'Phiên xem đã kết thúc. Mã có thể đã bị thu hồi hoặc thay bằng mã mới; kiểm tra email mới nhất rồi nhập lại mã, hoặc liên hệ đại diện đoàn.'
+const SESSION_ENDED = 'Bạn đã bị thoát khỏi buổi xem. Có thể mã cũ đã được thay bằng mã mới: mở email mời mới nhất rồi nhập lại mã, hoặc hỏi thầy cô phụ trách đoàn.'
 const TOUR_ENDED = 'TOUR_ENDED'
-const IN_USE_FALLBACK = 'Lời mời đang được dùng trên trình duyệt khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
+const IN_USE_FALLBACK = 'Mã này đang được dùng trên một máy hoặc trình duyệt khác. Nếu đó không phải bạn, nhờ thầy cô phụ trách đoàn cấp mã mới.'
 /** A 409's code, message and `errors.fields` (retryAfterSeconds, tourState; docs/architecture.md §3.2.3). */
 function conflict(error: ApiError): { code?: string; message?: string; retryAfterSeconds?: number; tourState?: string } {
   try {
@@ -61,7 +61,7 @@ function conflictMessage(error: ApiError) {
   const { code, message, retryAfterSeconds, tourState } = conflict(error)
   if (code === TOUR_ENDED) return message ?? (tourState === 'CANCELLED' ? 'Buổi tham quan đã bị hủy.' : 'Buổi tham quan đã kết thúc.')
   if (code === RECONNECT_WINDOW_EXPIRED) {
-    const text = message ?? 'Trình duyệt này đã mất kết nối quá lâu nên phiên cũ đang bị giữ. Nhờ đại diện hoặc Staff cấp mã mới để vào ngay.'
+    const text = message ?? 'Máy này mất kết nối quá lâu nên tạm chưa vào lại được. Nhờ thầy cô phụ trách đoàn cấp mã mới để vào ngay.'
     // The backend sentence may already name the wait; never say it twice.
     if (!retryAfterSeconds || /thử lại sau/i.test(text)) return text
     return `${text} Thử lại sau khoảng ${Math.max(1, Math.ceil(retryAfterSeconds / 60))} phút.`
@@ -71,7 +71,7 @@ function conflictMessage(error: ApiError) {
 function accessError(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 400) return 'Mã truy cập không hợp lệ. Kiểm tra mã trong email rồi thử lại.'
-    if (error.status === 401) return 'Mã hoặc phiên đã hết hạn, bị thu hồi hoặc không thuộc Tour này.'
+    if (error.status === 401) return 'Mã đã hết hạn, đã được thay bằng mã mới, hoặc không dùng cho buổi tham quan này. Kiểm tra email mời mới nhất.'
     if (error.status === 403) return 'Nguồn truy cập không được phép. Liên hệ quản trị hệ thống để kiểm tra cấu hình truy cập.'
     if (error.status === 409) return conflictMessage(error)
     if (error.status === 429) return 'Bạn đã thử quá nhiều lần. Đợi một phút rồi thử lại.'
@@ -180,21 +180,27 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const talk = useStudentTalk(tourId, talking, snapshot?.tourState !== 'Running' || liveTab === 'talk')
   // ADR-0063: the fallback video's token, held while the Tour runs so the player switches as soon as the live picture is lost.
   const fallback = useStudentFallbackAccess(tourId, snapshot?.tourState === 'Running' && !!info?.hasFallbackVideo && !leave.isPending)
+  const offline = !!info && session.isError && !finished
+  const retry = () => void session.refetch()
+  // Shown above the page, not under it: on a phone the bottom of a live Tour is far below the video.
+  const offlineBanner = offline && <div role="alert" className="st-offline-banner">
+    <p><strong>Đang mất kết nối.</strong> Hình và thông tin trên trang có thể chưa cập nhật. Kiểm tra mạng rồi bấm Kết nối lại.</p>
+    {!left && !unchecked && !endedBy && <button type="button" className="st-session-retry" disabled={session.isFetching || join.isPending || leave.isPending} onClick={retry}>Kết nối lại</button>}
+  </div>
   const status = <>
     {leave.isError && <p role="alert" className="st-session-error">{accessError(leave.error)}</p>}
-    {info && session.isError && !finished && <p role="alert" className="st-session-error">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên có thể hết hạn trong thời gian mất kết nối; kết nối lại để kiểm tra.</p>}
-    {session.isError && !left && !unchecked && !endedBy && <button type="button" className="st-session-retry" disabled={session.isFetching || join.isPending || leave.isPending} onClick={() => void session.refetch()}>Kiểm tra lại phiên</button>}
+    {session.isError && !offline && !left && !unchecked && !endedBy && <button type="button" className="st-session-retry" disabled={session.isFetching || join.isPending || leave.isPending} onClick={retry}>Kết nối lại</button>}
   </>
 
   let body
   if (session.isPending && !left && !slow) {
-    body = <section className="st-invitation-card"><p aria-busy="true">Đang kiểm tra phiên…</p><div className="st-loading-lines" aria-hidden="true"><span /><span /><span /></div></section>
+    body = <section className="st-invitation-card"><p aria-busy="true">Đang kiểm tra lời mời…</p><div className="st-loading-lines" aria-hidden="true"><span /><span /><span /></div></section>
   } else if (!info || !snapshot) {
     body = <div className="st-ctn st-entry-layout">
       {/* Code entry comes first in the DOM, so a phone shows it before the photo; wide screens place it right. */}
       <section className="st-invitation-card st-entry-form" aria-labelledby="student-access-title">
         {unchecked && <div className="st-session-unchecked" role="status">
-          <p>Chưa kiểm tra được phiên</p>
+          <p>Chưa kiểm tra được lời mời</p>
           <button type="button" className="st-session-retry" disabled={join.isPending || leave.isPending} onClick={retryCheck}>Thử lại</button>
         </div>}
         <form onSubmit={event => { event.preventDefault(); join.mutate() }}>
@@ -283,9 +289,9 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
       liveLabel="Trực tiếp"
       portalLabel={info ? sessionLabel : undefined}
       onLeave={info ? () => finished ? exitSession() : leave.mutate() : undefined}
-      leaveLabel="Thoát phiên"
+      leaveLabel="Rời buổi xem"
       leaveDisabled={leave.isPending}
     />
-    <main id="student-main" tabIndex={-1} className="st-main">{body}</main>
+    <main id="student-main" tabIndex={-1} className="st-main">{offlineBanner}{body}</main>
   </div>
 }

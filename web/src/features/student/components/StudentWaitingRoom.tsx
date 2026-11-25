@@ -193,7 +193,7 @@ function Countdown({ scheduledAt }: { scheduledAt: string }) {
     <div className="st-x-ring" role="timer" aria-label={left == null ? `Giờ dự kiến ${scheduledAt}` : days ? `${label} tới giờ bắt đầu` : `Còn ${label} tới giờ bắt đầu`}>
       <span className="st-x-ring__c">
         <b>{label}</b>
-        <span>{left == null ? 'Giờ dự kiến' : left === 0 ? 'Chờ Staff bắt đầu' : days ? 'Tới giờ bắt đầu' : 'Bắt đầu sau'}</span>
+        <span>{left == null ? 'Giờ dự kiến' : left === 0 ? 'Sắp bắt đầu' : days ? 'Tới giờ bắt đầu' : 'Bắt đầu sau'}</span>
       </span>
     </div>
   )
