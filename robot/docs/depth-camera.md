@@ -8,6 +8,9 @@ Trạng thái 17/11/2026 (mục 0 là bản tóm tắt cho demo):
   - lượt 15:04 có 6 recovery do người đi sát robot.
 - Chế độ camera với RPP T = 4 s (mục 6) mới chỉ **kiểm offline**. Nghiệm thu theo mục 7.
 - Mặc định **tắt**: `robot nav` không bật camera nếu không có `--camera` hoặc `ENABLE_CAMERA=true`.
+- 25/11: lượt đầu trên robot ở chế độ camera T = 4 s (runtime `4a0c8e5045`). Robot dừng trước
+  hộp thấp 3 lần, rồi vẫn đâm vào hộp sau lần BT xoá local costmap cuối. Đã sửa ở mục 6.4: khi bật
+  camera, BT chỉ xoá local costmap **ngoài** hình vuông 2.2 m quanh robot. Bản sửa chưa chạy trên robot.
 
 ## 0. Tóm tắt cho demo: camera làm được gì, đã chứng minh tới đâu
 
@@ -17,7 +20,7 @@ Ba việc khác nhau, không được coi là một:
 |---|---|---|
 | 1. Camera **phát hiện** | Cloud 160×120, ~20–28 Hz, đúng TF (cao 0.273 m), thấy vật 0.08–0.73 m cao ở 0.6–1.1 m trước mũi | **Đã đo trên robot** (đứng yên và trong 2 lượt tuyến). Mục 3–4 |
 | 2. Nav2 **đánh dấu** | `depth_obstacle_layer` trong local costmap; lọc sàn, vật cao, vật quá gần | **Offline**: `costmap_check.py`. **Trên robot**: vết depth có thật trên tuyến, kể cả chân người. Mục 5 |
-| 3. Robot **phản ứng** | RPP dừng trước vật thấp và đứng chờ | **T = 1 s: không giữ được lệnh dừng** (đã chứng minh offline). **T = 4 s, chỉ khi bật camera**: dừng ở 0.6–0.7 m và đứng chờ, mới **offline**. Cần nghiệm thu mục 7 |
+| 3. Robot **phản ứng** | RPP dừng trước vật thấp và đứng chờ | **T = 1 s: không giữ được lệnh dừng** (đã chứng minh offline). **T = 4 s, chỉ khi bật camera**: robot 25/11 dừng 3 lần rồi vẫn đâm sau một lần BT xoá costmap (mục 6.4). Bản sửa (BT giữ vùng quanh robot) mới **offline**. Cần nghiệm thu mục 7 |
 
 **Giá trị cho đồ án:**
 - Robot dừng **và chờ** trước vật thấp hơn mặt quét LiDAR (0.47 m) khi vật còn cách ≥ 0.75 m:
@@ -32,8 +35,8 @@ Ba việc khác nhau, không được coi là một:
 | Làm | Không làm (và lý do) |
 |---|---|
 | Driver chỉ depth, 160×120 (CPU ~5 %) | Nhận diện người bằng RGB/AI: thêm stream RGB và một model trên J5005 vốn đã sát CPU; robot cũng không có hành vi nào cần tới nó ngoài việc dừng, mà việc đó đã có |
-| Mount CAD, TF tĩnh của driver | Đi vòng tránh vật thấp: phải đưa depth vào global costmap (đổi ADR-0001); để sau demo |
-| Chế độ camera: RPP T = 4 s | VoxelLayer: không đổi kết quả của T = 1, và để lại nhiều vết sót hơn |
+| Mount CAD, TF tĩnh của driver | — |
+| Chế độ camera: RPP T = 4 s, depth cả trong global costmap để đi vòng, BT xoá trừ vùng 2.2 m (mục 6.4) | VoxelLayer: không đổi kết quả của T = 1, và để lại nhiều vết sót hơn |
 | V3: không có hai nguồn lệnh | Collision Monitor: chặn robot xoay ở START trong cả hai lượt replay |
 | Xem cloud trên RViz qua SSH, bật khi cần | Định kỳ xoá costmap: làm quên vật đang trong vùng mù |
 | Công cụ nghiệm thu `stop_check.py` | Sonar: đang tắt, vị trí lắp chưa đo |
@@ -42,7 +45,8 @@ Ba việc khác nhau, không được coi là một:
 - Vật **xuất hiện** gần hơn khoảng 0.6–0.75 m (ví dụ ai đó đặt chân ngay trước mũi) thì camera
   không thấy: vùng mù của Astra nằm ngay mép trước robot.
 - Vật thấp hơn 8 cm không thấy.
-- Robot dừng chờ chứ không đi vòng. Vật không được dọn thì chặng báo lỗi sau vòng recovery.
+- Robot đi vòng vật thấp khi thấy nó đủ sớm (≤ 2 m) và còn chỗ (mục 6.4). Hết chỗ thì dừng chờ;
+  vật không được dọn thì chặng báo lỗi sau vòng recovery.
 - Vết depth của người đi ngang có thể còn lại, gây một lần dừng 1–2 s (mục 6.3).
 
 ## 1. Kiến trúc
@@ -61,7 +65,11 @@ Astra Pro depth (cao ~0.27 m) ─ /robot_01/camera/depth/points ► depth_obstac
 - **Chỉ khi bật camera**, `navigation.launch.py` đưa cho Nav2 một bản sao của file params
   (`RewrittenYaml`) với đúng một giá trị khác:
   `FollowPath.max_allowed_time_to_collision_up_to_carrot` 1.0 → **4.0** (mục 6).
-  Camera tắt thì Nav2 dùng nguyên file.
+  Bản sao đó cho hai lớp depth xoá từ 0.65 m (mục 6.4), chép lớp depth vào global costmap
+  (đánh dấu tới 2 m), và trỏ `bt_navigator` tới bản sao của hai cây BT đang cấu hình. Trong bản sao, mỗi
+  lệnh xoá **toàn bộ** local costmap được đổi thành `ClearCostmapExceptRegion` 2.2 m (mục 6.4).
+  Cây BT sinh ra nằm trong `$ROS_LOG_DIR/camera_bt_*/` của phiên và được in trong log launch.
+  Camera tắt thì Nav2 dùng nguyên file params và nguyên cây BT.
 - TF:
   - `base_link → camera_link` là static, do `navigation.launch.py` publish.
   - `camera_link → camera_depth_frame → camera_depth_optical_frame` do driver publish.
@@ -148,8 +156,8 @@ Lúc làm việc này robot đang chạy `nav --fleet`, nên không đo tải n�
 |---|---|
 | `robot/scripts/tests/test_robot_launcher.py` | bật/tắt theo lần chạy và profile; `--camera` và `--no-camera` loại trừ nhau; chỉ `nav` có camera; 3 trường hợp hỏng đều về LiDAR-only kèm WARNING |
 | `robot/ros2_ws/src/robot_navigation/test/test_camera_launch_scope.py` | giá trị mặc định: mount CAD `base_link → camera_link`, depth 160×120@30, `use_uvc_camera` false; camera tắt thì không có node camera và TF mount |
-| `robot/ros2_ws/src/robot_navigation/test/test_camera_nav2_params.py` | camera tắt: file params dùng nguyên vẹn; camera bật: đúng một khoá đổi (T 1.0 → 4.0) với V2, V3 và `nav2_params.yaml`, chuỗi `$(var …)` và `$(find-pkg-share …)` giữ nguyên; file thiếu khoá thì dùng nguyên và ghi log |
-| `robot/tools/depth_camera/stop_sim.py` | vòng kín dừng trước hộp thấp, T = 1 so với T = 4 (mục 6.2) |
+| `robot/ros2_ws/src/robot_navigation/test/test_camera_nav2_params.py` | camera tắt: file params dùng nguyên vẹn; camera bật: đúng ba khoá đổi với V2, V3 và `nav2_params.yaml` (T 1.0 → 4.0 và hai cây BT); cây BT sinh ra giống hệt cây gốc, chỉ khác các lệnh xoá local costmap; mọi cây trong `behavior_trees/` đều có lệnh xoá được đổi; chuỗi `$(var …)` giữ nguyên; file thiếu khoá thì dùng nguyên và ghi log |
+| `robot/tools/depth_camera/stop_sim.py` | vòng kín dừng trước hộp thấp, T = 1 so với T = 4 (mục 6.2); `--clear except` so kiểu xoá mới với kiểu cũ (mục 6.4) |
 | `robot/tools/depth_camera/stop_check.py` | công cụ nghiệm thu: đọc bag thật, in trễ và khoảng cách dừng (mục 7) |
 | `robot/tools/depth_camera/costmap_check.py` | xem bảng dưới |
 
@@ -256,6 +264,67 @@ Offline, với `stop_sim.py` (costmap Nav2 thật; controller phát 0 khi báo v
 - Collision Monitor: chặn robot xoay ở START cả hai lượt chạy.
 - STVL: phải cài APT.
 
+### 6.4 Chế độ camera: đi vòng vật thấp, và gỡ kẹt không làm quên vật (25/11)
+
+**Sự cố trên robot (đã chứng minh, log `runs/20261125_112802_nav/`, không có bag).** Robot chạy
+`robot nav --camera` (runtime `4a0c8e5045`, T = 4 s). Hộp 15–20 cm nằm giữa đường tới goal A:
+- +8.1 s: RPP báo "collision ahead", robot dừng; sau 0.3 s (`failure_tolerance`) BT xoá **toàn bộ**
+  local costmap (+8.4 s, +8.7 s): vết hộp mất, camera vẽ lại vì hộp còn ≥ 0.6 m.
+- +9.6 s: dừng lại, xoá, rồi Spin 90° (+10.2 → 14.5 s): camera quay đi chỗ khác.
+- +22.9 s: quay về hướng cũ, gần hộp hơn; dừng lần 3, xoá (+23.1 s). Hộp đã trong vùng mù, không
+  ai vẽ lại: robot đi tiếp và **đâm hộp**; goal vẫn SUCCEEDED (+48.3 s).
+- Humble không cho giữ riêng một layer khi xoá (`clearable_layers` có từ bản sau Humble).
+
+**Sửa, chỉ khi bật camera** (ADR-0068 đề xuất; `navigation.launch.py` `camera_params()`):
+1. Lớp depth được chép vào **global costmap**, đánh dấu tới 2.0 m. Planner (1 Hz) thấy hộp từ xa và
+   **vạch đường vòng** khi còn chỗ. Hết chỗ thì vẫn vạch qua hộp, RPP dừng trước hộp và robot chờ.
+2. Mọi `ClearEntireCostmap` trong hai cây BT (local và global) thành `ClearCostmapExceptRegion`
+   2.2 m: chỉ xoá **ngoài** hình vuông 2.2 m quanh tâm robot (1.1 m mỗi phía = camera 0.394 m +
+   vùng mù 0.60 m + dư). Vết camera không còn nhìn thấy được giữ lại; vết xa vẫn xoá, và nếu thật
+   thì camera vẽ lại.
+3. Cả hai lớp depth chỉ **xoá** từ 0.65 m, trong khi vẫn **đánh dấu** từ 0.60 m. Chênh nhau một ô
+   5 cm, nên tia tới tường phía sau không xoá được vết của hộp vừa trượt vào vùng mù. Robot dừng
+   như thường lệ ở ~0.7 m, nên khi hộp được dọn thì tia vẫn xoá được vết.
+
+**Đổi lại (phải đo trên robot):**
+- Vết không ai xoá được ở lại lâu hơn. Ví dụ hộp được dọn khi đã nằm trong vùng mù, hộp được dọn
+  mà phía sau không có gì cho tia depth chạm vào (kính, khoảng trống), hay vết người đi sát hông
+  ngoài góc nhìn 58°. Khi đó robot chờ hoặc goal ABORTED thay vì đi tiếp: **đổi va chạm lấy dừng oan**.
+- RPP chiếu footprint cả khi xoay, nên một vết cũ sát hông có thể chặn lệnh xoay.
+- Vết depth trong global costmap không trôi ra khỏi cửa sổ như local. Nhiễu sàn hay người đi ngang
+  có thể để lại vết dọc tuyến; planner đi vòng vết đó, và khi planner hỏng thì BT xoá mọi vết ngoài
+  hình vuông.
+
+**Mô phỏng vòng kín** (`robot/tools/depth_camera/avoid_sim.sh`: Nav2 V2 thật, `fakebot2` trên
+`map2`, hành lang rộng ~2.9 m, `depthsim.py` vẽ hộp 30 × 30 × 15 cm mà LiDAR không thấy, cách START
+3.5 m; goal (6.0, 0.75)):
+
+| Kịch bản | Chế độ camera cũ (chỉ T = 4) | **Chế độ camera mới** |
+|---|---|---|
+| Hành lang còn chỗ | Dừng ở 0.66 → 0.53 → 0.41 → 0.30 m rồi **đâm** (khoảng cách 0). Goal vẫn SUCCEEDED (60 s), giống robot 11:28. 32 báo va chạm, 2 Spin, 9 lần xoá | **Đi vòng**, không dừng, SUCCEEDED 37 s, cách hộp gần nhất 0.19 m. 0 recovery |
+| Chắn kín, dọn hộp sau khi robot đứng yên 10 s | Nhích 0.65 → 0.33 m, ABORTED 48 s (hộp được dọn quá muộn) | Dừng cách hộp 1.5 m vì planner không có đường, rồi chờ. Dọn hộp thì đi tiếp, SUCCEEDED 53 s |
+| Chắn kín, hộp để nguyên | (chỉ có với mô hình cũ: nhích tới 0.24 m, ABORTED 47 s) | Dừng ở 1.55 → 1.03 → 0.79 → 0.61 m, **không chạm**, ABORTED 53 s |
+
+Trong kịch bản cuối, robot nhích dần vì mỗi lần planner hỏng, BT xoá vết hộp ở global costmap
+khi hộp còn ngoài hình vuông. Planner lại vạch qua hộp, và robot tiến tới khi camera vẽ lại.
+Robot không nhích thêm khi hộp đã vào hình vuông.
+
+`stop_sim.py` (costmap Humble thật, hộp xuất hiện muộn khi robot đang chạy, sau đó 8 lần BT xoá):
+
+| Hộp xuất hiện khi còn cách | Trước (xoá toàn bộ, depth xoá từ 0.60 m) | Chỉ xoá trừ vùng | Chỉ depth xoá từ 0.65 m | **Cả hai (bản mới)** |
+|---|---|---|---|---|
+| Có sẵn, hoặc 0.8 m | Dừng 0.67–0.73 m, nhích 0 | như trước | như trước | Dừng 0.67–0.72 m, nhích 0 |
+| 0.7 m (trễ 0.3 s) | — | — | **Nhích 0.20 m, mất vết** | Dừng 0.55 m, nhích 0, vẫn chặn |
+| 0.65 m | **Nhích 0.22 m, mất vết** | **Nhích 0.22 m, mất vết** | **Nhích 0.20 m, mất vết** | Dừng 0.51–0.53 m, nhích 0, vẫn chặn |
+| 0.5 m | Đâm | Đâm | Đâm | Đâm (xuất hiện ngay trong vùng mù: giới hạn vật lý) |
+
+- Ở 0.65 m, vết mất **trước** cả lần BT xoá đầu tiên. Hộp trượt vào dải 0.55–0.60 m nên không còn
+  được đánh dấu. Tia tới tường phía sau đi qua ô của nó ở mép 0.6 m và xoá vết. Vì vậy cần cả
+  hai thay đổi.
+- Mô hình đã sửa ngày 25/11: Astra cắt 0.6 m theo **độ sâu dọc trục**. Trước đó `stop_sim.py`
+  cắt theo khoảng cách 3D, nên vẫn thấy mặt trên hộp thấp ở trong vùng mù. Bảng 6.2 (14/11) đo
+  với mô hình cũ, nên lạc quan hơn thực tế.
+
 ## 7. Nghiệm thu trên robot
 
 Mốc so sánh là lượt **15:43** (`route_154345`): 165 s, 0 recovery. Mỗi bước chỉ đổi một thứ.
@@ -275,14 +344,17 @@ Mốc so sánh là lượt **15:43** (`route_154345`): 165 s, 0 recovery. Mỗi 
    - Vị trí lắp: mặt trước của thùng cao cách 1 m trùng với scan trong ±3 cm; cạnh trên hộp
      0.30 m ở z = 0.30 ± 0.02.
    - Sàn trống 2 phút: không có vết depth.
-   - Log có dòng `camera mode: RPP max_allowed_time_to_collision_up_to_carrot 4.0`.
+   - Log có dòng `camera mode: RPP max_allowed_time_to_collision_up_to_carrot 4.0; depth also in the
+     global costmap ...; BT clears keep a 2.2 m square ...` kèm thư mục `camera_nav2_*`.
    - RViz qua SSH với `-e camera/depth/points`: cloud của hộp hiện ra, scan LiDAR thì không có;
      TF camera không nhấp nháy.
    - Rút USB: Nav2 vẫn chạy.
 3. **Hộp xốp** (cần đồng ý; có người cầm E-stop; hộp mềm cao khoảng 12 cm, đặt giữa đường thẳng,
    cách robot ≥ 2 m). Cho robot chạy tới một goal phía sau hộp, camera bật.
-   - Đạt: robot dừng cách hộp ≥ 0.6 m và **đứng chờ**. Dọn hộp thì robot đi tiếp trong vòng vài
-     giây. Lặp lại 3 lần.
+   - Hành lang còn chỗ: đạt khi robot **đi vòng** hộp, không chạm, goal SUCCEEDED, không recovery.
+   - Chắn kín (hộp giữa hai vật LiDAR thấy): đạt khi robot dừng cách hộp ≥ 0.6 m và **đứng chờ**,
+     không nhích vào hộp sau các lần BT xoá. Dọn hộp thì robot đi tiếp cùng goal. Lặp lại 3 lần.
+   - Ghi bag (`robot/tools/ops/record_session.sh`) trước khi gửi goal.
    - Đo bằng `robot/tools/depth_camera/stop_check.py <bag>`. Công cụ in lúc có vết, lúc lệnh về 0,
      lúc robot đứng yên, khoảng cách còn lại và thời gian đứng chờ. Có `BELOW 0.6 m` là trượt.
    - Không đạt: trở về camera tắt cho demo.

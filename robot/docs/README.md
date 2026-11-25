@@ -41,7 +41,9 @@ permission to execute it.
   orphan goal never drives alongside a recovery Spin (offline proof, hardware acceptance).
 - [Depth camera](depth-camera.md) — Astra Pro depth in the local costmap beside the LiDAR
   (`robot nav --camera`, off by default): CAD mount, lean driver, measured cost, offline costmap
-  check, why it does not stop the robot for a low obstacle ahead, hardware test plan.
+  check, why it does not stop the robot for a low obstacle ahead, hardware test plan; camera mode
+  also in the global costmap with recoveries that keep the robot's surroundings (ADR-0068).
+- [Perception + navigation](perception-navigation.md) — LiDAR, depth and sonar as one AMR: measured coverage, weak points, layered proposal, rollout and integration tests (25/11/2026)
 - [Runtime deploy and rollback](runtime-deploy.md) — how the MiniPC runtime
   differs from source today, staging an immutable overlay from one commit, and
   rolling back by sourcing the previous overlay.
