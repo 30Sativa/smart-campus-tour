@@ -149,6 +149,13 @@ null for the start, `toStopId` null for the end).
 - Next and auto-advance on a voting route with only locked POIs left: 409 `ALL_REMAINING_STOPS_LOCKED`. Skip on a
   voting route while an unlocked POI remains: 409 `SKIP_NOT_ALLOWED`.
 - Live updates use the existing paths (the Viewer page and the Staff page poll as today); no new transport.
+- **Addendum 25/11/2026 (owner's request: Staff sees votes without delay).** Each committed vote is pushed on the
+  existing `/hubs/operations` hub as `BallotUpdated` with the ballot (no `myVote`), `leadingStopId`, `votesCast`,
+  `viewers { accepted, joined }` and `at`, sent at once and folded per Tour only while a send is in flight
+  (`TourBallotBroadcaster`). The vote handler queues the signal and `TourBallotNotificationBehavior` hands it on only
+  after the request committed. The Staff vote panel shows the turnout, each candidate's share and whether it is live.
+  `GET /api/staff/manage/tours/{id}` gains `viewers` while a ballot shows. The Viewer page reads the ballot every 2 s
+  while it is open (5 s otherwise); Viewers get no push channel.
 
 ## Consequences
 

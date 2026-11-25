@@ -17,14 +17,15 @@ import { actionGate, tourSituation, type ConsoleAction, type Situation } from '.
 import { AutoAdvanceToggle, ConsoleActionButton, EndEarlyAction } from '../../features/staff/operations/TourActions'
 import { TourStepper } from '../../features/staff/operations/TourStepper'
 import { VotePanel } from '../../features/staff/operations/VotePanel'
+import { voteOpen } from '../../features/staff/operations/ballot-live'
 import { useAuthStore } from '../../stores/auth-store'
 
 /**
  * Live operations of one Tour: while it runs, everything the Operator needs is
  * on this page. The main column holds the camera, then what is happening and
- * the one suggested step; the side column the camera head, the map, the robot
- * and End Early. Below 1024px the page reads in DOM order: camera, situation,
- * head, End Early, map, robot, route. Without an id it opens the running Tour,
+ * the one suggested step; the side column the Viewers' vote, the camera head,
+ * the map, the robot and End Early. Below 1024px the page reads in DOM order:
+ * camera, situation, vote, head, End Early, map, robot, route. Without an id it opens the running Tour,
  * the one needing help first.
  */
 export default function LiveOperationsPage() {
@@ -98,12 +99,13 @@ function TourConsole({ tourId }: { tourId: string }) {
             <div className="p-3"><LiveCamera robotCode={reservation?.robotCode} /></div>
           </section>}
           <SituationCard detail={detail} isOperator={isOperator} stale={stale} now={now} />
-          {detail.routeRevision?.viewerChoosesNextStop && <section className={panelClass} aria-label="Viewer chọn điểm tiếp theo">
+        </div>
+        <aside className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+          {/* The vote heads the side column, beside the camera, so the Operator reads it without scrolling. */}
+          {detail.routeRevision?.viewerChoosesNextStop && <section className={`${panelClass} ${voteOpen(detail) ? 'border-[#93c5fd] ring-2 ring-[#dbeafe]' : ''}`} aria-label="Viewer chọn điểm tiếp theo">
             <PanelHead title="Viewer chọn điểm tiếp theo" />
             <VotePanel detail={detail} isOperator={isOperator} now={now} />
           </section>}
-        </div>
-        <aside className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           {running && <section className={`${panelClass} lg:order-1`} aria-label="Đầu camera">
             <PanelHead title="Đầu camera" />
             <div className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} /></div>
