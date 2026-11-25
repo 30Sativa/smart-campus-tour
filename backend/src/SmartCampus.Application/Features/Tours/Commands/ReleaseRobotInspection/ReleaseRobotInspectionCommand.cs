@@ -12,7 +12,7 @@ namespace SmartCampus.Application.Features.Tours.Commands.ReleaseRobotInspection
 
 public sealed record ReleaseRobotInspectionRequest(Guid RequestId, string ExpectedRowVersion, string Reason);
 public sealed record ReleaseRobotInspectionCommand(Guid RobotId, Guid Actor, ReleaseRobotInspectionRequest Request)
-    : ITourMutationCommand<ReleaseRobotInspectionResult>;
+    : ITourMutationCommand<ReleaseRobotInspectionResult>, SmartCampus.Application.Features.StaffNotifications.IStaffNoticeCommand;
 public sealed record ReleaseRobotInspectionResult(Guid RobotId);
 
 public sealed class ReleaseRobotInspectionCommandValidator : AbstractValidator<ReleaseRobotInspectionCommand>

@@ -8,8 +8,9 @@ import type { StartConfirmation, TourDetails, TourExecutionSummary, TourListQuer
 /**
  * Server state for running Tours. Everything reads `/api/staff/manage/tours`
  * and shares the Tour management cache keys, so a write anywhere refreshes both
- * the preparation and the operations screens. There is no Tour push event yet
- * (`TourUpdated` is planned), so a Tour someone may act on is re-read often.
+ * the preparation and the operations screens. `TourUpdated` (no payload) makes
+ * the shell re-read them at once, but it may be coalesced or lost, so a Tour
+ * someone may act on is still re-read often.
  */
 const LIVE_TOUR_MS = 3_000
 const LIST_MS = 15_000

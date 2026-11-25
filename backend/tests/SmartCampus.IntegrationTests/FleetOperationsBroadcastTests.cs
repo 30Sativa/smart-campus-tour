@@ -190,6 +190,34 @@ public sealed class FleetOperationsBroadcastTests
         }
     }
 
+    [Fact]
+    public async Task StaffNoticeChanges_AreSentAsOneStaffNotificationsUpdatedWithoutPayload()
+    {
+        var sends = new List<(string Method, int Args)>();
+        var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var proxy = new TestClientProxy((method, args, _) =>
+        {
+            lock (sends) sends.Add((method, args.Length));
+            sent.TrySetResult();
+            return Task.CompletedTask;
+        });
+        var broadcaster = new StaffNoticeBroadcaster(new TestHubContext(proxy), NullLogger<StaffNoticeBroadcaster>.Instance);
+        using var stopping = new CancellationTokenSource();
+        // Three outcomes recorded before the sender runs are one pending signal.
+        for (var i = 0; i < 3; i++) broadcaster.StaffNoticesChanged();
+        await broadcaster.StartAsync(stopping.Token);
+        try
+        {
+            await sent.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            await Task.Delay(StaffNoticeBroadcaster.MinimumGap + TimeSpan.FromMilliseconds(300));
+            lock (sends) Assert.Equal([(StaffNoticeBroadcaster.EventName, 0)], sends);
+        }
+        finally
+        {
+            await broadcaster.StopAsync(CancellationToken.None);
+        }
+    }
+
     private static FleetOperationsBroadcaster CreateBroadcaster(
         IClientProxy client,
         IFleetTelemetryStore store,

@@ -27,6 +27,10 @@ public static class FleetSyncExtensions
         services.AddSingleton<TourBallotBroadcaster>();
         services.AddSingleton<SmartCampus.Application.Features.Tours.ITourBallotNotifier>(provider => provider.GetRequiredService<TourBallotBroadcaster>());
         services.AddHostedService(provider => provider.GetRequiredService<TourBallotBroadcaster>());
+        // Replaces the Application default: a Technical Staff outcome tells the Staff bells to re-read (StaffNotificationsUpdated).
+        services.AddSingleton<StaffNoticeBroadcaster>();
+        services.AddSingleton<SmartCampus.Application.Features.StaffNotifications.IStaffNoticeNotifier>(provider => provider.GetRequiredService<StaffNoticeBroadcaster>());
+        services.AddHostedService(provider => provider.GetRequiredService<StaffNoticeBroadcaster>());
         services.AddAuthorization(options => options.AddPolicy(
             FleetOperationsAuthorization.StaffPolicy,
             policy => policy.RequireRole(ApplicationRoles.Staff)));

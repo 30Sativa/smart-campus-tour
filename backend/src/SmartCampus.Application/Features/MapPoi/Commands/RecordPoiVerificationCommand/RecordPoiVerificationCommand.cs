@@ -9,7 +9,7 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Application.Features.MapPoi;
 
 public sealed record RecordPoiVerificationCommand(Guid ActorUserId, Guid ProposalId, int RevisionNumber, VerifyPoiProposalRequest Request)
-    : IPoiMutationCommand<PoiVerificationView>;
+    : IPoiMutationCommand<PoiVerificationView>, SmartCampus.Application.Features.StaffNotifications.IStaffNoticeCommand;
 
 public sealed class RecordPoiVerificationCommandValidator : AbstractValidator<RecordPoiVerificationCommand>
 {

@@ -11,7 +11,7 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Application.Features.MapPoi;
 
 public sealed record ImportPoiFilesCommand(Guid ActorUserId, ImportPoiFilesRequest Request)
-    : IPoiMutationCommand<PoiImportResult>;
+    : IPoiMutationCommand<PoiImportResult>, SmartCampus.Application.Features.StaffNotifications.IStaffNoticeCommand;
 
 public sealed class ImportPoiFilesCommandValidator : AbstractValidator<ImportPoiFilesCommand>
 {
