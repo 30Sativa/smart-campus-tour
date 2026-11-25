@@ -10,16 +10,31 @@ Staff lease has not expired.
 | `GET /api/staff/manage/robots/{robotCode}/headset` | Staff: the last headset report (battery, adb connection, video), ADR-0056. |
 | `POST /api/staff/manage/robots/{robotCode}/headset/commands` | Staff: `{action: WAKE\|SLEEP}`, handed to the robot once with its next poll as `headsetCommand` (ADR-0056 addendum). |
 
+## The running Tour for the headset MC
+
+While a Tour is `RUNNING` on the robot, the poll answer also carries `tour`:
+
+```json
+"tour": { "tourId": "…", "step": "OBSERVING", "isHeld": false, "visitId": "…",
+          "stopId": "…", "stopOrder": 2, "stopName": "Thư viện", "narrationText": "…" }
+```
+
+`stopId` is the stop the Tour is at (`OBSERVING`) or driving to (`NAVIGATING`), the current stop or else the last one
+reached. `narrationText` is the same snapshot the Student page reads (`RouteRevisionStops.NarrationText`, the narration
+approved when the route revision was saved, ADR-0060; an older Tour reads its POI). `visitId` changes on every arrival.
+`quest-stream` turns this into the `arrived` / `departed` events of the headset app (`robot/quest-stream/README.md`,
+"Nhân vật MC trong kính"). No Tour: `tour` is null and nothing extra is read.
+
 ## Code
 
 | Layer | Files |
 |---|---|
-| Application | `Features/FleetCamera/` (settings, `CameraDemandRules`, `PollCameraDemand`, `LeaseCamera`, `GetRobotHeadset`, `SendHeadsetCommand`), `Common/Abstractions/FleetCamera/ICameraDemandStore.cs`, `Common/Abstractions/Persistence/IRobotCameraReader.cs` |
-| Infrastructure | `Integrations/FleetCamera/InMemoryCameraDemandStore.cs` (singleton), `Persistence/Repositories/EfRobotCameraReader.cs` |
+| Application | `Features/FleetCamera/` (settings, `CameraDemandRules`, `PollCameraDemand`, `LeaseCamera`, `GetRobotHeadset`, `SendHeadsetCommand`), `Common/Abstractions/FleetCamera/ICameraDemandStore.cs`, `Common/Abstractions/Persistence/IRobotCameraReader.cs`, `IQuestTourStopReader.cs` |
+| Infrastructure | `Integrations/FleetCamera/InMemoryCameraDemandStore.cs` (singleton), `Persistence/Repositories/EfRobotCameraReader.cs`, `EfQuestTourStopReader.cs` |
 | Api | `Controllers/FleetCameraController.cs`, `Controllers/StaffRobotCameraController.cs` |
 
 All requests are plain `IRequest`, not `ICommand`: no `UnitOfWorkBehavior`, no SQL write. Each costs one unlocked
-`Robots`/`Tours` read.
+`Robots`/`Tours` read; a poll during a running Tour adds two more (the Tour, then its stop).
 
 ## Configuration
 

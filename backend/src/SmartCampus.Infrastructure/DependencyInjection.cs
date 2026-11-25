@@ -84,6 +84,8 @@ public static class DependencyInjection
             configuration.GetValue<int?>("FleetCamera:RobotListeningWithinSeconds") ?? 20));
         services.AddSingleton<ICameraDemandStore, InMemoryCameraDemandStore>();
         services.AddScoped<IRobotCameraReader, EfRobotCameraReader>();
+        // The camera poll also tells the headset MC where the running Tour is and what to say there.
+        services.AddScoped<IQuestTourStopReader, EfQuestTourStopReader>();
         // ADR-0055: reading the public relay needs a backend token; unset QuestRelay hands out none.
         services.AddSingleton(new StreamRelaySettings(configuration["QuestRelay:WhepUrl"],
             configuration["QuestRelay:RobotCode"], configuration["QuestRelay:Key"],

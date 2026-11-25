@@ -371,6 +371,51 @@ xem ở `curl -s localhost:8080/device` (`screen`, `lastCommand`); log có `HEAD
 
 Phía người xem (web): nút tạm dừng trên khung hình, và tự ngắt khi tab bị ẩn; mở lại tab là nối lại.
 
+## Nhân vật MC trong kính: tới POI là thuyết minh
+
+App Unity trên kính (`Animation3D`, script `RobotTourClient` + `PoiNarrator`) chỉ cho nhân vật nói và làm cử chỉ khi
+nhận được sự kiện "robot đã tới điểm". `quest-stream` phát các sự kiện đó (file `tour_bridge.py`):
+
+```
+backend ──(trả lời camera poll mỗi 5 s: tour {step, visitId, stopId, stopName, narrationText})──▶ quest-stream
+quest-stream ──GET /quest/events (HTTPS :8890, long-poll)──▶ kính: arrived → MC nói lời thuyết minh + cử chỉ
+```
+
+- `arrived`: Tour sang `OBSERVING` ở một lượt dừng mới (không bị giữ). Kèm `name` và `narration`: **đúng lời thuyết minh
+  trang học sinh đang đọc** (bản đã duyệt lúc lưu phiên bản tuyến, ADR-0060).
+- `departed`: robot bắt đầu chạy tới điểm kế tiếp (hoặc về điểm kết thúc): MC mời mọi người đi theo.
+- `cancelled`: Tour kết thúc / bị huỷ: MC ngừng nói.
+
+Cần `QUEST_CONTROL_URL=auto` (sự kiện đi kèm camera poll). Trong `quest-stream.env`:
+
+```bash
+QUEST_BRIDGE_PORT=8890
+QUEST_BRIDGE_TOKEN=<chuỗi bí mật, điền giống ô Token của RobotTourClient>
+# để trống CERT/KEY = dùng chứng chỉ MediaMTX (MTX_WEBRTCSERVERCERT/KEY trong mediamtx.env),
+# trùng vân tay SHA-256 đã điền ở QuestIntercom / RobotTourClient
+```
+
+Rồi `sudo ufw allow 8890/tcp` (install-services.sh đã thêm) và `sudo systemctl restart quest-stream`. Khi kính cắm USB,
+quest-stream tự chạy `adb reverse tcp:8890 tcp:8890` để app nói chuyện qua dây (`https://127.0.0.1:8890`).
+
+Kiểm tra trên NUC:
+
+```bash
+curl -s localhost:8080/status | python3 -m json.tool | grep -A8 tourBridge   # state, currentStop, lastEvent
+curl -sk -H "Authorization: Bearer <token>" "https://127.0.0.1:8890/quest/events?after=-1&wait=0"
+grep TOUR_BRIDGE logs/quest-stream.log    # TOUR_BRIDGE arrived at ... / departed towards ...
+```
+
+| Thấy gì | Làm gì |
+|---|---|
+| `TOUR_BRIDGE off: it needs QUEST_CONTROL_URL` | đặt `QUEST_CONTROL_URL=auto` (mục "Chỉ bật camera khi cần") |
+| `tourBridge.state` luôn `idle` khi Tour đang chạy | backend chưa bản mới (câu trả lời poll chưa có `tour`) |
+| Unity log `Không tới được robot ... (401)` | `QUEST_BRIDGE_TOKEN` khác ô Token trong Unity |
+| Unity log lỗi chứng chỉ | vân tay `Certificate Sha256` trong Unity không khớp chứng chỉ quest-stream đang dùng |
+| `TOUR_BRIDGE plain HTTP` | chưa có chứng chỉ: điền `QUEST_BRIDGE_CERT/KEY` |
+
+Độ trễ từ lúc robot tới điểm đến lúc MC nói: tối đa một chu kỳ poll (5 s).
+
 ## Phát ra Internet (trang deploy https://www.fptcampustour.cloud)
 
 Trình duyệt ngoài Internet không tới được NUC trong LAN, và trang HTTPS không gọi

@@ -26,6 +26,7 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
     TOUR_CAPACITY_CHANGED: 'Đổi sức chứa Tour', TOUR_OPERATOR_CHANGED: 'Đổi người vận hành Tour',
     TOUR_READY: 'Chốt Tour', TOUR_REOPENED: 'Mở lại Tour để sửa', TOUR_CANCELLED: 'Hủy Tour',
     TOUR_REGISTRATION_CANCELLED: 'Hủy đăng ký do hủy Tour', TOUR_INVITATION_REVOKED: 'Thu hồi lời mời do hủy Tour',
+    TOUR_NARRATION_REFRESHED: 'Cập nhật lời thuyết minh cho Tour',
   } },
   { label: 'Vận hành Tour', actions: {
     TOUR_STARTED: 'Bắt đầu Tour', TOUR_NEXT: 'Sang điểm dừng tiếp theo', TOUR_LEG_RETRIED: 'Thử lại chặng di chuyển',

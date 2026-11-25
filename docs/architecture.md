@@ -297,7 +297,7 @@ Sensor hierarchy is settled by
 RPLiDAR A3M1        -> /scan                 -> local + global costmap, AMCL, SLAM
 STM32 STEP counts   -> /wheel/odom -\
 BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
-Astra Pro (depth)   -> /camera/depth/points  -> LOCAL costmap ONLY
+Astra Pro (depth)   -> /camera/depth/points  -> LOCAL costmap; camera mode also global (ADR-0068)
 4x SR04T sonar      -> /ultrasonic/sonarN/range -> LOCAL costmap ONLY
 Astra Pro (RGB)     -> person detection      -> Nav2 speed limit
                        (`robot_perception`, not the AI tour guide)
@@ -358,7 +358,10 @@ not a local trajectory planner and does not search for detours. So: an obstacle
 the LiDAR sees reaches the global costmap and the planner can route around it;
 an obstacle only the depth camera or sonar sees reaches the local costmap only,
 and the baseline requirement is that the robot **detects it and stops safely** -
-an automatic detour is not guaranteed and is not claimed.
+an automatic detour is not guaranteed and is not claimed. Camera mode
+(`robot nav --camera`, ADR-0068, proposed) also copies the depth layer into the
+global costmap, so the planner can route around a low obstacle seen up to 2 m
+ahead, and its recoveries keep a 2.2 m square around the robot.
 
 The four SR04T sonars are mounted diagonally at the chassis corners with poses
 that are schematic rather than measured. They are not 360-degree coverage, they
@@ -2041,6 +2044,8 @@ Public contract added by this batch. Held seats are the Tour's active PENDING an
 | `POST /api/staff/manage/tours` | `configuration.capacity` is required, 1..`Tours:MaxCapacity` (default 20, ceiling 40 by `CK_Tours_Capacity`). |
 | `POST /api/staff/manage/tours/{id}/capacity` | Staff. `{requestId, expectedRowVersion, capacity}`. SCHEDULED/READY before Start. 409 `CAPACITY_BELOW_HELD`, 409 `TOUR_LOCKED`. Audit `TOUR_CAPACITY_CHANGED`. |
 | `POST /api/staff/manage/tours/{id}/operator` | Staff. `{requestId, expectedRowVersion, operatorUserId}`. SCHEDULED/READY before Start; READY stays READY. 409 `TOUR_LOCKED`, 409 `ROUTE_VERSION_REQUIRED` for a legacy Tour. Audit `TOUR_OPERATOR_CHANGED`. |
+| `GET /api/staff/manage/tours/{id}/narration` | Staff. Each stop's narration in the Tour and its POI's newest approved narration; `canRefresh` or `blockedCode`/`blockedReason` (ADR-0067). |
+| `POST /api/staff/manage/tours/{id}/narration/refresh` | Staff. `{requestId, expectedRowVersion}`. SCHEDULED/READY before Start. Moves the Tour to a revision of its route with the same path and the newest approved narration (saved and submitted when needed, same applied test run). 409 `TOUR_NARRATION_UP_TO_DATE`, `TOUR_ROUTE_CHANGED`, `TOUR_LOCKED`, `ROUTE_VERSION_REQUIRED`. Audit `TOUR_NARRATION_REFRESHED` (ADR-0067). |
 | Tour reads (`GET /api/staff/manage/tours`, `/{id}`) | `tour.capacity`, `tour.heldSeats`, `tour.registrationClosesAt`; `permissions.canChangeCapacity`, `canChangeOperator`, `maxCapacity`. `/slots` adds `maxCapacity`. |
 | Representative create, add rows, replace roster | 409 `TOUR_CAPACITY_EXCEEDED`, `errors.fields.remainingSeats`. A write that adds no seat is never refused. |
 | `GET /api/representative/tours` | Only SCHEDULED Tours before the 48-hour close. Tour responses add `capacity` and `remainingSeats`. The detail stays reachable for a Tour the Representative registered for. |

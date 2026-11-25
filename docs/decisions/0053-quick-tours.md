@@ -36,3 +36,7 @@ ADR-0050 rejected starting at any time once READY for two reasons: outside its h
 - Keeping the option off by default was rejected: it guarded nothing that the robot hold, Admin blocks and Start checks do not already guard, and it left the feature hidden until someone found the key.
 - Invitation emails still print the published time, which for a quick Tour is its latest Start. Wording such as "starts when everyone has joined" is left for a later change.
 - No physical behavior changed; robot-side safety evidence remains as ADR-0049 records it.
+
+## Addendum (23/11/2026): the hold ends when the Tour ends
+
+A quick Tour that completes or is ended early ends its hold at that moment (ADR-0043 D13 addendum), so the robot can take another quick Tour at once instead of staying held until the latest Start + expected duration + 15 minutes. A robot left waiting for inspection after End Early is still refused, as "chờ kiểm tra", not as held by the ended Tour.

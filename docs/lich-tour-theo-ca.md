@@ -63,6 +63,9 @@ Trên form tạo/sửa tuyến:
 - Danh sách ca nằm trong cấu hình (`Tours:Shifts`). Đổi ca phải sửa cấu hình rồi deploy, chưa có màn hình sửa ca (mục 9).
 - Tour cũ đã tạo ở giờ lẻ giữ nguyên: vẫn hiện trên lịch, vẫn chốt, mở lại, huỷ được như thường. Khung giữ robot của
   các Tour này vẫn được tính khi kiểm tra trùng.
+- Tour kết thúc thì khung giữ robot kết thúc tại giờ đó; robot dùng được ngay cho Tour nhanh khác (ADR-0043 D13, bổ sung
+  23/11/2026). Áp dụng cho Tour hoàn thành và Tour kết thúc sớm; robot chờ kiểm tra sau kết thúc sớm vẫn bị chặn vì chờ
+  kiểm tra. Lịch và trang Tour hiện giờ kết thúc thật.
 
 ## 4. Giới hạn thời lượng
 
@@ -428,6 +431,7 @@ mục trên giữ nguyên.
 - **Đăng ký:** như Tour ngắn hạn của ADR-0050: không có mốc 48 giờ và 24 giờ; đăng ký đóng khi Staff chốt READY, muộn nhất
   là hạn Start; job T−24h bỏ qua Tour này.
 - **Quá hạn:** chưa Start tới hạn Start + 15 phút thì hệ thống tự huỷ như mục 11 và trả robot.
+- **Kết thúc:** Tour nhanh chạy xong hoặc kết thúc sớm thì khung giữ robot kết thúc tại giờ đó, không giữ tới hết khung đã tính.
 - **Web:** không có tab hay trang riêng. Trong Lịch Tour, Tour nhanh hiện ở giờ hạn Start với nhãn "Nhanh" (thường ở dòng
   "Ngoài ca"), và ca bị nó giữ robot không nhận Tour mới. Danh sách và trang chi tiết ghi "Tour nhanh".
 - **Bỏ:** cách "Tour ngắn hạn gắn vào ca" của ADR-0050 (`shortNotice` trên `/slots`, `shortNoticeReason` khi tạo Tour theo ca).

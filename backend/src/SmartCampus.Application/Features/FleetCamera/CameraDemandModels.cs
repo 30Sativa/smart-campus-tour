@@ -14,9 +14,27 @@ public static class CameraDemandReasons
 
 /// <summary>
 /// Answer to the robot's poll: capture and publish while <see cref="Wanted"/>. <see cref="HeadsetCommand"/> (ADR-0056
-/// addendum) is a Staff wake/sleep press for the headset, handed out once, or null.
+/// addendum) is a Staff wake/sleep press for the headset, handed out once, or null. <see cref="Tour"/> tells the MC
+/// character in the headset where the running Tour is and what to say there; null when no Tour runs on the robot.
 /// </summary>
-public sealed record CameraDemand(bool Wanted, string Reason, int PollSeconds, HeadsetCommandOrder? HeadsetCommand = null);
+public sealed record CameraDemand(bool Wanted, string Reason, int PollSeconds, HeadsetCommandOrder? HeadsetCommand = null,
+    QuestTourStop? Tour = null);
+
+/// <summary>
+/// The running Tour as the headset MC needs it. quest-stream turns it into the "arrived" and "departed" events the
+/// headset app listens to: a new <see cref="VisitId"/> with <see cref="Step"/> OBSERVING and not <see cref="IsHeld"/>
+/// is an arrival at <see cref="StopId"/>; NAVIGATING towards <see cref="StopId"/> is a departure.
+/// <see cref="NarrationText"/> is the text the Student page reads for that stop.
+/// </summary>
+public sealed record QuestTourStop(
+    Guid TourId,
+    string? Step,
+    bool IsHeld,
+    Guid? VisitId,
+    Guid? StopId,
+    int? StopOrder,
+    string? StopName,
+    string? NarrationText);
 
 /// <summary>
 /// What a Staff page learns when it renews its lease. <see cref="Stream"/> is the relay URL and token (ADR-0055), null

@@ -72,6 +72,8 @@ export type TourDetails = {
     canEditMetadata: boolean; canChangeScheduleAndRoute: boolean; canCancel: boolean
     canMarkReady?: boolean; canReopen?: boolean; readyBlockers?: TourBlocker[] | null
     canChangeCapacity?: boolean; canChangeOperator?: boolean; maxCapacity?: number
+    /** ADR-0067: before Start a versioned Tour may take the newest approved narration. Absent on older servers. */
+    canRefreshNarration?: boolean
   }
   /** The run state; every field but `state` stays null until Start (ADR-0043). */
   execution?: TourExecution | null
@@ -164,3 +166,15 @@ export type TourShiftBlock = { id: string; scope: 'DAY' | 'SHIFT'; reason: strin
  * server estimates a route with (`Tours:EstimatedSpeedMetersPerSecond`), for a draft's estimate in `routes/route-estimate.ts`.
  */
 export type TourShifts = { days: { date: string; shifts: TourShift[]; tours?: TourShiftTour[] | null }[]; recommendedMaxSeconds: number; quickTourWaitMinutes: number; estimatedSpeedMetersPerSecond?: number }
+
+/** ADR-0067: one stop's narration in the Tour and its POI's newest approved narration. */
+export type TourNarrationStop = {
+  stopId: string; stopOrder: number; name: string
+  currentText: string | null; approvedText: string | null; approvedRevisionNumber: number | null; hasNewer: boolean
+}
+/** ADR-0067: `canRefresh`, or why not (`blockedCode` with a sentence for Staff). */
+export type TourNarrationStatus = {
+  tourId: string; routeRevisionId: string | null; routeRevisionNumber: number | null
+  canRefresh: boolean; blockedCode: string | null; blockedReason: string | null; stops: TourNarrationStop[]
+}
+export type TourNarrationRefreshResult = { id: string; routeRevisionId: string; routeRevisionNumber: number; updatedStops: string[] }
