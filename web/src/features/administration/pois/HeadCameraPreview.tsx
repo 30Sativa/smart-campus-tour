@@ -8,11 +8,11 @@ import { poiThemeClass } from './poi-ui'
 /**
  * An illustration of what the head will do at the POI (not to scale): PAN seen from above, the robot's front up and
  * its left on the left, and TILT seen from the side, front to the right. Angles, limits (PAN ±170°, TILT ±18°) and
- * the PAN stop are the real ones. "Chạy thử" plays the motion at three times the robot's speed (30°/s for a sweep,
- * 60°/s to an angle); it is a picture of the plan, not the robot's live state.
+ * the PAN stop are the real ones. "Chạy thử" plays the move from the front with the firmware's speeds and ramps: an
+ * angle at the robot's own pace, a sweep three times faster (`head-motion.ts`). It is a picture of the plan, not the
+ * robot's live state.
  */
 
-const SPEED_UP = 3
 /** Hardware stop (firmware `head_core.h`): PAN 174° to the right. */
 const PAN_STOP_DEG = -174
 
@@ -72,7 +72,7 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
     let started: number | null = null
     const tick = (now: number) => {
       started ??= now
-      const pose = poseAt(plan.legs, (now - started) / 1000 * SPEED_UP)
+      const pose = poseAt(plan.legs, (now - started) / 1000 * plan.speedUp)
       if (!pose) { frame.current = null; setPlaying(null); return }
       setPlaying(pose)
       frame.current = requestAnimationFrame(tick)
@@ -82,6 +82,8 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
 
   const pose = playing ?? plan.target
   const still = parts.mode === 'NONE'
+  const calm = reducedMotion()
+  const pace = plan.speedUp > 1 ? `Phát nhanh gấp ${plan.speedUp} lần robot thật` : 'Phát đúng tốc độ robot thật'
   const panText = sideLabel(pose.pan, 'trái', 'phải')
   const tiltText = sideLabel(pose.tilt, 'ngửa', 'cúi')
 
@@ -96,7 +98,7 @@ export function HeadCameraPreview({ parts }: { parts: HeadCameraParts }) {
   return <figure className={`${poiThemeClass} min-w-0 border-t border-[var(--poi-rule)] pt-4`} aria-label="Mô phỏng đầu camera">
     <div className="flex items-center justify-between gap-2">
       <figcaption className="text-[13px] font-semibold text-[var(--poi-ink)]">Mô phỏng</figcaption>
-      {!still && <button type="button" onClick={play} className={buttonClass('secondary', 'sm')} aria-pressed={Boolean(playing)} title={`Phát nhanh gấp ${SPEED_UP} lần robot thật`}>
+      {plan.legs.length > 0 && <button type="button" onClick={play} disabled={calm} className={buttonClass('secondary', 'sm')} aria-pressed={Boolean(playing)} title={calm ? 'Máy đang tắt hiệu ứng chuyển động' : pace}>
         {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}{playing ? 'Dừng' : 'Chạy thử'}
       </button>}
     </div>
