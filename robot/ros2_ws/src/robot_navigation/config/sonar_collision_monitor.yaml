@@ -31,9 +31,12 @@
     # navigation.launch.py overrides this to cmd_vel_sonar_shadow in shadow mode.
     cmd_vel_out_topic: cmd_vel_sonar
     transform_tolerance: 0.2
-    # stm32_bridge republishes every sonar with each FB frame (~40 Hz) and the
-    # newest stamp, and sonar_memory publishes at 10 Hz; an older stamp means one of
-    # them is down (a dead bridge also stops the motors). A timed-out source is
+    # With the guard running, stm32_bridge (sonar_publish_mode:=on_change) publishes a
+    # sonar when its reading changes and an unchanged one again every 0.2 s, on FB
+    # frames, so a live sonar's stamp is at most ~0.6 s old (0.2 s + the 0.4 s FB gap
+    # the bridge rides through); every_frame is ~40 Hz. sonar_memory publishes at
+    # 10 Hz. An older stamp means one of them is down (a dead bridge also stops the
+    # motors). A timed-out source is
     # IGNORED (warning in the log): the robot falls back to LiDAR + depth, the
     # pre-sonar baseline. Not fail-closed on purpose (ADR-0001: supplementary sensors
     # never block navigation by being absent).

@@ -27,12 +27,14 @@ V3=$WS/src/robot_control/config/nav2_params_v3.yaml
 export NAVSIM_MAP=$R/sonar_world.yaml NAVSIM_SEED=$seed NAVSIM_NOISE=${NAVSIM_NOISE:-0.01,0.3} NAVSIM_AR=0.95
 export NAVSIM_START="0.0,0.0,0" NAVSIM_OUT=$R/bot.npy NAVSIM_SCAN_TOPIC=/robot_01/scan_map NAVSIM_SONAR_OUT=$R/sonar.npy
 GOAL="6.8,6.0,1.5708"
+# bridge sonar_publish_mode as navigation.launch.py sets it; NAVSIM_SONAR_PUBLISH=every_frame
+# runs the guard on the 40 Hz stream (the commit 646b97fe behaviour) for an A/B.
 case $cfg in
-  off)     export NAVSIM_PARAMS=$V3 NAVSIM_SONAR_MODE=off NAVSIM_SONAR_MAX=2.0;;
+  off)     export NAVSIM_PARAMS=$V3 NAVSIM_SONAR_MODE=off NAVSIM_SONAR_MAX=2.0 NAVSIM_SONAR_PUBLISH=${NAVSIM_SONAR_PUBLISH:-every_frame};;
   legacy)  python3 "$S/legacy_params.py" "$V3" "$R/legacy.yaml" > /dev/null
-           export NAVSIM_PARAMS=$R/legacy.yaml NAVSIM_SONAR_MODE=off NAVSIM_SONAR_MAX=2.0;;
-  shadow)  export NAVSIM_PARAMS=$V3 NAVSIM_SONAR_MODE=shadow NAVSIM_SONAR_MAX=6.0;;
-  enforce) export NAVSIM_PARAMS=$V3 NAVSIM_SONAR_MODE=enforce NAVSIM_SONAR_MAX=6.0;;
+           export NAVSIM_PARAMS=$R/legacy.yaml NAVSIM_SONAR_MODE=off NAVSIM_SONAR_MAX=2.0 NAVSIM_SONAR_PUBLISH=${NAVSIM_SONAR_PUBLISH:-every_frame};;
+  shadow)  export NAVSIM_PARAMS=$V3 NAVSIM_SONAR_MODE=shadow NAVSIM_SONAR_MAX=6.0 NAVSIM_SONAR_PUBLISH=${NAVSIM_SONAR_PUBLISH:-on_change};;
+  enforce) export NAVSIM_PARAMS=$V3 NAVSIM_SONAR_MODE=enforce NAVSIM_SONAR_MAX=6.0 NAVSIM_SONAR_PUBLISH=${NAVSIM_SONAR_PUBLISH:-on_change};;
   *) echo "unknown config $cfg"; exit 2;;
 esac
 LOW_TURN=${LOW_TURN:-6.25,0.65,0.10}       # inner corner of the L, swept by the left side in the turn (README.md)
@@ -52,8 +54,10 @@ setsid python3 "$S/../fakebot2.py" >> "$R/nav.log" 2>&1 & F=$!
 setsid python3 "$S/sonarsim.py" >> "$R/nav.log" 2>&1 & SS=$!
 sleep 2
 setsid ros2 launch "$S/../sim.launch.py" >> "$R/nav.log" 2>&1 & L=$!
+python3 "$S/cpu_log.py" "$R/cpu.csv" & C=$!
 python3 "$S/sonar_goals.py" "$R/goal.json" "$GOAL" >> "$R/nav.log" 2>&1
 sleep 1
+kill -INT $C 2>/dev/null
 for g in $L $SS $F; do kill -INT -- -$g 2>/dev/null; done; sleep 6
 for g in $L $SS $F; do kill -9 -- -$g 2>/dev/null; done; wait 2>/dev/null
 left=$(d88); [ -n "$left" ] && kill -9 $left

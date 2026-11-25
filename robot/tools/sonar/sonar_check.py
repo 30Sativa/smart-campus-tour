@@ -5,8 +5,10 @@
           [--expect sonar1=0.50 ...] [--tol 0.05] [--guard]
 
 Per sonar over --seconds: messages/s, NEW measurements/s (a value change; the bridge
-republishes each reading with every FB frame), share of valid readings, min / median /
-max of the valid ones, and the TF mount (x, y, yaw, pitch) of sonarN_link in base_link.
+republishes each reading with every FB frame, ~40 msg/s, or with the sonar guard
+running only on a change + a 0.2 s heartbeat, ~5-8 msg/s), share of valid readings,
+min / median / max of the valid ones, and the TF mount (x, y, yaw, pitch) of
+sonarN_link in base_link.
 --expect sonarN=D: PASS when the median valid reading is within --tol of D metres (a
 board or box placed by tape measure in front of that sensor ONLY: this is how channel
 mapping and yaw are proven, robot/docs/sonar-perception.md section 8).

@@ -49,6 +49,9 @@ permission to execute it.
 - [Sonar FB status proposal](sonar-fb-status-proposal.md) — **proposal, not implemented**: FB
   fields 33–40 (per-sonar result code + measurement counter), REP-117 values in `stm32_bridge`,
   direct "too close" in `sonar_memory`; first a hardware test of what the SR04T outputs at 0.05–0.25 m.
+- [Sonar T0 check](sonar-t0-check.md) — measure the four SR04T on the robot before any sonar
+  change: read-only FB capture (`sonar_watch.py`), steps T0.0–T0.10, what needs external
+  equipment, and which result decides memory, FB status, TX buffer and compatibility.
 - [Perception + navigation](perception-navigation.md) — LiDAR, depth and sonar as one AMR: measured coverage, weak points, layered proposal, rollout and integration tests (25/11/2026)
 - [Runtime deploy and rollback](runtime-deploy.md) — how the MiniPC runtime
   differs from source today, staging an immutable overlay from one commit, and

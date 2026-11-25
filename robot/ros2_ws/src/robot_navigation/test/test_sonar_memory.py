@@ -81,6 +81,29 @@ def test_a_value_held_longer_than_one_firmware_cycle_counts_twice():
     assert len(m.points(0.9, ROBOT)) == 16
 
 
+def test_a_repeat_on_the_on_change_heartbeat_stream_still_counts_twice():
+    """stm32_bridge sonar_publish_mode:=on_change: a static 0.30 m comes again only
+    every 0.2 s. Re-measured unchanged at 0.29 s, lost at 0.58 s (blind zone), before
+    the 0.6 s heartbeat: as on the 40 Hz stream, that is two measurements, held."""
+    frames = SonarMemory()
+    for k in range(24):                        # every_frame: 0.000 .. 0.575 s
+        obs(frames, k * 0.025, 0.30)
+    obs(frames, 0.58, NAN)
+    heartbeat = SonarMemory()
+    for t in (0.0, 0.2, 0.4):
+        obs(heartbeat, t, 0.30)
+    obs(heartbeat, 0.58, NAN)
+    assert len(frames.points(0.6, ROBOT)) == len(heartbeat.points(0.6, ROBOT)) == 16
+
+
+def test_one_measurement_on_the_heartbeat_stream_is_still_not_held():
+    m = SonarMemory()
+    for t in (0.0, 0.2, 0.4):                 # one measurement and its two heartbeats
+        obs(m, t, 0.30)
+    obs(m, 0.42, NAN)                          # the next measurement, 0.42 s later
+    assert m.points(0.5, ROBOT) == []
+
+
 def test_a_stale_near_echo_does_not_arm_the_hold():
     m = SonarMemory()
     obs(m, 0.0, 0.30)

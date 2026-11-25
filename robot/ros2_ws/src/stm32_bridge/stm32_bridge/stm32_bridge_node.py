@@ -21,6 +21,9 @@ from stm32_bridge.motor_alarm import (
     MotorAlarmHealth, parse_fb_alarm, ERROR as ALARM_ERROR, WARN as ALARM_WARN)
 from stm32_bridge.motor_encoder import (
     MotorEncoderMonitor, WheelCalibration, parse_fb_encoder)
+from stm32_bridge.sonar_publish import (
+    DEFAULT_SONAR_HEARTBEAT, DEFAULT_SONAR_PUBLISH_MODE, MAX_SONAR_HEARTBEAT,
+    SONAR_PUBLISH_MODES, SonarPublishGate, valid_heartbeat)
 
 try:
     import serial
@@ -174,6 +177,13 @@ class Stm32BridgeNode(Node):
         # docs/phase3-nav2.md section 7.
         self.declare_parameter('sonar_max_range', 2.0)
         self.declare_parameter('sonar_field_of_view', 0.52)
+        # every_frame = one Range per sonar per FB frame (~40 Hz, the firmware
+        # re-measures each SR04T every 0.29-0.42 s). on_change = only a new
+        # (mm, valid), plus the same reading again every sonar_heartbeat_period
+        # (stm32_bridge/sonar_publish.py). navigation.launch.py picks on_change
+        # when the sonar guard runs (robot/docs/sonar-perception.md).
+        self.declare_parameter('sonar_publish_mode', DEFAULT_SONAR_PUBLISH_MODE)
+        self.declare_parameter('sonar_heartbeat_period', DEFAULT_SONAR_HEARTBEAT)
         # Longest FB gap that is ridden through. Recorded maximum 117 ms at 97 %
         # host CPU, see README "Link Supervision" before changing it.
         self.declare_parameter('feedback_timeout', 0.4)
@@ -268,6 +278,22 @@ class Stm32BridgeNode(Node):
             self.get_parameter('sonar_max_range').value)
         self.sonar_field_of_view = float(
             self.get_parameter('sonar_field_of_view').value)
+        self.sonar_publish_mode = str(
+            self.get_parameter('sonar_publish_mode').value)
+        if self.sonar_publish_mode not in SONAR_PUBLISH_MODES:
+            self.get_logger().error(
+                f'sonar_publish_mode={self.sonar_publish_mode!r} not in '
+                f'{SONAR_PUBLISH_MODES}; using {DEFAULT_SONAR_PUBLISH_MODE}.')
+            self.sonar_publish_mode = DEFAULT_SONAR_PUBLISH_MODE
+        self.sonar_heartbeat_period = float(
+            self.get_parameter('sonar_heartbeat_period').value)
+        if not valid_heartbeat(self.sonar_heartbeat_period):
+            self.get_logger().error(
+                f'sonar_heartbeat_period={self.sonar_heartbeat_period} outside '
+                f'(0, {MAX_SONAR_HEARTBEAT}] s; using {DEFAULT_SONAR_HEARTBEAT}.')
+            self.sonar_heartbeat_period = DEFAULT_SONAR_HEARTBEAT
+        self._sonar_gate = SonarPublishGate(
+            self.sonar_publish_mode, self.sonar_heartbeat_period)
         self.feedback_timeout = float(
             self.get_parameter('feedback_timeout').value)
         self.feedback_recovery_time = float(
@@ -471,6 +497,11 @@ class Stm32BridgeNode(Node):
             f'sonar_topics=({self.sonar1_topic},{self.sonar2_topic},'
             f'{self.sonar3_topic},{self.sonar4_topic}), '
             'command_format=CMD/STOP mm/s, feedback_format=FB seq/count/dt/status')
+        if self.publish_sonar and self.sonar_publish_mode != DEFAULT_SONAR_PUBLISH_MODE:
+            self.get_logger().info(
+                f'sonar_publish_mode={self.sonar_publish_mode}: a sonar Range only '
+                'when its reading changes, an unchanged one again every '
+                f'{self.sonar_heartbeat_period:.2f} s.')
 
         self._open_serial()
 
@@ -855,16 +886,20 @@ class Stm32BridgeNode(Node):
 
         if sonar1 is not None:
             self._publish_sonar_range(
-                self._sonar1_pub, self.sonar1_frame, sonar1, now_ros)
+                self._sonar1_pub, self.sonar1_frame, sonar1, now_ros,
+                1, now_mono)
         if sonar2 is not None:
             self._publish_sonar_range(
-                self._sonar2_pub, self.sonar2_frame, sonar2, now_ros)
+                self._sonar2_pub, self.sonar2_frame, sonar2, now_ros,
+                2, now_mono)
         if sonar3 is not None:
             self._publish_sonar_range(
-                self._sonar3_pub, self.sonar3_frame, sonar3, now_ros)
+                self._sonar3_pub, self.sonar3_frame, sonar3, now_ros,
+                3, now_mono)
         if sonar4 is not None:
             self._publish_sonar_range(
-                self._sonar4_pub, self.sonar4_frame, sonar4, now_ros)
+                self._sonar4_pub, self.sonar4_frame, sonar4, now_ros,
+                4, now_mono)
 
         self._last_feedback_mono = now_mono
         self._last_feedback_seq = seq
@@ -1176,8 +1211,14 @@ class Stm32BridgeNode(Node):
             publisher,
             frame_id: str,
             reading: Tuple[int, bool],
-            stamp):
+            stamp,
+            sonar: int,
+            now_mono: float):
         if not self.publish_sonar or publisher is None:
+            return
+        # on_change: a repeat of the last published reading is dropped until
+        # its heartbeat is due. The stamp stays this frame's receive time.
+        if not self._sonar_gate.due(sonar, reading, now_mono):
             return
 
         distance_mm, valid = reading

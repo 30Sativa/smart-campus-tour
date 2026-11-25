@@ -29,10 +29,15 @@ on evidence:
 
 A near echo is confirmed when two measurements agree within ``confirm_range``
 (single spurious echoes are not held). Repeated values are not new measurements:
-stm32_bridge republishes each sonar with every FB frame (~40 Hz) while the firmware
-re-measures it every 0.29-0.42 s, with no counter on the wire. A value is new when it
-changes; a value unchanged for ``repeat_confirm`` (over one firmware cycle) has been
-measured twice.
+the firmware re-measures each sonar every 0.29-0.42 s, with no counter on the wire,
+and stm32_bridge republishes the last value with every FB frame (~40 Hz,
+``sonar_publish_mode:=every_frame``) or only on a change plus a 0.2 s heartbeat
+(``on_change``, what the sonar guard launch uses). A value is new when it changes; a
+value unchanged for ``repeat_confirm`` (over one firmware cycle) has been measured
+twice. That is checked on every repeat AND when the value changes: on the heartbeat
+stream a repeat comes only at 0.2, 0.4, 0.6 s, and a value lost at 0.58 s (two equal
+measurements 0.29 s apart, then an object in the blind zone) would otherwise never
+count as confirmed.
 """
 
 import math
@@ -110,6 +115,11 @@ class SonarMemory:
                 s.repeat_seen = True
                 s.near.confirmed = True
             return None
+        # The old value stood until this frame: on the on_change stream this is the only
+        # frame that can show it lasted repeat_confirm (see the module docstring).
+        if (s.key >= 0 and not s.repeat_seen and t - s.t_first >= c.repeat_confirm
+                and s.near is not None):
+            s.near.confirmed = True
         s.key, s.t_first, s.repeat_seen = key, t, False
         if not valid:
             n = s.near
