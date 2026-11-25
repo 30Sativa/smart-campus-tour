@@ -10,7 +10,7 @@
   (every 0.25 m or 0.2 rad): e <- a*e + N(0, s).
 - Logs everything to $NAVSIM_OUT (npz) every 2 s.
 Env: NAVSIM_START "x,y,yaw_deg", NAVSIM_NOISE "s_xy,s_yaw_deg", NAVSIM_SEED, NAVSIM_OUT,
-NAVSIM_AR (error autocorrelation, see below), NAVSIM_OBST "x,y,r;..." (round obstacles NOT in the Nav2 map, only seen by the scan: replanning tests).
+NAVSIM_AR (error autocorrelation, see below), NAVSIM_MAP (map yaml, default map2), NAVSIM_OBST "x,y,r;..." (round obstacles NOT in the Nav2 map, only seen by the scan: replanning tests).
 (derived from the 2026-10-16 navsim fakebot; obstacle/AR/range_max options added 2026-10-22.)
 """
 import math, os, collections, numpy as np, yaml
@@ -56,7 +56,7 @@ class FakeBot(Node):
         self.err = np.zeros(3)
         self.since = [0.0, 0.0]
         self.out = os.environ['NAVSIM_OUT']
-        mp = os.path.expanduser('~/smart-campus-tour/robot/robot_maps/map2.yaml')
+        mp = os.environ.get('NAVSIM_MAP') or os.path.expanduser('~/smart-campus-tour/robot/robot_maps/map2.yaml')
         meta = yaml.safe_load(open(mp))
         from PIL import Image
         img = np.array(Image.open(os.path.join(os.path.dirname(mp), meta['image'])).convert('L'), dtype=float)

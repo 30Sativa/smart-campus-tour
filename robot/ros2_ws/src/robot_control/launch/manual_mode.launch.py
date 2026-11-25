@@ -27,6 +27,7 @@ def generate_launch_description():
     wheel_base = LaunchConfiguration('wheel_base')
     wheel_radius = LaunchConfiguration('wheel_radius')
     odom_linear_scale = LaunchConfiguration('odom_linear_scale')
+    sonar_max_range = LaunchConfiguration('sonar_max_range')
     max_wheel_speed_mm_s = LaunchConfiguration('max_wheel_speed_mm_s')
     speed_scale = LaunchConfiguration('speed_scale')
     invert_left = LaunchConfiguration('invert_left')
@@ -95,6 +96,10 @@ def generate_launch_description():
                                           '(Localization V2); 1.0 = unchanged.'),
         DeclareLaunchArgument('max_wheel_speed_mm_s', default_value='250.0',
                               description='Peak wheel speed safety limit.'),
+        DeclareLaunchArgument('sonar_max_range', default_value='2.0',
+                              description='stm32_bridge: longest sonar echo published as a '
+                                          'range (NaN beyond). navigation.launch.py raises it '
+                                          'with sonar_mode (robot/docs/sonar-perception.md).'),
         DeclareLaunchArgument(
             'speed_scale', default_value='1.0',
             description='Real-robot command scale; 1.0 applies no hidden scaling.'),
@@ -166,6 +171,7 @@ def generate_launch_description():
                     'wheel_base': wheel_base,
                     'wheel_radius': wheel_radius,
                     'odom_linear_scale': odom_linear_scale,
+                    'sonar_max_range': sonar_max_range,
                     'max_wheel_speed_mm_s': max_wheel_speed_mm_s,
                     'speed_scale': speed_scale,
                     'invert_left': invert_left,

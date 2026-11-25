@@ -70,6 +70,10 @@ PROFILE_KEYS = {
     # nav: Astra Pro depth into the LOCAL costmap only, beside the LiDAR (robot/docs/depth-camera.md).
     # Off by default; "robot nav --camera" / "--no-camera" override it per run.
     'ENABLE_CAMERA': 'false',
+    # nav: the four SR04T as a near-field speed guard (Nav2 collision_monitor, robot/docs/sonar-perception.md).
+    # off = the baseline; shadow = runs and logs what it would do, motion untouched; enforce = slows/stops.
+    # "robot nav --sonar off|shadow|enforce" overrides it per run.
+    'SONAR_MODE': 'off',
     # fleet service (robot/docs/fleet-service.md): auto = commands exactly while "robot nav --fleet" runs
     # (the ADR-0049 motion gate is up), telemetry otherwise; off = telemetry only, always.
     'FLEET_SERVICE_COMMANDS': 'auto',
@@ -405,7 +409,7 @@ def env_diff(env):
     return {k: env[k] for k in shown if k in env}
 
 
-def workflow_argv(p, workflow, fleet=False, auto_pose=False, camera=False):
+def workflow_argv(p, workflow, fleet=False, auto_pose=False, camera=False, sonar='off'):
     m, n = resolve_data(p)
     base = [f'robot_id:={p["ROBOT_ID"]}', f'lidar_yaw:={p["LIDAR_YAW"]}']
     if workflow == 'manual':
@@ -414,7 +418,8 @@ def workflow_argv(p, workflow, fleet=False, auto_pose=False, camera=False):
         return ['ros2', 'launch', 'robot_control', 'manual_mapping.launch.py', *base,
                 f'max_wheel_speed_mm_s:={p["MAP_MAX_WHEEL_SPEED_MM_S"]}', 'rviz:=false']
     return ['ros2', 'launch', 'robot_navigation', 'navigation.launch.py', *base, f'map:={m}',
-            f'enable_camera:={str(camera).lower()}', 'rviz:=false', f'nav2_params_file:={n}'] + \
+            f'enable_camera:={str(camera).lower()}', f'sonar_mode:={sonar}', 'rviz:=false',
+            f'nav2_params_file:={n}'] + \
         (['require_motion_permit:=true'] if fleet else []) + (['auto_initial_pose:=true'] if auto_pose else [])
 
 
@@ -432,6 +437,27 @@ def camera_wanted(p, a):
     if getattr(a, 'no_camera', False):
         return False
     return p['ENABLE_CAMERA'].strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+SONAR_MODES = ('off', 'shadow', 'enforce')
+
+
+def sonar_wanted(p, a):
+    mode = getattr(a, 'sonar', None) or p['SONAR_MODE'].strip().lower()
+    if mode not in SONAR_MODES:
+        raise Refused(f'SONAR_MODE must be one of {"/".join(SONAR_MODES)}, not {mode!r}')
+    return mode
+
+
+def sonar_problem(env):
+    """Why this runtime cannot run the sonar guard, or None."""
+    nav_launch = share_file(env, 'robot_navigation', 'launch', 'navigation.launch.py')
+    if not nav_launch or 'sonar_mode' not in open(nav_launch).read() or \
+            not os.path.isfile(share_file(env, 'robot_navigation', 'launch', 'sonar_guard.launch.py')):
+        return 'this runtime has no sonar guard (navigation.launch.py lacks sonar_mode): stage a newer overlay'
+    if not package_prefix(env, 'nav2_collision_monitor'):
+        return 'nav2_collision_monitor is not installed in this ROS environment'
+    return None
 
 
 ASTRA_DEPTH_USB = ('2bc5', '0403')       # Orbbec Astra Pro depth (OpenNI); the RGB half is 2bc5:0501
@@ -1008,6 +1034,9 @@ def main(argv=None):
                              help='add the Astra depth camera to the local costmap (overrides ENABLE_CAMERA)')
             cam.add_argument('--no-camera', action='store_true',
                              help='LiDAR-only local costmap, the baseline (overrides ENABLE_CAMERA)')
+            wp.add_argument('--sonar', choices=SONAR_MODES,
+                            help='sonar speed guard: off (baseline), shadow (log only) or enforce '
+                                 '(overrides SONAR_MODE; robot/docs/sonar-perception.md)')
     fl = sub.add_parser('fleet', help='fleet_bridge: foreground, or the boot service (status/start/stop/restart/logs)')
     fl.add_argument('action', nargs='?', choices=('status', 'start', 'stop', 'restart', 'logs'))
     fl.add_argument('--commands', action='store_true')
@@ -1086,7 +1115,15 @@ def main(argv=None):
                 if why:
                     camera = False
                     print(f'WARNING depth camera off for this session, LiDAR-only: {why}', file=sys.stderr)
-            argv = workflow_argv(p, a.cmd, fleet, auto_pose, camera)
+            sonar = sonar_wanted(p, a) if a.cmd == 'nav' else 'off'
+            if sonar != 'off':
+                why = sonar_problem(env)
+                if why and sonar == 'enforce':
+                    raise Refused(f'--sonar enforce: {why}')
+                if why:
+                    sonar = 'off'
+                    print(f'WARNING sonar guard off for this session (shadow requested): {why}', file=sys.stderr)
+            argv = workflow_argv(p, a.cmd, fleet, auto_pose, camera, sonar)
             if a.dry_run:
                 return run(argv, env, True, lock=('workflow', a.cmd), session='(new session directory)')
             session = new_session(p, a.cmd)
@@ -1103,7 +1140,7 @@ def main(argv=None):
                 else:
                     print('no fleet service: run "robot fleet --commands" in another terminal for Tours from the web.')
             return run(argv, env, False, lock=('workflow', dict(workflow=a.cmd, fleet=fleet, auto_pose=auto_pose,
-                                                                camera=camera,
+                                                                camera=camera, sonar=sonar,
                                                                 pid=os.getpid(), session=session)),
                        session=session, extra_env={'ROS_LOG_DIR': os.path.join(session, 'ros_log')})
         if a.cmd == 'teleop':

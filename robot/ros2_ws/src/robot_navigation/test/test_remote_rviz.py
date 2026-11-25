@@ -29,7 +29,8 @@ def test_relay_and_launch_are_installed(monkeypatch):
         'tf_rviz_relay = robot_navigation.tf_rviz_relay:main',
         'scan_rviz = robot_navigation.scan_rviz:main',
         'initialpose_guard = robot_navigation.initialpose_guard:main',
-        'pose_bootstrap = robot_navigation.pose_bootstrap:main']
+        'pose_bootstrap = robot_navigation.pose_bootstrap:main',
+        'sonar_memory = robot_navigation.sonar_memory:main']
     installed = dict(metadata['data_files'])
     assert 'launch/remote_rviz.launch.py' in installed['share/robot_navigation/launch']
     assert 'rviz/navigation.rviz' in installed['share/robot_navigation/rviz']

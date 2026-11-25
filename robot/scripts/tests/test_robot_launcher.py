@@ -745,6 +745,44 @@ def test_camera_problem_falls_back_to_lidar_only(world, broken, why):
     assert 'LiDAR-only' in r.stderr and why in r.stderr, r.stderr
 
 
+# ---- sonar speed guard (robot nav --sonar) --------------------------------------------------
+def sonar_runtime(w, has_guard=True):
+    launch = w['overlay'] / 'nav' / 'share' / 'robot_navigation' / 'launch'
+    launch.mkdir(parents=True, exist_ok=True)
+    (launch / 'navigation.launch.py').write_text("DeclareLaunchArgument('sonar_mode')\n" if has_guard else '# old\n')
+    if has_guard:
+        (launch / 'sonar_guard.launch.py').write_text('# guard\n')
+    elif (launch / 'sonar_guard.launch.py').exists():
+        (launch / 'sonar_guard.launch.py').unlink()
+
+
+def test_sonar_is_off_unless_asked_per_run_or_profile(world):
+    sonar_runtime(world)
+    assert 'sonar_mode:=off' in dry(world, 'nav')['argv']
+    for mode in ('shadow', 'enforce', 'off'):
+        assert f'sonar_mode:={mode}' in dry(world, 'nav', '--sonar', mode)['argv']
+    profile(world, SONAR_MODE='shadow')
+    assert 'sonar_mode:=shadow' in dry(world, 'nav')['argv']
+    assert 'sonar_mode:=off' in dry(world, 'nav', '--sonar', 'off')['argv']
+    assert not any(x.startswith('sonar_mode') for x in dry(world, 'map')['argv'])       # nav only
+    r = robot(world, 'nav', '--sonar', 'on', '--dry-run')
+    assert r.returncode == 2                                                           # not a mode
+    profile(world, SONAR_MODE='maybe')
+    r = robot(world, 'nav', '--dry-run')
+    assert r.returncode == 2 and 'SONAR_MODE' in r.stderr, r.stderr
+
+
+def test_sonar_on_an_old_runtime_shadow_falls_back_enforce_refuses(world):
+    sonar_runtime(world, has_guard=False)
+    r = robot(world, 'nav', '--sonar', 'shadow', '--dry-run')
+    assert r.returncode == 0, r.stderr
+    assert 'sonar_mode:=off' in json.loads(r.stdout)['argv']
+    assert 'sonar guard off' in r.stderr and 'lacks sonar_mode' in r.stderr, r.stderr
+    # Asked to protect: never run quietly without the protection.
+    r = robot(world, 'nav', '--sonar', 'enforce', '--dry-run')
+    assert r.returncode == 2 and '--sonar enforce' in r.stderr, r.stderr
+
+
 # ---- fleet service (robot fleet --service, run by sct-fleet.service) -----------------------
 # The supervisor gives the bridge a clean ROS environment, so the fake reads its knobs from files.
 FAKE_BRIDGE = '''#!/bin/sh

@@ -61,9 +61,10 @@ RGB cho Phase 4 (mặc định tắt để tiết kiệm băng thông USB). `ena
 `robot/ros2_ws/src/robot_control/config/nav2_params.yaml` loại `sonar_layer`
 khỏi danh sách `local_costmap.plugins` và giữ block của nó với `enabled: false`.
 LiDAR và depth giữ nguyên. Bridge vẫn publish Range để quan sát; đây không phải
-lệnh tắt nguồn cảm biến. Chưa áp dụng patch semantic bridge hoặc timeout policy.
-Trước khi nạp lại sonar vào costmap cần xử lý đồng thời hai vấn đề đó và test
-từng sensor; chỉ đổi checkbox RViz không bật sonar vào navigation.
+lệnh tắt nguồn cảm biến. **Không nạp lại `sonar_layer`**: nguyên nhân gốc và lý do
+nằm ở `robot/docs/sonar-perception.md` mục 2. Sonar vào navigation bằng đường khác,
+tuỳ chọn: `sonar_mode:=shadow|enforce` (Nav2 `collision_monitor` giữa controller và
+velocity_smoother, không costmap, không huỷ goal; ADR-0069). Mặc định `off` = baseline.
 
 ### Remote RViz trên laptop (workaround/debug)
 
@@ -275,7 +276,7 @@ vòng. Hệ quả trực tiếp:
 |---|---|---|
 | LiDAR thấy | global + local costmap | Planner replan vòng qua **nếu còn chỗ** |
 | Chỉ depth camera thấy | local costmap thôi | Robot **dừng / nav fail**. KHÔNG đảm bảo tự vòng |
-| Chỉ sonar thấy | OFF trong baseline hiện tại | Chưa đóng góp vật cản vào navigation |
+| Chỉ sonar thấy | không costmap nào; `sonar_mode:=enforce` mới có tác dụng | collision_monitor **giảm tốc / dừng chờ** nếu lệnh đang chạy sẽ chạm điểm sonar trong 1.5 s; goal không bị huỷ. Mặc định `off`: không tác dụng |
 
 Yêu cầu tối thiểu của baseline là **phát hiện + dừng an toàn**, không phải tự
 vòng. Muốn robot tự vòng vật chỉ camera thấy thì phải đưa depth vào global
@@ -307,6 +308,9 @@ khác sẽ còn nguyên vết cho tới khi robot quay lại nhìn. Phải test 
 acceptance test D bên dưới.
 
 ### Sonar — giới hạn, đọc kỹ trước khi tin
+
+Thiết kế hiện tại, số liệu vùng phủ và quy trình nghiệm thu: `robot/docs/sonar-perception.md`.
+Các ý dưới đây là lịch sử thời `sonar_layer` (26/08–23/09) và vẫn đúng về phần cứng.
 
 4 × SR04T gắn chéo ra 4 góc thân xe. Chúng bù đúng một trường hợp: vật **thấp**
 và **gần hơn 0.85 m**, chỗ Astra đã mù còn LiDAR thì raytrace vượt qua.
@@ -606,7 +610,7 @@ làm trên xe thật, có người giám sát, tay đặt sẵn E-stop.
 4. Thử: quay robot ra chỗ khác rồi dọn vật — xem vết có bị đóng băng không.
 5. Rút camera giữa chừng → navigation phải tiếp tục bằng LiDAR (sonar hiện OFF).
 
-**E. Sonar**
+**E. Sonar** (quy trình đầy đủ cho `sonar_mode`: `robot/docs/sonar-perception.md` mục 8)
 1. Test **từng** sonar một, riêng lẻ (che tay trước từng cái, xem `ros2 topic echo`).
 2. Đo vùng mù chính giữa phía trước.
 3. Đo vùng mù chính giữa phía sau.

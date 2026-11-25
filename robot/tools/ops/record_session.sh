@@ -5,7 +5,8 @@
 #        <session-dir>/bag, in its own process group (pgid in <session-dir>/rec_bag.pgid).
 # stop:  SIGINT to that group, wait up to 20 s for bag/metadata.yaml, TERM only after that.
 # Read a bag only after `stop` reports it closed. The topic list is the one used for the
-# 19/10-02/11 sessions (~/amr_logs/tools_r3s5/rec_start.sh) plus the link-safety state.
+# 19/10-02/11 sessions (~/amr_logs/tools_r3s5/rec_start.sh) plus the link-safety state and
+# the sonar guard (robot/docs/sonar-perception.md; topics that do not exist are just empty).
 set -u
 cmd=${1:-}; dir=${2:-}
 [[ -n "$cmd" && -n "$dir" ]] || { echo "usage: record_session.sh start|stop <session-dir>" >&2; exit 2; }
@@ -18,7 +19,9 @@ TOPICS=(/rosout /tf /tf_static /diagnostics
   $ns/local_costmap/published_footprint
   $ns/cmd_vel_manual $ns/cmd_vel_ctrl $ns/cmd_vel_nav $ns/cmd_vel
   $ns/emergency_stop_state $ns/robot_mode_state $ns/motion_gate_state $ns/stm32_link_ok
-  $ns/navigate_to_pose/_action/status $ns/navigate_to_pose/_action/feedback)
+  $ns/navigate_to_pose/_action/status $ns/navigate_to_pose/_action/feedback
+  $ns/ultrasonic/sonar1/range $ns/ultrasonic/sonar2/range $ns/ultrasonic/sonar3/range $ns/ultrasonic/sonar4/range
+  $ns/cmd_vel_sonar $ns/cmd_vel_sonar_shadow $ns/sonar_guard/memory)
 case $cmd in
   start)
     [[ -e "$dir/bag" ]] && { echo "REFUSED: $dir/bag exists (one new directory per session)" >&2; exit 2; }
