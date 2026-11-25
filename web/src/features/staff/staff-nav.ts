@@ -1,4 +1,4 @@
-import { Bot, Box, CalendarDays, ClipboardCheck, History, LayoutDashboard, MapPinned, MonitorPlay, Route } from 'lucide-react'
+import { Bot, Box, CalendarDays, ChartColumn, ClipboardCheck, History, LayoutDashboard, MapPinned, MonitorPlay, Route } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
@@ -50,7 +50,11 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
   },
   {
     label: 'Lịch sử',
-    items: [{ label: 'Lịch sử Tour', path: '/staff/history', icon: History }],
+    items: [
+      { label: 'Lịch sử Tour', path: '/staff/history', icon: History },
+      // ADR-0071: how viewers took part, per POI and per Tour, to improve routes.
+      { label: 'Phân tích tương tác', path: '/staff/engagement', icon: ChartColumn },
+    ],
   },
 ]
 

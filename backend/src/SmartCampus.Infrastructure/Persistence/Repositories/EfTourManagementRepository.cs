@@ -4,6 +4,7 @@ using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Models;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Routes;
+using SmartCampus.Application.Features.TourEngagement;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Entities;
 
@@ -96,7 +97,9 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         await db.TourAllowedBranches.AnyAsync(b => b.TourId == id, ct),
         // Short-notice creation, READY and Reopen are Staff decisions before Start; they must not lock the Tour as if it had run.
         await db.TourEvents.AnyAsync(e => e.TourId == id && e.EventType != "TOUR_ROUTE_CHANGED" && e.EventType != TourLifecycleEvents.CreatedShortNotice &&
-            e.EventType != TourLifecycleEvents.Ready && e.EventType != TourLifecycleEvents.Reopened, ct) ||
+            e.EventType != TourLifecycleEvents.Ready && e.EventType != TourLifecycleEvents.Reopened &&
+            // ADR-0071: a question counted in the waiting room is not operational use of the Tour.
+            e.EventType != TourEngagementEvents.QuestionAsked, ct) ||
             await db.BranchRequests.AnyAsync(b => b.TourId == id, ct),
         await db.Robots.AnyAsync(r => r.CurrentTourId == id, ct));
 

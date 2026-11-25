@@ -139,6 +139,8 @@ public static class TourLifecycleEvents
     public const string Completed = "TOUR_COMPLETED";
     public const string LegDispatchRequested = "LEG_DISPATCH_REQUESTED";
     public const string VisitClosed = "VISIT_CLOSED";
+    /// <summary>ADR-0071: the robot reached a POI. StopVisitId is the new visit, DataJson <c>{"stopId"}</c> its revision stop.</summary>
+    public const string StopArrived = "STOP_ARRIVED";
     public const string LegAccepted = "LEG_ACCEPTED";
     public const string LegRejected = "LEG_REJECTED";
     public const string LegTerminal = "LEG_TERMINAL";

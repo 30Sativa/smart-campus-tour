@@ -2754,6 +2754,27 @@ message); a restart starts a new `epoch`. Browsers poll every 2 s.
 
 Student calls use the same exact-origin check as the other Student session calls (§3.2.3).
 
+### 7.3 Viewer engagement report (ADR-0071, implemented)
+
+Decision record: [ADR-0071](decisions/0071-viewer-engagement-report.md). Staff-only, read-only, aggregates only:
+no response carries a display name, email, class, roster row id, session, token or question text.
+
+- `GET /api/staff/engagement?from=&to=` → `EngagementOverviewView`: ended Tours that started in `[from, to)`
+  (`from < to`, at most 366 days, else 400; at most 300 Tours, `truncated` when more), `tourCount`, `joinRate`,
+  `questionsPerTour`, `audience[]` (`rowType`, `acceptedRows`, `joinedRows`, `votedRows`, `questions`),
+  `questions` totals, `pois[]` per POI proposal (`visits`, `skips`, `questions`, `questionsPerVisit`,
+  `averageDwellSeconds`, `averagePlannedDwellSeconds`, `votesReceived`, `viewersLeft`, `signals[]`) and `tours[]`.
+- `GET /api/staff/manage/tours/{id}/engagement` → `TourEngagementView` (404 for an unknown Tour): the same audience
+  and totals, `viewersLeftDuringTour` and `stops[]` in planned order (`outcome` VISITED/SKIPPED/NOT_REACHED,
+  `visitOrder`, `arrivedAt`, `actualDwellSeconds`, `plannedDwellSeconds`, `questions`, `ballotVoters`,
+  `votesReceived`, `viewersLeft`, `signals[]`).
+- Signals: `MOST_QUESTIONS`, `MOST_LEFT`, `MOST_VOTED`, `OVER_DWELL`, `SHORT_DWELL`, `SKIPPED`, `NO_QUESTIONS`.
+
+New Tour events (no schema change): `STOP_ARRIVED` on each POI arrival (`StopVisitId`, `TargetStopOrder`,
+`DataJson {"stopId"}`) and `STUDENT_QUESTION_ASKED` per answered question (`StopVisitId` of the observed visit or
+null, `DataJson {"phase","rowType","outOfScope"}`). The §7.1 rule stands: question text is never logged or stored.
+`STUDENT_QUESTION_ASKED` is not operational history for schedule/route locking.
+
 ## 8. Deployment
 
 | Unit | Built by | Deployed how | Target |
