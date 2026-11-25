@@ -1,5 +1,5 @@
 import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { Bot, Captions, Check, Clock3, Compass, Flag, ListOrdered, MapPin, MessageSquare, Route } from 'lucide-react'
+import { Bot, Captions, Check, Clock3, Compass, Flag, Headset, ListOrdered, MapPin, MessageSquare, Route } from 'lucide-react'
 import type { PoiDetail, StudentSession, StudentTourSnapshot } from '../student-types'
 import { getStudentStatusDisplay } from '../student-status'
 import { poiMinutes, poiProgress, poiStatusText, stopPosition } from '../student-route'
@@ -18,6 +18,10 @@ interface StudentLiveViewProps {
   snapshot: StudentTourSnapshot
   /** The "Hỏi AI" panel. Defaults to the demo assistant with simulated answers. */
   ai?: ReactNode
+  /** ADR-0070: the "Hướng dẫn viên" panel, talk with the Tour's Operator. Without it the tab is not shown. */
+  talk?: ReactNode
+  /** Guide messages not yet looked at, shown on the tab. */
+  talkUnread?: number
   /** False hides the 2D map tab, for Tours without a robot pose feed. */
   showMap?: boolean
   /** Caption title while no stop is known (default: the Tour name). */
@@ -38,6 +42,7 @@ const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
   { key: 'stream', label: 'Thuyết minh', Icon: Captions },
   { key: 'map', label: 'Bản đồ 2D', Icon: Compass },
   { key: 'ai', label: 'Hỏi AI', Icon: MessageSquare },
+  { key: 'talk', label: 'Hướng dẫn viên', Icon: Headset },
   { key: 'route', label: 'Lộ trình', Icon: ListOrdered },
 ]
 
@@ -46,8 +51,8 @@ const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
  * On phones those panels stack in the same reading order.
  * Every tab stays mounted so the AI conversation survives a tab switch.
  */
-export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narrationIdleText, video, notice, quest, fallback }: StudentLiveViewProps) {
-  const tabs = showMap ? TABS : TABS.filter((t) => t.key !== 'map')
+export function StudentLiveView({ snapshot, ai, talk, talkUnread = 0, showMap = true, idleTitle, narrationIdleText, video, notice, quest, fallback }: StudentLiveViewProps) {
+  const tabs = TABS.filter((t) => (showMap || t.key !== 'map') && (talk !== undefined || t.key !== 'talk'))
   const storedTab = useStudentStore((s) => s.activeTab)
   const tab = tabs.some((t) => t.key === storedTab) ? storedTab : tabs[0].key
   const setTab = useStudentStore((s) => s.setActiveTab)
@@ -116,6 +121,9 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
               >
                 <Icon size={19} aria-hidden="true" />
                 <span>{label}</span>
+                {key === 'talk' && talkUnread > 0 && tab !== 'talk' && <span className="st-talk__dot">
+                  {talkUnread > 9 ? '9+' : talkUnread}<span className="sr-only"> tin mới</span>
+                </span>}
               </button>
             ))}
           </div>
@@ -156,6 +164,10 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
           <div {...panel('ai')}>
             {ai}
           </div>
+
+          {talk !== undefined && <div {...panel('talk')}>
+            {talk}
+          </div>}
 
           <div {...panel('route')}>
             <ol className="st-e-route">
