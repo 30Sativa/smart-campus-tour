@@ -513,8 +513,11 @@ def build_scrcpy_server_command(cfg: Config, serial: str, scid: str, crop: str, 
     options = []
     if copy:
         # Baseline (no B-frames, CAVLC) plays in every WebRTC browser; scrcpy's own keyframe
-        # interval is 10 s, too long for a viewer who joins.
-        options += ["profile:int=1", f"i-frame-interval:float={cfg.keyframe_interval:g}"]
+        # interval is 10 s, too long for a viewer who joins. The Quest's encoder counts that
+        # interval in frames of scrcpy's nominal 60 fps: give it the real rate, or the keyframes
+        # come twice as far apart (measured 25/11/2026: 30 frames = 1 s for 0.5 s).
+        options += ["profile:int=1", f"i-frame-interval:float={cfg.keyframe_interval:g}",
+                    f"frame-rate:float={cfg.scrcpy_max_fps or cfg.fps}"]
     if cfg.scrcpy_codec_options:
         options.append(cfg.scrcpy_codec_options)  # later options win
     if options:

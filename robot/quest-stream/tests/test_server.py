@@ -280,14 +280,16 @@ class PassthroughTests(unittest.TestCase):
         shell = cmd[4].split()
         for arg in ("video_codec=h264", "video_bit_rate=1000000", "max_fps=30", "max_size=1280",
                     "crop=1808:1017:128:596", "angle=20", "raw_stream=true",
-                    "video_codec_options=profile:int=1,i-frame-interval:float=0.5"):
+                    "video_codec_options=profile:int=1,i-frame-interval:float=0.5,frame-rate:float=30"):
             self.assertIn(arg, shell)
 
     def test_extra_codec_options_come_last_and_win(self):
         cmd = server.build_scrcpy_server_command(
             copy_cfg(scrcpy_codec_options="bitrate-mode:int=2,profile:int=65536"), "S", "0abc1234", "8:8:0:0", "5.0.1")
-        self.assertIn("video_codec_options=profile:int=1,i-frame-interval:float=0.5,bitrate-mode:int=2,profile:int=65536",
-                      cmd[4].split())
+        self.assertIn("video_codec_options=profile:int=1,i-frame-interval:float=0.5,frame-rate:float=30,"
+                      "bitrate-mode:int=2,profile:int=65536", cmd[4].split())
+        fps20 = server.build_scrcpy_server_command(copy_cfg(scrcpy_max_fps=20), "S", "0abc1234", "8:8:0:0", "5.0.1")
+        self.assertIn("frame-rate:float=20", fps20[4].split()[-1].split(","))  # the rate the Quest really sends
 
     def test_encoding_on_the_nuc_keeps_the_quest_settings(self):
         shell = server.build_scrcpy_server_command(cfg(capture="scrcpy"), "S", "0abc1234", self.EYE, "5.0.1")[4].split()

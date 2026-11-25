@@ -272,7 +272,9 @@ làm ra luồng cuối cùng:
 - scrcpy-server cắt sẵn khung 16:9 (đã xoay `QUEST_SCRCPY_ANGLE`), thu về
   `QUEST_OUTPUT_WIDTH`x`QUEST_OUTPUT_HEIGHT`, tối đa `QUEST_FPS` khung/giây;
 - H.264 Baseline (không B-frame) ở `QUEST_VIDEO_BITRATE`, keyframe mỗi
-  `QUEST_KEYFRAME_INTERVAL` giây (mặc định của scrcpy là 10 s);
+  `QUEST_KEYFRAME_INTERVAL` giây. scrcpy mặc định 10 s và khai encoder 60 fps; encoder
+  của kính đếm khoảng keyframe theo số khung của con số đó, nên server.py khai thêm
+  `frame-rate` bằng `QUEST_FPS` (đo 25/11: không khai thì 0.5 s thành 1 s, 10 s thành 20 s);
 - FFmpeg trên NUC chỉ đóng gói lại sang RTSP (`-c:v copy`), và chèn SPS/PPS trước
   mỗi keyframe. Encoder Android chỉ gửi SPS/PPS một lần lúc đầu, và FFmpeg bỏ
   các khung đọc lúc dò luồng (`-fflags nobuffer`), nên thiếu bước này người xem
@@ -284,7 +286,7 @@ sed -i '/^QUEST_ENCODER=/d' quest-stream.env && echo 'QUEST_ENCODER=copy' >> que
 sudo systemctl restart quest-stream
 grep SCRCPY_START logs/adb.log | tail -1
 # ... encoder=copy video_bit_rate=1000000 max_fps=30 max_size=1280 crop=1808:1017:128:596 angle=20
-#     video_codec_options=profile:int=1,i-frame-interval:float=0.5
+#     video_codec_options=profile:int=1,i-frame-interval:float=0.5,frame-rate:float=30
 ```
 
 Khung giống bản libx264: `QUEST_CROP_KEEP` chiều rộng một mắt, tỉ lệ đầu ra, ở giữa
