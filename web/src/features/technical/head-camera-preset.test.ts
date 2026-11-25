@@ -28,16 +28,31 @@ describe('POI camera preset of the VR head', () => {
   })
 })
 
-import { headPlan } from '../administration/pois/head-motion'
+import { headPlan, poseAt } from '../administration/pois/head-motion'
 
 describe('the motion drawn in the preview', () => {
-  it('sweeps left, right and back at button speed, and moves to an angle at angle speed', () => {
+  it('sweeps left, right and back at button speed, and moves to an angle at angle speed, with the firmware ramps', () => {
     const sweep = headPlan(splitHeadPreset('SWEEP:90')!)
-    expect(sweep.legs.map(leg => [leg.to.pan, leg.seconds])).toEqual([[90, 3], [-90, 6], [0, 3]])
+    // 30°/s with 120°/s² ramps: 90° = 3 s at speed + 0,25 s for the ramps.
+    expect(sweep.legs.map(leg => [leg.to.pan, leg.seconds])).toEqual([[90, 3.25], [-90, 6.25], [0, 3.25]])
+    expect(sweep.speedUp).toBe(3)
     expect(sweep.sweepDeg).toBe(90)
     const angle = headPlan(splitHeadPreset('ANGLE:-120,10')!)
     expect(angle.target).toEqual({ pan: -120, tilt: 10 })
-    expect(angle.legs[0].seconds).toBe(2)
+    expect(angle.legs[0].seconds).toBe(2.5)   // 120° at 60°/s + 0,5 s of ramps
+    expect(angle.speedUp).toBe(1)
     expect(headPlan(splitHeadPreset('NONE')!).legs).toEqual([])
+    expect(headPlan(splitHeadPreset('FRONT')!).legs).toEqual([])   // already at the front: nothing to play
+  })
+
+  it('moves each axis on its own ramp, as the firmware does', () => {
+    const { legs } = headPlan(splitHeadPreset('ANGLE:90,-18')!)
+    expect(legs[0].seconds).toBe(2)                                 // PAN 90° sets the length
+    const early = poseAt(legs, 0.25)!
+    expect(early.pan).toBeCloseTo(3.75)                             // 120°/s² from rest: ½·120·0,25²
+    expect(poseAt(legs, 1)!.pan).toBeCloseTo(45)                    // halfway, by symmetry
+    expect(poseAt(legs, 0.8)!.tilt).toBeCloseTo(-18)                // TILT 18° is done after 2·√(18/120) ≈ 0,77 s
+    expect(poseAt(legs, 2)).toEqual({ pan: 90, tilt: -18 })
+    expect(poseAt(legs, 2.01)).toBeNull()
   })
 })
