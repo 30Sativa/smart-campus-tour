@@ -242,7 +242,7 @@ describe('Staff versioned POI workflow', () => {
     renderAt('/staff/manage/pois')
     expect(await screen.findByText('Chưa thể tạo điểm tham quan')).toBeInTheDocument()
     expect(screen.getByText('Library · library-v1')).toBeInTheDocument()
-    expect(screen.getByText('Chờ kỹ thuật kiểm tra')).toBeInTheDocument()
+    expect(screen.getByText('Chưa kiểm tra triển khai')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toHaveAccessibleDescription('Chưa có bản đồ nào đạt kiểm tra kỹ thuật')
     expect(screen.getByText('Chưa có bản đồ nào đạt kiểm tra kỹ thuật')).toBeVisible()

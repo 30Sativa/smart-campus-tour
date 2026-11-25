@@ -1,0 +1,25 @@
+{
+  "scanned": "2026-11-25",
+  "findings": {
+    "fonts": "Be Vietnam Pro, web/design-previews/staff-overview/tokens.css:11",
+    "palette": "Staff blue #2d719e, web/design-previews/staff-overview/tokens.css:5",
+    "framework": "React + Vite, web/package.json:9",
+    "currentScreen": "web/src/routes/staff/OverviewPage.tsx:100; 7-day chart web/src/features/staff/operations/OverviewCharts.tsx:25",
+    "roles": "Staff business statistics, docs/requirements/campus-tour-scope.md:30",
+    "data": "No complete historical report source in current overview queries"
+  },
+  "preserve": [
+    "Staff brand font and blue",
+    "Staff navigation destinations",
+    "daily work priority",
+    "all existing app files and unrelated changes"
+  ],
+  "introduce": [
+    "isolated preview only",
+    "synthetic explicitly labeled tour records",
+    "year/quarter/month reporting and URL filters",
+    "same-cutoff comparison",
+    "accessible SVG and ledger",
+    "CSV sample"
+  ]
+}

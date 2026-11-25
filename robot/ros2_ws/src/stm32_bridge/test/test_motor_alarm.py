@@ -13,7 +13,7 @@ if _PKG_ROOT not in sys.path:
 
 from stm32_bridge.imu_health import parse_fb_counters  # noqa: E402
 from stm32_bridge.motor_alarm import (  # noqa: E402
-    ALARM, ALM_OK, DISABLED, ERROR, NO_SIGNAL, OK, STALE, UNKNOWN, WARN,
+    ALARM, ALM_OK, DISABLED, ERROR, MALFORMED, NO_SIGNAL, OK, STALE, UNKNOWN, WARN,
     AlarmFields, MotorAlarmHealth, parse_fb_alarm)
 
 # 24-field frame of the current firmware (contactor last).
@@ -39,8 +39,8 @@ def test_parse_old_and_new_firmware():
     assert parse_fb_alarm(fb(ALM_OK, ALARM, 0, 3)) == f(ALM_OK, ALARM, 0, 3)
     assert parse_fb_alarm(fb(ALM_OK, ALM_OK, extra=',99,abc')) == f(ALM_OK, ALM_OK), \
         'unknown trailing fields are ignored'
-    assert parse_fb_alarm(fb('x', ALM_OK)) is None
-    assert parse_fb_alarm(fb(ALM_OK, ALM_OK, -1, 0)) is None
+    assert parse_fb_alarm(fb('x', ALM_OK)) is MALFORMED, 'present but unreadable != old firmware'
+    assert parse_fb_alarm(fb(ALM_OK, ALM_OK, -1, 0)) is MALFORMED
     assert parse_fb_alarm('ALM,1,EN=1' + ',0' * 30) is None
     # Earlier fields keep their positions.
     assert parse_fb_counters(fb(ALM_OK, ALARM, 0, 3)) == (4, 1)
@@ -151,3 +151,31 @@ def test_firmware_monitoring_disabled():
     events = h.on_feedback(0.0, f(DISABLED, DISABLED))
     assert levels(events) == [OK]
     assert h.status(1.0, True)[:2] == (OK, 'ALM monitoring disabled in firmware')
+
+
+def test_malformed_frame_keeps_the_alarm():
+    """One unreadable frame during an ALARM: no 'old firmware', no repeated ALARM."""
+    h = MotorAlarmHealth()
+    h.on_feedback(0.0, parse_fb_alarm(fb(ALARM, ALM_OK, 1, 0)))
+    bad = h.on_feedback(0.02, parse_fb_alarm(fb('x', ALM_OK, 1, 0)))
+    assert levels(bad) == [WARN] and 'malformed' in bad[0][1]
+    assert h.on_feedback(0.04, parse_fb_alarm(fb(ALARM, '?', 1, 0))) == [], 'warned once per run'
+    assert h.status(0.05, True)[0] == ERROR, 'still ALARM'
+    assert h.on_feedback(0.06, parse_fb_alarm(fb(ALARM, ALM_OK, 1, 0))) == [], \
+        'no duplicate ALARM event, no "monitoring" banner again'
+    cleared = h.on_feedback(2.0, parse_fb_alarm(fb(ALM_OK, ALM_OK, 1, 0)))
+    assert levels(cleared) == [WARN] and 'after 2.0 s' in cleared[0][1], 'alarm duration kept'
+
+
+def test_unknown_state_code_is_not_drivers_ok():
+    h = MotorAlarmHealth()
+    h.on_feedback(0.0, parse_fb_alarm(fb(ALM_OK, ALM_OK)))
+    ev = h.on_feedback(0.02, parse_fb_alarm(fb(7, ALM_OK)))
+    assert levels(ev) == [WARN] and 'code 7' in ev[0][1]
+    assert h.on_feedback(0.04, parse_fb_alarm(fb(7, ALM_OK))) == [], 'logged on change only'
+    level, message, values = h.status(0.05, True)
+    assert level == WARN and 'left=7' in message
+    assert values['left_state'] == 'code_7'
+    assert h.status(0.05, True)[0] != OK
+    h.on_feedback(0.06, parse_fb_alarm(fb(7, ALARM, 0, 1)))
+    assert h.status(0.07, True)[0] == ERROR, 'a real ALARM still wins'

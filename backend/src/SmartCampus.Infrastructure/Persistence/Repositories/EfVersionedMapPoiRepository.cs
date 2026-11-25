@@ -27,6 +27,14 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
     public Task<MapArea?> LockAreaAsync(string areaKey, CancellationToken cancellationToken) =>
         LockAreaAndReadAsync(areaKey, cancellationToken);
 
+    public Task LockNewAreaNamesAsync(CancellationToken cancellationToken) =>
+        dbContext.Database.ExecuteSqlRawAsync("""
+            DECLARE @lockResult int;
+            EXEC @lockResult = sys.sp_getapplock @Resource = N'map-poi:new-area-names', @LockMode = N'Exclusive',
+                @LockOwner = N'Transaction', @LockTimeout = 10000;
+            IF @lockResult < 0 THROW 51021, 'Could not acquire new map area name lock.', 1;
+            """, cancellationToken);
+
     private async Task<MapArea?> LockAreaAndReadAsync(string areaKey, CancellationToken cancellationToken)
     {
         var resource = $"map-poi:area:{areaKey}";
@@ -78,6 +86,15 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
 
     public async Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksForPhysicalRobotsAsync(CancellationToken cancellationToken) =>
         await LatestPhysicalRobotDeploymentChecks.Query(dbContext).ToArrayAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Robot>> ListAssignedPhysicalRobotsAsync(CancellationToken cancellationToken) =>
+        await MapVersionLabels.WithAssignedMapsAsync(dbContext, await dbContext.Robots.AsNoTracking()
+            .Where(robot => robot.SourceType == "PHYSICAL" && robot.DeactivatedAt == null && robot.AssignedMapVersionId != null)
+            .ToArrayAsync(cancellationToken), cancellationToken);
+
+    public async Task<Robot?> ReadRobotForReadinessAsync(Guid robotId, CancellationToken cancellationToken) =>
+        await MapVersionLabels.WithAssignedMapAsync(dbContext, await dbContext.Robots.AsNoTracking()
+            .SingleOrDefaultAsync(robot => robot.Id == robotId && robot.SourceType == "PHYSICAL", cancellationToken), cancellationToken);
 
     public Task<MapDeploymentCheck?> FindDeploymentRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken) =>
         dbContext.MapDeploymentChecks.Include(check => check.Robot)
@@ -175,11 +192,11 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
         public DateTimeOffset? RetiredAt { get; init; }
     }
 
-    public Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken) =>
-        dbContext.MapDeploymentChecks.AsNoTracking().Include(check => check.Robot)
+    public async Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken) =>
+        await MapVersionLabels.WithMapAsync(dbContext, await dbContext.MapDeploymentChecks.AsNoTracking().Include(check => check.Robot)
             .Where(check => check.RobotId == robotId)
             .OrderByDescending(check => check.CheckedAt).ThenByDescending(check => check.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(cancellationToken), cancellationToken);
 
     public Task<MapDeploymentCheck?> GetLatestDeploymentCheckAsync(Guid mapVersionId, Guid? robotId, CancellationToken cancellationToken)
     {

@@ -392,7 +392,7 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal("Physical test robot", listedRobot.GetProperty("displayName").GetString());
         Assert.Equal("UNCONFIRMED", listedRobot.GetProperty("connectionStatus").GetString());
         Assert.Null(listedRobot.GetProperty("firstAcceptedSyncAt").GetString());
-        Assert.Equal(new[] { "assignedAreaName", "assignedFrameId", "assignedMapKey", "assignedMapVersionId", "assignedVersionNumber", "connectionStatus", "credentialHint", "credentialIssuedAt", "credentialIssuedByName", "credentialIssuedByUserId", "credentialRevokedAt", "credentialRevokedByName", "credentialRevokedByUserId", "credentialStatus", "currentTourId", "currentTourName", "currentTourState", "deactivatedAt", "deactivationReason", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "isDispatchEnabled", "lastSyncReceivedAt", "latestDeployedFrameId", "latestDeployedMapKey", "latestDeploymentPassed", "mapAssignedAt", "mapAssignedByName", "needsInspection", "robotCode", "rowVersion" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal(new[] { "assignedAreaName", "assignedFrameId", "assignedMapKey", "assignedMapVersionId", "assignedVersionNumber", "connectionStatus", "credentialHint", "credentialIssuedAt", "credentialIssuedByName", "credentialIssuedByUserId", "credentialRevokedAt", "credentialRevokedByName", "credentialRevokedByUserId", "credentialStatus", "currentTourId", "currentTourName", "currentTourState", "deactivatedAt", "deactivationReason", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "isDispatchEnabled", "lastRejectedReport", "lastSyncReceivedAt", "latestDeployedFrameId", "latestDeployedMapKey", "latestDeploymentPassed", "mapAssignedAt", "mapAssignedByName", "needsInspection", "readiness", "robotCode", "rowVersion" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
         Assert.Null(listedRobot.GetProperty("assignedMapKey").GetString());
         Assert.False(listedRobot.GetProperty("needsInspection").GetBoolean());
         Assert.Equal(JsonValueKind.Null, listedRobot.GetProperty("currentTourId").ValueKind);
@@ -448,9 +448,10 @@ public sealed class BusinessFlowIntegrationTests
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await database.InsertUserAsync(true, username: "mapgate.admin", roles: ["ADMIN"]);
         var robotId = Guid.NewGuid();
+        var robotCredential = FleetRobotCredentialHash.Create();
         await database.ExecuteAsync($"""
             INSERT dbo.Robots(Id, RobotCode, SourceType, CredentialHash, IsDispatchEnabled, NeedsInspection, CreatedAt)
-            VALUES ('{robotId:D}', N'mapgate-physical', 'PHYSICAL', 0x020304, 0, 0, SYSDATETIMEOFFSET());
+            VALUES ('{robotId:D}', N'mapgate-physical', 'PHYSICAL', 0x{Convert.ToHexString(robotCredential.Hash)}, 0, 0, SYSDATETIMEOFFSET());
             """);
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
         var admin = await Login(host.Client, "mapgate.admin");
@@ -464,6 +465,8 @@ public sealed class BusinessFlowIntegrationTests
         var map = (await Body(upload)).GetProperty("data");
         var mapId = map.GetProperty("id").GetGuid();
         var packageSha = map.GetProperty("packageSha256").GetString();
+        // ADR-0066: a deployment check needs the robot to hold the map.
+        await database.ExecuteAsync($"UPDATE dbo.Robots SET AssignedMapVersionId='{mapId:D}', AssignedAreaKey=N'mapgate', MapAssignedAt=SYSDATETIMEOFFSET(), MapAssignedByUserId=(SELECT TOP(1) Id FROM dbo.Users WHERE Username=N'mapgate.technical') WHERE Id='{robotId:D}';");
 
         // Race a failed technical check against POI creation. Both legal lock orders
         // leave the map ineligible and therefore must reject the proposal mutation.
@@ -490,7 +493,12 @@ public sealed class BusinessFlowIntegrationTests
         {
             var item = Assert.Single((await Body(robotStatus)).GetProperty("data").EnumerateArray());
             Assert.Equal("AWAITING_DATA", item.GetProperty("connectionStatus").GetString());
+            Assert.False(item.GetProperty("readiness").GetProperty("reportingOnAssignedMap").GetBoolean());
         }
+        // ADR-0066: a PASS needs live data on the assigned map; a simulated Fleet Sync client sends it.
+        using (var sync = await FleetSync(host.Client, "mapgate-physical", robotCredential.Secret,
+            map.GetProperty("mapKey").GetString()!, map.GetProperty("frameId").GetString()!))
+            Assert.Equal(HttpStatusCode.OK, sync.StatusCode);
 
         using var passingCheck = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{mapId}/deployment-checks", technical,
             new { requestId = Guid.NewGuid(), robotCode = "mapgate-physical", packageSha256 = packageSha,
@@ -1078,6 +1086,23 @@ public sealed class BusinessFlowIntegrationTests
         var data = (await Body(response)).GetProperty("data");
         Assert.Equal(role, data.GetProperty("role").GetString());
         return data.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>A simulated Fleet Sync report with a provisioned credential; not evidence from a physical robot.</summary>
+    private static Task<HttpResponseMessage> FleetSync(HttpClient client, string robotCode, string secret, string mapKey, string frameId)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/fleet/v1/sync")
+        {
+            Content = JsonContent.Create(new
+            {
+                robotId = robotCode, streamId = Guid.NewGuid(), seq = 1, reportedAt = DateTimeOffset.UtcNow, mapKey, frameId,
+                pose = (object?)null, status = "IDLE", legId = (Guid?)null, localized = (bool?)null, motionReady = (bool?)null,
+                faultCode = (string?)null, batteryPercent = (double?)null
+            })
+        };
+        request.Headers.Add("X-Robot-Code", robotCode);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+        return client.SendAsync(request);
     }
 
     private static async Task<string> Login(HttpClient client, string username)

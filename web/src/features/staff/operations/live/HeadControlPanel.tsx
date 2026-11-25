@@ -4,11 +4,12 @@ import { HEAD_LOCK_TEXT, headRefusal, useHeadCommand, useHeadMode, useTourHeadSt
 import { HeadHomeButton } from './HeadHomeButton'
 
 /**
- * One tap, in full motor steps: PAN 0,6° per step (3:1 gearbox) and TILT 0,36° per step (5:1 gearbox since 14/11/2026),
- * so both turn about 9° / 5,4° per tap (`robot/ros2_ws/src/stm32_bridge/HEAD_CONTROL.md`). The backend allows ±20.
+ * One tap, in full motor steps: PAN 0,45° per step (4:1 gearbox) and TILT 0,1125° per step (16:1 gearbox since
+ * 24/11/2026), so a tap turns 9° / 2,25° (`robot/ros2_ws/src/stm32_bridge/HEAD_CONTROL.md`). The backend allows ±20;
+ * holding a button turns further.
  */
-const PAN_TAP_STEPS = 15
-const TILT_TAP_STEPS = 15
+const PAN_TAP_STEPS = 20
+const TILT_TAP_STEPS = 20
 /** A press longer than this turns the head until release; the backend's JOG lives 600 ms, so it is repeated. */
 const HOLD_AFTER_MS = 350
 const JOG_EVERY_MS = 200

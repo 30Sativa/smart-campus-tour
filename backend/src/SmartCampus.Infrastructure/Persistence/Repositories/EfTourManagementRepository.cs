@@ -49,7 +49,8 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
             a.Action == TourLifecycleEvents.Started || a.Action == TourLifecycleEvents.Next ||
             a.Action == TourLifecycleEvents.EndedEarly || a.Action == TourLifecycleEvents.LegRetried ||
             a.Action == TourLifecycleEvents.CommandReconciled ||
-            a.Action == TourLifecycleEvents.CapacityChanged || a.Action == TourLifecycleEvents.OperatorChanged), ct);
+            a.Action == TourLifecycleEvents.CapacityChanged || a.Action == TourLifecycleEvents.OperatorChanged ||
+            a.Action == TourLifecycleEvents.NarrationRefreshed), ct);
 
     public async Task<PagedResult<TourSummary>> ListAsync(TourListRequest request, CancellationToken ct)
     {
@@ -120,6 +121,18 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
 
     public Task<TourRobotReservation?> FindActiveReservationAsync(Guid id, CancellationToken ct) =>
         db.TourRobotReservations.SingleOrDefaultAsync(r => r.TourId == id && r.ReleasedAt == null, ct);
+
+    public async Task<DateTimeOffset?> EndHoldAsync(Guid tourId, DateTimeOffset endedAt, CancellationToken ct)
+    {
+        var hold = await FindActiveReservationAsync(tourId, ct);
+        if (hold is null) return null;
+        // CK_TourRobotReservations_Window needs EndsAt > StartsAt, even for a Tour that ends the second it starts.
+        var endsAt = endedAt > hold.StartsAt ? endedAt : hold.StartsAt.AddSeconds(1);
+        if (endsAt >= hold.EndsAt) return null;
+        var previous = hold.EndsAt;
+        hold.EndsAt = endsAt;
+        return previous;
+    }
 
     public Task<bool> HasRobotTourNeedingAssistanceAsync(Guid robotId, Guid? exceptTourId, CancellationToken ct) =>
         db.Tours.AsNoTracking().AnyAsync(t => t.OperationalStatus == "NEEDS_ASSISTANCE" && t.Id != exceptTourId &&

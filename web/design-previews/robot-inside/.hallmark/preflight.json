@@ -1,0 +1,46 @@
+{
+  "mode": "redesign",
+  "depth": "full preview",
+  "scope": "app",
+  "productionEdits": false,
+  "purpose": "Interactive learning tool for visitors exploring signal flow inside the CampusTour robot",
+  "userPreference": "3D model focus, preview before application",
+  "evidence": [
+    {
+      "file": "src/routes/public/RobotInsidePage.tsx:25",
+      "finding": "Shared public navigation and footer"
+    },
+    {
+      "file": "src/features/landing/home-3d.css:2",
+      "finding": "Pale green, dark teal, lime and Be Vietnam Pro existing brand"
+    },
+    {
+      "file": "src/features/landing/sections/RobotFlowSection.tsx:90",
+      "finding": "Five functions, step navigation and real 3D viewer"
+    },
+    {
+      "file": "src/features/landing/robot-explode/flows.ts:96",
+      "finding": "Real function, step and signal metadata reused"
+    }
+  ],
+  "kept": [
+    "SiteNav",
+    "SiteFooter",
+    "FLOWS and every step",
+    "Real RobotFlowViewer with orbit and zoom",
+    "Technical details and signal legend"
+  ],
+  "introduced": [
+    "Compact header",
+    "Model on left and current step on right",
+    "Plain function tabs",
+    "Pause control and reduced motion snapshot",
+    "URL selection",
+    "Isolated preview only"
+  ],
+  "material": {
+    "real": "Project 3D model and source signal data",
+    "absent": "No invented facts, external images or marketing figures"
+  },
+  "review": "in-thread per Codex harness"
+}

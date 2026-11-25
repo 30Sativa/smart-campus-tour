@@ -1163,7 +1163,8 @@ public sealed class InvitationEndpointTests
 
         var early = await AskAsync(host.Client, f.TourId, cookie, "Robot dùng cảm biến gì?");
         Assert.Equal(HttpStatusCode.Conflict, early.Status);
-        Assert.Equal("TOUR_NOT_RUNNING", early.Body.GetProperty("errors").GetProperty("code").GetString());
+        // The Tour starts in days: the waiting room only asks from 15 minutes before the start.
+        Assert.Equal("AI_OPENS_LATER", early.Body.GetProperty("errors").GetProperty("code").GetString());
         Assert.Empty(assistant.Requests);
 
         await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='RUNNING',StartedAt=SYSDATETIMEOFFSET();");

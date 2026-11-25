@@ -1,47 +1,42 @@
 import { useState, type FormEvent } from 'react'
-import { ApiError } from '../../api/client'
-import { Activity, CircleCheck, CircleX, FileArchive, Layers, LoaderCircle, Upload } from 'lucide-react'
+import { Activity, Bot, CircleCheck, FileArchive, Layers, LoaderCircle, Upload } from 'lucide-react'
 import { PageHeader, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
 import { MapVersionTable } from '../../features/technical/MapVersionTable'
-import { RobotPicker } from '../../features/technical/RobotPicker'
-import { CheckRow, ResultToggle, SaveBlockedHint, TechnicalPage } from '../../features/technical/TechnicalUi'
-import { mapVersionLabel } from '../../features/technical/poi-labels'
+import { TechnicalPage } from '../../features/technical/TechnicalUi'
+import { areaLabel, duplicateAreaNames, mapVersionLabel, sameAreaName } from '../../features/technical/poi-labels'
 import { RetireMapDialog } from '../../features/technical/RetireMapDialog'
 import { formatDateTime } from '../../components/ui/date-time'
-import { useAllMapVersions, useMapAreas, usePhysicalRobots, useRecordDeployment, useReopenMap, useUploadMap } from '../../features/technical/technical-hooks'
+import { useAllMapVersions, useMapAreas, useReopenMap, useUploadMap } from '../../features/technical/technical-hooks'
 import { errorText, mapUploadFieldErrors } from '../../features/technical/technical-format'
 import type { MapAreaOption, MapVersionItem } from '../../features/technical/api/technical'
 
-const shortSha = (sha: string) => (sha.length > 16 ? `${sha.slice(0, 8)}…${sha.slice(-4)}` : sha)
-
 /**
- * Map versions: a figure strip, the version table, and two centered dialogs (upload a
- * package, record an on-robot check) so the table stays the page.
+ * Map versions: a figure strip, the version table and the upload dialog, so the table stays the page. Nothing here
+ * records a deployment check: that belongs to the robot's setup dialog, which "Triển khai cho robot…" opens.
  */
 export default function TechnicalMapsPage() {
   const maps = useAllMapVersions()
-  const robots = usePhysicalRobots()
   const [uploading, setUploading] = useState(false)
   const [uploadArea, setUploadArea] = useState<MapAreaOption | null>(null)
-  const [checking, setChecking] = useState<MapVersionItem | null>(null)
   const [retiring, setRetiring] = useState<MapVersionItem | null>(null)
   const [tab, setTab] = useState<'active' | 'retired'>('active')
   // An area's row shows its newest version still in use, so retiring the newest one falls back to the one before (ADR-0041).
   const items = (maps.data ?? []).filter(item => !isRetired(item))
   const retired = (maps.data ?? []).filter(isRetired)
   const passed = items.filter((item) => item.canUseForPoiPreparation).length
-  const failed = items.filter((item) => item.technicalCheckStatus === 'FAILED').length
+  // A robot assigned but not ready cannot run anything on the map, so the figure counts only ready ones.
+  const ready = items.filter(item => item.runningRobot?.readiness.state === 'READY').length
   const unchecked = items.filter((item) => item.technicalCheckStatus === 'PENDING').length
 
   return (
     <TechnicalPage>
       <PageHeader
-        eyebrow="Bản đồ & POI"
+        eyebrow="Chuẩn bị"
         title="Bản đồ"
-        description="Tải bản đồ lên, nạp lên robot rồi ghi kết quả kiểm tra."
+        description="Tải bản đồ lên rồi triển khai cho robot. Kiểm tra triển khai làm trong hộp Thiết lập của robot."
         action={<button type="button" className={buttonClass('primary')} onClick={() => setUploading(true)}><Upload size={15} aria-hidden="true" />Tải lên bản đồ mới</button>}
       />
 
@@ -49,9 +44,9 @@ export default function TechnicalMapsPage() {
         <div className="mb-3">
           <StatStrip label="Tình trạng bản đồ" columns="sm:grid-cols-4">
             <StatTile icon={Layers} label="Phiên bản đã tải lên" value={items.length} />
-            <StatTile icon={CircleCheck} label="Đủ điều kiện tạo POI" value={passed} />
-            <StatTile icon={Activity} label="Chờ kỹ thuật kiểm tra" value={unchecked} tone="warn" />
-            <StatTile icon={CircleX} label="Kiểm tra chưa đạt" value={failed} tone="danger" />
+            <StatTile icon={CircleCheck} label="Dùng được để soạn POI" value={passed} />
+            <StatTile icon={Bot} label="Có robot sẵn sàng" value={ready} />
+            <StatTile icon={Activity} label="Chưa kiểm tra triển khai" value={unchecked} tone="warn" />
           </StatStrip>
         </div>
       )}
@@ -64,11 +59,10 @@ export default function TechnicalMapsPage() {
       {maps.isPending ? <section className={panelClass}><p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p></section>
         : maps.error ? <section className={panelClass}><p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(maps.error)}</p></section>
         : tab === 'retired' ? <RetiredMapList items={retired} />
-        : items.length ? <MapVersionTable items={items} robots={robots} onUpload={area => { setUploadArea(area); setUploading(true) }} onCheck={setChecking} onRetire={setRetiring} />
+        : items.length ? <MapVersionTable items={items} onUpload={area => { setUploadArea(area); setUploading(true) }} onRetire={setRetiring} />
         : <section className={panelClass}><EmptyState variant="empty" title={retired.length ? 'Không có bản đồ đang dùng' : 'Chưa có bản đồ'} description={retired.length ? 'Mọi phiên bản đã ngừng sử dụng. Mở lại ở tab Ngừng sử dụng hoặc tải phiên bản mới.' : 'Tải tệp bản đồ đầu tiên lên để bắt đầu.'} /></section>}
 
       <UploadModal key={uploadArea?.areaKey ?? 'new-area'} open={uploading} initialArea={uploadArea} onClose={() => { setUploading(false); setUploadArea(null) }} />
-      <DeploymentModal key={checking?.map.id ?? 'closed'} item={checking} onClose={() => setChecking(null)} />
       {retiring && <RetireMapDialog key={retiring.map.id} map={retiring.map} onClose={() => setRetiring(null)} />}
     </TechnicalPage>
   )
@@ -119,8 +113,10 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
   const uploadErrors = upload.error ? mapUploadFieldErrors(upload.error) : {}
   const matchingArea = areas.data?.find(area => area.areaKey === areaKey)
   const duplicateNewKey = mode === 'new' && Boolean(matchingArea)
-  const areaReady = !areas.isPending && !areas.isError && (mode === 'new' ? !duplicateNewKey && Boolean(areaKey && areaName.trim()) : Boolean(matchingArea))
-  const missing = !packageFile ? 'Chọn tệp bản đồ (.zip) để tải lên.' : !areaReady && !duplicateNewKey ? (mode === 'new' ? 'Nhập tên khu vực.' : 'Chọn khu vực.') : null
+  // The server refuses a new area whose name, trimmed and ignoring case, another area has (MAP_AREA_NAME_TAKEN); say so while typing.
+  const takenNameArea = mode === 'new' && areaName.trim() ? areas.data?.find(area => sameAreaName(area.displayName, areaName)) : undefined
+  const areaReady = !areas.isPending && !areas.isError && (mode === 'new' ? !duplicateNewKey && !takenNameArea && Boolean(areaKey && areaName.trim()) : Boolean(matchingArea))
+  const missing = !packageFile ? 'Chọn tệp bản đồ (.zip) để tải lên.' : !areaReady && !duplicateNewKey && !takenNameArea ? (mode === 'new' ? 'Nhập tên khu vực.' : 'Chọn khu vực.') : null
   const fieldChanged = () => { upload.reset(); setRequestId(crypto.randomUUID()) }
   const switchMode = (next: 'new' | 'existing') => { setMode(next); setAreaKey(''); setAreaName(''); setKeyEdited(false); fieldChanged() }
   const pickFile = (file: File | null | undefined) => { setPackageFile(file ?? null); fieldChanged() }
@@ -134,7 +130,7 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
   }
   const segment = (active: boolean) => `flex-1 cursor-pointer rounded-md px-3 py-1.5 text-center text-[13px] font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#2563eb] ${active ? 'bg-white text-[#0f172a] shadow-sm' : 'text-[#64748b] hover:text-[#334155]'}`
   return (
-    <Modal open={open} title={initialArea ? `Tải phiên bản mới · ${initialArea.displayName}` : 'Tải lên bản đồ mới'} description="Sau khi tải lên, hãy nạp bản đồ lên robot và ghi kết quả kiểm tra." onClose={close}
+    <Modal open={open} title={initialArea ? `Tải phiên bản mới · ${areaLabel(initialArea.displayName, initialArea.areaKey, duplicateAreaNames((areas.data ?? []).map(area => ({ areaKey: area.areaKey, name: area.displayName }))))}` : 'Tải lên bản đồ mới'} description="Sau khi tải lên, mở chi tiết bản đồ và bấm Triển khai cho robot." onClose={close}
       footer={<div className="flex items-center justify-end gap-3">{missing && <p className="mr-auto text-xs text-[#64748b]">{missing}</p>}<button type="button" className={buttonClass('secondary')} onClick={close}>Hủy</button><button type="submit" form="map-upload-form" className={buttonClass('primary')} disabled={!packageFile || !areaReady || upload.isPending}>{upload.isPending ? 'Đang tải…' : 'Tải lên bản đồ'}</button></div>}>
       <form id="map-upload-form" className="space-y-4" onSubmit={submit}>
         <fieldset>
@@ -153,10 +149,10 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
             <option value="">Chọn khu vực</option>{areas.data?.map(area => <option key={area.areaKey} value={area.areaKey}>{area.displayName} · {area.areaKey}</option>)}
           </select>{areaKey && <p className="mt-1 text-xs text-[#64748b]">Bản đồ sẽ được lưu thành phiên bản mới của khu vực này.</p>}
         </div> : <div className="grid gap-3 sm:grid-cols-[1.4fr_1fr]">
-          <div><label className={labelClass} htmlFor="map-area-name">Tên khu vực</label><input id="map-area-name" aria-invalid={Boolean(uploadErrors.areaName)} className={`${inputClass} mt-1`} required maxLength={150} value={areaName} onChange={event => { const value = event.target.value; setAreaName(value); if (!keyEdited) setAreaKey(areaKeyFrom(value)); fieldChanged() }} placeholder="Thư viện tầng 1" />{uploadErrors.areaName && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{uploadErrors.areaName}</p>}</div>
+          <div><label className={labelClass} htmlFor="map-area-name">Tên khu vực</label><input id="map-area-name" aria-invalid={Boolean(uploadErrors.areaName) || Boolean(takenNameArea)} className={`${inputClass} mt-1`} required maxLength={150} value={areaName} onChange={event => { const value = event.target.value; setAreaName(value); if (!keyEdited) setAreaKey(areaKeyFrom(value)); fieldChanged() }} placeholder="Thư viện tầng 1" />{takenNameArea ? <p role="alert" className="mt-1 text-xs text-[#b23e18]">Đã có khu vực tên {takenNameArea.displayName} ({takenNameArea.areaKey}). Chọn Khu vực đã có hoặc đặt tên khác.</p> : uploadErrors.areaName && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{uploadErrors.areaName}</p>}</div>
           <div><label className={labelClass} htmlFor="map-area-key">Mã khu vực</label><input id="map-area-key" aria-describedby="map-area-key-help" aria-invalid={Boolean(uploadErrors.areaKey) || duplicateNewKey} className={`${inputClass} mt-1 font-mono`} required maxLength={80} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={areaKey} onChange={event => { setAreaKey(event.target.value); setKeyEdited(true); fieldChanged() }} placeholder="thu-vien-tang-1" /><p id="map-area-key-help" className="mt-1 text-xs text-[#64748b]">Tự tạo từ tên, có thể sửa.</p></div>
           {uploadErrors.areaKey && <p role="alert" className="text-xs text-[#b23e18] sm:col-span-2">{uploadErrors.areaKey}</p>}
-          {duplicateNewKey && <p role="alert" className="text-xs text-[#b23e18] sm:col-span-2">Mã khu vực đã tồn tại. Chuyển sang “Khu vực đã có” và chọn {matchingArea?.displayName} · {matchingArea?.areaKey}.</p>}
+          {duplicateNewKey && matchingArea !== takenNameArea && <p role="alert" className="text-xs text-[#b23e18] sm:col-span-2">Mã khu vực đã tồn tại. Chuyển sang “Khu vực đã có” và chọn {matchingArea?.displayName} · {matchingArea?.areaKey}.</p>}
         </div>}
         <div>
           <span className={labelClass} id="map-package-label">Tệp bản đồ (.zip)</span>
@@ -170,53 +166,6 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
           <p id="map-package-help" className="mt-1 text-xs text-[#64748b]">Gồm 1 tệp .yaml và 1 tệp .pgm đặt ngay trong ZIP (không để trong thư mục con).</p>
         </div>
         {uploadErrors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e18]">{uploadErrors.form}</p>}
-      </form>
-    </Modal>
-  )
-}
-
-function DeploymentModal({ item, onClose }: { item: MapVersionItem | null; onClose: () => void }) {
-  const deployment = useRecordDeployment()
-  const robots = usePhysicalRobots(Boolean(item))
-  const [robotCode, setRobotCode] = useState('')
-  const [note, setNote] = useState('')
-  // Nothing is chosen or ticked up front. The server derives the result from the two ticks, so the chosen
-  // result only has to agree with them: Đạt needs both, Không đạt needs at least one left unticked.
-  const [resultCode, setResultCode] = useState<'PASS' | 'FAIL' | null>(null)
-  const [localizationPassed, setLocalizationPassed] = useState(false)
-  const [displayPassed, setDisplayPassed] = useState(false)
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID())
-  const map = item?.map
-  const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
-  const connectionUnconfirmed = selectedRobot?.connectionStatus === 'UNCONFIRMED'
-  const allTicked = localizationPassed && displayPassed
-  const passBlocked = resultCode === 'PASS' && allTicked && connectionUnconfirmed
-  const missingToSave = [
-    !resultCode && 'chọn kết quả',
-    !robotCode && 'chọn robot',
-    resultCode === 'PASS' && !allTicked && 'tick đủ hai mục để ghi Đạt',
-    resultCode === 'FAIL' && allTicked && 'bỏ tick mục không đạt',
-    !note.trim() && (resultCode === 'FAIL' ? 'ghi lý do không đạt vào bằng chứng' : 'nhập bằng chứng kiểm tra'),
-  ].filter((value): value is string => Boolean(value))
-  const changed = () => { deployment.reset(); setRequestId(crypto.randomUUID()) }
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!map || missingToSave.length || passBlocked) return
-    deployment.mutate({ mapVersionId: map.id, requestId, robotCode, packageSha256: map.packageSha256, localizationPassed, displayPassed, evidenceNote: note }, {
-      onSuccess: onClose,
-      onError: cause => { if (cause instanceof ApiError && cause.status === 404) void robots.refetch() },
-    })
-  }
-  if (!map) return null
-  return (
-    <Modal open title={`Ghi kết quả kiểm tra · ${mapVersionLabel(map)}`} description={`Chỉ ghi khi robot đã nạp đúng tệp này (checksum ${shortSha(map.packageSha256)}).`} onClose={onClose}
-      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="map-check-missing" missing={missingToSave} tone="neutral" /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Hủy</button><button type="submit" form="map-check-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'map-check-missing' : undefined} disabled={deployment.isPending || robots.isPending || robots.isError || !robots.data?.length || missingToSave.length > 0 || passBlocked}>Lưu kết quả kiểm tra</button></div>}>
-      <form id="map-check-form" className="space-y-3.5" onSubmit={submit}>
-        <div><RobotPicker id="map-check-robot" label="Robot kiểm tra" value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần hoàn tất cấu hình robot trước khi ghi kết quả kiểm tra." />{passBlocked && <p role="status" className="mt-1 text-sm text-[#b23e18]">Robot chưa xác nhận kết nối. Hãy bật kết nối trên robot rồi bấm Cập nhật trạng thái để lưu kết quả đạt. Nếu kiểm tra thực tế không đạt, chọn Không đạt và bỏ tick mục chưa đạt.</p>}</div>
-        <ResultToggle id="map-check-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do vào bằng chứng." />
-        <div className="space-y-2"><CheckRow checked={localizationPassed} onChange={value => { setLocalizationPassed(value); changed() }}>Định vị đạt</CheckRow><CheckRow checked={displayPassed} onChange={value => { setDisplayPassed(value); changed() }}>Map hiển thị đúng</CheckRow></div>
-        <div><label className={labelClass} htmlFor="map-check-note">Bằng chứng kiểm tra</label><textarea id="map-check-note" rows={4} className={`${inputClass} mt-1`} required maxLength={2000} value={note} onChange={event => { setNote(event.target.value); changed() }} placeholder="Ghi nhận quan sát thực tế, sai lệch, ảnh chụp màn hình đã lưu ở đâu…" /></div>
-        {deployment.error && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errorText(deployment.error)}</p>}
       </form>
     </Modal>
   )

@@ -8,6 +8,7 @@
     when map evidence is only missing rather than wrong (#232);
   - step 3.3, the audited `IsDispatchEnabled` writer `POST /api/technical/physical-robots/{id}/dispatch` (#231);
   - STM32 link loss held as a state, not a one-shot stop (#270).
+- **Partially superseded by ADR-0066** (23/11/2026): changing or clearing a robot's map assignment turns its dispatch off automatically, audited like a manual stop; enabling dispatch uses ADR-0066's readiness rule, which adds the connection confirmation.
 
   **Still open:** no GATE A record exists, so every number below is still a target, not a measurement, and no robot
   may have `IsDispatchEnabled` set. Step 3.4 (Decision 10), the hardware E-stop input wired to the STM32 and read by

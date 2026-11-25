@@ -28,4 +28,5 @@ public interface IStudentAccessRepository
     Task<StudentQuestionAccess?> FindQuestionAccessAsync(Guid tourId, byte[] tokenHash, DateTimeOffset now, CancellationToken ct);
 }
 
-public sealed record StudentQuestionAccess(Guid SessionId, string TourState, string RowType);
+/// <summary><see cref="ScheduledStartAt"/> decides when the waiting room may already ask (StudentQuestionWindow).</summary>
+public sealed record StudentQuestionAccess(Guid SessionId, string TourState, string RowType, DateTimeOffset? ScheduledStartAt = null);

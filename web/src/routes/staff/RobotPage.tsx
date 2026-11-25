@@ -37,7 +37,7 @@ export default function RobotPage() {
             <tbody className="divide-y divide-[#eef1f4]">{data.map(robot => <tr key={robot.id}>
               <td className={`${tdClass} font-semibold text-[#0f172a]`}>{robot.displayName ?? '-'}</td>
               <td className={`${tdClass} font-mono text-xs`}>{robot.robotCode}</td>
-              <td className={tdClass}>{connectionStatusLabel(robot.connectionStatus)}</td>
+              <td className={tdClass}>{/* WRONG_MAP: sending, but refused for naming another map; Technical changes the MiniPC. */}<span className={robot.connectionStatus === 'WRONG_MAP' ? 'font-semibold text-amber-800' : undefined}>{connectionStatusLabel(robot.connectionStatus)}</span></td>
               <td className={`${tdClass} text-xs text-muted tabular-nums`}>{formatDateTime(robot.lastSyncReceivedAt)}</td>
               <td className={`${tdClass} text-right`}><Link to={`/staff/digital-twin?robot=${encodeURIComponent(robot.robotCode)}`} aria-label={`Mở Digital Twin cho ${robot.robotCode}`} className={buttonClass('secondary', 'sm')}><Cpu size={14} aria-hidden="true" />Mở Digital Twin</Link></td>
             </tr>)}</tbody>

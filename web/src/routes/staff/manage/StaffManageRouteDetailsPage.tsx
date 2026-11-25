@@ -13,6 +13,7 @@ import { formatMinutesSeconds } from '../../../components/ui/date-time'
 import { versionedRoutesApi, type VersionedRoute } from '../../../features/administration/routes/versioned-api'
 import { DeactivateRouteDialog } from '../../../features/administration/routes/DeactivateRouteDialog'
 import { RouteMap } from '../../../features/administration/routes/RouteMap'
+import { RouteStopNarrationList } from '../../../features/administration/routes/RouteStopNarrationList'
 import { NewerPoiRevisionNotice } from '../../../features/administration/routes/NewerPoiRevisionNotice'
 import { RetiredPoiBadge } from '../../../features/administration/routes/RetiredPoiBadge'
 import { tourKeys } from '../../../features/administration/tours/hooks'
@@ -142,11 +143,7 @@ export default function StaffManageRouteDetailsPage() {
     <section className={`${panelClass} mt-4 p-4`} aria-label="Các điểm dừng">
       <h2 className="font-semibold">Các điểm dừng</h2>
       <div className="mt-2 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <ol className="divide-y divide-[#eef1f4]">{value.stops.map(stop => <li className="flex items-center gap-3 py-2.5" key={stop.poiRevisionId}>
-          <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#173b5f] text-xs font-semibold text-white">{stop.stopOrder}</span>
-          <span className="min-w-0 flex-1 break-words font-medium text-[#0f172a]">{stop.name}</span>
-          <span className="shrink-0 text-[13px] text-[#64748b]">Dừng {formatDuration(stop.dwellSeconds)}</span>
-        </li>)}</ol>
+        <RouteStopNarrationList stops={value.stops} />
         <RouteMap mapVersionId={value.mapVersionId} start={start} end={end}
           stops={[...value.stops].sort((a, b) => a.stopOrder - b.stopOrder).map(stop => ({ id: stop.poiRevisionId, name: stop.name, x: stop.x, y: stop.y }))} />
       </div>

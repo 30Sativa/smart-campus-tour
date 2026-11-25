@@ -22,6 +22,12 @@ public interface ITourManagementRepository
     /// <summary>Tracked; caller must hold the Tour root lock.</summary>
     Task<TourRobotReservation?> FindActiveReservationAsync(Guid id, CancellationToken ct);
     /// <summary>
+    /// Ends the Tour's active hold when the Tour ends: EndsAt becomes <paramref name="endedAt"/>, never at or before StartsAt,
+    /// and only if that is earlier. ReleasedAt stays for a pre-Start cancel (ADR-0047). Returns the previous EndsAt when it moved.
+    /// Caller holds the Tour root lock.
+    /// </summary>
+    Task<DateTimeOffset?> EndHoldAsync(Guid tourId, DateTimeOffset endedAt, CancellationToken ct);
+    /// <summary>
     /// True when a Tour holding the robot is in NEEDS_ASSISTANCE: the Tour named by <c>Robots.CurrentTourId</c>, or a RUNNING
     /// Tour assigned to it (the open-incident stand-in of ADR-0042 open decision 3).
     /// </summary>

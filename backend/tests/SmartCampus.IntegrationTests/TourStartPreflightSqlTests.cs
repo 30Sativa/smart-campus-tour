@@ -56,6 +56,22 @@ public sealed class TourStartPreflightSqlTests
     }
 
     [SchemaV11Fact]
+    public async Task ALegacyNewestCheckOnAnotherMap_BlocksStart_WithTheReadinessReason()
+    {
+        await using var w = await World.Create();
+        var other = await w.H.Send(new CreateMapVersionCommand(w.H.TechnicalId, new("other", "Other", Guid.NewGuid(), TourReadySqlTests.MapPackage("other"))));
+
+        // ADR-0066: the robot still holds the route's map, so only the readiness row fails.
+        var checks = await w.AssertBlocked(["robotEligibleForRoute"], RobotIntegritySqlTests.LegacyCheckSql(other.Id, TourReadySqlTests.Robot),
+            $"DELETE dbo.MapDeploymentChecks WHERE MapVersionId = '{other.Id}';");
+
+        // Round 3: the reason names what to do on the map the robot holds.
+        Assert.Equal(await RobotReadinessTestSupport.NotCheckedOnAssignedMapAsync(w.H.Database.ConnectionString, TourReadySqlTests.Robot,
+                "Pilot · pilot · phiên bản 1"),
+            Assert.Single(checks.Checks, check => check.Id == "robotEligibleForRoute").Detail);
+    }
+
+    [SchemaV11Fact]
     public async Task EachDatabaseCheck_FailsAlone_WithItsOwnId()
     {
         await using var w = await World.Create();
@@ -63,7 +79,8 @@ public sealed class TourStartPreflightSqlTests
         await w.AssertBlocked(["robotEligibleForRoute"],
             "UPDATE dbo.Robots SET FirstAcceptedSyncAt = NULL, FirstAcceptedMapKey = NULL, FirstAcceptedFrameId = NULL;",
             "UPDATE dbo.Robots SET FirstAcceptedSyncAt = SYSDATETIMEOFFSET(), FirstAcceptedMapKey = 'pilot', FirstAcceptedFrameId = 'map';");
-        await w.AssertBlocked(["robotMapMatchesRoute"],
+        // ADR-0066: the assignment is part of the readiness rule, so an unassigned robot also fails robotEligibleForRoute.
+        await w.AssertBlocked(["robotEligibleForRoute", "robotMapMatchesRoute"],
             "UPDATE dbo.Robots SET AssignedMapVersionId = NULL, AssignedAreaKey = NULL, MapAssignedAt = NULL, MapAssignedByUserId = NULL;", w.AssignMapSql);
         // Inspection is its own check; the open-incident stand-in does not report it again (ADR-0042 open decision 3, refined).
         await w.AssertBlocked(["robotNotNeedsInspection"],

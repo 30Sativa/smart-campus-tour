@@ -96,9 +96,9 @@ class HeadInterface:
         # Firmware HOME dung khi dau lech trai toi 16 do; chua 6 do du phong.
         node.declare_parameter('head_home_safe_left_deg', 10.0)
         # head/sweep. pan_deg_per_step va pan_limit_deg PHAI khop firmware head_core.h
-        # (buoc du qua hop so 3:1 = 0.6 do; HEAD_PAN_LIMIT_CDEG = 17000). sweep_speed_dps chi de tinh timeout.
+        # (buoc du qua hop so 4:1 = 0.45 do; HEAD_PAN_LIMIT_CDEG = 17000). sweep_speed_dps chi de tinh timeout.
         node.declare_parameter('head_sweep_deg', 135.0)
-        node.declare_parameter('head_sweep_pan_deg_per_step', 0.6)
+        node.declare_parameter('head_sweep_pan_deg_per_step', 0.45)
         node.declare_parameter('head_sweep_pan_limit_deg', 170.0)
         node.declare_parameter('head_sweep_speed_dps', 30.0)
         self._move_timeout = float(node.get_parameter('head_move_timeout').value)

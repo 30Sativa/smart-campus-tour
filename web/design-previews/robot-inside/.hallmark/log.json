@@ -1,0 +1,61 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "brand",
+  "axes": "pale green/sans/lime",
+  "hero": "none, interactive tool",
+  "nav": "kept",
+  "footer": "kept",
+  "imagery": "real CampusTour GLB and captured fallback",
+  "photos": [],
+  "entry": "src/routes/public/RobotInsidePage.tsx",
+  "fingerprint": "compact header / tabs / model left / active step right / disclosure / footer",
+  "sections": [
+   "heading",
+   "function tabs",
+   "3D workbench",
+   "footer"
+  ],
+  "signature": "real interactive robot signal flow",
+  "waived": [
+   "49b original footer names"
+  ],
+  "prompt": "Apply the approved model-first preview",
+  "sweep": "0 FAIL, 0 WARN, 3 footer wrap waivers; in-thread visual review",
+  "verification": "scripts/verify web, 990 tests and browser smoke",
+  "date": "2026-11-23"
+ },
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "previewOnly": true,
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "brand",
+  "axes": "pale green/sans/lime",
+  "hero": "none, interactive tool",
+  "nav": "kept",
+  "footer": "kept",
+  "imagery": "existing interactive robot model",
+  "photos": [],
+  "entry": "index.html",
+  "fingerprint": "compact header / tabs / model left / explanation right / disclosure / retained footer",
+  "sections": [
+   "heading",
+   "function tabs",
+   "3D workbench",
+   "footer"
+  ],
+  "signature": "CampusTour robot signal flow",
+  "waived": [
+   "49b footer names"
+  ],
+  "prompt": "Interactive learning tool for visitors exploring signal flow inside the CampusTour robot",
+  "sweep": "0 FAIL, 1 WARN reviewed, 3 footer wrapping waivers",
+  "review": "in-thread",
+  "date": "2026-11-23"
+ }
+]

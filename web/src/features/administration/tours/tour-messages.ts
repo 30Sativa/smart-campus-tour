@@ -128,3 +128,17 @@ export function tourError(error: unknown, context: { quick?: boolean } = {}): st
   if (error.status === 400) return 'Dữ liệu chưa hợp lệ. Kiểm tra tên, lịch, tuyến và video dự phòng.'
   return 'Máy chủ chưa xử lý được yêu cầu. Hãy thử lại.'
 }
+
+/**
+ * A 409 from the narration refresh is either one of the ADR-0067 refusals or a refusal of the route save the refresh repeats (a POI no
+ * longer passed, the map unusable, …); the server's sentence says what to do in both. A stale Tour keeps the usual text.
+ */
+export function narrationError(error: unknown): string {
+  if (error instanceof ApiError && error.status === 409 && narrationConflictCode(error) !== 'STALE_VERSION')
+    return backendMessage(error) ?? tourError(error)
+  return tourError(error)
+}
+
+function narrationConflictCode(error: ApiError): string | undefined {
+  try { return (JSON.parse(error.body) as { errors?: { code?: string } })?.errors?.code } catch { return undefined }
+}

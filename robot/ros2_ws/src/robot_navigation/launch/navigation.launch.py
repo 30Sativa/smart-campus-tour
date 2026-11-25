@@ -26,7 +26,10 @@
 #   ros2 launch robot_navigation navigation.launch.py map:=/path/to/my_map.yaml
 # =============================================================================
 from launch import LaunchDescription
+import copy
 import os
+import re
+import tempfile
 
 import yaml
 
@@ -37,10 +40,9 @@ from launch.actions import Shutdown
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.logging import get_logger
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression, TextSubstitution
 from launch_ros.actions import Node, PushRosNamespace, SetRemap
 from launch_ros.substitutions import FindPackageShare
-from nav2_common.launch import RewrittenYaml
 
 
 def _check_map(context, *args, **kwargs):
@@ -66,36 +68,122 @@ def _check_map(context, *args, **kwargs):
     return [LogInfo(msg=f'[navigation] Dung map: {path}')]
 
 
-# Camera mode only (robot/docs/depth-camera.md). RPP checks for a collision
-# min(v * T, carrot 0.8 m) ahead; with the V2/V3 T = 1.0 s that is 0.2 m at 0.2 m/s,
-# inside the depth camera's 0.6 m blind zone, so a low obstacle seen only by the
-# camera is lost before RPP reacts. T = 4.0 s reaches the 0.8 m carrot: the robot
-# stops ~0.7 m away, where the camera still sees the obstacle. LiDAR-only runs keep
-# the params file exactly as it is.
+# Camera mode only (robot/docs/depth-camera.md section 6). LiDAR-only runs pass the params file
+# and the BT trees to Nav2 exactly as they are. Camera mode hands Nav2 a copy with these changes:
+#
+# 1. RPP checks for a collision min(v * T, carrot 0.8 m) ahead; with the V2/V3 T = 1.0 s that is
+#    0.2 m at 0.2 m/s, inside the depth camera's 0.6 m blind zone, so a low obstacle seen only by
+#    the camera is lost before RPP reacts. T = 4.0 s reaches the 0.8 m carrot: the robot stops
+#    ~0.7 m away, where the camera still sees the obstacle.
 CAMERA_NAV2_REWRITES = {
-    'controller_server.ros__parameters.FollowPath.max_allowed_time_to_collision_up_to_carrot': '4.0',
+    'controller_server.ros__parameters.FollowPath.max_allowed_time_to_collision_up_to_carrot': 4.0,
 }
+# 2. The planner sees what the camera sees (ADR-0068): the local depth layer is copied into the
+#    global costmap, so a low box the LiDAR misses gets a path around it when there is room, and
+#    the robot stops and waits only when there is none. The copy marks up to 2.0 m (local: 3.0 m):
+#    depth noise grows with range^2 and a global mark does not move out of a rolling window.
+CAMERA_GLOBAL_DEPTH_MAX_RANGE = 2.0
+#    Both depth layers also start clearing 0.65 m from the camera instead of 0.60 m. With both at
+#    0.60, a low box that slides into 0.55-0.60 m is no longer marked (the Astra returns nothing
+#    under 0.6 m), yet the rays to the wall behind it still cross its cell at the 0.6 m edge and
+#    erase it (stop_sim.py: a box appearing 0.65 m ahead, robot crept 0.22 m into it). One 5 cm
+#    cell of margin keeps it; at the usual ~0.7 m stop a removed box is still cleared by the rays.
+CAMERA_DEPTH_RAYTRACE_MIN_RANGE = 0.65
+# 3. The BT recoveries clear costmaps entirely, which also forgets a low box only the camera marked.
+#    Once the box is inside the camera's 0.6 m blind zone nothing marks it again and the robot
+#    drives into it (robot, 25/11/2026). In camera mode the trees clear only OUTSIDE a square
+#    centred on the robot (Humble's clear_except service keeps a square of side reset_distance).
+#    2.2 m keeps 1.1 m around the centre: camera 0.394 m + blind zone 0.60 m + margin. Farther
+#    marks are still cleared and, if real, drawn again, since the camera sees them.
+CAMERA_CLEAR_KEEP_M = 2.2
+CAMERA_BT_KEYS = ('bt_navigator.ros__parameters.default_nav_to_pose_bt_xml',
+                  'bt_navigator.ros__parameters.default_nav_through_poses_bt_xml')
+_CLEAR_ENTIRE = re.compile(r'<ClearEntireCostmap(\s+name="[^"]*")?\s+'
+                           r'service_name="(local|global)_costmap/clear_entirely_(local|global)_costmap"\s*/>')
+_PKG_SHARE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_LOCAL_DEPTH = 'local_costmap.local_costmap.ros__parameters.depth_obstacle_layer'
+_GLOBAL = 'global_costmap.global_costmap.ros__parameters'
+
+
+def camera_tree(xml):
+    """(tree, n): the BT with each 'clear entirely' turned into 'clear except the square'."""
+    return _CLEAR_ENTIRE.subn(
+        lambda m: f'<ClearCostmapExceptRegion{m.group(1) or ""} '
+                  f'service_name="{m.group(2)}_costmap/clear_except_{m.group(3)}_costmap" '
+                  f'reset_distance="{CAMERA_CLEAR_KEEP_M}"/>', xml)
+
+
+def _yaml_get(data, path):
+    for key in path.split('.'):
+        data = data.get(key) if isinstance(data, dict) else None
+    return data
+
+
+def camera_params(data, folder):
+    """(Nav2 params for camera mode, notes): a copy of data; changed trees are written to folder."""
+    out, notes = copy.deepcopy(data), []
+    for path, value in CAMERA_NAV2_REWRITES.items():
+        *parents, leaf = path.split('.')
+        _yaml_get(out, '.'.join(parents))[leaf] = value
+    depth, glob = _yaml_get(out, _LOCAL_DEPTH), _yaml_get(out, _GLOBAL)
+    if isinstance(depth, dict):
+        for source in str(depth.get('observation_sources', '')).split():
+            if isinstance(depth.get(source), dict) and 'raytrace_min_range' in depth[source]:
+                depth[source]['raytrace_min_range'] = max(depth[source]['raytrace_min_range'],
+                                                          CAMERA_DEPTH_RAYTRACE_MIN_RANGE)
+    if isinstance(depth, dict) and isinstance(glob, dict) and isinstance(glob.get('plugins'), list):
+        if 'depth_obstacle_layer' not in glob['plugins']:
+            plugins = glob['plugins']
+            at = plugins.index('inflation_layer') if 'inflation_layer' in plugins else len(plugins)
+            glob['plugins'] = plugins[:at] + ['depth_obstacle_layer'] + plugins[at:]
+            glob['depth_obstacle_layer'] = copy.deepcopy(depth)
+            for source in glob['depth_obstacle_layer']['observation_sources'].split():
+                glob['depth_obstacle_layer'][source]['obstacle_max_range'] = CAMERA_GLOBAL_DEPTH_MAX_RANGE
+    else:
+        notes.append('no local depth_obstacle_layer or global costmap plugins: the planner does not see depth')
+    for path in CAMERA_BT_KEYS:
+        value = _yaml_get(data, path)
+        if not isinstance(value, str):
+            continue
+        source = value.replace('$(find-pkg-share robot_navigation)', _PKG_SHARE)
+        if not os.path.isfile(source):
+            notes.append(f'{value} not found, that tree is unchanged')
+            continue
+        tree, n = camera_tree(open(source).read())
+        if not n:
+            notes.append(f'{os.path.basename(source)} has no costmap clear, unchanged')
+            continue
+        tree_file = os.path.join(folder, os.path.basename(source)[:-len('.xml')] + '_camera.xml')
+        with open(tree_file, 'w') as f:
+            f.write(tree)
+        *parents, leaf = path.split('.')
+        _yaml_get(out, '.'.join(parents))[leaf] = tree_file
+    return out, notes
 
 
 def _nav2_params_for_mode(context, nav2_params_file, enable_camera):
-    """(params_file, log actions): the file itself, or a rewritten copy in camera mode."""
+    """(params_file, log actions): the file itself, or a camera-mode copy of it."""
     if not IfCondition(enable_camera).evaluate(context):
         return nav2_params_file, []
     source = nav2_params_file.perform(context)
     data = yaml.safe_load(open(source))
-    missing = []
-    for path in CAMERA_NAV2_REWRITES:
-        node = data
-        for key in path.split('.'):
-            node = node.get(key) if isinstance(node, dict) else None
-        if node is None:
-            missing.append(path)
+    missing = [path for path in CAMERA_NAV2_REWRITES if _yaml_get(data, path) is None]
     if missing:
         return nav2_params_file, [LogInfo(msg=f'[navigation] camera mode: {source} has no {missing}; '
                                               'using it unchanged (camera marks only, no longer RPP horizon)')]
-    rewritten = RewrittenYaml(source_file=source, param_rewrites=CAMERA_NAV2_REWRITES, convert_types=True)
-    return rewritten, [LogInfo(msg='[navigation] camera mode: RPP '
-                                   'max_allowed_time_to_collision_up_to_carrot 4.0 (depth-camera.md)')]
+    log_dir = os.environ.get('ROS_LOG_DIR')
+    folder = tempfile.mkdtemp(prefix='camera_nav2_', dir=log_dir if log_dir and os.path.isdir(log_dir) else None)
+    params, notes = camera_params(data, folder)
+    out = os.path.join(folder, os.path.basename(source)[:-len('.yaml')] + '_camera.yaml')
+    with open(out, 'w') as f:
+        # no line folding: nav2_bringup substitutes $(var ...) in the text before parsing it
+        yaml.safe_dump(params, f, sort_keys=False, width=100000)
+    return TextSubstitution(text=out), [LogInfo(msg=(
+        '[navigation] camera mode: RPP max_allowed_time_to_collision_up_to_carrot 4.0; depth also in the '
+        f'global costmap (to {CAMERA_GLOBAL_DEPTH_MAX_RANGE} m), depth clears from {CAMERA_DEPTH_RAYTRACE_MIN_RANGE} m; '
+        f'BT clears keep a {CAMERA_CLEAR_KEEP_M} m '
+        f'square around the robot: {folder} (depth-camera.md)'))] + \
+        [LogInfo(msg=f'[navigation] camera mode: {note}') for note in notes]
 
 
 def _nav2(context, nav2_launch, robot_id, use_sim_time, nav2_params_file, enable_camera):
@@ -505,7 +593,7 @@ def generate_launch_description():
             # this does the same without baking the robot id into the file.
             SetLaunchConfiguration('robot_ns', robot_ns),
 
-            # In camera mode the params file goes through CAMERA_NAV2_REWRITES first.
+            # In camera mode Nav2 gets the camera_params() copy of the params file.
             OpaqueFunction(function=_nav2, args=[nav2_launch, robot_id, use_sim_time,
                                                  nav2_params_file, enable_camera]),
         ]),

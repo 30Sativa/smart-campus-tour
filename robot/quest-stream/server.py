@@ -11,7 +11,9 @@ One process, two jobs:
   whether the Quest is attached / authorised and reads its battery with
   ``adb shell dumpsys battery`` (separate short adb calls; the video pipeline
   is not touched);
-* a small HTTP server (stdlib only) with ``/status``, ``/device`` and ``/health``.
+* a small HTTP server (stdlib only) with ``/status``, ``/device`` and ``/health``;
+* with a control URL, the tour bridge (tour_bridge.py): ``/quest/events`` on port 8890 tells the MC character
+  in the headset when the robot reaches a stop and what to say there.
 
 Browsers never talk to this process for video: MediaMTX serves the path over
 WebRTC (WHEP, ``http://<NUC>:8889/quest/whep``). Nothing is written to disk
@@ -26,6 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import logging.handlers
+import math
 import os
 import random
 import re
@@ -45,6 +48,8 @@ from typing import Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
+
+from tour_bridge import TourBridge, UsbReverse, read_mediamtx_tls, start_bridge_server
 
 MODULE_DIR = Path(__file__).resolve().parent
 
@@ -96,7 +101,7 @@ class Config:
     vf_override: str = ""  # full -vf replacement for experiments
 
     # Encoder.
-    encoder: str = "libx264"  # or h264_vaapi
+    encoder: str = "libx264"  # or h264_vaapi, or copy (scrcpy only: the Quest encodes the final picture)
     x264_preset: str = "veryfast"
     bitrate: str = "4M"
     maxrate: str = "6M"
@@ -118,6 +123,7 @@ class Config:
     scrcpy_max_size: int = 1600  # longest side sent by the Quest, 0 = full eye
     scrcpy_crop: str = ""  # W:H:X:Y on the Quest display, empty = the chosen eye's half
     scrcpy_angle: float = 0.0  # rotate the eye image clockwise on the Quest (degrees), after the crop
+    scrcpy_codec_options: str = ""  # extra MediaCodec options for the Quest's encoder, key[:type]=value,...
 
     # Camera on demand (ADR-0052): capture only while the backend says someone needs the camera
     # (a Tour runs on this robot, or a Staff page holds a lease). Empty control_url = always capture.
@@ -129,6 +135,16 @@ class Config:
     # ADR-0056: the same poll reports the headset (battery, adb, video) for the web. Off = keep polling and reporting,
     # but capture whenever the Quest is plugged in, as without a control URL.
     camera_on_demand: bool = True
+
+    # Tour bridge for the MC character in the headset (tour_bridge.py). Needs control_url: the Tour comes with the
+    # camera poll. 0 = off. Without cert/key it serves plain HTTP (Unity Editor tests only: the headset app pins
+    # the certificate and needs HTTPS); empty cert/key = MediaMTX's MTX_WEBRTCSERVERCERT/KEY from mediamtx.env.
+    bridge_port: int = 8890
+    bridge_host: str = "0.0.0.0"
+    bridge_token: str = ""
+    bridge_cert: str = ""
+    bridge_key: str = ""
+    bridge_usb_reverse: bool = True
 
     # Output: where FFmpeg publishes (MediaMTX RTSP) and how often a keyframe
     # is sent (a new WebRTC viewer starts on the next keyframe).
@@ -177,6 +193,7 @@ class Config:
             scrcpy_max_size=_env_int("QUEST_SCRCPY_MAX_SIZE", 1600),
             scrcpy_crop=_env("QUEST_SCRCPY_CROP", ""),
             scrcpy_angle=_env_float("QUEST_SCRCPY_ANGLE", 0.0),
+            scrcpy_codec_options=_env("QUEST_SCRCPY_CODEC_OPTIONS", ""),
             publish_url=_env("QUEST_PUBLISH_URL", "rtsp://127.0.0.1:8554/quest"),
             keyframe_interval=_env_float("QUEST_KEYFRAME_INTERVAL", 1.0),
             log_dir=Path(_env("QUEST_LOG_DIR", str(MODULE_DIR / "logs"))),
@@ -192,6 +209,13 @@ class Config:
         cfg.control_failsafe = _env("QUEST_CONTROL_FAILSAFE", "on").lower() in ("1", "on", "true", "yes")
         cfg.control_grace = _env_float("QUEST_CONTROL_GRACE", 60.0)
         cfg.camera_on_demand = _env("QUEST_CAMERA_ON_DEMAND", "on").lower() in ("1", "on", "true", "yes")
+        cfg.bridge_port = _env_int("QUEST_BRIDGE_PORT", 8890)
+        cfg.bridge_host = _env("QUEST_BRIDGE_HOST", "0.0.0.0")
+        cfg.bridge_token = _env("QUEST_BRIDGE_TOKEN", "")
+        mtx = read_mediamtx_tls(Path(_env("QUEST_MEDIAMTX_ENV", str(MODULE_DIR / "mediamtx.env"))))
+        cfg.bridge_cert = _env("QUEST_BRIDGE_CERT", "") or mtx.get("cert", "")
+        cfg.bridge_key = _env("QUEST_BRIDGE_KEY", "") or mtx.get("key", "")
+        cfg.bridge_usb_reverse = _env("QUEST_BRIDGE_USB_REVERSE", "on").lower() in ("1", "on", "true", "yes")
         cfg.validate()
         return cfg
 
@@ -202,8 +226,17 @@ class Config:
             raise SystemExit("CONFIG_ERROR QUEST_CROP_KEEP must be between 0.2 and 1.0")
         if self.width % 2 or self.height % 2:
             raise SystemExit("CONFIG_ERROR output width/height must be even")
-        if self.encoder not in ("libx264", "h264_vaapi"):
-            raise SystemExit("CONFIG_ERROR QUEST_ENCODER must be libx264 or h264_vaapi")
+        if self.encoder not in ("libx264", "h264_vaapi", "copy"):
+            raise SystemExit("CONFIG_ERROR QUEST_ENCODER must be libx264, h264_vaapi or copy")
+        if self.encoder == "copy":
+            if self.capture != "scrcpy":
+                raise SystemExit("CONFIG_ERROR QUEST_ENCODER=copy needs QUEST_CAPTURE=scrcpy (the Quest makes the picture)")
+            if self.vf_override or self.hwdec:
+                raise SystemExit("CONFIG_ERROR QUEST_ENCODER=copy does not decode: leave QUEST_VF and QUEST_HWDEC empty")
+            if parse_bitrate(self.bitrate) is None:
+                raise SystemExit("CONFIG_ERROR QUEST_VIDEO_BITRATE must look like 1M, 1200k or 1000000")
+        if not re.fullmatch(r"[A-Za-z0-9_.:=,-]*", self.scrcpy_codec_options):
+            raise SystemExit("CONFIG_ERROR QUEST_SCRCPY_CODEC_OPTIONS must look like bitrate-mode:int=2,key:float=0.5")
         if self.hwdec not in ("", "vaapi"):
             raise SystemExit("CONFIG_ERROR QUEST_HWDEC must be empty or 'vaapi'")
         if self.control_url:
@@ -230,6 +263,10 @@ class Config:
             raise SystemExit("CONFIG_ERROR QUEST_DEVICE_POLL must be between 2 and 60 seconds")
         if not 0.2 <= self.keyframe_interval <= 10:
             raise SystemExit("CONFIG_ERROR QUEST_KEYFRAME_INTERVAL must be between 0.2 and 10 seconds")
+        if not 0 <= self.bridge_port <= 65535:
+            raise SystemExit("CONFIG_ERROR QUEST_BRIDGE_PORT must be 0 (off) or a TCP port")
+        if bool(self.bridge_cert) != bool(self.bridge_key):
+            raise SystemExit("CONFIG_ERROR QUEST_BRIDGE_CERT and QUEST_BRIDGE_KEY go together")
 
     @property
     def publish_endpoint(self) -> Tuple[str, int]:
@@ -312,8 +349,14 @@ def build_ffmpeg_command(cfg: Config) -> List[str]:
         "-f", "h264",
         "-i", "pipe:0",
         "-an",
-        "-vf", build_video_filter(cfg),
     ]
+    if cfg.encoder == "copy":
+        # The Quest already encodes the final picture (window_crop, build_scrcpy_server_command): only
+        # repackage it for RTSP, no decode, no encode. Its encoder sends SPS/PPS once, at the start;
+        # repeat them before every keyframe so a viewer that joins late decodes at once.
+        cmd += ["-c:v", "copy", "-bsf:v", "dump_extra=freq=keyframe"]
+        return cmd + _publish_args(cfg)
+    cmd += ["-vf", build_video_filter(cfg)]
     # WebRTC: every browser decodes H.264 constrained baseline, and B-frames
     # are not allowed at all.
     if cfg.encoder == "h264_vaapi":
@@ -339,13 +382,26 @@ def build_ffmpeg_command(cfg: Config) -> List[str]:
         "-g", gop,
         "-keyint_min", gop,
         "-sc_threshold", "0",
+    ]
+    return cmd + _publish_args(cfg)
+
+
+def _publish_args(cfg: Config) -> List[str]:
+    return [
         "-progress", "pipe:1",
         "-stats_period", "0.5",
         "-f", "rtsp",
         "-rtsp_transport", "tcp",
         cfg.publish_url,
     ]
-    return cmd
+
+
+def parse_bitrate(value: str) -> Optional[int]:
+    """FFmpeg-style bitrate ("1M", "1200k", "1000000") -> bits per second, None if unreadable."""
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)([kKM]?)", value.strip())
+    if not m:
+        return None
+    return int(float(m.group(1)) * {"": 1, "k": 1000, "K": 1000, "M": 1_000_000}[m.group(2)])
 
 
 def mediamtx_reachable(cfg: Config, timeout: float = 2.0) -> Tuple[bool, str]:
@@ -405,8 +461,39 @@ def eye_crop(size: Tuple[int, int], eye: str) -> str:
     return f"{half}:{h - h % 2}:{0 if eye == 'left' else w - half}:0"
 
 
+def window_crop(eye: str, cfg: Config) -> str:
+    """QUEST_ENCODER=copy: the output window, as a scrcpy crop W:H:X:Y of the Quest display.
+
+    It is the window build_video_filter cuts from the turned eye image (QUEST_CROP_KEEP of the eye's
+    width, the output's aspect ratio, centred + offset), in display pixels. scrcpy crops before it
+    turns (angle), but its crop only places the sampling window: the turn then rotates that window
+    about its centre and samples the whole display, so the eye image is not clipped to the crop.
+    The size is a whole multiple of the output's ratio, so max_size gives exactly WIDTHxHEIGHT.
+    """
+    ew, eh, ex, ey = (int(v) for v in eye.split(":"))
+    g = math.gcd(cfg.width, cfg.height)
+    sw, sh = cfg.width // g, cfg.height // g  # 16:9 for 1280x720
+    n = int(min(cfg.crop_keep * ew, eh * cfg.width / cfg.height) / sw)  # rounded down, as the filter's trunc
+    n = max(1, min(n, ew // sw, eh // sh))
+    w, h = n * sw, n * sh
+    # The filter shifts the window in the turned image; on the display, before the turn, that
+    # shift is turned back (the content turns clockwise by `angle`, y points down).
+    a = math.radians(cfg.scrcpy_angle)
+    vx, vy = cfg.crop_offset_x * ew, cfg.crop_offset_y * eh
+    cx = ex + ew / 2 + vx * math.cos(a) + vy * math.sin(a)
+    cy = ey + eh / 2 - vx * math.sin(a) + vy * math.cos(a)
+    x = min(max(round(cx - w / 2), ex), ex + ew - w)
+    y = min(max(round(cy - h / 2), ey), ey + eh - h)
+    return f"{w}:{h}:{x}:{y}"
+
+
 def build_scrcpy_server_command(cfg: Config, serial: str, scid: str, crop: str, version: str) -> List[str]:
-    """Start scrcpy-server on the Quest: raw H.264 of one eye, video only, no control."""
+    """Start scrcpy-server on the Quest: raw H.264 of one eye, video only, no control.
+
+    With QUEST_ENCODER=copy the Quest encodes what viewers get: the output window (crop from
+    window_crop), WIDTHxHEIGHT, QUEST_VIDEO_BITRATE, a keyframe every QUEST_KEYFRAME_INTERVAL.
+    """
+    copy = cfg.encoder == "copy"
     args = [
         f"CLASSPATH={SCRCPY_REMOTE_PATH}", "app_process", "/", "com.genymobile.scrcpy.Server", version,
         f"scid={scid}", "log_level=warn", "tunnel_forward=true",
@@ -414,14 +501,27 @@ def build_scrcpy_server_command(cfg: Config, serial: str, scid: str, crop: str, 
         # Plain Annex-B H.264 (what FFmpeg's -f h264 reads); the dummy byte (a 0x00, harmless
         # before a start code) confirms the connection reached the server, not just adb.
         "raw_stream=true", "send_dummy_byte=true",
-        "video_codec=h264", f"video_bit_rate={cfg.capture_bitrate}",
-        f"max_fps={cfg.scrcpy_max_fps or cfg.fps}", f"max_size={cfg.scrcpy_max_size}",
+        "video_codec=h264", f"video_bit_rate={parse_bitrate(cfg.bitrate) if copy else cfg.capture_bitrate}",
+        f"max_fps={cfg.scrcpy_max_fps or cfg.fps}",
+        f"max_size={max(cfg.width, cfg.height) if copy else cfg.scrcpy_max_size}",
         f"crop={crop}",
     ]
     if cfg.scrcpy_angle:
         # Rotates after the crop, on the Quest (scrcpy >= 3.0); only sent when set, so
         # older servers that do not know the option still start.
         args.append(f"angle={cfg.scrcpy_angle:g}")
+    options = []
+    if copy:
+        # Baseline (no B-frames, CAVLC) plays in every WebRTC browser; scrcpy's own keyframe
+        # interval is 10 s, too long for a viewer who joins. The Quest's encoder counts that
+        # interval in frames of scrcpy's nominal 60 fps: give it the real rate, or the keyframes
+        # come twice as far apart (measured 25/11/2026: 30 frames = 1 s for 0.5 s).
+        options += ["profile:int=1", f"i-frame-interval:float={cfg.keyframe_interval:g}",
+                    f"frame-rate:float={cfg.scrcpy_max_fps or cfg.fps}"]
+    if cfg.scrcpy_codec_options:
+        options.append(cfg.scrcpy_codec_options)  # later options win
+    if options:
+        args.append("video_codec_options=" + ",".join(options))
     return [cfg.adb, "-s", serial, "shell", " ".join(args)]
 
 
@@ -470,16 +570,18 @@ def run_scrcpy_capture(cfg: Config, serial: str) -> int:
             if size is None:
                 return fail(2, "cannot read the display size (adb shell wm size); set QUEST_SCRCPY_CROP")
             crop = eye_crop(size, cfg.eye)
+        if cfg.encoder == "copy":
+            crop = window_crop(crop, cfg)
         scid = f"{random.getrandbits(31):08x}"
         port = subprocess.run(adb + ["forward", "tcp:0", f"localabstract:scrcpy_{scid}"],
                               check=True, capture_output=True, text=True, timeout=10).stdout.strip()
     except (subprocess.SubprocessError, OSError) as exc:
         return fail(3, f"adb setup failed: {exc}")
 
-    print(f"SCRCPY_START version={version} crop={crop} max_fps={cfg.scrcpy_max_fps or cfg.fps} "
-          f"max_size={cfg.scrcpy_max_size} angle={cfg.scrcpy_angle:g}", file=sys.stderr, flush=True)
-    server = subprocess.Popen(build_scrcpy_server_command(cfg, serial, scid, crop, version),
-                              stdin=subprocess.DEVNULL, stdout=sys.stderr, stderr=sys.stderr)
+    command = build_scrcpy_server_command(cfg, serial, scid, crop, version)
+    print(f"SCRCPY_START version={version} encoder={cfg.encoder} {command[-1].split(' video_codec=h264 ')[-1]}",
+          file=sys.stderr, flush=True)
+    server = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=sys.stderr, stderr=sys.stderr)
     try:
         connected = _connect_scrcpy(int(port), server)
         if connected is None:
@@ -678,7 +780,8 @@ class CameraDemand(threading.Thread):
     by default the camera keeps running, so a backend outage never blacks out a running Tour.
     """
 
-    def __init__(self, cfg: Config, opener=urlopen, clock=time.time, report=None, on_headset_command=None):
+    def __init__(self, cfg: Config, opener=urlopen, clock=time.time, report=None, on_headset_command=None,
+                 on_tour=None):
         super().__init__(name="camera-demand", daemon=True)
         self.cfg = cfg
         # Polling (and the headset report) runs with a control URL; deciding the camera also needs camera_on_demand.
@@ -686,6 +789,7 @@ class CameraDemand(threading.Thread):
         self.enabled = self.polling and cfg.camera_on_demand
         self._report = report  # () -> dict sent as the poll body (ADR-0056), or None
         self._on_headset_command = on_headset_command  # (id, action) -> None: a Staff wake/sleep press, or None
+        self._on_tour = on_tour  # (dict | None) -> None: the running Tour for the headset MC (tour_bridge), or None
         self.changed = threading.Event()
         self.stop_event = threading.Event()
         self._opener = opener
@@ -743,6 +847,7 @@ class CameraDemand(threading.Thread):
                 if isinstance(poll, (int, float)) and 1 <= poll <= 60:
                     self._poll = float(poll)
             self._headset_command(data.get("headsetCommand"))
+            self._tour(data.get("tour"))
         except HTTPError as exc:
             why = (f"HTTP {exc.code}: the robot credential was refused (check {self.cfg.robot_credential_file})"
                    if exc.code in (401, 403) else f"HTTP {exc.code}")
@@ -765,6 +870,15 @@ class CameraDemand(threading.Thread):
             self._on_headset_command(command_id, action)
         except Exception as exc:  # noqa: BLE001 - a press never stops the camera poll
             log.warning("HEADSET_COMMAND not started: %s", exc)
+
+    def _tour(self, tour) -> None:
+        """Hands the running Tour (or None) to the tour bridge; a bridge error never stops the camera poll."""
+        if self._on_tour is None:
+            return
+        try:
+            self._on_tour(tour if isinstance(tour, dict) else None)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("TOUR_BRIDGE update failed: %s", exc)
 
     def _body(self) -> bytes:
         """The headset report as JSON; a failing report never stops the poll itself."""
@@ -1443,7 +1557,7 @@ class Supervisor(threading.Thread):
 # --------------------------------------------------------------------------
 
 
-def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = None, demand=None):
+def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = None, demand=None, bridge=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "QuestStream/2.0"
 
@@ -1484,6 +1598,8 @@ def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = N
                 body = status.snapshot(cfg)
                 if demand is not None:
                     body["camera"] = demand.snapshot()
+                if bridge is not None:
+                    body["tourBridge"] = bridge.snapshot()
                 return self._json(200, body)
             if path == "/device":
                 # The headset (adb + battery) and the video, kept apart: a
@@ -1544,11 +1660,34 @@ def main() -> int:
     device = DeviceStatus()
     monitor = DeviceMonitor(cfg, device)
     headset = HeadsetControl(cfg, device)
-    demand = CameraDemand(cfg, report=lambda: headset_report(device, status), on_headset_command=headset.submit)
+    bridge = TourBridge() if cfg.bridge_port and cfg.control_url else None
+    demand = CameraDemand(cfg, report=lambda: headset_report(device, status), on_headset_command=headset.submit,
+                          on_tour=bridge.update if bridge else None)
     supervisor = Supervisor(cfg, status, demand)
+    bridge_httpd = None
+    usb_reverse = None
+    if bridge is not None:
+        try:
+            bridge_httpd = start_bridge_server(bridge, cfg.bridge_host, cfg.bridge_port, cfg.bridge_token,
+                                               cfg.bridge_cert, cfg.bridge_key)
+        except (OSError, ValueError) as exc:
+            log.error("TOUR_BRIDGE cannot listen on %s:%s: %s", cfg.bridge_host, cfg.bridge_port, exc)
+            bridge = None
+        else:
+            log.info("TOUR_BRIDGE headset MC events on %s://%s:%s/quest/events%s", "https" if cfg.bridge_cert else "http",
+                     cfg.bridge_host, cfg.bridge_port, "" if cfg.bridge_token else " (no token: anyone on the LAN can read)")
+            if not cfg.bridge_cert:
+                log.warning("TOUR_BRIDGE plain HTTP: the headset app needs HTTPS (set QUEST_BRIDGE_CERT/KEY or "
+                            "MTX_WEBRTCSERVERCERT/KEY in mediamtx.env)")
+            if cfg.bridge_usb_reverse:
+                usb_reverse = UsbReverse(cfg.adb, cfg.bridge_port, lambda: device.snapshot()["serial"]
+                                         if device.snapshot()["connection"] == "connected" else "")
+                usb_reverse.start()
+    elif cfg.bridge_port:
+        log.info("TOUR_BRIDGE off: it needs QUEST_CONTROL_URL (the running Tour comes with the camera poll)")
 
     try:
-        httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status, device, demand))
+        httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status, device, demand, bridge))
     except OSError as exc:
         log.error("HTTP_ERROR cannot listen on %s:%s: %s", cfg.host, cfg.port, exc)
         return 3
@@ -1559,6 +1698,10 @@ def main() -> int:
         supervisor.stop()
         monitor.stop()
         demand.stop()
+        if usb_reverse is not None:
+            usb_reverse.stop()
+        if bridge_httpd is not None:
+            threading.Thread(target=bridge_httpd.shutdown, daemon=True).start()
         threading.Thread(target=httpd.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, shutdown)

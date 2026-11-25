@@ -26,12 +26,13 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
     TOUR_CAPACITY_CHANGED: 'Đổi sức chứa Tour', TOUR_OPERATOR_CHANGED: 'Đổi người vận hành Tour',
     TOUR_READY: 'Chốt Tour', TOUR_REOPENED: 'Mở lại Tour để sửa', TOUR_CANCELLED: 'Hủy Tour',
     TOUR_REGISTRATION_CANCELLED: 'Hủy đăng ký do hủy Tour', TOUR_INVITATION_REVOKED: 'Thu hồi lời mời do hủy Tour',
+    TOUR_NARRATION_REFRESHED: 'Cập nhật lời thuyết minh cho Tour',
   } },
   { label: 'Vận hành Tour', actions: {
     TOUR_STARTED: 'Bắt đầu Tour', TOUR_NEXT: 'Sang điểm dừng tiếp theo', TOUR_LEG_RETRIED: 'Thử lại chặng di chuyển',
     TOUR_PAUSE: 'Tạm dừng chặng di chuyển', TOUR_SKIP: 'Bỏ qua điểm dừng',
     COMMAND_RECONCILED: 'Đóng lệnh robot chưa rõ kết quả', TOUR_ENDED_EARLY: 'Kết thúc Tour sớm', TOUR_COMPLETED: 'Hoàn thành Tour',
-    ROBOT_DISPATCH_CHANGED: 'Cho phép hoặc dừng điều phối robot', ROBOT_INSPECTION_RELEASED: 'Xác nhận robot an toàn sau kiểm tra',
+    ROBOT_DISPATCH_CHANGED: 'Cho phép hoặc dừng điều phối robot', ROBOT_INSPECTION_RELEASED: 'Trả robot sau kiểm tra tại chỗ',
   } },
   { label: 'Lịch vận hành', actions: {
     SCHEDULE_BLOCK_CREATED: 'Khoá ngày hoặc ca', SCHEDULE_BLOCK_REMOVED: 'Gỡ khoá ngày hoặc ca',
@@ -81,7 +82,7 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
     POI_NARRATION_APPROVED: 'Duyệt thuyết minh', POI_NARRATION_DISCARDED: 'Bỏ bản thuyết minh đang soạn',
   } },
   { label: 'Bản đồ và robot', actions: {
-    MAP_VERSION_UPLOADED: 'Tải lên bản đồ', MAP_DEPLOYMENT_CHECK_RECORDED: 'Ghi kiểm tra bản đồ',
+    MAP_VERSION_UPLOADED: 'Tải lên bản đồ', MAP_DEPLOYMENT_CHECK_RECORDED: 'Kiểm tra triển khai bản đồ',
     MAP_VERSION_RETIRED: 'Ngừng sử dụng phiên bản bản đồ', MAP_VERSION_REOPENED: 'Mở lại phiên bản bản đồ',
     PHYSICAL_ROBOT_REGISTERED: 'Đăng ký robot', ROBOT_DEACTIVATED: 'Ngừng dùng robot', ROBOT_ACTIVATED: 'Mở lại robot',
     ROBOT_MAP_ASSIGNED: 'Gán bản đồ cho robot', ROBOT_MAP_CLEARED: 'Gỡ bản đồ khỏi robot',

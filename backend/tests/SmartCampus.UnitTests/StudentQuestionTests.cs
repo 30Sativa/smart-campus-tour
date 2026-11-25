@@ -103,17 +103,58 @@ public sealed class StudentQuestionTests
     }
 
     [Theory]
-    [InlineData("SCHEDULED")]
-    [InlineData("READY")]
     [InlineData("COMPLETED")]
     [InlineData("CANCELLED")]
-    public async Task TourNotRunning_IsConflict(string state)
+    public async Task TourEnded_IsConflict(string state)
     {
         var h = new Harness();
-        h.Repository.Results.Enqueue(Running with { TourState = state });
+        h.Repository.Results.Enqueue(Running with { TourState = state, ScheduledStartAt = h.Clock.GetUtcNow() });
         var error = await Assert.ThrowsAsync<ConflictException>(() => h.Handler.Handle(Ask(), CancellationToken.None));
         Assert.Equal("TOUR_NOT_RUNNING", error.Code);
         Assert.Empty(h.Assistant.Calls);
+    }
+
+    [Theory]
+    [InlineData("SCHEDULED")]
+    [InlineData("READY")]
+    public async Task WaitingRoom_OpensFifteenMinutesBeforeTheStart(string state)
+    {
+        var h = new Harness();
+        var start = h.Clock.GetUtcNow().AddMinutes(16);
+        h.Repository.Results.Enqueue(Running with { TourState = state, ScheduledStartAt = start });
+        var early = await Assert.ThrowsAsync<ConflictException>(() => h.Handler.Handle(Ask(), CancellationToken.None));
+        Assert.Equal("AI_OPENS_LATER", early.Code);
+        Assert.Contains("15 phút", early.Message);
+        Assert.Empty(h.Assistant.Calls);
+
+        var waiting = Running with { TourState = state, ScheduledStartAt = h.Clock.GetUtcNow().AddMinutes(15) };
+        h.Repository.Results.Enqueue(waiting);
+        h.Repository.Results.Enqueue(waiting);
+        var answer = await h.Handler.Handle(Ask(), CancellationToken.None);
+        Assert.Equal("Robot dùng LiDAR.", answer.Answer);
+        Assert.Null(Assert.Single(h.Assistant.Calls).Poi); // no stop yet: general campus content
+    }
+
+    [Fact]
+    public async Task WaitingRoom_StaysOpenPastTheStartUntilTheOperatorStarts()
+    {
+        var h = new Harness();
+        var late = Running with { TourState = "READY", ScheduledStartAt = h.Clock.GetUtcNow().AddMinutes(-5) };
+        h.Repository.Results.Enqueue(late);
+        h.Repository.Results.Enqueue(late);
+        await h.Handler.Handle(Ask(), CancellationToken.None);
+        Assert.Single(h.Assistant.Calls);
+    }
+
+    [Fact]
+    public void Window_IsOpenWhileRunning_AndNotWithoutAStartTimeBeforeIt()
+    {
+        var now = DateTimeOffset.UnixEpoch.AddDays(1);
+        Assert.True(StudentQuestionWindow.IsOpen(Running, now));
+        Assert.False(StudentQuestionWindow.IsOpen(Running with { TourState = "READY" }, now));
+        Assert.True(StudentQuestionWindow.IsOpen(Running with { TourState = "READY", ScheduledStartAt = now.AddMinutes(15) }, now));
+        Assert.False(StudentQuestionWindow.IsOpen(Running with { TourState = "READY", ScheduledStartAt = now.AddMinutes(15).AddSeconds(1) }, now));
+        Assert.False(StudentQuestionWindow.IsOpen(Running with { TourState = "COMPLETED", ScheduledStartAt = now }, now));
     }
 
     [Fact]

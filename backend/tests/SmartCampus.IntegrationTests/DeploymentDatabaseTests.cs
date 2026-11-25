@@ -61,6 +61,10 @@ public sealed class DeploymentDatabaseTests
             // ADR-0049: the Technical Staff dispatch endpoint writes this column, so the runtime role now may; the provisioner still may not.
             await using (var dispatch = new SqlCommand("UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql'; UPDATE dbo.Robots SET IsDispatchEnabled=0 WHERE RobotCode=N'robot_registered_sql';", connection))
                 await dispatch.ExecuteNonQueryAsync();
+            // ADR-0066: changing or clearing a map assignment stops dispatch in the same statement. The runtime role already
+            // holds UPDATE on the assignment columns (ADR-0032) and on IsDispatchEnabled (ADR-0049), so no new grant is needed.
+            await using (var reassign = new SqlCommand("UPDATE dbo.Robots SET AssignedMapVersionId=NULL, AssignedAreaKey=NULL, MapAssignedAt=NULL, MapAssignedByUserId=NULL, IsDispatchEnabled=0 WHERE RobotCode=N'robot_registered_sql';", connection))
+                Assert.Equal(1, await reassign.ExecuteNonQueryAsync());
             await using (var credentialUpdate = new SqlCommand("UPDATE dbo.Robots SET CredentialHash=0x0102 WHERE RobotCode=N'robot_registered_sql';", connection))
                 Assert.Equal(1, await credentialUpdate.ExecuteNonQueryAsync());
         }
@@ -229,8 +233,14 @@ public sealed class DeploymentDatabaseTests
             await using var command = new SqlCommand(statement, connection);
             Assert.Equal(229, (await Assert.ThrowsAsync<SqlException>(() => command.ExecuteNonQueryAsync())).Number);
         }
-        await using (var column = new SqlCommand("UPDATE dbo.TourRobotReservations SET EndsAt=EndsAt WHERE 1=0", connection))
+        // A Tour that ends shortens its hold (ADR-0043 D13 addendum); where the hold starts and whose robot it is never change.
+        await using (var ends = new SqlCommand("UPDATE dbo.TourRobotReservations SET EndsAt=EndsAt WHERE 1=0", connection))
+            await ends.ExecuteNonQueryAsync();
+        foreach (var statement in new[] { "UPDATE dbo.TourRobotReservations SET StartsAt=StartsAt WHERE 1=0", "UPDATE dbo.TourRobotReservations SET RobotId=RobotId WHERE 1=0" })
+        {
+            await using var column = new SqlCommand(statement, connection);
             Assert.Equal(230, (await Assert.ThrowsAsync<SqlException>(() => column.ExecuteNonQueryAsync())).Number);
+        }
         await using var revert = new SqlCommand("REVERT;", connection);
         await revert.ExecuteNonQueryAsync();
     }

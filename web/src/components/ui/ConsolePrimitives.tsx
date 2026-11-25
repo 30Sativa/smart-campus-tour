@@ -244,9 +244,11 @@ export function StatTile({ to, onClick, pressed, icon: Icon, label, value, hint,
     </>
   )
   const shape = 'block min-w-0 bg-white px-3.5 py-2.5'
-  if (onClick) return <button type="button" onClick={onClick} aria-pressed={pressed} className={`${shape} w-full cursor-pointer text-left transition-[background-color,box-shadow] duration-150 hover:bg-[#fafcfe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9] ${pressed ? 'shadow-[inset_0_-2px_0_#2d719e]' : ''}`}>{body}</button>
+  // "Đã đạt: 8": label and figure sit in separate blocks, so the name is given whole rather than left to the reader.
+  const name = typeof value === 'string' || typeof value === 'number' ? `${label}: ${value}` : undefined
+  if (onClick) return <button type="button" onClick={onClick} aria-pressed={pressed} aria-label={name} className={`${shape} w-full cursor-pointer text-left transition-[background-color,box-shadow] duration-150 hover:bg-[#fafcfe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9] ${pressed ? 'shadow-[inset_0_-2px_0_#2d719e]' : ''}`}>{body}</button>
   if (!to) return <div className={shape}>{body}</div>
-  return <Link to={to} className={`${shape} transition-colors duration-150 hover:bg-[#fafcfe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9]`}>{body}</Link>
+  return <Link to={to} aria-label={name} className={`${shape} transition-colors duration-150 hover:bg-[#fafcfe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9]`}>{body}</Link>
 }
 
 

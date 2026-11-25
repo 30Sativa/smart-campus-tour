@@ -65,11 +65,11 @@ def test_angles_past_the_soft_limits_are_rejected(pan, tilt):
 
 def test_steps_use_the_gearbox_sizes_and_stop_at_the_limits():
     model = homed()
-    model.step(15, 15)
+    model.step(20, 48)
     run(model, 1.0)
-    assert model.pan == pytest.approx(9.0)       # 15 x 0.6 (PAN 3:1)
-    assert model.tilt == pytest.approx(5.4)      # 15 x 0.36 (TILT 5:1)
-    model.step(0, 100)
+    assert model.pan == pytest.approx(9.0)       # 20 x 0.45 (PAN 4:1)
+    assert model.tilt == pytest.approx(5.4)      # 48 x 0.1125 (TILT 16:1)
+    model.step(0, 200)
     run(model, 1.0)
     assert model.tilt == 18.0
 

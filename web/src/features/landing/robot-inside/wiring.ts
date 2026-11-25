@@ -185,14 +185,14 @@ export const COMPONENTS: readonly InsideComponent[] = [
     specs: [['Pan', 'PA8 STEP · PA15 DIR · PB2 nEN'], ['Tilt', 'PA9 STEP · PA7 DIR · PB10 nEN'], ['Vi bước', '1/4'], ['Nguồn', 'VMOT 12 đến 24 V']],
   },
   {
-    id: 'pantilt', number: 10, label: 'Đầu pan-tilt', model: '2 động cơ NEMA17 · hộp số 3:1 và 5:1', cluster: 'motion',
+    id: 'pantilt', number: 10, label: 'Đầu pan-tilt', model: '2 động cơ NEMA17 · hộp số 4:1 và 16:1', cluster: 'motion',
     boxes: [{ min: [-0.076, 0.803, -0.078], max: [0.075, 1.035, 0.078] }],
     role: 'Xoay và gật mô hình đầu đeo kính Quest 3, để học sinh nhìn đúng vào điểm dừng.',
     how: [
-      'Trục pan qua hộp số 3:1, mỗi bước 0,6°, quay được ±170°. Trục tilt qua hộp số 5:1, mỗi bước 0,36°, gật trong ±18° và đủ lực giữ đầu cùng kính khoảng 2 kg.',
+      'Trục pan qua hộp số 4:1, mỗi bước 0,45°, quay được ±170°. Trục tilt qua hộp số 16:1, mỗi bước 0,1125°, gật trong ±18° và đủ lực giữ đầu cùng kính khoảng 2 kg.',
       'Góc được tính từ số xung đã phát rồi báo về trong khung FB. Lệnh HOME cho đầu tìm vật chặn để lấy lại mốc 0°.',
     ],
-    specs: [['Pan', '±170° · 0,6° mỗi bước'], ['Tilt', '±18° · 0,36° mỗi bước'], ['Động cơ', '17HD4401S · NEMA17'], ['Lệnh', 'HEAD,<seq>,<pan>,<tilt>']],
+    specs: [['Pan', '±170° · 0,45° mỗi bước'], ['Tilt', '±18° · 0,1125° mỗi bước'], ['Động cơ', '17HD4401S · NEMA17'], ['Lệnh', 'HEAD,<seq>,<pan>,<tilt>']],
   },
   {
     id: 'quest', number: 11, label: 'Kính Meta Quest 3', model: 'Góc nhìn của chuyến đi · USB-C', cluster: 'video',

@@ -203,10 +203,140 @@ public sealed class RobotDiagnosticsTests
         Assert.Contains(result.ActionItems, item => item.Type == "HELD_ROBOT" && item.TargetId == robotHeld.Id.ToString());
     }
 
-    private sealed class TestRobotRepository(IReadOnlyList<Robot> robots, IReadOnlyList<MapDeploymentCheck> deploymentChecks) : IPhysicalRobotRepository
+    [Fact]
+    public async Task GetTechnicalDashboard_HeldRobotSaysTrảRobot_AndQueuesLinkToTheRenamedPages()
     {
+        var held = new Robot { Id = Guid.NewGuid(), RobotCode = "amr-held", NeedsInspection = true, RowVersion = [1] };
+
+        var result = await Dashboard(new TestRobotRepository([held], []), new TestSender(queued: 1));
+
+        Assert.Equal("Robot bị giữ cần kiểm tra. Cần kiểm tra tại chỗ rồi trả robot.",
+            Assert.Single(result.ActionItems, item => item.Type == "HELD_ROBOT").Description);
+        Assert.Equal("/technical/pois", Assert.Single(result.ActionItems, item => item.Type == "POI_QUEUE").LinkUrl);
+        Assert.Equal("/technical/route-tests", Assert.Single(result.ActionItems, item => item.Type == "ROUTE_QUEUE").LinkUrl);
+        Assert.Equal("/technical/route-tests", Assert.Single(result.ActionItems, item => item.Type == "ROUTE_RERUN").LinkUrl);
+    }
+
+    [Fact]
+    public async Task GetTechnicalDashboard_MapMismatch_SaysTheRobotListsReadinessSentence()
+    {
+        var robot = AssignedRobot("amr_01", TestMap);
+        var check = PassingCheck(robot, Betea);
+
+        var result = await Dashboard(new TestRobotRepository([robot], [check]), new TestSender());
+
+        var item = Assert.Single(result.ActionItems, item => item.Type == "MAP_MISMATCH");
+        // Round 3: the readiness sentence names the map the robot holds; the Betea history is only its detail.
+        Assert.Equal("Robot amr_01 chưa kiểm tra triển khai trên Tầng 6 · test123 · phiên bản 1 (gán lúc 04/11 15:00).", item.Description);
+        Assert.Equal(RobotMapReadiness.EvaluateOnAssignedMap(robot, check).Message, item.Description);
+    }
+
+    [Fact]
+    public async Task GetTechnicalDashboard_RobotRefusedForTheWrongMap_IsWrongMapNotDisconnected()
+    {
+        var robot = AssignedRobot("amr_01", TestMap);
+        var telemetry = new TestTelemetryStore([new FleetTelemetrySnapshot(TestIdentity("amr_01"),
+            new FleetTelemetryReport("amr_01", Guid.NewGuid(), 1, Now.AddMinutes(-5), "test123-v1", "map", null, "IDLE", null, true, true, null, 80),
+            Now.AddMinutes(-5))]);
+        telemetry.RecordRejected("amr_01", new FleetRejectedReport("betea-v1", "map", Now.AddSeconds(-3)));
+
+        var result = await new GetTechnicalDashboardQueryHandler(new TestRobotRepository([robot], []), new TestMapRepository([]), telemetry,
+            new TestDiagnosticsStore(), new TestSender(), Settings, new FixedTimeProvider(Now)).Handle(new GetTechnicalDashboardQuery(), CancellationToken.None);
+
+        var summary = Assert.Single(result.Robots);
+        Assert.Equal("WRONG_MAP", summary.ConnectionStatus);
+        Assert.Equal("betea-v1", summary.LastRejectedReport?.MapKey);
+        Assert.Equal((1, 0), (result.Kpis.WrongMapRobots, result.Kpis.DisconnectedRobots));
+    }
+
+    [Fact]
+    public async Task GetTechnicalDashboard_UpcomingToursTheRobotCannotRun_AreOneWarningPerRobot()
+    {
+        // amr_01 holds and passed Tầng 6 (test123); amr_02 is connected but holds no map.
+        var first = AssignedRobot("amr_01", TestMap);
+        var second = new Robot { Id = Guid.NewGuid(), RobotCode = "amr_02", FirstAcceptedSyncAt = Now.AddDays(-1), RowVersion = [2] };
+        var onBetea = new RouteRevision { Id = Guid.NewGuid(), MapVersionId = Betea.Id, MapPackageSha256 = Betea.PackageSha256 };
+        var onTest = new RouteRevision { Id = Guid.NewGuid(), MapVersionId = TestMap.Id, MapPackageSha256 = TestMap.PackageSha256 };
+        UpcomingTourTarget Tour(string name, TimeSpan after, Robot robot, RouteRevision revision) =>
+            new(Guid.NewGuid(), name, Now + after, robot.Id, revision, revision == onBetea ? Betea : TestMap);
+        var repo = new TestRobotRepository([first, second], [PassingCheck(first, TestMap)],
+        [
+            Tour("Tham quan lầu 6", TimeSpan.FromDays(2), first, onBetea),
+            Tour("Tham quan sớm", TimeSpan.FromDays(1), first, onBetea),
+            Tour("Chạy được", TimeSpan.FromHours(3), first, onTest),
+            Tour("Tour robot hai", TimeSpan.FromDays(3), second, onTest)
+        ]);
+
+        var result = await Dashboard(repo, new TestSender());
+
+        Assert.Equal((Now, Now + TimeSpan.FromDays(7)), repo.UpcomingWindow);
+        var items = result.ActionItems.Where(item => item.Type == "TOUR_ROBOT_NOT_READY").ToArray();
+        Assert.Equal(2, items.Length);
+        Assert.All(items, item => Assert.Equal("WARNING", item.Severity));
+        Assert.Equal(("2 Tour sắp tới của robot amr_01 chưa chạy được",
+                "Robot amr_01 đang gán Tầng 6 · test123 · phiên bản 1, không phải bản đồ này. Sớm nhất: Tour Tham quan sớm 06/11 15:00.",
+                first.Id.ToString(), $"/technical/robots?robot={first.Id}"),
+            (items[0].Title, items[0].Description, items[0].TargetId, items[0].LinkUrl));
+        Assert.Equal(("Tour Tour robot hai 08/11 15:00 chưa chạy được", "Robot amr_02 chưa được gán bản đồ.", $"/technical/robots?robot={second.Id}"),
+            (items[1].Title, items[1].Description, items[1].LinkUrl));
+    }
+
+    [Fact]
+    public void BackendText_NoLongerSaysGiảiPhóng()
+    {
+        var src = Path.Combine(FindBackend(), "src");
+        var offenders = Directory.EnumerateFiles(src, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") &&
+                File.ReadAllText(path).Contains("giải phóng", StringComparison.OrdinalIgnoreCase))
+            .Select(path => Path.GetRelativePath(src, path)).ToArray();
+        // A held robot is "Chờ kiểm tra tại chỗ" and its button is "Trả robot" (technical-readiness round 2, F1).
+        Assert.Empty(offenders);
+    }
+
+    private static readonly MapVersion TestMap = Map("test123", "Tầng 6", [1, 1]);
+    private static readonly MapVersion Betea = Map("betea", "Betea", [2, 2]);
+
+    private static MapVersion Map(string areaKey, string areaName, byte[] sha) => new()
+    {
+        Id = Guid.NewGuid(), AreaKey = areaKey, VersionNumber = 1, MapKey = $"{areaKey}-v1", FrameId = "map", PackageSha256 = sha,
+        ValidationStatus = "VALID", AreaKeyNavigation = new MapArea { AreaKey = areaKey, DisplayName = areaName }
+    };
+
+    private static Robot AssignedRobot(string code, MapVersion map) => new()
+    {
+        Id = Guid.NewGuid(), RobotCode = code, FirstAcceptedSyncAt = Now.AddDays(-1), AssignedMapVersionId = map.Id,
+        AssignedMapVersion = map, AssignedAreaKey = map.AreaKey, MapAssignedAt = Now.AddDays(-1), RowVersion = [1]
+    };
+
+    private static MapDeploymentCheck PassingCheck(Robot robot, MapVersion map) => new()
+    {
+        Id = Guid.NewGuid(), RobotId = robot.Id, Robot = robot, MapVersionId = map.Id, MapVersion = map, PackageSha256 = map.PackageSha256,
+        LocalizationPassed = true, DisplayPassed = true, CheckedAt = Now.AddHours(-2)
+    };
+
+    private static Task<TechnicalDashboardDto> Dashboard(TestRobotRepository repo, TestSender sender) =>
+        new GetTechnicalDashboardQueryHandler(repo, new TestMapRepository([]), new TestTelemetryStore([]), new TestDiagnosticsStore(),
+            sender, Settings, new FixedTimeProvider(Now)).Handle(new GetTechnicalDashboardQuery(), CancellationToken.None);
+
+    private static string FindBackend()
+    {
+        for (var current = new DirectoryInfo(AppContext.BaseDirectory); current is not null; current = current.Parent)
+            if (File.Exists(Path.Combine(current.FullName, "SmartCampus.slnx")))
+                return current.FullName;
+        throw new DirectoryNotFoundException("Cannot find backend/SmartCampus.slnx.");
+    }
+
+    private sealed class TestRobotRepository(IReadOnlyList<Robot> robots, IReadOnlyList<MapDeploymentCheck> deploymentChecks,
+        IReadOnlyList<UpcomingTourTarget>? upcomingTours = null) : IPhysicalRobotRepository
+    {
+        public (DateTimeOffset From, DateTimeOffset To)? UpcomingWindow { get; private set; }
         public Task<IReadOnlyList<Robot>> ListPhysicalRobotsAsync(CancellationToken cancellationToken) => Task.FromResult(robots);
         public Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksAsync(CancellationToken cancellationToken) => Task.FromResult(deploymentChecks);
+        public Task<IReadOnlyList<UpcomingTourTarget>> ListUpcomingTourTargetsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+        {
+            UpcomingWindow = (from, to);
+            return Task.FromResult(upcomingTours ?? []);
+        }
         public Task<bool> RobotCodeExistsAsync(string robotCode, CancellationToken cancellationToken) => Task.FromResult(false);
         public void Add(Robot robot) => throw new NotSupportedException();
         public void AddAuditLog(AuditLog auditLog) => throw new NotSupportedException();
@@ -225,6 +355,9 @@ public sealed class RobotDiagnosticsTests
         public Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksForPhysicalRobotsAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<MapDeploymentCheck>>([]);
         public Task<MapDeploymentCheck?> FindDeploymentRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken) => Task.FromResult<MapDeploymentCheck?>(null);
         public Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken cancellationToken) => Task.FromResult<Robot?>(null);
+        public Task<IReadOnlyList<Robot>> ListAssignedPhysicalRobotsAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Robot>>([]);
+        public Task<Robot?> ReadRobotForReadinessAsync(Guid robotId, CancellationToken cancellationToken) => Task.FromResult<Robot?>(null);
+        public Task LockNewAreaNamesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
         public Task LockRobotDeploymentStateAsync(Guid robotId, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<bool> LockAndReadConnectionConfirmationAsync(Guid robotId, CancellationToken cancellationToken) => Task.FromResult(true);
         public Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken) => Task.FromResult<MapDeploymentCheck?>(null);
@@ -247,6 +380,9 @@ public sealed class RobotDiagnosticsTests
         public Task<FleetTelemetryApplyResult> ApplyAsync(FleetTelemetrySnapshot snapshot, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public IReadOnlyList<FleetTelemetrySnapshot> GetLatest() => snapshots;
+        private readonly Dictionary<string, FleetRejectedReport> rejected = new(StringComparer.Ordinal);
+        public void RecordRejected(string robotCode, FleetRejectedReport report) => rejected[robotCode] = report;
+        public FleetRejectedReport? GetLatestRejected(string robotCode) => rejected.GetValueOrDefault(robotCode);
     }
 
     private sealed class TestDiagnosticsStore : IRobotDiagnosticsStore
@@ -265,17 +401,20 @@ public sealed class RobotDiagnosticsTests
         public IReadOnlyList<RobotDiagnosticsSnapshot> GetAll() => store.Values.ToArray();
     }
 
-    private sealed class TestSender : ISender
+    /// <summary>Each queue holds <paramref name="queued"/> rows; the dashboard only counts them.</summary>
+    private sealed class TestSender(int queued = 0) : ISender
     {
+        private List<T> Rows<T>() => Enumerable.Repeat(default(T)!, queued).ToList();
+
         public Task<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
         {
             if (request is ListPoiVerificationQueueQuery)
-                return Task.FromResult((TResponse)(object)new List<PoiVerificationQueueItem>());
+                return Task.FromResult((TResponse)(object)Rows<PoiVerificationQueueItem>());
             if (request is ListRouteRerunQueueQuery)
-                return Task.FromResult((TResponse)(object)new List<RouteRevisionView>());
+                return Task.FromResult((TResponse)(object)Rows<RouteRevisionView>());
 
             if (request is ListRouteRevisionQueueQuery)
-                return Task.FromResult((TResponse)(object)new List<RouteRevisionView>());
+                return Task.FromResult((TResponse)(object)Rows<RouteRevisionView>());
 
             throw new NotSupportedException($"Unhandled request {request.GetType().Name}");
         }

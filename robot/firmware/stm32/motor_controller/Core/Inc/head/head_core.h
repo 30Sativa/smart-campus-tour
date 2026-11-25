@@ -26,7 +26,8 @@
  * moc 0 lap lai moi lan HOME va chi can hieu chinh HOME_OFFSET mot lan.
  *
  * Thong so co khi duoi day theo phan cung 14/11/2026 (motor 17HD4401S,
- * DRV8825 vi buoc 1/4, TILT qua hop so 5:1). Doi phan cung thi sua cho khop.
+ * DRV8825 vi buoc 1/4, PAN hop so 4:1, TILT hop so 16:1 tu 24/11/2026). Doi phan
+ * cung thi sua cho khop.
  */
 
 #include "main.h"
@@ -49,14 +50,16 @@
 
 /* ---- Co khi (14/11/2026) ---------------------------------------------------
  * Ca hai truc: motor 17HD4401S (NEMA17 42x42, 1.8 do/buoc, 0.42 Nm).
- *   PAN : hop so hanh tinh 3:1 -> 1 buoc du = 0.6 do tai truc ra.
- *   TILT: hop so hanh tinh 5:1 -> 1 buoc du = 0.36 do tai truc ra. Hop so
- *         cho du luc giu dau + Meta Quest 3 (~2 kg, trong tam ~183 mm tren
- *         truc): o +/-18 do motor can ~0.29 Nm (69% cua 0.42 Nm).
+ *   PAN : hop so hanh tinh 4:1 (vanh 42, mat troi 14, hanh tinh 14; 24/11/2026)
+ *         -> 1 buoc du = 0.45 do tai truc ra.
+ *   TILT: hop so 16:1 (24/11/2026) -> 1 buoc du = 0.1125 do tai truc ra. Dau +
+ *         Meta Quest 3 (~2 kg, trong tam ~183 mm tren truc) can ~1.1 Nm o 18 do,
+ *         tuc ~0.08 Nm o motor: con du nhieu. Luc ep vat can khi HOME lai lon
+ *         (~6 Nm o 1.5 A), nen dong TILT chi can ~0.5 A (Vref ~0.25-0.3 V).
  * Ca hai DRV8825 chay vi buoc 1/4: M0 THAP, M1 CAO, M2 THAP (1/4 em hon va it
  * rung cong huong hon buoc du). Doi jumper M0-M2 thi doi HEAD_MICROSTEP cho
  * khop (1 = buoc du, 2, 4, 8, 16, 32), neu khong moi goc se sai dung ty le do.
- * Vi buoc nho nhat tai truc ra: PAN 0.15 do, TILT 0.09 do. */
+ * Vi buoc nho nhat tai truc ra: PAN 0.1125 do, TILT 0.028 do. */
 #ifndef HEAD_MOTOR_STEPS_PER_REV
 #define HEAD_MOTOR_STEPS_PER_REV 200.0f   /* motor 1.8 do/buoc */
 #endif
@@ -66,11 +69,11 @@
 #endif
 
 #ifndef HEAD_PAN_GEAR_RATIO
-#define HEAD_PAN_GEAR_RATIO 3.0f          /* hop so hanh tinh 3:1 (vong motor / vong truc PAN) */
+#define HEAD_PAN_GEAR_RATIO 4.0f          /* hop so hanh tinh 4:1 (vong motor / vong truc PAN, 24/11/2026) */
 #endif
 
 #ifndef HEAD_TILT_GEAR_RATIO
-#define HEAD_TILT_GEAR_RATIO 5.0f         /* hop so hanh tinh 5:1 (14/11/2026) */
+#define HEAD_TILT_GEAR_RATIO 16.0f        /* hop so 16:1 (24/11/2026) */
 #endif
 
 /* ---- Homing bang vat can co khi --------------------------------------------
@@ -91,12 +94,12 @@
  * khoi dong sau nam trong khoang nay. Muon HOME duoc tu MOI vi tri thi dat
  * HEAD_PAN_HOME_SEEK_CDEG = 36000 (truot buoc lau hon).
  *
- * TILT (14/11/2026): vat can o phia CUI 20 do tai truc ra (sau hop so 5:1).
- * Homing cui xuong toi vat can roi ngua len 20 do ve thang (20 do = 55.6
- * buoc du, lam tron toi vi buoc 0.09 do). SEEK 44 do: tu vi tri ngua cao nhat
- * co the (~20 do) toi vat can duoi la 40 do, du 4 do. Qua hop so 5:1, luc ep
- * vao vat can lon gap ~5 lan (~2 Nm): HEAD_HOME_SPEED_DPS giu cham va quang
- * du chi 4 do de do va dap len rang hop so. */
+ * TILT (14/11/2026, hop so 16:1 tu 24/11/2026): vat can o phia CUI 20 do tai
+ * truc ra. Homing cui xuong toi vat can roi ngua len 20 do ve thang (20 do =
+ * 177.8 buoc du, lam tron toi vi buoc 0.028 do). SEEK 44 do: tu vi tri ngua
+ * cao nhat co the (~20 do) toi vat can duoi la 40 do, du 4 do. Qua hop so
+ * 16:1, luc ep vao vat can lon gap ~14 lan luc motor: HEAD_HOME_SPEED_DPS giu
+ * cham, quang du chi 4 do, va dong TILT nen dat thap (xem docs/HEAD_PAN_TILT.md). */
 #ifndef HEAD_PAN_HOME_DIR
 #define HEAD_PAN_HOME_DIR (-1)
 #endif
@@ -147,10 +150,9 @@
 #define HEAD_PAN_LIMIT_CDEG 17000
 #endif
 
-/* TILT: +/-18 do (cui 18, ngua 18) = 50 buoc du qua hop so 5:1; vat can cui
- * o 20 do. Khong mo rong toi 27 do: o 27 do motor can ~0.39 Nm (93% cua
- * 0.42 Nm) nen de truot buoc khi dang quay. Sai so homing (+/-2 buoc du =
- * +/-0.72 do, cong do ro hop so) van con cach vat can > 1 do. Phia ngua khong co vat can trong firmware; neu co vat
+/* TILT: +/-18 do (cui 18, ngua 18) = 160 buoc du qua hop so 16:1; vat can cui
+ * o 20 do. Sai so homing (+/-2 buoc du = +/-0.23 do, cong do ro hop so) van
+ * con cach vat can > 1 do. Phia ngua khong co vat can trong firmware; neu co vat
  * can co khi phia tren thi no phai xa hon 18 do. */
 #ifndef HEAD_TILT_LIMIT_CDEG
 #define HEAD_TILT_LIMIT_CDEG 1800
@@ -165,8 +167,8 @@
 
 /* ---- Nut bam (STEP / JOG) ------------------------------------------------------
  * Nhan 1 lan: HEAD,<seq>,STEP,<n_pan>,<n_tilt> quay n BUOC DU cua motor
- * (1 buoc du = HEAD_MICROSTEP vi buoc; tai truc ra: PAN 1.8/3 = 0.6 do,
- * TILT 1.8/5 = 0.36 do).
+ * (1 buoc du = HEAD_MICROSTEP vi buoc; tai truc ra: PAN 1.8/4 = 0.45 do,
+ * TILT 1.8/16 = 0.1125 do).
  * Giu nut: HEAD,<seq>,JOG,<dir_pan>,<dir_tilt> (dir -1/0/1) quay lien tuc;
  * host phai gui lai it nhat moi HEAD_JOG_TIMEOUT_MS, im lang qua han thi
  * firmware tu giam toc dung (deadman: mat mang khong lam dau quay chay mai). */

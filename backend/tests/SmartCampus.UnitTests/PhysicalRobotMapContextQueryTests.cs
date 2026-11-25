@@ -81,6 +81,7 @@ public sealed class PhysicalRobotMapContextQueryTests
     {
         public Task<IReadOnlyList<Robot>> ListPhysicalRobotsAsync(CancellationToken cancellationToken) => Task.FromResult(robots);
         public Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksAsync(CancellationToken cancellationToken) => Task.FromResult(latest);
+        public Task<IReadOnlyList<UpcomingTourTarget>> ListUpcomingTourTargetsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<UpcomingTourTarget>>([]);
         public Task<bool> RobotCodeExistsAsync(string robotCode, CancellationToken cancellationToken) => Task.FromResult(false);
         public void Add(Robot robot) => throw new NotSupportedException();
         public void AddAuditLog(AuditLog auditLog) => throw new NotSupportedException();
@@ -91,5 +92,7 @@ public sealed class PhysicalRobotMapContextQueryTests
         public Task<FleetTelemetryApplyResult> ApplyAsync(FleetTelemetrySnapshot snapshot, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public IReadOnlyList<FleetTelemetrySnapshot> GetLatest() => [];
+        public void RecordRejected(string robotCode, FleetRejectedReport report) => throw new NotSupportedException();
+        public FleetRejectedReport? GetLatestRejected(string robotCode) => null;
     }
 }

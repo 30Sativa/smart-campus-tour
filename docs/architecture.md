@@ -297,7 +297,7 @@ Sensor hierarchy is settled by
 RPLiDAR A3M1        -> /scan                 -> local + global costmap, AMCL, SLAM
 STM32 STEP counts   -> /wheel/odom -\
 BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
-Astra Pro (depth)   -> /camera/depth/points  -> LOCAL costmap ONLY
+Astra Pro (depth)   -> /camera/depth/points  -> LOCAL costmap; camera mode also global (ADR-0068)
 4x SR04T sonar      -> /ultrasonic/sonarN/range -> no costmap; opt-in speed guard
                        (Nav2 collision_monitor, ADR-0066)
 Astra Pro (RGB)     -> person detection      -> Nav2 speed limit
@@ -359,7 +359,10 @@ not a local trajectory planner and does not search for detours. So: an obstacle
 the LiDAR sees reaches the global costmap and the planner can route around it;
 an obstacle only the depth camera or sonar sees reaches the local costmap only,
 and the baseline requirement is that the robot **detects it and stops safely** -
-an automatic detour is not guaranteed and is not claimed.
+an automatic detour is not guaranteed and is not claimed. Camera mode
+(`robot nav --camera`, ADR-0068, proposed) also copies the depth layer into the
+global costmap, so the planner can route around a low obstacle seen up to 2 m
+ahead, and its recoveries keep a 2.2 m square around the robot.
 
 The four SR04T sonars are mounted diagonally at the chassis corners with poses
 that are schematic rather than measured. They are not 360-degree coverage, they
@@ -599,10 +602,11 @@ Normal API startup requires `Authentication:Jwt:SigningKey` from environment,
 User Secrets, or another external configuration source. It must contain at
 least 32 UTF-8 bytes. The explicit initial-admin seed command exits before
 starting HTTP and does not require the signing key. Isolated development
-SimulationPreview also skips JWT middleware and persistence setup. Repository-
-dependent Application handlers fail service validation before the host starts
-in this mode, so it does not serve Auth or account API controllers; use normal
-API mode for those endpoints. In Development, CORS allows the explicit
+SimulationPreview also skips JWT middleware and persistence setup. It turns off
+build-time service validation so the host still starts; repository-dependent
+Application handlers stay unavailable and fail per request in this mode, so it
+does not serve Auth, account or other database-backed API controllers; use
+normal API mode for those endpoints. Every other mode keeps validation on. In Development, CORS allows the explicit
 `http://localhost:5173` origin with credentials; production origins must be
 configured explicitly, with no wildcard.
 
@@ -751,6 +755,78 @@ Under ADR-0062 (schema v1.23), which amends that rule:
   already SCHEDULED or READY still go READY and Start. Route revision views (route
   detail and list, and `routeRevision` in Tour detail) add `retiredPoiNames` at the
   end: the stop names whose POI is retired or discarded now.
+
+Under ADR-0066 (no schema change), "robot R is ready on map version M" is one rule:
+R is not deactivated, its connection is confirmed (`FirstAcceptedSyncAt`), it is
+assigned to M, and its newest deployment check on any map passes on M with M's
+package checksum. POI verification and import, route test runs, Tour create/slots/
+robot list, READY, the Start preflight and enabling dispatch all use it:
+
+- Readiness reason codes, in check order: `ROBOT_DEACTIVATED`,
+  `ROBOT_CONNECTION_UNCONFIRMED`, `ROBOT_MAP_NOT_ASSIGNED`,
+  `ROBOT_DEPLOYMENT_CHECK_REQUIRED`, each with a Vietnamese sentence naming the
+  robot and the map ("{khu vực} · {mã khu vực} · phiên bản {n}"). POI verification
+  keeps 409 `MAP_NOT_DEPLOYED` and Tours keep `ROBOT_NOT_READY_FOR_ROUTE`, now with
+  that sentence as message; a route test run and enabling dispatch return the
+  readiness code itself (`MAP_NOT_CURRENTLY_DEPLOYED` is no longer returned). The
+  Start preflight row `robotMapMatchesRoute` stays.
+- `POST /api/technical/map-versions/{id}/deployment-checks` (PASS or FAIL) for a
+  robot not assigned to that version: 409 `ROBOT_MAP_NOT_ASSIGNED` (the readiness
+  sentence plus "Đổi bản đồ cho robot ở trang Robot trước khi ghi kiểm tra."). A
+  PASS also needs a Fleet Sync report no older than `SyncFreshness`, received after
+  `MapAssignedAt`, with the assigned `mapKey`; otherwise 409 `ROBOT_NOT_REPORTING`
+  ("Robot {code} chưa gửi dữ liệu theo bản đồ {khu vực} · v{n}. Bật fleet_bridge
+  với MapKey {mapKey}, FrameId {frameId} rồi bấm Cập nhật trạng thái."). Replays of
+  a stored request still return it.
+- Changing or clearing a map assignment sets `IsDispatchEnabled = false` in the
+  same transaction and audits `ROBOT_DISPATCH_CHANGED` (`enabled: false`, reason
+  "Tự tắt vì đổi bản đồ", `automatic: true`). Assigning the version already held
+  changes nothing.
+- Creating a map version for a new area whose name (trimmed, any case) is already
+  used: 409 `MAP_AREA_NAME_TAKEN` ("Đã có khu vực tên {tên} ({mã}). Chọn Khu vực đã
+  có hoặc đặt tên khác."). New versions of an existing area are unaffected.
+- `GET /api/technical/physical-robots` items add `readiness`:
+  `{ state, reasonCode, reason, mapVersionId, mapLabel, deploymentCheckedAt,
+  reportingOnAssignedMap }`. `state` is `READY`, `NOT_READY` (deactivated, or
+  assigned and connected but the deployment-check condition fails) or `NOT_SET_UP`
+  (no map or no confirmed connection). `mapVersionId`/`mapLabel` ("{khu vực} ·
+  v{n}") name the assigned version; `deploymentCheckedAt` is the newest check's time
+  when it is on the assigned version; `reportingOnAssignedMap` is the live-data test
+  above, informational only.
+- Round 3 (ADR-0066, 23/11/2026) adds `readiness.nextStep` and `readiness.detail`.
+  `nextStep` is `ASSIGN_MAP` (no map; first even before the connection is
+  confirmed, since Fleet Sync accepts nothing without one), `CONFIRM_CONNECTION`,
+  `CONFIGURE_MINIPC` (assigned, `reportingOnAssignedMap` false), `DEPLOYMENT_CHECK`
+  (reporting on the assigned map, no passing check on it), or null when READY or
+  deactivated; it is display only and never changes `state`. When the robot holds
+  M and its newest check is not a PASS on M (none, another map, failed, other
+  package), `reason` and every writer's 409 message are "Robot {code} chưa kiểm tra
+  triển khai trên {khu vực} · {mã} · phiên bản {n} (gán lúc {dd/MM HH:mm})." (the
+  time in campus time, omitted without `MapAssignedAt`). `detail` keeps the history:
+  "Lần kiểm tra triển khai mới nhất của robot {code} là trên {bản đồ khác}." or
+  "… không đạt ({dd/MM HH:mm})."; otherwise null. Codes are unchanged.
+- Robot list items (and the Staff connection list), dashboard `robots[]` and
+  diagnostics: `connectionStatus` adds `WRONG_MAP`, with `lastRejectedReport`
+  `{ mapKey, frameId, at, message }` or null. Fleet Sync keeps, in process memory
+  beside the telemetry store, the newest report it refused with
+  `MAP_CONTEXT_MISMATCH`. It is shown while it is within `SyncFreshness`, arrived at
+  or after `MapAssignedAt`, and is newer than the newest accepted report; `message`
+  is "Robot đang gửi dữ liệu theo {mapKey gửi}, bị từ chối vì đang gán {mapKey
+  được gán}. Đổi MapKey/FrameId trên MiniPC." (a FrameId-only mismatch names the
+  frames). Status order: `UNCONFIRMED` (no confirmed connection; the report may
+  still be shown), `WRONG_MAP`, `CONNECTED` (`FleetSyncFreshness`),
+  `AWAITING_DATA`, `DISCONNECTED`. Dashboard `kpis` add `wrongMapRobots`. The
+  memory clears on restart; the Start preflight is unchanged (its telemetry row
+  already fails without an accepted report).
+- `GET /api/maps/versions` and `GET /api/maps/versions/{id}` items add
+  `runningRobot`: `{ id, robotCode, displayName, readiness }` for the active robot
+  assigned to that version, or null. `currentlyDeployedOn` is kept for
+  compatibility, but the web no longer uses it for the running-robot column.
+- `POST` POI import preview adds `robotReadiness`: `{ ready, code, message }`. When
+  the robot is not ready on the chosen version, files with `verified: true` are
+  imported without a PASS and wait in the verification queue (formerly a
+  `MAP_NOT_DEPLOYED` file error). A preview or result file's `verified` is what is,
+  or will be, recorded.
 
 Under ADR-0041 (schema v1.21), TechnicalStaff retire a map version instead of
 deleting it: `POST /api/technical/map-versions/{id}/retire` with
@@ -1074,6 +1150,8 @@ Account deactivation does not immediately revoke an already-issued JWT; it
 remains valid until expiry under current API authentication. Its legacy
 `connectionState: Live|Stale` describes recent HTTPS sync, not an open socket.
 `TourUpdated` (no payload, since 2026-11-07) follows any committed command of the Tours feature, robot command reports included. It is a hint to re-read Tours, coalesced to at most one send per second and possibly lost; clients keep polling as the fallback and re-read after reconnecting. A `tourId`/revision payload remains planned.
+
+`BallotUpdated` (since 2026-11-25, ADR-0065 addendum) follows each committed Viewer vote with a payload `{ tourId, ballot, leadingStopId, votesCast, viewers { accepted, joined }, at }`: the ballot as Staff see it (`myVote` always null), the leader by rule 6 and the turnout. It is sent at once, never delayed; votes that arrive while a send is in flight are folded into one send of that Tour's newest ballot. The Staff console patches the cached Tour detail with it (a push for another stop visit makes it re-read the Tour; an older `at` is ignored) and keeps the 3 s poll as the fallback.
 `syncFresh`, `poseFresh`, execution status, `localized`, and `motionReady`
 remain separate. Neither a new sync nor a pose sample implies localization or
 motion readiness. No command is emitted by v1.
@@ -1100,7 +1178,18 @@ node list or Nav2 state (see `robot/ros2_ws/src/fleet_bridge/README.md`).
 records with the latest in-memory Fleet Sync and diagnostics snapshots. Missing
 or stale telemetry and diagnostics remain independently visible. The dashboard
 includes action items and counts for robot connection state, inspection holds,
-POI verification and route-test queues.
+POI verification and route-test queues. Each action item is
+`{type, severity, title, description, targetId, linkUrl}`; `type` is
+`HELD_ROBOT`, `MAP_MISMATCH`, `TOUR_ROBOT_NOT_READY`, `POI_QUEUE`, `ROUTE_QUEUE`
+or `ROUTE_RERUN`. `MAP_MISMATCH` describes the robot with its
+`readiness.reason` sentence. `TOUR_ROBOT_NOT_READY` (WARNING, ADR-0066) is one
+item per robot whose SCHEDULED or READY Tours, not yet running and starting
+within seven days, its reserved robot cannot run by `TourTarget.RobotBlockReason`.
+It is titled `Tour {name} {dd/MM HH:mm} chưa chạy được`, or
+`{n} Tour sắp tới của robot {code} chưa chạy được` when there are several, with
+the readiness sentence as description, `targetId` = robot id and `linkUrl`
+`/technical/robots?robot={robotId}`. Queue links are `/technical/pois` and
+`/technical/route-tests`.
 
 `GET /api/admin/infrastructure/health` requires the `Admin` role and reports
 the API process host/runtime, a bounded database connectivity check, Docker
@@ -1469,7 +1558,8 @@ POI head motion is robot-side (ADR-0045 addendum 14/11/2026): `fleet_bridge` (`h
 every 5 s and watches `navigate_to_pose/_action/status`; a goal that starts executing turns the head to `ANGLE 0/0`,
 a goal that succeeds within 0.6 m of a POI runs that POI's preset (`ANGLE` or `SWEEP`), only while `autoMotion`. The
 backend no longer queues head commands on `ARRIVED` or Next. Head hardware since 14/11/2026: DRV8825 1/4 microstep on
-both axes, PAN 3:1 and TILT 5:1 planetary gearboxes; soft limits unchanged (PAN ±170°, TILT ±18°).
+both axes, PAN 3:1 and TILT 5:1 planetary gearboxes; soft limits unchanged (PAN ±170°, TILT ±18°). From 24/11/2026 the gearboxes are PAN 4:1 and TILT 16:1 (firmware `HEAD_*_GEAR_RATIO`); one
+`HeadStep` full step is then PAN 0.45° and TILT 0.1125°. Wire formats are unchanged.
 
 **Quest camera on demand (ADR-0052, proposed 09/11/2026; robot side opt-in).**
 The robot's Quest stream runs only while a Tour assigned to it is `RUNNING` or a Staff
@@ -1958,6 +2048,8 @@ Public contract added by this batch. Held seats are the Tour's active PENDING an
 | `POST /api/staff/manage/tours` | `configuration.capacity` is required, 1..`Tours:MaxCapacity` (default 20, ceiling 40 by `CK_Tours_Capacity`). |
 | `POST /api/staff/manage/tours/{id}/capacity` | Staff. `{requestId, expectedRowVersion, capacity}`. SCHEDULED/READY before Start. 409 `CAPACITY_BELOW_HELD`, 409 `TOUR_LOCKED`. Audit `TOUR_CAPACITY_CHANGED`. |
 | `POST /api/staff/manage/tours/{id}/operator` | Staff. `{requestId, expectedRowVersion, operatorUserId}`. SCHEDULED/READY before Start; READY stays READY. 409 `TOUR_LOCKED`, 409 `ROUTE_VERSION_REQUIRED` for a legacy Tour. Audit `TOUR_OPERATOR_CHANGED`. |
+| `GET /api/staff/manage/tours/{id}/narration` | Staff. Each stop's narration in the Tour and its POI's newest approved narration; `canRefresh` or `blockedCode`/`blockedReason` (ADR-0067). |
+| `POST /api/staff/manage/tours/{id}/narration/refresh` | Staff. `{requestId, expectedRowVersion}`. SCHEDULED/READY before Start. Moves the Tour to a revision of its route with the same path and the newest approved narration (saved and submitted when needed, same applied test run). 409 `TOUR_NARRATION_UP_TO_DATE`, `TOUR_ROUTE_CHANGED`, `TOUR_LOCKED`, `ROUTE_VERSION_REQUIRED`. Audit `TOUR_NARRATION_REFRESHED` (ADR-0067). |
 | Tour reads (`GET /api/staff/manage/tours`, `/{id}`) | `tour.capacity`, `tour.heldSeats`, `tour.registrationClosesAt`; `permissions.canChangeCapacity`, `canChangeOperator`, `maxCapacity`. `/slots` adds `maxCapacity`. |
 | Representative create, add rows, replace roster | 409 `TOUR_CAPACITY_EXCEEDED`, `errors.fields.remainingSeats`. A write that adds no seat is never refused. |
 | `GET /api/representative/tours` | Only SCHEDULED Tours before the 48-hour close. Tour responses add `capacity` and `remainingSeats`. The detail stays reachable for a Tour the Representative registered for. |
@@ -2490,7 +2582,8 @@ Implementation: `ai-assistant/` (service), backend
 `Infrastructure/Integrations/Assistant/HttpAiAssistantClient.cs` and
 `Api/Controllers/StudentQuestionsController.cs`, and the web panel on the invited
 Student page (`web/src/features/student/components/LiveStudentAiAssistant.tsx`,
-shown only while the Tour is `RUNNING`, in the live view's "Hỏi AI" tab). The labelled demo Tour page keeps its
+shown while the Tour is `RUNNING`, in the live view's "Hỏi AI" tab, and in the waiting room from 15 minutes before the
+scheduled start, where answers use general campus content). The labelled demo Tour page keeps its
 simulated answers. Voice input is off on the live page until server-side STT
 (P1-01).
 
@@ -2529,7 +2622,8 @@ Backend configuration (opt-in, validated at startup; secrets outside Git):
 |---|---|---|
 | 400 | (validation errors, existing `BaseResponse` format) | Empty/too long text, missing/empty `questionId`, too many or too long turns |
 | 401 | — | No, expired, closed or revoked session; same generic body as §3.2.3 |
-| 409 | `TOUR_NOT_RUNNING` | Tour is not `RUNNING` at acceptance or at answer time |
+| 409 | `AI_OPENS_LATER` | Tour is `SCHEDULED`/`READY` and more than 15 minutes before its scheduled start (the waiting room asks from 15 minutes before; since 2026-11-25) |
+| 409 | `TOUR_NOT_RUNNING` | Tour is neither `RUNNING` nor in its waiting-room window (ended or cancelled) at acceptance or at answer time |
 | 409 | `QUESTION_ID_REUSED` | Same `questionId` with different text |
 | 429 | `RATE_LIMITED` | More than 6 questions/minute or a second in-flight question for this session |
 | 503 | `AI_UNAVAILABLE` | Assistant unreachable, overloaded or its circuit is open |

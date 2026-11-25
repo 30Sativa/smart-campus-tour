@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { notify, type ToastInput } from '../../components/ui/toast-store'
 import { versionedRoutesApi } from '../administration/routes/versioned-api'
 import { technicalApi, type ReleaseRobotInspectionInput, type RouteTestRunInput, type SetRobotDispatchInput } from './api/technical'
 import { diagnosticsApi } from './api/diagnostics-api'
+import { duplicateAreaNames, mapShortLabel } from './poi-labels'
 
 const keys = {
   maps: ['technical', 'maps'] as const,
@@ -31,6 +33,25 @@ export function useMapRetirementImpact(mapVersionId: string | undefined) {
 
 export function useMapAreas(enabled = true) {
   return useQuery({ queryKey: ['technical', 'map-areas'], queryFn: technicalApi.listMapAreas, enabled })
+}
+
+/** Area names that more than one area uses; only those print their area key beside the name. Empty until the list loads. */
+export function useDuplicateAreaNames() {
+  const areas = useMapAreas()
+  return useMemo(() => duplicateAreaNames((areas.data ?? []).map(area => ({ areaKey: area.areaKey, name: area.displayName }))), [areas.data])
+}
+
+/** "{area} · v{n}" of a map version by id, with the area key when the name is shared; null while the version is unknown. */
+export function useMapShortLabel() {
+  const maps = useAllMapVersions()
+  const duplicates = useDuplicateAreaNames()
+  return useMemo(() => {
+    const byId = new Map((maps.data ?? []).map(item => [item.map.id, item.map]))
+    return (mapVersionId: string | null | undefined) => {
+      const map = mapVersionId ? byId.get(mapVersionId) : undefined
+      return map ? mapShortLabel(map, duplicates) : null
+    }
+  }, [maps.data, duplicates])
 }
 
 export function usePhysicalRobots(enabled = true) {
@@ -191,9 +212,11 @@ export const useImportPoiFiles = () => useTechnicalMutation(technicalApi.importP
   detail: 'Staff cần bổ sung tên và thuyết minh cho POI mới.',
 }))
 
+/** A check changes the robot's readiness as well as the map's, so both lists reload. */
 export const useRecordDeployment = () => useTechnicalMutation(technicalApi.recordDeployment, keys.maps, (input, check) => check?.passed
-  ? { title: `Đã ghi kiểm tra trên ${input.robotCode}: đạt`, detail: 'Localization và hiển thị map đều đạt.' }
-  : { tone: 'info', title: `Đã ghi kiểm tra trên ${input.robotCode}: chưa đạt`, detail: 'Version này chưa dùng được cho tới khi kiểm tra lại đạt.' })
+  ? { title: `Đã ghi kiểm tra triển khai trên ${input.robotCode}: đạt`, detail: 'Định vị và hiển thị bản đồ đều đạt.' }
+  : { tone: 'info', title: `Đã ghi kiểm tra triển khai trên ${input.robotCode}: không đạt`, detail: 'Robot chưa sẵn sàng trên bản đồ này cho tới khi kiểm tra lại đạt.' },
+[keys.physicalRobots])
 
 export const useRegisterPhysicalRobot = () => useTechnicalMutation(technicalApi.registerPhysicalRobot, keys.physicalRobots, (_input, robot) => ({
   title: `Đã đăng ký ${robot.robotCode}`,
@@ -246,7 +269,7 @@ export function useClearRobotMap() {
 }
 
 export const useVerifyPoi = () => useTechnicalMutation(technicalApi.verifyPoi, keys.poiProposals, (input) => input.resultCode === 'PASS'
-  ? { title: 'Đã ghi POI đạt', detail: `Kiểm tra cùng robot ${input.robotCode}, gắn với phiên bản POI ${input.revisionNumber}.` }
+  ? { title: 'Đã ghi POI đạt', detail: `Kiểm chứng cùng robot ${input.robotCode}, gắn với phiên bản POI ${input.revisionNumber}.` }
   : { tone: 'info', title: 'Đã ghi POI không đạt', detail: 'Staff cần chỉnh POI rồi gửi lại để kiểm chứng.' })
 
 /**

@@ -9,6 +9,7 @@ public sealed class InMemoryFleetTelemetryStore : IFleetTelemetryStore
 {
     private const int RetiredStreamHistoryLimit = 16;
     private readonly ConcurrentDictionary<string, RobotState> robots = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, FleetRejectedReport> rejected = new(StringComparer.Ordinal);
 
     public InMemoryFleetTelemetryStore(ILogger<InMemoryFleetTelemetryStore>? logger = null) => Logger = logger;
 
@@ -49,6 +50,12 @@ public sealed class InMemoryFleetTelemetryStore : IFleetTelemetryStore
         .Select(snapshot => snapshot!)
         .OrderBy(snapshot => snapshot.Robot.RobotCode, StringComparer.Ordinal)
         .ToArray();
+
+    public void RecordRejected(string robotCode, FleetRejectedReport report) =>
+        rejected.AddOrUpdate(robotCode, report, (_, current) => report.At >= current.At ? report : current);
+
+    public FleetRejectedReport? GetLatestRejected(string robotCode) =>
+        rejected.TryGetValue(robotCode, out var report) ? report : null;
 
     private sealed class RobotState
     {

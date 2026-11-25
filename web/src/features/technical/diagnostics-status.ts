@@ -24,6 +24,7 @@ const connectionView: Record<string, { label: string; tone: StatusTone }> = {
   CONNECTED: { label: 'Trực tuyến', tone: 'ok' },
   DISCONNECTED: { label: 'Ngoại tuyến', tone: 'danger' },
   AWAITING_DATA: { label: 'Chưa nhận dữ liệu', tone: 'warn' },
+  WRONG_MAP: { label: 'Sai bản đồ', tone: 'warn' },
   UNCONFIRMED: { label: 'Chưa xác nhận kết nối', tone: 'muted' },
 }
 

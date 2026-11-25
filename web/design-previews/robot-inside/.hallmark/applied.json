@@ -1,0 +1,61 @@
+{
+  "mode": "redesign",
+  "depth": "full preview",
+  "scope": "app",
+  "productionEdits": true,
+  "purpose": "Interactive learning tool for visitors exploring signal flow inside the CampusTour robot",
+  "userPreference": "3D model focus, preview before application",
+  "evidence": [
+    {
+      "file": "src/routes/public/RobotInsidePage.tsx:25",
+      "finding": "Shared public navigation and footer"
+    },
+    {
+      "file": "src/features/landing/home-3d.css:2",
+      "finding": "Pale green, dark teal, lime and Be Vietnam Pro existing brand"
+    },
+    {
+      "file": "src/features/landing/sections/RobotFlowSection.tsx:90",
+      "finding": "Five functions, step navigation and real 3D viewer"
+    },
+    {
+      "file": "src/features/landing/robot-explode/flows.ts:96",
+      "finding": "Real function, step and signal metadata reused"
+    }
+  ],
+  "kept": [
+    "SiteNav",
+    "SiteFooter",
+    "FLOWS and every step",
+    "Real RobotFlowViewer with orbit and zoom",
+    "Technical details and signal legend"
+  ],
+  "introduced": [
+    "Compact header",
+    "Model on left and current step on right",
+    "Plain function tabs",
+    "Pause control and reduced motion snapshot",
+    "URL selection",
+    "Isolated preview only"
+  ],
+  "material": {
+    "real": "Project 3D model and source signal data",
+    "absent": "No invented facts, external images or marketing figures"
+  },
+  "review": "in-thread per Codex harness",
+  "appliedTo": "/ben-trong-robot",
+  "appliedFiles": [
+    "src/routes/public/RobotInsidePage.tsx",
+    "src/features/landing/sections/RobotFlowWorkbench.tsx",
+    "src/features/landing/home-3d.css",
+    "src/features/landing/robot-explode/RobotFlowViewer.tsx",
+    "src/features/landing/robot-explode/WheelAura.tsx",
+    "public/images/robot-inside-still.png"
+  ],
+  "verification": {
+    "browser": "5 functions, 19 steps, 320 to 1920px widths, URL restoration, keyboard, zoom, dark mode, mobile menu and GLB error fallback passed",
+    "pausedScene": "pixel-stable while paused; zoom and orbit redraw; resize retained model",
+    "hallmark": "0 FAIL, 0 WARN, 3 original footer names allowed to wrap",
+    "project": "scripts/verify web passed in isolated copy: clean npm ci, map check, TypeScript, ESLint, 131 test files / 990 tests, production build"
+  }
+}

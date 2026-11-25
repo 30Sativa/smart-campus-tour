@@ -60,7 +60,8 @@ class ReadinessMonitor:
         node.create_subscription(Bool, 'emergency_stop_state', self._on_estop, latched)
         node.create_subscription(String, 'robot_mode_state', self._on_mode, latched)
         node.create_subscription(String, 'motion_gate_state', self._on_gate, volatile)
-        node.create_subscription(Odometry, sources.odometry_topic, self._on_odom, qos_profile_sensor_data)
+        # Raw: only the arrival time is used, so the message is never deserialized.
+        node.create_subscription(Odometry, sources.odometry_topic, self._on_odom, qos_profile_sensor_data, raw=True)
         self._status_subs = {
             action: node.create_subscription(
                 GoalStatusArray, f'{action}/_action/status',

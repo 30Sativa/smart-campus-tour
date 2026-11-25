@@ -33,7 +33,15 @@ const MESSAGES: Record<string, string> = {
   STOP_LOCK_INVALID: 'Không khóa hoặc mở khóa được điểm này: điểm đã được tham quan, Tour không còn chạy, hoặc bạn không phải người vận hành. Trạng thái mới đã được tải lại.',
 }
 
-type Body = { errors?: { code?: unknown; checks?: unknown; blockedBy?: unknown; blockers?: unknown } }
+/**
+ * The robot is not ready on the route's map (one server rule for creating, scheduling, READY and Start). The server's
+ * sentence names the robot and what is missing, so it wins; this text is only for an older server that sent none.
+ */
+const SERVER_WORDED: Record<string, string> = {
+  ROBOT_NOT_READY_FOR_ROUTE: 'Robot chưa sẵn sàng trên bản đồ của tuyến này. Technical Staff cần kiểm tra triển khai cho robot trên đúng bản đồ.',
+}
+
+type Body = { message?: unknown; errors?: { code?: unknown; checks?: unknown; blockedBy?: unknown; blockers?: unknown } }
 
 function parse(error: ApiError): Body {
   try {
@@ -57,11 +65,14 @@ export function operationRefusal(error: unknown, { operator = false }: { operato
   if (!(error instanceof ApiError)) return { ...empty, message: tourError(error) }
   if (error.status === 403) return { ...empty, message: operator ? 'Chỉ người vận hành được giao cho Tour mới thao tác được.' : 'Tài khoản không có quyền thao tác Tour này.' }
   if (error.status === 404 && operator) return { ...empty, message: 'Máy chủ không còn thấy Tour hoặc lệnh này. Tải lại trang rồi kiểm tra.' }
-  const errors = parse(error).errors
+  const body = parse(error)
+  const errors = body.errors
   const code = typeof errors?.code === 'string' ? errors.code : null
   const checks = Array.isArray(errors?.checks) ? errors.checks.filter(isCheck) : null
   const blockedBy = Array.isArray(errors?.blockedBy) ? errors.blockedBy.filter((id): id is string => typeof id === 'string') : []
   const blockers = Array.isArray(errors?.blockers) ? errors.blockers.filter(isBlocker) : []
-  const message = error.status === 409 && code && MESSAGES[code] ? MESSAGES[code] : tourError(error)
+  const serverText = typeof body.message === 'string' && body.message.trim() ? body.message : null
+  const message = error.status === 409 && code && SERVER_WORDED[code] ? serverText ?? SERVER_WORDED[code]
+    : error.status === 409 && code && MESSAGES[code] ? MESSAGES[code] : tourError(error)
   return { message, code, checks, blockedBy, blockers }
 }

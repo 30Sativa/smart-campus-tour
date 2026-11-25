@@ -4,6 +4,7 @@ using MediatR;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
@@ -38,7 +39,7 @@ public sealed class SetRobotDispatchCommandValidator : AbstractValidator<SetRobo
 /// <summary>
 /// Technical Staff allow or stop dispatch to a physical robot (ADR-0049, Decision 8). Stopping always works, whatever the
 /// robot's state and even from a stale page, so a person can never be refused the safer choice. Allowing needs an active
-/// robot with a key, a map, a passing deployment check on that map, no pending inspection, and a reference to the
+/// robot with a key, a map it is ready on (ADR-0066), no pending inspection, and a reference to the
 /// GATE A record. Neither direction stops a robot that is already moving.
 /// </summary>
 public sealed class SetRobotDispatchCommandHandler(ITourManagementRepository repository, IRouteRevisionRepository revisions, TimeProvider clock)
@@ -88,9 +89,11 @@ public sealed class SetRobotDispatchCommandHandler(ITourManagementRepository rep
             throw new ConflictException("Robot chưa có khóa kết nối đang hiệu lực.", "ROBOT_CREDENTIAL_REQUIRED");
         if (robot.AssignedMapVersionId is null)
             throw new ConflictException("Robot chưa được gán bản đồ.", "ROBOT_MAP_REQUIRED");
-        var latest = await revisions.GetLatestDeploymentForRobotAsync(robot.Id, ct);
-        if (latest is null || latest.MapVersionId != robot.AssignedMapVersionId || !latest.LocalizationPassed || !latest.DisplayPassed)
-            throw new ConflictException("Kiểm tra triển khai mới nhất của robot chưa đạt trên bản đồ đã gán.", "ROBOT_DEPLOYMENT_CHECK_REQUIRED");
+        // ADR-0066: the shared readiness rule on the assigned map; it adds the connection confirmation and the checksum.
+        var map = await revisions.GetMapAsync(robot.AssignedMapVersionId.Value, ct)
+            ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");
+        if (RobotMapReadiness.Evaluate(robot, await revisions.GetLatestDeploymentForRobotAsync(robot.Id, ct), map) is { IsReady: false } readiness)
+            throw new ConflictException(readiness.Message!, readiness.Code!);
         if (robot.NeedsInspection)
             throw new ConflictException("Robot đang chờ kiểm tra tại chỗ.", "ROBOT_NEEDS_INSPECTION");
     }

@@ -117,6 +117,7 @@ if (initialAdminSeedCommand.Requested || !simulationPreviewEnabled)
 
 // The opt-in Gazebo preview is isolated in Hubs/SimulationPreviewExtensions.cs.
 builder.Services.AddSimulationPreview();
+builder.Host.UseSimulationPreviewServiceValidation(simulationPreviewEnabled);
 if (!simulationPreviewEnabled)
     builder.Services.AddFleetSync(builder.Configuration);
 

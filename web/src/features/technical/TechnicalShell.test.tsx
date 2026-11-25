@@ -17,8 +17,13 @@ const DASHBOARD = {
   robots: [],
 }
 
+/** The bell reads the robot list too when a map mismatch is waiting, for the robot's own readiness reason. */
+const ROBOTS = [{ id: 'r1', robotCode: 'amr-01', readiness: { state: 'NOT_READY', reasonCode: 'ROBOT_DEPLOYMENT_CHECK_REQUIRED', reason: 'Lần kiểm tra triển khai mới nhất của robot amr-01 là trên Betea · v1.', mapVersionId: 'm1', mapLabel: 'Tầng 6 · v1', deploymentCheckedAt: null, reportingOnAssignedMap: true } }]
+
 function stubDashboard(body: unknown, status = 200) {
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status })))
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/api/technical/physical-robots')
+    ? new Response(JSON.stringify({ success: true, data: ROBOTS }), { status: 200 })
+    : new Response(JSON.stringify(body), { status })))
 }
 
 function renderShell(path = '/technical/dashboard') {
@@ -78,7 +83,24 @@ describe('TechnicalShell', () => {
     expect(rows[0]).toHaveTextContent('Robot amr-01 chờ kiểm tra tại chỗ')
     expect(within(rows[0]).getByRole('link')).toHaveAttribute('href', '/technical/robots?robot=r1')
     expect(within(rows[1]).queryByRole('link')).not.toBeInTheDocument()
-    expect(within(panel).getByRole('link', { name: /2 POI chờ kiểm chứng/ })).toHaveAttribute('href', '/technical/poi-import')
+    // The server still names the old address; the link opens the page it moved to.
+    expect(within(panel).getByRole('link', { name: /2 POI chờ kiểm chứng/ })).toHaveAttribute('href', '/technical/pois')
+    // "Lệch cấu hình bản đồ" says what is wrong in the robot's readiness words, not the dashboard's key comparison.
+    expect(await within(rows[1]).findByText('Lần kiểm tra triển khai mới nhất của robot amr-01 là trên Betea · v1.')).toBeInTheDocument()
+    expect(within(rows[1]).queryByText('Kiểm tra lại bản đồ trên robot.')).not.toBeInTheDocument()
+  })
+
+  // Round 2 F2: an upcoming Tour the robot cannot run shows in the bell like the other items.
+  it('lists an upcoming Tour whose robot is not ready in the bell, linking to the robot', async () => {
+    stubDashboard({ success: true, data: { ...DASHBOARD, actionItems: [
+      { type: 'TOUR_ROBOT_NOT_READY', severity: 'WARNING', title: '3 Tour sắp tới của robot amr_01 chưa chạy được', description: 'Robot amr_01 đang gán Tầng 6 · test123 · phiên bản 1, không phải bản đồ này.', targetId: 'r1', linkUrl: '/technical/robots?robot=r1' },
+    ] } })
+    renderShell()
+    fireEvent.click(await screen.findByRole('button', { name: 'Thông báo, 1 việc đang chờ' }))
+    const row = within(within(screen.getByRole('region', { name: 'Bảng thông báo' })).getByRole('listitem'))
+    expect(row.getByText('3 Tour sắp tới của robot amr_01 chưa chạy được')).toBeInTheDocument()
+    expect(row.getByText('Robot amr_01 đang gán Tầng 6 · test123 · phiên bản 1, không phải bản đồ này.')).toBeInTheDocument()
+    expect(row.getByRole('link')).toHaveAttribute('href', '/technical/robots?robot=r1')
   })
 
   it('says nothing is waiting only when the Dashboard answered, and says so when it failed', async () => {

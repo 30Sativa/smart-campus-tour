@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Domain.Entities;
@@ -47,7 +48,7 @@ internal static class TourLegDispatch
         return next is not null ? TourLegTarget.To(next) : revision.EndMode == "POSE" ? TourLegTarget.End(revision) : null;
     }
 
-    /// <summary>A normal end releases the robot in the same transaction (ADR-0043 D13).</summary>
+    /// <summary>A normal end releases the robot and ends its hold in the same transaction (ADR-0043 D13).</summary>
     public static async Task CompleteAsync(ITourManagementRepository repository, Tour tour, Guid robotId, Guid? actor,
         DateTimeOffset now, CancellationToken ct)
     {
@@ -56,7 +57,17 @@ internal static class TourLegDispatch
         repository.AddEvent(new TourEvent
         {
             TourId = tour.Id, EventType = TourLifecycleEvents.Completed, OccurredAt = now, RobotId = robotId,
-            RouteId = tour.ActiveRouteId, ActorUserId = actor
+            RouteId = tour.ActiveRouteId, ActorUserId = actor, DataJson = await EndHoldAsync(repository, tour.Id, now, ct)
         });
     }
+
+    /// <summary>
+    /// A Tour that ended holds its robot no longer (ADR-0043 D13 addendum): the hold ends now, so any Tour may take the robot
+    /// once it is released. Returns the end event's data naming the previous end, or null when the hold did not move.
+    /// </summary>
+    public static async Task<string?> EndHoldAsync(ITourManagementRepository repository, Guid tourId, DateTimeOffset endedAt,
+        CancellationToken ct) =>
+        await repository.EndHoldAsync(tourId, endedAt, ct) is { } previous
+            ? JsonSerializer.Serialize(new { holdEndsAtBefore = previous })
+            : null;
 }
