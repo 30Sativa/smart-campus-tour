@@ -650,6 +650,23 @@ describe('Staff versioned Route workflow', () => {
     expect(await screen.findByText(/Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh thì bản mới giữ kết quả chạy thử\. Đổi bản đồ, điểm dừng, thứ tự, góc nhìn camera, điểm đầu hoặc điểm cuối thì cần chạy thử lại\./)).toBeInTheDocument()
   })
 
+  // ADR-0060: each stop opens the narration saved with the revision, the words its Tours read.
+  it('opens the saved narration of each stop on the route page', async () => {
+    const entrance = { ...currentRoute.stops[0], narrationText: 'Chào mừng các em tới sảnh chính.' }
+    currentRoute = { ...currentRoute, stops: [entrance, currentRoute.stops[1]] }
+    renderAt('/staff/manage/routes/route-1')
+    const open = await screen.findByRole('button', { name: 'Xem lời thuyết minh Verified entrance' })
+    expect(open).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('Chào mừng các em tới sảnh chính.')).not.toBeInTheDocument()
+    fireEvent.click(open)
+    expect(screen.getByRole('button', { name: 'Ẩn lời thuyết minh Verified entrance' })).toHaveAttribute('aria-expanded', 'true')
+    expect(within(screen.getByRole('region', { name: 'Lời thuyết minh Verified entrance' })).getByText('Chào mừng các em tới sảnh chính.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Mở tất cả lời thuyết minh' }))
+    expect(within(screen.getByRole('region', { name: 'Lời thuyết minh Verified hall' })).getByText('Điểm này chưa có lời thuyết minh đã duyệt khi lưu tuyến.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn tất cả' }))
+    expect(screen.queryByRole('region', { name: /Lời thuyết minh/ })).not.toBeInTheDocument()
+  })
+
   // ADR-0060: saving again is how a route takes narration approved after its save, so that is not "nothing changed".
   it('lets an otherwise unchanged route be saved again to take newly approved narration, keeping the passed run', async () => {
     currentRoute = { ...currentRoute, isSubmitted: true, verificationStatus: 'PASS' }

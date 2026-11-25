@@ -26,7 +26,9 @@ export type VersionedRoute = {
   configurationFingerprint: string; isSubmitted: boolean; verificationStatus: string; effectiveTestRunId: string | null
   durationStatus: string; dwellDurationSeconds: number; stops: Array<{ /** `RouteRevisionStops.Id`; an older server omits it. */ id?: string; poiRevisionId: string; sourcePoiVerificationRecordId: string; stopOrder: number; dwellSeconds: number; headSteps: Array<{ preset: 'FRONT' | 'LEFT' | 'RIGHT'; holdSeconds: number }>; name: string; x: number; y: number; yaw: number; cameraPreset: string
     /** ADR-0061: the POI the stop's revision belongs to; an older server omits it. */
-    poiProposalId?: string | null }>
+    poiProposalId?: string | null
+    /** ADR-0060: the approved narration saved with this revision, read by its Tours; null when the POI had none. */
+    narrationText?: string | null }>
   /** Open for new Tours. Off does not affect Tours already scheduled. */
   isActive: boolean
   /** Opaque concurrency token for deactivate/activate. */

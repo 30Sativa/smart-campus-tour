@@ -423,6 +423,24 @@ describe('Viewers choose the next stop (ADR-0065)', () => {
     expect((await panel()).queryByRole('button', { name: /Khóa/ })).not.toBeInTheDocument()
   })
 
+  it('puts the vote and the camera head on one card with a switch, opening on the vote', async () => {
+    tour = voting()
+    renderAt('/staff/live/tour-1')
+    const tabs = within(await screen.findByRole('tablist', { name: 'Bầu chọn và đầu camera' }))
+    expect(tabs.getByRole('tab', { name: /Bầu chọn/ })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('region', { name: 'Viewer chọn điểm tiếp theo' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Đầu camera' })).not.toBeInTheDocument()
+
+    fireEvent.click(tabs.getByRole('tab', { name: /Đầu camera/ }))
+    expect(await screen.findByRole('region', { name: 'Đầu camera' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Viewer chọn điểm tiếp theo' })).not.toBeInTheDocument()
+    // The open ballot is still flagged on its tab while the head is showing.
+    expect(tabs.getByRole('tab', { name: /Bầu chọn.*đang mở/ })).toHaveAttribute('aria-selected', 'false')
+
+    fireEvent.keyDown(tabs.getByRole('tab', { name: /Đầu camera/ }), { key: 'ArrowLeft' })
+    expect(tabs.getByRole('tab', { name: /Bầu chọn/ })).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('leaves a fixed-order Tour exactly as before', async () => {
     renderAt('/staff/live/tour-1')
     expect(await screen.findByRole('region', { name: 'Tình hình hiện tại' })).toBeInTheDocument()

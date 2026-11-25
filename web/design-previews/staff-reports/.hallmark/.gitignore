@@ -1,0 +1,10 @@
+shots/
+before/
+before.json
+before.txt
+compare.html
+
+variants/
+capture-diagnostics/
+check.mjs
+*.csv
