@@ -297,7 +297,7 @@ Sensor hierarchy is settled by
 RPLiDAR A3M1        -> /scan                 -> local + global costmap, AMCL, SLAM
 STM32 STEP counts   -> /wheel/odom -\
 BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
-Astra Pro (depth)   -> /camera/depth/points  -> LOCAL costmap ONLY
+Astra Pro (depth)   -> /camera/depth/points  -> LOCAL costmap; camera mode also global (ADR-0068)
 4x SR04T sonar      -> /ultrasonic/sonarN/range -> LOCAL costmap ONLY
 Astra Pro (RGB)     -> person detection      -> Nav2 speed limit
                        (`robot_perception`, not the AI tour guide)
@@ -358,7 +358,10 @@ not a local trajectory planner and does not search for detours. So: an obstacle
 the LiDAR sees reaches the global costmap and the planner can route around it;
 an obstacle only the depth camera or sonar sees reaches the local costmap only,
 and the baseline requirement is that the robot **detects it and stops safely** -
-an automatic detour is not guaranteed and is not claimed.
+an automatic detour is not guaranteed and is not claimed. Camera mode
+(`robot nav --camera`, ADR-0068, proposed) also copies the depth layer into the
+global costmap, so the planner can route around a low obstacle seen up to 2 m
+ahead, and its recoveries keep a 2.2 m square around the robot.
 
 The four SR04T sonars are mounted diagonally at the chassis corners with poses
 that are schematic rather than measured. They are not 360-degree coverage, they
