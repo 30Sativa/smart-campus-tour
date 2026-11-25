@@ -205,6 +205,123 @@ class ScrcpyCaptureTests(unittest.TestCase):
             self.assertEqual(server.scrcpy_server_version(cfg(scrcpy_server=jar, scrcpy_version="v3.2")), "3.2")
 
 
+def copy_cfg(**kw) -> server.Config:
+    """The Quest encodes the final picture, as on the robot (quest-stream.env of 25/11/2026)."""
+    values = dict(capture="scrcpy", encoder="copy", crop_keep=0.88, scrcpy_angle=20, bitrate="1M",
+                  keyframe_interval=0.5)
+    values.update(kw)
+    return cfg(**values)
+
+
+class PassthroughTests(unittest.TestCase):
+    """QUEST_ENCODER=copy: scrcpy makes the stream on the Quest, FFmpeg on the NUC only repackages it."""
+
+    EYE = "2064:2208:0:0"  # the left eye of the Quest 3 display (4128x2208)
+    PUBLISH = ["-progress", "pipe:1", "-stats_period", "0.5", "-f", "rtsp", "-rtsp_transport", "tcp",
+               "rtsp://127.0.0.1:8554/quest"]
+
+    def arg(self, cmd, flag):
+        return cmd[cmd.index(flag) + 1]
+
+    def test_copy_needs_scrcpy_a_readable_bitrate_and_no_decoder_options(self):
+        for bad in (
+            {"capture": "screenrecord"}, {"bitrate": "fast"}, {"vf_override": "null"}, {"hwdec": "vaapi"},
+            {"scrcpy_codec_options": "profile=1; reboot"},
+        ):
+            with self.assertRaises(SystemExit, msg=str(bad)):
+                copy_cfg(**bad)
+        self.assertEqual(copy_cfg().encoder, "copy")
+
+    def test_bitrate_is_read_like_ffmpeg(self):
+        self.assertEqual(server.parse_bitrate("1M"), 1_000_000)
+        self.assertEqual(server.parse_bitrate("1200k"), 1_200_000)
+        self.assertEqual(server.parse_bitrate("2.5M"), 2_500_000)
+        self.assertEqual(server.parse_bitrate("1000000"), 1_000_000)
+        self.assertIsNone(server.parse_bitrate("1Mbit"))
+
+    def test_ffmpeg_only_repackages(self):
+        cmd = server.build_ffmpeg_command(copy_cfg())
+        self.assertEqual(self.arg(cmd, "-c:v"), "copy")
+        self.assertEqual(self.arg(cmd, "-bsf:v"), "dump_extra=freq=keyframe")  # SPS/PPS for late viewers
+        for decoder_or_encoder in ("-vf", "-b:v", "-g", "-profile:v", "libx264", "-hwaccel"):
+            self.assertNotIn(decoder_or_encoder, cmd)
+        self.assertEqual(self.arg(cmd, "-f"), "h264")  # input: the raw stream on stdin
+        self.assertEqual(cmd[-9:], self.PUBLISH)  # progress (STREAM_STARTED) and RTSP as before
+
+    def test_the_encoding_commands_are_unchanged(self):
+        cmd = server.build_ffmpeg_command(cfg(capture="scrcpy"))
+        self.assertEqual(self.arg(cmd, "-c:v"), "libx264")
+        self.assertNotIn("-bsf:v", cmd)
+        self.assertEqual(cmd[-9:], self.PUBLISH)
+
+    def test_window_is_the_filters_16x9_window_on_the_display(self):
+        # 0.88 of 2064 = 1816, rounded down to whole 16x9 steps; centred on the eye.
+        self.assertEqual(server.window_crop(self.EYE, copy_cfg()), "1808:1017:128:596")
+        w, h, x, y = (int(v) for v in server.window_crop(self.EYE, copy_cfg(crop_keep=0.8)).split(":"))
+        self.assertEqual((w * 720, h * 1280), (h * 1280, w * 720))  # exactly 16:9: max_size=1280 gives 1280x720
+        self.assertEqual(h * 1280 // w, 720)
+        self.assertAlmostEqual(x + w / 2, 1032, delta=0.5)  # centred on the eye
+        self.assertAlmostEqual(y + h / 2, 1104, delta=0.5)
+        self.assertEqual(server.window_crop("2064:2208:2064:0", copy_cfg()), "1808:1017:2192:596")  # right eye
+
+    def test_window_offset_follows_the_turned_picture(self):
+        # Without a turn the shift is the filter's: a fraction of the eye's width/height.
+        flat = server.window_crop(self.EYE, copy_cfg(scrcpy_angle=0, crop_offset_x=0.05))
+        self.assertEqual(flat, f"1808:1017:{128 + round(0.05 * 2064)}:596")
+        # Turned 90 degrees clockwise, "right" in the picture is "up" on the display.
+        turned = server.window_crop(self.EYE, copy_cfg(scrcpy_angle=90, crop_offset_x=0.05))
+        self.assertEqual(turned, f"1808:1017:128:{round(1104 - 0.05 * 2064 - 1017 / 2)}")
+        # Never outside the eye (scrcpy refuses a crop outside the display).
+        far = server.window_crop(self.EYE, copy_cfg(scrcpy_angle=0, crop_offset_x=0.4, crop_offset_y=-0.4))
+        self.assertEqual(far, "1808:1017:256:0")
+
+    def test_the_quest_encodes_what_viewers_get(self):
+        cmd = server.build_scrcpy_server_command(copy_cfg(), "S", "0abc1234", "1808:1017:128:596", "5.0.1")
+        shell = cmd[4].split()
+        for arg in ("video_codec=h264", "video_bit_rate=1000000", "max_fps=30", "max_size=1280",
+                    "crop=1808:1017:128:596", "angle=20", "raw_stream=true",
+                    "video_codec_options=profile:int=1,i-frame-interval:float=0.5"):
+            self.assertIn(arg, shell)
+
+    def test_extra_codec_options_come_last_and_win(self):
+        cmd = server.build_scrcpy_server_command(
+            copy_cfg(scrcpy_codec_options="bitrate-mode:int=2,profile:int=65536"), "S", "0abc1234", "8:8:0:0", "5.0.1")
+        self.assertIn("video_codec_options=profile:int=1,i-frame-interval:float=0.5,bitrate-mode:int=2,profile:int=65536",
+                      cmd[4].split())
+
+    def test_encoding_on_the_nuc_keeps_the_quest_settings(self):
+        shell = server.build_scrcpy_server_command(cfg(capture="scrcpy"), "S", "0abc1234", self.EYE, "5.0.1")[4].split()
+        self.assertIn("video_bit_rate=20000000", shell)
+        self.assertIn("max_size=1600", shell)
+        self.assertFalse([a for a in shell if a.startswith("video_codec_options=")])
+
+
+def nal_types(data: bytes):
+    """Annex-B H.264 -> NAL unit types in order (7 SPS, 8 PPS, 5 IDR, 1 other slice)."""
+    types, i = [], data.find(b"\x00\x00\x01")
+    while 0 <= i < len(data) - 3:
+        types.append(data[i + 3] & 0x1F)
+        i = data.find(b"\x00\x00\x01", i + 3)
+    return types
+
+
+def keep_first_parameter_sets(data: bytes) -> bytes:
+    """Drop every SPS/PPS after the first ones: what an Android encoder (the Quest) sends."""
+    starts, i = [], data.find(b"\x00\x00\x01")
+    while i >= 0:
+        starts.append(i)
+        i = data.find(b"\x00\x00\x01", i + 3)
+    starts.append(len(data))
+    out, seen = [], set()
+    for a, b in zip(starts, starts[1:]):
+        t = data[a + 3] & 0x1F
+        if t in (7, 8) and t in seen:
+            continue
+        seen.add(t)
+        out.append(b"\x00" + data[a:b])
+    return b"".join(out)
+
+
 class BatteryParsingTests(unittest.TestCase):
     DUMPSYS = (
         "Current Battery Service state:\n"
@@ -397,8 +514,9 @@ class FakeMediaMTX:
     drops the ones that send nothing and hands the publisher to a fresh FFmpeg.
     """
 
-    def __init__(self, port: int, out: Path):
+    def __init__(self, port: int, out: Path, fmt: str = "mpegts"):
         self.out = out
+        self.fmt = fmt  # mpegts adds SPS/PPS before keyframes itself; h264 keeps what was sent
         self.procs = []
         self.sock = socket.socket()
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -423,7 +541,7 @@ class FakeMediaMTX:
             inner = free_port()
             proc = subprocess.Popen(
                 ["ffmpeg", "-v", "error", "-y", "-rtsp_flags", "listen", "-timeout", "60",
-                 "-i", f"rtsp://127.0.0.1:{inner}/quest", "-c", "copy", "-f", "mpegts", str(self.out)],
+                 "-i", f"rtsp://127.0.0.1:{inner}/quest", "-c", "copy", "-f", self.fmt, str(self.out)],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
             self.procs.append(proc)
@@ -474,6 +592,48 @@ class FakeMediaMTX:
                     proc.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     proc.kill()
+
+
+@unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg not installed")
+class PassthroughWithRealFfmpeg(unittest.TestCase):
+    """The copy command really publishes over RTSP, reports frames and repeats SPS/PPS (small, light picture)."""
+
+    def test_repackages_and_repeats_the_parameter_sets(self):
+        source = subprocess.run(
+            ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30", "-t", "3",
+             "-c:v", "libx264", "-preset", "ultrafast", "-profile:v", "baseline", "-g", "15", "-bf", "0",
+             "-f", "h264", "-"], capture_output=True, timeout=30,
+        ).stdout
+        quest = keep_first_parameter_sets(source)
+        self.assertEqual([nal_types(quest).count(t) for t in (7, 8, 5)], [1, 1, 6])  # 6 keyframes, SPS once
+
+        with tempfile.TemporaryDirectory() as tmp:
+            port, out = free_port(), Path(tmp) / "received.h264"
+            mtx = FakeMediaMTX(port, out, fmt="h264")
+            ffmpeg = subprocess.Popen(
+                server.build_ffmpeg_command(copy_cfg(publish_url=f"rtsp://127.0.0.1:{port}/quest")),
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            try:
+                frames = [quest[i:i + 2048] for i in range(0, len(quest), 2048)]
+                for chunk in frames:  # about real time, like the Quest
+                    ffmpeg.stdin.write(chunk)
+                    time.sleep(3.0 / len(frames))
+                progress, errors = ffmpeg.communicate(timeout=30)  # closes stdin: end of the stream
+            finally:
+                if ffmpeg.poll() is None:
+                    ffmpeg.kill()
+                time.sleep(1)
+                mtx.stop()
+            self.assertEqual(ffmpeg.returncode, 0, errors.decode())
+            reported = [int(line.split(b"=")[1]) for line in progress.splitlines() if line.startswith(b"frame=")]
+            received = nal_types(out.read_bytes())
+            # -fflags nobuffer drops what FFmpeg read while probing, the Quest's only SPS/PPS included:
+            # without dump_extra nothing after it would carry them.
+            self.assertGreaterEqual(received.count(5), 2)
+            self.assertEqual(received.count(7), received.count(5))  # SPS before every keyframe
+            self.assertEqual(received.count(8), received.count(5))
+            self.assertEqual(reported[-1], received.count(1) + received.count(5))  # STREAM_STARTED needs frame > 0
 
 
 @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg not installed")
