@@ -299,7 +299,7 @@ STM32 STEP counts   -> /wheel/odom -\
 BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
 Astra Pro (depth)   -> /camera/depth/points  -> LOCAL costmap; camera mode also global (ADR-0068)
 4x SR04T sonar      -> /ultrasonic/sonarN/range -> no costmap; opt-in speed guard
-                       (Nav2 collision_monitor, ADR-0066)
+                       (Nav2 collision_monitor, ADR-0069)
 Astra Pro (RGB)     -> person detection      -> Nav2 speed limit
                        (`robot_perception`, not the AI tour guide)
 ```

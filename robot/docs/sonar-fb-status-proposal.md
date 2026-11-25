@@ -463,7 +463,7 @@ không bao giờ phải đổi hai đầu cùng lúc.
 4. Tăng `PROTOCOL_TX_BUFFER_SIZE` 256 → 320 ngay trong lần này, hay giữ 256 (còn 5 B)?
 5. Bộ đếm uint8 (stamp ±12 ms) là đủ, hay muốn thêm tuổi phép đo (phương án B, bắt buộc tăng
    bộ đệm)?
-6. Đổi giao thức FB lần này có cần ADR riêng, hay ghi bổ sung vào ADR-0066 (Proposed)?
+6. Đổi giao thức FB lần này có cần ADR riêng, hay ghi bổ sung vào ADR-0069 (Proposed)?
 7. Sonar báo ERROR (không xung / kẹt cao): chỉ cảnh báo (đề xuất), hay `sonar_check.py`/launcher
    **từ chối** `--sonar enforce` khi có ERROR?
 8. Có chấp nhận "giữ ngay khi `-Inf`" dù không có echo gần trước đó (che vật vào từ bên hông),
@@ -480,7 +480,7 @@ không bao giờ phải đổi hai đầu cùng lúc.
 ## 11. Tham chiếu
 
 - `robot/docs/sonar-perception.md` (RCA, guard, giới hạn mục 7, nghiệm thu mục 8);
-  `docs/decisions/0066-sonar-near-field-speed-guard.md`.
+  `docs/decisions/0069-sonar-near-field-speed-guard.md`.
 - `robot/docs/PROTOCOL_FB.md`; `firmware/stm32/motor_controller/docs/PIN_MAP.md` mục 6 (PULLDOWN).
 - Firmware: `Core/Src/sonar/sr04t.c`, `Core/Src/usb_protocol.c`, `tests/test_usb_protocol.c`.
 - Bridge: `stm32_bridge/stm32_bridge_node.py`, mẫu module thuần `motor_encoder.py`, `motor_alarm.py`.

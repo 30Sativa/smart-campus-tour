@@ -1,4 +1,4 @@
-# ADR-0066: The four SR04T are a near-field speed guard, not a costmap source
+# ADR-0069: The four SR04T are a near-field speed guard, not a costmap source
 
 Status: **Proposed** (23/11/2026). Opt-in (`sonar_mode`, default `off`); not hardware validated.
 Evidence and acceptance: `robot/docs/sonar-perception.md`.

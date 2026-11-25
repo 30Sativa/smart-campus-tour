@@ -44,7 +44,7 @@ permission to execute it.
   check, why it does not stop the robot for a low obstacle ahead, hardware test plan; camera mode
   also in the global costmap with recoveries that keep the robot's surroundings (ADR-0068).
 - [Sonar perception](sonar-perception.md) — why the SR04T costmap layer failed goals (root cause),
-  the opt-in `sonar_mode` speed guard (Nav2 collision_monitor + blind-zone memory, ADR-0066),
+  the opt-in `sonar_mode` speed guard (Nav2 collision_monitor + blind-zone memory, ADR-0069),
   what the four corner sonars can and cannot see, offline scenarios, hardware acceptance.
 - [Sonar FB status proposal](sonar-fb-status-proposal.md) — **proposal, not implemented**: FB
   fields 33–40 (per-sonar result code + measurement counter), REP-117 values in `stm32_bridge`,

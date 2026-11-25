@@ -3,7 +3,7 @@
 Trạng thái 23/11/2026, nhánh `feature/claude/sonar-perception`:
 - Code, test đơn vị, test launch và mô phỏng Nav2 thật (offline) **xong**.
 - **Chưa chạy trên robot.** Mặc định **tắt** (`sonar_mode:=off` = baseline V2/V3 y nguyên).
-- Quyết định kiến trúc: ADR-0066 (`docs/decisions/0066-sonar-near-field-speed-guard.md`), trạng
+- Quyết định kiến trúc: ADR-0069 (`docs/decisions/0069-sonar-near-field-speed-guard.md`), trạng
   thái *Proposed*. Nghiệm thu phần cứng theo mục 8; trước đó chỉ được chạy `shadow`.
 
 ## 0. Tóm tắt
@@ -234,7 +234,7 @@ từ topic `odom` của EKF (30 Hz) và mount sonar từ `/tf_static`, không d�
 | `robot/tools/sonar/` | `sonar_check.py` (kiểm tĩnh), `sonar_shadow_report.py` (đọc bag) |
 | `robot/tools/ops/record_session.sh` | ghi thêm 4 topic sonar, `cmd_vel_sonar(_shadow)`, `sonar_guard/memory` |
 | `robot/tools/nav2_bench/sim/` | `NAVSIM_MAP`, wiring sonar trong `sim.launch.py`; `sim/sonar/` kịch bản |
-| `docs/architecture.md`, ADR-0066, `robot/AGENTS.md`, `robot_navigation/README.md` | vai trò sonar |
+| `docs/architecture.md`, ADR-0069, `robot/AGENTS.md`, `robot_navigation/README.md` | vai trò sonar |
 
 **Không đổi**: firmware, giao thức FB, `stm32_bridge_node.py`, `nav2_params*.yaml` (V2/V3 giữ
 nguyên sha), BT, `mode_manager`, `fleet_bridge`, backend.
