@@ -1,6 +1,7 @@
 """Robot-side POI head (ADR-0045 addendum 14/11/2026): presets, POI list, Nav2 goal events. No ROS needed."""
 
 import json
+import math
 import threading
 import unittest
 from pathlib import Path
@@ -16,6 +17,7 @@ from fleet_bridge.poi_head import (
     nearest_poi,
     parse_pois_response,
     preset_action,
+    yaw_correction_deg,
 )
 
 FIXTURE = Path(__file__).resolve().parent / 'fixtures/fleet-head/pois-response.json'
@@ -69,7 +71,7 @@ class ParseTests(unittest.TestCase):
         snapshot = parse_pois_response(json.loads(FIXTURE.read_text(encoding='utf-8')))
         self.assertEqual((snapshot.source, snapshot.auto_motion, len(snapshot.pois)), ('TOUR', True, 3))
         self.assertEqual(snapshot.pois[0], PoiTarget('1a2b3c4d-0000-4000-8000-000000000001', 'Thư viện', 3.25, -1.5,
-                                                     'ANGLE:45,10'))
+                                                     'ANGLE:45,10', 1.5708))
 
     def test_bad_bodies_are_rejected(self):
         good = json.loads(FIXTURE.read_text(encoding='utf-8'))
@@ -78,6 +80,8 @@ class ParseTests(unittest.TestCase):
                       {'data': {**good['data'], 'pois': [{'id': 'a', 'name': 'b', 'x': 'nan', 'y': 0,
                                                           'cameraPreset': 'FRONT'}]}},
                       {'data': {**good['data'], 'pois': [{'id': 'a', 'name': 'b', 'x': float('inf'), 'y': 0,
+                                                          'cameraPreset': 'FRONT'}]}},
+                      {'data': {**good['data'], 'pois': [{'id': 'a', 'name': 'b', 'x': 0, 'y': 0, 'yaw': 'north',
                                                           'cameraPreset': 'FRONT'}]}}]
         for body in bad_values:
             with self.subTest(body=body):
@@ -207,3 +211,57 @@ class PoiListWorkerTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class YawCorrectionTests(unittest.TestCase):
+    """Nav2 stops within 0.30 rad of the POI yaw; the PAN makes up for it so the camera looks where Staff set it."""
+
+    EAST = PoiTarget('e', 'Cổng', 0.0, 0.0, 'ANGLE:45,10', 0.0)
+
+    def arrive(self, poi, robot_yaw_deg, max_deg=30.0, logs=None):
+        actuator = FakeActuator()
+        d = PoiHeadDirector(actuator, 0.6, (logs.append if logs is not None else None), max_deg)
+        d.set_snapshot(PoiSnapshot('TOUR', True, (poi,)))
+        d.on_goal_status([], None)
+        d.on_goal_status([(b'g', SUCCEEDED)], (0.1, 0.0, math.radians(robot_yaw_deg)))
+        return actuator.calls
+
+    def test_robot_stopped_turned_right_turns_the_head_further_left(self):
+        # Robot 10 deg clockwise of the POI yaw: 45 left of the robot would look 10 deg short, so 55.
+        self.assertEqual(self.arrive(self.EAST, -10.0), [('angle', 55.0, 10.0)])
+        self.assertEqual(self.arrive(self.EAST, 12.0), [('angle', 33.0, 10.0)])
+
+    def test_front_left_and_right_are_corrected_too_and_clamped_to_the_limit(self):
+        front = PoiTarget('f', 'Sảnh', 0.0, 0.0, 'FRONT', 0.0)
+        self.assertEqual(self.arrive(front, 15.0), [('angle', -15.0, 0.0)])
+        edge = PoiTarget('l', 'Lab', 0.0, 0.0, 'ANGLE:165,0', 0.0)
+        self.assertEqual(self.arrive(edge, -15.0), [('angle', 170.0, 0.0)])
+
+    def test_wraps_across_pi(self):
+        self.assertAlmostEqual(yaw_correction_deg(math.radians(175), math.radians(-175)), -10.0)
+        self.assertIsNone(yaw_correction_deg(None, 0.0))
+        self.assertIsNone(yaw_correction_deg(0.0, None))
+
+    def test_no_yaw_sweep_off_switch_or_a_large_error_leave_the_preset_as_set(self):
+        no_yaw = PoiTarget('n', 'Cổng', 0.0, 0.0, 'ANGLE:45,10')
+        self.assertEqual(self.arrive(no_yaw, -10.0), [('angle', 45.0, 10.0)])
+        sweep = PoiTarget('s', 'Sân', 0.0, 0.0, 'SWEEP:90', 0.0)
+        self.assertEqual(self.arrive(sweep, -10.0), [('sweep', 90.0)])
+        self.assertEqual(self.arrive(self.EAST, -10.0, max_deg=0.0), [('angle', 45.0, 10.0)])
+        logs = []
+        self.assertEqual(self.arrive(self.EAST, -60.0, logs=logs), [('angle', 45.0, 10.0)])
+        self.assertTrue(any('not corrected' in line for line in logs))
+
+    def test_two_value_pose_still_works(self):
+        actuator = FakeActuator()
+        d = PoiHeadDirector(actuator, 0.6)
+        d.set_snapshot(PoiSnapshot('TOUR', True, (self.EAST,)))
+        d.on_goal_status([], None)
+        d.on_goal_status([(b'g', SUCCEEDED)], (0.1, 0.0))
+        self.assertEqual(actuator.calls, [('angle', 45.0, 10.0)])
+
+    def test_correction_limit_is_checked(self):
+        for bad in (-1.0, 91.0):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    PoiHeadDirector(FakeActuator(), 0.6, None, bad)

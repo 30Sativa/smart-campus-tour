@@ -105,6 +105,24 @@ public sealed class TourReadySqlTests
     }
 
     [SchemaV11Fact]
+    public async Task ALegacyNewestCheckOnAnotherMap_BlocksReady_WithTheReadinessReason()
+    {
+        await using var h = await Harness.Create();
+        await h.AddAcceptedRow();
+        var other = await h.Send(new CreateMapVersionCommand(h.TechnicalId, new("other", "Other", Guid.NewGuid(), MapPackage("other"))));
+        // ADR-0066: data from before the rule, the robot's newest check is a PASS on a map it does not hold.
+        await h.Database.ExecuteAsync(RobotIntegritySqlTests.LegacyCheckSql(other.Id, Robot));
+
+        var blocker = Assert.Single((await h.Detail()).Permissions.ReadyBlockers!);
+        // Round 3: the reason names what to do on the map the robot holds; the Other check is only the robot page's detail.
+        Assert.Equal(("ROBOT_NOT_READY_FOR_ROUTE",
+                await RobotReadinessTestSupport.NotCheckedOnAssignedMapAsync(h.Database.ConnectionString, Robot, "Pilot · pilot · phiên bản 1")),
+            (blocker.Code, blocker.Message));
+        await h.AssertBlocked(["ROBOT_NOT_READY_FOR_ROUTE"], restoreSql: $"DELETE dbo.MapDeploymentChecks WHERE MapVersionId = '{other.Id}';");
+        Assert.True((await h.Detail()).Permissions.CanMarkReady);
+    }
+
+    [SchemaV11Fact]
     public async Task ATourNobodyWasAcceptedFor_IsNotReady_UntilARowIsAccepted()
     {
         await using var h = await Harness.Create();
@@ -289,7 +307,16 @@ public sealed class TourReadySqlTests
                     CredentialHint = "abcd", CredentialIssuedAt = now, CredentialIssuedByUserId = technicalId });
                 await db.SaveChangesAsync();
             }
-            await Send(new RecordMapDeploymentCommand(technicalId, map.Id, new(Guid.NewGuid(), Robot, map.PackageSha256, true, true, "Kiểm tra triển khai.")));
+            // ADR-0066: the robot holds the map and has a passing check on it. The check is written in SQL, not through the
+            // command: a PASS needs a live report, and these Tour tests start with a robot that has not reported yet.
+            await RobotReadinessTestSupport.AssignAndReportAsync(provider, database.ConnectionString, Robot, map.Id, technicalId, report: false);
+            await database.ExecuteAsync($"""
+                INSERT dbo.MapDeploymentChecks(Id, MapVersionId, RobotId, PackageSha256, LocalizationPassed, DisplayPassed, EvidenceNote,
+                    CheckedByUserId, RequestId, RequestHash, CheckedAt)
+                SELECT NEWID(), map.Id, robot.Id, map.PackageSha256, 1, 1, N'Kiểm tra triển khai.', '{technicalId}', NEWID(),
+                    HASHBYTES('SHA2_256', N'deployment-check'), '{provider.GetRequiredService<TimeProvider>().GetUtcNow():O}'
+                FROM dbo.MapVersions map CROSS JOIN dbo.Robots robot WHERE map.Id = '{map.Id}' AND robot.RobotCode = N'{Robot}';
+                """);
             var library = await VerifiedPoi(map.Id, "Thư viện", 1.5m, 1.5m);
             // Every route has two stops (docs/lich-tour-theo-ca.md §2); twoStopsToEndPose now only adds the end pose.
             var stops = new List<RouteRevisionStopInput> { new(library, 30, [new("FRONT", 30)]),

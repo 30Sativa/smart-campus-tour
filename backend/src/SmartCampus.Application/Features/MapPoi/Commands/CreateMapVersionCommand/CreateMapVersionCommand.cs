@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using FluentValidation;
 using MediatR;
@@ -32,6 +33,10 @@ public sealed class CreateMapVersionCommandHandler(
     TimeProvider timeProvider)
     : IRequestHandler<CreateMapVersionCommand, MapVersionView>
 {
+    public const string AreaNameTakenCode = "MAP_AREA_NAME_TAKEN";
+
+    internal static string AreaNameKey(string name) => name.Trim().Normalize(NormalizationForm.FormC).ToUpperInvariant();
+
     public async Task<MapVersionView> Handle(CreateMapVersionCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
@@ -56,6 +61,12 @@ public sealed class CreateMapVersionCommandHandler(
         var area = await repository.LockAreaAsync(areaKey, cancellationToken);
         if (area is null)
         {
+            // ADR-0066: a new area cannot reuse an existing area's name (trimmed, any case). Existing duplicates stay.
+            await repository.LockNewAreaNamesAsync(cancellationToken);
+            var key = AreaNameKey(areaName);
+            if ((await repository.ListMapAreasAsync(cancellationToken)).FirstOrDefault(item => AreaNameKey(item.DisplayName) == key) is { } taken)
+                throw new ConflictException(
+                    $"Đã có khu vực tên {taken.DisplayName} ({taken.AreaKey}). Chọn Khu vực đã có hoặc đặt tên khác.", AreaNameTakenCode);
             area = new MapArea
             {
                 AreaKey = areaKey,

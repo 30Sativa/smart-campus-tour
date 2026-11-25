@@ -61,6 +61,10 @@ public sealed class RobotDispatchSqlTests
         await Refused(w, "ROBOT_MAP_REQUIRED",
             "UPDATE dbo.Robots SET AssignedMapVersionId = NULL, AssignedAreaKey = NULL, MapAssignedAt = NULL, MapAssignedByUserId = NULL;", w.AssignMapSql);
         await Refused(w, "ROBOT_DEPLOYMENT_CHECK_REQUIRED", Check(passed: false), Check(passed: true));
+        // ADR-0066: the shared readiness rule adds the connection confirmation; the other preconditions are unchanged.
+        await Refused(w, "ROBOT_CONNECTION_UNCONFIRMED",
+            "UPDATE dbo.Robots SET FirstAcceptedSyncAt = NULL, FirstAcceptedMapKey = NULL, FirstAcceptedFrameId = NULL;",
+            "UPDATE dbo.Robots SET FirstAcceptedSyncAt = SYSDATETIMEOFFSET(), FirstAcceptedMapKey = 'pilot', FirstAcceptedFrameId = 'map';");
         await Refused(w, "ROBOT_CREDENTIAL_REQUIRED",
             $"UPDATE dbo.Robots SET CredentialHash = NULL, CredentialRevokedAt = SYSDATETIMEOFFSET(), CredentialRevokedByUserId = '{technical}';", null);
         await Refused(w, "ROBOT_DEACTIVATED",

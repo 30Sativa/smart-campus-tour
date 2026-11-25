@@ -1,6 +1,7 @@
 # ADR-0028: Require technical map evidence before POI preparation
 
 - **Status:** Owner-authorized business rule, 2026-10-28.
+- **Partially superseded by ADR-0066** (23/11/2026): the robot that may verify or import POIs on a map must be ready on it under ADR-0066's single rule (assigned, connected, newest check passing there). The map-preparation rule here is unchanged.
 - **Scope:** Map → POI preparation only; does not add a map approval/publish workflow or change the schema.
 - **Supersedes:** ADR-0021's implementation allowance to create an unverified POI draft on any uploaded, valid map package before deployment-check evidence exists.
 

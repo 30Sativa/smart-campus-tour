@@ -47,14 +47,19 @@ function runAura(parts: AuraParts, angle: number, time: number, drive: number) {
  * as strong as `drive` (0 hidden … 1 full); `angle` is how far the wheels
  * have turned (rad).
  */
-export default function WheelAura({ centres, color, drive, angle }: {
+export default function WheelAura({ centres, color, drive, angle, paused = false }: {
   centres: readonly Vector3[]
   color: string
   drive: () => number
   angle: () => number
+  paused?: boolean
 }) {
   const parts = useRef<AuraParts>({ arcs: [], halos: [], streaks: [], chevrons: [] })
-  useFrame(state => runAura(parts.current, angle(), state.clock.elapsedTime, drive()))
+  const time = useRef(0)
+  useFrame((_, delta) => {
+    if (!paused) time.current += Math.min(delta, 0.1)
+    runAura(parts.current, angle(), time.current, drive())
+  })
   return (
     <>
       {centres.map((centre, side) => {

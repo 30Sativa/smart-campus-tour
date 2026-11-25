@@ -1,6 +1,7 @@
 import { apiClient } from '../../../api/client'
 import type { ApiResponse } from '../../../api/contracts/shared'
 import type { FleetPose } from '../../staff/operations/fleet-telemetry'
+import type { RejectedFleetReport } from './technical'
 
 export type TechnicalKpiSummary = {
   totalRobots: number
@@ -8,6 +9,8 @@ export type TechnicalKpiSummary = {
   awaitingDataRobots: number
   disconnectedRobots: number
   unconfirmedRobots: number
+  /** Sending, but refused for naming another map (WRONG_MAP); not counted in disconnectedRobots. Older servers omit it. */
+  wrongMapRobots?: number
   heldForInspectionCount: number
   pendingPoiVerificationsCount: number
   pendingRouteTestsCount: number
@@ -28,7 +31,9 @@ export type TechnicalRobotSummary = {
   id: string
   robotCode: string
   displayName: string | null
-  connectionStatus: 'CONNECTED' | 'AWAITING_DATA' | 'DISCONNECTED' | 'UNCONFIRMED' | string
+  connectionStatus: 'CONNECTED' | 'AWAITING_DATA' | 'DISCONNECTED' | 'UNCONFIRMED' | 'WRONG_MAP' | string
+  /** With WRONG_MAP: what the refused report named. */
+  lastRejectedReport?: RejectedFleetReport | null
   syncFresh: boolean
   lastSeenAt: string | null
   batteryPercent: number | null

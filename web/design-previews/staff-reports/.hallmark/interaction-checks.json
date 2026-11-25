@@ -1,0 +1,28 @@
+{
+  "dataInvariantCases": 144,
+  "viewportWidths": [
+    320,
+    375,
+    600,
+    768,
+    960,
+    1000,
+    1280,
+    1440,
+    1920
+  ],
+  "checks": [
+    "year/month/quarter",
+    "mine",
+    "drilldown",
+    "URL reload and back",
+    "2025 no baseline",
+    "future period",
+    "loading/empty/error/retry",
+    "mobile menu/Escape",
+    "no script",
+    "reduced motion",
+    "CSV metadata and totals"
+  ],
+  "pageErrors": []
+}

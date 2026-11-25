@@ -9,6 +9,9 @@
 .st .st-x-count > p { color: var(--st-secondary); font-size: var(--st-font-sm); line-height: 1.8; max-width: 65ch; }
 .st .st-x-meta { display: flex; align-items: flex-start; gap: 8px; color: var(--st-secondary); font-size: var(--st-font-sm); line-height: 1.8; }
 .st .st-x-meta svg { margin-top: 4px; }
+/* Waiting-room AI chat (from 15 minutes before the start), full width under the two cards. */
+.st .st-x-wait-ai { margin-top: var(--st-gap); display: grid; gap: 12px; }
+.st .st-x-wait-ai .st-x-sec { display: flex; align-items: center; gap: 8px; }
 .st .st-x-ring { width: 100%; padding-bottom: 20px; border-bottom: 1px solid var(--st-line); }
 .st .st-x-ring > svg { display: none; }
 .st .st-x-ring__c { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: var(--st-font-xs); color: var(--st-secondary); }

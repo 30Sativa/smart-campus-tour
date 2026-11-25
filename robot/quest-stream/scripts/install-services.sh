@@ -41,6 +41,7 @@ if command -v ufw >/dev/null && sudo ufw status | grep -q "Status: active"; then
   sudo ufw allow 8189/udp comment "MediaMTX WebRTC media"
   sudo ufw allow 8888/tcp comment "MediaMTX HLS (debug)"
   sudo ufw allow 8080/tcp comment "quest-stream status"
+  sudo ufw allow 8890/tcp comment "quest-stream tour bridge (headset MC)"
 fi
 
 systemctl --no-pager --lines=0 status mediamtx quest-stream || true

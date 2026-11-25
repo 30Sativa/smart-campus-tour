@@ -8,6 +8,8 @@ import { StudentWaitingRoom } from '../components/StudentWaitingRoom'
 import { StudentLiveView } from '../components/StudentLiveView'
 import { StudentEndScreen } from '../components/StudentEndScreen'
 import { LiveStudentAiAssistant } from '../components/LiveStudentAiAssistant'
+import { WaitingRoomAssistant } from '../components/WaitingRoomAssistant'
+import { useLiveStudentAiChat } from '../ai/use-live-student-ai-chat'
 import { StudentBallotBox } from '../components/StudentBallotBox'
 import { readBallot } from '../../tour-vote/vote'
 import { useStudentFallbackAccess, useStudentStreamAccess } from '../../quest-stream/stream-access'
@@ -151,8 +153,12 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   if (sessionInfo && !hadSession) setHadSession(true)
   const ended = hadSession && refused
   // Route and progress; a failure only hides the stops, the session above stays the access authority.
+  // One conversation for the page: what the group asked in the waiting room stays when the Tour starts.
+  const aiChat = useLiveStudentAiChat(tourId)
   const view = useQuery({ queryKey: studentTourViewKey(tourId), queryFn: ({ signal }) => getStudentTourView(tourId, signal),
-    retry: false, enabled: !!info && !finished && !leave.isPending, refetchInterval: info?.tourState === 'RUNNING' ? 5000 : 30000 })
+    retry: false, enabled: !!info && !finished && !leave.isPending,
+    // While a vote is open the counts move every second or two; between POIs the usual pace is enough.
+    refetchInterval: query => info?.tourState !== 'RUNNING' ? 30000 : readBallot(query.state.data?.ballot)?.open ? 2000 : 5000 })
 
   const unchecked = !left && !info && ((session.isPending && slow) || (session.isError && uncheckedError(session.error)))
   const shared = info?.rowType === 'SHARED_VIEWING'
@@ -231,7 +237,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         video={{
           emptyMessage: 'Livestream chưa được kết nối cho buổi này. Bạn vẫn có thể theo dõi lộ trình và hỏi Trợ lý AI.',
         }}
-        ai={<LiveStudentAiAssistant tourId={tourId} shared={shared} poiName={snapshot.currentPoi?.title} />}
+        ai={<LiveStudentAiAssistant tourId={tourId} shared={shared} poiName={snapshot.currentPoi?.title} chat={aiChat} />}
       />
       <div className="st-ctn st-invitation-status">{status}</div>
     </>
@@ -252,6 +258,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         intro={`${sessionLabel}. Khi nhân viên vận hành bắt đầu buổi tham quan, trang này sẽ tự chuyển sang buổi tham quan trực tiếp. Mã còn hạn tới ${formatDateTime(info.invitationExpiresAt)}.`}
         meta={`${info.tourName}, Giờ dự kiến ${formatDateTime(info.scheduledStartAt)}`}
         showMicCheck={false}
+        assistant={<WaitingRoomAssistant tourId={tourId} scheduledStartAt={info.scheduledStartAt} shared={shared} chat={aiChat} />}
       />
       <div className="st-ctn st-invitation-status">{status}</div>
     </>

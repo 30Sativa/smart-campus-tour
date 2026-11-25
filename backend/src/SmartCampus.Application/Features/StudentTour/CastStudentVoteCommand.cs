@@ -30,7 +30,8 @@ public sealed class CastStudentVoteCommandValidator : AbstractValidator<CastStud
 }
 
 public sealed class CastStudentVoteCommandHandler(ITourVoteRepository votes, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, IInvitationCodeService codes, InvitationSettings settings, TimeProvider clock)
+    IRouteRevisionRepository revisions, IInvitationCodeService codes, InvitationSettings settings, TimeProvider clock,
+    ITourManagementRepository tours, TourBallotSignalQueue signals)
     : IRequestHandler<CastStudentVoteCommand, TourBallotView>
 {
     private static UnauthorizedException Invalid() =>
@@ -69,6 +70,10 @@ public sealed class CastStudentVoteCommandHandler(ITourVoteRepository votes, IRe
             state = new TourVotingState(tour, revision, state.Stops, state.Records with { Votes = [.. state.Records.Votes, vote],
                 CountedRowIds = new HashSet<Guid>(state.Records.CountedRowIds) { row } });
         }
-        return TourVoting.Ballot(state, now, row)!;
+        var ballot = TourVoting.Ballot(state, now, row)!;
+        // Pushed to the Staff consoles once this vote has committed (TourBallotNotificationBehavior), without the voter.
+        signals.Add(new TourBallotSignal(tour.Id, ballot with { MyVote = null }, TourVoting.LeadingStopId(state, now),
+            ballot.Candidates.Sum(candidate => candidate.Votes), await tours.GetViewerPresenceAsync(tour.Id, now, ct), now));
+        return ballot;
     }
 }

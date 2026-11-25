@@ -1,0 +1,39 @@
+[
+ {
+  "date": "2026-11-25",
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "brand",
+  "axes": "light/geometric-sans/cool",
+  "hero": "none: app screen",
+  "nav": "kept Staff navigation",
+  "footer": "data definitions and demo states",
+  "imagery": "product demo; no photo slots",
+  "photos": [],
+  "entry": "web/design-previews/staff-reports/index.html",
+  "fingerprint": [
+   "Staff shell",
+   "daily priority strip",
+   "shared period filters",
+   "paired column chart",
+   "stacked state bar",
+   "monthly ledger"
+  ],
+  "sections": [
+   "daily summary",
+   "priority actions",
+   "report filters",
+   "stat row",
+   "charts",
+   "report table",
+   "operations context"
+  ],
+  "signature": "Monthly Tour ledger linked to period chart",
+  "waived": [],
+  "prompt": "Thiết kế lại tổng quan staff, bổ sung báo cáo Tour theo tháng/năm và biểu đồ, demo trước khi áp dụng",
+  "data": "synthetic sample, visibly disclosed",
+  "review": "subagent fix; 4 findings resolved"
+ }
+]

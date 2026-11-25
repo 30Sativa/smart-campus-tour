@@ -55,7 +55,7 @@ export const FLOW_NODES: readonly FlowNode[] = [
   { id: 'driver', label: 'Driver HBS57H ×2', detail: 'STEP / DIR', column: 'out', part: 'driver' },
   { id: 'motor', label: 'Động cơ 57EBP98ALC ×2', detail: 'Hộp số 10:1', column: 'out', part: 'motor' },
   { id: 'drv', label: 'Driver pan/tilt ×2', detail: 'STEP · nEN', column: 'out', part: 'drv' },
-  { id: 'pantilt', label: 'Đầu pan-tilt', detail: 'Pan 0,6° · tilt 0,36°/bước', column: 'out', part: 'pantilt' },
+  { id: 'pantilt', label: 'Đầu pan-tilt', detail: 'Pan 0,45° · tilt 0,1125°/bước', column: 'out', part: 'pantilt' },
   { id: 'contactor', label: 'Contactor', detail: 'MOSFET · PA10', column: 'out', part: 'pcb' },
   { id: 'cloud', label: 'Trang tour', detail: 'WebRTC · học sinh', column: 'out', part: null },
 ]
@@ -183,7 +183,7 @@ export const FLOWS: readonly Flow[] = [
       {
         title: 'Đầu quay theo',
         body: 'Motor trong [[cụm pan-tilt|command]] quay đầu tới góc đặt; [[kính Quest 3|command]] trên đầu quay theo nên góc nhìn của học sinh đổi theo.',
-        signal: 'Mỗi bước đủ: pan 0,6° (hộp số 3:1), tilt 0,36° (hộp số 5:1). Giới hạn mềm pan ±170°, tilt ±18°.',
+        signal: 'Mỗi bước đủ: pan 0,45° (hộp số 4:1), tilt 0,1125° (hộp số 16:1). Giới hạn mềm pan ±170°, tilt ±18°.',
         links: [{ from: 'drv', to: 'pantilt', kind: 'command', label: 'Động cơ bước' }],
         parts: ['head', 'quest'],
         motion: 'head',

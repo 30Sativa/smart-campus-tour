@@ -235,3 +235,15 @@ Khi bật camera, Nav2 nhận thêm RPP `max_allowed_time_to_collision_up_to_car
 Launcher không từ chối nav vì camera. Khi không có USB `2bc5:0403`, thiếu `astra_camera` hoặc
 runtime cũ, nó in `WARNING … LiDAR-only` rồi chạy như baseline. Đọc mục 6 của
 `depth-camera.md` trước khi bật cho demo.
+
+## 12. Đầu camera quay theo POI trong Tour: `FLEET_HEAD_ENABLED`
+
+Mặc định tắt. Với `FLEET_HEAD_ENABLED=true` trong profile, mọi `fleet_bridge` launcher chạy (`robot fleet`,
+`robot fleet --commands` và dịch vụ `sct-fleet.service` ở cả hai chế độ) nhận thêm `-p head_enabled:=true`:
+
+- nút đầu camera của Operator trên web tới được `stm32_bridge` (ADR-0045);
+- khi Nav2 tới một POI của Tour đang chạy, robot tự quay đầu theo preset của POI đó, và về phía trước khi chặng
+  sau bắt đầu (`head_poi_auto`, `robot/ros2_ws/src/fleet_bridge/README.md`).
+
+Cần thêm phía backend `FleetHead__Enabled=true` (`backend/docs/fleet-head.md`); Tour ở chế độ đầu camera AUTO.
+Dịch vụ đọc profile lúc khởi động: sửa xong thì `robot fleet restart`. `robot fleet --dry-run` in argv để kiểm.

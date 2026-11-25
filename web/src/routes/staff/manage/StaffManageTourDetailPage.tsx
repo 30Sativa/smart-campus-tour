@@ -11,11 +11,12 @@ import { campusShortDate, campusTime } from '../../../features/administration/to
 import { NewerRevisionNotice } from '../../../features/administration/routes/NewerRevisionNotice'
 import { mapAreaName } from '../../../features/administration/map-labels'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
+import { newRequestId, useCancelTour, useTour, useTourNarration } from '../../../features/administration/tours/hooks'
 import { overdueStartLabel } from '../../../features/administration/tours/overdue-start'
 import { isRegistrationClosed, openSeatsLabel, tourError, tourStateLabel } from '../../../features/administration/tours/tour-messages'
 import { TourReadyPanel } from '../../../features/administration/tours/TourReadyPanel'
 import { TourSeatsAndOperatorPanel } from '../../../features/administration/tours/TourSeatsAndOperatorPanel'
+import { TourNarrationPanel } from '../../../features/administration/tours/TourNarrationPanel'
 import { QuickTourShare } from '../../../features/administration/tours/QuickTourShare'
 import { TourStepper } from '../../../features/staff/operations/TourStepper'
 import { isUploadedFallbackVideo } from '../../../features/administration/tours/api/fallback-video'
@@ -37,6 +38,8 @@ export default function StaffManageTourDetailPage() {
   const [requestId, setRequestId] = useState(newRequestId)
   const [now] = useState(() => Date.now())
   const data = detail.data
+  // ADR-0067: shared with TourNarrationPanel through the query cache; tells the newer-revision notice whether a refresh fits.
+  const narration = useTourNarration(tourId, Boolean(data?.routeRevision && (data.tour.state === 'SCHEDULED' || data.tour.state === 'READY')))
   if (detail.isError) return <AdminPage><AdminErrorPanel title={tourError(detail.error)} onRetry={() => void detail.refetch()} /></AdminPage>
   if (!data) return <AdminPage><SkeletonRows rows={5} label="Đang tải Tour" /></AdminPage>
   const { tour, route, routeRevision, operator, reservation, permissions } = data
@@ -96,7 +99,8 @@ export default function StaffManageTourDetailPage() {
       {routeFail && <div className="mt-2"><Notice tone="danger">
         Đường đi của Tour này vừa chạy thử không đạt lúc {campusTime(routeFail.checkedAt)} {campusShortDate(routeFail.checkedAt)}{routeFail.failureReason?.trim() ? ` (lý do: ${routeFail.failureReason.trim()})` : ''}. Tour không chốt và không bắt đầu được cho tới khi Kỹ thuật ghi một lần chạy đạt.
       </Notice></div>}
-      {upcoming && <NewerRevisionNotice routeId={routeRevision.routeId} revisionId={routeRevision.revisionId} tourRevisionFailed={Boolean(routeFail)} />}
+      {upcoming && <NewerRevisionNotice routeId={routeRevision.routeId} revisionId={routeRevision.revisionId} tourRevisionFailed={Boolean(routeFail)}
+        narrationRefreshable={Boolean(narration.data?.canRefresh)} />}
       {/* ADR-0062: a retired POI blocks new Tours only; this one still goes READY and starts. */}
       {(tour.state === 'SCHEDULED' || tour.state === 'READY') && Boolean(routeRevision.retiredPoiNames?.length) && <div className="mt-2"><Notice tone="warn">Tuyến của Tour này có POI đã ngưng dùng: {routeRevision.retiredPoiNames!.join(', ')}.</Notice></div>}
       <p className="mt-1 text-sm text-muted">{routePassedAt && `Tuyến đã chạy thử đạt ngày ${formatDate(routePassedAt)} · `}{routeRevision.stops.length} điểm dừng</p>
@@ -105,6 +109,9 @@ export default function StaffManageTourDetailPage() {
         <span className="block text-xs text-muted">Dừng {formatMinutesSeconds(stop.dwellSeconds)}</span>
       </li>)}</ol>
     </section>}
+
+    {/* ADR-0067: newer approved narration, taken without cancelling the Tour. */}
+    {routeRevision && <TourNarrationPanel key={tour.rowVersion} detail={data} />}
 
     {route && <section className={`${panelClass} mt-3 p-4`} aria-label="Tuyến của Tour">
       <div className="flex flex-wrap items-baseline justify-between gap-2">

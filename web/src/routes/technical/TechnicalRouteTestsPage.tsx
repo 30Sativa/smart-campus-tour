@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router'
 import { CircleCheck, CircleX, Clock3, LoaderCircle } from 'lucide-react'
 import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
@@ -7,12 +8,14 @@ import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from 
 import { expectedDurationText, failedCheckNames, hasScheduledToursOnPath, legCoverageText, missingLegsText, resultSource, revisionTone, routeChanges, sharedResultLine } from '../../features/administration/routes/route-messages'
 import { campusShortStamp } from '../../features/administration/tours/tour-calendar'
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
-import { RobotPicker } from '../../features/technical/RobotPicker'
+import { DeployToRobotDialog } from '../../features/technical/DeployToRobotDialog'
+import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
+import { robotForMap, routeReturnPath } from '../../features/technical/robot-readiness'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
 import { CheckRow, ComputedResult, NoneChecked, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { errorText, robotNotReadyReason, routeTestErrors } from '../../features/technical/technical-format'
+import { errorText, routeTestErrors } from '../../features/technical/technical-format'
 import { formatDateTime, formatMinutesSeconds } from '../../components/ui/date-time'
-import { usePhysicalRobots, usePreviousRevision, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
+import { useMapVersions, usePhysicalRobots, usePreviousRevision, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 
 type RouteFilter = 'pending' | 'passed' | 'failed'
 type RouteRow = { route: VersionedRoute; filter: RouteFilter }
@@ -41,13 +44,28 @@ function toRows(queue: VersionedRoute[], routes: VersionedRoute[]): RouteRow[] {
  * Whole-route verification: the figure strip filters one table; a run is recorded
  * against the exact submitted revision, and a recorded run opens read-only.
  */
-export default function TechnicalConfirmationsPage() {
+export default function TechnicalRouteTestsPage() {
   const queue = useRouteTestQueue()
   const routes = useSubmittedRoutes()
   const [filter, setFilter] = useState<RouteFilter>('pending')
   const [dialog, setDialog] = useState<Dialog | null>(null)
+  // The robot picker replaces the test form rather than opening inside its <form> (see ReadyRobotField); it keeps
+  // the route so Hủy reopens that form.
+  const [assigning, setAssigning] = useState<{ mapVersionId: string; mapLabel: string; preselectRobotId?: string; route: VersionedRoute } | null>(null)
+  // `?route=<revisionId>` is where the robot page sends someone back to: it reopens that route's test or its result.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [linkedRoute, setLinkedRoute] = useState(() => searchParams.get('route'))
+  useEffect(() => {
+    if (searchParams.has('route')) setSearchParams(current => { const next = new URLSearchParams(current); next.delete('route'); return next }, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const rows = useMemo(() => toRows(queue.data ?? [], routes.data?.data ?? []), [queue.data, routes.data])
+  // Opened once both lists are in, then held like any other dialog so a save does not unmount it.
+  if (linkedRoute && queue.isSuccess && !routes.isPending) {
+    const row = rows.find(item => item.route.revisionId === linkedRoute)
+    setLinkedRoute(null)
+    if (row) setDialog({ view: row.filter === 'pending' ? 'record' : 'result', route: row.route })
+  }
   // A route Staff stopped using stays listed with its result, below the routes still in use.
   const visible = rows.filter(row => row.filter === filter).sort((a, b) => Number(a.route.isActive === false) - Number(b.route.isActive === false))
   const count = (value: RouteFilter) => rows.filter(row => row.filter === value).length
@@ -55,7 +73,7 @@ export default function TechnicalConfirmationsPage() {
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="Tuyến" title="Xác nhận chạy thử" description="Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Kết quả do người kiểm tra nhập, hệ thống không tự xác minh robot đã chạy. Tuyến đạt thì Staff dùng được để tạo Tour." />
+      <PageHeader eyebrow="Chuẩn bị" title="Chạy thử tuyến" description="Ghi kết quả chạy thử toàn tuyến cho đúng phiên bản Staff đã gửi. Kết quả do người kiểm tra nhập, hệ thống không tự xác minh robot đã chạy. Tuyến đạt thì Staff dùng được để tạo Tour." />
 
       {!queue.isPending && !queue.error && (
         <div className="mb-3">
@@ -64,6 +82,8 @@ export default function TechnicalConfirmationsPage() {
             <StatTile icon={CircleCheck} label="Đã đạt" value={recordedCount('passed')} onClick={() => setFilter('passed')} pressed={filter === 'passed'} />
             <StatTile icon={CircleX} label="Không đạt" value={recordedCount('failed')} tone="danger" onClick={() => setFilter('failed')} pressed={filter === 'failed'} />
           </StatStrip>
+          {/* Đã đạt and Không đạt count the catalog, so its failure is shown under the figures whatever the filter. */}
+          {routes.isError && <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 rounded-2xl border border-[#f5c8c2] bg-[#fff4f2] p-3 text-[13px] text-[#b23e31]"><p>Chưa tải được số tuyến đã đạt và không đạt.</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void routes.refetch()}>Tải lại</button></div>}
         </div>
       )}
 
@@ -71,7 +91,6 @@ export default function TechnicalConfirmationsPage() {
 
       <section className={panelClass} aria-label="Danh sách kiểm chứng tuyến">
         <PanelHead title={filterText[filter].title} />
-        {filter !== 'pending' && routes.isError && <div role="alert" className="space-y-2 border-b border-[#eef1f4] p-4 text-[13px] text-[#b23e31]"><p>{errorText(routes.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void routes.refetch()}>Tải lại danh sách tuyến</button></div>}
         {queue.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p> : queue.error ? <div role="alert" className="space-y-2 p-4 text-[13px] text-[#b23e31]"><p>{errorText(queue.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void queue.refetch()}>Tải lại danh sách chờ</button></div> : (
           <div className="relative overflow-x-auto">
             <table className="w-full min-w-[720px] text-left">
@@ -103,17 +122,20 @@ export default function TechnicalConfirmationsPage() {
         <Note tone="ok"><b>Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh</b> thì giữ kết quả chạy thử của đường đi, không cần chạy lại.</Note>
       </div>
 
-      {dialog?.view === 'record' && <RecordRouteTestModal key={dialog.route.revisionId} route={dialog.route} onClose={() => setDialog(null)} />}
+      {dialog?.view === 'record' && <RecordRouteTestModal key={dialog.route.revisionId} route={dialog.route} onClose={() => setDialog(null)}
+        onAssignRobot={(mapLabel, preselectRobotId) => { setAssigning({ mapVersionId: dialog.route.mapVersionId, mapLabel, preselectRobotId, route: dialog.route }); setDialog(null) }} />}
+      {assigning && <DeployToRobotDialog mapVersionId={assigning.mapVersionId} mapLabel={assigning.mapLabel} preselectRobotId={assigning.preselectRobotId} returnTo={routeReturnPath(assigning.route.revisionId)}
+        onClose={() => { setDialog({ view: 'record', route: assigning.route }); setAssigning(null) }} />}
       {dialog?.view === 'result' && <RouteResultModal key={dialog.route.revisionId} route={dialog.route} onRecord={() => setDialog({ view: 'record', route: dialog.route })} onClose={() => setDialog(null)} />}
     </TechnicalPage>
   )
 }
 
-function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClose: () => void }) {
+function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: VersionedRoute; onClose: () => void; onAssignRobot: (mapLabel: string, preselectRobotId?: string) => void }) {
   const record = useRecordRouteTest()
   const robots = usePhysicalRobots()
+  const maps = useMapVersions()
   const participants = useRouteTestParticipants()
-  const [robotCode, setRobotCode] = useState('')
   const [staffUserId, setStaffUserId] = useState('')
   const [allStopsReached, setAllStopsReached] = useState(false)
   const [safelyStopped, setSafelyStopped] = useState(false)
@@ -138,17 +160,15 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   // The result follows the ticks: all three ticked is Đạt, any left unticked is Không đạt and needs a reason.
   const resultCode: 'PASS' | 'FAIL' = checks.every(check => check.checked) ? 'PASS' : 'FAIL'
   const pending = !touched && checks.every(check => !check.checked)
-  const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
-  // The server refuses this either way, so save waits for a fresh robot list showing the robot confirmed and passing on this map.
-  const robotNotReady = selectedRobot ? robotNotReadyReason(selectedRobot, route.mapKey) : null
+  // Not chosen: the one robot the server calls ready on the route's map version records the run.
+  const robotCode = robotForMap(robots.data, route.mapVersionId).ready?.robotCode ?? ''
   const errors = record.error ? routeTestErrors(record.error) : {}
   // ADR-0023 addendum: the result applies to every save with this path, so the Tours it decides are named before saving.
   const shared = sharedResultLine(route)
   const failStopsTours = !pending && resultCode === 'FAIL' && hasScheduledToursOnPath(route)
   const changed = () => { record.reset(); setRequestId(crypto.randomUUID()) }
   const missingToSave = [
-    !robotCode && 'chọn robot',
-    robotNotReady && `robot ${robotNotReady}`,
+    !robotCode && 'cần một robot sẵn sàng trên bản đồ này',
     !staffUserId && 'chọn Staff đi cùng',
     pending && 'tick các mục đã kiểm tra',
     !pending && resultCode === 'FAIL' && !failureReason.trim() && 'nhập lý do không đạt',
@@ -174,9 +194,8 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} failed={failedCheckNames({ allStopsReached, safelyStopped, localizationPassed })} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="route-test-form" className="space-y-3.5" onSubmit={submit}>
         <div>
-          <RobotPicker id="route-test-robot" label="Robot vật lý" mapKey={route.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} requireReady emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
+          <ReadyRobotField robots={robots} mapVersionId={route.mapVersionId} map={maps.data?.find(item => item.map.id === route.mapVersionId)?.map} subject="tuyến" returnTo={routeReturnPath(route.revisionId)} onAssignRobot={onAssignRobot} />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
-          {robotNotReady && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">{selectedRobot?.connectionStatus === 'UNCONFIRMED' ? 'Robot này chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại' : `Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên ${route.mapKey}. Ghi kiểm tra triển khai đạt ở trang Bản đồ`} rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
         <div>
           <label className={labelClass} htmlFor="route-test-staff">Staff đi cùng</label>

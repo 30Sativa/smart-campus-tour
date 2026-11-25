@@ -88,6 +88,7 @@ public sealed class MapRetirementSqlTests
 
         // Another version of the same area is untouched.
         await h.RecordDeployment(h.PilotMapV2, Second, passed: true);
+        await h.Assign(Second, null);
         await h.Assign(First, h.PilotMapV2.Id);
     }
 
@@ -97,7 +98,7 @@ public sealed class MapRetirementSqlTests
         await using var h = await Harness.Create();
         await h.Assign(First, h.PilotMap.Id);
 
-        var error = await Assert.ThrowsAsync<ConflictException>(() => h.Retire(h.PilotMap.Id, "Cũ"));
+        var error = await Assert.ThrowsAsync<ConflictException>(() => h.Retire(h.PilotMap.Id, "Cũ", releaseRobots: false));
 
         Assert.Equal("MAP_VERSION_ROBOT_ASSIGNED", error.Code);
         Assert.Contains(First, error.Message);
@@ -157,6 +158,7 @@ public sealed class MapRetirementSqlTests
     public async Task TwoSimultaneousRetires_OnlyOneSucceeds()
     {
         await using var h = await Harness.Create();
+        await h.Assign(First, null);
         var rowVersion = h.PilotMap.RowVersion;
 
         var results = await Task.WhenAll(
@@ -190,6 +192,7 @@ public sealed class MapRetirementSqlTests
         await h.Send(new CreatePoiProposalCommand(h.StaffId, new(Guid.NewGuid(), h.Draft(h.PilotMap.Id, "Cổng mới"))));
         await h.RecordDeployment(h.PilotMap, First, passed: true);
         Assert.NotEqual(Guid.Empty, await h.CreateTour(route, First));
+        await h.Assign(First, null);
         await h.Assign(Second, h.PilotMap.Id);
     }
 
@@ -297,8 +300,15 @@ public sealed class MapRetirementSqlTests
             return await scope.ServiceProvider.GetRequiredService<ISender>().Send(request);
         }
 
-        public async Task<MapVersionView> Retire(Guid mapVersionId, string reason)
+        /// <summary>
+        /// ADR-0066: the harness robot holds the pilot map to be ready on it, and an assigned version cannot be retired, so
+        /// the robot is released first unless the test is about that refusal.
+        /// </summary>
+        public async Task<MapVersionView> Retire(Guid mapVersionId, string reason, bool releaseRobots = true)
         {
+            if (releaseRobots)
+                foreach (var code in new[] { First, Second })
+                    if ((await Robot(code)).AssignedMapVersionId == mapVersionId) await Assign(code, null);
             var current = (await Send(new GetMapVersionQuery(mapVersionId))).Map;
             return await Send(new RetireMapVersionCommand(technicalId, mapVersionId, new(reason, current.RowVersion)));
         }
@@ -325,8 +335,12 @@ public sealed class MapRetirementSqlTests
             return await Send(new ChangePhysicalRobotMapAssignmentCommand(robot.Id, technicalId, Guid.NewGuid(), Convert.ToBase64String(robot.RowVersion), mapVersionId));
         }
 
-        public Task RecordDeployment(MapVersionView map, string robot, bool passed) =>
-            Send(new RecordMapDeploymentCommand(technicalId, map.Id, new(Guid.NewGuid(), robot, map.PackageSha256, passed, true, "Kiểm tra triển khai.")));
+        // ADR-0066: a check needs the robot to hold the map, and a PASS needs a report on it since.
+        public async Task RecordDeployment(MapVersionView map, string robot, bool passed)
+        {
+            await RobotReadinessTestSupport.AssignAndReportAsync(provider, database.ConnectionString, robot, map.Id, technicalId);
+            await Send(new RecordMapDeploymentCommand(technicalId, map.Id, new(Guid.NewGuid(), robot, map.PackageSha256, passed, true, "Kiểm tra triển khai.")));
+        }
 
         private async Task<List<RouteRevisionStopInput>> PassedStops()
         {

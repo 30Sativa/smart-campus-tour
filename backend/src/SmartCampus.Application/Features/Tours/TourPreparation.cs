@@ -45,7 +45,8 @@ internal static class TourPreparation
         return new(edit, edit && !usage.LocksScheduleAndRoute, beforeStart)
         {
             CanChangeCapacity = beforeStart,
-            CanChangeOperator = beforeStart && tour.RouteRevisionId is not null
+            CanChangeOperator = beforeStart && tour.RouteRevisionId is not null,
+            CanRefreshNarration = beforeStart && tour.RouteRevisionId is not null
         };
     }
 

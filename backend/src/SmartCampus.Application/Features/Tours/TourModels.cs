@@ -52,7 +52,9 @@ public sealed record TourUsage(bool HasRegistrations, bool HasAllowedBranches, b
 /// <summary><see cref="ReadyBlockers"/> lists every READY condition the Tour fails now; empty when it can be marked READY.</summary>
 public sealed record TourPermissions(bool CanEditMetadata, bool CanChangeScheduleAndRoute, bool CanCancel, bool CanDelete = false,
     bool CanMarkReady = false, bool CanReopen = false, IReadOnlyList<ConflictBlocker>? ReadyBlockers = null,
-    bool CanChangeCapacity = false, bool CanChangeOperator = false, int MaxCapacity = 0);
+    bool CanChangeCapacity = false, bool CanChangeOperator = false, int MaxCapacity = 0,
+    // ADR-0067: before Start a versioned Tour may take the newest approved narration of its POIs.
+    bool CanRefreshNarration = false);
 public sealed record TourReservationView(string RobotCode, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
     int MeasuredDurationSeconds, DateTimeOffset? ReleasedAt, int ExpectedDurationSeconds);
 /// <summary>One shift on one day: <see cref="Time"/> is the Tour start, the reservation is the whole shift.</summary>
@@ -95,7 +97,9 @@ public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDet
     TourBallotView? Ballot = null, Guid? LeadingStopId = null, TourNextTargetView? NextTarget = null,
     IReadOnlyList<TourStopProgressView>? StopProgress = null,
     // ADR-0065 rule 8: on a voting route whose current leg has stopped, where Retry/Resume would go; null otherwise.
-    TourNextTargetView? RetryTarget = null);
+    TourNextTargetView? RetryTarget = null,
+    // ADR-0065 addendum: while a ballot shows, how many Viewers are accepted and in the room, for the vote turnout.
+    TourViewerPresence? Viewers = null);
 /// <summary>The running state of a Tour: null fields until Start; <see cref="DwellDeadlineAt"/> is display only (ADR-0043 D12).</summary>
 public sealed record TourExecutionView(string State, string? OperationalStatus, string? AssistanceReason, string? CurrentStep,
     Guid? CurrentLegId, string? CurrentLegKind, Guid? CurrentRevisionStopId, Guid? LastArrivedRevisionStopId,
@@ -151,6 +155,8 @@ public static class TourLifecycleEvents
     public const string DispatchChanged = "ROBOT_DISPATCH_CHANGED";
     public const string CapacityChanged = "TOUR_CAPACITY_CHANGED";
     public const string OperatorChanged = "TOUR_OPERATOR_CHANGED";
+    /// <summary>ADR-0067: the Tour moved to a revision of its route that differs only in approved narration.</summary>
+    public const string NarrationRefreshed = "TOUR_NARRATION_REFRESHED";
     /// <summary>ADR-0065: a voting Tour closed a ballot and chose its next POI; DataJson holds the counts, winner and reason.</summary>
     public const string NextStopChosen = "NEXT_STOP_CHOSEN";
     public const string StopLocked = "STOP_LOCKED";

@@ -28,6 +28,17 @@ public static class SimulationPreviewExtensions
         return services;
     }
 
+    // Preview skips Infrastructure (no database), so Development's build-time check would reject
+    // every DB-backed handler. Those handlers stay unavailable in preview and fail per request instead.
+    public static IHostBuilder UseSimulationPreviewServiceValidation(this IHostBuilder host, bool enabled) =>
+        enabled
+            ? host.UseDefaultServiceProvider(options =>
+            {
+                options.ValidateOnBuild = false;
+                options.ValidateScopes = true;
+            })
+            : host;
+
     public static WebApplication UseSimulationPreview(
         this WebApplication app,
         bool enabled)

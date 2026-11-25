@@ -43,6 +43,16 @@ export function useTourShifts(from: string, to: string, enabled = true) {
 export function useTour(id: string | undefined) {
   return useQuery({ queryKey: tourKeys.detail(id ?? ''), queryFn: () => toursApi.get(id!), enabled: Boolean(id), refetchOnWindowFocus: false })
 }
+/** ADR-0067: the Tour's narration against the newest approved one; refetched with the Tour after any Tour change. */
+export function useTourNarration(id: string, enabled = true) {
+  return useQuery({ queryKey: [...tourKeys.detail(id), 'narration'], queryFn: () => toursApi.narration(id), enabled: enabled && Boolean(id) })
+}
+/** ADR-0067: the server rechecks everything under its locks; a refusal can mean the Tour or route changed, so refresh either way. */
+export function useRefreshTourNarration() {
+  const refresh = useInvalidateTours()
+  return useMutation({ mutationFn: ({ id, requestId, rowVersion }: { id: string; requestId: string; rowVersion: string }) =>
+    toursApi.refreshNarration(id, { requestId, expectedRowVersion: rowVersion }), onSettled: refresh })
+}
 export function useTourOperators() {
   return useQuery({ queryKey: [...tourKeys.all, 'operators'], queryFn: toursApi.operators })
 }

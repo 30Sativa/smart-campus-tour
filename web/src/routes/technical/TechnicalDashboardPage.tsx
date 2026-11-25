@@ -8,9 +8,12 @@ import { Note, TechnicalPage, ToneBadge } from '../../features/technical/Technic
 import { EmptyState } from '../../components/ui/EmptyState'
 import type { TechnicalActionItem, TechnicalKpiSummary, TechnicalRobotSummary } from '../../features/technical/api/diagnostics-api'
 import { connectionStatusView, reading, sensorStatusView, sourceState, sourceStateView } from '../../features/technical/diagnostics-status'
-import { errorText } from '../../features/technical/technical-format'
+import { errorText, wrongMapText } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
-import { useTechnicalDashboard } from '../../features/technical/technical-hooks'
+import { usePhysicalRobots, useTechnicalDashboard } from '../../features/technical/technical-hooks'
+import { actionItemDescription, hasMapMismatch } from '../../features/technical/robot-readiness'
+import type { PhysicalRobotOption } from '../../features/technical/api/technical'
+import { technicalInternalLink } from '../../features/technical/technical-nav'
 
 const REFRESH_MS = 15_000
 
@@ -21,15 +24,13 @@ const rankOf = (item: TechnicalActionItem) => severityRank[item.severity] ?? 2
 
 const FLEET_PARTS = [
   { status: 'CONNECTED', count: 'connectedRobots' },
+  { status: 'WRONG_MAP', count: 'wrongMapRobots' },
   { status: 'DISCONNECTED', count: 'disconnectedRobots' },
   { status: 'AWAITING_DATA', count: 'awaitingDataRobots' },
   { status: 'UNCONFIRMED', count: 'unconfirmedRobots' },
 ] as const
 
 const quietLinkClass = 'inline-flex min-h-8 shrink-0 items-center gap-0.5 rounded-lg px-2 text-[13px] font-semibold text-[#1d4ed8] transition-colors hover:bg-[#eff6ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]'
-
-/** Only links into this area are followed; anything else the server sends is shown as text. */
-const internalLink = (url: string | null) => (url && url.startsWith('/technical/') ? url : null)
 
 function SectionTitle({ title, note, children }: { title: string; note?: string; children?: ReactNode }) {
   return (
@@ -43,7 +44,7 @@ function SectionTitle({ title, note, children }: { title: string; note?: string;
 
 /** One bar answers "is the fleet up"; every state keeps its printed count, so colour is never the only carrier. */
 function FleetHealth({ kpis }: { kpis: TechnicalKpiSummary }) {
-  const parts = FLEET_PARTS.map(part => ({ ...connectionStatusView(part.status), status: part.status, count: kpis[part.count] }))
+  const parts = FLEET_PARTS.map(part => ({ ...connectionStatusView(part.status), status: part.status, count: kpis[part.count] ?? 0 }))
   return (
     <section className={`${panelClass} flex flex-col`} aria-label="Tình trạng robot">
       <SectionTitle title="Tình trạng robot" />
@@ -73,8 +74,8 @@ function FleetHealth({ kpis }: { kpis: TechnicalKpiSummary }) {
   )
 }
 
-function ActionItemRow({ item }: { item: TechnicalActionItem }) {
-  const to = internalLink(item.linkUrl)
+function ActionItemRow({ item, description }: { item: TechnicalActionItem; description: string }) {
+  const to = technicalInternalLink(item.linkUrl)
   const label = severityLabel[item.severity]
   return (
     <li className="flex items-center gap-3 px-4 py-2.5">
@@ -83,7 +84,7 @@ function ActionItemRow({ item }: { item: TechnicalActionItem }) {
           <span className="text-[13px] font-semibold text-[#0f172a]">{item.title}</span>
           {label && <ToneBadge tone={severityTone[item.severity]}>{label}</ToneBadge>}
         </p>
-        <p className="mt-0.5 text-xs text-[#64748b]">{item.description}</p>
+        <p className="mt-0.5 text-xs text-[#64748b]">{description}</p>
       </div>
       {to && <Link to={to} className={quietLinkClass}>Mở<ChevronRight size={14} aria-hidden="true" /></Link>}
     </li>
@@ -112,10 +113,11 @@ function BatteryCell({ robot }: { robot: TechnicalRobotSummary }) {
 }
 
 
-function MapFacts({ robot }: { robot: TechnicalRobotSummary }) {
+/** `readiness` is the robot's server readiness from the robot list, which says what is wrong with its map in words. */
+function MapFacts({ robot, readiness }: { robot: TechnicalRobotSummary; readiness: PhysicalRobotOption['readiness'] | undefined }) {
   return <>
     <span className="font-mono text-[12.5px] text-[#334155]">{robot.assignedMapKey ?? 'Chưa gán bản đồ'}</span>
-    {robot.contextMismatch && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ kiểm tra gần nhất</p>}
+    {robot.contextMismatch && <p className="mt-0.5 text-[11.5px] text-amber-800">{readiness?.reason ?? 'Khác bản đồ kiểm tra triển khai gần nhất'}</p>}
     {robot.needsInspection && <p className="mt-0.5"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}
   </>
 }
@@ -125,6 +127,7 @@ export default function TechnicalDashboardPage() {
   const data = dashboard.data
   const kpis = data?.kpis
   const actionItems = data ? [...data.actionItems].sort((a, b) => rankOf(a) - rankOf(b)) : []
+  const robots = usePhysicalRobots(hasMapMismatch(actionItems) || Boolean(data?.robots.some(robot => robot.contextMismatch)))
 
   return (
     <TechnicalPage>
@@ -162,7 +165,7 @@ export default function TechnicalDashboardPage() {
               </SectionTitle>
               {actionItems.length === 0
                 ? <EmptyState variant="empty" title="Chưa có việc kỹ thuật cần xử lý" className="flex-1" />
-                : <ul className="mt-1.5 divide-y divide-[#eef1f4] pb-1.5">{actionItems.map((item, index) => <ActionItemRow key={`${item.type}-${item.targetId ?? index}`} item={item} />)}</ul>}
+                : <ul className="mt-1.5 divide-y divide-[#eef1f4] pb-1.5">{actionItems.map((item, index) => <ActionItemRow key={`${item.type}-${item.targetId ?? index}`} item={item} description={actionItemDescription(item, robots.data)} />)}</ul>}
             </section>
           </div>
 
@@ -179,8 +182,8 @@ export default function TechnicalDashboardPage() {
                     return (
                       <tr key={robot.id} className={rowClass}>
                         <td className={tdClass}><p className="font-semibold text-[#0f172a]">{robot.displayName ?? robot.robotCode}</p><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p>
-                          <div className="mt-1"><MapFacts robot={robot} /></div></td>
-                        <td className={tdClass}><ToneBadge tone={connection.tone}>{connection.label}</ToneBadge>{robot.lastSeenAt && <p className="mt-0.5 text-[11.5px] text-[#64748b]">Lần nhận cuối: {formatDateTime(robot.lastSeenAt)}</p>}
+                          <div className="mt-1"><MapFacts robot={robot} readiness={robots.data?.find(physical => physical.id === robot.id)?.readiness} /></div></td>
+                        <td className={tdClass}><ToneBadge tone={connection.tone}>{connection.label}</ToneBadge>{robot.connectionStatus === 'WRONG_MAP' && robot.lastRejectedReport && <p className="mt-0.5 max-w-xs text-[11.5px] text-amber-800">{wrongMapText(robot.lastRejectedReport, robot.assignedMapKey)}</p>}{robot.lastSeenAt && <p className="mt-0.5 text-[11.5px] text-[#64748b]">Lần nhận cuối: {formatDateTime(robot.lastSeenAt)}</p>}
                           <p className="mt-0.5 text-[12.5px]">Pin <BatteryCell robot={robot} /></p></td>
                         <td className={tdClass}><MiniPcCell robot={robot} /></td>
                         <td className={`${tdClass} text-right`}><Link to={`/technical/monitoring?robot=${encodeURIComponent(robot.robotCode)}`} aria-label={`Giám sát ${robot.robotCode}`} className={quietLinkClass}>Giám sát<ChevronRight size={14} aria-hidden="true" /></Link></td>

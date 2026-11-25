@@ -41,13 +41,15 @@ permission to execute it.
   orphan goal never drives alongside a recovery Spin (offline proof, hardware acceptance).
 - [Depth camera](depth-camera.md) — Astra Pro depth in the local costmap beside the LiDAR
   (`robot nav --camera`, off by default): CAD mount, lean driver, measured cost, offline costmap
-  check, why it does not stop the robot for a low obstacle ahead, hardware test plan.
+  check, why it does not stop the robot for a low obstacle ahead, hardware test plan; camera mode
+  also in the global costmap with recoveries that keep the robot's surroundings (ADR-0068).
 - [Sonar perception](sonar-perception.md) — why the SR04T costmap layer failed goals (root cause),
   the opt-in `sonar_mode` speed guard (Nav2 collision_monitor + blind-zone memory, ADR-0066),
   what the four corner sonars can and cannot see, offline scenarios, hardware acceptance.
 - [Sonar T0 check](sonar-t0-check.md) — measure the four SR04T on the robot before any sonar
   change: read-only FB capture (`sonar_watch.py`), steps T0.0–T0.10, what needs external
   equipment, and which result decides memory, FB status, TX buffer and compatibility.
+- [Perception + navigation](perception-navigation.md) — LiDAR, depth and sonar as one AMR: measured coverage, weak points, layered proposal, rollout and integration tests (25/11/2026)
 - [Runtime deploy and rollback](runtime-deploy.md) — how the MiniPC runtime
   differs from source today, staging an immutable overlay from one commit, and
   rolling back by sourcing the previous overlay.
@@ -73,6 +75,9 @@ permission to execute it.
   bridge, safeguards and staged transition.
 Dated evidence (true for its date; later pages supersede it):
 
+- [PCB V2 decision 2026-11-20](pcb-v2-decision-2026-11-20.md) — why the right
+  encoder moves to TIM1 PA8/PA9 (PB8 only BOOT0), alternatives rejected, the
+  electrical changes and the checks before ordering.
 - [Encoder bench 2026-11-20](encoder-bench-2026-11-20.md) — HBS57H encoders
   read through AM26LV32E (TIM3/TIM8): 2.5 counts/STEP both wheels, signs,
   TERR 0; NRST with PB8 high boots DFU (FAIL); final PCB V2 pin map and

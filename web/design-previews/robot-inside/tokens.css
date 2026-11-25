@@ -1,0 +1,91 @@
+:root {
+  --color-control-border: #708786;
+  --color-video: #8b63d8;
+  --color-power: #e2a72e;
+  --color-feedback: #3d8fe0;
+  --color-command: #e5554a;
+  --color-selection: #577d30;
+  --color-stage: #edf3ef;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.44rem;
+  --text-2xl: 1.728rem;
+  --text-3xl: 2.074rem;
+  --text-display-s: 1.44rem;
+  --text-display: 1.728rem;
+  --text-section: 1.2rem;
+  --text-title: 1rem;
+  --text-lead: 1rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --color-error: oklch(52% 0.19 27);
+  --color-success: oklch(50% 0.12 150);
+  --color-paper: #f7faf6;
+  --color-paper-2: #edf3ee;
+  --color-paper-3: #e3ece6;
+  --color-ink: #102d31;
+  --color-ink-2: #4e6568;
+  --color-muted: #607779;
+  --color-rule: #cbd8d2;
+  --color-accent: #d6f18d;
+  --color-accent-ink: #102d31;
+  --color-focus: #357744;
+  --font-display: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-outlier: var(--font-body);
+  --radius-card: 14px;
+  --radius-pill: 999px;
+  --shadow-card: none;
+  --tracking-display: -0.02em;
+}
+:root {
+  --space-3xs: 2px;
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --space-2xl: 64px;
+  --space-3xl: 96px;
+  --space-4xl: 144px;
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+  --container: 1440px;
+  --gutter: 64px;
+  --gap-columns: 32px;
+  --section-gap-s: 120px;
+  --section-gap: 144px;
+  --section-gap-l: 176px;
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-sticky-nav: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+  --rule-hair: 1px;
+}
+@media (max-width: 60rem) { :root { --gutter: 24px; --section-gap-s: 80px; --section-gap: 96px; --section-gap-l: 120px; } }
+@media (max-width: 40rem) { :root { --gutter: 16px; --section-gap-s: 56px; --section-gap: 72px; --section-gap-l: 96px; --gap-columns: 16px; } }
+
+html.dark {
+  --color-paper: #09282b;
+  --color-paper-2: #0d3033;
+  --color-paper-3: #25494b;
+  --color-ink: #f2f7f2;
+  --color-ink-2: #bad0ca;
+  --color-muted: #a6c0b9;
+  --color-rule: #365658;
+  --color-stage: #dde8e2;
+  --color-selection: #d6f18d;
+  --color-control-border: #8ba9a1;
+  --color-focus: #d6f18d;
+}
+
+:root { --color-footer-ink: #bed0c9; --color-stage-ink: #4e6568; }

@@ -504,6 +504,17 @@ def test_fleet_telemetry_runs_alone_and_keeps_the_credential_out_of_output(world
     assert 'SECRET-CREDENTIAL' not in r.stdout and 'amr_01.credential' not in r.stdout
 
 
+def test_fleet_head_enabled_turns_on_the_bridge_head_in_both_modes(world):
+    fleet_runtime(world)
+    fleet_profile(world)
+    assert not any(x.startswith('head_enabled') for x in dry(world, 'fleet')['argv'])
+    fleet_profile(world, FLEET_HEAD_ENABLED='true')
+    argv = dry(world, 'fleet')['argv']
+    at = argv.index('head_enabled:=true')
+    # Right after the identity flags, before the commands block: commands and map-package flags stay last.
+    assert argv[at - 1] == '-p' and argv[at - 2].startswith('frame_id:=')
+
+
 def test_fleet_commands_need_a_running_nav_and_note_a_missing_permit(world):
     fleet_runtime(world)
     fleet_profile(world)

@@ -59,14 +59,15 @@ The sensor hierarchy is a deliberate decision, not an accident
 RPLiDAR A3M1        -> /scan                  -> local + global costmap, AMCL, SLAM
 STM32 STEP counts   -> /wheel/odom -\
 BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
-Astra Pro (depth)   -> /camera/depth/points   -> LOCAL costmap ONLY
+Astra Pro (depth)   -> /camera/depth/points   -> LOCAL costmap; camera mode also global (ADR-0068)
 Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
 4x SR04T sonar      -> ultrasonic/sonarN/range -> NO costmap; opt-in collision_monitor
                                                  speed guard (ADR-0066, docs/sonar-perception.md)
 ```
 
 - The Astra Pro is a **supplementary** obstacle sensor. Do not make it a
-  localization input, do not feed it into the global costmap, do not make Nav2
+  localization input, do not feed it into the global costmap outside camera
+  mode (ADR-0068: launch-time copy only), do not make Nav2
   depend on it being present.
 - The STM32 owns real-time stepping. ROS 2 sends wheel-speed commands over USB
   CDC serial and owns nothing below that line.

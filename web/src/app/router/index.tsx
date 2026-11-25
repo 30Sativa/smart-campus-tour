@@ -14,7 +14,7 @@ import RouteErrorPage from './RouteErrorPage'
  *   `/`        public   marketing pages, no account
  *   `/staff/*` staff    tour preparation (`/staff/manage/*`) and operations, for Staff and Admin
  *   `/admin/*` admin    accounts and roles, Admin only
- *   `/technical/*`      Technical Staff: dashboard, robot/Mini PC monitoring, map versions, POI import, technical confirmation
+ *   `/technical/*`      Technical Staff: dashboard, robot/Mini PC monitoring, map versions, POI verification and import, route tests
  *   `/dai-dien/*`       school representative: register a group, roster, invitation
  *   `/tour/*`           students, no account: join, waiting room, live, end
  *
@@ -84,9 +84,9 @@ const TechnicalDashboardPage = lazy(() => import('../../routes/technical/Technic
 const TechnicalMonitoringPage = lazy(() => import('../../routes/technical/TechnicalMonitoringPage'))
 const TechnicalMapsPage = lazy(() => import('../../routes/technical/TechnicalMapsPage'))
 const TechnicalRobotsPage = lazy(() => import('../../routes/technical/TechnicalRobotsPage'))
-const TechnicalPoiImportPage = lazy(() => import('../../routes/technical/TechnicalPoiImportPage'))
+const TechnicalPoisPage = lazy(() => import('../../routes/technical/TechnicalPoisPage'))
 const TechnicalPoiFileImportPage = lazy(() => import('../../routes/technical/TechnicalPoiFileImportPage'))
-const TechnicalConfirmationsPage = lazy(() => import('../../routes/technical/TechnicalConfirmationsPage'))
+const TechnicalRouteTestsPage = lazy(() => import('../../routes/technical/TechnicalRouteTestsPage'))
 
 function ShellFallback({ background }: { background: string }) {
   return <div className="min-h-[100dvh]" style={{ background }} aria-busy="true" aria-label="Đang tải" />
@@ -310,9 +310,13 @@ export const routes = [
       { path: 'monitoring', element: <TechnicalMonitoringPage /> },
       { path: 'maps', element: <TechnicalMapsPage /> },
       { path: 'robots', element: <TechnicalRobotsPage /> },
-      { path: 'poi-import', element: <TechnicalPoiImportPage /> },
-      { path: 'poi-file-import', element: <TechnicalPoiFileImportPage /> },
-      { path: 'confirmations', element: <TechnicalConfirmationsPage /> },
+      { path: 'pois', element: <TechnicalPoisPage /> },
+      { path: 'pois/import', element: <TechnicalPoiFileImportPage /> },
+      { path: 'route-tests', element: <TechnicalRouteTestsPage /> },
+      // Menu regrouped on 23/11/2026 (TECHNICAL_MOVED_PATHS): old bookmarks and server links keep their query string.
+      { path: 'poi-import', element: <MergedInto path="/technical/pois" /> },
+      { path: 'poi-file-import', element: <MergedInto path="/technical/pois/import" /> },
+      { path: 'confirmations', element: <MergedInto path="/technical/route-tests" /> },
       { path: 'profile', element: <TechnicalProfilePage /> },
       { path: '*', element: <Navigate to="/technical" replace /> },
     ],

@@ -15,7 +15,9 @@
  * 3V3, opto cua driver keo xuong) manh hon pull noi ~40k nhieu, nen chan
  * DANG DUOC LAI cho cung muc o ca hai lan. Chan tha noi (chua han, dut day
  * 1k) di theo pull noi -> hai lan khac nhau -> MOTOR_ALARM_NO_SIGNAL. Nho vay
- * chan chua dau KHONG bao gio bi doc thanh OK hay ALARM. */
+ * chan chua han 10k/1k KHONG bao gio bi doc thanh OK hay ALARM. Nhung khi 10k
+ * da han ma day toi driver bi tuot, hoac driver mat nguon, chan van bi keo
+ * len 3V3 -> doc thanh OK (docs/ALM_HBS57H.md muc 4). */
 
 /* = 0: khong dong vao PC10/PC11 (giu analog sau reset), FB bao DISABLED. */
 #ifndef MOTOR_ALARM_ENABLE

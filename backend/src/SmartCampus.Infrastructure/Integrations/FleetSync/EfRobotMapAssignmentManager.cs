@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.MapPoi;
+using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Entities;
 using SmartCampus.Infrastructure.Persistence;
 
@@ -15,6 +16,7 @@ public sealed class EfRobotMapAssignmentManager(ApplicationDbContext db, TimePro
 {
     private const string Assigned = "ROBOT_MAP_ASSIGNED";
     private const string Cleared = "ROBOT_MAP_CLEARED";
+    public const string AutoDisableReason = "Tự tắt vì đổi bản đồ";
 
     public async Task<RobotMapAssignmentView> ChangeAsync(Guid robotId, Guid actorUserId, Guid requestId,
         string expectedRowVersion, Guid? mapVersionId, CancellationToken cancellationToken)
@@ -34,6 +36,9 @@ public sealed class EfRobotMapAssignmentManager(ApplicationDbContext db, TimePro
         if (targetArea is not null) await LockAreaAsync(targetArea, cancellationToken);
         // The lock map retirement takes (ADR-0041): a version cannot be retired between this check and the assignment.
         if (targetArea is not null) await LockMapPreparationAsync(mapVersionId!.Value, cancellationToken);
+        // ADR-0066: the lock deployment checks, POI verification and Tours take after the map lock, so an assignment change
+        // and a deployment check on the old map cannot pass each other. Same order: area, map preparation, robot deployment.
+        await LockRobotDeploymentAsync(robotId, cancellationToken);
 
         var robot = await db.Robots.Include(r => r.AssignedMapVersion).ThenInclude(m => m!.AreaKeyNavigation)
             .Include(r => r.MapAssignedByUser)
@@ -81,11 +86,32 @@ public sealed class EfRobotMapAssignmentManager(ApplicationDbContext db, TimePro
 
         var old = robot.AssignedMapVersion;
         var now = clock.GetUtcNow();
-        robot.AssignedMapVersionId = target?.Id;
-        robot.AssignedMapVersion = target;
-        robot.AssignedAreaKey = target?.AreaKey;
-        robot.MapAssignedAt = target is null ? null : now;
-        robot.MapAssignedByUserId = target is null ? null : actorUserId;
+        // Assigning the version already held changes nothing: the assignment time, and so the live-data proof, stays.
+        var changed = robot.AssignedMapVersionId != target?.Id;
+        if (changed)
+        {
+            robot.AssignedMapVersionId = target?.Id;
+            robot.AssignedMapVersion = target;
+            robot.AssignedAreaKey = target?.AreaKey;
+            robot.MapAssignedAt = target is null ? null : now;
+            robot.MapAssignedByUserId = target is null ? null : actorUserId;
+        }
+        // ADR-0066: the robot is no longer ready on its new map, so dispatch stops in the same transaction, audited as a
+        // manual stop is (ADR-0049). It is not a dispatch request, so it carries no request id to replay.
+        if (changed && robot.IsDispatchEnabled)
+        {
+            robot.IsDispatchEnabled = false;
+            db.AuditLogs.Add(new AuditLog
+            {
+                ActorUserId = actorUserId, RobotId = robot.Id, EntityType = "Robot", EntityId = robot.Id.ToString("D"),
+                Action = TourLifecycleEvents.DispatchChanged, ResultCode = "SUCCESS", OccurredAt = now,
+                DataJson = JsonSerializer.Serialize(new
+                {
+                    enabled = false, reason = AutoDisableReason, automatic = true, mapAssignmentRequestId = requestId,
+                    oldMapVersionId = old?.Id, newMapVersionId = target?.Id
+                })
+            });
+        }
         var action = target is null ? Cleared : Assigned;
         db.AuditLogs.Add(new AuditLog
         {
@@ -123,6 +149,17 @@ public sealed class EfRobotMapAssignmentManager(ApplicationDbContext db, TimePro
                 .Where(u => u.Id == actorUserId).Select(u => u.FullName).SingleAsync(cancellationToken)),
             Convert.ToBase64String(robot.RowVersion),
             await RobotTourImpact.ListAsync(db, robot.Id, target?.Id, cancellationToken));
+    }
+
+    private Task LockRobotDeploymentAsync(Guid robotId, CancellationToken cancellationToken)
+    {
+        var resource = $"map-poi:robot-deployment:{robotId:D}";
+        return db.Database.ExecuteSqlInterpolatedAsync($"""
+            DECLARE @lockResult int;
+            EXEC @lockResult = sys.sp_getapplock @Resource = {resource}, @LockMode = N'Exclusive',
+                @LockOwner = N'Transaction', @LockTimeout = 10000;
+            IF @lockResult < 0 THROW 51022, 'Could not acquire robot deployment state lock.', 1;
+            """, cancellationToken);
     }
 
     private Task LockMapPreparationAsync(Guid mapVersionId, CancellationToken cancellationToken)

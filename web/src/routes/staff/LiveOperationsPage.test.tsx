@@ -110,8 +110,8 @@ describe('live console camera head (ADR-0045)', () => {
     fireEvent.click(within(panel).getByRole('button', { name: /Quét xung quanh/ }))
     await waitFor(() => expect(headCommands()).toHaveLength(4))
     expect(headCommands().map(item => item.body)).toEqual([
-      { kind: 'STEP', panSteps: 15, tiltSteps: 0 },
-      { kind: 'STEP', panSteps: 0, tiltSteps: 15 },
+      { kind: 'STEP', panSteps: 20, tiltSteps: 0 },
+      { kind: 'STEP', panSteps: 0, tiltSteps: 20 },
       { kind: 'ANGLE', panDeg: 0, tiltDeg: 0 },
       { kind: 'SWEEP' },
     ])
@@ -421,6 +421,24 @@ describe('Viewers choose the next stop (ADR-0065)', () => {
     renderAt('/staff/live/tour-1')
     expect((await panel()).getByRole('table', { name: 'Số phiếu' })).toBeInTheDocument()
     expect((await panel()).queryByRole('button', { name: /Khóa/ })).not.toBeInTheDocument()
+  })
+
+  it('puts the vote and the camera head on one card with a switch, opening on the vote', async () => {
+    tour = voting()
+    renderAt('/staff/live/tour-1')
+    const tabs = within(await screen.findByRole('tablist', { name: 'Bầu chọn và đầu camera' }))
+    expect(tabs.getByRole('tab', { name: /Bầu chọn/ })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('region', { name: 'Viewer chọn điểm tiếp theo' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Đầu camera' })).not.toBeInTheDocument()
+
+    fireEvent.click(tabs.getByRole('tab', { name: /Đầu camera/ }))
+    expect(await screen.findByRole('region', { name: 'Đầu camera' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Viewer chọn điểm tiếp theo' })).not.toBeInTheDocument()
+    // The open ballot is still flagged on its tab while the head is showing.
+    expect(tabs.getByRole('tab', { name: /Bầu chọn.*đang mở/ })).toHaveAttribute('aria-selected', 'false')
+
+    fireEvent.keyDown(tabs.getByRole('tab', { name: /Đầu camera/ }), { key: 'ArrowLeft' })
+    expect(tabs.getByRole('tab', { name: /Bầu chọn/ })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('leaves a fixed-order Tour exactly as before', async () => {

@@ -155,6 +155,8 @@ Chạy tay không qua systemd (để thử): `/usr/local/bin/mediamtx /usr/local
   đen/méo ống kính; tăng (0.9) nếu muốn rộng hơn.
 - `QUEST_CROP_OFFSET_X / _Y`: dịch khung nếu tâm ảnh bị lệch.
 - `QUEST_KEEP_AWAKE=1`: tắt cảm biến tiệm cận để kính không ngủ khi không ai đeo.
+- `QUEST_ENCODER=copy` (cần `QUEST_CAPTURE=scrcpy`): kính tự mã hoá luồng cuối, NUC
+  chỉ đóng gói lại. Nhẹ nhất; xem mục "Kính tự mã hoá".
 - `QUEST_ENCODER=h264_vaapi` và/hoặc `QUEST_HWDEC=vaapi`: dùng GPU Intel nếu CPU
   quá tải (`sudo apt install intel-media-va-driver-non-free vainfo`, user thuộc nhóm `render`).
 - `QUEST_CAPTURE_SIZE=2560x1344`: kính gửi hình nhỏ hơn, NUC giải mã nhẹ hơn.
@@ -259,6 +261,86 @@ mắt 1496x1600): giải mã bằng CPU 162 fps, giải mã VAAPI chỉ 7.7 fps 
 thời gian thực, hình dồn lại, trễ tăng dần tới cả phút). Cả chuỗi CPU (giải mã,
 cắt, scale, libx264 ultrafast) đạt 43 fps, đủ cho `QUEST_FPS=30`.
 
+## Kính tự mã hoá: NUC không giải mã, không mã hoá lại (`QUEST_ENCODER=copy`)
+
+Đo 25/11/2026 trên NUC7PJYH khi robot chạy Nav2: FFmpeg của chuỗi scrcpy (giải mã
+1496x1600 khoảng 14 Mbit/s, cắt, scale, libx264 ultrafast 1 Mbit/s) chiếm khoảng
+**90 % một nhân**, cộng với Nav2 và fleet_bridge làm load lên 12–17 trên 4 nhân,
+controller trễ chu kỳ 10 Hz. Với `QUEST_ENCODER=copy`, encoder phần cứng của kính
+làm ra luồng cuối cùng:
+
+- scrcpy-server cắt sẵn khung 16:9 (đã xoay `QUEST_SCRCPY_ANGLE`), thu về
+  `QUEST_OUTPUT_WIDTH`x`QUEST_OUTPUT_HEIGHT`, tối đa `QUEST_FPS` khung/giây;
+- H.264 Baseline (không B-frame) ở `QUEST_VIDEO_BITRATE`, keyframe mỗi
+  `QUEST_KEYFRAME_INTERVAL` giây. scrcpy mặc định 10 s và khai encoder 60 fps; encoder
+  của kính đếm khoảng keyframe theo số khung của con số đó, nên server.py khai thêm
+  `frame-rate` bằng `QUEST_FPS` (đo 25/11: không khai thì 0.5 s thành 1 s, 10 s thành 20 s);
+- FFmpeg trên NUC chỉ đóng gói lại sang RTSP (`-c:v copy`), và chèn SPS/PPS trước
+  mỗi keyframe. Encoder Android chỉ gửi SPS/PPS một lần lúc đầu, và FFmpeg bỏ
+  các khung đọc lúc dò luồng (`-fflags nobuffer`), nên thiếu bước này người xem
+  vào sau không giải mã được.
+
+```bash
+# quest-stream.env, cần QUEST_CAPTURE=scrcpy
+sed -i '/^QUEST_ENCODER=/d' quest-stream.env && echo 'QUEST_ENCODER=copy' >> quest-stream.env
+sudo systemctl restart quest-stream
+grep SCRCPY_START logs/adb.log | tail -1
+# ... encoder=copy video_bit_rate=1000000 max_fps=30 max_size=1280 crop=1808:1017:128:596 angle=20
+#     video_codec_options=profile:int=1,i-frame-interval:float=0.5,frame-rate:float=30
+```
+
+Đo 25/11/2026 trên NUC7PJYH với Quest 3 thật, stack robot tắt (live = luồng thật qua
+MediaMTX và relay; bench = mẫu ghi từ kính, `~/amr_logs/tools_quest/bench_encoders.py`):
+
+| | libx264 (cũ) | `copy` |
+|---|---|---|
+| FFmpeg trên NUC (% một nhân) | 83.4 live, 90.2 bench | 0.8 live, 0.6 bench |
+| Cả chuỗi Quest: FFmpeg, adb, server.py, relay, MediaMTX | khoảng 90 | khoảng 10 |
+| Kính gửi NUC | 12.9 Mbit/s, 1494x1600 High | 1.24 Mbit/s, 1280x720 Baseline 3.1 |
+| Keyframe | 20 s | 0.50 s |
+| Từ lúc FFmpeg mở tới khung đầu ra | khoảng 20 s | khoảng 2 s |
+
+Bản cũ khởi động chậm vì `-fflags nobuffer` bỏ keyframe đầu (lúc dò luồng) và keyframe kế
+tiếp của kính tới sau 20 s. Bitrate thật cao hơn mục tiêu khoảng 25 % (encoder kính, VBR).
+Độ trễ kính → web chưa đo.
+
+Khung giống bản libx264: `QUEST_CROP_KEEP` chiều rộng một mắt, tỉ lệ đầu ra, ở giữa
+(+ `QUEST_CROP_OFFSET_X/Y`), làm tròn xuống bội của 16x9 để ra đúng 1280x720;
+`QUEST_SCRCPY_CROP` (nếu đặt) vẫn là vùng một mắt, khung được cắt trong đó.
+scrcpy cắt trước rồi mới xoay, nhưng crop của nó chỉ đặt cửa sổ lấy mẫu; phép xoay
+lấy mẫu trên cả màn hình nên hình không bị viền đen, miễn là khung nghiêng còn nằm
+trong mắt (0.88 và 20°: còn cách mép mắt 9 px; tăng góc hoặc `QUEST_CROP_KEEP` thì
+góc hình có thể đen, như bản cũ).
+
+Khác bản libx264:
+
+- Không dùng `QUEST_VIDEO_MAXRATE/BUFSIZE`, `QUEST_CAPTURE_BITRATE`,
+  `QUEST_SCRCPY_MAX_SIZE`. Encoder Android chỉ giữ bitrate trung bình; muốn bitrate
+  đều hơn: `QUEST_SCRCPY_CODEC_OPTIONS=bitrate-mode:int=2` (CBR).
+- Số khung/giây theo nội dung, tối đa `QUEST_FPS` (không nhân bản khung như filter
+  `fps`); `measure.sh` không có `drop`/`dup`.
+- Kính không phóng to: khung nhỏ hơn đầu ra (`QUEST_CROP_KEEP` rất nhỏ) thì hình
+  nhỏ hơn 1280x720.
+
+Kiểm tra trên NUC khi đang phát:
+
+```bash
+# kích thước, profile (phải là Baseline hoặc Constrained Baseline)
+timeout 15 ffprobe -v error -rtsp_transport tcp -select_streams v:0 \
+  -show_entries stream=width,height,profile,has_b_frames -of default=nw=1 rtsp://127.0.0.1:8554/quest
+# keyframe: một dòng "K" mỗi QUEST_KEYFRAME_INTERVAL giây
+timeout 15 ffprobe -v error -rtsp_transport tcp -select_streams v:0 -read_intervals %+6 \
+  -show_entries packet=pts_time,flags -of csv=p=0 rtsp://127.0.0.1:8554/quest | grep K
+top -b -n 3 -d 5 | grep -E 'ffmpeg|python3'   # ffmpeg vài % thay vì ~90 %
+```
+
+| Thấy gì | Làm gì |
+|---|---|
+| `SCRCPY_ERROR scrcpy-server did not start`, `adb.log` có `Capture/encoding error` | encoder của kính không nhận profile Baseline: thử `QUEST_SCRCPY_CODEC_OPTIONS=profile:int=65536` (Constrained Baseline), hoặc quay lại libx264 |
+| Khoảng cách các dòng `K` vẫn khoảng 10 s | kính bỏ qua `i-frame-interval`: người xem mới chờ tới 10 s; quay lại libx264 |
+| `profile` là High/Main | kính bỏ qua `profile`: Chrome/Edge/Safari vẫn xem được, Firefox (OpenH264) có thể không; quay lại libx264 nếu cần Firefox |
+| Quay lại cách cũ | `QUEST_ENCODER=libx264`, `sudo systemctl restart quest-stream` |
+
 ## Xử lý khi hỏng
 
 Hành vi tự động:
@@ -281,7 +363,7 @@ Hành vi tự động:
 | `/status` = `connecting`, log `STREAM_STALLED` | kính tắt màn hình: đeo kính hoặc `QUEST_KEEP_AWAKE=1` |
 | `/status` = `live`, nhưng `:8889/quest` không có hình (xoay mãi) | **UDP 8189 bị chặn**: `sudo ufw allow 8189/udp`; NUC nhiều card mạng → đặt `MTX_WEBRTCADDITIONALHOSTS` |
 | `:8889/quest` có hình, web dev vẫn "Mất tín hiệu" | sai `VITE_QUEST_WHEP_URL` (phải có `/quest/whep`), quên chạy lại `npm run dev`, hoặc trang HTTPS gọi HTTP. Xem Console (F12) |
-| Hình giật, `speed` < 1.0 trong `measure.sh` | CPU NUC không kịp: `QUEST_X264_PRESET=ultrafast`, `QUEST_CAPTURE_SIZE=2560x1344`, hoặc `QUEST_ENCODER=h264_vaapi` |
+| Hình giật, `speed` < 1.0 trong `measure.sh` | CPU NUC không kịp: `QUEST_CAPTURE=scrcpy` + `QUEST_ENCODER=copy`, hoặc `QUEST_X264_PRESET=ultrafast`, `QUEST_CAPTURE_SIZE=2560x1344` |
 | Còn viền đen/méo | giảm `QUEST_CROP_KEEP`, chỉnh `QUEST_CROP_OFFSET_X/Y` |
 
 ```bash
@@ -297,12 +379,19 @@ tail -20 logs/adb.log
 python3 -m unittest discover -s tests -v
 ```
 
-20 test: bộ lọc (mắt trái, 16:9, 1280x720, 30 fps, pixel vuông), lệnh FFmpeg
+Gồm: bộ lọc (mắt trái, 16:9, 1280x720, 30 fps, pixel vuông), lệnh FFmpeg
 (RTSP/TCP, baseline, không B-frame, GOP), phân tích `adb devices`, HTTP
 `/status`, và một test end-to-end: `tests/fake_adb.py` giả lập Quest 3 →
 `server.py` → một "MediaMTX giả" (FFmpeg nhận RTSP) → `ffprobe` kiểm tra
 H.264 Constrained Baseline 1280x720 30 fps không B-frame; rồi tắt MediaMTX,
 bật lại, rút/cắm "cáp" và kiểm tra tự phục hồi.
+
+`QUEST_ENCODER=copy` (`PassthroughTests`, `PassthroughWithRealFfmpeg`): khung cắt
+trên kính (16:9, đúng 1280x720 sau `max_size`, dịch theo góc xoay), lệnh scrcpy
+(bitrate, `max_size`, `video_codec_options`), lệnh FFmpeg chỉ copy; và một FFmpeg
+thật đẩy H.264 320x180 chỉ có SPS/PPS ở đầu (như kính) qua RTSP: phía nhận phải có
+SPS/PPS trước mọi keyframe, `-progress` phải đếm khung. Test end-to-end giải mã và
+mã hoá thật: **không chạy trên robot khi stack robot đang bật** (tốn CPU).
 
 Phía web, `npm test` chạy test của client WHEP (`whep.test.ts`,
 `QuestLiveVideo.test.tsx`).
@@ -370,6 +459,51 @@ sẽ mất hình). Không có nút tắt nguồn: kính tắt nguồn hẳn thì
 xem ở `curl -s localhost:8080/device` (`screen`, `lastCommand`); log có `HEADSET_COMMAND ...`.
 
 Phía người xem (web): nút tạm dừng trên khung hình, và tự ngắt khi tab bị ẩn; mở lại tab là nối lại.
+
+## Nhân vật MC trong kính: tới POI là thuyết minh
+
+App Unity trên kính (`Animation3D`, script `RobotTourClient` + `PoiNarrator`) chỉ cho nhân vật nói và làm cử chỉ khi
+nhận được sự kiện "robot đã tới điểm". `quest-stream` phát các sự kiện đó (file `tour_bridge.py`):
+
+```
+backend ──(trả lời camera poll mỗi 5 s: tour {step, visitId, stopId, stopName, narrationText})──▶ quest-stream
+quest-stream ──GET /quest/events (HTTPS :8890, long-poll)──▶ kính: arrived → MC nói lời thuyết minh + cử chỉ
+```
+
+- `arrived`: Tour sang `OBSERVING` ở một lượt dừng mới (không bị giữ). Kèm `name` và `narration`: **đúng lời thuyết minh
+  trang học sinh đang đọc** (bản đã duyệt lúc lưu phiên bản tuyến, ADR-0060).
+- `departed`: robot bắt đầu chạy tới điểm kế tiếp (hoặc về điểm kết thúc): MC mời mọi người đi theo.
+- `cancelled`: Tour kết thúc / bị huỷ: MC ngừng nói.
+
+Cần `QUEST_CONTROL_URL=auto` (sự kiện đi kèm camera poll). Trong `quest-stream.env`:
+
+```bash
+QUEST_BRIDGE_PORT=8890
+QUEST_BRIDGE_TOKEN=<chuỗi bí mật, điền giống ô Token của RobotTourClient>
+# để trống CERT/KEY = dùng chứng chỉ MediaMTX (MTX_WEBRTCSERVERCERT/KEY trong mediamtx.env),
+# trùng vân tay SHA-256 đã điền ở QuestIntercom / RobotTourClient
+```
+
+Rồi `sudo ufw allow 8890/tcp` (install-services.sh đã thêm) và `sudo systemctl restart quest-stream`. Khi kính cắm USB,
+quest-stream tự chạy `adb reverse tcp:8890 tcp:8890` để app nói chuyện qua dây (`https://127.0.0.1:8890`).
+
+Kiểm tra trên NUC:
+
+```bash
+curl -s localhost:8080/status | python3 -m json.tool | grep -A8 tourBridge   # state, currentStop, lastEvent
+curl -sk -H "Authorization: Bearer <token>" "https://127.0.0.1:8890/quest/events?after=-1&wait=0"
+grep TOUR_BRIDGE logs/quest-stream.log    # TOUR_BRIDGE arrived at ... / departed towards ...
+```
+
+| Thấy gì | Làm gì |
+|---|---|
+| `TOUR_BRIDGE off: it needs QUEST_CONTROL_URL` | đặt `QUEST_CONTROL_URL=auto` (mục "Chỉ bật camera khi cần") |
+| `tourBridge.state` luôn `idle` khi Tour đang chạy | backend chưa bản mới (câu trả lời poll chưa có `tour`) |
+| Unity log `Không tới được robot ... (401)` | `QUEST_BRIDGE_TOKEN` khác ô Token trong Unity |
+| Unity log lỗi chứng chỉ | vân tay `Certificate Sha256` trong Unity không khớp chứng chỉ quest-stream đang dùng |
+| `TOUR_BRIDGE plain HTTP` | chưa có chứng chỉ: điền `QUEST_BRIDGE_CERT/KEY` |
+
+Độ trễ từ lúc robot tới điểm đến lúc MC nói: tối đa một chu kỳ poll (5 s).
 
 ## Phát ra Internet (trang deploy https://www.fptcampustour.cloud)
 

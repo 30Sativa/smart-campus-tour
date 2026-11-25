@@ -15,7 +15,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.Routes TO campus_tour_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.RouteStops TO campus_tour_app;
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.Tours TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.TourRobotReservations TO campus_tour_app;
-GRANT UPDATE (ReleasedAt, ReleasedByUserId) ON OBJECT::dbo.TourRobotReservations TO campus_tour_app;
+-- ADR-0043 D13 addendum: a Tour that ends shortens its hold to the end time; StartsAt, robot and durations stay as written.
+GRANT UPDATE (EndsAt, ReleasedAt, ReleasedByUserId) ON OBJECT::dbo.TourRobotReservations TO campus_tour_app;
 -- v1.16: Admin schedule blocks are removed by stamping RemovedAt/RemovedByUserId, never deleted.
 GRANT SELECT, INSERT ON OBJECT::dbo.TourScheduleBlocks TO campus_tour_app;
 GRANT UPDATE (RemovedAt, RemovedByUserId) ON OBJECT::dbo.TourScheduleBlocks TO campus_tour_app;

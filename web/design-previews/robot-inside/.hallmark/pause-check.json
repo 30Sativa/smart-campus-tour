@@ -1,0 +1,6 @@
+{
+  "pause": "static scene verified",
+  "zoom": "redraws while paused",
+  "orbit": "redraws while paused",
+  "resize": "model remains visible"
+}

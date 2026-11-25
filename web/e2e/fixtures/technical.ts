@@ -25,6 +25,7 @@ export const robots: PhysicalRobotOption[] = [{
   assignedMapKey: 'campus-hcm', assignedFrameId: 'map', mapAssignedAt: at(-10 * 24 * 60), mapAssignedByName: 'Đỗ Kỹ Thuật',
   latestDeployedMapKey: 'campus-hcm', latestDeployedFrameId: 'map', latestDeploymentPassed: true, needsInspection: false,
   currentTourId: null, currentTourName: null, currentTourState: null, isDispatchEnabled: true,
+  readiness: { state: 'READY', reasonCode: null, reason: null, mapVersionId: MAP_ID, mapLabel: 'Campus Hồ Chí Minh · v2', deploymentCheckedAt: at(-10 * 24 * 60), reportingOnAssignedMap: true },
 }]
 
 export function technicalHandlers(): Handler[] {

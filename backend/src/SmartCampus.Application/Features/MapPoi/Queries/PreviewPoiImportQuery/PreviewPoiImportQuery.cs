@@ -31,9 +31,10 @@ public sealed class PreviewPoiImportQueryHandler(IMapVersionRepository mapReposi
             ?? throw new NotFoundException("Physical robot", robotCode);
         RobotLifecycleRules.EnsureActive(robot);
 
-        var planned = await PoiImportPlanner.PlanAsync(importRepository, mapRepository, map, robot,
+        var plan = await PoiImportPlanner.PlanAsync(importRepository, mapRepository, map, robot,
             PoiImportPlanner.Parse(sources), settings, cancellationToken);
-        return new PoiImportPreview(map.Id, robot.RobotCode, planned.All(file => file.ErrorCode is null),
-            planned.Select(file => file.ToPreview()).ToArray());
+        return new PoiImportPreview(map.Id, robot.RobotCode, plan.Files.All(file => file.ErrorCode is null),
+            plan.Files.Select(file => file.ToPreview()).ToArray(),
+            new(plan.RobotReadiness.IsReady, plan.RobotReadiness.Code, plan.RobotReadiness.Message));
     }
 }

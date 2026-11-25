@@ -34,6 +34,9 @@ export type NarrationVoice = {
 
 const MAX_CHUNK = 180
 
+/** Speech speed of the browser voice: a little under normal (1), so Students follow a guide's pace over the live video. */
+export const NARRATION_RATE = 0.85
+
 /** Sentence-sized chunks: Chrome silently stops one long utterance after about 15 seconds. */
 export function splitForSpeech(text: string, max = MAX_CHUNK): string[] {
   const sentences = text.replace(/\s+/g, ' ').trim().match(/[^.!?…;:]+[.!?…;:]*/g) ?? []
@@ -90,7 +93,7 @@ function speakText(api: SpeechSynthesis, text: string, voice: SpeechSynthesisVoi
     const utterance = new SpeechSynthesisUtterance(chunk)
     utterance.lang = voice?.lang ?? 'vi-VN'
     if (voice) utterance.voice = voice
-    utterance.rate = 1
+    utterance.rate = NARRATION_RATE
     if (index === chunks.length - 1) utterance.onend = done
     utterance.onerror = (event) => { if (event.error === 'not-allowed') refused(); else done() }
     api.speak(utterance)

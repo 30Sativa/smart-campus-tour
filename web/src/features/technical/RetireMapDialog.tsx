@@ -70,12 +70,12 @@ function RetirementImpact({ impact }: { impact: MapRetirementImpact }) {
         {impact.pendingPois.length > 0 && <div className="mt-2">
           <p>POI đã gửi, đang chờ Kỹ thuật kiểm chứng:</p>
           <ul className="mt-1 list-inside list-disc">{impact.pendingPois.map(poi =>
-            <li key={poi.proposalId}><Link className={linkClass} to="/technical/poi-import">{poi.name} · phiên bản {poi.revisionNumber}</Link></li>)}</ul>
+            <li key={poi.proposalId}><Link className={linkClass} to="/technical/pois">{poi.name} · phiên bản {poi.revisionNumber}</Link></li>)}</ul>
         </div>}
         {impact.pendingRoutes.length > 0 && <div className="mt-2">
           <p>Tuyến đã gửi, đang chờ chạy thử:</p>
           <ul className="mt-1 list-inside list-disc">{impact.pendingRoutes.map(route =>
-            <li key={route.revisionId}><Link className={linkClass} to="/technical/confirmations">{route.name} · phiên bản {route.revisionNumber}</Link></li>)}</ul>
+            <li key={route.revisionId}><Link className={linkClass} to="/technical/route-tests">{route.name} · phiên bản {route.revisionNumber}</Link></li>)}</ul>
         </div>}
         {impact.upcomingTours.length > 0 && <div className="mt-2">
           <p>Tour đã lên lịch hoặc sẵn sàng. Staff cần hủy hoặc đổi tuyến các Tour này trước:</p>
