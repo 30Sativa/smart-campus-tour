@@ -55,7 +55,14 @@ export function ExcelUploader({ accepted, onAccept, onDiscard, inUse, error, exi
   return <div className="rep-upload rep-stack">
     <div className="rep-upload-spec">
       <div><p><strong>Yêu cầu tệp danh sách</strong></p>
-        <p className="rep-hint">Các cột LoaiDong, HoTen, Email bắt buộc; Lop không bắt buộc. LoaiDong nhận CA_NHAN hoặc DIEM_XEM_CHUNG. Điểm xem chung dùng email người phụ trách, không liệt kê tất cả người xem. Tệp .xlsx hoặc .csv, tối đa 2 MB và {ROSTER_MAX_ROWS} điểm xem.</p>
+        <p className="rep-hint">Cách dễ nhất: tải file mẫu, điền mỗi người hoặc mỗi phòng xem trên một dòng, rồi chọn lại file.</p>
+        <ul className="rep-hint rep-upload-columns">
+          <li><strong>LoaiDong</strong>: ghi <code>CA_NHAN</code> nếu một học sinh xem trên máy riêng, hoặc <code>DIEM_XEM_CHUNG</code> nếu cả phòng xem chung một màn hình.</li>
+          <li><strong>HoTen</strong>: họ tên học sinh, hoặc tên phòng xem chung (ví dụ: Phòng 204).</li>
+          <li><strong>Email</strong>: email nhận lời mời. Với phòng xem chung, dùng email người phụ trách phòng, không cần liệt kê từng người xem.</li>
+          <li><strong>Lop</strong> (không bắt buộc): lớp của học sinh.</li>
+        </ul>
+        <p className="rep-hint">Nhận file .xlsx hoặc .csv, tối đa 2 MB và {ROSTER_MAX_ROWS} dòng.</p>
       </div>
       <button type="button" className={repButton('secondary', 'sm')} onClick={() => downloadBytes(TEMPLATE_FILE_NAME, rosterTemplateBytes())}><Download size={16} aria-hidden="true" />Tải file Excel mẫu</button>
     </div>

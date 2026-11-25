@@ -41,7 +41,11 @@ const samePose = (a: PickerPose, b: PickerPose) => a.x === b.x && a.y === b.y &&
 // START is still saved as endMode POSE; it only keeps the end pose following the start. A separate end pose is no longer
 // offered (ADR-0065, ROUTE_END_POSE_NOT_START); a revision saved with one stays readable, but a new save chooses again.
 type EndChoice = 'LAST_POI' | 'START'
-const poseText = (pose: PickerPose) => placed(pose) ? `x ${pose.x!.toFixed(2)} m · y ${pose.y!.toFixed(2)} m · hướng ${yawDegrees(pose.yaw!)}°` : 'Chưa chọn'
+// Plain words first; the map coordinates stay as a small second line for whoever checks them against the map.
+const poseSummary = (pose: PickerPose) => placed(pose) ? <>
+  <span className="block">{`Đã chọn trên bản đồ, robot quay hướng ${yawDegrees(pose.yaw!)}°`}</span>
+  <span className="block font-mono text-xs text-muted">{`x ${pose.x!.toFixed(2)} m · y ${pose.y!.toFixed(2)} m`}</span>
+</> : 'Chưa chọn'
 // docs/lich-tour-theo-ca.md §2. The server checks the same bounds; these only say so before Save.
 const MIN_DWELL_SECONDS = 15
 const MAX_DWELL_SECONDS = 300
@@ -396,7 +400,7 @@ export default function StaffManageRouteFormPage() {
           <ReviewRow label="Tên tuyến" onEdit={() => goTo(0)}>{draft.name.trim()}{draft.description.trim() && <span className="block text-xs text-[#64748b]">{draft.description.trim()}</span>}</ReviewRow>
           <ReviewRow label="Bản đồ" onEdit={() => goTo(0)}>{chosenMap ? mapLabel(chosenMap.map) : '-'}</ReviewRow>
           <ReviewRow label={`Điểm dừng (${stops.length})`} onEdit={() => goTo(1)}><ol className="list-inside list-decimal">{stops.map(stop => <li key={stop.poiRevisionId}>{poiName(stop.poiRevisionId)} · dừng {stop.dwellSeconds} giây</li>)}</ol></ReviewRow>
-          <ReviewRow label="Điểm bắt đầu" onEdit={() => goTo(2)}><span className="font-mono text-xs">{poseText(startPose)}</span></ReviewRow>
+          <ReviewRow label="Điểm bắt đầu" onEdit={() => goTo(2)}><span>{poseSummary(startPose)}</span></ReviewRow>
           <ReviewRow label="Viewer chọn điểm" onEdit={() => goTo(1)}>{voting ? 'Có. POI đầu là điểm cố định, các POI sau do học sinh bầu.' : 'Không, robot đi theo thứ tự đã đặt.'}</ReviewRow>
           <ReviewRow label="Điểm kết thúc" onEdit={() => goTo(2)}>{endChoice === 'LAST_POI' ? 'Dừng tại điểm dừng cuối' : endChoice === 'START' ? 'Quay về điểm bắt đầu' : 'Chưa chọn'}</ReviewRow>
           <ReviewRow label="Lộ trình" onEdit={() => goTo(1)}>

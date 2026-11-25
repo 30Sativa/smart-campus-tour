@@ -110,7 +110,7 @@ export default function TechnicalRobotsPage() {
       </section>
       <RegisterRobotModal open={registering} onClose={() => setRegistering(false)} />
       {selected && dialog?.view === 'detail' && <RobotDetailModal robot={selected} strip={strip} refreshing={robots.isFetching} onRefresh={() => void robots.refetch()} onAssignMap={() => setDialog({ view: 'map', robotId: selected.id })} onManageKey={() => setDialog({ view: 'credential', robotId: selected.id })} onClose={closeDialog} />}
-      {selected && dialog?.view === 'credential' && <RobotCredentialPanel robotCode={selected.robotCode} onClose={showDetail} />}
+      {selected && dialog?.view === 'credential' && <RobotCredentialPanel robotCode={selected.robotCode} step={SETUP_STEP.key} onClose={showDetail} />}
       {selected && dialog?.view === 'map' && <RobotMapAssignmentModal robot={selected} strip={strip} otherRobots={robots.data ?? []} initialMapVersionId={dialog.mapVersionId} onClose={showDetail} />}
     </TechnicalPage>
   )
@@ -182,6 +182,9 @@ function CopyValue({ label, value }: { label: string; value: string }) {
   }
   return <span className="flex items-center gap-1.5"><span className="min-w-0 break-all font-mono">{value}</span><button type="button" title={`Sao chép ${label}`} aria-label={`Sao chép ${label}`} className="grid size-6 shrink-0 place-items-center rounded-md text-[#64748b] transition-colors hover:bg-[#f1f5f9] hover:text-[#0f172a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]" onClick={() => void copy()}><Copy size={13} aria-hidden="true" /></button></span>
 }
+
+// Positions in RobotSetupChecklist, shown in the key and map dialogs it opens so the setup keeps its place.
+const SETUP_STEP = { key: 'Bước 2/5', map: 'Bước 3/5' } as const
 
 type NextStep = 'key' | 'map' | 'connect' | 'minipc' | 'deploy' | 'release' | null
 
@@ -483,7 +486,7 @@ function RobotMapAssignmentModal({ robot, strip, otherRobots, initialMapVersionI
     else clear.mutate(input, { onSuccess: onClose })
     setConfirming(null)
   }
-  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description="Chọn khu vực và phiên bản bản đồ robot sẽ dùng. Có thể gán trước khi bản đồ có kiểm tra triển khai đạt, nhưng robot chỉ sẵn sàng nhận Tour khi đã kiểm tra triển khai đạt trên đúng phiên bản này." footer={<div className="flex flex-wrap items-center justify-between gap-2"><div>{robot.assignedMapVersionId && <button type="button" className={buttonClass('danger')} onClick={() => setConfirming('clear')} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}</div><div className="ml-auto flex flex-wrap gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
+  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description={`${SETUP_STEP.map} trong thiết lập robot. Chọn khu vực và phiên bản bản đồ robot sẽ dùng. Có thể gán trước khi bản đồ có kiểm tra triển khai đạt, nhưng robot chỉ sẵn sàng nhận Tour khi đã kiểm tra triển khai đạt trên đúng phiên bản này.`} footer={<div className="flex flex-wrap items-center justify-between gap-2"><div>{robot.assignedMapVersionId && <button type="button" className={buttonClass('danger')} onClick={() => setConfirming('clear')} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}</div><div className="ml-auto flex flex-wrap gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
     {strip}
     <form id="robot-map-assignment-form" className="space-y-3.5" onSubmit={submit}>
       <div><label className={labelClass} htmlFor="robot-map-area">Khu vực</label><select title="" id="robot-map-area" className={`${inputClass} mt-1`} value={areaKey} onChange={event => chooseArea(event.target.value)}><option value="">Chọn khu vực</option>{(areas.data ?? []).map(area => {

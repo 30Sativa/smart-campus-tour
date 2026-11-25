@@ -41,7 +41,7 @@ export function StudentHeader({
     </button>
   )
   const leaveButton = onLeave && (
-    <button type="button" onClick={onLeave} disabled={leaveDisabled} aria-label={leaveLabel} title="Thoát phiên tham quan" className="st-leave">
+    <button type="button" onClick={onLeave} disabled={leaveDisabled} aria-label={leaveLabel} title="Rời buổi tham quan" className="st-leave">
       <LogOut size={16} aria-hidden="true" />
       <span>{leaveLabel}</span>
     </button>

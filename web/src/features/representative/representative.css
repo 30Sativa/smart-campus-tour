@@ -253,6 +253,8 @@
 .rep-upload { display: grid; gap: var(--rep-space-lg); }
 .rep-upload-spec { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--rep-space-lg); font-size: var(--rep-text-sm); }
 .rep-upload-spec > div { flex: 1; min-width: 240px; }
+.rep-upload-columns { margin: var(--rep-space-sm) 0; padding-left: 1.25rem; list-style: disc; display: grid; gap: 4px; }
+.rep-upload-columns code { font-size: 0.95em; font-weight: 600; }
 .rep-upload-zone { display: grid; justify-items: start; gap: var(--rep-space-sm); padding: var(--rep-space-lg); background: var(--rep-sunk); border: 1px dashed var(--rep-line-2); border-radius: var(--rep-radius); }
 .rep-upload-zone.is-over { background: #f1f8fe; border-color: var(--rep-ring); }
 .rep-file-label { font-size: var(--rep-text-sm); }

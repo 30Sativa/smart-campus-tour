@@ -309,12 +309,20 @@ export default function StaffManagePoiFormPage() {
         <h2 className="mb-3 text-base font-semibold text-[var(--poi-ink)]">Vị trí & hướng robot</h2>
         {mapError && <div role="alert" className="mb-3"><Notice tone="danger" action={<button type="button" onClick={retryMap} className={buttonClass('secondary', 'sm')}>Thử lại</button>}>{mapError}</Notice></div>}
         {pickerMap && selectedItem ? <PoiPosePicker layout="workbench" map={pickerMap} pose={pose} editable={mapEligible && !frozen} mode={mapEligible && !frozen ? poseMode : 'pan'} onModeChange={setPoseMode} onPoseChange={value => update(value)} clearanceMeters={selectedItem.poiClearanceMeters} /> : <div className="grid min-h-[260px] lg:min-h-[440px] place-items-center rounded-xl border border-[var(--poi-rule)] bg-[var(--poi-paper)] p-5 text-center text-sm text-[var(--poi-muted)]"><div><MapPinned size={26} className="mx-auto mb-2 text-[var(--poi-control)]" aria-hidden="true" />{mapDetailsQuery.isError ? 'Không tải được bản đồ lịch sử.' : mapError ? 'Chưa tải được bản đồ.' : draft.mapVersionId ? 'Đang tải bản đồ…' : 'Chọn bản đồ ở trên để đặt vị trí điểm.'}</div></div>}
-        {/* One set of fields, synced both ways with the map: clicking the map fills them, typing moves the marker. */}
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <p className="mt-4 text-sm text-[var(--poi-ink)]">{placed && draft.yaw != null
+          ? `Đã đặt vị trí trên bản đồ, robot quay hướng ${yawDegreesText(draft.yaw)}°.`
+          : placed ? 'Đã đặt vị trí. Tiếp theo, chọn hướng robot nhìn trên bản đồ.'
+          : 'Chưa đặt vị trí. Bấm lên bản đồ ở chỗ robot cần dừng.'}</p>
+        {/* One set of fields, synced both ways with the map: clicking the map fills them, typing moves the marker.
+            Folded away: most Staff place the POI on the map and never need the numbers. */}
+        <details className="mt-2 text-sm">
+          <summary className="cursor-pointer text-[var(--poi-muted)]">Nhập tọa độ chính xác (không bắt buộc)</summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x: x == null ? null : quantizeMeters(x) })} />
           <PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y: y == null ? null : quantizeMeters(y) })} />
           <YawDegreesField yaw={draft.yaw} disabled={locked} change={yaw => update({ yaw })} />
         </div>
+        </details>
       </section>
       </div>
       <div className="min-w-0 border-t border-[var(--poi-rule)] bg-[var(--poi-paper)] lg:border-t-0 lg:border-l">

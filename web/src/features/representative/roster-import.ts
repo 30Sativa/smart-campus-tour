@@ -84,7 +84,7 @@ export function rowsToRoster(fileName: string, rows: SheetRow[]): ImportResult {
   const emailCol = keys.indexOf('email')
   const issues: ImportIssue[] = []
   for (const [column, index] of [['LoaiDong', typeCol], ['HoTen', nameCol], ['Email', emailCol]] as const) {
-    if (index < 0) issues.push({ row: header.rowNumber, column, message: `Thiếu cột ${column}. Dùng file mẫu mới.` })
+    if (index < 0) issues.push({ row: header.rowNumber, column, message: `Thiếu cột ${column}. Tải file mẫu và giữ nguyên dòng tiêu đề LoaiDong, HoTen, Email, Lop.` })
     else if (keys.filter(key => key === keys[index]).length > 1) issues.push({ row: header.rowNumber, column, message: `Cột ${column} bị trùng.` })
   }
   if (issues.length) return fail(fileName, ...issues)
@@ -106,7 +106,7 @@ export function rowsToRoster(fileName: string, rows: SheetRow[]): ImportResult {
     if (!/^[^\s@]+@[^\s@]+$/.test(email) || email.length > 254) issue('Email', 'Email thiếu hoặc sai định dạng.')
     else if (emails.has(email)) issue('Email', `Email trùng với dòng ${emails.get(email)}.`)
     if (!emails.has(email)) emails.set(email, row.rowNumber)
-    if (type !== 'CA_NHAN' && type !== 'DIEM_XEM_CHUNG') issue('LoaiDong', 'Chỉ nhận CA_NHAN hoặc DIEM_XEM_CHUNG.')
+    if (type !== 'CA_NHAN' && type !== 'DIEM_XEM_CHUNG') issue('LoaiDong', 'Ghi CA_NHAN (một học sinh xem trên máy riêng) hoặc DIEM_XEM_CHUNG (cả phòng xem chung một màn hình).')
     if (!Number.isInteger(row.rowNumber) || row.rowNumber < 1 || row.rowNumber > 1048576 || numbers.has(row.rowNumber)) issue(null, 'Số dòng không hợp lệ hoặc bị trùng.')
     numbers.add(row.rowNumber)
     roster.push({ rowNumber: row.rowNumber, rowType: type === 'CA_NHAN' ? 'INDIVIDUAL' : 'SHARED_VIEWING', displayName, email, className: className || null })

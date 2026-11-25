@@ -411,7 +411,7 @@ describe('Staff versioned Route workflow', () => {
     expect(screen.queryByRole('region', { name: 'Vị trí kết thúc' })).not.toBeInTheDocument()
     next()
     const review = within(screen.getByRole('region', { name: 'Xem lại và lưu' }))
-    expect(review.getByText('x 10.20 m · y 21.60 m · hướng 0°')).toBeInTheDocument()
+    expect(review.getByText('x 10.20 m · y 21.60 m')).toBeInTheDocument()
     expect(review.getByText('Quay về điểm bắt đầu')).toBeInTheDocument()
     expect(review.getByLabelText('Lộ trình robot đi')).toHaveTextContent('Bắt đầu → 1. Verified entrance → 2. Verified hall → Kết thúc tại điểm bắt đầu')
     expect(review.getByText('5 phút 30 giây')).toBeInTheDocument()
@@ -580,7 +580,7 @@ describe('Staff versioned Route workflow', () => {
     await screen.findByLabelText('Tên tuyến')
     expect(screen.getByRole('button', { name: /Bước 4/ })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: /Bước 4/ }))
-    expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getByText('x 11.40 m · y 21.60 m · hướng 0°')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getByText('x 11.40 m · y 21.60 m')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm chứng' })).toBeEnabled()
   })
 
