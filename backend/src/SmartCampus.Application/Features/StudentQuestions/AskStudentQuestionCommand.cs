@@ -1,10 +1,12 @@
 using System.Text;
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using SmartCampus.Application.Common.Abstractions.Assistant;
 using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.TourEngagement;
 
 namespace SmartCampus.Application.Features.StudentQuestions;
 
@@ -67,7 +69,7 @@ public sealed class AskStudentQuestionCommandValidator : AbstractValidator<AskSt
 
 public sealed class AskStudentQuestionCommandHandler(IStudentAccessRepository repository, IInvitationCodeService codes,
     InvitationSettings settings, IAiAssistantClient assistant, StudentQuestionGate gate, TimeProvider clock,
-    IStudentTourViewReader tour)
+    IStudentTourViewReader tour, IStudentQuestionEventRecorder questions, ILogger<AskStudentQuestionCommandHandler> logger)
     : IRequestHandler<AskStudentQuestionCommand, StudentAnswer>
 {
     private static UnauthorizedException Invalid() =>
@@ -91,15 +93,33 @@ public sealed class AskStudentQuestionCommandHandler(IStudentAccessRepository re
                 .ToList();
             var result = await assistant.AnswerAsync(new AssistantQuestion(Guid.NewGuid(), text, turns, poi), ct);
             // Access may have been revoked or the Tour ended while the assistant worked: never return a late answer.
-            await CheckAsync(command.TourId, tokenHash, ct);
+            var current = await CheckAsync(command.TourId, tokenHash, ct);
             var answer = new StudentAnswer(command.QuestionId, result.Answer, result.OutOfScope,
                 poi is null ? null : new StudentAnswerPoi(poi.Id, poi.Name), clock.GetUtcNow());
             gate.Remember(access.SessionId, command.QuestionId, text, answer);
+            await CountAsync(command.TourId, current, result.OutOfScope, ct);
             return answer;
         }
         finally
         {
             gate.Exit(access.SessionId);
+        }
+    }
+
+    /// <summary>
+    /// ADR-0071: one counted question for the engagement report, never its text. A repeat of a question id is not counted
+    /// again (it returns above), and a failure to count never costs the Student the answer.
+    /// </summary>
+    private async Task CountAsync(Guid tourId, StudentQuestionAccess access, bool outOfScope, CancellationToken ct)
+    {
+        var phase = StudentQuestionWindow.InWaitingRoom(access.TourState) ? TourEngagementEvents.PhaseWaitingRoom : TourEngagementEvents.PhaseTour;
+        try
+        {
+            await questions.RecordAsync(tourId, phase, access.RowType, outOfScope, ct);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            logger.LogWarning(error, "Could not count a Student question for Tour {TourId}.", tourId);
         }
     }
 

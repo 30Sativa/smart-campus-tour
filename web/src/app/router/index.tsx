@@ -57,6 +57,8 @@ const StartCheckPage = lazy(() => import('../../routes/staff/StartCheckPage'))
 const LiveOperationsPage = lazy(() => import('../../routes/staff/LiveOperationsPage'))
 const RobotPage = lazy(() => import('../../routes/staff/RobotPage'))
 const TourHistoryPage = lazy(() => import('../../routes/staff/TourHistoryPage'))
+const EngagementPage = lazy(() => import('../../routes/staff/EngagementPage'))
+const TourEngagementPage = lazy(() => import('../../routes/staff/TourEngagementPage'))
 const DigitalTwinPage = lazy(() => import('../../routes/staff/DigitalTwinPage'))
 const StaffProfilePage = lazy(() => import('../../routes/staff/StaffProfilePage'))
 
@@ -256,6 +258,8 @@ export const routes = [
       { path: 'robot', element: <RobotPage /> },
       { path: 'digital-twin', element: <DigitalTwinPage /> },
       { path: 'history', element: <TourHistoryPage /> },
+      { path: 'engagement', element: <EngagementPage /> },
+      { path: 'engagement/:tourId', element: <TourEngagementPage /> },
       { path: 'profile', element: <StaffProfilePage /> },
       // Tour preparation, moved from `/admin/*` (SRS v1.9 §3.2.c: Staff owns
       // content, registrations, Routes and scheduling).

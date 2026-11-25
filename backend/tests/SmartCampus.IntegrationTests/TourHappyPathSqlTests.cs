@@ -433,8 +433,8 @@ public sealed class TourHappyPathSqlTests
         await using var db = w.H.Context();
         Assert.Equal(3, await db.RobotCommands.CountAsync());
         Assert.Equal(0, await db.RobotCommands.CountAsync(c => c.IsOpen));
-        Assert.Equal(["TOUR_READY", "TOUR_STARTED", "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL", "VISIT_CLOSED", "LEG_DISPATCH_REQUESTED",
-                "LEG_ACCEPTED", "LEG_TERMINAL", "VISIT_CLOSED", "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL", "TOUR_COMPLETED"],
+        Assert.Equal(["TOUR_READY", "TOUR_STARTED", "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL", "STOP_ARRIVED", "VISIT_CLOSED", "LEG_DISPATCH_REQUESTED",
+                "LEG_ACCEPTED", "LEG_TERMINAL", "STOP_ARRIVED", "VISIT_CLOSED", "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL", "TOUR_COMPLETED"],
             await db.TourEvents.AsNoTracking().Where(e => e.TourId == w.H.TourId).OrderBy(e => e.Id).Select(e => e.EventType).ToArrayAsync());
     }
 

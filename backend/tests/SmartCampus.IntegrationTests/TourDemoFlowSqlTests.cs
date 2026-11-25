@@ -96,8 +96,8 @@ public sealed class TourDemoFlowSqlTests
         Assert.Equal("COMPLETED", (await after.Tours.AsNoTracking().SingleAsync(t => t.Id == w.H.TourId)).State);
         Assert.Null((await after.Robots.AsNoTracking().SingleAsync()).CurrentTourId);
         Assert.Equal((3, 0), (await after.RobotCommands.CountAsync(), await after.RobotCommands.CountAsync(c => c.IsOpen)));
-        Assert.Equal(["TOUR_READY", "TOUR_STARTED", "TOUR_DEPARTED", "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL", "VISIT_CLOSED",
-                "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL", "VISIT_CLOSED", "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL",
+        Assert.Equal(["TOUR_READY", "TOUR_STARTED", "TOUR_DEPARTED", "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL", "STOP_ARRIVED", "VISIT_CLOSED",
+                "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL", "STOP_ARRIVED", "VISIT_CLOSED", "LEG_DISPATCH_REQUESTED", "LEG_ACCEPTED", "LEG_TERMINAL",
                 "TOUR_COMPLETED"],
             await after.TourEvents.AsNoTracking().Where(e => e.TourId == w.H.TourId).OrderBy(e => e.Id).Select(e => e.EventType).ToArrayAsync());
     }

@@ -52,12 +52,13 @@ export default function TourHistoryPage() {
             : <EmptyState variant="empty" title="Chưa có tour nào trong lịch sử." />)
           : <>
             <div className="overflow-x-auto"><table className="w-full text-left" aria-label="Lịch sử Tour">
-              <thead className="border-b border-[#e2e8f0]"><tr>{['Tour', 'Thời gian', 'Tuyến', 'Đoàn đăng ký'].map(label => <th key={label} scope="col" className={thClass}>{label}</th>)}</tr></thead>
+              <thead className="border-b border-[#e2e8f0]"><tr>{['Tour', 'Thời gian', 'Tuyến', 'Đoàn đăng ký', 'Tương tác'].map(label => <th key={label} scope="col" className={thClass}>{label}</th>)}</tr></thead>
               <tbody className="divide-y divide-[#eef1f4]">{tours.data.data.map(tour => <tr key={tour.id} className={rowClass}>
                 <td className={tdClass}><Link to={`/staff/manage/tours/${tour.id}`} className="font-semibold text-[#0f172a] hover:text-[#2d719e] hover:underline">{tour.name}</Link></td>
                 <td className={`${tdClass} whitespace-nowrap`}>{formatDateTime(tour.scheduledStartAt)}</td>
                 <td className={tdClass}>{tour.routeName}</td>
                 <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>
+                <td className={tdClass}><Link to={`/staff/engagement/${tour.id}`} className="text-sm font-semibold text-[#2d719e] hover:underline" aria-label={`Xem tương tác của ${tour.name}`}>Xem</Link></td>
               </tr>)}</tbody>
             </table></div>
             <Pagination page={page} pageCount={Math.max(1, tours.data.pagination.totalPages)} total={tours.data.pagination.totalItems} pageSize={PAGE_SIZE} onPage={setPage} label="Phân trang lịch sử" />

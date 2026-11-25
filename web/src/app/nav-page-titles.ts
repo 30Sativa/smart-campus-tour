@@ -25,6 +25,7 @@ export const NAV_PAGE_PAIRS: NavPagePair[] = [
   { area: 'staff', path: '/staff/manage/pois', file: 'staff/manage/StaffManagePoisPage.tsx', heading: 'h1' },
   { area: 'staff', path: '/staff/manage/routes', file: 'staff/manage/StaffManageRouteCatalogPage.tsx', heading: 'PageHeader' },
   { area: 'staff', path: '/staff/history', file: 'staff/TourHistoryPage.tsx', heading: 'PageHeader' },
+  { area: 'staff', path: '/staff/engagement', file: 'staff/EngagementPage.tsx', heading: 'PageHeader' },
 
   { area: 'admin', path: '/admin/accounts', file: 'admin/AdminAccountsPage.tsx', heading: 'PageHeader', pending: 'WS-H' },
   { area: 'admin', path: '/admin/roles', file: 'admin/RolesPage.tsx', heading: 'PageHeader' },

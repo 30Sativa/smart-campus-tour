@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using SmartCampus.Application.Common.Abstractions.Assistant;
 using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Application.Common.Abstractions.Persistence;
@@ -25,6 +26,7 @@ public sealed class StudentQuestionTests
         public FakeAssistant Assistant { get; } = new();
         public FakeClock Clock { get; } = new();
         public FakeTourReader Tour { get; } = new();
+        public FakeRecorder Recorder { get; } = new();
         public StudentQuestionGate Gate { get; }
         public AskStudentQuestionCommandHandler Handler { get; }
 
@@ -32,7 +34,7 @@ public sealed class StudentQuestionTests
         {
             Gate = new StudentQuestionGate(Clock);
             Handler = new AskStudentQuestionCommandHandler(Repository, new FakeCodes(), new InvitationSettings(enabled, 24),
-                Assistant, Gate, Clock, Tour);
+                Assistant, Gate, Clock, Tour, Recorder, NullLogger<AskStudentQuestionCommandHandler>.Instance);
         }
     }
 
@@ -208,6 +210,51 @@ public sealed class StudentQuestionTests
     }
 
     [Fact]
+    public async Task AnsweredQuestion_IsCountedOnce_WithoutItsText_AndARepeatIsNotCountedAgain()
+    {
+        var h = new Harness();
+        var id = Guid.NewGuid();
+        await h.Handler.Handle(Ask("Robot dùng cảm biến gì?", id), CancellationToken.None);
+        await h.Handler.Handle(Ask("Robot dùng cảm biến gì?", id), CancellationToken.None);
+
+        var counted = Assert.Single(h.Recorder.Calls);
+        Assert.Equal((TourId, "TOUR", "INDIVIDUAL", false), counted);
+    }
+
+    [Fact]
+    public async Task WaitingRoomQuestion_IsCountedInTheWaitingRoomPhase()
+    {
+        var h = new Harness();
+        var waiting = Running with { TourState = "READY", ScheduledStartAt = h.Clock.GetUtcNow().AddMinutes(5) };
+        h.Repository.Results.Enqueue(waiting);
+        h.Repository.Results.Enqueue(waiting);
+        await h.Handler.Handle(Ask(), CancellationToken.None);
+        Assert.Equal("WAITING_ROOM", Assert.Single(h.Recorder.Calls).Phase);
+    }
+
+    [Fact]
+    public async Task QuestionsThatGetNoAnswer_AreNotCounted()
+    {
+        var h = new Harness();
+        h.Assistant.Failure = new ServiceUnavailableException("down", "AI_UNAVAILABLE");
+        await Assert.ThrowsAsync<ServiceUnavailableException>(() => h.Handler.Handle(Ask(), CancellationToken.None));
+        h.Assistant.Failure = null;
+        h.Repository.Results.Enqueue(Running);
+        h.Repository.Results.Enqueue(null);
+        await Assert.ThrowsAsync<UnauthorizedException>(() => h.Handler.Handle(Ask(), CancellationToken.None));
+        Assert.Empty(h.Recorder.Calls);
+    }
+
+    [Fact]
+    public async Task CountingFailure_StillReturnsTheAnswer()
+    {
+        var h = new Harness();
+        h.Recorder.Failure = new InvalidOperationException("sql down");
+        var answer = await h.Handler.Handle(Ask(), CancellationToken.None);
+        Assert.Equal("Robot dùng LiDAR.", answer.Answer);
+    }
+
+    [Fact]
     public void Gate_AllowsOneQuestionInFlightPerSession()
     {
         var gate = new StudentQuestionGate(new FakeClock());
@@ -302,6 +349,19 @@ public sealed class StudentQuestionTests
         }
 
         public Task<StudentTourViewData?> LoadAsync(Guid tourId, CancellationToken ct) => throw new NotSupportedException();
+    }
+
+    private sealed class FakeRecorder : IStudentQuestionEventRecorder
+    {
+        public List<(Guid TourId, string Phase, string RowType, bool OutOfScope)> Calls { get; } = [];
+        public Exception? Failure { get; set; }
+
+        public Task RecordAsync(Guid tourId, string phase, string rowType, bool outOfScope, CancellationToken ct)
+        {
+            if (Failure is not null) return Task.FromException(Failure);
+            Calls.Add((tourId, phase, rowType, outOfScope));
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeAssistant : IAiAssistantClient

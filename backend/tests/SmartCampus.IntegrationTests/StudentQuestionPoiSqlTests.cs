@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using SmartCampus.Application.Common.Abstractions.Assistant;
 using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Application.Features.StudentQuestions;
+using SmartCampus.Application.Features.TourEngagement;
 using SmartCampus.Application.Features.Tours.Commands.NextTourStop;
 using SmartCampus.Domain.Entities;
 using SmartCampus.Infrastructure.Persistence.Repositories;
@@ -41,6 +43,23 @@ public sealed class StudentQuestionPoiSqlTests
 
         await TourHappyPathSqlTests.Result(w, await TourHappyPathSqlTests.Delivered(w), "TERMINAL", "ARRIVED");
         await AssertAt(w, token, stopIds[1]);
+
+        // ADR-0071: each answered question is counted, without its text, at the visit the robot stood at.
+        await using var check = w.H.Context();
+        var arrivals = await check.TourEvents.AsNoTracking().Where(e => e.TourId == w.H.TourId && e.EventType == "STOP_ARRIVED")
+            .OrderBy(e => e.Id).Select(e => e.StopVisitId).ToArrayAsync();
+        Assert.Equal(2, arrivals.Length);
+        var counted = await check.TourEvents.AsNoTracking().Where(e => e.TourId == w.H.TourId && e.EventType == TourEngagementEvents.QuestionAsked)
+            .OrderBy(e => e.Id).Select(e => new { e.StopVisitId, e.DataJson }).ToArrayAsync();
+        Assert.Equal(new[] { null, arrivals[0], null, arrivals[1] }, counted.Select(e => e.StopVisitId));
+        Assert.All(counted, e => Assert.DoesNotContain("Đây là đâu", e.DataJson!, StringComparison.Ordinal));
+
+        var report = TourEngagementCalculator.Build((await new EfTourEngagementReader(check).LoadAsync(w.H.TourId, CancellationToken.None))!,
+            w.Clock.GetUtcNow());
+        Assert.Equal(4, report.Questions.Total);
+        Assert.Equal(new[] { 1, 1 }, report.Stops.Take(2).Select(stop => stop.Questions));
+        Assert.Equal(new[] { "VISITED", "VISITED" }, report.Stops.Take(2).Select(stop => stop.Outcome));
+        Assert.True(report.Audience.Single(a => a.RowType == "INDIVIDUAL").JoinedRows >= 1);
     }
 
     private static async Task AssertAt(World w, string token, Guid revisionStopId)
@@ -80,7 +99,8 @@ public sealed class StudentQuestionPoiSqlTests
         await using var db = w.H.Context();
         var assistant = new RecordingAssistant();
         var handler = new AskStudentQuestionCommandHandler(new EfStudentAccessRepository(db), w.H.Service<IInvitationCodeService>(),
-            w.H.Service<InvitationSettings>(), assistant, new StudentQuestionGate(w.Clock), w.Clock, new EfStudentTourViewReader(db));
+            w.H.Service<InvitationSettings>(), assistant, new StudentQuestionGate(w.Clock), w.Clock, new EfStudentTourViewReader(db),
+            new EfStudentQuestionEventRecorder(db, w.Clock), NullLogger<AskStudentQuestionCommandHandler>.Instance);
         var answer = await handler.Handle(new AskStudentQuestionCommand(w.H.TourId, token, Guid.NewGuid(), "Đây là đâu?", []),
             CancellationToken.None);
         return (answer, Assert.Single(assistant.Questions).Poi);

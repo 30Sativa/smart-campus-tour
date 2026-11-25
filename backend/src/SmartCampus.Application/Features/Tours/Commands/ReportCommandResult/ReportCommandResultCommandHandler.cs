@@ -106,6 +106,14 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
             var stop = stops.Single(item => item.Id == command.RouteRevisionStopId);
             // The robot turns its head to the POI's camera preset by itself (ADR-0045 addendum 14/11/2026).
             tour.ArriveAtStop(stop.Id, now.AddSeconds(stop.DwellSeconds), now);
+            // ADR-0071: the arrival of this visit, so the engagement report can place questions and departures at the POI.
+            repository.AddEvent(new TourEvent
+            {
+                TourId = tour.Id, EventType = TourLifecycleEvents.StopArrived, OccurredAt = now, RobotId = command.RobotId,
+                RouteId = tour.ActiveRouteId, LegId = command.LegId, LegKind = command.LegKind, CommandId = command.Id,
+                StopVisitId = tour.CurrentStopVisitId, TargetStopOrder = stop.StopOrder,
+                DataJson = JsonSerializer.Serialize(new { stopId = stop.Id })
+            });
             // ADR-0065: a voting Tour records the visit and opens its ballot here.
             if (await revisions.FindRevisionAsync(tour.RouteRevisionId.Value, ct) is { ViewerChoosesNextStop: true } revision)
                 await TourVoting.ArriveAsync(repository, votes, tour, revision, stops, stop.Id, now, ct);

@@ -78,6 +78,9 @@ public static class DependencyInjection
         services.AddSingleton<SmartCampus.Application.Common.Abstractions.Tours.ITourAutoAdvanceStore, SmartCampus.Application.Features.Tours.InMemoryTourAutoAdvanceStore>();
         services.AddScoped<ITourHeadControlReader, EfTourHeadControlReader>();
         services.AddScoped<ITourTalkReader, EfTourTalkReader>();
+        // ADR-0071: the Staff engagement report and the counted Student questions it reads.
+        services.AddScoped<ITourEngagementReader, EfTourEngagementReader>();
+        services.AddScoped<IStudentQuestionEventRecorder, EfStudentQuestionEventRecorder>();
         services.AddScoped<IRobotHeadPoiReader, EfRobotHeadPoiReader>();
         // ADR-0052: the Quest camera runs only while a Tour runs or a Staff page holds a lease. In memory, like head control.
         services.AddSingleton(new FleetCameraSettings(configuration.GetValue<int?>("FleetCamera:LeaseSeconds") ?? 120,
