@@ -102,6 +102,9 @@ export function duplicateAreaNames(areas: Array<{ areaKey: string; name: string 
 export const areaLabel = (name: string, areaKey: string, duplicates: Set<string>) =>
   duplicates.has(normalizedAreaName(name)) ? `${name.trim()} · ${areaKey}` : name.trim()
 
+/** "{area} · {key} · v{n}": the map named exactly, as the robot line of the POI and route forms prints it. */
+export const exactMapLabel = (map: { areaName: string; areaKey: string; versionNumber: number }) => `${map.areaName} · ${map.areaKey} · v${map.versionNumber}`
+
 /** A map version in running text: "Tầng 6 · v1", or "Tầng 6 · tang-6 · v1" when another area shares the name. */
 export const mapShortLabel = (map: { areaName: string; areaKey: string; versionNumber: number }, duplicates: Set<string>) =>
   `${areaLabel(map.areaName, map.areaKey, duplicates)} · v${map.versionNumber}`

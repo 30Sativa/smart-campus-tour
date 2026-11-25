@@ -43,6 +43,13 @@ export const returnStripText = {
   back: (target: { kind: 'poi' | 'route'; name: string | null } | null) => !target?.name ? 'Quay lại' : target.kind === 'poi' ? 'Quay lại POI' : 'Quay lại tuyến',
   ready: (target: { kind: 'poi' | 'route'; name: string | null } | null) => !target?.name ? 'Robot đã sẵn sàng · Quay lại'
     : target.kind === 'poi' ? `Robot đã sẵn sàng · Quay lại kiểm chứng POI ${target.name}` : `Robot đã sẵn sàng · Quay lại chạy thử tuyến ${target.name}`,
+  /** Ready, but on another map than the POI's or route's (round 4, W1): the strip must not say "đã sẵn sàng". */
+  otherMap: (target: { kind: 'poi' | 'route'; name: string }, robotCode: string, targetMap: string | null, readyMap: string) => {
+    const where = targetMap ? ` (${targetMap})` : ''
+    return target.kind === 'poi'
+      ? `Đang chuẩn bị ${robotCode} để kiểm chứng POI ${target.name}${where}. ${robotCode} hiện sẵn sàng trên ${readyMap}, chưa phải bản đồ của POI này.`
+      : `Đang chuẩn bị ${robotCode} để chạy thử tuyến ${target.name}${where}. ${robotCode} hiện sẵn sàng trên ${readyMap}, chưa phải bản đồ của tuyến này.`
+  },
 }
 
 export function errorText(error: unknown) {
