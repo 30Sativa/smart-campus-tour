@@ -7,14 +7,17 @@ empty LiDAR scan, and a model of the rest of the chain:
   RPP (Humble isCollisionImminent: footprint outline lethal within min(v*T, carrot 0.8 m))
   controller_server 10 Hz, publishes zero while a collision is reported (failure_tolerance)
   velocity_smoother +-0.5 m/s^2, then a pure actuation delay (--delay, bridge + STM32 + motors)
-  the Astra returns nothing closer than 0.6 m
+  the Astra returns nothing with a depth (along its axis) under 0.6 m
 
 The model reads the published grid, so the temporary copy publishes at the costmap update rate.
 Scenarios: the box is there from the start, or appears suddenly at a front gap; after the stop,
 K BT-style "clear entirely" calls (the controller then sees an empty costmap until the next update)
-to measure the creep. Isolated: ROS_DOMAIN_ID 89, localhost only, nice.
+to measure the creep. --clear except makes them camera mode's "clear except a square around the
+robot" (navigation.launch.py CAMERA_LOCAL_CLEAR_KEEP_M) instead. Isolated: ROS_DOMAIN_ID 89,
+localhost only, nice.
 
   stop_sim.py [--T 1.0 4.0] [--delay 0.15] [--appear none 0.5 0.65 0.8 1.0] [--clears 8]
+              [--clear entire|except] [--keep 2.2]
 """
 import argparse, json, math, os, signal, struct, subprocess, sys, tempfile, time
 
@@ -38,6 +41,8 @@ def main():
     ap.add_argument('--appear', nargs='+', default=['none', '0.5', '0.65', '0.8', '1.0'])
     ap.add_argument('--wall', choices=('yes', 'no'), default='yes')
     ap.add_argument('--clears', type=int, default=8)
+    ap.add_argument('--clear', choices=('entire', 'except'), default='entire')
+    ap.add_argument('--keep', type=float, default=2.2, help='--clear except: side of the kept square, m')
     ap.add_argument('--params', default=PARAMS)
     ap.add_argument('--child', action='store_true', help=argparse.SUPPRESS)
     a = ap.parse_args()
@@ -54,7 +59,7 @@ def run(a):
     from geometry_msgs.msg import TransformStamped
     from lifecycle_msgs.srv import ChangeState
     from nav_msgs.msg import OccupancyGrid
-    from nav2_msgs.srv import ClearEntireCostmap
+    from nav2_msgs.srv import ClearCostmapExceptRegion, ClearEntireCostmap
     from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
     from sensor_msgs.msg import LaserScan, PointCloud2, PointField
     from tf2_ros import StaticTransformBroadcaster, TransformBroadcaster
@@ -94,7 +99,9 @@ def run(a):
         s.angle_min, s.angle_max, s.angle_increment, s.range_min, s.range_max = -math.pi, math.pi, math.radians(1), 0.15, 12.0
         s.ranges = [math.inf] * 360; sp.publish(s)
         o = (S['x'] + CAM[0], 0.0, BZ + CAM[2])
-        pts = [p for p in (box if S['box'] else []) + wall if math.dist(p, o) >= 0.6]
+        # the Astra's 0.6 m is depth along the optical axis (x here), not the 3D distance (until 25/11/2026
+        # this used math.dist, which let the sim keep seeing a low box's top ~0.05 m inside the blind zone)
+        pts = [p for p in (box if S['box'] else []) + wall if p[0] - o[0] >= 0.6]
         c = PointCloud2(); c.header.stamp = s.header.stamp; c.header.frame_id = 'camera_depth_optical_frame'
         c.height, c.width = 1, len(pts); c.fields = [PointField(name=k, offset=4 * i, datatype=7, count=1) for i, k in enumerate('xyz')]
         c.point_step, c.row_step, c.is_dense = 12, 12 * len(pts), True
@@ -128,14 +135,19 @@ def run(a):
         e = time.time() + sec
         while time.time() < e: publish(); rclpy.spin_once(n, timeout_sec=0.005)
     clear_cli = n.create_client(ClearEntireCostmap, '/costmap/clear_entirely_costmap')
-    def clear():
-        f = clear_cli.call_async(ClearEntireCostmap.Request()); rclpy.spin_until_future_complete(n, f, timeout_sec=5)
+    except_cli = n.create_client(ClearCostmapExceptRegion, '/costmap/clear_except_costmap')
+    def clear(mode='entire'):
+        if mode == 'except':
+            req = ClearCostmapExceptRegion.Request(); req.reset_distance = a.keep; f = except_cli.call_async(req)
+        else:
+            f = clear_cli.call_async(ClearEntireCostmap.Request())
+        rclpy.spin_until_future_complete(n, f, timeout_sec=5)
     results = []
     try:
         cli = n.create_client(ChangeState, '/costmap/costmap/change_state'); cli.wait_for_service(timeout_sec=30)
         for tid in (1, 3):
             r = ChangeState.Request(); r.transition.id = tid; f = cli.call_async(r); rclpy.spin_until_future_complete(n, f, timeout_sec=20)
-        clear_cli.wait_for_service(timeout_sec=10)
+        clear_cli.wait_for_service(timeout_sec=10); except_cli.wait_for_service(timeout_sec=10)
         spin(2.0)
         for T in a.T:
             for delay in a.delay:
@@ -163,7 +175,7 @@ def run(a):
                         if gap <= 0.0: hit = True; break
                         if detect and v_act == 0.0 and v_s == 0.0: break
                         spin(dt); t += dt
-                    res = dict(T=T, delay=delay, appear=appear, wall=a.wall, hit=hit,
+                    res = dict(T=T, delay=delay, appear=appear, wall=a.wall, clear=a.clear, hit=hit,
                                detected_at_gap=round(detect[1], 3) if detect else None,
                                stopped_gap=None if hit else round(BOX_X - (S['x'] + 0.4011), 3),
                                camera_box_m=None if hit else round(BOX_X - (S['x'] + CAM[0]), 3))
@@ -172,7 +184,7 @@ def run(a):
                         # BT recovery clears: until the next costmap update the controller sees nothing
                         creep0 = S['x']
                         for _ in range(a.clears):
-                            clear(); t0 = time.time(); v_s2 = 0.0
+                            clear(a.clear); t0 = time.time(); v_s2 = 0.0
                             while time.time() - t0 < 0.4:
                                 go = not imminent(T)
                                 v_s2 = min(v_s2 + 0.5 * 0.02, 0.2) if go else max(v_s2 - 0.5 * 0.02, 0.0)
