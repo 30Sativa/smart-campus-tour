@@ -1,4 +1,5 @@
 using MediatR;
+using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Features.Invitations;
 using SmartCampus.Application.Features.Registrations;
@@ -7,7 +8,8 @@ using SmartCampus.Application.Features.Tours;
 
 namespace SmartCampus.Application.Features.Representative.Commands.UpdateRegistration;
 
-public sealed class UpdateRegistrationCommandHandler(IRegistrationRepository repository, IInvitationRepository invitations, TimeProvider clock)
+public sealed class UpdateRegistrationCommandHandler(IRegistrationRepository repository, IInvitationRepository invitations,
+    InvitationSettings settings, TimeProvider clock)
     : IRequestHandler<UpdateRegistrationCommand, Unit>
 {
     public async Task<Unit> Handle(UpdateRegistrationCommand command, CancellationToken ct)
@@ -19,12 +21,18 @@ public sealed class UpdateRegistrationCommandHandler(IRegistrationRepository rep
         var now = clock.GetUtcNow();
         if (input.Roster.Any(row => row.RowId is null)) RegistrationCutoff.EnsureNewRowsAllowed(tour, now);
         var heldBefore = registration.RosterRows.Count(row => row.IsActive && RosterParticipationStates.HoldsSeat(row.ParticipationState));
-        var removed = RegistrationDraftWriter.Apply(registration, input, await invitations.LoadAsync(registration.Id, ct), now);
+        var loaded = await invitations.LoadAsync(registration.Id, ct);
+        var revocable = InvitationRevokeNotice.Revocable(tour, registration, loaded, now);
+        var removed = RegistrationDraftWriter.Apply(registration, input, loaded, now);
         TourCapacity.EnsureRoom(tour, await repository.CountHeldSeatsAsync(tour.Id, registration.Id, ct), heldBefore,
             registration.RosterRows.Count(row => row.IsActive && RosterParticipationStates.HoldsSeat(row.ParticipationState)));
         foreach (var invitation in removed)
+        {
             invitations.AddAudit(InvitationAudit.Create(tour.Id, command.ActorUserId, "INVITATION_REVOKED_BY_ROSTER_REMOVAL",
                 invitation.Id.ToString("D"), Guid.NewGuid(), now, "OK", entityType: "Invitation"));
+            if (revocable.Contains(invitation.Id))
+                InvitationRevokeNotice.Queue(invitations, settings, invitation, tour.Id, command.ActorUserId, now);
+        }
         repository.AddAudit(RegistrationAudit.Create(registration, command.ActorUserId, RegistrationAudit.UpdatedAuditAction, now));
         return Unit.Value;
     }

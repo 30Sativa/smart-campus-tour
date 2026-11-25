@@ -1,11 +1,13 @@
 using MediatR;
+using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Features.Invitations;
 using SmartCampus.Application.Features.Registrations;
 
 namespace SmartCampus.Application.Features.Representative.Commands.CancelRegistration;
 
-public sealed class CancelRegistrationCommandHandler(IRegistrationRepository repository, IInvitationRepository invitations, TimeProvider clock)
+public sealed class CancelRegistrationCommandHandler(IRegistrationRepository repository, IInvitationRepository invitations,
+    InvitationSettings settings, TimeProvider clock)
     : IRequestHandler<CancelRegistrationCommand, Unit>
 {
     public async Task<Unit> Handle(CancelRegistrationCommand command, CancellationToken ct)
@@ -14,6 +16,7 @@ public sealed class CancelRegistrationCommandHandler(IRegistrationRepository rep
             command.Request.ExpectedRowVersion, command.Request.ExpectedTourRowVersion, RegistrationOperation.Cancel, clock, ct);
         var now = clock.GetUtcNow();
         var activeInvitations = await invitations.LoadAsync(registration.Id, ct);
+        var revocable = InvitationRevokeNotice.Revocable(tour, registration, activeInvitations, now);
         foreach (var row in registration.RosterRows.Where(row => row.IsActive))
         {
             row.IsActive = false;
@@ -25,6 +28,8 @@ public sealed class CancelRegistrationCommandHandler(IRegistrationRepository rep
             invitation.RevokedAt = now;
             invitations.AddAudit(InvitationAudit.Create(tour.Id, command.ActorUserId, "INVITATION_REVOKED_BY_REGISTRATION_CANCEL",
                 invitation.Id.ToString("D"), Guid.NewGuid(), now, "OK", entityType: "Invitation"));
+            if (revocable.Contains(invitation.Id))
+                InvitationRevokeNotice.Queue(invitations, settings, invitation, tour.Id, command.ActorUserId, now);
         }
         registration.State = RegistrationStates.Cancelled;
         registration.CancelledAt = now;

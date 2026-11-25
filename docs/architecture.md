@@ -1876,7 +1876,20 @@ enqueue/rotate twice. Another operation with that ID conflicts.
 
 Tour-first locks serialize issuance/support/admission. Resend keeps code/session;
 reissue keeps invitation ID/expiry, replaces code and closes open sessions;
-revoke invalidates code and sessions. Send/reissue require active APPROVED rows,
+revoke invalidates code and sessions. Revoke notice (since 2026-11-25): when a
+commit revokes a code that was usable just before (direct revoke, roster removal by
+replace/resubmit, or Representative registration cancel), the same commit appends
+`INVITATION_REVOKE_NOTICE_REQUESTED` (EntityId = invitation, CorrelationId = attempt,
+data `{accessVersion}`) when invitation email is enabled. The email worker claims it
+under the Tour lock (`INVITATION_REVOKE_NOTICE_STARTED`), sends one Resend email
+(Idempotency-Key `campus-tour/invitation-revoked/{attemptId}`) to that row's own
+address only, and records `INVITATION_REVOKE_NOTICE_RESULT` with ACCEPTED, FAILED,
+UNKNOWN (`DELIVERY_UNCERTAIN`/`INTERRUPTED`, never resent) or SKIPPED
+(`ACCESS_RESTORED`: reissued, or AccessVersion changed, before sending). The email
+names the row and Tour; it carries no code, link, ID or other row's data. An already
+revoked code, a replay, Tour-wide cancel (it has its own notice), reissue (it sends
+the new invitation) and email change send no revoke notice. Audit data never holds
+an address. Send/reissue require active APPROVED rows,
 unexpired access and SCHEDULED/READY/RUNNING; revocation also supports valid
 post-Start End Early fallback. A one-minute per-invitation send cooldown applies.
 Expiry defaults to scheduled start +24 hours, configurable for future issuance.

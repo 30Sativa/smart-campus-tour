@@ -82,7 +82,7 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion, va
     </>}
     <RepConfirmationDialog open={choice !== null} title={dialogTitle(choice?.operation, target)}
       confirmLabel={choice?.operation === 'resend' ? 'Gửi lại' : choice?.operation === 'issue' ? 'Cấp và gửi' : 'Xác nhận thu hồi'} busy={mutation.isPending} onConfirm={submit} onClose={() => { if (!mutation.isPending) setChoice(null) }}>
-      <p>{choice?.operation === 'issue' ? 'Các dòng đã được chấp nhận và đủ điều kiện sẽ nhận lời mời riêng gồm lịch, link Tour và mã truy cập.' : choice?.operation === 'resend' ? 'Gửi cùng mã hiện hành tới email đã duyệt; phiên đang xem được giữ nguyên.' : choice?.operation === 'reissue' ? 'Mã và mọi phiên cũ sẽ bị thu hồi ngay. Mã mới giữ nguyên hạn; gửi email lỗi không khôi phục mã cũ.' : 'Mã và mọi phiên đang dùng lời mời này sẽ ngừng hiệu lực.'}</p>
+      <p>{choice?.operation === 'issue' ? 'Các dòng đã được chấp nhận và đủ điều kiện sẽ nhận lời mời riêng gồm lịch, link Tour và mã truy cập.' : choice?.operation === 'resend' ? 'Gửi cùng mã hiện hành tới email đã duyệt; phiên đang xem được giữ nguyên.' : choice?.operation === 'reissue' ? 'Mã và mọi phiên cũ sẽ bị thu hồi ngay. Mã mới giữ nguyên hạn; gửi email lỗi không khôi phục mã cũ.' : 'Mã và mọi phiên đang dùng lời mời này sẽ ngừng hiệu lực. Người nhận sẽ được báo qua email, không kèm mã.'}</p>
       {mutation.isError && <p className="rep-error-message" role="alert">{message(mutation.error)}</p>}
     </RepConfirmationDialog>
   </section>
@@ -116,7 +116,7 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion, va
       {query.data.items.length > 0 && <p className="mt-3 text-xs text-slate-500">Gửi lại giữ nguyên mã và phiên đang xem. Cấp mã mới ngắt phiên cũ, giữ nguyên hạn. Dịch vụ chấp nhận gửi chưa xác nhận người nhận đã nhận thư.</p>}
     </>}
     <ConfirmationDialog open={choice !== null} title={dialogTitle(choice?.operation, target)}
-      description={choice?.operation === 'issue' ? 'Mỗi dòng đã duyệt sẽ nhận một email riêng gồm lịch, link Tour và mã truy cập.' : choice?.operation === 'resend' ? 'Gửi cùng mã hiện hành tới email đã duyệt; phiên đang xem được giữ nguyên.' : choice?.operation === 'reissue' ? 'Mã và mọi phiên cũ sẽ bị thu hồi ngay. Mã mới giữ nguyên hạn; gửi email lỗi không khôi phục mã cũ.' : 'Mã và mọi phiên đang dùng lời mời này sẽ ngừng hiệu lực.'}
+      description={choice?.operation === 'issue' ? 'Mỗi dòng đã duyệt sẽ nhận một email riêng gồm lịch, link Tour và mã truy cập.' : choice?.operation === 'resend' ? 'Gửi cùng mã hiện hành tới email đã duyệt; phiên đang xem được giữ nguyên.' : choice?.operation === 'reissue' ? 'Mã và mọi phiên cũ sẽ bị thu hồi ngay. Mã mới giữ nguyên hạn; gửi email lỗi không khôi phục mã cũ.' : 'Mã và mọi phiên đang dùng lời mời này sẽ ngừng hiệu lực. Người nhận sẽ được báo qua email, không kèm mã.'}
       confirmLabel={choice?.operation === 'resend' ? 'Gửi lại' : choice?.operation === 'issue' ? 'Cấp và gửi' : 'Xác nhận thu hồi'}
       withReason={false}
       tone={choice?.operation === 'revoke' || choice?.operation === 'reissue' ? 'danger' : 'default'} busy={mutation.isPending}

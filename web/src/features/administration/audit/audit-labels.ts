@@ -61,6 +61,8 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
     TOUR_CANCEL_NOTICE_SENT: 'Đã gửi email hủy Tour', TOUR_CANCEL_NOTICE_FAILED: 'Gửi email hủy Tour thất bại',
     ROSTER_EXPIRY_NOTICE_REQUESTED: 'Xếp hàng email hết hạn', ROSTER_EXPIRY_NOTICE_STARTED: 'Bắt đầu gửi email hết hạn',
     ROSTER_EXPIRY_NOTICE_SENT: 'Đã gửi email hết hạn', ROSTER_EXPIRY_NOTICE_FAILED: 'Gửi email hết hạn thất bại',
+    INVITATION_REVOKE_NOTICE_REQUESTED: 'Xếp hàng email thu hồi mã', INVITATION_REVOKE_NOTICE_STARTED: 'Bắt đầu gửi email thu hồi mã',
+    INVITATION_REVOKE_NOTICE_RESULT: 'Kết quả gửi email thu hồi mã',
   } },
   { label: 'Tuyến', actions: {
     ROUTE_CREATED: 'Tạo tuyến', ROUTE_UPDATED: 'Sửa tuyến', ROUTE_DELETED: 'Xóa tuyến',

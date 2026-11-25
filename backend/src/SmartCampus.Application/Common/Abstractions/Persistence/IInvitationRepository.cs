@@ -23,6 +23,10 @@ public interface IInvitationRepository
     Task<bool> HasTourCancelNoticeStartedAsync(Guid attemptId, CancellationToken ct);
     Task<bool> HasTourCancelNoticeResultAsync(Guid attemptId, CancellationToken ct);
     Task<IReadOnlyList<EmailWorkItem>> PendingTourCancelNoticesAsync(DateTimeOffset staleBefore, CancellationToken ct);
+    Task<AuditLog?> GetRevokeNoticeAsync(Guid attemptId, CancellationToken ct);
+    Task<bool> HasRevokeNoticeStartedAsync(Guid attemptId, CancellationToken ct);
+    Task<bool> HasRevokeNoticeResultAsync(Guid attemptId, CancellationToken ct);
+    Task<IReadOnlyList<EmailWorkItem>> PendingRevokeNoticesAsync(DateTimeOffset staleBefore, CancellationToken ct);
     Task<AuditLog?> GetRosterExpiryNoticeAsync(Guid attemptId, CancellationToken ct);
     Task<bool> HasRosterExpiryNoticeStartedAsync(Guid attemptId, CancellationToken ct);
     Task<bool> HasRosterExpiryNoticeResultAsync(Guid attemptId, CancellationToken ct);

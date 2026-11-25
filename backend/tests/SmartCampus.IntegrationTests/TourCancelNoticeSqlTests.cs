@@ -148,6 +148,7 @@ public sealed class TourCancelNoticeSqlTests
         public void Throw(string recipient) => throwing.Add(recipient);
         public Task<EmailSendResult> SendAsync(InvitationEmail email, CancellationToken ct) => throw new InvalidOperationException("Not an invitation.");
         public Task<EmailSendResult> SendRosterExpiredAsync(RosterExpiredEmail email, CancellationToken ct) => throw new NotSupportedException();
+        public Task<EmailSendResult> SendInvitationRevokedAsync(InvitationRevokedEmail email, CancellationToken ct) => throw new NotSupportedException();
         public Task<EmailSendResult> SendTourCancelledAsync(TourCancelEmail email, CancellationToken ct)
         {
             Attempts++;

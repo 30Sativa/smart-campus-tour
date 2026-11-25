@@ -59,6 +59,19 @@ public sealed class EfInvitationRepository(ApplicationDbContext context) : IInvi
                 context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == TourCancelNoticeAudit.Started && start.OccurredAt < staleBefore)))
             .OrderBy(a => a.Id).Take(20).Select(a => new EmailWorkItem(a.CorrelationId!.Value,
                 context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == TourCancelNoticeAudit.Started))).ToArrayAsync(ct);
+    public Task<AuditLog?> GetRevokeNoticeAsync(Guid attemptId, CancellationToken ct) =>
+        context.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.CorrelationId == attemptId && a.Action == InvitationRevokeNotice.Requested, ct);
+    public Task<bool> HasRevokeNoticeStartedAsync(Guid attemptId, CancellationToken ct) =>
+        context.AuditLogs.AnyAsync(a => a.CorrelationId == attemptId && a.Action == InvitationRevokeNotice.Started, ct);
+    public Task<bool> HasRevokeNoticeResultAsync(Guid attemptId, CancellationToken ct) =>
+        context.AuditLogs.AnyAsync(a => a.CorrelationId == attemptId && a.Action == InvitationRevokeNotice.Result, ct);
+    public async Task<IReadOnlyList<EmailWorkItem>> PendingRevokeNoticesAsync(DateTimeOffset staleBefore, CancellationToken ct) =>
+        await context.AuditLogs.AsNoTracking().Where(a => a.Action == InvitationRevokeNotice.Requested &&
+            !context.AuditLogs.Any(result => result.CorrelationId == a.CorrelationId && result.Action == InvitationRevokeNotice.Result) &&
+            (!context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == InvitationRevokeNotice.Started) ||
+                context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == InvitationRevokeNotice.Started && start.OccurredAt < staleBefore)))
+            .OrderBy(a => a.Id).Take(20).Select(a => new EmailWorkItem(a.CorrelationId!.Value,
+                context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == InvitationRevokeNotice.Started))).ToArrayAsync(ct);
     public Task<AuditLog?> GetRosterExpiryNoticeAsync(Guid attemptId, CancellationToken ct) =>
         context.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.CorrelationId == attemptId && a.Action == RosterExpiryNoticeAudit.Requested, ct);
     public Task<bool> HasRosterExpiryNoticeStartedAsync(Guid attemptId, CancellationToken ct) =>
