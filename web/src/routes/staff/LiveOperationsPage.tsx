@@ -12,6 +12,7 @@ import { isTourStale, useDayTours, useOperationTour, useRunningTours, useUpcomin
 import { HeadControlPanel } from '../../features/staff/operations/live/HeadControlPanel'
 import { LiveCamera } from '../../features/staff/operations/live/LiveCamera'
 import { LiveMiniMap } from '../../features/staff/operations/live/LiveMiniMap'
+import { TourTalkPanel } from '../../features/staff/operations/live/TourTalkPanel'
 import { VoteHeadTabs } from '../../features/staff/operations/live/VoteHeadTabs'
 import { CommandCard, ExecutionPanel, RobotStatusCard, RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { actionGate, tourSituation, type ConsoleAction, type Situation } from '../../features/staff/operations/situation'
@@ -27,7 +28,7 @@ import { useAuthStore } from '../../stores/auth-store'
  * the one suggested step; the side column the Viewers' vote and the camera head
  * (one card with a switch when the Tour has both),
  * the map, the robot and End Early. Below 1024px the page reads in DOM order:
- * camera, situation, vote, head, End Early, map, robot, route. Without an id it opens the running Tour,
+ * camera, situation, vote, head, talk, End Early, map, robot, route. Without an id it opens the running Tour,
  * the one needing help first.
  */
 export default function LiveOperationsPage() {
@@ -123,6 +124,11 @@ function TourConsole({ tourId }: { tourId: string }) {
             </section>
             return null
           })()}
+          {/* ADR-0070: the Operator talks to the Viewers (voice or text) and reads their replies. */}
+          <section className={`${panelClass} lg:order-1`} aria-label="Trò chuyện với người xem">
+            <PanelHead title="Trò chuyện với người xem" description="Nói hoặc nhắn cho cả đoàn; người xem trả lời bằng chữ." />
+            <TourTalkPanel tourId={summary.id} operatorName={operator?.fullName} />
+          </section>
           {running && isOperator && <section className={`${panelClass} border-[#f5c8c2] lg:order-4`} aria-label="Kết thúc sớm">
             <PanelHead title="Kết thúc sớm" description="Khi Tour không thể hoặc không nên đi tiếp." />
             <div className="p-4"><EndEarlyAction detail={detail} /></div>

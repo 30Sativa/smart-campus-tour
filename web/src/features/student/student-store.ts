@@ -14,7 +14,7 @@ function getInitialSession(): StudentSession | null {
 }
 
 /** Tab of the live-tour panel (desktop and phone share it). */
-export type StudentLiveTab = 'stream' | 'map' | 'ai' | 'route'
+export type StudentLiveTab = 'stream' | 'map' | 'ai' | 'talk' | 'route'
 
 interface StudentStoreState {
   session: StudentSession | null

@@ -23,9 +23,11 @@ interface StudentWaitingRoomProps {
   children?: ReactNode
   /** Full width under the cards: the AI chat of the invited page, open from 15 minutes before the start. */
   assistant?: ReactNode
+  /** ADR-0070: talk with the guide, shown above the assistant when the invited page has it. */
+  talk?: ReactNode
 }
 
-export function StudentWaitingRoom({ session, snapshot, heading, intro, meta, showMicCheck = true, children, assistant }: StudentWaitingRoomProps) {
+export function StudentWaitingRoom({ session, snapshot, heading, intro, meta, showMicCheck = true, children, assistant, talk }: StudentWaitingRoomProps) {
   const [isPlayingTestAudio, setIsPlayingTestAudio] = useState(false)
   const [audioTested, setAudioTested] = useState(false)
   const [micStatus, setMicStatus] = useState<'idle' | 'testing' | 'granted' | 'denied'>('idle')
@@ -143,6 +145,8 @@ export function StudentWaitingRoom({ session, snapshot, heading, intro, meta, sh
           </ol>}
         </div>
       </div>
+
+      {talk}
 
       {assistant}
 

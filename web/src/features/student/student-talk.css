@@ -1,0 +1,11 @@
+/* ADR-0070: talk with the guide. Reuses the Q&A chat (.st-ai); only the voice clip button and the empty line are new. */
+.st .st-talk__empty { color: var(--st-secondary); font-size: var(--st-font-sm); line-height: 1.7; }
+.st .st-talk__audio { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 14px; margin-bottom: 8px; border-radius: var(--st-radius); background: var(--st-primary); color: var(--st-primary-ink); font-size: var(--st-font-xs); font-weight: 600; white-space: nowrap; transition: background-color var(--st-duration-short) var(--st-ease); }
+.st .st-talk__audio:hover { background: var(--st-primary-hover); }
+.st .st-talk__audio[data-state='blocked'] { background: var(--st-warning-bg); color: var(--st-warning); }
+.st span.st-talk__audio[data-state='gone'] { min-height: 0; padding: 0; background: none; color: var(--st-muted); font-weight: 400; }
+.st .st-e-tabs button .st-talk__dot { position: absolute; top: 8px; right: calc(50% - 18px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--st-danger); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; }
+.st .st-e-tabs button { position: relative; }
+.st .st-x-wait .st-talk { margin-top: var(--st-gap); padding: 24px; border: 1px solid var(--st-line); border-radius: var(--st-card-radius); background: var(--st-paper); box-shadow: var(--st-shadow); }
+.st .st-x-wait .st-talk .st-ai__msgs { max-height: 320px; }
+@media (max-width: 959px) { .st .st-e-body--talk { height: 580px; flex: none; } }

@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { Link, MemoryRouter, Route, Routes } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SESSION_CHECK_WATCHDOG_MS, StudentInvitationPage } from './StudentInvitationPage'
 import { ENTER_TOUR_LABEL } from './invitation-labels'
 import { QueryProvider } from '../../../app/providers/query-provider'
 import StudentTourPage from '../../../routes/student/StudentTourPage'
 import { useAuthStore } from '../../../stores/auth-store'
+import { useStudentStore } from '../student-store'
 
 // These invitation cases exercise a Tour without a configured livestream.
 vi.mock('../../quest-stream/quest-stream-config', async importOriginal => ({
@@ -23,6 +24,8 @@ const view = { stops: [
 ], progress: null }
 const info = { tourId, tourName: 'Tour được mời', tourState: 'SCHEDULED', scheduledStartAt: '2026-10-20T02:00:00Z',
   invitationExpiresAt: '2026-10-21T02:00:00Z', rowType: 'INDIVIDUAL', hasFallbackVideo: false }
+/** ADR-0070: an empty, open conversation with the guide. */
+const talkFeed = { epoch: 'e1', lastSeq: 0, open: true, canSend: true, messages: [] }
 let client: QueryClient
 function response(data: unknown = info, status = 200) {
   return new Response(JSON.stringify({ success: status === 200, data }), { status })
@@ -59,7 +62,7 @@ it('recovers a cookie session without an access code, account JWT or account ref
   expect(calls[0][0]).toMatch(/\/session$/)
   expect(calls.filter(([url]) => url.endsWith('/session'))).toHaveLength(1)
   for (const [url, options] of calls) {
-    expect(url).toMatch(/\/(session|view)$/)
+    expect(url).toMatch(/\/(session|view|talk)$/)
     expect(options.credentials).toBe('include')
     expect(options.body).toBeUndefined()
     expect(new Headers(options.headers).get('Authorization')).toBeNull()
@@ -150,6 +153,7 @@ it('does not let a late anonymous heartbeat discard a successful join', async ()
   let sessions = 0
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url.endsWith('/join')) return response()
+    if (url.endsWith('/talk')) return response(talkFeed)
     if (url.endsWith('/view')) return response(view)
     return ++sessions === 1 ? response(null, 401) : heartbeat.promise
   }))
@@ -170,6 +174,7 @@ it('cancels a pending heartbeat before leave and keeps the room cache empty', as
   let sessions = 0
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url.endsWith('/leave')) return response(null)
+    if (url.endsWith('/talk')) return response(talkFeed)
     if (url.endsWith('/view')) return response(view)
     return ++sessions === 1 ? response() : heartbeat.promise
   }))
@@ -216,6 +221,37 @@ it('keeps the waiting room usable when the route view fails', async () => {
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
+it('talks with the guide in its own tab: an unread mark, the message, and a private text reply (ADR-0070)', async () => {
+  useStudentStore.getState().setActiveTab('stream')
+  onTestFinished(() => useStudentStore.getState().setActiveTab('stream'))
+  const running = { ...info, tourState: 'RUNNING' }
+  const guide = { ...talkFeed, lastSeq: 1, messages: [{ id: 'm1', seq: 1, from: 'STAFF', text: 'Các bạn muốn đi điểm nào tiếp theo?',
+    hasAudio: false, audioAvailable: false, audioDurationMs: null, staffName: 'Lan', viewerName: null, viewerClass: null,
+    viewerRowType: null, mine: false, sentAt: '2026-10-20T02:10:00Z' }] }
+  const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/talk')) return response(init?.method === 'POST' ? guide.messages[0] : guide)
+    return url.endsWith('/view') ? response(view) : response(running)
+  })
+  vi.stubGlobal('fetch', fetch)
+  mount()
+  const tab = await screen.findByRole('tab', { name: /Hướng dẫn viên/ })
+  await waitFor(() => expect(tab).toHaveTextContent('1 tin mới'))
+  fireEvent.click(tab)
+  expect(tab).not.toHaveTextContent('tin mới')
+  expect(screen.getByText('Các bạn muốn đi điểm nào tiếp theo?')).toBeVisible()
+  expect(screen.getByText('Hướng dẫn viên Lan')).toBeVisible()
+
+  fireEvent.change(screen.getByLabelText('Trả lời hướng dẫn viên'), { target: { value: 'Thư viện ạ' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi trả lời' }))
+  const isReply = ([url, options]: [string, RequestInit?]) => url.endsWith('/talk') && options?.method === 'POST'
+  await waitFor(() => expect((fetch.mock.calls as unknown as [string, RequestInit][]).some(isReply)).toBe(true))
+  const [url, init] = (fetch.mock.calls as unknown as [string, RequestInit][]).find(isReply)!
+  expect(url).toBe(`/api/student/tours/${tourId}/talk`)
+  expect(JSON.parse(String(init.body))).toEqual({ text: 'Thư viện ạ' })
+  expect(init.credentials).toBe('include')
+  expect(new Headers(init.headers).get('Authorization')).toBeNull()
+})
+
 it('shows the live Tour with the current stop, its narration and no map tab', async () => {
   const running = { ...info, tourState: 'RUNNING' }
   const live = { ...view, progress: { step: 'OBSERVING', currentPoiId: 'p1', lastArrivedPoiId: 'p1', needsAssistance: false, isHeld: false } }
@@ -225,7 +261,8 @@ it('shows the live Tour with the current stop, its narration and no map tab', as
   expect(screen.getByRole('heading', { name: 'Thư viện trung tâm', level: 2 })).toBeVisible()
   expect(screen.getByText('Thuyết minh điểm dừng')).toBeVisible()
   expect(screen.queryByRole('tab', { name: /Bản đồ/ })).not.toBeInTheDocument()
-  expect(screen.getAllByRole('tab')).toHaveLength(3)
+  expect(screen.getAllByRole('tab')).toHaveLength(4)
+  expect(screen.getByRole('tab', { name: /Hướng dẫn viên/ })).toBeInTheDocument()
   expect(screen.getByText(/Livestream chưa được kết nối/)).toBeVisible()
   expect(screen.getByText('Đang gắn ngữ cảnh: Điểm Thư viện trung tâm và thông tin chung')).toBeInTheDocument()
 })
@@ -314,6 +351,7 @@ it('re-checks the session when an account sign-out clears the query cache mid-ch
   const first = deferredResponse()
   let sessions = 0
   const fetch = vi.fn(async (url: string) => {
+    if (url.endsWith('/talk')) return response(talkFeed)
     if (url.endsWith('/view')) return response(view)
     return ++sessions === 1 ? first.promise : response()
   })
@@ -333,6 +371,7 @@ it('offers the code form and a retry after 8 s without a session answer', async 
     const hanging = deferredResponse()
     let sessions = 0
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.endsWith('/talk')) return response(talkFeed)
       if (url.endsWith('/view')) return response(view)
       return ++sessions === 1 ? hanging.promise : response()
     }))
@@ -358,6 +397,7 @@ it.each([
 ])('shows the code form with "Chưa kiểm tra được phiên" when the check fails (%s)', async (_name, fail) => {
   let sessions = 0
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    if (url.endsWith('/talk')) return response(talkFeed)
     if (url.endsWith('/view')) return response(view)
     return ++sessions === 1 ? fail() : response()
   }))

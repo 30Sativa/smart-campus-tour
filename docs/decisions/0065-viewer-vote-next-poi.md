@@ -57,7 +57,7 @@ runtime. The group replaces it with a vote by the invited Viewers at each POI, d
    is released as today (ADR-0043 D13).
 
 Out of scope: the Representative branch flow, a separate "hold" button (turning auto-advance off already holds),
-a Staff-to-Viewer channel, letting Viewers skip a POI, pick a POI outside the route, or end the Tour.
+a Staff-to-Viewer channel (since revised by ADR-0070, Tour talk), letting Viewers skip a POI, pick a POI outside the route, or end the Tour.
 
 ## Route rules for every new save
 

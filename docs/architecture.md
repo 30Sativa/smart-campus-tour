@@ -2734,6 +2734,25 @@ the data-use condition of the provider tier.
 
 ---
 
+### 7.2 Tour talk between the Operator and the Viewers (implemented; device verification pending)
+
+ADR-0070. The Tour's Operator speaks to every Viewer as text (≤ 500 characters) or a recorded voice clip (≤ 30 s,
+≤ 1 MB); a Viewer answers in text that only Staff read. Open while the Tour is `RUNNING` and in the waiting room from
+15 minutes before the scheduled start (409 `TALK_OPENS_LATER` / `TALK_CLOSED` otherwise); reading stays possible.
+Kept in memory on the single API instance (newest 300 messages and 40 clips per Tour, forgotten 6 hours after the last
+message); a restart starts a new `epoch`. Browsers poll every 2 s.
+
+| Endpoint | Caller | Notes |
+|---|---|---|
+| `GET /api/staff/manage/tours/{id}/talk?epoch=&after=` | any Staff (JWT) | `{epoch, lastSeq, open, canSend, messages}`; `canSend` only for the Operator |
+| `POST /api/staff/manage/tours/{id}/talk` | the Operator | multipart `text` and/or `audio` + `durationMs`; 403 for another Staff |
+| `GET /api/staff/manage/tours/{id}/talk/{messageId}/audio` | any Staff | the clip with its content type; 404 once dropped |
+| `GET /api/student/tours/{tourId}/talk?epoch=&after=` | Student session cookie | the Operator's messages and this row's own replies (`mine`), no other row's identity |
+| `POST /api/student/tours/{tourId}/talk` | Student session cookie | `{text}`; 6 per minute per roster row (429 `RATE_LIMITED`) |
+| `GET /api/student/tours/{tourId}/talk/{messageId}/audio` | Student session cookie | an Operator clip only |
+
+Student calls use the same exact-origin check as the other Student session calls (§3.2.3).
+
 ## 8. Deployment
 
 | Unit | Built by | Deployed how | Target |

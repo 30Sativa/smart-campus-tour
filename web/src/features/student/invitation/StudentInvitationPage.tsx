@@ -9,6 +9,9 @@ import { StudentLiveView } from '../components/StudentLiveView'
 import { StudentEndScreen } from '../components/StudentEndScreen'
 import { LiveStudentAiAssistant } from '../components/LiveStudentAiAssistant'
 import { WaitingRoomAssistant } from '../components/WaitingRoomAssistant'
+import { StudentTalkPanel } from '../components/StudentTalkPanel'
+import { useStudentTalk } from '../talk/student-talk'
+import { useStudentStore } from '../student-store'
 import { useLiveStudentAiChat } from '../ai/use-live-student-ai-chat'
 import { StudentBallotBox } from '../components/StudentBallotBox'
 import { readBallot } from '../../tour-vote/vote'
@@ -171,6 +174,10 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
       .map(poi => ({ stopId: poi.stopId ?? poi.id, name: poi.title, reason: poi.lockReason ?? '' }))
   // ADR-0055: the relay URL and a short token, renewed while the Tour runs; refused once access ends.
   const quest = useStudentStreamAccess(tourId, snapshot?.tourState === 'Running' && !leave.isPending)
+  // ADR-0070: talk with the guide, from the waiting room until the Tour ends; the live page shows it in its own tab.
+  const liveTab = useStudentStore(store => store.activeTab)
+  const talking = !!info && !finished && !leave.isPending && (snapshot?.tourState === 'Running' || snapshot?.tourState === 'Ready' || snapshot?.tourState === 'Scheduled')
+  const talk = useStudentTalk(tourId, talking, snapshot?.tourState !== 'Running' || liveTab === 'talk')
   // ADR-0063: the fallback video's token, held while the Tour runs so the player switches as soon as the live picture is lost.
   const fallback = useStudentFallbackAccess(tourId, snapshot?.tourState === 'Running' && !!info?.hasFallbackVideo && !leave.isPending)
   const status = <>
@@ -238,6 +245,8 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
           emptyMessage: 'Livestream chưa được kết nối cho buổi này. Bạn vẫn có thể theo dõi lộ trình và hỏi Trợ lý AI.',
         }}
         ai={<LiveStudentAiAssistant tourId={tourId} shared={shared} poiName={snapshot.currentPoi?.title} chat={aiChat} />}
+        talk={<StudentTalkPanel tourId={tourId} talk={talk} shared={shared} />}
+        talkUnread={talk.unread}
       />
       <div className="st-ctn st-invitation-status">{status}</div>
     </>
@@ -258,6 +267,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         intro={`${sessionLabel}. Khi nhân viên vận hành bắt đầu buổi tham quan, trang này sẽ tự chuyển sang buổi tham quan trực tiếp. Mã còn hạn tới ${formatDateTime(info.invitationExpiresAt)}.`}
         meta={`${info.tourName}, Giờ dự kiến ${formatDateTime(info.scheduledStartAt)}`}
         showMicCheck={false}
+        talk={<StudentTalkPanel tourId={tourId} talk={talk} shared={shared} waiting />}
         assistant={<WaitingRoomAssistant tourId={tourId} scheduledStartAt={info.scheduledStartAt} shared={shared} chat={aiChat} />}
       />
       <div className="st-ctn st-invitation-status">{status}</div>
