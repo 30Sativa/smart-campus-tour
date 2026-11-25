@@ -21,7 +21,7 @@ CANCELLED_BEFORE_START = 'CANCELLED_BEFORE_START'
 
 
 class Nav2Navigator:
-    def __init__(self, node, drain_period_sec: float = 0.05, on_goal_id=None, prepare=None):
+    def __init__(self, node, on_goal_id=None, prepare=None):
         self._node = node
         self._on_goal_id = on_goal_id or (lambda goal_id: None)
         # Runs before each goal: `prepare(done)` calls `done(None)` to send it or `done(reason)` to refuse it.
@@ -30,13 +30,18 @@ class Nav2Navigator:
         self._work: queue.SimpleQueue = queue.SimpleQueue()
         self._handle = None
         self._cancel_pending = False
-        self._timer = node.create_timer(drain_period_sec, self._drain)
+        # Wakes the executor only when work is queued: a 20 Hz drain timer cost one wait-set rebuild per tick.
+        self._wake = node.create_guard_condition(self._drain)
 
     def send_goal(self, x, y, yaw, frame_id, on_response, on_result) -> None:
-        self._work.put(lambda: self._send(x, y, yaw, frame_id, on_response, on_result))
+        self._put(lambda: self._send(x, y, yaw, frame_id, on_response, on_result))
 
     def cancel(self) -> None:
-        self._work.put(self._cancel)
+        self._put(self._cancel)
+
+    def _put(self, work) -> None:
+        self._work.put(work)
+        self._wake.trigger()
 
     def server_ready(self) -> bool:
         return self._client.server_is_ready()
