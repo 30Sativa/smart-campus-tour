@@ -402,11 +402,11 @@ static void test_homing_against_hard_stop(void)
 	 * PAN: goc that (duong = trai). Seek 190 do sang phai chi toi duoc canh
 	 * vat can (174 do phai) khi dau dang trong [174 phai .. 16 trai]:
 	 * -17300 = sat canh homing; +1200 = gan bien trai cua khoang do.
-	 * TILT: goc that (duong = ngua len), vat can cui 20 do, seek 36 do: chi
-	 * toi vat can khi dau ngua khong qua 16 do (dung 16 do chi vua cham).
-	 * -1900 = sat vat can; +1500 = xa nhat ma van ep vao vat can 1 do. */
+	 * TILT: goc that (duong = ngua len), vat can cui 20 do, seek 27 do: chi
+	 * toi vat can khi dau ngua khong qua 7 do (dung 7 do chi vua cham).
+	 * -1900 = sat vat can; +600 = xa nhat ma van ep vao vat can 1 do. */
 	static const int32_t starts[][2] = {
-		{ 0, 0 }, { 1200, -1500 }, { -9000, 1500 }, { -17300, -1900 }, { 600, 1500 }
+		{ 0, 0 }, { 1200, -1500 }, { -9000, 300 }, { -17300, -1900 }, { 600, 600 }
 	};
 	for (unsigned k = 0; k < sizeof(starts) / sizeof(starts[0]); k++)
 	{
@@ -443,13 +443,13 @@ static void test_homing_against_hard_stop(void)
 	g_phys_on = 0;
 }
 
-/* TILT seek 36 do (26/11/2026): dau ngua 18 do (gioi han mem) la ngoai tam,
+/* TILT seek 27 do (26/11/2026): dau ngua 18 do (gioi han mem) la ngoai tam,
  * seek het quang ma chua cham vat can. Ghi lai danh doi nay: HOME van xong,
- * nhung moc 0 lech dung phan thieu (2 do), khong truot buoc nao. */
-static void test_tilt_home_seek_is_36_deg(void)
+ * nhung moc 0 lech len dung phan thieu (18 - 7 = 11 do), khong truot buoc nao. */
+static void test_tilt_home_seek_is_27_deg(void)
 {
-	printf("test_tilt_home_seek_is_36_deg\n");
-	CHECK(HEAD_TILT_HOME_SEEK_CDEG == 3600 && HEAD_HOME_SPEED_DPS == 20.0f, "TILT HOME: down at most 36 deg at 20 deg/s");
+	printf("test_tilt_home_seek_is_27_deg\n");
+	CHECK(HEAD_TILT_HOME_SEEK_CDEG == 2700 && HEAD_HOME_SPEED_DPS == 20.0f, "TILT HOME: down at most 27 deg at 20 deg/s");
 	reset();
 	phys_setup(0, 1800);
 	CHECK(HeadCore_Home() == HEAD_OK, "HOME accepted");
@@ -457,10 +457,10 @@ static void test_tilt_home_seek_is_36_deg(void)
 	long t = run_ms_until_state_not(HEAD_STATE_HOMING, 120000);
 	HeadStatus st; HeadCore_GetStatus(&st);
 	CHECK(t > 0 && st.state == HEAD_STATE_IDLE, "homing finishes");
-	CHECK(g_lost[1] == 0, "from +18 deg the 36 deg seek never reaches the stop");
-	long miss = (long)g_phys[1] - (long)cdeg_steps(1, 200);
+	CHECK(g_lost[1] == 0, "from +18 deg the 27 deg seek never reaches the stop");
+	long miss = (long)g_phys[1] - (long)cdeg_steps(1, 1800 - (HEAD_TILT_HOME_SEEK_CDEG - HEAD_TILT_HOME_OFFSET_CDEG));
 	if (miss < 0) miss = -miss;
-	CHECK(miss <= HEAD_MICROSTEP * 4L, "so TILT 0 ends ~2 deg up (the missing part of the seek)");
+	CHECK(miss <= HEAD_MICROSTEP * 4L, "so TILT 0 ends ~11 deg up (the missing part of the seek)");
 	g_phys_on = 0;
 }
 
@@ -474,8 +474,8 @@ static void test_homing_repeatable_rotor_model(void)
 	const int32_t offset_cdeg[HEAD_AXIS_COUNT] = { HEAD_PAN_HOME_OFFSET_CDEG, HEAD_TILT_HOME_OFFSET_CDEG };
 	const int home_dir[HEAD_AXIS_COUNT] = { HEAD_PAN_HOME_DIR, HEAD_TILT_HOME_DIR };
 	const int32_t limit_cdeg[HEAD_AXIS_COUNT] = { HEAD_PAN_LIMIT_CDEG, HEAD_TILT_LIMIT_CDEG };
-	/* TILT start <= +16 do: seek 36 do toi vat can o cui 20 do (head_core.h). */
-	static const int32_t starts[][2] = { { 0, 0 }, { 1200, 1500 }, { -9000, -1700 }, { -17300, 900 } };
+	/* TILT start <= +6 do: seek 27 do toi vat can o cui 20 do (head_core.h). */
+	static const int32_t starts[][2] = { { 0, 0 }, { 1200, 600 }, { -9000, -1700 }, { -17300, 300 } };
 	const long n_starts = (long)(sizeof(starts) / sizeof(starts[0]));
 	long c0_stride = PHASE_PERIOD / 8; if (c0_stride < 1) c0_stride = 1;
 	int all_repeat = 1, all_close = 1, all_noslip = 1;
@@ -666,7 +666,7 @@ int main(void)
 	test_both_axes_together();
 	test_sub_step_command();
 	test_homing_against_hard_stop();
-	test_tilt_home_seek_is_36_deg();
+	test_tilt_home_seek_is_27_deg();
 	test_homing_repeatable_rotor_model();
 	test_homing_abort();
 	test_step_taps();
