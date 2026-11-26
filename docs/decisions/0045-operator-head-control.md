@@ -137,3 +137,20 @@ Staff start-check page shows the button under the camera picture, with the robot
 ready); the live head panel has it too. The automatic HOME when the STM32 boots (`head_auto_home`) is kept, so the head
 holds its position from power-on; the button re-aligns it at the start point before each Tour.
 
+## Addendum 26/11/2026 (5): the head turns by hand only at a POI
+
+Requested by the owner: while the robot drives to a POI, the Operator cannot turn the head; only once the robot has
+arrived.
+
+1. Backend: for a `RUNNING` Tour, `STEP`, `JOG`, `ANGLE` and `SWEEP` need `Tours.CurrentStep = OBSERVING`; `HOME` needs
+   `OBSERVING` or `INITIALIZING` (the robot waits at the start). `STOP` and a `JOG` release (both directions 0) always
+   pass, so a held button let go as the robot sets off still stops the head. Otherwise 409 `HEAD_ROBOT_MOVING`. `READY`
+   HOME is unchanged.
+2. Robot (`fleet_bridge`, `head_block_while_driving`, default true): while any Nav2 goal is ACCEPTED, EXECUTING or
+   CANCELING, the same commands are dropped and logged, and a held JOG is released when a goal starts. This also covers
+   goals not sent by the Tour (RViz, bus_manager) and the window before the backend sees the step change.
+3. Web: the live head panel locks the direction pad, "về phía trước" and "Quét" with "Robot đang di chuyển..." while
+   the step is not `OBSERVING`; "Tự canh chỉnh" follows rule 1. The AUTO/MANUAL switch is not affected.
+
+The robot's automatic POI moves (FRONT at departure, the preset on arrival) are unchanged. Behaviour on the robot is
+READY FOR HARDWARE TEST.

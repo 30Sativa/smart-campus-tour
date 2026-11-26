@@ -111,7 +111,7 @@ function TourConsole({ tourId }: { tourId: string }) {
               <VotePanel detail={detail} isOperator={isOperator} now={now} />
             </section> : null
             const head = running ? <section aria-label="Đầu camera">
-              <div className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} /></div>
+              <div className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} step={detail.execution?.currentStep ?? null} /></div>
             </section> : null
             if (vote && head) return <VoteHeadTabs voteOpen={voteOpen(detail)} vote={vote} head={head} />
             if (vote) return <section className={`${panelClass} ${voteOpen(detail) ? 'border-[#93c5fd] ring-2 ring-[#dbeafe]' : ''}`} aria-label="Viewer chọn điểm tiếp theo">
@@ -120,7 +120,7 @@ function TourConsole({ tourId }: { tourId: string }) {
             </section>
             if (head) return <section className={`${panelClass} lg:order-1`} aria-label="Đầu camera">
               <PanelHead title="Đầu camera" />
-              <div className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} /></div>
+              <div className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} step={detail.execution?.currentStep ?? null} /></div>
             </section>
             return null
           })()}

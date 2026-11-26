@@ -66,6 +66,7 @@ class FleetBridgeNode(Node):
         # POI head: the robot turns its head itself from the Nav2 goal result (front on a new goal, the POI's camera
         # preset on arrival). Needs head_enabled; the backend decides autoMotion. See poi_head.py.
         self.declare_parameter('head_poi_auto', True)
+        self.declare_parameter('head_block_while_driving', True)
         self.declare_parameter('head_poi_radius_m', 0.6)
         self.declare_parameter('head_poi_refresh_sec', 5.0)
         self.declare_parameter('head_poi_nav_action', 'navigate_to_pose')
@@ -199,15 +200,23 @@ class FleetBridgeNode(Node):
             self._head_worker = FleetHeadWorker(
                 HeadWorkerConfig(wait_ms=wait_ms, retry_max_sec=min(retry_max_sec, 10.0)), applier,
                 head_client, head_state.latest, self.get_logger().warning)
-            if bool(self.get_parameter('head_poi_auto').value):
+            poi_auto = bool(self.get_parameter('head_poi_auto').value)
+            block_while_driving = bool(self.get_parameter('head_block_while_driving').value)
+            if poi_auto or block_while_driving:
+                # One Nav2 status subscription serves both: the POI presets (only with head_poi_auto, from the
+                # backend's list) and the Operator lock while a goal is active.
                 from .head_ros import subscribe_poi_head
-                from .head_worker import PoiListWorker
                 from .poi_head import PoiHeadDirector
                 director = PoiHeadDirector(
                     head_actuator, float(self.get_parameter('head_poi_radius_m').value), self.get_logger().info,
                     float(self.get_parameter('head_poi_max_yaw_correction_deg').value))
                 subscribe_poi_head(self, director, str(self.get_parameter('head_poi_nav_action').value),
                                    self._latest_pose)
+                if block_while_driving:
+                    applier.set_motion_guard(lambda: not director.driving())
+                    director.set_on_departure(applier.release)
+            if poi_auto:
+                from .head_worker import PoiListWorker
                 self._poi_worker = PoiListWorker(
                     head_client, director, float(self.get_parameter('head_poi_refresh_sec').value),
                     self.get_logger().warning)

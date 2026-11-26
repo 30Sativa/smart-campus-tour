@@ -175,6 +175,40 @@ describe('live console camera head (ADR-0045)', () => {
     expect(within(panel).getByText('Robot chưa báo vị trí đầu camera.')).toBeInTheDocument()
   })
 
+  it.each(['NAVIGATING', 'RETURNING_TO_END'] as const)('locks the turning buttons while the robot drives (%s), keeping the mode switch (addendum 5)', async step => {
+    tour = { ...running(), execution: { ...running().execution!, currentStep: step } }
+    renderAt('/staff/live/tour-1')
+    const panel = await headPanel()
+    expect(await within(panel).findByText('Robot đang di chuyển. Chỉ xoay được đầu camera khi robot đã tới điểm dừng (POI).')).toBeInTheDocument()
+    for (const button of headButtons(panel)) expect(button).toBeDisabled()
+    await waitFor(() => expect(within(panel).getByRole('switch')).toBeEnabled())
+    expect(within(panel).getByRole('button', { name: /Tự canh chỉnh đầu camera/ })).toBeDisabled()
+    expect(headCommands()).toHaveLength(0)
+  })
+
+  it('lets HOME through while the robot waits at the start, with the turning buttons still locked', async () => {
+    tour = { ...running(), execution: { ...running().execution!, currentStep: 'INITIALIZING' } }
+    renderAt('/staff/live/tour-1')
+    const panel = await headPanel()
+    for (const button of headButtons(panel)) expect(button).toBeDisabled()
+    const home = within(panel).getByRole('button', { name: /Tự canh chỉnh đầu camera/ })
+    await waitFor(() => expect(home).toBeEnabled())
+    fireEvent.click(home)
+    await waitFor(() => expect(headCommands().map(item => item.body)).toEqual([{ kind: 'HOME' }]))
+  })
+
+  it('says the robot is driving when the server refuses a press with HEAD_ROBOT_MOVING, without locking for good', async () => {
+    headReply = conflict('HEAD_ROBOT_MOVING')
+    renderAt('/staff/live/tour-1')
+    const panel = await headPanel()
+    const left = within(panel).getByRole('button', { name: 'Xoay đầu camera: Trái' })
+    await waitFor(() => expect(left).toBeEnabled())
+    fireEvent.click(left)
+    expect(await within(panel).findByRole('alert')).toHaveTextContent('Robot đang di chuyển. Chỉ xoay được đầu camera khi robot đã tới điểm dừng (POI).')
+    expect(left).toBeEnabled()
+    expect(panel.textContent).not.toMatch(/HEAD_/)
+  })
+
   it('unlocks once a newer head status says the control is back', async () => {
     headReply = conflict('HEAD_ROBOT_NOT_CONNECTED')
     head = { ...OK_HEAD, connected: false }

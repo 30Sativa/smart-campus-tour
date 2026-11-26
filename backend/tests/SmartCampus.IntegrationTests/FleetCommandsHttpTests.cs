@@ -327,6 +327,11 @@ public sealed class FleetCommandsHttpTests
         Assert.Equal((HttpStatusCode.Conflict, "TOUR_STATE_INVALID"), (early.Status, Code(early.Body)));
 
         await b.StartTour();
+        // Addendum 5: the robot has not reached a POI yet, so the head does not turn by hand.
+        var driving = await b.OperatorCall(HttpMethod.Post, "head-commands", new { kind = "STEP", panSteps = 1 });
+        Assert.Equal((HttpStatusCode.Conflict, "HEAD_ROBOT_MOVING"), (driving.Status, Code(driving.Body)));
+        // The robot stands at a POI (the step an arrival writes).
+        await b.W.H.Database.ExecuteAsync("UPDATE dbo.Tours SET CurrentStep = N'OBSERVING';");
         var deaf = await b.OperatorCall(HttpMethod.Post, "head-commands", new { kind = "STEP", panSteps = 1 });
         Assert.Equal((HttpStatusCode.Conflict, "HEAD_ROBOT_NOT_CONNECTED"), (deaf.Status, Code(deaf.Body)));
         Assert.Equal(HttpStatusCode.Unauthorized,

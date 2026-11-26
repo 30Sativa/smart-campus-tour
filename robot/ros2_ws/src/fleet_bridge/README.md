@@ -76,6 +76,13 @@ goal sender (RViz, bus_manager, Fleet Commands):
 
 Code: `poi_head.py` (pure logic, `test/test_poi_head.py`), `head_worker.PoiListWorker`.
 
+**No hand control while driving (`head_block_while_driving: true`, with `head_enabled`; ADR-0045 addendum 5).**
+The same goal-status subscription tells the receiver whether a Nav2 goal is active (ACCEPTED, EXECUTING or
+CANCELING). While one is, a Staff `STEP`, `JOG`, `ANGLE`, `SWEEP` or `HOME` is logged and dropped, and the head is
+released; `STOP` and a JOG release still go through. When a goal starts, a JOG still held is released at once. The
+robot's own POI head moves are not affected. The backend refuses the same presses with `HEAD_ROBOT_MOVING`; this is
+the robot's own check, for any goal sender (RViz, bus_manager, Fleet Commands). Works with `head_poi_auto: false`.
+
 ## Command receiver (off by default)
 
 `commands_enabled: true` adds a Fleet Commands v1 poll loop
