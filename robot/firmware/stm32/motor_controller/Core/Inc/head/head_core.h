@@ -96,10 +96,13 @@
  *
  * TILT (14/11/2026, hop so 16:1 tu 24/11/2026): vat can o phia CUI 20 do tai
  * truc ra. Homing cui xuong toi vat can roi ngua len 20 do ve thang (20 do =
- * 177.8 buoc du, lam tron toi vi buoc 0.028 do). SEEK 44 do: tu vi tri ngua
- * cao nhat co the (~20 do) toi vat can duoi la 40 do, du 4 do. Qua hop so
- * 16:1, luc ep vao vat can lon gap ~14 lan luc motor: HEAD_HOME_SPEED_DPS giu
- * cham, quang du chi 4 do, va dong TILT nen dat thap (xem docs/HEAD_PAN_TILT.md). */
+ * 177.8 buoc du, lam tron toi vi buoc 0.028 do). SEEK 36 do (26/11/2026, truoc
+ * la 44): cui toi da 36 do o 20 do/s. Xuat phat o 0 do thi cham vat can sau 20
+ * do va chi truot buoc 16 do (truoc 24). CHU Y: chi cham duoc vat can khi dau
+ * dang ngua khong qua 16 do (gioi han mem +18); dau xuat phat o 0 sau
+ * head_park_on_shutdown. Qua hop so 16:1, luc ep vao vat can lon gap ~14 lan
+ * luc motor: HEAD_HOME_SPEED_DPS giu cham va dong TILT nen dat thap (xem
+ * docs/HEAD_PAN_TILT.md). */
 #ifndef HEAD_PAN_HOME_DIR
 #define HEAD_PAN_HOME_DIR (-1)
 #endif
@@ -114,7 +117,7 @@
 #define HEAD_TILT_HOME_DIR (-1)
 #endif
 #ifndef HEAD_TILT_HOME_SEEK_CDEG
-#define HEAD_TILT_HOME_SEEK_CDEG 4400
+#define HEAD_TILT_HOME_SEEK_CDEG 3600
 #endif
 #ifndef HEAD_TILT_HOME_OFFSET_CDEG
 #define HEAD_TILT_HOME_OFFSET_CDEG 2000
