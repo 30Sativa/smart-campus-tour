@@ -464,6 +464,8 @@ describe('demo flow on the live console', () => {
     expect(within(await screen.findByRole('region', { name: 'Tình hình hiện tại' })).getByText('Chuẩn bị khởi hành')).toBeInTheDocument()
     const depart = screen.getByRole('button', { name: 'Khởi hành tới Thư viện' })
     expect(depart).toBeDisabled()
+    // The server allows Next here, but the departure is that Next with the ticks: no second, unticked way off the start.
+    expect(screen.queryByRole('button', { name: /^Đi tới/ })).not.toBeInTheDocument()
     for (const box of within(screen.getByRole('group', { name: 'Xác nhận tại chỗ' })).getAllByRole('checkbox')) fireEvent.click(box)
     await waitFor(() => expect(depart).toBeEnabled())
     fireEvent.click(depart)
