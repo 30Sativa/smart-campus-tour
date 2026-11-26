@@ -345,7 +345,7 @@ describe('Staff versioned Route workflow', () => {
     })
 
     it('names the stops whose POI has newer approved narration than the route saved, without a new test run', async () => {
-      currentRoute = { ...route, stops: [{ ...route.stops[0], newerNarrationRevisionNumber: 2 }, { ...route.stops[1], newerNarrationRevisionNumber: null }] } as typeof route
+      currentRoute = { ...route, stops: [{ ...route.stops[0], newerNarrationRevisionNumber: 2 }, { ...route.stops[1], newerNarrationRevisionNumber: null }] } as unknown as typeof route
       renderAt('/staff/manage/routes/route-1')
       const notice = await updateNotice()
       expect(notice.getByText('Verified entrance: có lời thuyết minh mới đã duyệt. Lưu lại tuyến để dùng lời mới, không cần chạy thử lại.')).toBeInTheDocument()
