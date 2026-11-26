@@ -1,4 +1,4 @@
-# ADR-0072: Evidence photos on Technical Staff records
+# ADR-0073: Evidence photos on Technical Staff records
 
 - **Status:** Proposed 26/11/2026 by the owner's request ("thêm phần đẩy hình ảnh để lưu bằng chứng cho technical và
   lưu trữ những hình ảnh đó trên cloudinary"). Implemented in backend (schema v1.26) and web; needs the owner's
@@ -32,7 +32,7 @@ fallback videos to Cloudinary with a backend signature, so no new storage provid
 5. **Stored with the record, immutable.** Schema v1.26 adds `EvidencePhotoUrlsJson NVARCHAR(2000) NULL` (a JSON
    array, `ISJSON` CHECK) to the three tables; null means no photos, so older rows read as before. Photos are part of
    the idempotent request: the same `requestId` with other photos is `IDEMPOTENCY_CONFLICT`, and a request without
-   photos hashes exactly as before ADR-0072. Records stay append-only; a photo cannot be added or removed later.
+   photos hashes exactly as before ADR-0073. Records stay append-only; a photo cannot be added or removed later.
 6. **No cleanup.** An upload whose record is never saved stays on Cloudinary. Removing unused uploads is a later
    task.
 

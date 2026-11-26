@@ -42,7 +42,7 @@ public sealed class RecordMapDeploymentCommandHandler(
         var request = command.Request;
         var checksum = Convert.FromHexString(request.PackageSha256);
         var photos = TechnicalEvidencePhotos.Normalize(request.EvidencePhotoUrls, cloudinarySettings, command.ActorUserId);
-        // ADR-0072: photos join the hash only when sent, so a request without them hashes as it did before.
+        // ADR-0073: photos join the hash only when sent, so a request without them hashes as it did before.
         var requestHash = photos.Count == 0
             ? MapPoiRequestHash.Compute(new
             {

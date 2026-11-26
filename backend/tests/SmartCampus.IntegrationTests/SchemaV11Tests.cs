@@ -2118,7 +2118,7 @@ public sealed class SchemaV11Tests
             services.AddSingleton(Shifts);
             services.AddSingleton(new MapPoiSettings(null));
             services.AddSingleton(new RouteRuleSettings(null, null));
-            // ADR-0072: evidence records validate photo links against Cloudinary; unconfigured here, so a record carries none.
+            // ADR-0073: evidence records validate photo links against Cloudinary; unconfigured here, so a record carries none.
             services.AddSingleton(new SmartCampus.Application.Features.FallbackVideo.CloudinarySettings());
             return services.BuildServiceProvider(validateScopes: true);
         }

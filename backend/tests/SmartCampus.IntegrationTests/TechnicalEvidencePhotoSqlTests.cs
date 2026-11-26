@@ -8,7 +8,7 @@ using SmartCampus.Application.Features.TechnicalEvidence;
 namespace SmartCampus.IntegrationTests;
 
 /// <summary>
-/// ADR-0072: a map deployment check, a manual POI verification and a route test run keep 0-5 evidence photos the checker
+/// ADR-0073: a map deployment check, a manual POI verification and a route test run keep 0-5 evidence photos the checker
 /// uploaded to Cloudinary, return them in their views, and treat them as part of the retried request.
 /// </summary>
 public sealed partial class RobotIntegritySqlTests
@@ -44,7 +44,7 @@ public sealed partial class RobotIntegritySqlTests
         await using (var db = h.Context())
             Assert.Equal(1, await db.MapDeploymentChecks.CountAsync(check => check.EvidencePhotoUrlsJson != null));
 
-        // Without photos the record stays as before ADR-0072.
+        // Without photos the record stays as before ADR-0073.
         var plain = await h.Send(new RecordMapDeploymentCommand(h.TechnicalId, h.PilotMap.Id, Request(Guid.NewGuid(), null)));
         Assert.Empty(plain.EvidencePhotoUrls!);
         Assert.Null((await h.LatestDeployment(First)).EvidencePhotoUrlsJson);

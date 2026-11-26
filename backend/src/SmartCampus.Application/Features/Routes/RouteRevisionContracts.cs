@@ -18,7 +18,7 @@ public sealed record RouteRunRequest(
     string? FailureReason, string EvidenceNote,
     // ADR-0065: the revision stop ids in the order driven; required on a voting route, ignored on a fixed one.
     IReadOnlyList<Guid>? TraversedStopIds = null,
-    // ADR-0072: 0-5 photos this checker uploaded with POST api/technical/evidence-photo-upload.
+    // ADR-0073: 0-5 photos this checker uploaded with POST api/technical/evidence-photo-upload.
     IReadOnlyList<string>? EvidencePhotoUrls = null);
 /// <summary>ADR-0065: how many of a voting route's legs the PASS runs since the newest FAIL have driven.</summary>
 public sealed record RouteLegCoverageView(int RequiredCount, int CoveredCount, IReadOnlyList<RouteMissingLegView> MissingLegs);
@@ -47,7 +47,7 @@ public sealed record RouteTestRunView(Guid Id, Guid RouteRevisionId, Guid MapVer
     string? CheckedByName = null, string? ParticipatingStaffName = null,
     // ADR-0065: the revision stop ids in the order driven, recorded on a voting route; null on a fixed one.
     IReadOnlyList<Guid>? TraversedStopIds = null,
-    // ADR-0072: the evidence photos' Cloudinary URLs; empty when the run has none.
+    // ADR-0073: the evidence photos' Cloudinary URLs; empty when the run has none.
     IReadOnlyList<string>? EvidencePhotoUrls = null);
 /// <summary>
 /// Another submitted save of the same route with the same path (map, start, end, stop POIs and order, head steps): the

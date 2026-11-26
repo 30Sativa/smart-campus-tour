@@ -3,7 +3,7 @@ import type { ApiResponse } from '../../../api/contracts/shared'
 import { CloudinaryUploadError, megabytes, uploadToCloudinary } from '../../../api/cloudinary-upload'
 
 /**
- * ADR-0072: what the backend signs for one evidence photo. Each ticket names a new public ID under the checker's own
+ * ADR-0073: what the backend signs for one evidence photo. Each ticket names a new public ID under the checker's own
  * folder, so a photo is never replaced; `storedUrl` is what the deployment check, POI verification or route test run
  * sends in `evidencePhotoUrls` once Cloudinary has accepted the file.
  */

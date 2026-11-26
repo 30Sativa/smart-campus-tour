@@ -42,7 +42,7 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
     {
         var q = c.Request; var result = q.ResultCode.Trim().ToUpperInvariant();
         var photos = TechnicalEvidencePhotos.Normalize(q.EvidencePhotoUrls, cloudinary, c.ActorUserId);
-        // The driven order (ADR-0065) and the photos (ADR-0072) join the hash only when sent, so a request without them
+        // The driven order (ADR-0065) and the photos (ADR-0073) join the hash only when sent, so a request without them
         // hashes as it did before.
         var hash = (q.TraversedStopIds is null, photos.Count == 0) switch
         {

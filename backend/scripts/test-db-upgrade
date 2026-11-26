@@ -152,7 +152,7 @@ users_data() {
 # v1.25 adds RouteRevisions.ViewerChoosesNextStop and RouteTestRuns.TraversedStopIdsJson with the same effect, so both
 # tables are compared over every column except the new one. Its new TourStopVisits, TourStopVotes and TourStopLocks
 # tables are left out; the v1.24-to-v1.25 scenario checks they are empty. v1.26 adds the nullable EvidencePhotoUrlsJson
-# to RouteTestRuns, MapDeploymentChecks and PoiVerificationRecords (ADR-0072), compared the same way.
+# to RouteTestRuns, MapDeploymentChecks and PoiVerificationRecords (ADR-0073), compared the same way.
 route_vote_columns_data() {
   local table column
   for table_column in RouteRevisions:ViewerChoosesNextStop RouteTestRuns:TraversedStopIdsJson,EvidencePhotoUrlsJson \
@@ -914,7 +914,7 @@ if grep -q 'Applying additive database patch: patches/' "$scratch/v125-rerun.log
 [[ $(all_data) == "$after_v125" && $(markers) == "1.26|$v124_hash" ]] || fail 'v1.25 regrant changed data or markers.'
 check_only > "$scratch/v125-check.log" 2>&1 || { cat "$scratch/v125-check.log" >&2; fail 'Read-only gate rejected the v1.26 database.'; }
 
-# 21. A deployed v1.25 database receives only the nullable evidence photo columns (ADR-0072); all rows and its bootstrap
+# 21. A deployed v1.25 database receives only the nullable evidence photo columns (ADR-0073); all rows and its bootstrap
 # hash survive, every existing record has no photos, each column has its trusted CHECK, and a rerun is a regrant.
 v125_hash=$(tool --entrypoint /bin/bash "$db_init_image" -c "sed 's/\r$//' /database/smart-campus-tour-schema-v1.25.sql | sha256sum | cut -d ' ' -f 1")
 sql -d master -Q 'DROP DATABASE SmartCampusTourV11; CREATE DATABASE SmartCampusTourV11;'

@@ -5,7 +5,7 @@ using SmartCampus.Application.Features.TechnicalEvidence;
 
 namespace SmartCampus.UnitTests;
 
-/// <summary>ADR-0072: evidence photos are public Cloudinary images the checker uploaded under their own folder.</summary>
+/// <summary>ADR-0073: evidence photos are public Cloudinary images the checker uploaded under their own folder.</summary>
 public sealed class TechnicalEvidencePhotosTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(1_794_900_000);

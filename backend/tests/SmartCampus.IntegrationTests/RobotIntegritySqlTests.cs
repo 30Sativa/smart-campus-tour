@@ -380,7 +380,7 @@ public sealed partial class RobotIntegritySqlTests
             settings["Tours:Shifts:0:Code"] = "S1"; settings["Tours:Shifts:0:Name"] = "Ca sáng";
             settings["Tours:Shifts:0:Start"] = "08:00"; settings["Tours:Shifts:0:End"] = "10:00";
             settings["Tours:Shifts:1:Code"] = "S2"; settings["Tours:Shifts:1:Name"] = "Ca chiều 1"; settings["Tours:Shifts:1:Start"] = "13:00"; settings["Tours:Shifts:1:End"] = "15:00";
-            // ADR-0072: evidence photos are accepted only with Cloudinary configured.
+            // ADR-0073: evidence photos are accepted only with Cloudinary configured.
             settings["Cloudinary:CloudName"] = EvidenceCloud; settings["Cloudinary:ApiKey"] = "123456789012345";
             settings["Cloudinary:ApiSecret"] = "integration-cloudinary-secret";
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();

@@ -2124,7 +2124,7 @@ Tour root lock; the visited set comes from `TourStopVisits`, never from
 `RouteRevisions.ViewerChoosesNextStop`, `RouteTestRuns.TraversedStopIdsJson`,
 `TourStopVisits`, `TourStopVotes` and `TourStopLocks` (ADR-0065 §Schema).
 
-### 3.2.w Technical evidence photos (ADR-0072, schema v1.26)
+### 3.2.w Technical evidence photos (ADR-0073, schema v1.26)
 
 Optional photos (0-5) on the three Technical Staff evidence records, stored on
 Cloudinary as public images under a random public ID. The text evidence note

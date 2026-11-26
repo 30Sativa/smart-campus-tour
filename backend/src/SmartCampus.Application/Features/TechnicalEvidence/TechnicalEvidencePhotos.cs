@@ -7,7 +7,7 @@ using SmartCampus.Application.Features.FallbackVideo;
 namespace SmartCampus.Application.Features.TechnicalEvidence;
 
 /// <summary>
-/// ADR-0072: photos a Technical Staff member attaches to a map deployment check, a manual POI verification or a route test
+/// ADR-0073: photos a Technical Staff member attaches to a map deployment check, a manual POI verification or a route test
 /// run. Each is a public Cloudinary image under <c>smartcampus/technical-evidence/{userId:N}/{uploadId:N}</c>, uploaded by
 /// the browser with a backend signature before the record is saved; the record keeps the delivery URLs as a JSON array in
 /// its <c>EvidencePhotoUrlsJson</c> column. A record accepts only photos its own checker uploaded to this cloud.

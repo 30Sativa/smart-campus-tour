@@ -5,7 +5,7 @@ public sealed record CreateMapVersionRequest(string AreaKey, string AreaName, Gu
 public sealed record RecordMapDeploymentRequest(
     Guid RequestId, string RobotCode, string PackageSha256,
     bool LocalizationPassed, bool DisplayPassed, string EvidenceNote,
-    // ADR-0072: 0-5 photos this checker uploaded with POST api/technical/evidence-photo-upload.
+    // ADR-0073: 0-5 photos this checker uploaded with POST api/technical/evidence-photo-upload.
     IReadOnlyList<string>? EvidencePhotoUrls = null);
 
 public sealed record PoiProposalDraft(
@@ -36,7 +36,7 @@ public sealed record VerifyPoiProposalRequest(
     Guid RequestId, int ExpectedRevisionNumber, string ExpectedRowVersion, string RobotCode,
     string ResultCode, bool Reached, bool Stopped, bool LocalizationPassed,
     bool CameraPresetConfirmed, string? Reason, string EvidenceNote,
-    // ADR-0072: 0-5 photos this checker uploaded with POST api/technical/evidence-photo-upload.
+    // ADR-0073: 0-5 photos this checker uploaded with POST api/technical/evidence-photo-upload.
     IReadOnlyList<string>? EvidencePhotoUrls = null);
 public sealed record RetireMapVersionRequest(string Reason, string ExpectedRowVersion);
 public sealed record ReopenMapVersionRequest(string? ExpectedRowVersion);

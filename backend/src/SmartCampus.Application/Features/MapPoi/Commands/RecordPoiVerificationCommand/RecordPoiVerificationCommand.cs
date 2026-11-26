@@ -44,7 +44,7 @@ public sealed class RecordPoiVerificationCommandHandler(
         var normalizedEvidence = request.EvidenceNote.Trim();
         var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
         var photos = TechnicalEvidencePhotos.Normalize(request.EvidencePhotoUrls, cloudinarySettings, command.ActorUserId);
-        // ADR-0072: photos join the hash only when sent, so a request without them hashes as it did before.
+        // ADR-0073: photos join the hash only when sent, so a request without them hashes as it did before.
         var requestHash = photos.Count == 0
             ? MapPoiRequestHash.Compute(new
             {

@@ -6,7 +6,7 @@ using SmartCampus.Application.Features.FallbackVideo;
 namespace SmartCampus.Application.Features.TechnicalEvidence;
 
 /// <summary>
-/// What a Technical page needs to send one evidence photo straight to Cloudinary (ADR-0072): POST the file with every
+/// What a Technical page needs to send one evidence photo straight to Cloudinary (ADR-0073): POST the file with every
 /// field of <see cref="Fields"/> to <see cref="UploadUrl"/>, then send <see cref="StoredUrl"/> in the record's
 /// <c>evidencePhotoUrls</c>. The photo never passes through the API.
 /// </summary>

@@ -42,7 +42,7 @@ public sealed class TechnicalDashboardController(ISender sender) : ControllerBas
         });
     }
 
-    /// <summary>ADR-0072: signs one direct upload of an evidence photo to Cloudinary.</summary>
+    /// <summary>ADR-0073: signs one direct upload of an evidence photo to Cloudinary.</summary>
     [HttpPost("evidence-photo-upload")]
     public async Task<ActionResult<BaseResponse<EvidencePhotoUploadTicket>>> SignEvidencePhotoUpload(
         CancellationToken cancellationToken) =>

@@ -134,7 +134,7 @@ export type DeploymentCheck = {
   passed: boolean
   evidenceNote: string
   checkedAt: string
-  /** ADR-0072: the photos saved with the check; an older server omits them. */
+  /** ADR-0073: the photos saved with the check; an older server omits them. */
   evidencePhotoUrls?: string[]
 }
 
@@ -225,7 +225,7 @@ export type PoiVerification = {
   mapKey: string; robotCode: string; resultCode: 'PASS' | 'FAIL'; reached: boolean | null; stopped: boolean | null
   localizationPassed: boolean | null; cameraPresetConfirmed: boolean | null; reason: string | null; evidenceNote: string
   checkedByUserId: string; checkedAt: string; verificationMethod: PoiVerificationMethod; sourceFileSha256: string | null
-  /** ADR-0072: the photos saved with a manual check; an older server omits them. */
+  /** ADR-0073: the photos saved with a manual check; an older server omits them. */
   evidencePhotoUrls?: string[]
 }
 
@@ -260,7 +260,7 @@ export type RouteTestRunInput = {
   failureReason: string | null; evidenceNote: string
   /** ADR-0065: required on a route where Viewers choose the next stop, the revision stop ids in the order driven. */
   traversedStopIds?: string[]
-  /** ADR-0072: 0-5 photos this checker uploaded through `uploadEvidencePhoto`. */
+  /** ADR-0073: 0-5 photos this checker uploaded through `uploadEvidencePhoto`. */
   evidencePhotoUrls?: string[]
 }
 
