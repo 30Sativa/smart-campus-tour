@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Lock, LocateFixed } from 'lucide-react'
 import { buttonClass } from '../../../../components/ui/ui-classes'
-import { HEAD_LOCK_TEXT, headKeys, headRefusal, useHeadCommand, useTourHeadStatus, type HeadReport } from './head-control'
+import { HEAD_LOCK_TEXT, headKeys, headMayHome, headRefusal, useHeadCommand, useTourHeadStatus, type HeadReport } from './head-control'
 
 /** What the head is doing, from the robot's own report (queued is not executed). */
 function headLine(head: HeadReport | null): { text: string; homing: boolean; ok: boolean } {
@@ -16,10 +16,11 @@ function headLine(head: HeadReport | null): { text: string; homing: boolean; ok:
 /**
  * "Tự canh chỉnh đầu camera" (ADR-0045 HOME): the robot turns PAN and TILT into their mechanical stops and back to the
  * front, so 0° is exact again before a Tour. Allowed for the Tour's Operator while the Tour is READY (the robot it holds)
- * or RUNNING. No confirmation, like every head press: the head never moves the robot.
+ * or RUNNING. No confirmation, like every head press: the head never moves the robot. `step` is the RUNNING Tour's step:
+ * HOME waits while the robot drives (ADR-0045 addendum 5); leave it out before Start.
  */
-export function HeadHomeButton({ tourId, isOperator, operatorName, compact = false }: {
-  tourId: string; isOperator: boolean; operatorName?: string | null; compact?: boolean
+export function HeadHomeButton({ tourId, isOperator, operatorName, step, compact = false }: {
+  tourId: string; isOperator: boolean; operatorName?: string | null; step?: string | null; compact?: boolean
 }) {
   const status = useTourHeadStatus(tourId, true)
   const command = useHeadCommand(tourId)
@@ -31,6 +32,7 @@ export function HeadHomeButton({ tourId, isOperator, operatorName, compact = fal
     : current && !current.enabled ? HEAD_LOCK_TEXT.disabled
     : current && !current.robotCode ? 'Tour chưa giữ robot nào, nên chưa canh chỉnh được.'
     : current && !current.connected ? HEAD_LOCK_TEXT.notConnected
+    : step !== undefined && !headMayHome(step) ? 'Robot đang di chuyển. Canh chỉnh đầu camera khi robot đã tới điểm dừng.'
     : null
   const busy = command.isPending || line.homing
 

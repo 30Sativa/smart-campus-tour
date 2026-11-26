@@ -11,6 +11,7 @@ public sealed class EfTourHeadControlReader(ApplicationDbContext db) : ITourHead
             .Where(tour => tour.Id == tourId)
             .Select(tour => new TourHeadControlView(tour.Id, tour.State, tour.OperatorUserId, tour.AssignedRobotId,
                 db.Robots.Where(robot => robot.Id == tour.AssignedRobotId).Select(robot => robot.RobotCode).FirstOrDefault(),
-                tour.TourRobotReservations.Where(hold => hold.ReleasedAt == null).Select(hold => hold.Robot.RobotCode).FirstOrDefault()))
+                tour.TourRobotReservations.Where(hold => hold.ReleasedAt == null).Select(hold => hold.Robot.RobotCode).FirstOrDefault(),
+                tour.CurrentStep))
             .SingleOrDefaultAsync(cancellationToken);
 }

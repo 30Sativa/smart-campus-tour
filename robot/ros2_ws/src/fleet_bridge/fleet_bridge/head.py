@@ -4,6 +4,10 @@ The backend queues the Operator's head buttons; this module parses a poll respon
 seq order, to an actuator (ROS topics/services of stm32_bridge in production, a fake in tests). A JOG keeps the head
 turning only until this robot's own receipt time plus `ttlMs`: losing the backend, the network or the Operator's tab
 therefore stops the head without any message.
+
+While the robot drives (a Nav2 goal is active, `motion_allowed()` false) the Operator's head is locked: STEP, JOG,
+ANGLE, SWEEP and HOME are skipped and logged, STOP and a JOG release still run. The backend refuses them first
+(ADR-0045 addendum 5); this is the robot's own check for a command delivered just as the robot set off.
 """
 
 from __future__ import annotations
@@ -12,9 +16,11 @@ import math
 import threading
 import uuid
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Callable, Optional, Protocol
 
 KINDS = frozenset({'STEP', 'JOG', 'STOP', 'ANGLE', 'SWEEP', 'HOME'})
+# Commands that move the head; refused while the robot drives. STOP and a JOG release (0, 0) never are.
+MOTION_KINDS = frozenset({'STEP', 'JOG', 'ANGLE', 'SWEEP', 'HOME'})
 DEFAULT_JOG_TTL_SEC = 0.6
 MAX_STEPS = 20
 MIN_SWEEP_DEG, MAX_SWEEP_DEG = 10, 170
@@ -113,14 +119,20 @@ def head_state_report(state: int, referenced: bool, pan_deg: float, tilt_deg: fl
 class HeadCommandApplier:
     """Applies each command once, in seq order, and owns the local JOG deadline. Thread-safe."""
 
-    def __init__(self, actuator: HeadActuator, on_log=None):
+    def __init__(self, actuator: HeadActuator, on_log=None, motion_allowed: Optional[Callable[[], bool]] = None):
         self._actuator = actuator
         self._on_log = on_log or (lambda message: None)
+        self._motion_allowed = motion_allowed or (lambda: True)
         self._lock = threading.Lock()
         self.epoch: Optional[str] = None
         self.last_seq = 0
         self._jog: Optional[tuple[int, int]] = None
         self._jog_deadline = 0.0
+
+    def set_motion_guard(self, motion_allowed: Callable[[], bool]) -> None:
+        """`motion_allowed()` false while the robot drives; it must not take a lock this applier's caller holds."""
+        with self._lock:
+            self._motion_allowed = motion_allowed
 
     def cursor(self) -> tuple[Optional[str], int]:
         with self._lock:
@@ -145,6 +157,12 @@ class HeadCommandApplier:
         return executed
 
     def _execute(self, command: HeadCommand, now: float) -> None:
+        releases = command.kind == 'JOG' and (command.pan_dir, command.tilt_dir) == (0, 0)
+        if command.kind in MOTION_KINDS and not releases and not self._motion_allowed():
+            self._release()
+            self._on_log(f'Head {command.kind} seq {command.seq} ignored: the robot is driving; '
+                         'the head turns only at a POI.')
+            return
         if command.kind == 'STEP':
             if command.pan_steps or command.tilt_steps:
                 # A live JOG would be re-published by tick() and override the step: release it first.

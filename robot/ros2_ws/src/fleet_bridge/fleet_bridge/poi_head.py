@@ -32,6 +32,7 @@ MIN_SWEEP_DEG, MAX_SWEEP_DEG = 10, 170
 
 # action_msgs/msg/GoalStatus
 STATUS_EXECUTING = 2
+ACTIVE_STATUSES = frozenset({1, 2, 3})   # ACCEPTED, EXECUTING, CANCELING: the robot may be driving
 STATUS_SUCCEEDED = 4
 TERMINAL_STATUSES = frozenset({4, 5, 6})
 
@@ -165,6 +166,17 @@ class PoiHeadDirector:
         self._lock = threading.Lock()
         self._snapshot = EMPTY_SNAPSHOT
         self._seen: Optional[dict[bytes, int]] = None   # None until the first status message (the latched backlog)
+        # Plain bool, read without the lock: the Operator's head check calls driving() under the applier's lock.
+        self._driving = False
+        self._on_departure = lambda: None
+
+    def driving(self) -> bool:
+        """True while a navigate_to_pose goal is active, also from the latched backlog after a bridge restart."""
+        return self._driving
+
+    def set_on_departure(self, callback) -> None:
+        """Called (outside this lock) whenever a goal starts executing, e.g. to end an Operator's held JOG."""
+        self._on_departure = callback
 
     @property
     def snapshot(self) -> PoiSnapshot:
@@ -186,10 +198,12 @@ class PoiHeadDirector:
         Returns what was done, for logs and tests.
         """
         done: list[str] = []
+        departed = False
         with self._lock:
             first = self._seen is None
             previous = self._seen or {}
             current = {goal_id: status for goal_id, status in statuses}
+            self._driving = any(status in ACTIVE_STATUSES for status in current.values())
             # Goals that already succeeded before this bridge started are history, not an arrival.
             self._seen = current if first else {**previous, **current}
             if first:
@@ -198,11 +212,14 @@ class PoiHeadDirector:
             for goal_id, status in current.items():
                 before = previous.get(goal_id)
                 if status == STATUS_EXECUTING and before not in (STATUS_EXECUTING, *TERMINAL_STATUSES):
+                    departed = True
                     done.append(self._departure(snapshot))
                 elif status == STATUS_SUCCEEDED and before != STATUS_SUCCEEDED:
                     done.append(self._arrival(snapshot, pose))
             # Status arrays only list recent goals; forget the ones Nav2 dropped.
             self._seen = {goal_id: status for goal_id, status in self._seen.items() if goal_id in current}
+        if departed:
+            self._on_departure()
         return [item for item in done if item]
 
     def _departure(self, snapshot: PoiSnapshot) -> str:

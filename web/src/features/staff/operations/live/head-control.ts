@@ -59,14 +59,22 @@ export function useHeadMode(tourId: string) {
   })
 }
 
-/** Why the buttons are locked, from the status or from the last refusal; the server's two lock codes first. */
-export type HeadLock = 'disabled' | 'notConnected' | 'notOperator' | 'notRunning'
+/**
+ * Why the buttons are locked, from the status or from the last refusal; the server's two lock codes first. `moving`
+ * comes from the Tour's step (ADR-0045 addendum 5): the head turns by hand only while the robot stands at a POI.
+ */
+export type HeadLock = 'disabled' | 'notConnected' | 'notOperator' | 'notRunning' | 'moving'
 
 export const HEAD_LOCK_TEXT: Record<Exclude<HeadLock, 'notOperator'>, string> = {
   disabled: 'Máy chủ đang tắt chức năng xoay đầu camera. Báo Kỹ thuật nếu cần dùng.',
   notConnected: 'Robot chưa kết nối kênh đầu camera, nên nút tạm khóa. Kiểm tra robot đang bật và có mạng.',
   notRunning: 'Chỉ xoay được đầu camera khi Tour đang chạy.',
+  moving: 'Robot đang di chuyển. Chỉ xoay được đầu camera khi robot đã tới điểm dừng (POI).',
 }
+
+/** ADR-0045 addendum 5: the RUNNING Tour's step lets the head turn by hand (OBSERVING), or HOME it (also INITIALIZING). */
+export function headMayTurn(step: string | null | undefined): boolean { return step === 'OBSERVING' }
+export function headMayHome(step: string | null | undefined): boolean { return step === 'OBSERVING' || step === 'INITIALIZING' }
 
 function errorCode(error: ApiError): string | null {
   try {
@@ -82,6 +90,8 @@ export function headRefusal(error: unknown): { lock: HeadLock | null; message: s
     const code = errorCode(error)
     if (error.status === 409 && code === 'HEAD_CONTROL_DISABLED') return { lock: 'disabled', message: HEAD_LOCK_TEXT.disabled }
     if (error.status === 409 && code === 'HEAD_ROBOT_NOT_CONNECTED') return { lock: 'notConnected', message: HEAD_LOCK_TEXT.notConnected }
+    // The robot left the POI between the page's last refresh and the press; the Tour's step locks the buttons next.
+    if (error.status === 409 && code === 'HEAD_ROBOT_MOVING') return { lock: 'moving', message: HEAD_LOCK_TEXT.moving }
     if (error.status === 409 && code === 'TOUR_STATE_INVALID') return { lock: 'notRunning', message: HEAD_LOCK_TEXT.notRunning }
     if (error.status === 403) return { lock: 'notOperator', message: 'Chỉ người vận hành được giao cho Tour mới xoay được đầu camera.' }
     if (error.status === 429) return { lock: null, message: 'Bấm quá nhanh, máy chủ tạm từ chối. Chờ một chút rồi bấm lại.' }

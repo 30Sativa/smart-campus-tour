@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crosshair, Lock, ScanLine } from 'lucide-react'
-import { HEAD_LOCK_TEXT, headRefusal, useHeadCommand, useHeadMode, useTourHeadStatus, type HeadCommand, type HeadLock } from './head-control'
+import { HEAD_LOCK_TEXT, headMayTurn, headRefusal, useHeadCommand, useHeadMode, useTourHeadStatus, type HeadCommand, type HeadLock } from './head-control'
 import { HeadHomeButton } from './HeadHomeButton'
 
 /**
@@ -36,9 +36,12 @@ function angleText(value: number | null, positive: string, negative: string) {
  * server's HEAD_CONTROL_DISABLED and HEAD_ROBOT_NOT_CONNECTED lock them too,
  * until the head status says the control is back. A tap turns one step, a
  * press held down keeps turning until release. No press asks for confirmation:
- * the head never moves the robot.
+ * the head never moves the robot. While the robot drives (`step` is not OBSERVING, ADR-0045 addendum 5) the turning
+ * buttons are locked; the AUTO/MANUAL switch and HOME follow their own rules.
  */
-export function HeadControlPanel({ tourId, isOperator, operatorName }: { tourId: string; isOperator: boolean; operatorName: string | null | undefined }) {
+export function HeadControlPanel({ tourId, isOperator, operatorName, step }: {
+  tourId: string; isOperator: boolean; operatorName: string | null | undefined; step: string | null | undefined
+}) {
   const status = useTourHeadStatus(tourId, true)
   const command = useHeadCommand(tourId)
   const mode = useHeadMode(tourId)
@@ -56,14 +59,24 @@ export function HeadControlPanel({ tourId, isOperator, operatorName }: { tourId:
     : current && !current.enabled ? 'disabled'
     : current && !current.connected ? 'notConnected'
     : refusedLock
+  // Only the turning buttons wait for a POI; the other locks also cover the mode switch.
+  const moving = lock === null && !headMayTurn(step)
   const reason = lock === 'notOperator' ? `Chỉ ${operatorName ?? 'người vận hành được giao'} mới xoay được đầu camera.` : lock ? HEAD_LOCK_TEXT[lock] : null
   const locked = lock !== null
+  const turnLocked = locked || moving
 
   const send = (body: HeadCommand) => {
     command.mutate(body, {
       onSuccess: () => setMessage(null),
       onError: error => {
         const refusal = headRefusal(error)
+        // The robot set off before the page saw it: stop a held button and release the JOG (a release goes through);
+        // the Tour's step, not this refusal, keeps the turning buttons locked.
+        if (refusal.lock === 'moving') {
+          setMessage(refusal.message)
+          stopHold(true)
+          return
+        }
         setMessage(refusal.lock ? null : refusal.message)
         if (refusal.lock) {
           setRefused({ lock: refusal.lock, seenAt: Date.now() })
@@ -103,7 +116,7 @@ export function HeadControlPanel({ tourId, isOperator, operatorName }: { tourId:
   }
 
   const pad = (direction: Direction) => (
-    <button key={direction.key} type="button" className={padButton} disabled={locked} aria-label={`Xoay đầu camera: ${direction.label}`} title={direction.label}
+    <button key={direction.key} type="button" className={padButton} disabled={turnLocked} aria-label={`Xoay đầu camera: ${direction.label}`} title={direction.label}
       onPointerDown={event => { if (event.button === 0) press(direction) }} onPointerUp={release} onPointerLeave={release} onPointerCancel={release}
       onClick={event => click(direction, event.detail > 0)}>
       {direction.icon}
@@ -117,17 +130,19 @@ export function HeadControlPanel({ tourId, isOperator, operatorName }: { tourId:
     <div className="space-y-3">
       {reason && <p role="status" className="flex items-start gap-2 rounded-lg bg-[#fffaf0] px-3 py-2 text-[13px] leading-5 font-semibold text-[#7d5310]">
         <Lock size={15} className="mt-0.5 shrink-0" aria-hidden="true" />{reason}</p>}
+      {moving && <p role="status" className="flex items-start gap-2 rounded-lg bg-[#eff6ff] px-3 py-2 text-[13px] leading-5 font-semibold text-[#1e3a8a]">
+        <Lock size={15} className="mt-0.5 shrink-0" aria-hidden="true" />{HEAD_LOCK_TEXT.moving}</p>}
       <div className="flex flex-wrap items-center gap-4">
         <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Nút xoay đầu camera">
           <span />{pad(UP)}<span />
           {pad(LEFT)}
-          <button type="button" className={padButton} disabled={locked} aria-label="Đưa đầu camera về phía trước" title="Về phía trước"
+          <button type="button" className={padButton} disabled={turnLocked} aria-label="Đưa đầu camera về phía trước" title="Về phía trước"
             onClick={() => send({ kind: 'ANGLE', panDeg: 0, tiltDeg: 0 })}><Crosshair size={18} aria-hidden="true" /></button>
           {pad(RIGHT)}
           <span />{pad(DOWN)}<span />
         </div>
         <div className="min-w-0 flex-1 space-y-2">
-          <button type="button" className={`${padButton} !h-10 !w-full !grid-flow-col gap-2 px-3 text-[13px] font-semibold`} disabled={locked} onClick={() => send({ kind: 'SWEEP' })}>
+          <button type="button" className={`${padButton} !h-10 !w-full !grid-flow-col gap-2 px-3 text-[13px] font-semibold`} disabled={turnLocked} onClick={() => send({ kind: 'SWEEP' })}>
             <ScanLine size={16} aria-hidden="true" />Quét xung quanh
           </button>
           <label className={`flex items-center justify-between gap-3 rounded-lg border border-[#e2e8f0] px-3 py-2 text-[13px] ${locked ? 'text-muted' : 'text-[#0f172a]'}`}>
@@ -143,11 +158,11 @@ export function HeadControlPanel({ tourId, isOperator, operatorName }: { tourId:
       <p className="text-xs text-muted">
         {head ? `Đầu camera đang ở: ngang ${angleText(head.panDeg, 'trái', 'phải')}, dọc ${angleText(head.tiltDeg, 'lên', 'xuống')}.`
           : 'Robot chưa báo vị trí đầu camera.'}
-        {!locked && ' Bấm một lần để xoay một nấc, giữ nút để xoay liên tục.'}
+        {!turnLocked && ' Bấm một lần để xoay một nấc, giữ nút để xoay liên tục.'}
       </p>
-      {message && <p role="alert" className="text-[13px] leading-5 font-semibold text-[#9d3428]">{message}</p>}
+      {message && !(moving && message === HEAD_LOCK_TEXT.moving) && <p role="alert" className="text-[13px] leading-5 font-semibold text-[#9d3428]">{message}</p>}
       <div className="border-t border-[#f1f5f9] pt-3">
-        <HeadHomeButton tourId={tourId} isOperator={isOperator} operatorName={operatorName} compact />
+        <HeadHomeButton tourId={tourId} isOperator={isOperator} operatorName={operatorName} step={step} compact />
       </div>
     </div>
   )
