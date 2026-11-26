@@ -60,7 +60,11 @@ if name == 'gh':
         print('services: {}')
     else:
         sha = args[-1].split('head_sha=')[1].split('&')[0]
-        print(json.dumps({'workflow_runs': [] if mode == 'unverified' or (mode == 'unverified-ops' and sha == os.environ['OPS']) else [
+        lookups = Path(os.environ['LOG']).read_text().count('head_sha=')
+        lagging = mode == 'listing-lag' and lookups <= 2
+        # GitHub's status= filter has omitted completed successful runs for hours.
+        stale_status_filter = 'status=' in args[-1]
+        print(json.dumps({'workflow_runs': [] if stale_status_filter or lagging or mode == 'unverified' or (mode == 'unverified-ops' and sha == os.environ['OPS']) else [
             {'id': 71, 'event': 'push', 'head_branch': 'main', 'head_sha': sha, 'conclusion': 'success', 'run_number': 1},
             {'id': 72, 'event': 'pull_request', 'head_branch': 'main', 'head_sha': sha, 'conclusion': 'success', 'run_number': 2}
         ]}))
@@ -92,14 +96,20 @@ def main():
         for command in ("git", "gh", "ssh", "scp", "id", "docker"):
             (binary / command).symlink_to(fake)
         env = dict(os.environ, PATH=f"{binary}:{os.environ['PATH']}", LOG=str(root / "calls"),
-                   OPS=OPS, DEPLOY_SOURCE=str(DEPLOY), MANIFEST=json.dumps(MANIFEST), TOKEN_RECEIVED=str(root / "token"))
-        for mode in ("unverified", "unverified-ops", "missing-artifact", "bad-manifest", "gh-unavailable", "success"):
+                   OPS=OPS, DEPLOY_SOURCE=str(DEPLOY), MANIFEST=json.dumps(MANIFEST), TOKEN_RECEIVED=str(root / "token"),
+                   BACKEND_VERIFY_LOOKUP_DELAY_SECONDS="0")
+        for mode in ("unverified", "unverified-ops", "missing-artifact", "bad-manifest", "gh-unavailable", "listing-lag", "success"):
             env["FAIL_MODE"] = mode
+            (root / "calls").write_text("")
             destination = root / mode
             result = subprocess.run(["bash", str(DEPLOY / "prepare-release.sh"), SHA, OPS, str(destination)],
                                     env=env, text=True, capture_output=True)
-            assert (result.returncode == 0) == (mode == "success"), (mode, result.stderr)
-            assert (destination / "verified-revisions").exists() == (mode == "success")
+            succeeds = mode in ("listing-lag", "success")
+            assert (result.returncode == 0) == succeeds, (mode, result.stderr)
+            assert (destination / "verified-revisions").exists() == succeeds
+            lookups = (root / "calls").read_text().count("head_sha=")
+            # A just-completed run missing from the listing is retried; a run that never appears still fails.
+            assert lookups == {"unverified": 6, "unverified-ops": 7, "listing-lag": 4}.get(mode, lookups), (mode, lookups)
         bundle = root / "success"
         assert (bundle / "verified-revisions").read_text().splitlines() == [SHA, OPS, "71", "71"]
         assert (bundle / "release/docker-compose.yml").read_text() == "services: {}\n"
@@ -255,7 +265,7 @@ def main():
                                 env=env, text=True, capture_output=True)
         assert result.returncode == 0, result.stderr
         assert not (root / "archive-bundle/ops/api.env").exists(), "Ignored configuration leaked into the bundle"
-    print("PASS: verified run selection, private source bundle, invalid/expired releases, pinned SSH/auth failures, upload/remote errors and stdin-only credentials (mocked CLIs).")
+    print("PASS: verified run selection with listing-lag retry, private source bundle, invalid/expired releases, pinned SSH/auth failures, upload/remote errors and stdin-only credentials (mocked CLIs).")
     print("PASS: receiver preserves SQL-maintenance mode and image/revision identity; registry credentials cleaned on login/deploy failure, TERM interruption and success.")
     print("PASS: real Git archive excludes ignored workstation credentials from the operations bundle.")
 

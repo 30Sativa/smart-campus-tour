@@ -10,12 +10,24 @@ source_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 [[ $(git -C "$source_root" rev-parse HEAD) == "$ops" ]] || fail 'Checkout does not match the operations revision.'
 [[ -z $(git -C "$source_root" status --porcelain --untracked-files=no -- backend/deploy) ]] || fail 'Operations scripts have local modifications.'
 [[ ! -e "$destination" ]] || fail 'Bundle destination already exists; use a new directory.'
+# GitHub's status= listing filter can omit a completed successful run (seen
+# missing for hours), so select the conclusion locally. The unfiltered listing
+# can still lag a run that has just completed, so retry before failing.
+lookup_attempts=${BACKEND_VERIFY_LOOKUP_ATTEMPTS:-6}
+lookup_delay=${BACKEND_VERIFY_LOOKUP_DELAY_SECONDS:-10}
+[[ "$lookup_attempts" =~ ^[1-9][0-9]*$ && "$lookup_delay" =~ ^[0-9]+$ ]] || fail 'Invalid Backend Verify lookup retry settings.'
 find_run() {
-  local response run
-  response=$(gh api "/repos/$repo/actions/workflows/backend-verify.yml/runs?head_sha=$1&status=success&per_page=100")
-  run=$(jq -r --arg sha "$1" '[.workflow_runs[] | select(.event == "push" and .head_branch == "main" and .head_sha == $sha and .conclusion == "success")] | sort_by(.run_number) | last | .id // empty' <<<"$response")
-  [[ "$run" =~ ^[0-9]+$ ]] || fail "No successful main Backend Verify run exists for $1."
-  printf '%s' "$run"
+  local response run attempt
+  for ((attempt = 1; attempt <= lookup_attempts; attempt++)); do
+    response=$(gh api "/repos/$repo/actions/workflows/backend-verify.yml/runs?head_sha=$1&per_page=100") || response=''
+    run=$(jq -r --arg sha "$1" '[.workflow_runs[] | select(.event == "push" and .head_branch == "main" and .head_sha == $sha and .conclusion == "success")] | sort_by(.run_number) | last | .id // empty' <<<"$response" 2>/dev/null) || run=''
+    if [[ "$run" =~ ^[0-9]+$ ]]; then printf '%s' "$run"; return; fi
+    if ((attempt < lookup_attempts)); then
+      echo "Backend Verify run for $1 not listed yet (attempt $attempt/$lookup_attempts); retrying in ${lookup_delay}s." >&2
+      sleep "$lookup_delay"
+    fi
+  done
+  fail "No successful main Backend Verify run exists for $1."
 }
 release_run=$(find_run "$release")
 ops_run=$(find_run "$ops")
