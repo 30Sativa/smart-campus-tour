@@ -183,8 +183,8 @@ export function tourSituation(detail: TourDetails, robot: RobotReport = null): S
       body: 'Robot đứng chờ tại đây. Mở khóa một điểm để học sinh bầu và đi tiếp, hoặc bỏ qua các điểm còn lại để về điểm kết thúc.',
     }
     const auto = execution?.autoAdvance
-    const autoText = auto?.blockedReason ? 'Hết giờ dừng nhưng robot chưa đi được (xem lý do bên dưới); bấm khi sẵn sàng.'
-      : auto?.enabled ? 'Robot tự đi tiếp khi hết giờ dừng. Tắt "Tự đi tiếp" để giữ robot ở đây.'
+    const autoText = auto?.blockedReason ? 'Hết giờ dừng nhưng robot chưa đi được (xem lý do ở mục Tuyến); bấm khi sẵn sàng.'
+      : auto?.enabled ? 'Robot tự đi tiếp khi hết giờ dừng. Tắt "Tự đi tiếp" ở mục Tuyến để giữ robot ở đây.'
       : 'Bấm khi đoàn đã xem xong; robot không tự rời điểm dừng.'
     if (vote.voting) {
       const voteText = vote.ballot?.open ? 'Học sinh đang bầu điểm tiếp theo; bầu chọn đóng khi hết giờ dừng hoặc khi bạn cho robot đi. ' : ''

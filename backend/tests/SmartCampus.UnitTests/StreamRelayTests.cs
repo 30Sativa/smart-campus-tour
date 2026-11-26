@@ -79,7 +79,8 @@ public sealed class StreamRelayTests
         var relay = Relay();
         Assert.Equal(RelayDecision.UnknownCaller, await relay.Ask("publish", key: "wrong", user: "nuc", password: PublishPassword));
         Assert.Equal(RelayDecision.UnknownCaller, await relay.Ask("publish", key: null, user: "nuc", password: PublishPassword));
-        var unconfigured = new AuthorizeRelayRequestHandler(new StreamRelaySettings(), Entitlement(new StreamRelaySettings(), new Clock(Now)));
+        var unconfigured = new AuthorizeRelayRequestHandler(new StreamRelaySettings(), Entitlement(new StreamRelaySettings(), new Clock(Now)),
+            new GuideVoiceEntitlement(new StreamRelaySettings(), new FakeTalkReader(), new FakeReader(), new Clock(Now)));
         Assert.Equal(RelayDecision.UnknownCaller, await unconfigured.Handle(new("publish", "publish", "quest", "nuc", PublishPassword, null, null), default));
     }
 
@@ -258,6 +259,111 @@ public sealed class StreamRelayTests
         Assert.Equal(RelayDecision.Deny, (await withoutCloudinary.Handle(new(Key, FallbackPath), default)).Decision);
     }
 
+    // --- ADR-0072: the Operator's live voice on the relay path voice-{tourId} -----------------------------------------
+
+    private static readonly string VoicePath = "voice-aaaaaaaabbbbccccddddeeeeeeeeeeee";
+
+    [Fact]
+    public void VoicePath_IsOnlyTheExactFormTheBackendMakes()
+    {
+        Assert.Equal(VoicePath, GuideVoicePaths.For(TourId));
+        Assert.True(GuideVoicePaths.TryParse(VoicePath, out var parsed));
+        Assert.Equal(TourId, parsed);
+        Assert.False(GuideVoicePaths.TryParse("voice-AAAAAAAABBBBCCCCDDDDEEEEEEEEEEEE", out _));
+        Assert.False(GuideVoicePaths.TryParse("voice-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", out _));
+        Assert.False(GuideVoicePaths.TryParse(FallbackPath, out _));
+        Assert.False(GuideVoicePaths.TryParse(null, out _));
+    }
+
+    [Fact]
+    public async Task VoicePublish_IsOnlyTheToursOperator_WhileTheTalkWindowIsOpen()
+    {
+        var relay = Relay();
+        relay.Talk.Tour = new(TourId, "RUNNING", Now.AddMinutes(-10), StaffUser, "Operator");
+        var access = relay.Voice.IssuePublish(StaffUser, TourId);
+        Assert.Equal("https://stream.example.test:8889/" + VoicePath + "/whip", access.Url);
+        var query = "token=" + access.Token;
+
+        Assert.Equal(RelayDecision.Allow, await relay.Ask("publish", path: VoicePath, query: query));
+        // A publisher token never reads; the NUC password does not publish the voice; the token opens no other path.
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", path: VoicePath, query: query));
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("publish", path: VoicePath, user: "nuc", password: PublishPassword));
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("publish", query: query));
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("publish", path: "voice-" + Guid.NewGuid().ToString("N"), query: query));
+
+        // Another Operator now, or the Tour ended: refused, and the reaper cuts the open session.
+        relay.Talk.Tour = relay.Talk.Tour with { OperatorUserId = Guid.NewGuid() };
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("publish", path: VoicePath, query: query));
+        relay.Talk.Tour = relay.Talk.Tour with { OperatorUserId = StaffUser };
+        Assert.Equal(RelayDecision.Allow, await relay.Ask("publish", path: VoicePath, query: query, recheck: true));
+        relay.Talk.Tour = relay.Talk.Tour with { State = "COMPLETED" };
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("publish", path: VoicePath, query: query, recheck: true));
+    }
+
+    [Fact]
+    public async Task VoiceRead_IsASessionOfThatTour_AndTheReaperKeepsItAfterTheTokenExpires()
+    {
+        var relay = Relay();
+        relay.Talk.Tour = new(TourId, "READY", Now.AddMinutes(10), StaffUser, "Operator");
+        relay.Reader.InTour = true;
+        var access = relay.Voice.IssueListen(Session, TourId);
+        Assert.Equal("https://stream.example.test:8889/" + VoicePath + "/whep", access.Url);
+        var query = "token=" + access.Token;
+
+        Assert.Equal(RelayDecision.Allow, await relay.Ask("read", path: VoicePath, query: query));
+        Assert.Equal((Session, TourId), relay.Reader.LastInTourAsked);
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("publish", path: VoicePath, query: query));
+        // A camera token does not open the voice, nor a listener token the camera.
+        relay.Reader.Entitled = true;
+        var camera = relay.Entitlement.Issue(StreamTokenKinds.Student, Session).Token;
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", path: VoicePath, query: "token=" + camera));
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", query: query));
+
+        relay.Clock.Now = Now.AddSeconds(120);
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", path: VoicePath, query: query));
+        Assert.Equal(RelayDecision.Allow, await relay.Ask("read", path: VoicePath, query: query, recheck: true));
+
+        // A revoked session is cut by the reaper.
+        relay.Reader.InTour = false;
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", path: VoicePath, query: query, recheck: true));
+    }
+
+    [Fact]
+    public async Task VoiceRead_WaitsForTheTalkWindow()
+    {
+        var relay = Relay();
+        relay.Reader.InTour = true;
+        relay.Talk.Tour = new(TourId, "SCHEDULED", Now.AddMinutes(30), StaffUser, "Operator");
+        var query = "token=" + relay.Voice.IssueListen(Session, TourId).Token;
+
+        Assert.Equal(RelayDecision.Deny, await relay.Ask("read", path: VoicePath, query: query));
+        relay.Talk.Tour = relay.Talk.Tour with { ScheduledStartAt = Now.AddMinutes(14) };
+        Assert.Equal(RelayDecision.Allow, await relay.Ask("read", path: VoicePath, query: query));
+    }
+
+    [Fact]
+    public async Task StaffVoiceAccess_IsForTheOperator_InTheWindow_WithAConfiguredRelay()
+    {
+        var talk = new FakeTalkReader { Tour = new(TourId, "RUNNING", Now, StaffUser, "Operator") };
+        var clock = new Clock(Now);
+        GetStaffGuideVoiceAccessQueryHandler Handler(StreamRelaySettings settings) =>
+            new(talk, settings, new GuideVoiceEntitlement(settings, talk, new FakeReader(), clock), clock);
+
+        var access = await Handler(Settings()).Handle(new(TourId, StaffUser), default);
+        Assert.Equal(StreamTokenKinds.VoicePublisher, StreamTokens.Read(Settings(), access.Token)!.Kind);
+        Assert.Equal(Now.AddSeconds(120), access.ExpiresAt);
+        await Assert.ThrowsAsync<SmartCampus.Application.Common.Exceptions.ForbiddenException>(() =>
+            Handler(Settings()).Handle(new(TourId, Guid.NewGuid()), default));
+        await Assert.ThrowsAsync<SmartCampus.Application.Common.Exceptions.NotFoundException>(() =>
+            Handler(Settings()).Handle(new(Guid.NewGuid(), StaffUser), default));
+        var refused = await Assert.ThrowsAsync<SmartCampus.Application.Common.Exceptions.ConflictException>(() =>
+            Handler(new StreamRelaySettings()).Handle(new(TourId, StaffUser), default));
+        Assert.Equal(GuideVoiceErrors.NotAvailable, refused.Code);
+        talk.Tour = talk.Tour with { State = "COMPLETED" };
+        await Assert.ThrowsAsync<SmartCampus.Application.Common.Exceptions.ConflictException>(() =>
+            Handler(Settings()).Handle(new(TourId, StaffUser), default));
+    }
+
     private static StreamEntitlement Entitlement(StreamRelaySettings settings, TimeProvider clock, FakeReader? reader = null, FakeStore? store = null) =>
         new(settings, reader ?? new FakeReader(), store ?? new FakeStore(), clock);
 
@@ -269,13 +375,16 @@ public sealed class StreamRelayTests
         public FakeReader Reader { get; } = new();
         public FakeStore Store { get; } = new();
         public StreamRelaySettings Settings { get; } = StreamRelayTests.Settings();
+        public FakeTalkReader Talk { get; } = new();
         public StreamEntitlement Entitlement { get; }
+        public GuideVoiceEntitlement Voice { get; }
         private readonly AuthorizeRelayRequestHandler handler;
 
         public RelayFixture()
         {
             Entitlement = new StreamEntitlement(Settings, Reader, Store, Clock);
-            handler = new AuthorizeRelayRequestHandler(Settings, Entitlement);
+            Voice = new GuideVoiceEntitlement(Settings, Talk, Reader, Clock);
+            handler = new AuthorizeRelayRequestHandler(Settings, Entitlement, Voice);
         }
 
         public Task<RelayDecision> Ask(string action, string? key = Key, string path = "quest", string? user = null,
@@ -311,6 +420,23 @@ public sealed class StreamRelayTests
         }
 
         public Task<string?> RunningTourFallbackVideoAsync(Guid tourId, CancellationToken ct) => Task.FromResult(RunningFallbackVideo);
+
+        public bool InTour { get; set; }
+        public (Guid Session, Guid Tour)? LastInTourAsked { get; private set; }
+
+        public Task<bool> StudentSessionIsInTourAsync(Guid sessionId, Guid tourId, DateTimeOffset now, CancellationToken ct)
+        {
+            LastInTourAsked = (sessionId, tourId);
+            return Task.FromResult(InTour);
+        }
+    }
+
+    private sealed class FakeTalkReader : ITourTalkReader
+    {
+        public TourTalkTour? Tour { get; set; }
+        public Task<TourTalkTour?> GetTourAsync(Guid tourId, CancellationToken ct) => Task.FromResult(Tour?.TourId == tourId ? Tour : null);
+        public Task<TourTalkViewer?> FindViewerAsync(Guid tourId, byte[] tokenHash, DateTimeOffset now, CancellationToken ct) =>
+            Task.FromResult<TourTalkViewer?>(null);
     }
 
     private sealed class FakeRobots(RobotCameraFacts? facts) : IRobotCameraReader

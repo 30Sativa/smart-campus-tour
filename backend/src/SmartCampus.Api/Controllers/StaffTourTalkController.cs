@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
+using SmartCampus.Application.Features.StreamRelay;
 using SmartCampus.Application.Features.TourTalk;
 using SmartCampus.Application.Features.TourTalk.Commands.SendStaffTalkMessage;
 using SmartCampus.Application.Features.TourTalk.Queries.GetTourTalk;
@@ -57,6 +58,21 @@ public sealed class StaffTourTalkController(ISender sender) : ControllerBase
         var message = await sender.Send(new SendStaffTalkMessageCommand(id, User.GetRequiredUserId(), form.Text, audio,
             form.Audio?.ContentType, form.DurationMs), ct);
         return Ok(new BaseResponse<TourTalkMessageView> { Success = true, Message = "Message sent.", Data = message });
+    }
+
+    /// <summary>
+    /// ADR-0072: the WHIP address and a short token for the Operator's live voice to the Viewers (push-to-talk).
+    /// 403 for anyone but the Tour's Operator, 409 outside the talk window or without a configured relay.
+    /// </summary>
+    [HttpGet("voice-access")]
+    public async Task<ActionResult<BaseResponse<GuideVoiceAccess>>> VoiceAccess(Guid id, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new BaseResponse<GuideVoiceAccess>
+        {
+            Success = true, Message = "OK",
+            Data = await sender.Send(new GetStaffGuideVoiceAccessQuery(id, User.GetRequiredUserId()), ct)
+        });
     }
 
     [HttpGet("{messageId:guid}/audio")]

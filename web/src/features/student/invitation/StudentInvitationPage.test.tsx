@@ -62,7 +62,7 @@ it('recovers a cookie session without an access code, account JWT or account ref
   expect(calls[0][0]).toMatch(/\/session$/)
   expect(calls.filter(([url]) => url.endsWith('/session'))).toHaveLength(1)
   for (const [url, options] of calls) {
-    expect(url).toMatch(/\/(session|view|talk)$/)
+    expect(url).toMatch(/\/(session|view|talk|talk\/voice-access)$/)
     expect(options.credentials).toBe('include')
     expect(options.body).toBeUndefined()
     expect(new Headers(options.headers).get('Authorization')).toBeNull()
@@ -153,6 +153,7 @@ it('does not let a late anonymous heartbeat discard a successful join', async ()
   let sessions = 0
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url.endsWith('/join')) return response()
+    if (url.endsWith('/talk/voice-access')) return response(null, 409)
     if (url.endsWith('/talk')) return response(talkFeed)
     if (url.endsWith('/view')) return response(view)
     return ++sessions === 1 ? response(null, 401) : heartbeat.promise
@@ -174,6 +175,7 @@ it('cancels a pending heartbeat before leave and keeps the room cache empty', as
   let sessions = 0
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url.endsWith('/leave')) return response(null)
+    if (url.endsWith('/talk/voice-access')) return response(null, 409)
     if (url.endsWith('/talk')) return response(talkFeed)
     if (url.endsWith('/view')) return response(view)
     return ++sessions === 1 ? response() : heartbeat.promise
@@ -351,6 +353,7 @@ it('re-checks the session when an account sign-out clears the query cache mid-ch
   const first = deferredResponse()
   let sessions = 0
   const fetch = vi.fn(async (url: string) => {
+    if (url.endsWith('/talk/voice-access')) return response(null, 409)
     if (url.endsWith('/talk')) return response(talkFeed)
     if (url.endsWith('/view')) return response(view)
     return ++sessions === 1 ? first.promise : response()
@@ -371,6 +374,7 @@ it('offers the code form and a retry after 8 s without a session answer', async 
     const hanging = deferredResponse()
     let sessions = 0
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.endsWith('/talk/voice-access')) return response(null, 409)
       if (url.endsWith('/talk')) return response(talkFeed)
       if (url.endsWith('/view')) return response(view)
       return ++sessions === 1 ? hanging.promise : response()
@@ -397,6 +401,7 @@ it.each([
 ])('shows the code form with "Chưa kiểm tra được lời mời" when the check fails (%s)', async (_name, fail) => {
   let sessions = 0
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    if (url.endsWith('/talk/voice-access')) return response(null, 409)
     if (url.endsWith('/talk')) return response(talkFeed)
     if (url.endsWith('/view')) return response(view)
     return ++sessions === 1 ? fail() : response()
