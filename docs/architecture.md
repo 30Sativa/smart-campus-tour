@@ -2786,7 +2786,7 @@ token's expiry, so the reaper cuts the voice within 5 s when access ends. The re
 `"~^voice-[0-9a-f]{32}$": source: publisher` in `robot/quest-stream/relay/install-relay.sh`.
 
 Viewer video: the Student player shows the narration line being spoken as a subtitle (toggle "Tắt phụ đề"/"Bật phụ đề",
-on by default, hidden while muted); web only, no API change.
+on by default; while the page is muted the lines still run, timed from each sentence's length); web only, no API change.
 
 ### 7.3 Viewer engagement report (ADR-0071, implemented)
 

@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { captionAt, NARRATION_RATE, pickVietnameseVoice, splitForSpeech, useNarrationVoice, type NarrationSource } from './use-narration-voice'
+import { captionAt, NARRATION_RATE, pickVietnameseVoice, silentLineMs, splitForSpeech, useNarrationVoice, type NarrationSource } from './use-narration-voice'
 
 class FakeUtterance {
   lang = ''
@@ -69,21 +69,52 @@ describe('captionAt', () => {
 })
 
 describe('useNarrationVoice', () => {
-  it('subtitles the sentence being read and clears it when the voice ends or is muted', () => {
-    const { result, rerender } = renderHook(({ muted }) => useNarrationVoice(at('lib'), muted), { initialProps: { muted: false } })
+  it('subtitles the sentence being read and clears it when the voice ends', () => {
+    const { result } = renderHook(() => useNarrationVoice(at('lib'), false))
     flush()
     expect(result.current.caption).toBeNull()
     act(() => spoken[0].onstart?.())
     expect(result.current.caption).toBe('Đây là thư viện.')
     act(() => spoken[1].onstart?.())
     expect(result.current.caption).toBe('Mở cửa từ 7 giờ.')
-    rerender({ muted: true })
-    expect(result.current.caption).toBeNull()
-    rerender({ muted: false })
     act(() => spoken[1].onend?.())
     expect(result.current.caption).toBeNull()
   })
 
+  it('keeps the subtitles going without sound when the page is muted on arrival', () => {
+    const { result } = renderHook(() => useNarrationVoice(at('lib'), true))
+    act(() => { vi.advanceTimersByTime(0) })
+    expect(speech.speak).not.toHaveBeenCalled()
+    expect(result.current.speaking).toBe(false)
+    expect(result.current.caption).toBe('Đây là thư viện.')
+    act(() => { vi.advanceTimersByTime(silentLineMs('Đây là thư viện.')) })
+    expect(result.current.caption).toBe('Mở cửa từ 7 giờ.')
+    act(() => { vi.advanceTimersByTime(silentLineMs('Mở cửa từ 7 giờ.')) })
+    expect(result.current.caption).toBeNull()
+  })
+
+  it('muting cuts the voice and carries on the subtitles from the sentence being read', () => {
+    const { result, rerender } = renderHook(({ muted }) => useNarrationVoice(at('lib'), muted), { initialProps: { muted: false } })
+    act(() => { vi.advanceTimersByTime(0) })
+    act(() => spoken[1].onstart?.())
+    speech.cancel.mockClear()
+    rerender({ muted: true })
+    expect(speech.cancel).toHaveBeenCalled()
+    expect(result.current.speaking).toBe(false)
+    act(() => { vi.advanceTimersByTime(0) })
+    expect(result.current.caption).toBe('Mở cửa từ 7 giờ.')
+    act(() => spoken[1].onend?.()) // the cancelled voice's own end does not clear the silent subtitle
+    expect(result.current.caption).toBe('Mở cửa từ 7 giờ.')
+    rerender({ muted: false }) // unmuting does not restart the voice mid-way; the subtitles finish
+    act(() => { vi.advanceTimersByTime(silentLineMs('Mở cửa từ 7 giờ.')) })
+    expect(result.current.caption).toBeNull()
+    expect(speech.speak).toHaveBeenCalledTimes(2)
+  })
+
+  it('times a muted subtitle line from its length, never too short to read', () => {
+    expect(silentLineMs('Ngắn.')).toBe(1800)
+    expect(silentLineMs('x'.repeat(120))).toBe(10000)
+  })
 
   it('reads the stop once on arrival and again after travelling', () => {
     const { result, rerender } = renderHook(({ n }) => useNarrationVoice(n, false), { initialProps: { n: at('lib') as NarrationSource | undefined } })
