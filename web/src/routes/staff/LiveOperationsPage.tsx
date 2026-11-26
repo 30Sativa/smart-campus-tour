@@ -224,7 +224,10 @@ function SituationCard({ detail, isOperator, stale, now }: { detail: TourDetails
   const connection = useFleetConnection(store => store.state)
   const running = detail.tour.state === 'RUNNING'
   const observing = running && detail.execution?.currentStep === 'OBSERVING'
-  const extras = EXTRA_ACTIONS.filter(action => action !== situation.action && !situation.secondary.includes(action) && actionGate(detail, action)?.allowed)
+  // The departure is Next from the start, carrying the on-site confirmations: offering Next beside it would be a second
+  // way to leave the start without them.
+  const extras = EXTRA_ACTIONS.filter(action => action !== situation.action && !situation.secondary.includes(action) &&
+    !(action === 'next' && situation.action === 'depart') && actionGate(detail, action)?.allowed)
   // Pause comes from servers with the demo flow; an older one sends no gate for it, and it is not offered.
   const primary = situation.action && !(situation.action === 'pause' && !actionGate(detail, 'pause')) ? situation.action : null
   const actions = primary ? [primary, ...extras] : extras
@@ -237,10 +240,12 @@ function SituationCard({ detail, isOperator, stale, now }: { detail: TourDetails
 
   const hasControls = actions.length > 0 || secondary.length > 0 || consoleOffline || (!isOperator && (running || situation.action))
   const endEarlyOnly = situation.onlyEndEarly && actions.length === 0 && running && isOperator
+  // The departure's four on-site confirmations are too tall for a side column: they go in one row under the message.
+  const departing = isOperator && actions[0] === 'depart'
   // One band across the page: what is happening, and the step it calls for on the right (stacked below 1024px).
   // With nothing to press the message takes the whole band.
   return (
-    <section className={`${panelClass} flex flex-col gap-3 p-3 lg:flex-row lg:items-start`} aria-label="Tình hình hiện tại">
+    <section className={`${panelClass} flex flex-col gap-3 p-3 ${departing ? '' : 'lg:flex-row lg:items-start'}`} aria-label="Tình hình hiện tại">
       <div className={`flex min-w-0 flex-1 items-start gap-3 self-stretch rounded-xl border px-4 py-3 ${style.box}`} role={situation.tone === 'danger' ? 'alert' : 'status'}>
         <style.icon size={22} className="mt-0.5 shrink-0" aria-hidden="true" />
         <div className="min-w-0">
@@ -250,7 +255,7 @@ function SituationCard({ detail, isOperator, stale, now }: { detail: TourDetails
           {endEarlyOnly && <p className="mt-1.5 text-[13px] leading-5">Không còn thao tác nào tiếp tục được Tour. <a href="#ket-thuc-som" className="font-semibold underline underline-offset-2 hover:no-underline">Dùng mục Kết thúc sớm</a>.</p>}
         </div>
       </div>
-      {hasControls && <div className="w-full min-w-0 space-y-3 sm:max-w-md lg:w-[380px] lg:max-w-none lg:shrink-0">
+      {hasControls && <div className={`w-full min-w-0 space-y-3 ${departing ? 'px-1' : 'sm:max-w-md lg:w-[380px] lg:max-w-none lg:shrink-0'}`}>
         {!isOperator ? <p className="flex gap-2 px-1 text-[13px] leading-5 text-[#475569]"><UserRound size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
           Bạn đang xem Tour này. Chỉ {detail.operator?.fullName ?? 'người vận hành được giao'} mới thao tác được.</p>
           : <>

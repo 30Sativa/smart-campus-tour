@@ -177,20 +177,23 @@ function DepartAction({ detail, gate, frozen }: { detail: TourDetails; gate: Tou
     next.mutateAsync({ id: tour.id, requestId: requestId(`depart:${tour.id}:${tour.rowVersion}`), rowVersion: tour.rowVersion, confirmation })
       .then(() => notify({ title: `Đã khởi hành tới ${targets.next ?? 'điểm dừng đầu tiên'}`, detail: 'Theo dõi robot trên camera và bản đồ.' }), () => undefined)
   }
+  // Laid out across the situation band: the four ticks in one row on a wide screen, the button and its note under them.
   return <div className="space-y-2.5">
-    <fieldset className="space-y-1.5">
-      <legend className="mb-1 text-[13px] font-semibold text-[#0f172a]">Xác nhận tại chỗ</legend>
-      {CONFIRMATIONS.map(({ key, label, hint }) => (
+    <fieldset>
+      <legend className="mb-1.5 text-[13px] font-semibold text-[#0f172a]">Xác nhận tại chỗ</legend>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{CONFIRMATIONS.map(({ key, label, hint }) => (
         <label key={key} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors duration-150 motion-reduce:transition-none ${confirmation[key] ? 'border-[#bfdbfe] bg-[#eff6ff]' : 'border-[#e2e8f0] hover:border-[#bfdbfe]'}`}>
           <input type="checkbox" checked={confirmation[key]} onChange={event => setConfirmation(value => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#2563eb]" />
           <span className="min-w-0"><span className="block text-[13px] font-semibold text-[#0f172a]">{label}</span><span className="block text-[11.5px] text-muted">{hint}</span></span>
         </label>
-      ))}
+      ))}</div>
     </fieldset>
-    <button type="button" className={`${buttonClass('primary', 'lg')} w-full`} disabled={!allowed || next.isPending} onClick={depart} aria-describedby="depart-note">
-      <Play size={18} aria-hidden="true" />{next.isPending ? 'Đang gửi…' : `Khởi hành tới ${targets.next ?? 'điểm dừng đầu tiên'}`}
-    </button>
-    <p id="depart-note" className={`text-[13px] leading-5 ${allowed ? 'text-[#64748b]' : 'text-[#7d5310]'}`}>{note}</p>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <p id="depart-note" className={`text-[13px] leading-5 ${allowed ? 'text-[#64748b]' : 'text-[#7d5310]'}`}>{note}</p>
+      <button type="button" className={`${buttonClass('primary', 'lg')} w-full sm:w-auto sm:min-w-[260px]`} disabled={!allowed || next.isPending} onClick={depart} aria-describedby="depart-note">
+        <Play size={18} aria-hidden="true" />{next.isPending ? 'Đang gửi…' : `Khởi hành tới ${targets.next ?? 'điểm dừng đầu tiên'}`}
+      </button>
+    </div>
     {refusal && <div role="alert" className="space-y-2"><p className="text-[13px] font-semibold text-[#9d3428]">{refusal.message}</p>
       {refusal.checks && <BlockerList checks={refusal.checks} blockedBy={refusal.blockedBy} />}</div>}
   </div>
