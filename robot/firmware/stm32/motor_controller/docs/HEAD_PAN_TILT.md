@@ -53,7 +53,7 @@ cần 650 ns).
 | `HEAD_MICROSTEP` | 4 | Phải khớp chân M0–M2 của cả hai DRV8825. Hiện tại 1/4: M0 thấp, M1 cao, M2 thấp. Không jumper = 1 (bước đủ); M2 cao = 16 |
 | `HEAD_PAN_GEAR_RATIO`, `HEAD_TILT_GEAR_RATIO` | 4,0 / 16,0 | PAN hộp số hành tinh 4:1, TILT hộp số 16:1 (24/11/2026). **Phải khớp hộp số thật**, sai thì mọi góc sai đúng tỉ lệ đó |
 | `HEAD_PAN_HOME_DIR`, `HEAD_TILT_HOME_DIR` | −1 / −1 | Chiều tới vật cản: PAN quay phải, TILT cúi xuống |
-| `HEAD_PAN_HOME_SEEK_CDEG`, `HEAD_TILT_HOME_SEEK_CDEG` | 19000 / 3600 | Quãng quay tìm vật cản. PAN 190°; TILT 36° (26/11/2026, trước là 44°): cúi tối đa 36° ở 20°/s, nên chỉ chạm vật cản cúi 20° khi đầu đang ngửa không quá 16° |
+| `HEAD_PAN_HOME_SEEK_CDEG`, `HEAD_TILT_HOME_SEEK_CDEG` | 19000 / 2700 | Quãng quay tìm vật cản. PAN 190°; TILT 27° (26/11/2026, trước là 44°): cúi tối đa 27° ở 20°/s, nên chỉ chạm vật cản cúi 20° khi đầu đang ngửa không quá 7°; ngửa hơn thì mốc 0 lệch lên đúng phần thiếu |
 | `HEAD_PAN_HOME_OFFSET_CDEG`, `HEAD_TILT_HOME_OFFSET_CDEG` | 17400 / 2000 | Từ cạnh vật cản về 0°: PAN quay trái 174°, TILT ngửa 20° (177,8 bước đủ, làm tròn tới vi bước 0,028°). **Núm hiệu chỉnh**: HOME xong mà đầu chưa thẳng thì sửa số này |
 | `HEAD_HOME_SPEED_DPS` | 20 °/s | Tốc độ khi tìm vật cản (PAN 178 xung/s, TILT 711 xung/s ở vi bước 1/4) |
 | `HEAD_HOME_SETTLE_MS` | 200 | Đứng yên tại vật cản cho rotor hết rung trước khi đặt mốc |
@@ -72,11 +72,11 @@ TILT dương = ngửa lên. Bước đủ tại trục ra: PAN 0,45°, TILT 0,11
 
 ## Lấy mốc bằng vật cản (HOME)
 
-1. Bật driver. PAN quay **phải** 190°, TILT cúi **xuống** tối đa 36°, ở 20°/s. Quãng
+1. Bật driver. PAN quay **phải** 190°, TILT cúi **xuống** tối đa 27°, ở 20°/s. Quãng
    seek được kéo dài thêm 0–3 bước để bước cuối rơi vào cùng một pha điện của
    DRV8825 (`HEAD_HOME_PHASE_ALIGN`).
 2. Chạm vật cản thì motor trượt bước tại chỗ tới hết quãng (tiếng "tè tè" là
-   bình thường). Xuất phát ở 0° thì PAN chỉ trượt khoảng 16°, TILT cũng khoảng 16°.
+   bình thường). Xuất phát ở 0° thì PAN chỉ trượt khoảng 16°, TILT khoảng 7°.
 3. Đứng yên 200 ms, rồi firmware đặt vị trí = cạnh vật cản và chạy về 0° ở
    tốc độ thường: PAN quay trái 174°, TILT ngửa lên 20°.
 4. Xong: `head_state=1`, có mốc. Toàn bộ khoảng 13 s (PAN), TILT xong sớm hơn.
