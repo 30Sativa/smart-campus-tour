@@ -30,7 +30,10 @@ export type NarrationVoice = {
   /** Plays the current stop's narration again from the start. */
   replay: () => void
   stop: () => void
-  /** The sentence being read right now, for the subtitle over the video; null while silent. */
+  /**
+   * The sentence being read right now, for the subtitle over the video. While the page is muted the subtitle still
+   * runs, timed from each sentence's length; null when there is nothing to read.
+   */
   caption: string | null
 }
 
@@ -38,6 +41,15 @@ const MAX_CHUNK = 180
 
 /** Speech speed of the browser voice: a little under normal (1), so Students follow a guide's pace over the live video. */
 export const NARRATION_RATE = 0.85
+
+/** Reading pace used to time the subtitles while muted: about the browser voice at `NARRATION_RATE`. */
+const SILENT_CHARS_PER_SECOND = 12
+const SILENT_MIN_LINE_MS = 1800
+
+/** How long a subtitle line stays up while muted. */
+export function silentLineMs(line: string): number {
+  return Math.max(SILENT_MIN_LINE_MS, Math.round((line.length / SILENT_CHARS_PER_SECOND) * 1000))
+}
 
 /** Sentence-sized chunks: Chrome silently stops one long utterance after about 15 seconds. */
 export function splitForSpeech(text: string, max = MAX_CHUNK): string[] {
@@ -136,6 +148,10 @@ export function useNarrationVoice(narration: NarrationSource | undefined, muted:
   const run = useRef(0)
   const latest = useRef(narration)
   useEffect(() => { latest.current = narration })
+  /** Next subtitle line while muted. */
+  const silentTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const shown = useRef({ caption, speaking })
+  useEffect(() => { shown.current = { caption, speaking } })
 
   useEffect(() => {
     const api = speechApi()
@@ -152,6 +168,7 @@ export function useNarrationVoice(narration: NarrationSource | undefined, muted:
 
   /** Silences the device; the playing narration's own pause/cancel events clear `speaking`. */
   const silence = useCallback(() => {
+    clearTimeout(silentTimer.current)
     audio.current?.pause()
     speechApi()?.cancel()
   }, [])
@@ -180,19 +197,47 @@ export function useNarrationVoice(narration: NarrationSource | undefined, muted:
     setSpeaking(true)
   }, [silence])
 
+  /** Subtitles without sound, from sentence `from`: the muted page still reads along. */
+  const showSilently = useCallback((source: NarrationSource, from = 0) => {
+    run.current += 1
+    silence()
+    const id = run.current
+    const chunks = splitForSpeech(source.text)
+    setSpeaking(false)
+    const step = (index: number) => {
+      if (run.current !== id) return
+      if (index >= chunks.length) { setCaption(null); return }
+      setCaption(chunks[index])
+      silentTimer.current = setTimeout(() => step(index + 1), silentLineMs(chunks[index]))
+    }
+    step(from)
+  }, [silence])
+
   // Arriving at a stop starts its narration once; travelling between stops re-arms it.
   useEffect(() => {
     if (!narration) { handled.current = null; return }
     if (!narration.isPlaying || handled.current === narration.poiId) return
     const timer = setTimeout(() => {
       handled.current = narration.poiId
-      if (!muted) start(narration)
+      if (muted) showSilently(narration)
+      else start(narration)
     }, 0)
     return () => clearTimeout(timer)
-  }, [narration, muted, start])
+  }, [narration, muted, start, showSilently])
 
-  // Muting cuts the voice at once.
-  useEffect(() => { if (muted) silence() }, [muted, silence])
+  // Muting cuts the voice at once; the subtitles carry on from the sentence that was being read.
+  useEffect(() => {
+    if (!muted) return
+    const { caption: line, speaking: wasSpeaking } = shown.current
+    const current = latest.current
+    // Nothing audible (or subtitles already running silently): leave it as it is.
+    if (!wasSpeaking || !current) return
+    run.current += 1
+    silence()
+    const from = Math.max(0, line ? splitForSpeech(current.text).indexOf(line) : 0)
+    const timer = setTimeout(() => showSilently(current, from), 0)
+    return () => clearTimeout(timer)
+  }, [muted, silence, showSilently])
 
   // Leaving the page or the Tour ending stops any sound.
   useEffect(() => () => { run.current += 1; silence() }, [silence])
@@ -211,7 +256,7 @@ export function useNarrationVoice(narration: NarrationSource | undefined, muted:
   const stop = useCallback(() => { run.current += 1; silence(); setSpeaking(false); setCaption(null) }, [silence])
 
   const on = speaking && !muted
-  return { speaking: on, blocked, noVietnameseVoice, enable, replay, stop, caption: on ? caption : null }
+  return { speaking: on, blocked, noVietnameseVoice, enable, replay, stop, caption }
 }
 
 /**
