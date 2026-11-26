@@ -4,7 +4,7 @@ ARG SQLSERVER_IMAGE=mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
 FROM ${SQLSERVER_IMAGE}
 
 ARG VCS_REF=unknown
-ARG VERSION=1.25
+ARG VERSION=1.26
 ARG BUILD_DATE=unknown
 ARG SQLSERVER_IMAGE
 
@@ -37,6 +37,7 @@ COPY --chmod=u=rwX,go=rX \
     database/smart-campus-tour-schema-v1.23.sql \
     database/smart-campus-tour-schema-v1.24.sql \
     database/smart-campus-tour-schema-v1.25.sql \
+    database/smart-campus-tour-schema-v1.26.sql \
     database/smart-campus-tour-map-poi-permissions.sql \
     database/smart-campus-tour-route-revision-permissions.sql \
     database/smart-campus-tour-bootstrap-check.sql \
@@ -70,6 +71,7 @@ COPY --chmod=u=rwX,go=rX \
     database/patches/upgrade-v1.22-to-v1.23-poi-retirement.sql \
     database/patches/upgrade-v1.23-to-v1.24-user-avatar.sql \
     database/patches/upgrade-v1.24-to-v1.25-viewer-vote.sql \
+    database/patches/upgrade-v1.25-to-v1.26-technical-evidence-photos.sql \
     database/patches/add-poi-rowversion-v1.1.sql \
     /database/patches/
 

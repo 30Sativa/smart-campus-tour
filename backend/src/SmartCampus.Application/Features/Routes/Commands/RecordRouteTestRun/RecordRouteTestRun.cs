@@ -1,11 +1,13 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentValidation;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.FallbackVideo;
 using SmartCampus.Application.Features.MapPoi;
+using SmartCampus.Application.Features.TechnicalEvidence;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Routes;
@@ -32,20 +34,28 @@ public sealed class RecordRouteTestRunValidator : AbstractValidator<RecordRouteT
     }
 }
 
-public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tours.TourScheduleSettings schedule, TimeProvider clock)
+public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tours.TourScheduleSettings schedule,
+    CloudinarySettings cloudinary, TimeProvider clock)
     : IRequestHandler<RecordRouteTestRunCommand, RouteRevisionView>
 {
     public async Task<RouteRevisionView> Handle(RecordRouteTestRunCommand c, CancellationToken ct)
     {
         var q = c.Request; var result = q.ResultCode.Trim().ToUpperInvariant();
-        // The driven order joins the hash only when sent, so a fixed-route request hashes as it did before ADR-0065.
-        var hash = q.TraversedStopIds is null
-            ? SaveRouteRevisionHandler.Hash(new { c.RouteId, c.RevisionId, q.RobotCode, q.ParticipatingStaffUserId,
+        var photos = TechnicalEvidencePhotos.Normalize(q.EvidencePhotoUrls, cloudinary, c.ActorUserId);
+        // The driven order (ADR-0065) and the photos (ADR-0072) join the hash only when sent, so a request without them
+        // hashes as it did before.
+        var hash = (q.TraversedStopIds is null, photos.Count == 0) switch
+        {
+            (true, true) => SaveRouteRevisionHandler.Hash(new { c.RouteId, c.RevisionId, q.RobotCode, q.ParticipatingStaffUserId,
                 Result = result, q.AllStopsReached, q.SafelyStopped, q.LocalizationPassed,
-                q.FailureReason, q.EvidenceNote })
-            : SaveRouteRevisionHandler.Hash(new { c.RouteId, c.RevisionId, q.RobotCode, q.ParticipatingStaffUserId,
+                q.FailureReason, q.EvidenceNote }),
+            (false, true) => SaveRouteRevisionHandler.Hash(new { c.RouteId, c.RevisionId, q.RobotCode, q.ParticipatingStaffUserId,
                 Result = result, q.AllStopsReached, q.SafelyStopped, q.LocalizationPassed,
-                q.FailureReason, q.EvidenceNote, q.TraversedStopIds });
+                q.FailureReason, q.EvidenceNote, q.TraversedStopIds }),
+            _ => SaveRouteRevisionHandler.Hash(new { c.RouteId, c.RevisionId, q.RobotCode, q.ParticipatingStaffUserId,
+                Result = result, q.AllStopsReached, q.SafelyStopped, q.LocalizationPassed,
+                q.FailureReason, q.EvidenceNote, q.TraversedStopIds, EvidencePhotoUrls = photos }),
+        };
         await repo.LockRequestAsync(c.ActorUserId, q.RequestId, "test", ct);
         var prior = await repo.FindTestRequestAsync(c.ActorUserId, q.RequestId, ct);
         if (prior is not null)
@@ -93,17 +103,19 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
             SafelyStopped = q.SafelyStopped, LocalizationPassed = q.LocalizationPassed, MeasuredDurationSeconds = Tours.TourSchedule.StoredDurationSeconds(estimated),
             FailureReason = string.IsNullOrWhiteSpace(q.FailureReason) ? null : q.FailureReason.Trim(), EvidenceNote = q.EvidenceNote.Trim(),
             RequestId = q.RequestId, RequestHash = hash, CheckedAt = now, MeasurementBasis = RouteMeasurementBasis.TotalWithDwell,
-            TraversedStopIdsJson = RouteVerification.WriteTraversed(traversed) };
+            TraversedStopIdsJson = RouteVerification.WriteTraversed(traversed),
+            EvidencePhotoUrlsJson = TechnicalEvidencePhotos.Write(photos) };
         repo.Add(run);
         repo.AddAudit(new AuditLog { ActorUserId = c.ActorUserId, RobotId = robot.Id, Action = result == "PASS" ? "ROUTE_TEST_PASSED" : "ROUTE_TEST_FAILED",
             EntityType = "RouteRevision", EntityId = revision.Id.ToString("D"), ResultCode = result, OccurredAt = now,
-            DataJson = JsonSerializer.Serialize(new { revision.RevisionNumber, map.Id, robot.RobotCode, q.ParticipatingStaffUserId, EstimatedDurationSeconds = estimated }) });
+            DataJson = JsonSerializer.Serialize(new { revision.RevisionNumber, map.Id, robot.RobotCode, q.ParticipatingStaffUserId, EstimatedDurationSeconds = estimated,
+                EvidencePhotoCount = photos.Count }) });
         var view = await RouteRevisionMapper.Load(repo, route.Id, revision.Id, true, ct, schedule);
         var testView = new RouteTestRunView(run.Id, run.RouteRevisionId, run.MapVersionId,
             Convert.ToHexString(run.MapPackageSha256).ToLowerInvariant(), robot.RobotCode, run.CheckedByUserId,
             run.ParticipatingStaffUserId, run.ResultCode, run.AllStopsReached, run.SafelyStopped,
             run.LocalizationPassed, run.MeasuredDurationSeconds, run.FailureReason, run.EvidenceNote, run.CheckedAt, run.MeasurementBasis,
-            (await repo.FindUserAsync(c.ActorUserId, ct))?.FullName, staff.FullName, traversed);
+            (await repo.FindUserAsync(c.ActorUserId, ct))?.FullName, staff.FullName, traversed, photos);
         // The new run is not committed yet, so the loaded view still describes the previous one.
         var applied = RouteVerification.Evaluate(revision, stops,
             [.. RouteVerification.RunsOnPath(routeRuns, targetNavigation), new RouteVerification.Run(run, stops)]);

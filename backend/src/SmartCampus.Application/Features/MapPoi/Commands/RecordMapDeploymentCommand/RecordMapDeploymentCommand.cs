@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.Json;
 using FluentValidation;
 using MediatR;
@@ -6,7 +6,9 @@ using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.FallbackVideo;
 using SmartCampus.Application.Features.FleetSync;
+using SmartCampus.Application.Features.TechnicalEvidence;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.MapPoi;
@@ -31,6 +33,7 @@ public sealed class RecordMapDeploymentCommandHandler(
     IMapPoiRequestLock requestLock,
     IFleetTelemetryStore telemetryStore,
     FleetSyncSettings fleetSyncSettings,
+    CloudinarySettings cloudinarySettings,
     TimeProvider timeProvider)
     : IRequestHandler<RecordMapDeploymentCommand, MapDeploymentCheckView>
 {
@@ -38,15 +41,28 @@ public sealed class RecordMapDeploymentCommandHandler(
     {
         var request = command.Request;
         var checksum = Convert.FromHexString(request.PackageSha256);
-        var requestHash = MapPoiRequestHash.Compute(new
-        {
-            command.MapVersionId,
-            request.RobotCode,
-            PackageSha256 = request.PackageSha256.ToLowerInvariant(),
-            request.LocalizationPassed,
-            request.DisplayPassed,
-            EvidenceNote = request.EvidenceNote.Trim()
-        });
+        var photos = TechnicalEvidencePhotos.Normalize(request.EvidencePhotoUrls, cloudinarySettings, command.ActorUserId);
+        // ADR-0072: photos join the hash only when sent, so a request without them hashes as it did before.
+        var requestHash = photos.Count == 0
+            ? MapPoiRequestHash.Compute(new
+            {
+                command.MapVersionId,
+                request.RobotCode,
+                PackageSha256 = request.PackageSha256.ToLowerInvariant(),
+                request.LocalizationPassed,
+                request.DisplayPassed,
+                EvidenceNote = request.EvidenceNote.Trim()
+            })
+            : MapPoiRequestHash.Compute(new
+            {
+                command.MapVersionId,
+                request.RobotCode,
+                PackageSha256 = request.PackageSha256.ToLowerInvariant(),
+                request.LocalizationPassed,
+                request.DisplayPassed,
+                EvidenceNote = request.EvidenceNote.Trim(),
+                EvidencePhotoUrls = photos
+            });
         await requestLock.LockRequestAsync(command.ActorUserId, request.RequestId, "deployment-check", cancellationToken);
         var prior = await repository.FindDeploymentRequestAsync(command.ActorUserId, request.RequestId, cancellationToken);
         if (prior is not null)
@@ -100,6 +116,7 @@ public sealed class RecordMapDeploymentCommandHandler(
             LocalizationPassed = request.LocalizationPassed,
             DisplayPassed = request.DisplayPassed,
             EvidenceNote = request.EvidenceNote.Trim(),
+            EvidencePhotoUrlsJson = TechnicalEvidencePhotos.Write(photos),
             CheckedByUserId = command.ActorUserId,
             RequestId = request.RequestId,
             RequestHash = requestHash,
@@ -114,7 +131,7 @@ public sealed class RecordMapDeploymentCommandHandler(
             EntityType = "MapVersion",
             EntityId = map.Id.ToString("D"),
             ResultCode = check.LocalizationPassed && check.DisplayPassed ? "PASS" : "FAIL",
-            DataJson = JsonSerializer.Serialize(new { robot.RobotCode, packageSha256 = request.PackageSha256.ToLowerInvariant(), check.LocalizationPassed, check.DisplayPassed }),
+            DataJson = JsonSerializer.Serialize(new { robot.RobotCode, packageSha256 = request.PackageSha256.ToLowerInvariant(), check.LocalizationPassed, check.DisplayPassed, evidencePhotoCount = photos.Count }),
             OccurredAt = now
         });
         check.Robot = robot;

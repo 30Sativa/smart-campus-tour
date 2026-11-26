@@ -13,7 +13,7 @@ if [[ "$mode" == --bootstrap && ! ${SQL_APP_PASSWORD:-} =~ ^[A-Za-z0-9!_-]{32,12
 fi
 : "${SQLCMDPASSWORD:?SQL admin password is required}"
 sql=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -l 15 -r 1)
-schema_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.25.sql | sha256sum | cut -d ' ' -f 1)
+schema_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.26.sql | sha256sum | cut -d ' ' -f 1)
 schema_hash_v124=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.24.sql | sha256sum | cut -d ' ' -f 1)
 schema_hash_v123=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.23.sql | sha256sum | cut -d ' ' -f 1)
 schema_hash_v122=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.22.sql | sha256sum | cut -d ' ' -f 1)
@@ -56,18 +56,18 @@ if [[ "$state" == EMPTY ]]; then
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
 GO
-  :r /database/smart-campus-tour-schema-v1.25.sql
+  :r /database/smart-campus-tour-schema-v1.26.sql
 :r /database/smart-campus-tour-permissions.sql
   :r /database/smart-campus-tour-map-poi-permissions.sql
   :r /database/smart-campus-tour-route-revision-permissions.sql
 EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$(SchemaHash)';
-EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.25';
+EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.26';
 COMMIT TRANSACTION;
 GO
 SQL
 elif [[ "$state" != READY ]]; then
   if [[ "$state" == UPGRADE_REQUIRED ]]; then
-    echo 'Database schema is older than v1.25. Stop the deployment and follow the reviewed, backed-up Database First upgrade path; this initializer never migrates existing data.' >&2
+    echo 'Database schema is older than v1.26. Stop the deployment and follow the reviewed, backed-up Database First upgrade path; this initializer never migrates existing data.' >&2
     exit 1
   fi
   echo 'Unexpected database bootstrap state.' >&2
@@ -112,7 +112,7 @@ if [[ "$mode" == --check-only ]]; then
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'IsDispatchEnabled',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'DELETE') = 1
-       THROW 51005, 'Runtime Robot grants are incomplete or too broad; update runtime grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime Robot grants are incomplete or too broad; update runtime grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     IF HAS_PERMS_BY_NAME(N'dbo.PoiProposals',N'OBJECT',N'UPDATE',N'DiscardedAt',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiProposals',N'OBJECT',N'UPDATE',N'DiscardedByUserId',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiProposals',N'OBJECT',N'UPDATE',N'RetiredAt',N'COLUMN') <> 1
@@ -120,14 +120,14 @@ if [[ "$mode" == --check-only ]]; then
        OR HAS_PERMS_BY_NAME(N'dbo.PoiProposals',N'OBJECT',N'UPDATE') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiProposals',N'OBJECT',N'DELETE') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiProposalRevisions',N'OBJECT',N'DELETE') = 1
-       THROW 51005, 'Runtime POI proposal grants are incomplete or too broad; update runtime grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime POI proposal grants are incomplete or too broad; update runtime grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     IF HAS_PERMS_BY_NAME(N'dbo.MapVersions',N'OBJECT',N'UPDATE',N'RetiredAt',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.MapVersions',N'OBJECT',N'UPDATE',N'RetiredByUserId',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.MapVersions',N'OBJECT',N'UPDATE',N'RetirementReason',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.MapVersions',N'OBJECT',N'UPDATE') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.MapVersions',N'OBJECT',N'UPDATE',N'PackageSha256',N'COLUMN') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.MapVersions',N'OBJECT',N'DELETE') = 1
-       THROW 51005, 'Runtime map version grants are incomplete or too broad; update runtime grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime map version grants are incomplete or too broad; update runtime grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     IF HAS_PERMS_BY_NAME(N'dbo.PoiNarrationRevisions',N'OBJECT',N'SELECT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiNarrationRevisions',N'OBJECT',N'INSERT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiNarrationRevisions',N'OBJECT',N'UPDATE',N'NarrationText',N'COLUMN') <> 1
@@ -142,7 +142,7 @@ if [[ "$mode" == --check-only ]]; then
        OR HAS_PERMS_BY_NAME(N'dbo.PoiNarrationRequestReceipts',N'OBJECT',N'INSERT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiNarrationRequestReceipts',N'OBJECT',N'UPDATE') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.PoiNarrationRequestReceipts',N'OBJECT',N'DELETE') = 1
-       THROW 51005, 'Runtime POI narration grants are incomplete or too broad; update runtime grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime POI narration grants are incomplete or too broad; update runtime grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     REVERT;
     IF EXISTS (SELECT 1 FROM sys.database_permissions p
       WHERE p.grantee_principal_id IN (DATABASE_PRINCIPAL_ID(N'campus_tour_app'), DATABASE_PRINCIPAL_ID(N'smartcampus_api'))
@@ -167,7 +167,7 @@ if [[ "$mode" == --check-only ]]; then
            COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'LastAssignedAt','ColumnId'),
            COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'NeedsInspection','ColumnId'),
            COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'IsDispatchEnabled','ColumnId')))
-       THROW 51005, 'Runtime Robot grants are incomplete or too broad; update runtime grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime Robot grants are incomplete or too broad; update runtime grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     EXECUTE AS USER=N'smartcampus_api';
     IF HAS_PERMS_BY_NAME(N'dbo.RobotCommands',N'OBJECT',N'SELECT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.RobotCommands',N'OBJECT',N'INSERT') <> 1
@@ -179,7 +179,7 @@ if [[ "$mode" == --check-only ]]; then
        OR HAS_PERMS_BY_NAME(N'dbo.RobotCommands',N'OBJECT',N'UPDATE',N'X',N'COLUMN') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.RobotCommands',N'OBJECT',N'UPDATE',N'RobotId',N'COLUMN') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.RobotCommands',N'OBJECT',N'DELETE') = 1
-       THROW 51005, 'Runtime robot command grants are incomplete or too broad; update runtime grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime robot command grants are incomplete or too broad; update runtime grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     REVERT;
     EXECUTE AS USER=N'smartcampus_api';
     IF HAS_PERMS_BY_NAME(N'dbo.TourScheduleBlocks',N'OBJECT',N'SELECT') <> 1
@@ -187,7 +187,7 @@ if [[ "$mode" == --check-only ]]; then
        OR HAS_PERMS_BY_NAME(N'dbo.TourScheduleBlocks',N'OBJECT',N'UPDATE',N'RemovedAt',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.TourScheduleBlocks',N'OBJECT',N'UPDATE',N'Reason',N'COLUMN') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.TourScheduleBlocks',N'OBJECT',N'DELETE') = 1
-       THROW 51005, 'Runtime schedule block grants are incomplete or too broad; update runtime grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime schedule block grants are incomplete or too broad; update runtime grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     REVERT;
     EXECUTE AS USER=N'smartcampus_api';
     IF HAS_PERMS_BY_NAME(N'dbo.TourStopVisits',N'OBJECT',N'SELECT') <> 1
@@ -213,7 +213,7 @@ if [[ "$mode" == --check-only ]]; then
        OR HAS_PERMS_BY_NAME(N'dbo.TourStopLocks',N'OBJECT',N'DELETE') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.RouteRevisions',N'OBJECT',N'UPDATE',N'ViewerChoosesNextStop',N'COLUMN') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.RouteTestRuns',N'OBJECT',N'UPDATE',N'TraversedStopIdsJson',N'COLUMN') = 1
-       THROW 51005, 'Runtime viewer vote grants are incomplete or too broad; update runtime grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime viewer vote grants are incomplete or too broad; update runtime grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     REVERT;
     IF EXISTS (SELECT 1 FROM sys.database_permissions p
       WHERE p.grantee_principal_id IN (DATABASE_PRINCIPAL_ID(N'campus_tour_app'), DATABASE_PRINCIPAL_ID(N'smartcampus_api'))
@@ -230,7 +230,7 @@ if [[ "$mode" == --check-only ]]; then
                 COLUMNPROPERTY(OBJECT_ID(N'dbo.TourStopLocks'),N'UnlockedByUserId','ColumnId'),
                 COLUMNPROPERTY(OBJECT_ID(N'dbo.TourStopLocks'),N'UnlockedAt','ColumnId'),
                 COLUMNPROPERTY(OBJECT_ID(N'dbo.TourStopLocks'),N'UnlockReason','ColumnId')))))
-       THROW 51005, 'Runtime viewer vote grants are incomplete or too broad; update runtime grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime viewer vote grants are incomplete or too broad; update runtime grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     EXECUTE AS USER=N'smartcampus_api';
     IF HAS_PERMS_BY_NAME(N'dbo.AuditLogs',N'OBJECT',N'SELECT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.AuditLogs',N'OBJECT',N'INSERT') <> 1
@@ -239,7 +239,7 @@ if [[ "$mode" == --check-only ]]; then
        THROW 51005, 'Runtime credential audit grants are incomplete or allow audit rewrites.', 1;
     REVERT;
     IF DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') IS NULL
-       THROW 51006, 'Fleet credential provisioner role is missing; update provisioning grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51006, 'Fleet credential provisioner role is missing; update provisioning grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     IF NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'Id','ColumnId') AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'RobotCode','ColumnId') AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'SourceType','ColumnId') AND p.state IN ('G','W'))
@@ -262,12 +262,12 @@ if [[ "$mode" == --check-only ]]; then
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.AuditLogs') AND p.permission_name=N'SELECT' AND p.minor_id=0 AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.AuditLogs') AND p.permission_name=N'INSERT' AND p.minor_id=0 AND p.state IN ('G','W'))
        OR EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.AuditLogs') AND p.permission_name IN (N'UPDATE',N'DELETE') AND (p.minor_id=0 OR p.permission_name=N'DELETE') AND p.state IN ('G','W'))
-       THROW 51007, 'Fleet credential provisioner grants are incomplete or too broad; update provisioning grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51007, 'Fleet credential provisioner grants are incomplete or too broad; update provisioning grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     IF EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=0)
        OR EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'DELETE')
-       THROW 51007, 'Fleet credential provisioner grants are incomplete or too broad; update provisioning grants through the controlled v1.25 upgrade/regrant before API deployment.', 1;
+       THROW 51007, 'Fleet credential provisioner grants are incomplete or too broad; update provisioning grants through the controlled v1.26 upgrade/regrant before API deployment.', 1;
     SELECT 'COMPATIBLE';" | tr -d '\r\n '); then
-    echo 'FAIL: runtime/provisioner grants are incomplete. For an existing database, run the controlled v1.25 Database First upgrade/regrant before API deployment.' >&2
+    echo 'FAIL: runtime/provisioner grants are incomplete. For an existing database, run the controlled v1.26 Database First upgrade/regrant before API deployment.' >&2
     exit 1
   fi
   [[ "$permissions" == COMPATIBLE ]] || { echo 'Runtime database grants are not compatible.' >&2; exit 1; }

@@ -1,5 +1,10 @@
 # CampusTour database snapshots
 
+## v1.26 technical evidence photos
+
+smart-campus-tour-schema-v1.26.sql adds nullable MapDeploymentChecks.EvidencePhotoUrlsJson NVARCHAR(2000), PoiVerificationRecords.EvidencePhotoUrlsJson NVARCHAR(2000) and RouteTestRuns.EvidencePhotoUrlsJson NVARCHAR(2000), each with an ISJSON CHECK constraint (CK_MapDeploymentChecks_EvidencePhotoUrlsJson, CK_PoiVerificationRecords_EvidencePhotoUrlsJson, CK_RouteTestRuns_EvidencePhotoUrlsJson). The value is a JSON array of 1-5 Cloudinary https image URLs; the app validates the array contents, the DB only checks ISJSON. patches/upgrade-v1.25-to-v1.26-technical-evidence-photos.sql applies them to a v1.25 database, changes no row and is rerunnable (THROW 51260/51261). Runtime already has table-level SELECT/INSERT on these three tables under smart-campus-tour-map-poi-permissions.sql and smart-campus-tour-route-revision-permissions.sql, so the new columns need no grant changes; the check-only gate is unchanged. The v1.25 snapshot and its patch stay immutable. A scaffold of a fresh v1.26 database will show the three new properties added to the EF entities.
+
+
 ## Runtime grant: a Tour that ends shortens its hold (ADR-0043 D13 addendum, 23/11/2026)
 
 No schema change and no new snapshot. `smart-campus-tour-runtime-permissions.sql` now grants column `UPDATE (EndsAt)` on `TourRobotReservations` next to the release columns, so a COMPLETED or ended-early Tour sets its hold's `EndsAt` to `Tours.EndedAt`. `StartsAt`, `RobotId` and the durations stay write-once; the check-only gate refuses a runtime without the `EndsAt` grant or with `UPDATE (StartsAt)`. A v1.25 database gets the grant from the regrant step of `upgrade-db.sh --upgrade-to-v1.25`, which `upgrade-db-schema-ec2.sh --if-needed` runs when the gate refuses. No row is backfilled: holds of Tours that ended before the deploy run to their old end.

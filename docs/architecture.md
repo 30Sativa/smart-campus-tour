@@ -2124,6 +2124,19 @@ Tour root lock; the visited set comes from `TourStopVisits`, never from
 `RouteRevisions.ViewerChoosesNextStop`, `RouteTestRuns.TraversedStopIdsJson`,
 `TourStopVisits`, `TourStopVotes` and `TourStopLocks` (ADR-0065 §Schema).
 
+### 3.2.w Technical evidence photos (ADR-0072, schema v1.26)
+
+Optional photos (0-5) on the three Technical Staff evidence records, stored on
+Cloudinary as public images under a random public ID. The text evidence note
+stays required. All changes are additive; a request without photos behaves and
+hashes exactly as before.
+
+| Surface | Contract |
+|---|---|
+| `POST /api/technical/evidence-photo-upload` | TechnicalStaff, no body. Returns `{ uploadUrl, fields, storedUrl, maxBytes, maxPhotos }`: the browser posts the file and every field to `uploadUrl` (Cloudinary signed upload of public ID `smartcampus/technical-evidence/{userId:N}/{random:N}`, JPG/PNG/WebP/HEIC up to 10 MB, stored at most 2048 px), then sends `storedUrl`. 503 when Cloudinary is not configured. |
+| `POST /api/technical/map-versions/{id}/deployment-checks`, `POST /api/technical/poi-proposals/{id}/revisions/{n}/verification`, `POST /api/technical/routes/{routeId}/revisions/{revisionId}/test-runs` | Input gains optional `evidencePhotoUrls` (at most 5 distinct `storedUrl`s of this cloud from the caller's own folder; otherwise 400 before any write). Part of the idempotent request: the same `requestId` with other photos is 409 `IDEMPOTENCY_CONFLICT`. Stored in `EvidencePhotoUrlsJson` (null without photos). |
+| Deployment check views, POI verification records (`GET /api/technical/poi-verifications` and proposal reads), route revision `testRuns[]` | Gain `evidencePhotoUrls` (empty for a record without photos). |
+
 ### 3.3 State storage and realtime delivery
 
 When the backend receives robot pose/state, it is transient latest-state data

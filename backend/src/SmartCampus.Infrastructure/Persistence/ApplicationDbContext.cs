@@ -299,6 +299,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CheckedAt).HasPrecision(3);
             entity.Property(e => e.EvidenceNote).HasMaxLength(2000);
+            entity.Property(e => e.EvidencePhotoUrlsJson).HasMaxLength(2000);
             entity.Property(e => e.PackageSha256)
                 .HasMaxLength(32)
                 .IsFixedLength();
@@ -635,6 +636,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CheckedAt).HasPrecision(3);
             entity.Property(e => e.EvidenceNote).HasMaxLength(2000);
+            entity.Property(e => e.EvidencePhotoUrlsJson).HasMaxLength(2000);
             entity.Property(e => e.NavigationFingerprint)
                 .HasMaxLength(32)
                 .IsFixedLength();
@@ -1059,6 +1061,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CheckedAt).HasPrecision(3);
             entity.Property(e => e.EvidenceNote).HasMaxLength(2000);
+            entity.Property(e => e.EvidencePhotoUrlsJson).HasMaxLength(2000);
             entity.Property(e => e.FailureReason).HasMaxLength(1000);
             entity.Property(e => e.MeasurementBasis).HasMaxLength(32);
             entity.Property(e => e.TraversedStopIdsJson).HasMaxLength(1000);

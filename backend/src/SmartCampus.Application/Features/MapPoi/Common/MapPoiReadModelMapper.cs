@@ -1,3 +1,4 @@
+﻿using SmartCampus.Application.Features.TechnicalEvidence;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.MapPoi;
@@ -17,7 +18,7 @@ internal static class MapPoiReadModelMapper
         check.Id, check.MapVersionId, check.Robot.RobotCode,
         Convert.ToHexString(check.PackageSha256).ToLowerInvariant(), check.LocalizationPassed,
         check.DisplayPassed, check.LocalizationPassed && check.DisplayPassed,
-        check.EvidenceNote, check.CheckedByUserId, check.CheckedAt);
+        check.EvidenceNote, check.CheckedByUserId, check.CheckedAt, TechnicalEvidencePhotos.Read(check.EvidencePhotoUrlsJson));
 
     public static PoiVerificationView ToVerificationView(PoiVerificationRecord record) => new(
         record.Id, record.ProposalRevision.ProposalId, record.ProposalRevisionId,
@@ -25,14 +26,15 @@ internal static class MapPoiReadModelMapper
         record.Robot.RobotCode, Convert.ToHexString(record.NavigationFingerprint).ToLowerInvariant(),
         record.ResultCode, record.Reached, record.Stopped, record.LocalizationPassed,
         record.CameraPresetConfirmed, record.Reason, record.EvidenceNote, record.CheckedByUserId, record.CheckedAt,
-        record.VerificationMethod, Hex(record.SourceFileSha256));
+        record.VerificationMethod, Hex(record.SourceFileSha256), TechnicalEvidencePhotos.Read(record.EvidencePhotoUrlsJson));
 
     public static PoiVerificationView ToVerificationView(PoiVerificationRecord record, PoiProposalRevision revision,
         string mapKey, string robotCode) => new(
         record.Id, revision.ProposalId, record.ProposalRevisionId, revision.RevisionNumber, record.MapVersionId,
         mapKey, robotCode, Convert.ToHexString(record.NavigationFingerprint).ToLowerInvariant(), record.ResultCode,
         record.Reached, record.Stopped, record.LocalizationPassed, record.CameraPresetConfirmed, record.Reason,
-        record.EvidenceNote, record.CheckedByUserId, record.CheckedAt, record.VerificationMethod, Hex(record.SourceFileSha256));
+        record.EvidenceNote, record.CheckedByUserId, record.CheckedAt, record.VerificationMethod, Hex(record.SourceFileSha256),
+        TechnicalEvidencePhotos.Read(record.EvidencePhotoUrlsJson));
 
     private static string? Hex(byte[]? value) => value is null ? null : Convert.ToHexString(value).ToLowerInvariant();
 }

@@ -789,6 +789,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.23-to-v1.24-user-avatar.sql");
         await db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql");
         await db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql");
+        await db.ApplyFileAsync("upgrade-v1.25-to-v1.26-technical-evidence-photos.sql");
+        await db.ApplyFileAsync("upgrade-v1.25-to-v1.26-technical-evidence-photos.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -799,7 +801,7 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.25", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.26", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.RouteRevisions WHERE ViewerChoosesNextStop=1;"));
         Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('TourStopVisits','TourStopVotes','TourStopLocks');"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Users') AND name='AvatarUrl' AND is_nullable=1;"));
@@ -1305,7 +1307,7 @@ public sealed class SchemaV11Tests
 
         Assert.Equal("1.25", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
-        await using var snapshot = await TestDatabase.CreateAsync();
+        await using var snapshot = await TestDatabase.CreateAsync("snapshot-v1.25.sql");
         const string tables = "('RouteRevisions','RouteTestRuns','TourStopVisits','TourStopVotes','TourStopLocks')";
         var shapes = new[]
         {
@@ -1340,6 +1342,52 @@ public sealed class SchemaV11Tests
         await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.25';");
         var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql"));
         Assert.Equal(51251, error.Number);
+    }
+
+    [SchemaV17Fact]
+    public async Task TechnicalEvidencePhotosUpgrade_MatchesTheSnapshot_ChangesNoRow_AndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.25.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.25';");
+        const string bootstrapHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{bootstrapHash}';");
+
+        await db.ApplyFileAsync("upgrade-v1.25-to-v1.26-technical-evidence-photos.sql");
+        await db.ApplyFileAsync("upgrade-v1.25-to-v1.26-technical-evidence-photos.sql");
+
+        Assert.Equal("1.26", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        await using var snapshot = await TestDatabase.CreateAsync();
+        const string tables = "('MapDeploymentChecks','PoiVerificationRecords','RouteTestRuns')";
+        var shapes = new[]
+        {
+            $"SELECT STRING_AGG(CONCAT(OBJECT_NAME(object_id),'.',name,':',is_nullable,':',max_length), N',') WITHIN GROUP (ORDER BY OBJECT_NAME(object_id), column_id) FROM sys.columns WHERE OBJECT_NAME(object_id) IN {tables} AND name='EvidencePhotoUrlsJson';",
+            $"SELECT STRING_AGG(CONCAT(name,':',definition,':',is_not_trusted), N',') WITHIN GROUP (ORDER BY name) FROM sys.check_constraints WHERE name IN ('CK_MapDeploymentChecks_EvidencePhotoUrlsJson','CK_PoiVerificationRecords_EvidencePhotoUrlsJson','CK_RouteTestRuns_EvidencePhotoUrlsJson');",
+        };
+        foreach (var shape in shapes)
+            Assert.Equal(await snapshot.ScalarAsync<string>(shape), await db.ScalarAsync<string>(shape));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE name='EvidencePhotoUrlsJson' AND OBJECT_NAME(object_id) IN " + tables + " AND is_nullable=1 AND max_length=4000;"));
+        // SQL Server stores the definition as (isjson([EvidencePhotoUrlsJson])=(1)), so match the bracketed column.
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.check_constraints WHERE definition LIKE '%isjson(\\[EvidencePhotoUrlsJson\\])%' ESCAPE '\\' AND is_not_trusted=0;"));
+    }
+
+    [SchemaV17Fact]
+    public async Task TechnicalEvidencePhotosUpgrade_RefusesAnyOtherVersion()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.24.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.24';");
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.25-to-v1.26-technical-evidence-photos.sql"));
+        Assert.Equal(51260, error.Number);
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE name='EvidencePhotoUrlsJson';"));
+    }
+
+    [SchemaV17Fact]
+    public async Task TechnicalEvidencePhotosUpgrade_RefusesAV126MarkerWithoutTheEvidenceColumns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.25.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.26';");
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.25-to-v1.26-technical-evidence-photos.sql"));
+        Assert.Equal(51261, error.Number);
     }
 
     [SchemaV17Fact]
@@ -1814,7 +1862,7 @@ public sealed class SchemaV11Tests
     [SchemaV12Fact]
     public async Task ConcurrentMapUploads_SerializeAreaVersioningAndIdempotentRetries()
     {
-        // The current snapshot (v1.25): MapVersions gained the v1.21 retirement columns (ADR-0041), which today's upload reads back.
+        // The current snapshot (v1.26): MapVersions gained the v1.21 retirement columns (ADR-0041), which today's upload reads back.
         await using var db = await TestDatabase.CreateAsync();
         await using var services = db.BuildFeatureServiceProvider();
         var package = CreateMapPackage();
@@ -2012,7 +2060,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.25.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.26.sql")
         {
             var db = new TestDatabase();
             try
@@ -2070,6 +2118,8 @@ public sealed class SchemaV11Tests
             services.AddSingleton(Shifts);
             services.AddSingleton(new MapPoiSettings(null));
             services.AddSingleton(new RouteRuleSettings(null, null));
+            // ADR-0072: evidence records validate photo links against Cloudinary; unconfigured here, so a record carries none.
+            services.AddSingleton(new SmartCampus.Application.Features.FallbackVideo.CloudinarySettings());
             return services.BuildServiceProvider(validateScopes: true);
         }
 

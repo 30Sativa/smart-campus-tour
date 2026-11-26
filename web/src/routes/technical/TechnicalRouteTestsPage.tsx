@@ -12,6 +12,8 @@ import { DeployToRobotDialog } from '../../features/technical/DeployToRobotDialo
 import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
 import { robotForMap, routeReturnPath } from '../../features/technical/robot-readiness'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
+import { EvidencePhotoField, EvidencePhotoList } from '../../features/technical/EvidencePhotos'
+import { useEvidencePhotos } from '../../features/technical/use-evidence-photos'
 import { CheckRow, ComputedResult, NoneChecked, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { errorText, routeTestErrors } from '../../features/technical/technical-format'
 import { formatDateTime, formatMinutesSeconds } from '../../components/ui/date-time'
@@ -151,6 +153,8 @@ function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: Versio
   const [driven, setDriven] = useState<string[]>(() => orderedStops[0]?.id ? [orderedStops[0].id] : [])
   // Stable across retries of the same input, so a lost response cannot record a second run.
   const [requestId, setRequestId] = useState(() => crypto.randomUUID())
+  // A changed photo list is a new request: the photos are part of the retried input.
+  const photos = useEvidencePhotos(() => { record.reset(); setRequestId(crypto.randomUUID()) })
 
   const checks = [
     { label: 'Robot đi đủ các điểm dừng', checked: allStopsReached, set: setAllStopsReached },
@@ -173,6 +177,7 @@ function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: Versio
     pending && 'tick các mục đã kiểm tra',
     !pending && resultCode === 'FAIL' && !failureReason.trim() && 'nhập lý do không đạt',
     !evidence.trim() && 'nhập ghi chú bằng chứng',
+    photos.uploading && 'chờ tải ảnh xong',
     voting && !stopIdsKnown && 'tải lại trang để lấy mã điểm dừng',
     voting && stopIdsKnown && driven.length < orderedStops.length && 'chọn đủ thứ tự robot đã đi',
   ].filter((item): item is string => Boolean(item))
@@ -186,6 +191,7 @@ function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: Versio
       allStopsReached, safelyStopped, localizationPassed,
       failureReason: resultCode === 'FAIL' ? failureReason.trim() : null, evidenceNote: evidence.trim(),
       ...(voting ? { traversedStopIds: driven } : {}),
+      ...(photos.photos.length ? { evidencePhotoUrls: photos.photos } : {}),
     } }, { onSuccess: onClose })
   }
 
@@ -220,6 +226,7 @@ function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: Versio
         </div>
         {!pending && resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="route-test-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này khi sửa tuyến.</p><input id="route-test-reason" className={`${inputClass} mt-1`} required maxLength={1000} value={failureReason} onChange={event => { setFailureReason(event.target.value); changed() }} /></div>}
         <div><label className={labelClass} htmlFor="route-test-evidence">Ghi chú bằng chứng</label><textarea id="route-test-evidence" rows={3} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={event => { setEvidence(event.target.value); changed() }} /></div>
+        <EvidencePhotoField id="route-test-photos" state={photos} />
         {errors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errors.form}</p>}
         <Note>Mỗi lần chạy được ghi thêm, không sửa được. Lần chạy mới nhất của cùng đường đi là kết quả đang áp dụng, cho mọi bản lưu có đường đi này. Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh thì giữ kết quả.</Note>
       </form>
@@ -247,6 +254,7 @@ function RouteResultModal({ route, onRecord, onClose }: { route: VersionedRoute;
           {run.traversedStopIds?.length ? <p className="mt-1 text-xs text-[#334155]">Thứ tự đã đi: {drivenText(detail.data ?? route, run.traversedStopIds)}</p> : null}
           {run.failureReason && <p className="mt-2"><span className="font-medium">Lý do:</span> {run.failureReason}</p>}
           <p className="mt-2 whitespace-pre-wrap"><span className="font-medium">Bằng chứng:</span> {run.evidenceNote}</p>
+          <EvidencePhotoList urls={run.evidencePhotoUrls} />
         </section>)}
         {detail.isSuccess && !runs.length && <p className="text-sm text-[#64748b]">Chưa có lần chạy nào.</p>}
       </div>

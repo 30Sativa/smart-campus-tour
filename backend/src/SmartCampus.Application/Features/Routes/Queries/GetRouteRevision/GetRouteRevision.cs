@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.Json;
 using FluentValidation;
 using MediatR;
@@ -81,7 +81,8 @@ internal static class RouteRevisionMapper
                 r.ParticipatingStaffUserId, r.ResultCode, r.AllStopsReached, r.SafelyStopped, r.LocalizationPassed,
                 r.MeasuredDurationSeconds, r.FailureReason, r.EvidenceNote, r.CheckedAt, r.MeasurementBasis,
                 await NameAsync(r.CheckedByUserId), await NameAsync(r.ParticipatingStaffUserId),
-                RouteVerification.ReadTraversed(r.TraversedStopIdsJson)));
+                RouteVerification.ReadTraversed(r.TraversedStopIdsJson),
+                TechnicalEvidence.TechnicalEvidencePhotos.Read(r.EvidencePhotoUrlsJson)));
         var revisionRecords = await repo.GetRevisionsAsync(route.Id, submittedOnly: false, ct);
         // Cross-save application (ADR-0023 addendum): every submitted save with this path shares the result recorded on any of them.
         var scheduledTours = await repo.ListScheduledToursAsync(route.Id, ct);

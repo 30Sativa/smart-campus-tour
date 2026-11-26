@@ -1,10 +1,12 @@
-using MediatR;
+﻿using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Features.RobotDiagnostics.Queries.GetRobotDiagnostics;
 using SmartCampus.Application.Features.RobotDiagnostics.Queries.GetTechnicalDashboard;
+using SmartCampus.Application.Features.TechnicalEvidence;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -39,4 +41,15 @@ public sealed class TechnicalDashboardController(ISender sender) : ControllerBas
             Data = result
         });
     }
+
+    /// <summary>ADR-0072: signs one direct upload of an evidence photo to Cloudinary.</summary>
+    [HttpPost("evidence-photo-upload")]
+    public async Task<ActionResult<BaseResponse<EvidencePhotoUploadTicket>>> SignEvidencePhotoUpload(
+        CancellationToken cancellationToken) =>
+        Ok(new BaseResponse<EvidencePhotoUploadTicket>
+        {
+            Success = true,
+            Message = "Evidence photo upload signed.",
+            Data = await sender.Send(new GetEvidencePhotoUploadQuery(User.GetRequiredUserId()), cancellationToken)
+        });
 }

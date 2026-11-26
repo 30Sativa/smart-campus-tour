@@ -312,9 +312,9 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV125SnapshotAndMarker()
+    public async Task Bootstrap_AcceptsVerifiedV126SnapshotAndMarker()
     {
-        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.25.sql", "1.25"));
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.26.sql", "1.26"));
     }
 
     [SchemaV11Fact]
@@ -324,7 +324,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_RefusesAV125MarkerWithoutTheTrustedViewerVoteStructure()
+    public async Task Bootstrap_RefusesAV126MarkerWithoutTheTrustedEvidenceColumns()
     {
         foreach (var sql in new[]
         {
@@ -334,10 +334,10 @@ public sealed class DeploymentDatabaseTests
             "DROP INDEX UX_TourStopLocks_Active ON dbo.TourStopLocks;",
         })
         {
-            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.25.sql", "1.25", sql));
+            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.26.sql", "1.26", sql));
             Assert.Equal(51001, error.Number);
         }
-        var marker = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.24.sql", "1.25"));
+        var marker = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.24.sql", "1.26"));
         Assert.Equal(51001, marker.Number);
     }
 
@@ -520,7 +520,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     // Bootstraps the snapshot with its own hash and version markers, then runs the guard with every
-    // variable bound exactly as init-db.sh binds it for the current v1.25 release.
+    // variable bound exactly as init-db.sh binds it for the current v1.26 release.
     private static async Task<object?> RunCurrentGuardAsync(string snapshot, string version, string? alteration = null)
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync(snapshot);
@@ -551,7 +551,7 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV122)", await SnapshotHashAsync("snapshot-v1.22.sql"))
             .Replace("$(SchemaHashV123)", await SnapshotHashAsync("snapshot-v1.23.sql"))
             .Replace("$(SchemaHashV124)", await SnapshotHashAsync("snapshot-v1.24.sql"))
-            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.25.sql"));
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.26.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();
     }

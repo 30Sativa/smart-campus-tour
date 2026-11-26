@@ -1,9 +1,11 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentValidation;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.FallbackVideo;
+using SmartCampus.Application.Features.TechnicalEvidence;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.MapPoi;
@@ -31,6 +33,7 @@ public sealed class RecordPoiVerificationCommandHandler(
     IPoiProposalRepository proposalRepository,
     IPoiVerificationRepository verificationRepository,
     IMapPoiRequestLock requestLock,
+    CloudinarySettings cloudinarySettings,
     TimeProvider timeProvider)
     : IRequestHandler<RecordPoiVerificationCommand, PoiVerificationView>
 {
@@ -40,12 +43,22 @@ public sealed class RecordPoiVerificationCommandHandler(
         var resultCode = request.ResultCode.Trim().ToUpperInvariant();
         var normalizedEvidence = request.EvidenceNote.Trim();
         var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
-        var requestHash = MapPoiRequestHash.Compute(new
-        {
-            command.ProposalId, command.RevisionNumber, request.RobotCode,
-            ResultCode = resultCode, request.Reached, request.Stopped, request.LocalizationPassed,
-            request.CameraPresetConfirmed, Reason = reason, EvidenceNote = normalizedEvidence
-        });
+        var photos = TechnicalEvidencePhotos.Normalize(request.EvidencePhotoUrls, cloudinarySettings, command.ActorUserId);
+        // ADR-0072: photos join the hash only when sent, so a request without them hashes as it did before.
+        var requestHash = photos.Count == 0
+            ? MapPoiRequestHash.Compute(new
+            {
+                command.ProposalId, command.RevisionNumber, request.RobotCode,
+                ResultCode = resultCode, request.Reached, request.Stopped, request.LocalizationPassed,
+                request.CameraPresetConfirmed, Reason = reason, EvidenceNote = normalizedEvidence
+            })
+            : MapPoiRequestHash.Compute(new
+            {
+                command.ProposalId, command.RevisionNumber, request.RobotCode,
+                ResultCode = resultCode, request.Reached, request.Stopped, request.LocalizationPassed,
+                request.CameraPresetConfirmed, Reason = reason, EvidenceNote = normalizedEvidence,
+                EvidencePhotoUrls = photos
+            });
         await requestLock.LockRequestAsync(command.ActorUserId, request.RequestId, $"poi-verification:{command.ProposalId:D}", cancellationToken);
         var prior = await verificationRepository.FindVerificationRequestAsync(command.ActorUserId, request.RequestId, cancellationToken);
         if (prior is not null)
@@ -98,6 +111,7 @@ public sealed class RecordPoiVerificationCommandHandler(
             CameraPresetConfirmed = request.CameraPresetConfirmed,
             Reason = reason,
             EvidenceNote = normalizedEvidence,
+            EvidencePhotoUrlsJson = TechnicalEvidencePhotos.Write(photos),
             CheckedByUserId = command.ActorUserId,
             RequestId = request.RequestId,
             RequestHash = requestHash,
@@ -114,7 +128,8 @@ public sealed class RecordPoiVerificationCommandHandler(
             EntityId = revision.Id.ToString("D"),
             ResultCode = resultCode,
             DataJson = JsonSerializer.Serialize(new { revision.ProposalId, revision.RevisionNumber, revision.MapVersionId,
-                request.Reached, request.Stopped, request.LocalizationPassed, request.CameraPresetConfirmed }),
+                request.Reached, request.Stopped, request.LocalizationPassed, request.CameraPresetConfirmed,
+                evidencePhotoCount = photos.Count }),
             OccurredAt = now
         });
         return MapPoiReadModelMapper.ToVerificationView(result, revision, map.MapKey, robot.RobotCode);

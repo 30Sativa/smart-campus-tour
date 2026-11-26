@@ -27,6 +27,8 @@ public partial class MapDeploymentCheck
 
     public DateTimeOffset CheckedAt { get; set; }
 
+    public string? EvidencePhotoUrlsJson { get; set; }
+
     public virtual User CheckedByUser { get; set; } = null!;
 
     public virtual MapVersion MapVersion { get; set; } = null!;

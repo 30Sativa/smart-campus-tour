@@ -1,4 +1,4 @@
-using SmartCampus.Domain.Entities;
+﻿using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.MapPoi;
 
@@ -22,7 +22,7 @@ public sealed record CurrentlyDeployedRobot(string RobotCode, DateTimeOffset Che
 public sealed record MapDeploymentCheckView(
     Guid Id, Guid MapVersionId, string RobotCode, string PackageSha256,
     bool LocalizationPassed, bool DisplayPassed, bool Passed, string EvidenceNote,
-    Guid CheckedByUserId, DateTimeOffset CheckedAt);
+    Guid CheckedByUserId, DateTimeOffset CheckedAt, IReadOnlyList<string>? EvidencePhotoUrls = null);
 
 public sealed record PoiRevisionView(
     Guid Id, int RevisionNumber, Guid MapVersionId, string MapKey, string Name, string Purpose,
@@ -60,7 +60,7 @@ public sealed record PoiVerificationView(
     string MapKey, string RobotCode, string NavigationFingerprint, string ResultCode,
     bool? Reached, bool? Stopped, bool? LocalizationPassed, bool? CameraPresetConfirmed,
     string? Reason, string EvidenceNote, Guid CheckedByUserId, DateTimeOffset CheckedAt,
-    string VerificationMethod, string? SourceFileSha256);
+    string VerificationMethod, string? SourceFileSha256, IReadOnlyList<string>? EvidencePhotoUrls = null);
 
 public sealed record PoiHistoryView(Guid ProposalId, IReadOnlyList<PoiRevisionView> Revisions,
     IReadOnlyList<PoiVerificationView> VerificationRecords);

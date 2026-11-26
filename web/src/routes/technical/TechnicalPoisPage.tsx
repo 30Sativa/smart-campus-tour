@@ -8,6 +8,8 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { DeployToRobotDialog } from '../../features/technical/DeployToRobotDialog'
 import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
+import { EvidencePhotoField, EvidencePhotoList } from '../../features/technical/EvidencePhotos'
+import { useEvidencePhotos } from '../../features/technical/use-evidence-photos'
 import { poiReturnPath, robotForMap } from '../../features/technical/robot-readiness'
 import { CheckRow, ComputedResult, NoneChecked, DetailFact, Note, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
 import { mapVersionLabel, narrationStatus, poiObservationLabels, verificationMethodLabel } from '../../features/technical/poi-labels'
@@ -186,11 +188,13 @@ function VerifyModal({ proposal, mapName, onClose, onAssignRobot }: { proposal: 
   const pending = !touched && checks.every(check => !check.checked)
   // Not chosen: the one robot the server calls ready on this exact version records the result (MAP_NOT_DEPLOYED otherwise).
   const robotCode = robotForMap(robots.data, revision.mapVersionId).ready?.robotCode ?? ''
+  const photos = useEvidencePhotos(() => verify.reset())
   const missingToSave = [
     !robotCode && 'cần một robot sẵn sàng trên bản đồ này',
     pending && 'tick các mục đã kiểm tra',
     !pending && resultCode === 'FAIL' && !reason.trim() && 'nhập lý do không đạt',
     !evidence.trim() && 'nhập ghi chú bằng chứng',
+    photos.uploading && 'chờ tải ảnh xong',
   ].filter((item): item is string => Boolean(item))
   const errors = verify.error ? poiVerifyErrors(verify.error) : {}
   const changed = () => { if (verify.error) verify.reset() }
@@ -210,6 +214,7 @@ function VerifyModal({ proposal, mapName, onClose, onAssignRobot }: { proposal: 
       cameraPresetConfirmed: cameraConfirmed,
       reason: resultCode === 'FAIL' ? reason : undefined,
       evidenceNote: evidence,
+      evidencePhotoUrls: photos.photos,
     }, { onSuccess: onClose })
   }
 
@@ -228,6 +233,7 @@ function VerifyModal({ proposal, mapName, onClose, onAssignRobot }: { proposal: 
         </div>
         {!pending && resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="verify-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này, sửa POI và gửi lại phiên bản mới.</p><input id="verify-reason" aria-invalid={Boolean(errors.reason)} className={`${inputClass} mt-1`} required maxLength={1000} value={reason} onChange={(event) => { setReason(event.target.value); changed() }} />{errors.reason && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.reason}</p>}</div>}
         <div><label className={labelClass} htmlFor="verify-evidence">Ghi chú bằng chứng</label><textarea id="verify-evidence" rows={3} aria-invalid={Boolean(errors.evidenceNote)} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={(event) => { setEvidence(event.target.value); changed() }} />{errors.evidenceNote && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.evidenceNote}</p>}</div>
+        <EvidencePhotoField id="verify-photos" state={photos} />
         {errors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errors.form}</p>}
         <Note>Bản ghi gắn với phiên bản POI {revision.revisionNumber}. Nếu Staff sửa POI trong lúc bạn kiểm tra, máy chủ sẽ từ chối và bạn cần mở lại.</Note>
       </form>
@@ -262,6 +268,7 @@ function PoiResultModal({ proposalId, revision, mapName, onClose }: { proposalId
                 : <ul className="mt-2 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-2">{observations(record).map(item => <li key={item.label}>{item.passed ? 'Đạt' : 'Chưa đạt'}: {item.label}</li>)}</ul>}
               {record.reason && <p className="mt-2"><span className="font-medium">Lý do:</span> {record.reason}</p>}
               <p className="mt-2 whitespace-pre-wrap"><span className="font-medium">Bằng chứng:</span> {record.evidenceNote}</p>
+              <EvidencePhotoList urls={record.evidencePhotoUrls} />
             </section>
           )
         })}
