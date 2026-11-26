@@ -551,6 +551,7 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV122)", await SnapshotHashAsync("snapshot-v1.22.sql"))
             .Replace("$(SchemaHashV123)", await SnapshotHashAsync("snapshot-v1.23.sql"))
             .Replace("$(SchemaHashV124)", await SnapshotHashAsync("snapshot-v1.24.sql"))
+            .Replace("$(SchemaHashV125)", await SnapshotHashAsync("snapshot-v1.25.sql"))
             .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.26.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();

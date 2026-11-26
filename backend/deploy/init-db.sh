@@ -14,6 +14,7 @@ fi
 : "${SQLCMDPASSWORD:?SQL admin password is required}"
 sql=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -l 15 -r 1)
 schema_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.26.sql | sha256sum | cut -d ' ' -f 1)
+schema_hash_v125=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.25.sql | sha256sum | cut -d ' ' -f 1)
 schema_hash_v124=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.24.sql | sha256sum | cut -d ' ' -f 1)
 schema_hash_v123=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.23.sql | sha256sum | cut -d ' ' -f 1)
 schema_hash_v122=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.22.sql | sha256sum | cut -d ' ' -f 1)
@@ -35,7 +36,7 @@ schema_hash_v16=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.6.sql | sh
 schema_hash_v17=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.7.sql | sha256sum | cut -d ' ' -f 1)
 schema_hash_v15=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.5.sql | sha256sum | cut -d ' ' -f 1)
 schema_hash_v14=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.4.sql | sha256sum | cut -d ' ' -f 1)
-export SchemaHash="$schema_hash" SchemaHashV124="$schema_hash_v124" SchemaHashV123="$schema_hash_v123" SchemaHashV122="$schema_hash_v122" SchemaHashV121="$schema_hash_v121" SchemaHashV120="$schema_hash_v120" SchemaHashV119="$schema_hash_v119" SchemaHashV118="$schema_hash_v118" SchemaHashV117="$schema_hash_v117" SchemaHashV116="$schema_hash_v116" SchemaHashV115="$schema_hash_v115" SchemaHashV114="$schema_hash_v114" SchemaHashV113="$schema_hash_v113" SchemaHashV112="$schema_hash_v112" SchemaHashV111="$schema_hash_v111" SchemaHashV110="$schema_hash_v110" SchemaHashV19="$schema_hash_v19" SchemaHashV18="$schema_hash_v18" SchemaHashV17="$schema_hash_v17" SchemaHashV16="$schema_hash_v16" SchemaHashV15="$schema_hash_v15" SchemaHashV14="$schema_hash_v14" AppPassword="${SQL_APP_PASSWORD:-}"
+export SchemaHash="$schema_hash" SchemaHashV125="$schema_hash_v125" SchemaHashV124="$schema_hash_v124" SchemaHashV123="$schema_hash_v123" SchemaHashV122="$schema_hash_v122" SchemaHashV121="$schema_hash_v121" SchemaHashV120="$schema_hash_v120" SchemaHashV119="$schema_hash_v119" SchemaHashV118="$schema_hash_v118" SchemaHashV117="$schema_hash_v117" SchemaHashV116="$schema_hash_v116" SchemaHashV115="$schema_hash_v115" SchemaHashV114="$schema_hash_v114" SchemaHashV113="$schema_hash_v113" SchemaHashV112="$schema_hash_v112" SchemaHashV111="$schema_hash_v111" SchemaHashV110="$schema_hash_v110" SchemaHashV19="$schema_hash_v19" SchemaHashV18="$schema_hash_v18" SchemaHashV17="$schema_hash_v17" SchemaHashV16="$schema_hash_v16" SchemaHashV15="$schema_hash_v15" SchemaHashV14="$schema_hash_v14" AppPassword="${SQL_APP_PASSWORD:-}"
 
 database_exists=$("${sql[@]}" -d master -h -1 -W -Q "SET NOCOUNT ON; SELECT CASE WHEN DB_ID(N'SmartCampusTourV11') IS NULL THEN 0 ELSE 1 END;" | tr -d '\r\n ')
 if [[ "$database_exists" == 0 ]]; then
