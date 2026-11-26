@@ -84,7 +84,10 @@ readiness, interruption recovery, API rollback and separate SQL maintenance.
 SBOM is inventory evidence, not a vulnerability scanner gate.
 
 `backend/deploy/prepare-release.sh` requires successful **push/main** Backend
-Verify runs for application and operations SHAs. It downloads that run's manifest,
+Verify runs for application and operations SHAs. It selects the run's conclusion
+locally because GitHub's `status=` listing filter has omitted a completed
+successful run for hours, and retries a run not yet listed (default 6 attempts,
+10s apart) before failing. It downloads that run's manifest,
 validates digests, fetches the application's Compose through authenticated GitHub
 Contents API and copies scripts from a clean operations checkout.
 `backend/deploy/ssh-deploy.sh` transfers the bundle and invokes the existing host
