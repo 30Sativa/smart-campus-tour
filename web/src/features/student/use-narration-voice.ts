@@ -30,6 +30,8 @@ export type NarrationVoice = {
   /** Plays the current stop's narration again from the start. */
   replay: () => void
   stop: () => void
+  /** The sentence being read right now, for the subtitle over the video; null while silent. */
+  caption: string | null
 }
 
 const MAX_CHUNK = 180
@@ -70,15 +72,33 @@ function hasUserActivation(): boolean {
   return activation ? activation.hasBeenActive : true
 }
 
-type RunCallbacks = { done: () => void; refused: () => void }
+type RunCallbacks = { done: () => void; refused: () => void; line?: (text: string) => void }
 
-/** Plays a prepared narration file. */
-function playFile(el: HTMLAudioElement, url: string, { done, refused }: RunCallbacks): void {
+/**
+ * The subtitle line of a narration file at `currentTime`: the file has no timing of its own, so each sentence chunk
+ * gets the share of the duration its length has of the whole text. Null before the duration is known.
+ */
+export function captionAt(chunks: readonly string[], currentTime: number, duration: number): string | null {
+  if (!chunks.length || !Number.isFinite(duration) || duration <= 0) return null
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+  const reached = Math.max(0, Math.min(1, currentTime / duration)) * total
+  let start = 0
+  for (const chunk of chunks) {
+    start += chunk.length
+    if (reached < start) return chunk
+  }
+  return chunks[chunks.length - 1]
+}
+
+/** Plays a prepared narration file; `text` gives the subtitle lines. */
+function playFile(el: HTMLAudioElement, url: string, text: string, { done, refused, line }: RunCallbacks): void {
+  const chunks = splitForSpeech(text)
   el.src = url
   el.currentTime = 0
   el.onended = done
   el.onerror = done
   el.onpause = done
+  el.ontimeupdate = () => { const caption = captionAt(chunks, el.currentTime, el.duration); if (caption) line?.(caption) }
   el.play().catch((error: unknown) => {
     if (error instanceof DOMException && error.name === 'NotAllowedError') refused()
     else done()
@@ -86,7 +106,7 @@ function playFile(el: HTMLAudioElement, url: string, { done, refused }: RunCallb
 }
 
 /** Queues the narration text sentence by sentence on the browser's speech voice. */
-function speakText(api: SpeechSynthesis, text: string, voice: SpeechSynthesisVoice | undefined, { done, refused }: RunCallbacks): boolean {
+function speakText(api: SpeechSynthesis, text: string, voice: SpeechSynthesisVoice | undefined, { done, refused, line }: RunCallbacks): boolean {
   const chunks = splitForSpeech(text)
   if (chunks.length === 0) return false
   chunks.forEach((chunk, index) => {
@@ -94,6 +114,8 @@ function speakText(api: SpeechSynthesis, text: string, voice: SpeechSynthesisVoi
     utterance.lang = voice?.lang ?? 'vi-VN'
     if (voice) utterance.voice = voice
     utterance.rate = NARRATION_RATE
+    // The subtitle follows the sentence the voice is reading.
+    utterance.onstart = () => line?.(chunk)
     if (index === chunks.length - 1) utterance.onend = done
     utterance.onerror = (event) => { if (event.error === 'not-allowed') refused(); else done() }
     api.speak(utterance)
@@ -105,6 +127,7 @@ export function useNarrationVoice(narration: NarrationSource | undefined, muted:
   const [speaking, setSpeaking] = useState(false)
   const [blocked, setBlocked] = useState(false)
   const [noVietnameseVoice, setNoVietnameseVoice] = useState(false)
+  const [caption, setCaption] = useState<string | null>(null)
   const audio = useRef<HTMLAudioElement | null>(null)
   const voice = useRef<SpeechSynthesisVoice | undefined>(undefined)
   /** poiId whose arrival has already been narrated (or skipped while muted); cleared while the robot travels. */
@@ -137,14 +160,16 @@ export function useNarrationVoice(narration: NarrationSource | undefined, muted:
     run.current += 1
     silence()
     const id = run.current
+    setCaption(null)
     const callbacks: RunCallbacks = {
-      done: () => { if (run.current === id) setSpeaking(false) },
-      refused: () => { if (run.current === id) { setSpeaking(false); setBlocked(true) } },
+      done: () => { if (run.current === id) { setSpeaking(false); setCaption(null) } },
+      refused: () => { if (run.current === id) { setSpeaking(false); setCaption(null); setBlocked(true) } },
+      line: (text) => { if (run.current === id) setCaption(text) },
     }
 
     if (source.audioUrl) {
       if (!audio.current) audio.current = new Audio()
-      playFile(audio.current, source.audioUrl, callbacks)
+      playFile(audio.current, source.audioUrl, source.text, callbacks)
     } else {
       const api = speechApi()
       if (!api) return
@@ -183,9 +208,10 @@ export function useNarrationVoice(narration: NarrationSource | undefined, muted:
     if (current?.isPlaying) start(current)
   }, [start])
 
-  const stop = useCallback(() => { run.current += 1; silence(); setSpeaking(false) }, [silence])
+  const stop = useCallback(() => { run.current += 1; silence(); setSpeaking(false); setCaption(null) }, [silence])
 
-  return { speaking: speaking && !muted, blocked, noVietnameseVoice, enable, replay, stop }
+  const on = speaking && !muted
+  return { speaking: on, blocked, noVietnameseVoice, enable, replay, stop, caption: on ? caption : null }
 }
 
 /**

@@ -43,7 +43,7 @@ export function readTalkFeed(value: unknown): TalkFeed | null {
     canSend: feed.canSend === true, messages: [...messages].sort((a, b) => a.seq - b.seq) }
 }
 
-function errorCode(error: ApiError): string | undefined {
+export function errorCode(error: ApiError): string | undefined {
   try {
     const parsed = JSON.parse(error.body) as { errors?: { code?: unknown } }
     return typeof parsed.errors?.code === 'string' ? parsed.errors.code : undefined

@@ -36,6 +36,8 @@ interface StudentLiveViewProps {
   quest?: QuestSource | null
   /** ADR-0063: the Tour's fallback video on the relay, played while the live picture is lost. */
   fallback?: QuestSource | null
+  /** The guide's live voice status, shown over the picture. */
+  guideVoice?: ReactNode
 }
 
 const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
@@ -51,7 +53,7 @@ const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
  * On phones those panels stack in the same reading order.
  * Every tab stays mounted so the AI conversation survives a tab switch.
  */
-export function StudentLiveView({ snapshot, ai, talk, talkUnread = 0, showMap = true, idleTitle, narrationIdleText, video, notice, quest, fallback }: StudentLiveViewProps) {
+export function StudentLiveView({ snapshot, ai, talk, talkUnread = 0, showMap = true, idleTitle, narrationIdleText, video, notice, quest, fallback, guideVoice }: StudentLiveViewProps) {
   const tabs = TABS.filter((t) => (showMap || t.key !== 'map') && (talk !== undefined || t.key !== 'talk'))
   const storedTab = useStudentStore((s) => s.activeTab)
   const tab = tabs.some((t) => t.key === storedTab) ? storedTab : tabs[0].key
@@ -92,7 +94,7 @@ export function StudentLiveView({ snapshot, ai, talk, talkUnread = 0, showMap = 
           <div className={`st-x-stage st-tone-${statusDisplay.tone}${snapshot.step === 'navigating' || snapshot.step === 'returning' ? ' is-moving' : ''}`}>
             <StudentVideoPlayer streamUrl={snapshot.videoStreamUrl || undefined} statusLabel={stopLabel}
               badge={video?.badge} emptyMessage={video?.emptyMessage} {...(quest === undefined ? {} : { quest })} fallback={fallback}
-              onReplayNarration={snapshot.narration ? voice.replay : undefined} />
+              onReplayNarration={snapshot.narration ? voice.replay : undefined} caption={voice.caption} overlay={guideVoice} />
             {/* Keep the current stop readable below the picture and its controls. */}
             <div className="st-x-caption" aria-live="polite">
               <small><MapPin size={14} aria-hidden="true" />{statusDisplay.label}</small>

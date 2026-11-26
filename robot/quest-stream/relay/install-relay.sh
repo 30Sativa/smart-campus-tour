@@ -18,6 +18,10 @@
 # backend for the Tour's signed Cloudinary video and publishes it in a loop with
 # ffmpeg over RTSP on the loopback; MediaMTX stops it 10 s after the last viewer.
 #
+# ADR-0072: the Operator's live voice to a Tour's Viewers uses the path
+# voice-<tourId>: the Operator's browser publishes it over WHIP and Viewers read it
+# over WHEP, both with a backend token; the reaper cuts either when access ends.
+#
 #   sudo ROBOT_CODE=amr_01 bash install-relay.sh stream.fptcampustour.cloud  # install / update
 #   sudo bash install-relay.sh stream.fptcampustour.cloud --show             # print the API and NUC lines again
 #   sudo bash install-relay.sh --remove
@@ -99,6 +103,10 @@ paths:
     runOnDemandRestart: yes
     runOnDemandStartTimeout: 30s
     runOnDemandCloseAfter: 10s
+  # ADR-0072: one Tour's live guide voice. The Operator's browser publishes it over
+  # WHIP and the Tour's Viewers read it over WHEP, each with a backend token.
+  "~^voice-[0-9a-f]{32}$":
+    source: publisher
 YML
 }
 

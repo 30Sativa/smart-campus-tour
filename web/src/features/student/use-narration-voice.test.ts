@@ -1,11 +1,12 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NARRATION_RATE, pickVietnameseVoice, splitForSpeech, useNarrationVoice, type NarrationSource } from './use-narration-voice'
+import { captionAt, NARRATION_RATE, pickVietnameseVoice, splitForSpeech, useNarrationVoice, type NarrationSource } from './use-narration-voice'
 
 class FakeUtterance {
   lang = ''
   voice: unknown = null
   rate = 1
+  onstart: (() => void) | null = null
   onend: (() => void) | null = null
   onerror: ((event: { error: string }) => void) | null = null
   text: string
@@ -52,7 +53,38 @@ describe('pickVietnameseVoice', () => {
   })
 })
 
+describe('captionAt', () => {
+  const chunks = ['Một hai ba.', 'Bốn năm sáu bảy tám chín mười.']
+  it('gives each sentence its share of the file by length', () => {
+    expect(captionAt(chunks, 0, 10)).toBe(chunks[0])
+    expect(captionAt(chunks, 2, 10)).toBe(chunks[0])
+    expect(captionAt(chunks, 5, 10)).toBe(chunks[1])
+    expect(captionAt(chunks, 12, 10)).toBe(chunks[1])
+  })
+  it('shows nothing before the duration is known', () => {
+    expect(captionAt(chunks, 1, NaN)).toBeNull()
+    expect(captionAt(chunks, 1, 0)).toBeNull()
+    expect(captionAt([], 1, 10)).toBeNull()
+  })
+})
+
 describe('useNarrationVoice', () => {
+  it('subtitles the sentence being read and clears it when the voice ends or is muted', () => {
+    const { result, rerender } = renderHook(({ muted }) => useNarrationVoice(at('lib'), muted), { initialProps: { muted: false } })
+    flush()
+    expect(result.current.caption).toBeNull()
+    act(() => spoken[0].onstart?.())
+    expect(result.current.caption).toBe('Đây là thư viện.')
+    act(() => spoken[1].onstart?.())
+    expect(result.current.caption).toBe('Mở cửa từ 7 giờ.')
+    rerender({ muted: true })
+    expect(result.current.caption).toBeNull()
+    rerender({ muted: false })
+    act(() => spoken[1].onend?.())
+    expect(result.current.caption).toBeNull()
+  })
+
+
   it('reads the stop once on arrival and again after travelling', () => {
     const { result, rerender } = renderHook(({ n }) => useNarrationVoice(n, false), { initialProps: { n: at('lib') as NarrationSource | undefined } })
     flush()

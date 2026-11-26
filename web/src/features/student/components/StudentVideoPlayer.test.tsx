@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 type Status = 'idle' | 'live' | 'connecting' | 'offline' | 'error'
@@ -17,6 +17,7 @@ vi.mock('../../quest-stream/use-whep-stream', () => ({
 }))
 
 import { StudentVideoPlayer } from './StudentVideoPlayer'
+import { useStudentStore } from '../student-store'
 
 const QUEST = { whepUrl: 'http://nuc.test:8889/quest/whep', token: 't' }
 
@@ -115,5 +116,21 @@ describe('StudentVideoPlayer relay fallback', () => {
     const { rerender } = render(<StudentVideoPlayer quest={QUEST} fallback={FALLBACK} />)
     rerender(<StudentVideoPlayer quest={QUEST} fallback={null} />)
     expect(screen.queryByLabelText('Video dự phòng')).toBeNull()
+  })
+})
+
+describe('StudentVideoPlayer subtitles', () => {
+  it('shows the narration line over the video and the CC button turns it off and on', () => {
+    whep.status = 'live'
+    useStudentStore.getState().setCaptionsOn(true)
+    render(<StudentVideoPlayer quest={QUEST} caption="Đây là thư viện." overlay={<p>Hướng dẫn viên đang nói</p>} />)
+    expect(screen.getByText('Đây là thư viện.')).toBeInTheDocument()
+    expect(screen.getByText('Hướng dẫn viên đang nói')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tắt phụ đề' }))
+    expect(screen.queryByText('Đây là thư viện.')).toBeNull()
+    expect(useStudentStore.getState().captionsOn).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Bật phụ đề' }))
+    expect(screen.getByText('Đây là thư viện.')).toBeInTheDocument()
   })
 })

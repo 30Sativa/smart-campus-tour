@@ -1,5 +1,6 @@
 """ADR-0055: the relay asks the backend about every connection, and its reaper cuts ended viewers.
 ADR-0063: fallback-<tourId> is published on demand by a script that asks the backend what to play.
+ADR-0072: voice-<tourId> carries the Operator's live voice, published from the browser over WHIP.
 
 Runs install-relay.sh in its print modes (no root, no network) and the generated reaper against a
 stub `curl` that plays both the MediaMTX API and the backend. Needs bash and jq.
@@ -57,6 +58,14 @@ class RelayConfigTests(unittest.TestCase):
                       '    runOnDemand: /usr/local/bin/mediamtx-relay-fallback\n', paths)
         self.assertIn("    runOnDemandCloseAfter: 10s\n", paths)
         # The fallback path has no SRT passphrase of its own: only the backend-approved publisher may publish.
+        self.assertEqual(paths.count("srtPublishPassphrase"), 1)
+
+    def test_guide_voice_paths_are_published_by_the_operators_browser(self):
+        # ADR-0072: no on-demand command and no SRT passphrase: only a WHIP publisher the backend approves.
+        paths = self.config().split("paths:\n", 1)[1]
+        voice = paths.split('  "~^voice-[0-9a-f]{32}$":\n', 1)[1]
+        self.assertTrue(voice.startswith("    source: publisher\n"))
+        self.assertNotIn("runOnDemand", voice.split("\n  ", 1)[0])
         self.assertEqual(paths.count("srtPublishPassphrase"), 1)
 
     def test_the_nuc_still_needs_the_srt_passphrase(self):

@@ -37,6 +37,14 @@ describe('audio transport ownership', () => {
     expect(fetch.mock.calls.filter(([, init]) => init.method === 'DELETE')).toHaveLength(1)
     expect(fetch).toHaveBeenLastCalledWith('https://media.test/quest-mic/session/123', expect.objectContaining({ method: 'DELETE', headers: { Authorization: 'Basic test-credential' } }))
   })
+  it('with a token on the address sends no Authorization header and ends the session with the same token', async () => {
+    const fetch = vi.fn().mockResolvedValue(answer('/voice-x/whip/abc'))
+    vi.stubGlobal('fetch', fetch)
+    const session = await openAudioPeer({ ...options(), url: 'https://media.test/voice-x/whip?token=t1', authorization: undefined })
+    expect(fetch.mock.calls[0][1].headers).toEqual({ 'Content-Type': 'application/sdp' })
+    session.close()
+    expect(fetch).toHaveBeenLastCalledWith('https://media.test/voice-x/whip/abc?token=t1', expect.objectContaining({ method: 'DELETE', headers: {} }))
+  })
   it('never forwards credentials to an off-origin session URL', async () => {
     const fetch = vi.fn().mockResolvedValue(answer('https://other.test/session'))
     vi.stubGlobal('fetch', fetch)
