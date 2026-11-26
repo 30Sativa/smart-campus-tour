@@ -46,6 +46,12 @@ internal static class RouteRevisionMapper
             if (poi is null || source is null || source.ResultCode != "PASS" || latestPoiResult is null || latestPoiResult.ResultCode != "PASS")
                 eligibilityIssues.Add($"POI_VERIFICATION_REQUIRED:{stop.PoiProposalRevisionId:D}");
         }
+        // ADR-0060: approving new wording does not change a saved revision; say which stops have newer approved text.
+        var approvedNarration = (await repo.GetApprovedNarrationsAsync(proposalByStop.Values.Distinct().ToArray(), ct))
+            .ToDictionary(narration => narration.ProposalId);
+        int? NewerNarration(RouteRevisionStop stop) =>
+            proposalByStop.TryGetValue(stop.Id, out var proposal) && approvedNarration.TryGetValue(proposal, out var narration)
+                && narration.Id != stop.NarrationRevisionId ? narration.RevisionNumber : null;
         var unusable = (await repo.FindPoiProposalsAsync(proposalByStop.Values.Distinct().ToArray(), ct))
             .Where(p => p.RetiredAt is not null || p.DiscardedAt is not null).Select(p => p.Id).ToHashSet();
         var retiredPoiNames = stops.Where(s => proposalByStop.TryGetValue(s.Id, out var id) && unusable.Contains(id))
@@ -108,7 +114,7 @@ internal static class RouteRevisionMapper
             stops.Select(s => new RouteRevisionStopView(s.Id, s.PoiProposalRevisionId, s.SourcePoiVerificationRecordId,
                 s.StopOrder, s.DwellSeconds, Route.ReadHeadSteps(s.HeadStepsJson), s.Name, s.X, s.Y, s.Yaw,
                 s.CameraPreset, s.NarrationText, s.FallbackVideoUrl,
-                proposalByStop.TryGetValue(s.Id, out var proposalId) ? proposalId : null)).ToArray(), dtoRuns, summaries, eligibilityIssues,
+                proposalByStop.TryGetValue(s.Id, out var proposalId) ? proposalId : null, NewerNarration(s))).ToArray(), dtoRuns, summaries, eligibilityIssues,
             route.IsOpenForNewTours, LegacyRouteRevision.For(route), schedule is null ? Tours.RouteScheduleFit.Unknown
                 : Tours.TourSchedule.ScheduleFit(schedule, expected), expected, retiredPoiNames, shared,
             scheduledTours.Where(tour => tour.RouteRevisionId == revision.Id).ToArray(),

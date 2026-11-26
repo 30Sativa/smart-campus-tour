@@ -28,7 +28,9 @@ export type VersionedRoute = {
     /** ADR-0061: the POI the stop's revision belongs to; an older server omits it. */
     poiProposalId?: string | null
     /** ADR-0060: the approved narration saved with this revision, read by its Tours; null when the POI had none. */
-    narrationText?: string | null }>
+    narrationText?: string | null
+    /** ADR-0060: the POI's approved narration version when it is newer than the one saved here; an older server omits it. */
+    newerNarrationRevisionNumber?: number | null }>
   /** Open for new Tours. Off does not affect Tours already scheduled. */
   isActive: boolean
   /** Opaque concurrency token for deactivate/activate. */
