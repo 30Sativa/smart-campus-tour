@@ -39,6 +39,10 @@
     # from the navigate_to_pose goal status, turns the head to the front when a goal starts and to the POI's camera
     # preset when a goal succeeds within head_poi_radius_m of that POI. The backend's autoMotion can switch it off.
     head_poi_auto: true
+    # The Operator's head buttons work only while the robot stands still (no navigate_to_pose goal active): STEP, JOG,
+    # ANGLE, SWEEP and HOME are skipped while it drives, STOP always runs. The backend refuses them first; this is the
+    # robot's own check for a command delivered as the robot sets off. A held JOG ends when a goal starts.
+    head_block_while_driving: true
     head_poi_radius_m: 0.6
     head_poi_refresh_sec: 5.0
     head_poi_nav_action: navigate_to_pose

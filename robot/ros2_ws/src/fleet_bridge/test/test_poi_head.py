@@ -265,3 +265,34 @@ class YawCorrectionTests(unittest.TestCase):
             with self.subTest(bad=bad):
                 with self.assertRaises(ValueError):
                     PoiHeadDirector(FakeActuator(), 0.6, None, bad)
+
+
+class DrivingTests(unittest.TestCase):
+    """While a goal is active the Operator's head is locked (head_block_while_driving)."""
+
+    def test_driving_follows_the_goal_status(self):
+        d, _ = director(auto=False)
+        self.assertFalse(d.driving())
+        d.on_goal_status([(b'g1', ACCEPTED)], (0.0, 0.0))
+        self.assertTrue(d.driving())
+        d.on_goal_status([(b'g1', EXECUTING)], (0.0, 0.0))
+        self.assertTrue(d.driving())
+        d.on_goal_status([(b'g1', SUCCEEDED)], (3.0, 0.0))
+        self.assertFalse(d.driving())
+        d.on_goal_status([(b'g1', SUCCEEDED), (b'g2', EXECUTING)], (3.0, 0.0))
+        self.assertTrue(d.driving())
+        d.on_goal_status([(b'g1', SUCCEEDED), (b'g2', ABORTED)], (5.0, 0.0))
+        self.assertFalse(d.driving())
+
+    def test_a_bridge_restarted_mid_drive_knows_from_the_latched_backlog(self):
+        d = PoiHeadDirector(FakeActuator(), 0.6)
+        d.on_goal_status([(b'run', EXECUTING)], None)   # first message: no head action, but it is driving
+        self.assertTrue(d.driving())
+
+    def test_departure_ends_a_held_jog_once_per_goal_even_without_auto_motion(self):
+        d, _ = director(auto=False)
+        released = []
+        d.set_on_departure(lambda: released.append(True))
+        d.on_goal_status([(b'g1', EXECUTING)], (0.0, 0.0))
+        d.on_goal_status([(b'g1', EXECUTING)], (0.5, 0.0))
+        self.assertEqual([True], released)

@@ -180,6 +180,29 @@ class ApplierTests(unittest.TestCase):
         self.applier.tick(0.2)
         self.assertEqual([('jog', 1, 0), ('jog', 0, 0), ('step', -3, 0)], self.actuator.calls)
 
+    def test_while_driving_only_stop_and_a_jog_release_reach_the_head(self):
+        logs = []
+        driving = {'now': True}
+        actuator = FakeActuator()
+        applier = HeadCommandApplier(actuator, on_log=logs.append, motion_allowed=lambda: not driving['now'])
+        applier.apply(EPOCH, [parse_head_command(c) for c in [
+            {'seq': 1, 'kind': 'STEP', 'panSteps': 2}, {'seq': 2, 'kind': 'JOG', 'panDir': 1},
+            {'seq': 3, 'kind': 'ANGLE', 'panDeg': 30, 'tiltDeg': 0}, {'seq': 4, 'kind': 'SWEEP'},
+            {'seq': 5, 'kind': 'HOME'}, {'seq': 6, 'kind': 'JOG', 'panDir': 0, 'tiltDir': 0},
+            {'seq': 7, 'kind': 'STOP'}]], 0.0)
+        self.assertEqual([('stop',)], actuator.calls)
+        self.assertFalse(applier.jogging)
+        self.assertEqual(5, sum('ignored: the robot is driving' in line for line in logs))
+        self.assertEqual((EPOCH, 7), applier.cursor())   # skipped, not retried at the next stop
+        driving['now'] = False
+        applier.apply(EPOCH, [parse_head_command({'seq': 8, 'kind': 'STEP', 'panSteps': 2})], 0.0)
+        self.assertEqual([('stop',), ('step', 2, 0)], actuator.calls)
+
+    def test_a_guard_set_later_applies_to_the_next_command(self):
+        self.applier.set_motion_guard(lambda: False)
+        self.apply([{'seq': 1, 'kind': 'STEP', 'panSteps': 1}])
+        self.assertEqual([], self.actuator.calls)
+
     def test_release_without_jog_publishes_nothing(self):
         self.applier.release()
         self.applier.tick(5.0)

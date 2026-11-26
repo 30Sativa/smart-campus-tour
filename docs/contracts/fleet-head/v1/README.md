@@ -121,6 +121,7 @@ under `ttlMs`); release = `JOG` with `0,0` (or `STOP`).
 | 404 | | Unknown Tour. |
 | 409 | `HEAD_CONTROL_DISABLED` | `FleetHead:Enabled` is false. |
 | 409 | `TOUR_STATE_INVALID` | Tour is not RUNNING or has no assigned robot (`HOME`: not READY with a held robot either). |
+| 409 | `HEAD_ROBOT_MOVING` | RUNNING Tour whose step is not `OBSERVING` (the robot is not standing at a POI). Only `STOP` and a `JOG` release (both directions 0) pass; `HOME` also at `INITIALIZING` (added 26/11/2026, ADR-0045 addendum 5). Checked before the connection. |
 | 409 | `HEAD_ROBOT_NOT_CONNECTED` | The robot has not polled within `FleetHead:RobotConnectedWithinMs`. |
 | 429 | `RATE_LIMITED` | `FleetHead` policy. |
 

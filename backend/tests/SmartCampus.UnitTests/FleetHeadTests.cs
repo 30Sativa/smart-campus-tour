@@ -396,6 +396,64 @@ public sealed class FleetHeadTests
         }
     }
 
+    // ---- Addendum 5: the head turns by hand only at a POI ----------------------------------------------------------
+
+    public static TheoryData<string?, string> NotAtAPoi => new()
+    {
+        { TourRuntime.Navigating, "STEP" }, { TourRuntime.Navigating, "JOG" }, { TourRuntime.Navigating, "ANGLE" },
+        { TourRuntime.Navigating, "SWEEP" }, { TourRuntime.Navigating, "HOME" },
+        { TourRuntime.ReturningToEnd, "JOG" }, { TourRuntime.ReturningToEnd, "HOME" },
+        { TourRuntime.Initializing, "STEP" }, { TourRuntime.Initializing, "SWEEP" },
+        { null, "ANGLE" }
+    };
+
+    [Theory]
+    [MemberData(nameof(NotAtAPoi))]
+    public async Task Send_RefusesToTurnTheHeadWhileTheRobotIsNotAtAPoi(string? step, string kind)
+    {
+        var channel = new FakeChannel { Connected = true };
+        var spec = kind switch
+        {
+            "STEP" => new HeadCommandSpec(kind, PanSteps: 1),
+            "JOG" => new HeadCommandSpec(kind, PanDir: 1),
+            "ANGLE" => new HeadCommandSpec(kind, PanDeg: 30, TiltDeg: 0),
+            _ => new HeadCommandSpec(kind)
+        };
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Handler(channel, new FakeReader(Running() with { CurrentStep = step }))
+            .Handle(new SendHeadCommand(TourId, Operator, spec), default));
+        Assert.Equal("HEAD_ROBOT_MOVING", error.Code);
+        Assert.Empty(channel.Queued);
+    }
+
+    [Theory]
+    [InlineData(TourRuntime.Navigating)]
+    [InlineData(TourRuntime.ReturningToEnd)]
+    public async Task Send_StopAlwaysGoesThrough_EvenWhileTheRobotDrives(string step)
+    {
+        var channel = new FakeChannel { Connected = true };
+        await Handler(channel, new FakeReader(Running() with { CurrentStep = step }))
+            .Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("STOP")), default);
+        Assert.Equal(new HeadCommandSpec("STOP"), Assert.Single(channel.Queued).Spec);
+    }
+
+    [Fact]
+    public async Task Send_AJogReleaseGoesThrough_WhileTheRobotDrives()
+    {
+        var channel = new FakeChannel { Connected = true };
+        await Handler(channel, new FakeReader(Running() with { CurrentStep = TourRuntime.Navigating }))
+            .Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("JOG", PanDir: 0, TiltDir: 0)), default);
+        Assert.Equal("JOG", Assert.Single(channel.Queued).Spec.Kind);
+    }
+
+    [Fact]
+    public async Task Send_HomeWorksWhileTheRobotWaitsAtTheStart()
+    {
+        var channel = new FakeChannel { Connected = true };
+        await Handler(channel, new FakeReader(Running() with { CurrentStep = TourRuntime.Initializing }))
+            .Handle(new SendHeadCommand(TourId, Operator, new HeadCommandSpec("HOME")), default);
+        Assert.Equal(new HeadCommandSpec("HOME"), Assert.Single(channel.Queued).Spec);
+    }
+
     [Fact]
     public async Task Send_TheOperatorCanAlsoSweepByHand()
     {
@@ -406,7 +464,9 @@ public sealed class FleetHeadTests
 
     // ---- helpers ---------------------------------------------------------------------------------------------------
 
-    private static TourHeadControlView Running() => new(TourId, TourRuntime.Running, Operator, Guid.NewGuid(), Robot);
+    /// <summary>A RUNNING Tour whose robot stands at a POI, where every head command is allowed.</summary>
+    private static TourHeadControlView Running() =>
+        new(TourId, TourRuntime.Running, Operator, Guid.NewGuid(), Robot, CurrentStep: TourRuntime.Observing);
 
     private static FleetHeadSettings Settings(bool enabled = true) => new(enabled);
 

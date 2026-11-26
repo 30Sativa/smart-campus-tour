@@ -96,7 +96,7 @@ function TourConsole({ tourId }: { tourId: string }) {
     ...(detail.routeRevision?.viewerChoosesNextStop ? [{ id: 'vote', label: 'Bầu chọn', icon: Vote, urgent: voteOpen(detail),
       content: <section aria-label="Viewer chọn điểm tiếp theo"><VotePanel detail={detail} isOperator={isOperator} now={now} /></section> }] : []),
     ...(running ? [{ id: 'head', label: 'Đầu camera', icon: Camera,
-      content: <section aria-label="Đầu camera" className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} /></section> }] : []),
+      content: <section aria-label="Đầu camera" className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} step={detail.execution?.currentStep ?? null} /></section> }] : []),
     { id: 'talk', label: 'Trò chuyện', icon: MessagesSquare, count: talkCount,
       content: <section aria-label="Trò chuyện với người xem">
         <p className="px-4 pt-3 text-xs text-muted">Nói hoặc nhắn cho cả đoàn; người xem trả lời bằng chữ.</p>

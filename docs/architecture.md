@@ -1543,7 +1543,7 @@ buttons on the Operator console:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE\|SWEEP\|HOME, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?, sweepDeg?}` (ANGLE within pan ±170, tilt ±18; `sweepDeg` 10..170, SWEEP only); `HOME` (re-align against the stops) is also accepted while READY, for the held robot; 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
+| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE\|SWEEP\|HOME, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?, sweepDeg?}` (ANGLE within pan ±170, tilt ±18; `sweepDeg` 10..170, SWEEP only); `HOME` (re-align against the stops) is also accepted while READY, for the held robot; 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_MOVING` (RUNNING but the step is not `OBSERVING`: only `STOP`, a `JOG` release and, at `INITIALIZING`, `HOME` pass; ADR-0045 addendum 5), `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
 | PUT | `/api/staff/manage/tours/{id}/head-mode` | `{mode: AUTO\|MANUAL}`, Operator only, until the Tour ends. AUTO (default) lets the robot turn the head to each POI's camera preset itself; MANUAL sets `autoMotion: false` on `GET pois`. In memory. |
 | GET | `/api/staff/manage/tours/{id}/head` | Any Staff: `{enabled, mode, robotCode, connected, lastPollAt, head}` from the robot's last poll. |
 | POST | `/api/fleet/head/v1/poll` | Robot scheme. Long poll `{epoch, afterSeq, waitMs, head}` → `{epoch, commands[]}`. |

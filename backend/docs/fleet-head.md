@@ -42,6 +42,14 @@ stops. `SendHeadCommandHandler` accepts it for a `READY` Tour, queued to `TourHe
 active `TourRobotReservations` row), as well as for a `RUNNING` Tour; every other kind still needs `RUNNING`.
 `GetTourHeadStatus` reports the held robot while `READY` so the page can show connection and `HOMING`.
 
+## Only at a POI while RUNNING (ADR-0045 addendum 5, 26/11/2026)
+
+`TourHeadControlView.CurrentStep` carries `Tours.CurrentStep`. For a `RUNNING` Tour, `SendHeadCommandHandler.MayTurnHere`
+lets `STEP`, `JOG`, `ANGLE` and `SWEEP` through only at `OBSERVING` (the robot stands at a POI); `HOME` at `OBSERVING` or
+`INITIALIZING` (waiting at the start); `STOP` and a `JOG` release (both directions 0) always. Anything else is 409
+`HEAD_ROBOT_MOVING`, checked before the robot connection. The robot's own POI head (AUTO) is not a Staff command and
+is not affected. The robot enforces the same rule itself (`fleet_bridge` `head_block_while_driving`).
+
 ## Head behaviour at POIs (ADR-0045 addendum 14/11/2026: the robot decides)
 
 Everything the VR camera head does at a POI is set on the POI, in Staff "Camera & tư liệu", as its camera preset
