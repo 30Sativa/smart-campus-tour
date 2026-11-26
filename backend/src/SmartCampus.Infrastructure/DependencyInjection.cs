@@ -100,6 +100,7 @@ public static class DependencyInjection
         services.AddSingleton(new SmartCampus.Application.Features.FallbackVideo.CloudinarySettings(
             configuration["Cloudinary:CloudName"], configuration["Cloudinary:ApiKey"], configuration["Cloudinary:ApiSecret"]));
         services.AddScoped<StreamEntitlement>();
+        services.AddScoped<GuideVoiceEntitlement>();
         services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
         services.AddSingleton<JwtTokenSettings>();
         services.AddSingleton(TimeProvider.System);

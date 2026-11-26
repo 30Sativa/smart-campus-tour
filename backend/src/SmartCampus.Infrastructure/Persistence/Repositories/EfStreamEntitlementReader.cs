@@ -4,7 +4,7 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Infrastructure.Persistence.Repositories;
 
-/// <summary>Unlocked reads for ADR-0055 and ADR-0063, asked on every token issue and every relay connection.</summary>
+/// <summary>Unlocked reads for ADR-0055, ADR-0063 and ADR-0072, asked on every token issue and every relay connection.</summary>
 public sealed class EfStreamEntitlementReader(ApplicationDbContext db) : IStreamEntitlementReader
 {
     private const string Scheduled = "SCHEDULED";
@@ -22,6 +22,9 @@ public sealed class EfStreamEntitlementReader(ApplicationDbContext db) : IStream
     public Task<bool> StudentSessionMayWatchFallbackAsync(Guid sessionId, Guid tourId, DateTimeOffset now, CancellationToken ct) =>
         SessionTour(sessionId, now)
             .AnyAsync(tour => tour.Id == tourId && tour.State == TourRuntime.Running && tour.FallbackVideoUrl != null, ct);
+
+    public Task<bool> StudentSessionIsInTourAsync(Guid sessionId, Guid tourId, DateTimeOffset now, CancellationToken ct) =>
+        SessionTour(sessionId, now).AnyAsync(tour => tour.Id == tourId, ct);
 
     public Task<string?> RunningTourFallbackVideoAsync(Guid tourId, CancellationToken ct) =>
         db.Tours.AsNoTracking()

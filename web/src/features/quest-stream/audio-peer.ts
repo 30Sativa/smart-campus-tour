@@ -22,7 +22,8 @@ export function audioPath(value: string | undefined): string | null {
 export type AudioPeer = { close(): void }
 export type AudioPeerOptions = {
   url: string
-  authorization: string
+  /** The intercom's Basic credentials; without it the relay reads a `?token=` already on `url` (ADR-0072). */
+  authorization?: string
   signal: AbortSignal
   iceServers?: RTCIceServer[]
   stream?: MediaStream
@@ -33,6 +34,7 @@ export type AudioPeerOptions = {
 
 export async function openAudioPeer(options: AudioPeerOptions): Promise<AudioPeer> {
   const pc = new RTCPeerConnection({ iceServers: options.iceServers ?? [] })
+  const auth: Record<string, string> = options.authorization ? { Authorization: options.authorization } : {}
   let resource: string | null = null
   let closed = false
   let connectTimer: ReturnType<typeof setTimeout> | undefined
@@ -41,7 +43,7 @@ export async function openAudioPeer(options: AudioPeerOptions): Promise<AudioPee
     if (!resource) return
     const url = resource
     resource = null
-    void fetch(url, { method: 'DELETE', headers: { Authorization: options.authorization }, keepalive: true }).catch(() => {})
+    void fetch(url, { method: 'DELETE', headers: auth, keepalive: true }).catch(() => {})
   }
   const close = () => {
     if (!closed) {
@@ -89,7 +91,7 @@ export async function openAudioPeer(options: AudioPeerOptions): Promise<AudioPee
     }
     checkOpen()
     const response = await fetch(options.url, { method: 'POST', redirect: 'error',
-      headers: { 'Content-Type': 'application/sdp', Authorization: options.authorization },
+      headers: { 'Content-Type': 'application/sdp', ...auth },
       body: pc.localDescription?.sdp ?? '', signal: options.signal })
     if (response.status !== 201) throw new AudioPeerError(response.status)
     const location = response.headers.get('Location')
@@ -97,6 +99,8 @@ export async function openAudioPeer(options: AudioPeerOptions): Promise<AudioPee
     const session = new URL(location, options.url)
     // Never forward a password to an origin supplied by a response header.
     if (session.origin !== new URL(options.url).origin || session.username || session.password) throw new AudioPeerError()
+    // A token on the address also authorizes ending the session.
+    if (!options.authorization && !session.search) session.search = new URL(options.url).search
     resource = session.toString()
     checkOpen()
     const sdp = await response.text()

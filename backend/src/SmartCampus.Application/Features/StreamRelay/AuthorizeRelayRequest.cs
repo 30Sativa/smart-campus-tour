@@ -21,7 +21,8 @@ public enum RelayDecision
 public sealed record AuthorizeRelayRequest(string? RelayKey, string? Action, string? Path, string? User, string? Password,
     string? Token, string? Query, bool Recheck = false) : IRequest<RelayDecision>;
 
-public sealed class AuthorizeRelayRequestHandler(StreamRelaySettings settings, StreamEntitlement entitlement)
+public sealed class AuthorizeRelayRequestHandler(StreamRelaySettings settings, StreamEntitlement entitlement,
+    GuideVoiceEntitlement voice)
     : IRequestHandler<AuthorizeRelayRequest, RelayDecision>
 {
     public async Task<RelayDecision> Handle(AuthorizeRelayRequest request, CancellationToken ct)
@@ -30,6 +31,12 @@ public sealed class AuthorizeRelayRequestHandler(StreamRelaySettings settings, S
             return RelayDecision.UnknownCaller;
         if (FallbackPaths.TryParse(request.Path, out var tourId))
             return await FallbackAsync(request, tourId, ct);
+        // ADR-0072: the Operator publishes and the Viewers read voice-{tourId}, each with its own backend token.
+        if (GuideVoicePaths.TryParse(request.Path, out var voiceTourId))
+            return (request.Recheck || request.Action is "publish" or "read")
+                && await voice.TokenMayAsync(request.Recheck ? null : request.Action,
+                    StreamTokens.FromQuery(request.Query) ?? request.Token, voiceTourId, ct)
+                ? RelayDecision.Allow : RelayDecision.Deny;
         if (!string.Equals(request.Path, settings.Path, StringComparison.Ordinal))
             return RelayDecision.Deny;
         if (request.Recheck)

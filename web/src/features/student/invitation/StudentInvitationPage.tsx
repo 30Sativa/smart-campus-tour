@@ -14,6 +14,8 @@ import { useStudentTalk } from '../talk/student-talk'
 import { useStudentStore } from '../student-store'
 import { useLiveStudentAiChat } from '../ai/use-live-student-ai-chat'
 import { StudentBallotBox } from '../components/StudentBallotBox'
+import { StudentGuideVoice } from '../components/StudentGuideVoice'
+import { useGuideVoice } from '../../tour-talk/guide-voice'
 import { readBallot } from '../../tour-vote/vote'
 import { useStudentFallbackAccess, useStudentStreamAccess } from '../../quest-stream/stream-access'
 import { formatDateTime } from '../../../components/ui/date-time'
@@ -178,6 +180,9 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const liveTab = useStudentStore(store => store.activeTab)
   const talking = !!info && !finished && !leave.isPending && (snapshot?.tourState === 'Running' || snapshot?.tourState === 'Ready' || snapshot?.tourState === 'Scheduled')
   const talk = useStudentTalk(tourId, talking, snapshot?.tourState !== 'Running' || liveTab === 'talk')
+  // ADR-0072: the guide's live voice, heard on every invited page (shared rooms too) while the talk channel is open.
+  const muted = useStudentStore(store => store.audioMuted)
+  const guideVoice = useGuideVoice(tourId, talking, muted)
   // ADR-0063: the fallback video's token, held while the Tour runs so the player switches as soon as the live picture is lost.
   const fallback = useStudentFallbackAccess(tourId, snapshot?.tourState === 'Running' && !!info?.hasFallbackVideo && !leave.isPending)
   const offline = !!info && session.isError && !finished
@@ -253,6 +258,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         ai={<LiveStudentAiAssistant tourId={tourId} shared={shared} poiName={snapshot.currentPoi?.title} chat={aiChat} />}
         talk={<StudentTalkPanel tourId={tourId} talk={talk} shared={shared} />}
         talkUnread={talk.unread}
+        guideVoice={<div className="st-video__guide"><StudentGuideVoice voice={guideVoice} /></div>}
       />
       <div className="st-ctn st-invitation-status">{status}</div>
     </>
@@ -273,7 +279,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         intro={`${sessionLabel}. Khi nhân viên vận hành bắt đầu buổi tham quan, trang này sẽ tự chuyển sang buổi tham quan trực tiếp. Mã còn hạn tới ${formatDateTime(info.invitationExpiresAt)}.`}
         meta={`${info.tourName}, Giờ dự kiến ${formatDateTime(info.scheduledStartAt)}`}
         showMicCheck={false}
-        talk={<StudentTalkPanel tourId={tourId} talk={talk} shared={shared} waiting />}
+        talk={<><StudentGuideVoice voice={guideVoice} /><StudentTalkPanel tourId={tourId} talk={talk} shared={shared} waiting /></>}
         assistant={<WaitingRoomAssistant tourId={tourId} scheduledStartAt={info.scheduledStartAt} shared={shared} chat={aiChat} />}
       />
       <div className="st-ctn st-invitation-status">{status}</div>

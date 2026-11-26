@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
+  Captions,
+  CaptionsOff,
   Maximize,
   Minimize,
   Pause,
@@ -34,6 +36,10 @@ interface StudentVideoPlayerProps {
    * audio muted) while the live picture is lost or missing, until the live picture plays again.
    */
   fallback?: QuestSource | null
+  /** The narration sentence being read now, shown as a subtitle over the picture (also in full screen). */
+  caption?: string | null
+  /** A live element shown over the picture, e.g. the guide's voice status. */
+  overlay?: ReactNode
 }
 
 export const FALLBACK_BADGE = 'Video dự phòng · chế độ suy giảm'
@@ -54,6 +60,8 @@ export function StudentVideoPlayer({
   emptyMessage,
   quest = DEV_QUEST_SOURCE,
   fallback = null,
+  caption = null,
+  overlay,
 }: StudentVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const fallbackRef = useRef<HTMLVideoElement>(null)
@@ -68,6 +76,8 @@ export function StudentVideoPlayer({
   const audioMuted = useStudentStore((s) => s.audioMuted)
   const setAudioMuted = useStudentStore((s) => s.setAudioMuted)
   const isAiSpeaking = useStudentStore((s) => s.isAiSpeaking)
+  const captionsOn = useStudentStore((s) => s.captionsOn)
+  const setCaptionsOn = useStudentStore((s) => s.setCaptionsOn)
 
   // With a relay source from the API, the Quest 3 live stream (WebRTC from
   // MediaMTX) replaces the tour's video source; the hook owns connecting and
@@ -277,6 +287,13 @@ export function StudentVideoPlayer({
         </div>
       )}
 
+      {overlay}
+
+      {/* Subtitles of the narration: the sentence the voice is reading, over the picture and in full screen. */}
+      {captionsOn && caption && (
+        <p className="st-video__caption" aria-hidden="true"><span>{caption}</span></p>
+      )}
+
       <div className="st-video__bottom">
         <div className="st-video__ctl">
           <button
@@ -299,6 +316,16 @@ export function StudentVideoPlayer({
               {livePaused ? <Play size={18} /> : <Pause size={18} />}
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setCaptionsOn(!captionsOn)}
+            className="st-icon-btn"
+            aria-pressed={captionsOn}
+            title={captionsOn ? 'Tắt phụ đề' : 'Bật phụ đề'}
+            aria-label={captionsOn ? 'Tắt phụ đề' : 'Bật phụ đề'}
+          >
+            {captionsOn ? <Captions size={18} /> : <CaptionsOff size={18} />}
+          </button>
           {onReplayNarration && (
             <button type="button" onClick={onReplayNarration} className="st-ghost-btn" title="Nghe lại thuyết minh điểm hiện tại">
               <RotateCcw size={14} />

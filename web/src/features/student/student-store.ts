@@ -27,6 +27,10 @@ interface StudentStoreState {
   isAiSpeaking: boolean
   setIsAiSpeaking: (speaking: boolean) => void
 
+  // Subtitles of the narration over the video, on unless the viewer turns them off
+  captionsOn: boolean
+  setCaptionsOn: (on: boolean) => void
+
   // Live-tour panel tab
   activeTab: StudentLiveTab
   setActiveTab: (tab: StudentLiveTab) => void
@@ -66,6 +70,9 @@ export const useStudentStore = create<StudentStoreState>((set) => ({
 
   isAiSpeaking: false,
   setIsAiSpeaking: (isAiSpeaking) => set({ isAiSpeaking }),
+
+  captionsOn: true,
+  setCaptionsOn: (captionsOn) => set({ captionsOn }),
 
   activeTab: 'stream',
   setActiveTab: (activeTab) => set({ activeTab }),

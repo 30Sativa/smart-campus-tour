@@ -14,6 +14,12 @@ public static class StreamTokenKinds
 
     /// <summary>ADR-0063: a Student browser session watching its Tour's fallback video (subject = BrowserSessions.Id).</summary>
     public const string Fallback = "F";
+
+    /// <summary>ADR-0072: the Tour's Operator speaking on its guide voice path (subject = user id).</summary>
+    public const string VoicePublisher = "P";
+
+    /// <summary>ADR-0072: a Student browser session hearing its Tour's guide voice (subject = BrowserSessions.Id).</summary>
+    public const string VoiceListener = "L";
 }
 
 /// <summary>What a valid token says. <see cref="ExpiresAt"/> is checked by the caller, not by <see cref="StreamTokens.Read"/>.</summary>
@@ -46,7 +52,8 @@ public static class StreamTokens
         var signature = FromBase64Url(parts[5]);
         if (signature is null || !CryptographicOperations.FixedTimeEquals(signature, Sign(settings, body)))
             return null;
-        if (parts[1] is not (StreamTokenKinds.Student or StreamTokenKinds.Staff or StreamTokenKinds.Fallback)
+        if (parts[1] is not (StreamTokenKinds.Student or StreamTokenKinds.Staff or StreamTokenKinds.Fallback
+                or StreamTokenKinds.VoicePublisher or StreamTokenKinds.VoiceListener)
             || !Guid.TryParseExact(parts[2], "N", out var subject)
             || FromBase64Url(parts[3]) is not { } robot
             || !long.TryParse(parts[4], NumberStyles.None, CultureInfo.InvariantCulture, out var expires))

@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using SmartCampus.Api.Common.Responses;
+using SmartCampus.Application.Features.StreamRelay;
 using SmartCampus.Application.Features.TourTalk;
 using SmartCampus.Application.Features.TourTalk.Commands.SendViewerTalkMessage;
 using SmartCampus.Application.Features.TourTalk.Queries.GetTourTalk;
@@ -37,6 +38,16 @@ public sealed class StudentTourTalkController(ISender sender, IConfiguration con
             request.Text), ct);
         Response.Headers.CacheControl = "no-store";
         return Ok(new BaseResponse<TourTalkMessageView> { Success = true, Message = "OK", Data = message });
+    }
+
+    /// <summary>ADR-0072: the WHEP address and a short token to hear the Operator's live voice; renewed before it expires.</summary>
+    [HttpGet("voice-access")]
+    public async Task<ActionResult<BaseResponse<GuideVoiceAccess>>> VoiceAccess(Guid tourId, CancellationToken ct)
+    {
+        StudentSessionCookie.EnsureAllowedOrigin(Request, configuration);
+        var access = await sender.Send(new GetStudentGuideVoiceAccessQuery(tourId, Request.Cookies[StudentSessionCookie.Name(tourId)]), ct);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new BaseResponse<GuideVoiceAccess> { Success = true, Message = "OK", Data = access });
     }
 
     [HttpGet("{messageId:guid}/audio")]

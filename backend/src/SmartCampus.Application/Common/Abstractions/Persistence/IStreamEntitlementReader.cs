@@ -16,6 +16,9 @@ public interface IStreamEntitlementReader
     /// </summary>
     Task<bool> StudentSessionMayWatchFallbackAsync(Guid sessionId, Guid tourId, DateTimeOffset now, CancellationToken ct);
 
+    /// <summary>ADR-0072: the same session rules, and the session's Tour is <paramref name="tourId"/>, in any state.</summary>
+    Task<bool> StudentSessionIsInTourAsync(Guid sessionId, Guid tourId, DateTimeOffset now, CancellationToken ct);
+
     /// <summary>ADR-0063: the stored fallback video reference of a RUNNING Tour, or null.</summary>
     Task<string?> RunningTourFallbackVideoAsync(Guid tourId, CancellationToken ct);
 }
