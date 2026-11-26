@@ -342,7 +342,11 @@ describe('live console on the real Tour API', () => {
     tour = running({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'RobotDisconnected', command: { id: 'cmd-1', kind: 'GoTo', state: 'EXPIRED', outcome: null, reasonCode: 'EXPIRED' } })
     renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
     expect(await screen.findByText(/robot chưa nhận lệnh này\. Máy chủ không cho thử lại/)).toBeInTheDocument()
-    expect(screen.getByText(/Dùng mục Kết thúc sớm/)).toBeInTheDocument()
+    // Nothing to press in the band: the message points to End Early, and the automatic departure stays under the route.
+    const situation = within(screen.getByRole('region', { name: 'Tình hình hiện tại' }))
+    expect(situation.getByRole('link', { name: 'Dùng mục Kết thúc sớm' })).toHaveAttribute('href', '#ket-thuc-som')
+    expect(document.getElementById('ket-thuc-som')).toHaveAccessibleName('Kết thúc sớm')
+    expect(situation.queryByRole('switch')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Cho robot đi lại|Đối soát lệnh|Đi tới/ })).not.toBeInTheDocument()
   })
 
