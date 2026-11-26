@@ -29,7 +29,9 @@ public sealed record RouteRevisionStopView(Guid Id, Guid PoiRevisionId, Guid Sou
     string Name, decimal X, decimal Y, decimal Yaw, string CameraPreset,
     string? NarrationText = null, string? FallbackVideoUrl = null,
     // ADR-0061: the POI the stop's revision belongs to, so a reader can find that POI's newer revisions.
-    Guid? PoiProposalId = null);
+    Guid? PoiProposalId = null,
+    // ADR-0060: the POI's approved narration version when it is not the one this stop saved; null when the stop has it.
+    int? NewerNarrationRevisionNumber = null);
 /// <summary>
 /// One recorded run. Since nobody types a duration, <c>MeasuredDurationSeconds</c> holds the estimate stored when it was
 /// recorded (older runs keep what was typed); screens no longer show it. It and <c>MeasurementBasis</c> go with the columns

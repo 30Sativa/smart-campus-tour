@@ -323,12 +323,41 @@ describe('Staff versioned Route workflow', () => {
       expect(step.queryByText(/poi-rev-pending-old/)).not.toBeInTheDocument()
     })
 
-    it('names the stops whose POI has a newer passed revision on the current route revision, with a way to edit', async () => {
+    const updateNotice = async () => within((await screen.findByText(/Có POI trong tuyến vừa được cập nhật/)).closest('[role="alert"]') as HTMLElement)
+
+    it('names the stops whose POI has a newer passed revision on the current route revision, apart by whether the robot pose moved', async () => {
       currentRoute = { ...route, stops: [oldStop('poi-rev-pass-old', 'p-pass', 'Old entrance', 9.8), oldStop('poi-rev-hall-old', 'p-hall', 'Old hall', 11.4), oldStop('poi-rev-pending-old', 'p-pending', 'Old pending', 12)] } as typeof route
       renderAt('/staff/manage/routes/route-1')
-      const notice = (await screen.findByText(/có phiên bản mới đã đạt/)).closest('[role="alert"]')!
-      expect(notice).toHaveTextContent('POI Old entrance, Old hall có phiên bản mới đã đạt. Bấm Sửa tuyến ở đầu trang để dùng bản mới. Đổi vị trí, hướng hoặc camera thì tuyến phải chạy thử lại.')
-      expect(within(notice as HTMLElement).queryByRole('link', { name: 'Sửa tuyến' })).not.toBeInTheDocument()
+      const notice = await updateNotice()
+      expect(notice.getByText('Old entrance: có phiên bản mới đã đạt, đã đổi vị trí, hướng hoặc camera. Chọn Dùng bản mới thì tuyến phải chạy thử lại.')).toBeInTheDocument()
+      expect(notice.getByText('Old hall: có phiên bản mới đã đạt, vị trí, hướng và camera giữ nguyên. Chọn Dùng bản mới không cần chạy thử lại.')).toBeInTheDocument()
+      expect(notice.queryByText(/Old pending/)).not.toBeInTheDocument()
+      expect(notice.queryByText(/thuyết minh/)).not.toBeInTheDocument()
+      expect(notice.queryByRole('link', { name: 'Sửa tuyến' })).not.toBeInTheDocument()
+    })
+
+    it('lists only the moved stops when every newer revision changed the robot pose', async () => {
+      currentRoute = { ...route, stops: [oldStop('poi-rev-pass-old', 'p-pass', 'Old entrance', 9.8), route.stops[1]] } as typeof route
+      renderAt('/staff/manage/routes/route-1')
+      const notice = await updateNotice()
+      expect(notice.getByText(/^Old entrance: có phiên bản mới đã đạt, đã đổi vị trí/)).toBeInTheDocument()
+      expect(notice.queryByText(/giữ nguyên/)).not.toBeInTheDocument()
+    })
+
+    it('names the stops whose POI has newer approved narration than the route saved, without a new test run', async () => {
+      currentRoute = { ...route, stops: [{ ...route.stops[0], newerNarrationRevisionNumber: 2 }, { ...route.stops[1], newerNarrationRevisionNumber: null }] } as typeof route
+      renderAt('/staff/manage/routes/route-1')
+      const notice = await updateNotice()
+      expect(notice.getByText('Verified entrance: có lời thuyết minh mới đã duyệt. Lưu lại tuyến để dùng lời mới, không cần chạy thử lại.')).toBeInTheDocument()
+      expect(notice.queryByText(/Verified hall/)).not.toBeInTheDocument()
+      expect(notice.queryByText(/phiên bản mới đã đạt/)).not.toBeInTheDocument()
+    })
+
+    it('says nothing when every stop has the narration and POI revision in use', async () => {
+      currentRoute = { ...route, stops: route.stops.map(stop => ({ ...stop, newerNarrationRevisionNumber: null })) } as typeof route
+      renderAt('/staff/manage/routes/route-1')
+      expect((await screen.findAllByText('Verified hall')).length).toBeGreaterThan(0)
+      expect(screen.queryByText(/Có POI trong tuyến vừa được cập nhật/)).not.toBeInTheDocument()
     })
 
     it('says nothing about newer POI revisions on an older, read-only route revision', async () => {
@@ -336,7 +365,7 @@ describe('Staff versioned Route workflow', () => {
         revisionHistory: [...route.revisionHistory, { ...route.revisionHistory[0], revisionId: 'route-rev-2', revisionNumber: 2 }] } as typeof route
       renderAt('/staff/manage/routes/route-1?revisionId=route-rev-1')
       expect(await screen.findByText(/chỉ xem được/)).toBeInTheDocument()
-      expect(screen.queryByText(/có phiên bản mới đã đạt/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Có POI trong tuyến vừa được cập nhật/)).not.toBeInTheDocument()
     })
 
     it('explains ROUTE_DUPLICATE_POI in Vietnamese', async () => {

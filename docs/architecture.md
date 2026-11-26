@@ -886,6 +886,10 @@ not discarded:
   duyệt."). The stop snapshots that text and video and records
   `RouteRevisionStops.NarrationRevisionId`; the route fingerprint and test-run
   inheritance are unchanged. Existing route revisions and Tours keep their snapshot.
+  Route revision reads add `newerNarrationRevisionNumber` to each stop: the
+  POI's currently approved narration version when it is not the one the stop
+  saved (including stops saved before narration approval existed), else null.
+  It is a hint for Staff to save the route again; nothing changes by itself.
 
 Under ADR-0061, a POI proposal appears at most once in a route revision: route
 revision save returns 409 `ROUTE_DUPLICATE_POI` ("POI {tên} đã có trong tuyến.
