@@ -191,22 +191,36 @@ describe('live console camera head (ADR-0045)', () => {
 })
 
 describe('live console layout', () => {
-  it('reads camera, situation, head, End Early, map, then route in DOM order, with Next in the situation card', async () => {
+  it('reads situation, camera, head, robot, End Early, then route and map in DOM order, with Next in the situation band', async () => {
     renderAt('/staff/live/tour-1')
     await headPanel()
-    const order = ['Camera', 'Tình hình hiện tại', 'Đầu camera', 'Kết thúc sớm', 'Bản đồ', 'Robot', 'Tuyến của Tour']
+    const order = ['Tình hình hiện tại', 'Camera', 'Đầu camera', 'Robot', 'Kết thúc sớm', 'Tuyến của Tour', 'Bản đồ']
       .map(name => screen.getByRole('region', { name }))
     for (let index = 1; index < order.length; index++)
       expect(order[index - 1].compareDocumentPosition(order[index]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(within(order[1]).getByRole('button', { name: /Đi tới/ })).toBeInTheDocument()
-    // From 1024px: camera and situation in the main column, head, map, robot and End Early in the side column.
-    expect(order[0].parentElement?.className).toContain('lg:col-start-1')
-    const side = order[2].parentElement as HTMLElement
-    expect(side.tagName).toBe('ASIDE')
-    expect(side.className).toContain('lg:col-start-2')
-    expect([order[2], order[4], order[5], order[3]].map(section => section.className.match(/lg:order-(\d)/)?.[1])).toEqual(['1', '2', '3', '4'])
+    expect(within(order[0]).getByRole('button', { name: /Đi tới/ })).toBeInTheDocument()
+    // The situation spans the page above the grid; from 1024px the camera, route and map take the main column,
+    // the tabbed card, robot and End Early one side block spanning every row, so the side column leaves no hole.
+    const grid = screen.getByTestId('live-layout')
+    expect(grid.contains(order[0])).toBe(false)
+    const gridChild = (section: HTMLElement) => {
+      let block = section
+      while (block.parentElement !== grid) block = block.parentElement as HTMLElement
+      return block
+    }
+    expect(order.slice(1).map(section => gridChild(section).className.match(/lg:col-start-(\d)/)?.[1])).toEqual(['1', '2', '2', '2', '1', '1'])
+    const side = gridChild(order[2])
+    expect(side.className).toContain('lg:row-span-3')
+    expect([order[3], order[4]].map(gridChild)).toEqual([side, side])
+    // The head, the vote and the talk share one card; a fixed-order Tour opens on the head.
+    const tabs = within(screen.getByRole('tablist', { name: 'Bảng điều khiển trong Tour' }))
+    expect(tabs.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Đầu camera', 'Trò chuyện'])
+    expect(tabs.getByRole('tab', { name: 'Đầu camera' })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(tabs.getByRole('tab', { name: 'Trò chuyện' }))
+    expect(screen.getByRole('region', { name: 'Trò chuyện với người xem' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Đầu camera' })).not.toBeInTheDocument()
     // The Staff camera permission brings the relay URL and token (ADR-0055); the video is the shared player.
-    expect(await within(order[0]).findByLabelText(/Hình trực tiếp/)).toBeInTheDocument()
+    expect(await within(order[1]).findByLabelText(/Hình trực tiếp/)).toBeInTheDocument()
     expect(sent.some(item => item.method === 'POST' && item.path === '/api/staff/manage/robots/amr_01/camera-lease')).toBe(true)
   })
 
@@ -357,14 +371,16 @@ describe('Viewers choose the next stop (ADR-0065)', () => {
     expect(sent.some(item => item.path === '/api/staff/manage/tours/tour-1/retry-leg')).toBe(true)
   })
 
-  it('labels Next with the server target, shows the ballot, the leader and the dwell left, and keeps the auto switch', async () => {
+  it('labels Next with the server target, shows the ballot, the leader and the dwell left, and keeps the auto switch under the route', async () => {
     tour = voting()
     renderAt('/staff/live/tour-1')
     const situation = within(await screen.findByRole('region', { name: 'Tình hình hiện tại' }))
     // By StopOrder the next POI would be Phòng B; the server says Phòng C.
     expect(situation.getByRole('button', { name: /Đi tới Phòng C/ })).toBeInTheDocument()
     expect(situation.queryByRole('button', { name: /Bỏ qua/ })).not.toBeInTheDocument()
-    expect(situation.getByRole('switch', { name: /Tự đi tiếp khi hết giờ dừng/ })).toBeInTheDocument()
+    // The automatic departure is a setting of the run: it sits under the route, not in the situation band.
+    expect(situation.queryByRole('switch')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Tuyến của Tour' })).getByRole('switch', { name: /Tự đi tiếp khi hết giờ dừng/ })).toBeInTheDocument()
     expect(situation.getByText(/Học sinh đang bầu điểm tiếp theo/)).toBeInTheDocument()
     const votes = within((await panel()).getByRole('table', { name: 'Số phiếu' }))
     expect(votes.getByRole('row', { name: /Phòng C/ })).toHaveTextContent(/Phòng C\s*Đang dẫn đầu\s*3 phiếu/)
@@ -426,7 +442,7 @@ describe('Viewers choose the next stop (ADR-0065)', () => {
   it('puts the vote and the camera head on one card with a switch, opening on the vote', async () => {
     tour = voting()
     renderAt('/staff/live/tour-1')
-    const tabs = within(await screen.findByRole('tablist', { name: 'Bầu chọn và đầu camera' }))
+    const tabs = within(await screen.findByRole('tablist', { name: 'Bảng điều khiển trong Tour' }))
     expect(tabs.getByRole('tab', { name: /Bầu chọn/ })).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByRole('region', { name: 'Viewer chọn điểm tiếp theo' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Đầu camera' })).not.toBeInTheDocument()
