@@ -29,6 +29,7 @@ public sealed class EfRobotLifecycleManager(ApplicationDbContext db, TimeProvide
         // Same order as Tour create, so a Tour either sees this or is listed by it.
         await LockAsync($"map-poi:robot-deployment:{robot.Id:D}", cancellationToken);
         await LockAsync($"tour-robot-reservation:{robot.Id:D}", cancellationToken);
+        await RobotRunningTour.EnsureNoneAsync(db, robot.Id, robot.RobotCode, RobotRunningTour.Deactivate, cancellationToken);
 
         var now = clock.GetUtcNow();
         var changed = await db.Robots.Where(r => r.Id == robot.Id && r.RowVersion == expected && r.DeactivatedAt == null)
@@ -141,6 +142,32 @@ public sealed class EfRobotLifecycleManager(ApplicationDbContext db, TimeProvide
     }
 
     private static ConflictException Stale() => new("Robot đã thay đổi. Tải lại rồi thử lại.", "ROBOT_CONCURRENCY_CONFLICT");
+}
+
+/// <summary>
+/// ADR-0066 round 5: a robot whose <see cref="Robot.CurrentTourId"/> names a RUNNING Tour keeps its map, its activation and
+/// its key until that Tour ends, so the Tour never stops halfway. A robot held for inspection after its Tour ended is not
+/// running. Stopping dispatch and revoking the key are never refused (ADR-0049).
+/// </summary>
+internal static class RobotRunningTour
+{
+    public const string Code = "ROBOT_IN_RUNNING_TOUR";
+    public const string ChangeMap = "đổi bản đồ";
+    public const string Deactivate = "ngừng sử dụng";
+    public const string ChangeKey = "đổi khóa";
+
+    /// <summary>A fresh read, taken after the robot deployment lock that Start holds while it claims the robot.</summary>
+    public static async Task EnsureNoneAsync(ApplicationDbContext db, Guid robotId, string robotCode, string change,
+        CancellationToken cancellationToken)
+    {
+        var tour = await db.Robots.AsNoTracking()
+            .Where(r => r.Id == robotId && r.CurrentTour != null && r.CurrentTour.State == "RUNNING")
+            .Select(r => r.CurrentTour!.Name).FirstOrDefaultAsync(cancellationToken);
+        if (tour is not null)
+            throw new ConflictException(
+                $"Robot {robotCode} đang chạy Tour {tour}. Kết thúc Tour (hoặc kết thúc sớm) rồi mới {change}.", Code,
+                blockers: [new ConflictBlocker("TOUR", tour)]);
+    }
 }
 
 /// <summary>SCHEDULED/READY Tours holding this robot whose route needs another map, or all of them with no map.</summary>

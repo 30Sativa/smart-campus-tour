@@ -759,7 +759,7 @@ Under ADR-0062 (schema v1.23), which amends that rule:
 Under ADR-0066 (no schema change), "robot R is ready on map version M" is one rule:
 R is not deactivated, its connection is confirmed (`FirstAcceptedSyncAt`), it is
 assigned to M, and its newest deployment check on any map passes on M with M's
-package checksum. POI verification and import, route test runs, Tour create/slots/
+package checksum and was recorded at or after `MapAssignedAt` (round 5). POI verification and import, route test runs, Tour create/slots/
 robot list, READY, the Start preflight and enabling dispatch all use it:
 
 - Readiness reason codes, in check order: `ROBOT_DEACTIVATED`,
@@ -805,6 +805,20 @@ robot list, READY, the Start preflight and enabling dispatch all use it:
   time in campus time, omitted without `MapAssignedAt`). `detail` keeps the history:
   "Lần kiểm tra triển khai mới nhất của robot {code} là trên {bản đồ khác}." or
   "… không đạt ({dd/MM HH:mm})."; otherwise null. Codes are unchanged.
+- Round 5 (ADR-0066, 27/11/2026): a PASS on M recorded before the current
+  `MapAssignedAt` (the robot moved away and back, or to another version and back)
+  no longer counts: `ROBOT_DEPLOYMENT_CHECK_REQUIRED` with the same `reason`, and
+  `detail` "Lần kiểm tra đạt gần nhất trên {M} lúc {dd/MM HH:mm} có trước lần gán
+  lúc {dd/MM HH:mm}, cần kiểm lại."; `deploymentCheckedAt` is null for such a
+  check. A null `MapAssignedAt` keeps the earlier rule.
+- Round 5: while `Robots.CurrentTourId` names a RUNNING Tour, changing or clearing
+  the map assignment (`PUT`/`DELETE .../map-assignment`; the version held is not a
+  change), deactivating the robot and rotating its key return 409
+  `ROBOT_IN_RUNNING_TOUR` ("Robot {code} đang chạy Tour {tên}. Kết thúc Tour (hoặc
+  kết thúc sớm) rồi mới {đổi bản đồ / ngừng sử dụng / đổi khóa}.") with `blockers`
+  `[{ code: "TOUR", message: tên }]`. Stopping dispatch, revoking the key,
+  releasing an inspection and deployment checks are never refused; a robot held
+  for inspection after its Tour ended is not running.
 - Robot list items (and the Staff connection list), dashboard `robots[]` and
   diagnostics: `connectionStatus` adds `WRONG_MAP`, with `lastRejectedReport`
   `{ mapKey, frameId, at, message }` or null. Fleet Sync keeps, in process memory
