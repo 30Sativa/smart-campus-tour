@@ -1629,7 +1629,7 @@ uses `authMethod: http`: it asks the backend about every publish and read. The r
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/student/tours/{tourId}/stream-access` | Student session cookie (allowed origin). 200 `{whepUrl, token, expiresAt}` while the session is open, unexpired and unrevoked on an active ACCEPTED row and the Tour is `RUNNING` with `AssignedRobotId` = `QuestRelay:RobotCode`, or `SCHEDULED`/`READY` with an unreleased reservation on that robot. 401 without a valid session; 409 `STREAM_NOT_AVAILABLE` otherwise (ended or cancelled Tour, another robot, no relay configured). `no-store`. |
-| POST | `/api/internal/stream-relay/auth?key=` | Anonymous; only the relay knows `QuestRelay:Key`. Body is MediaMTX's `{user, password, token, ip, action, path, protocol, id, query}`. 204 allows `publish` with `QuestRelay:PublishUser` and a password whose SHA-256 is `QuestRelay:PublishPasswordSha256`, or `read` of `QuestRelay:Path` (`quest`) with an unexpired token in the `token` query parameter whose holder may still watch; 403 refuses; 401 wrong key or relay not configured. `StreamRelay` rate limit (1200/min/IP). ADR-0073 adds `publish`/`read` of `voice-{tourId}` with `P`/`L` tokens (§7.2). |
+| POST | `/api/internal/stream-relay/auth?key=` | Anonymous; only the relay knows `QuestRelay:Key`. Body is MediaMTX's `{user, password, token, ip, action, path, protocol, id, query}`. 204 allows `publish` with `QuestRelay:PublishUser` and a password whose SHA-256 is `QuestRelay:PublishPasswordSha256`, or `read` of `QuestRelay:Path` (`quest`) with an unexpired token in the `token` query parameter whose holder may still watch; 403 refuses; 401 wrong key or relay not configured. `StreamRelay` rate limit (1200/min/IP). ADR-0072 adds `publish`/`read` of `voice-{tourId}` with `P`/`L` tokens (§7.2). |
 | POST | `/api/internal/stream-relay/recheck?key=` | Same key. Body `{path, query}` of an open WebRTC session, sent every 5 s by `mediamtx-relay-reaper` on the relay host. 204 while the holder may still watch (the token's expiry is ignored), 403 when not, and the reaper then kicks the session through the MediaMTX API on `127.0.0.1:9997`; 401 wrong key. |
 
 Token: `v1.<S|T>.<session or user id>.<robot>.<expires>.<HMAC-SHA256>`, key derived from
@@ -2798,7 +2798,7 @@ message); a restart starts a new `epoch`. Browsers poll every 2 s.
 
 Student calls use the same exact-origin check as the other Student session calls (§3.2.3).
 
-**Live guide voice (ADR-0073, implemented; device and relay verification pending).** The live console has no clip
+**Live guide voice (ADR-0072, implemented; device and relay verification pending).** The live console has no clip
 recorder any more: the Operator holds "Nhấn giữ để nói" and speaks live. Clips already sent still play.
 
 | Endpoint | Caller | Notes |
