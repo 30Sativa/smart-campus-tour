@@ -152,6 +152,9 @@ Additive JSON fields, recorded in `docs/architecture.md` §3.4.6:
   Start holds while it claims the robot; rotation from the web now takes the deployment lock too. The CLI provisioner
   (`campus_fleet_provisioner`, column-scoped, no access to `Tours`) is not checked: it is run on the machine on purpose. A robot held for inspection after its
   Tour ended is not running. Stopping dispatch, revoking the key, releasing an inspection and recording a deployment check
-  are never refused (ADR-0049: the safer choice is always available).
+  are never refused (ADR-0049: the safer choice is always available). Lock order (round 6): web rotation and deactivation
+  take their robot locks before any `Robots` read, as Start does (web rotation finds the robot's id before its
+  transaction), and check the running Tour before the row version, so a race with Start ends in this 409 or in Start's
+  own refusal, never in a deadlock (SQL error 1205).
 - Deploy PR 1 together with PR 2 and PR 3: the web before PR 2 still offers the old free-form check, which the backend
   now refuses for an unassigned robot.
