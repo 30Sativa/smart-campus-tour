@@ -33,7 +33,7 @@ public sealed record TechnicalKpiSummary(
     int WrongMapRobots = 0);
 
 public sealed record TechnicalActionItem(
-    string Type, // "HELD_ROBOT", "MAP_MISMATCH", "TOUR_ROBOT_NOT_READY", "POI_QUEUE", "ROUTE_QUEUE", "ROUTE_RERUN"
+    string Type, // "HELD_ROBOT", "MAP_MISMATCH", "TOUR_ROBOT_NOT_READY", "ROBOT_NOT_READY", "MAP_WITHOUT_ROBOT", "POI_QUEUE", "ROUTE_QUEUE", "ROUTE_RERUN"
     string Severity, // "DANGER", "WARNING", "INFO"
     string Title,
     string Description,
@@ -101,6 +101,10 @@ public sealed class GetTechnicalDashboardQueryHandler(
         var routeReruns = await sender.Send(new ListRouteRerunQueueQuery(), cancellationToken);
 
         var actionItems = new List<TechnicalActionItem>();
+        // A robot that already has a Tour item is not told again that it is not ready (ROBOT_NOT_READY).
+        var tourItems = (await UpcomingToursNotReadyAsync(robots, deploymentChecks, now, cancellationToken)).ToArray();
+        var robotsWithTourItem = tourItems.Select(item => item.TargetId).ToHashSet(StringComparer.Ordinal);
+        var robotNotReadyItems = new List<TechnicalActionItem>();
 
         var robotSummaries = new List<TechnicalRobotSummaryDto>();
 
@@ -184,6 +188,19 @@ public sealed class GetTechnicalDashboardQueryHandler(
                     $"/technical/robots?robot={robot.Id}"));
             }
 
+            // Setup left half-done: the robot holds a map but cannot run on it. MAP_MISMATCH already says the same sentence.
+            if (robot.AssignedMapVersionId is not null && !contextMismatch && !robotsWithTourItem.Contains(robot.Id.ToString()) &&
+                RobotMapReadiness.EvaluateOnAssignedMap(robot, deployment) is { IsReady: false, Message: { } notReady })
+            {
+                robotNotReadyItems.Add(new TechnicalActionItem(
+                    "ROBOT_NOT_READY",
+                    "WARNING",
+                    $"Robot {robot.RobotCode} chưa sẵn sàng trên bản đồ được gán",
+                    notReady,
+                    robot.Id.ToString(),
+                    $"/technical/robots?robot={robot.Id}"));
+            }
+
             var syncFresh = telemetry is not null && telemetry.ReceivedAt >= now - fleetSyncSettings.SyncFreshness;
             var diagFresh = diagnostics is not null && diagnostics.ReceivedAt >= now - TimeSpan.FromSeconds(60);
 
@@ -218,7 +235,9 @@ public sealed class GetTechnicalDashboardQueryHandler(
                 lastRejected));
         }
 
-        actionItems.AddRange(await UpcomingToursNotReadyAsync(robots, deploymentChecks, now, cancellationToken));
+        actionItems.AddRange(tourItems);
+        actionItems.AddRange(robotNotReadyItems);
+        actionItems.AddRange(MapsWithoutRobot(activeMaps, robots, poiQueue, routeQueue));
 
         if (poiQueue.Count > 0)
         {
@@ -301,6 +320,28 @@ public sealed class GetTechnicalDashboardQueryHandler(
                     robot.Id.ToString(),
                     $"/technical/robots?robot={robot.Id}");
             });
+    }
+
+    /// <summary>
+    /// One MAP_WITHOUT_ROBOT item per active map version with POIs or routes waiting for Technical Staff (verification queue,
+    /// route-test queue) that no active robot holds, since nothing on it can be checked until a robot is assigned.
+    /// </summary>
+    private static IEnumerable<TechnicalActionItem> MapsWithoutRobot(IReadOnlyList<MapVersion> activeMaps, IReadOnlyList<Robot> robots,
+        IReadOnlyList<PoiVerificationQueueItem> poiQueue, IReadOnlyList<RouteRevisionView> routeQueue)
+    {
+        var held = robots.Where(robot => !robot.IsDeactivated && robot.AssignedMapVersionId is not null)
+            .Select(robot => robot.AssignedMapVersionId!.Value).ToHashSet();
+        var waiting = poiQueue.Select(item => item.Revision.MapVersionId).Concat(routeQueue.Select(item => item.MapVersionId))
+            .GroupBy(id => id).ToDictionary(group => group.Key, group => group.Count());
+        return activeMaps.Where(map => waiting.ContainsKey(map.Id) && !held.Contains(map.Id))
+            .OrderBy(map => map.AreaKey, StringComparer.Ordinal).ThenBy(map => map.VersionNumber)
+            .Select(map => new TechnicalActionItem(
+                "MAP_WITHOUT_ROBOT",
+                "INFO",
+                $"Bản đồ {RobotMapReadiness.Label(map, map.Id)} chưa có robot",
+                $"{RobotMapReadiness.Label(map, map.Id)}: {waiting[map.Id]} POI/tuyến đang chờ nhưng chưa robot nào gán bản đồ này.",
+                map.Id.ToString(),
+                $"/technical/maps?map={map.Id}"));
     }
 
     private static string LocalTime(DateTimeOffset at) =>

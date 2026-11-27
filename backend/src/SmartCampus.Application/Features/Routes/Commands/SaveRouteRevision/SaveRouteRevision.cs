@@ -197,7 +197,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             inheritedRun.ParticipatingStaffUserId, inheritedRun.ResultCode, inheritedRun.AllStopsReached,
             inheritedRun.SafelyStopped, inheritedRun.LocalizationPassed, inheritedRun.MeasuredDurationSeconds,
             inheritedRun.FailureReason, inheritedRun.EvidenceNote, inheritedRun.CheckedAt, inheritedRun.MeasurementBasis,
-            TraversedStopIds: RouteVerification.ReadTraversed(inheritedRun.TraversedStopIdsJson))];
+            TraversedStopIds: RouteVerification.ReadTraversed(inheritedRun.TraversedStopIdsJson),
+            TraversedStops: RouteVerification.TraversedStops(inheritedRun.TraversedStopIdsJson, inheritedRuns[^1].RevisionStops))];
         // docs/lich-tour-theo-ca.md §4: estimated from dwell and the stop positions, the same sum a reservation uses.
         var expected = Tours.TourSchedule.EstimatedDurationSeconds(revision, stopRows, schedule.EstimatedSpeedMetersPerSecond);
         var applied = RouteVerification.Evaluate(revision, stopRows, inheritedRuns);

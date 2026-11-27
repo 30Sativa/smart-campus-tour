@@ -282,6 +282,60 @@ public sealed class RobotDiagnosticsTests
     }
 
     [Fact]
+    public async Task GetTechnicalDashboard_RobotWithAMapButNotReady_IsOneWarningWithItsReadinessSentence()
+    {
+        var notChecked = AssignedRobot("amr_01", TestMap);
+        var ready = AssignedRobot("amr_02", Betea);
+        var noMap = new Robot { Id = Guid.NewGuid(), RobotCode = "amr_03", FirstAcceptedSyncAt = Now.AddDays(-1), RowVersion = [3] };
+        var deactivated = AssignedRobot("amr_04", TestMap);
+        deactivated.DeactivatedAt = Now.AddHours(-1);
+
+        var result = await Dashboard(new TestRobotRepository([notChecked, ready, noMap, deactivated], [PassingCheck(ready, Betea)]), new TestSender());
+
+        var item = Assert.Single(result.ActionItems, item => item.Type == "ROBOT_NOT_READY");
+        Assert.Equal(("WARNING", "Robot amr_01 chưa sẵn sàng trên bản đồ được gán",
+                "Robot amr_01 chưa kiểm tra triển khai trên Tầng 6 · test123 · phiên bản 1 (gán lúc 04/11 15:00).",
+                notChecked.Id.ToString(), $"/technical/robots?robot={notChecked.Id}"),
+            (item.Severity, item.Title, item.Description, item.TargetId, item.LinkUrl));
+        Assert.Equal(RobotMapReadiness.EvaluateOnAssignedMap(notChecked, null).Message, item.Description);
+    }
+
+    [Fact]
+    public async Task GetTechnicalDashboard_RobotNotReady_IsNotRepeatedWhenItsTourOrMapMismatchItemSaysSo()
+    {
+        var withTour = AssignedRobot("amr_01", TestMap);
+        var mismatched = AssignedRobot("amr_02", TestMap);
+        var onTest = new RouteRevision { Id = Guid.NewGuid(), MapVersionId = TestMap.Id, MapPackageSha256 = TestMap.PackageSha256 };
+        var repo = new TestRobotRepository([withTour, mismatched], [PassingCheck(mismatched, Betea)],
+            [new UpcomingTourTarget(Guid.NewGuid(), "Tham quan", Now.AddDays(1), withTour.Id, onTest, TestMap)]);
+
+        var result = await Dashboard(repo, new TestSender());
+
+        Assert.Equal(withTour.Id.ToString(), Assert.Single(result.ActionItems, item => item.Type == "TOUR_ROBOT_NOT_READY").TargetId);
+        Assert.Equal(mismatched.Id.ToString(), Assert.Single(result.ActionItems, item => item.Type == "MAP_MISMATCH").TargetId);
+        Assert.DoesNotContain(result.ActionItems, item => item.Type == "ROBOT_NOT_READY");
+    }
+
+    [Fact]
+    public async Task GetTechnicalDashboard_ActiveMapWithWaitingPoisOrRoutesAndNoRobot_IsOneInfoPerMap()
+    {
+        // Betea waits for two POIs and a route test with no robot (amr_02 holding it is deactivated); Tầng 6 has amr_01.
+        var robot = AssignedRobot("amr_01", TestMap);
+        var deactivated = AssignedRobot("amr_02", Betea);
+        deactivated.DeactivatedAt = Now.AddHours(-1);
+        var idle = Map("idle", "Kho", [3, 3]);
+        var sender = new TestSender(pois: [PoiItem(Betea.Id), PoiItem(Betea.Id), PoiItem(TestMap.Id)], routes: [RouteItem(Betea.Id), RouteItem(TestMap.Id)]);
+
+        var result = await Dashboard(new TestRobotRepository([robot, deactivated], [PassingCheck(robot, TestMap)]), sender, [TestMap, Betea, idle]);
+
+        var item = Assert.Single(result.ActionItems, item => item.Type == "MAP_WITHOUT_ROBOT");
+        Assert.Equal(("INFO", "Bản đồ Betea · betea · phiên bản 1 chưa có robot",
+                "Betea · betea · phiên bản 1: 3 POI/tuyến đang chờ nhưng chưa robot nào gán bản đồ này.",
+                Betea.Id.ToString(), $"/technical/maps?map={Betea.Id}"),
+            (item.Severity, item.Title, item.Description, item.TargetId, item.LinkUrl));
+    }
+
+    [Fact]
     public void BackendText_NoLongerSaysGiảiPhóng()
     {
         var src = Path.Combine(FindBackend(), "src");
@@ -314,9 +368,16 @@ public sealed class RobotDiagnosticsTests
         LocalizationPassed = true, DisplayPassed = true, CheckedAt = Now.AddHours(-2)
     };
 
-    private static Task<TechnicalDashboardDto> Dashboard(TestRobotRepository repo, TestSender sender) =>
-        new GetTechnicalDashboardQueryHandler(repo, new TestMapRepository([]), new TestTelemetryStore([]), new TestDiagnosticsStore(),
+    private static Task<TechnicalDashboardDto> Dashboard(TestRobotRepository repo, TestSender sender, IReadOnlyList<MapVersion>? maps = null) =>
+        new GetTechnicalDashboardQueryHandler(repo, new TestMapRepository(maps ?? []), new TestTelemetryStore([]), new TestDiagnosticsStore(),
             sender, Settings, new FixedTimeProvider(Now)).Handle(new GetTechnicalDashboardQuery(), CancellationToken.None);
+
+    private static PoiVerificationQueueItem PoiItem(Guid mapVersionId) => new(Guid.NewGuid(), 1, "AQ==",
+        new PoiRevisionView(Guid.NewGuid(), 1, mapVersionId, "map", "POI", "STOP", null, 0, 0, 0, "FRONT", "00", Guid.NewGuid(), Now,
+            true, Now, "PENDING", null));
+
+    private static RouteRevisionView RouteItem(Guid mapVersionId) => new(Guid.NewGuid(), Guid.NewGuid(), 1, "Tuyến", null, mapVersionId,
+        "map", "00", 0, 0, 0, "RETURN_TO_START", null, null, null, "00", true, "NOT_TESTED", null, "UNKNOWN", 0, [], [], [], []);
 
     private static string FindBackend()
     {
@@ -401,20 +462,24 @@ public sealed class RobotDiagnosticsTests
         public IReadOnlyList<RobotDiagnosticsSnapshot> GetAll() => store.Values.ToArray();
     }
 
-    /// <summary>Each queue holds <paramref name="queued"/> rows; the dashboard only counts them.</summary>
-    private sealed class TestSender(int queued = 0) : ISender
+    /// <summary>
+    /// Each queue holds <paramref name="queued"/> rows on a map no test lists, unless <paramref name="pois"/> or
+    /// <paramref name="routes"/> give the verification and route-test queues; the rerun queue is only counted.
+    /// </summary>
+    private sealed class TestSender(int queued = 0, IReadOnlyList<PoiVerificationQueueItem>? pois = null,
+        IReadOnlyList<RouteRevisionView>? routes = null) : ISender
     {
-        private List<T> Rows<T>() => Enumerable.Repeat(default(T)!, queued).ToList();
+        private List<T> Rows<T>(Func<T> row) => Enumerable.Range(0, queued).Select(_ => row()).ToList();
 
         public Task<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
         {
             if (request is ListPoiVerificationQueueQuery)
-                return Task.FromResult((TResponse)(object)Rows<PoiVerificationQueueItem>());
+                return Task.FromResult((TResponse)(object)(pois ?? Rows(() => PoiItem(Guid.NewGuid()))));
             if (request is ListRouteRerunQueueQuery)
-                return Task.FromResult((TResponse)(object)Rows<RouteRevisionView>());
+                return Task.FromResult((TResponse)(object)Rows(() => RouteItem(Guid.NewGuid())));
 
             if (request is ListRouteRevisionQueueQuery)
-                return Task.FromResult((TResponse)(object)Rows<RouteRevisionView>());
+                return Task.FromResult((TResponse)(object)(routes ?? Rows(() => RouteItem(Guid.NewGuid()))));
 
             throw new NotSupportedException($"Unhandled request {request.GetType().Name}");
         }

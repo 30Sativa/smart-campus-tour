@@ -103,7 +103,8 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
             Convert.ToHexString(run.MapPackageSha256).ToLowerInvariant(), robot.RobotCode, run.CheckedByUserId,
             run.ParticipatingStaffUserId, run.ResultCode, run.AllStopsReached, run.SafelyStopped,
             run.LocalizationPassed, run.MeasuredDurationSeconds, run.FailureReason, run.EvidenceNote, run.CheckedAt, run.MeasurementBasis,
-            (await repo.FindUserAsync(c.ActorUserId, ct))?.FullName, staff.FullName, traversed);
+            (await repo.FindUserAsync(c.ActorUserId, ct))?.FullName, staff.FullName, traversed,
+            RouteVerification.TraversedStops(run.TraversedStopIdsJson, stops));
         // The new run is not committed yet, so the loaded view still describes the previous one.
         var applied = RouteVerification.Evaluate(revision, stops,
             [.. RouteVerification.RunsOnPath(routeRuns, targetNavigation), new RouteVerification.Run(run, stops)]);
