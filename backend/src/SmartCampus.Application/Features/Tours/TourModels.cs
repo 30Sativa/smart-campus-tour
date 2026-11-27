@@ -99,7 +99,11 @@ public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDet
     // ADR-0065 rule 8: on a voting route whose current leg has stopped, where Retry/Resume would go; null otherwise.
     TourNextTargetView? RetryTarget = null,
     // ADR-0065 addendum: while a ballot shows, how many Viewers are accepted and in the room, for the vote turnout.
-    TourViewerPresence? Viewers = null);
+    TourViewerPresence? Viewers = null, DateTimeOffset? OperatorLastSeenAt = null,
+    DateTimeOffset? OperatorDisconnectedSince = null, int OperatorDisconnectEndEarlyMinutes = 5,
+    TourEndedEarlyView? EndedEarlyByBackupStaff = null);
+public sealed record TourEndedEarlyView(Guid ActorUserId, string ActorName, Guid? OperatorUserId, string? OperatorName,
+    DateTimeOffset? OperatorLastSeenAt);
 /// <summary>The running state of a Tour: null fields until Start; <see cref="DwellDeadlineAt"/> is display only (ADR-0043 D12).</summary>
 public sealed record TourExecutionView(string State, string? OperationalStatus, string? AssistanceReason, string? CurrentStep,
     Guid? CurrentLegId, string? CurrentLegKind, Guid? CurrentRevisionStopId, Guid? LastArrivedRevisionStopId,

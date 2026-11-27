@@ -314,7 +314,8 @@ public sealed class DeploymentDatabaseTests
     [SchemaV11Fact]
     public async Task Bootstrap_AcceptsVerifiedV125SnapshotAndMarker()
     {
-        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.25.sql", "1.25"));
+        Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.25.sql", "1.25"));
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.26.sql", "1.26"));
     }
 
     [SchemaV11Fact]
@@ -332,9 +333,11 @@ public sealed class DeploymentDatabaseTests
             "ALTER TABLE dbo.TourStopVisits NOCHECK CONSTRAINT CK_TourStopVisits_Choice_Complete;",
             "ALTER TABLE dbo.TourStopVotes NOCHECK CONSTRAINT FK_TourStopVotes_RosterRowId;",
             "DROP INDEX UX_TourStopLocks_Active ON dbo.TourStopLocks;",
+            "ALTER TABLE dbo.TourOperatorPresence NOCHECK CONSTRAINT FK_TourOperatorPresence_TourId;",
+            "ALTER TABLE dbo.TourOperatorPresence ALTER COLUMN LastSeenAt datetimeoffset(2) NULL;",
         })
         {
-            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.25.sql", "1.25", sql));
+            var error = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.26.sql", "1.26", sql));
             Assert.Equal(51001, error.Number);
         }
         var marker = await Assert.ThrowsAsync<SqlException>(() => RunCurrentGuardAsync("snapshot-v1.24.sql", "1.25"));
@@ -551,7 +554,8 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV122)", await SnapshotHashAsync("snapshot-v1.22.sql"))
             .Replace("$(SchemaHashV123)", await SnapshotHashAsync("snapshot-v1.23.sql"))
             .Replace("$(SchemaHashV124)", await SnapshotHashAsync("snapshot-v1.24.sql"))
-            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.25.sql"));
+            .Replace("$(SchemaHashV125)", await SnapshotHashAsync("snapshot-v1.25.sql"))
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.26.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();
     }
@@ -594,6 +598,10 @@ public sealed class DeploymentDatabaseTests
             "REVOKE UPDATE (ChosenRevisionStopId) ON OBJECT::dbo.TourStopVisits FROM campus_tour_app;",
             "REVOKE INSERT ON OBJECT::dbo.TourStopVotes FROM campus_tour_app;",
             "REVOKE UPDATE (UnlockReason) ON OBJECT::dbo.TourStopLocks FROM campus_tour_app;",
+            "REVOKE UPDATE (LastSeenAt) ON OBJECT::dbo.TourOperatorPresence FROM campus_tour_app;",
+            "GRANT UPDATE ON OBJECT::dbo.TourOperatorPresence TO campus_tour_app;",
+            "GRANT UPDATE (TourId) ON OBJECT::dbo.TourOperatorPresence TO campus_tour_app;",
+            "GRANT DELETE ON OBJECT::dbo.TourOperatorPresence TO campus_tour_app;",
             "GRANT DELETE ON OBJECT::dbo.TourStopVotes TO campus_tour_app;",
             "GRANT UPDATE ON OBJECT::dbo.TourStopLocks TO campus_tour_app;",
             "GRANT UPDATE (RosterRowId) ON OBJECT::dbo.TourStopVotes TO campus_tour_app;",

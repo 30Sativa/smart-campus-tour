@@ -49,6 +49,8 @@
     <None Include="..\..\database\smart-campus-tour-schema-v1.22.sql" Link="Schema\snapshot-v1.22.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.23.sql" Link="Schema\snapshot-v1.23.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.24.sql" Link="Schema\snapshot-v1.24.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.26.sql" Link="Schema\snapshot-v1.26.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.25-to-v1.26-operator-presence.sql" Link="Schema\upgrade-v1.25-to-v1.26-operator-presence.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.25.sql" Link="Schema\snapshot-v1.25.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.2-to-v1.3-route-revisions.sql" Link="Schema\upgrade-v1.2-to-v1.3-route-revisions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.3-to-v1.4-row-registration.sql" Link="Schema\upgrade-v1.3-to-v1.4-row-registration.sql" CopyToOutputDirectory="PreserveNewest" />

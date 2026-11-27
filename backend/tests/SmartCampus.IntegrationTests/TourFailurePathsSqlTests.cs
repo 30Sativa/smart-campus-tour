@@ -129,7 +129,7 @@ public sealed class TourFailurePathsSqlTests
         await Start(w);
         await Delivered(w);
         var version = await w.H.Version();
-        await Assert.ThrowsAsync<ForbiddenException>(() => w.H.Send(new EndTourEarlyCommand(w.H.TourId, w.H.StaffId, new(Guid.NewGuid(), version, "Sai người"))));
+        Assert.Equal("OPERATOR_STILL_CONNECTED", (await Assert.ThrowsAsync<ConflictException>(() => w.H.Send(new EndTourEarlyCommand(w.H.TourId, w.H.StaffId, new(Guid.NewGuid(), version, "Sai người"))))).Code);
 
         var errors = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Capture(w.H.Send(new EndTourEarlyCommand(w.H.TourId, w.H.OperatorId,
             new(Guid.NewGuid(), version, "Mưa lớn"))))));

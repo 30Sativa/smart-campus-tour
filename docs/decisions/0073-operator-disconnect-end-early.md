@@ -1,0 +1,27 @@
+# ADR-0073: backup Staff End Early and group notices
+
+Status: owner-authorized task, 27/11/2026, Phiếu v1.12 §3.2.c as quoted in the task.
+
+Another Staff may End Early only after the assigned Operator console has not contacted the API for at least
+`Tours:OperatorDisconnectEndEarlyMinutes` (default 5, positive). Admin has no running-tour control. Other controls
+remain Operator-only. This scoped business rule succeeds ADR-0043's Operator-only End Early; older Report 3/F-14
+text is left for the group to reconcile. ADR-0049's safer-action rule and the existing robot-stop semantics stay intact.
+
+SQL Server changes `Tours.RowVersion` on every UPDATE. v1.26 therefore adds `TourOperatorPresence(TourId, LastSeenAt)`
+(one nullable DATETIMEOFFSET(3), FK/PK TourId), instead of a column on Tours. No process-memory fallback is used.
+Start stamps presence in its transaction. The existing detail GET records only the assigned Operator of a RUNNING
+Tour, at most once per 10 seconds, in a short explicit persistence transaction before opening the detail snapshot.
+Both that write and End Early acquire the shared Tour root lock first. End Early reads presence after the lock;
+committed reconnects therefore win against stale browser observations. A missing/null timestamp on a legacy Tour
+allows backup Staff immediately; read models expose disconnectedSince = null with no timestamp and the server's
+allowedActions.endEarly disambiguates this case. Restart never resets or extends the window.
+
+End Early queues one TOUR_CANCEL_NOTICE_REQUESTED audit containing registration IDs with active APPROVED/ACCEPTED rows,
+in the same transaction as TOUR_ENDED_EARLY and its request receipt. It does not revoke invitations or close sessions.
+The worker selects a separate generic ended-early template from the committed Tour state/end reason. Disabled email
+records FAILED/EMAIL_DISABLED without failing End Early. No technical reason, access code, Tour link or other row's
+data is included. Existing cancellation behavior is unchanged.
+
+The additive patch is idempotent and requires v1.25 or v1.26. The v1.25 snapshot remains immutable. Runtime gets
+SELECT/INSERT and column UPDATE(LastSeenAt) only; deployment gates require the new structure and grants. No live
+or shared database is modified by implementation or verification.

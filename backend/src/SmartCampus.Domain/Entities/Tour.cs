@@ -93,6 +93,8 @@ public partial class Tour
 
     public virtual ICollection<RobotCommand> RobotCommands { get; set; } = new List<RobotCommand>();
 
+    public virtual TourOperatorPresence? TourOperatorPresence { get; set; }
+
     public virtual ICollection<TourRobotReservation> TourRobotReservations { get; set; } = new List<TourRobotReservation>();
 
     public virtual RouteStop? CurrentRouteStop { get; set; }

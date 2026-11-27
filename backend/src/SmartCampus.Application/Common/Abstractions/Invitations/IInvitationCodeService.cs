@@ -24,7 +24,7 @@ public sealed record InvitationRevokedEmail(Guid TourId, Guid InvitationId, Guid
     DateTimeOffset ScheduledStartAt, string RecipientName, bool SharedViewing);
 /// <summary>One recipient of a cancellation notice. Carries no code or link: the Tour no longer grants access.</summary>
 public sealed record TourCancelEmail(Guid TourId, Guid AttemptId, Guid RegistrationId, string Recipient, string TourName,
-    DateTimeOffset ScheduledStartAt, string Reason);
+    DateTimeOffset ScheduledStartAt, string Reason, bool EndedEarly = false);
 /// <summary>One registration's T-24h notice. Counts only: no row name or address beyond the recipient.</summary>
 public sealed record RosterExpiredEmail(Guid TourId, Guid AttemptId, Guid RegistrationId, string Recipient, string TourName,
     DateTimeOffset ScheduledStartAt, int ExpiredRows, int ExpiredEmailChanges);

@@ -372,7 +372,7 @@ public sealed class TourStartPreflightSqlTests
         private string mapKey = null!;
         private string frameId = null!;
 
-        public static async Task<World> Create(bool report = true, bool enabled = false, bool twoStopsToEndPose = false)
+        public static async Task<World> Create(bool report = true, bool enabled = false, bool twoStopsToEndPose = false, Action<IServiceCollection>? configure = null)
         {
             var clock = new MutableClock();
             var console = new FakeConsole();
@@ -381,6 +381,7 @@ public sealed class TourStartPreflightSqlTests
                 services.AddSingleton<TimeProvider>(clock);
                 services.AddSingleton<IOperatorConsolePresence>(console);
                 services.AddSingleton(new FleetCommandSettings(enabled));
+                configure?.Invoke(services);
             }, twoStopsToEndPose);
             var world = new World(harness, clock, console);
             // Created now, before the clock moves to the start: Tour create requires its lead time.

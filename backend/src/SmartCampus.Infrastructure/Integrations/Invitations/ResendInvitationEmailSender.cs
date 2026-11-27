@@ -19,9 +19,9 @@ public sealed class ResendInvitationEmailSender(HttpClient client, InvitationCon
 
     public async Task<EmailSendResult> SendTourCancelledAsync(TourCancelEmail email, CancellationToken ct)
     {
-        var (html, text) = TourCancelEmailTemplate.Render(email, configuration.SupportEmail);
+        var (html, text) = email.EndedEarly ? TourEndedEarlyEmailTemplate.Render(email) : TourCancelEmailTemplate.Render(email, configuration.SupportEmail);
         return await PostAsync($"campus-tour/tour-cancel/{email.AttemptId:D}/{email.RegistrationId:D}", email.Recipient,
-            TourCancelEmailTemplate.Subject(email), html, text, ct);
+            email.EndedEarly ? TourEndedEarlyEmailTemplate.Subject(email) : TourCancelEmailTemplate.Subject(email), html, text, ct);
     }
 
     public async Task<EmailSendResult> SendInvitationRevokedAsync(InvitationRevokedEmail email, CancellationToken ct)

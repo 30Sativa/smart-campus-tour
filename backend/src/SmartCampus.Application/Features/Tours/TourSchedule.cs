@@ -43,10 +43,14 @@ public sealed class TourScheduleSettings
     public TimeSpan ShortNoticeMinLead { get; }
     /// <summary>Average travel speed used by <see cref="TourSchedule.EstimatedDurationSeconds"/> (Tours:EstimatedSpeedMetersPerSecond).</summary>
     public double EstimatedSpeedMetersPerSecond { get; }
+    public int OperatorDisconnectEndEarlyMinutes { get; }
 
     public TourScheduleSettings(IEnumerable<TourShiftOption>? shifts, int? recommendedMaxMinutes, int? maxCapacity = null,
-        int? shortNoticeMinLeadMinutes = null, double? estimatedSpeedMetersPerSecond = null)
+        int? shortNoticeMinLeadMinutes = null, double? estimatedSpeedMetersPerSecond = null, int operatorDisconnectEndEarlyMinutes = 5)
     {
+        if (operatorDisconnectEndEarlyMinutes <= 0)
+            throw new InvalidOperationException("Tours:OperatorDisconnectEndEarlyMinutes must be greater than 0.");
+        OperatorDisconnectEndEarlyMinutes = operatorDisconnectEndEarlyMinutes;
         EstimatedSpeedMetersPerSecond = estimatedSpeedMetersPerSecond ?? DefaultEstimatedSpeedMetersPerSecond;
         if (!(EstimatedSpeedMetersPerSecond > 0) || double.IsInfinity(EstimatedSpeedMetersPerSecond))
             throw new InvalidOperationException("Tours:EstimatedSpeedMetersPerSecond must be greater than 0.");
