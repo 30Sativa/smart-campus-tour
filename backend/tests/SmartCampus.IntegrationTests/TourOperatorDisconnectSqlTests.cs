@@ -40,7 +40,9 @@ public sealed class TourOperatorDisconnectSqlTests
             Assert.Equal(last.AddMinutes(5), DateTimeOffset.Parse(error.FieldErrors!["allowedAt"][0]));
             return;
         }
-        await End(w, w.H.StaffId);
+        var request = new EndTourEarlyRequest(Guid.NewGuid(), await w.H.Version(), "Kết thúc thay người vận hành");
+        await w.H.Send(new EndTourEarlyCommand(w.H.TourId, w.H.StaffId, request));
+        await w.H.Send(new EndTourEarlyCommand(w.H.TourId, w.H.StaffId, request));
         await using var db = w.H.Context();
         var ended = await db.TourEvents.AsNoTracking().SingleAsync(e => e.EventType == TourLifecycleEvents.EndedEarly);
         using var data = JsonDocument.Parse(ended.DataJson!);

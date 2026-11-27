@@ -466,9 +466,17 @@ public sealed class TourManagementEndpointTests
         foreach (var token in new[] { f.SystemAdmin, f.Representative, f.Technical })
             foreach (var (path, body) in staffActions)
                 Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, path, body, token));
-        // A legacy Tour has no Operator, so a Staff who is not its Operator is refused too.
+        // Backup End Early accepts missing legacy presence, but still refuses a Tour that is not RUNNING.
+        // The other recovery controls remain Operator-only.
         foreach (var (path, body) in staffActions)
-            Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, path, body));
+        {
+            if (path.EndsWith("/end-early", StringComparison.Ordinal))
+            {
+                var refused = await f.SendBody(HttpMethod.Post, path, body, HttpStatusCode.Conflict);
+                Assert.Equal("TOUR_STATE_INVALID", refused.GetProperty("errors").GetProperty("code").GetString());
+            }
+            else Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, path, body));
+        }
 
         var release = new { requestId = Guid.NewGuid(), expectedRowVersion = version, reason = "Đã kiểm tra" };
         var robot = $"/api/technical/physical-robots/{Guid.NewGuid()}/release-inspection";
