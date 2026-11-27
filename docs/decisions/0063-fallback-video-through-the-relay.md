@@ -57,3 +57,36 @@ copied signed URL keeps working.
 - Same single-API-instance and backend-down behaviour as ADR-0055.
 - Not verified here: MediaMTX on the relay host, ffmpeg reading the signed URL, Cloudinary's eager transformation on a
   real account. The hardware test must cover them.
+
+## Update 2026-11-28
+
+### Context
+
+Report 4 §1.3 Table 7 cites this together with ADR-0055; copied fallback URLs must obey the same
+invitation/session access boundary as live video.
+
+### Decision
+
+Keep the implemented Cloudinary authenticated asset and signed-source handoff behind MediaMTX.
+Playback uses `fallback-{tourId:N}`, a deterministic per-Tour path, and token kind F bound to the Tour/session.
+Only eligible sessions of a RUNNING Tour receive fallback access; End Early closes entitlement.
+The live camera still uses ADR-0055's configured robot path, not a random per-Tour live path.
+Session polling is 5 seconds RUNNING / 30 seconds waiting; the relay reaper independently checks open sessions
+every 5 seconds. The required revoke/reissue stop bound is 10 seconds, to be verified in real browsers.
+
+### Rejected alternatives
+
+- Sending a permanent Cloudinary asset URL to the browser: bypasses session revocation and can be copied.
+- Per-viewer robot uploads: increases campus uplink use without improving authorization.
+
+### Consequences
+
+One on-demand ffmpeg process is needed per active fallback Tour and relay egress grows with viewers.
+Backend/reaper outages or missing relay query evidence prevent a blanket claim of the revocation bound.
+Fallback is clearly labelled and does not fabricate robot pose or establish physical stop.
+
+### Status / Notes
+
+Report 4 records the paired media decision as Accepted; source/auth/reaper integration exists on main `1b586a70`.
+Hardware, Cloudinary and copied-URL timing evidence are not supplied by this docs-only update.
+The technical path correction and its reason are recorded in the ADR-0055 update.

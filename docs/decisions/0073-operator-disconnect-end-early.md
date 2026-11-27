@@ -29,3 +29,47 @@ data is included. Existing cancellation behavior is unchanged.
 The additive patch is idempotent and requires v1.25 or v1.26. The v1.25 snapshot remains immutable. Runtime gets
 SELECT/INSERT and column UPDATE(LastSeenAt) only; deployment gates require the new structure and grants. No live
 or shared database is modified by implementation or verification.
+
+## Update 2026-11-28
+
+### Context
+
+Phiếu v1.12 §3.2.c, Report 3 BR-17/21 and Report 4 §1.3 Table 6 require a controlled way to end a
+RUNNING Tour if its assigned Operator console disappears. Admin has no running-Tour authority.
+
+### Decision
+
+The assigned Operator may End Early. Another Staff member may do so after at least five minutes of
+Operator-console disconnect; otherwise return `OPERATOR_STILL_CONNECTED`.
+Persist contact in `TourOperatorPresence`; read it under the same Tour root lock used by the heartbeat writer.
+`TourOperatorPresencePolicy` and `Tours:OperatorDisconnectEndEarlyMinutes` implement the configured interval,
+default 5. Check RUNNING before the backup-presence rule; a COMPLETED Tour returns `TOUR_STATE_INVALID`.
+Audit actor, time, reason and backup metadata `byBackupStaff`, `operatorUserId`, `operatorLastSeenAt`.
+Queue `kind: "ENDED_EARLY"` for the generic group email in the same transaction; Cancel/AutoCancel queue
+`"CANCELLED"`. The worker reads the committed kind, never infers it from Tour fields.
+Admin and other non-Staff roles remain forbidden; no other Operator control is opened.
+
+Web: the existing End Early button follows `allowedActions.endEarly`; no separate backup button or countdown in V1.
+
+### Rejected alternatives
+
+- Admin override: conflicts with BR-17 and the role boundary.
+- Automatic End Early on disconnect: a transient outage would irreversibly terminate a class's Tour.
+- In-memory presence or a heartbeat column on Tours: restart changes the window or heartbeat UPDATE changes RowVersion.
+- Inferring the email kind from mutable Tour fields: can select the wrong template and disclose a technical reason.
+
+### Consequences
+
+The backup path is durable and audited, but normally waits five minutes and writes periodic presence.
+Email delivery is post-commit and can fail; no email, state or ACK proves a physical robot stop.
+A missing/unsupported notice kind records `FAILED/NOTICE_KIND_INVALID` without sending.
+
+### Status / Notes
+
+Implementation checked on main `1b586a70`; cited in Report 4 §1.3 Table 6.
+Two code exceptions differ from the minimum-evidence rule above: null/missing presence currently allows backup
+immediately, and configuration accepts any positive interval, including below five.
+The Phiếu rule is retained and [change #470](https://github.com/30Sativa/smart-campus-tour/issues/470) tracks alignment.
+The quoted web sentence describes the existing button's availability gate. In current
+`web/src/routes/staff/LiveOperationsPage.tsx`, rendering also requires `running && isOperator`;
+`allowedActions.endEarly=true` alone does not reveal a button to backup Staff. This docs update does not change web.

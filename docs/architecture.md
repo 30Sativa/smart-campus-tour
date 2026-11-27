@@ -1,32 +1,35 @@
 # System Architecture
 
-## SRS v0.2 adoption and implementation boundary (2026-10-27)
+## Phiếu v1.12 / Report 3 adoption and implementation boundary (2026-11-28)
 
-The owner adopts Report 3 SRS v0.2 aligned to Phiếu v1.9 through
+Phiếu v1.12 and the revised Report 3 govern business rules through the dated update to
 [ADR-0020](decisions/0020-srs-v02-business-baseline-and-technical-staff.md).
-The current target is in `docs/requirements/campus-tour-scope.md`; source evidence,
-implementation gaps and waves are in `docs/requirements/srs-v02-backend-gap-register.md`.
+The original SRS v0.2 adoption is retained there. Earlier requirement/gap-register statements do not
+override the dated decision updates; main `1b586a70` supplies current implementation evidence.
 TechnicalStaff accounts, the scoped versioned map/POI API, and Wave C's
 per-row registration/email-change slice are implemented.
 Staff owns versioned POI proposals and route revisions, per-row registration
 review, and the existing pre-execution Tour operations. Admin business aliases,
 the legacy POI catalog API, legacy Route authoring writes, aggregate registration
 review, and direct Admin email correction have been removed from HTTP routing.
-Read-only legacy Route projections remain for the Tour slice that cannot yet
-consume RouteRevision. Admin account management remains available.
-F-14 and project YAML/frame mapping remain pending. Representative branch requests are replaced by the
+Read-only legacy Route projections remain for old Tours; new Tours pin an exact tested RouteRevision.
+Admin owns accounts, roles, configuration and audit, with no running-Tour control.
+The former Admin F-14 exception grants no permission; project YAML/frame mapping remains separate. Representative branch requests are replaced by the
 Viewer vote for the next POI ([ADR-0065](decisions/0065-viewer-vote-next-poi.md), §3.2.z); the cutoff question is closed.
 M2 command transport is selected by [ADR-0042](decisions/0042-m2-command-transport-and-start-readiness.md)
-and is implemented from M2.2; dispatch stays off until M2.3 safety evidence.
-Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; no command endpoint is enabled yet.
+and is implemented through robot-originated HTTPS polling. Movement dispatch requires three independent
+switches: server `FleetCommands:Enabled`, audited per-robot `IsDispatchEnabled`, and on-robot
+`commands_enabled`/motion permit, plus ADR-0066 readiness. Map reassignment turns per-robot dispatch off.
+Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; there is no `/hubs/fleet` command channel.
+This description does not assert physical safety acceptance.
 
 ## API ownership and retired compatibility routes (2026-10-28)
 
 The accepted cutover is recorded in
 [ADR-0027](decisions/0027-versioned-map-poi-and-route-api-cutover.md). `Staff`
 is the application/JWT role for Tour Staff; `TechnicalStaff` has only the
-map-upload, deployment-evidence and POI-verification policies. Admin keeps
-account management. The old `/api/admin/{pois,routes,tours,registrations}`
+robot setup/credential/map assignment and map/deployment/POI/route verification policies.
+Admin keeps accounts, roles, configuration and audit. The old `/api/admin/{pois,routes,tours,registrations}`
 aliases and direct Admin email correction are not routed. `GET
 /api/staff/manage/routes` and its detail read remain a legacy projection used by
 the existing Tour model; route creation/edit/activation is versioned under
@@ -40,8 +43,8 @@ This is the pre-execution SQL slice in
 `docs/decisions/0018-admin-tour-management.md`; Staff now owns the existing
 pre-execution API. All endpoints require Staff, and CreatedByUserId is attribution
 only. `/api/staff/manage/tours` is canonical; the former `/api/admin/tours`
-compatibility alias was retired under ADR-0027. Route selection is restricted
-to `AuthoringMode=LEGACY`.
+compatibility alias was retired under ADR-0027. New Tour selection uses an exact tested versioned RouteRevision;
+legacy projections remain read-compatible with existing records.
 Tour create stores the exact RouteRevisionId, assigned Operator and robot
 reservation (ADR-0034); legacy Tours store none of them. No immutable READY
 snapshot is stored: the Tour pins its exact revision. READY and Reopen are
@@ -76,7 +79,7 @@ branch-request endpoint is implemented here (branch requests are replaced by ADR
 | GET | `/api/staff/manage/tours/{id}/start-checks` | Any Staff. `{checks: [{id, passed, source, detail}], canStart, blockedBy}`: the Start conditions of §3.2 evaluated now without locks (`source` DB, TELEMETRY, CONFIG, CONSOLE), with `callerIsOperator` and without the on-site confirmations. `canStart` = every returned check passed, so it is the caller's own answer (false for any Staff who is not the Operator); `blockedBy` lists root causes only. |
 | POST | `/api/staff/manage/tours/{id}/start` | `{requestId, expectedRowVersion, confirmation: {robotPlaced, areaClear, attendantPresent, previewChecked}}`; only `Tours.OperatorUserId` (other Staff 403). Re-runs every Start check under the READY lock order. Any failing check: 409 `START_PRECONDITION_FAILED` with `errors.checks` and `errors.blockedBy`; all pass but `FleetCommands:Enabled = false`: 409 `COMMAND_TRANSPORT_DISABLED` with the checks and nothing written; `STALE_VERSION`. Enabled and all pass: one transaction claims the robot (409 `ROBOT_CLAIM_FAILED` if it just changed), moves READY to RUNNING, inserts the first GoTo as PENDING, writes `TOUR_STARTED`, `LEG_DISPATCH_REQUESTED` and the receipt. A repeat with the same `requestId` replays; the same id with other content is `IDEMPOTENCY_CONFLICT`. |
 | POST | `/api/staff/manage/tours/{id}/next` | `{requestId, expectedRowVersion}`; only the Operator. RUNNING, NORMAL and OBSERVING, else 409 `TOUR_STATE_INVALID`; an open command is 409 `TOUR_COMMAND_OPEN`; a failed movement check is 409 `MOVE_PRECONDITION_FAILED` with `errors.checks` and `errors.blockedBy`. Closes the visit once, then a new GoTo to the next stop, or to the end pose (`EndMode = POSE`), or COMPLETED and robot release (`EndMode = LAST_POI`, no command, no movement check). `VISIT_CLOSED` event and receipt. |
-| POST | `/api/staff/manage/tours/{id}/end-early` | `{requestId, expectedRowVersion, reason}`; only the Operator, while RUNNING (`TOUR_STATE_INVALID`). CANCELLED with `EndedAt`/`EndReason`, `Robots.NeedsInspection = 1`, `CurrentTourId` kept. A PENDING GoTo becomes EXPIRED (`WITHDRAWN`); a DELIVERED/ACCEPTED one gets a PENDING Cancel; an UNKNOWN one waits for Reconcile. The leg's real result is still recorded (arrival beats cancel). **Nothing in this flow is evidence that the robot stopped.** FR-48 revocation and notices are a follow-up. |
+| POST | `/api/staff/manage/tours/{id}/end-early` | `{requestId, expectedRowVersion, reason}`; RUNNING only (`TOUR_STATE_INVALID` checked before backup presence), assigned Operator or eligible backup Staff under ADR-0073; Admin forbidden. CANCELLED with actor/time/reason; withdraws a PENDING GoTo or queues best-effort Cancel for delivered/accepted/UNKNOWN GoTo, retaining its actual result. An open GoTo keeps the robot for inspection; without one the robot is released. Queues `ENDED_EARLY` group email atomically and closes Viewer media/Q&A entitlement through Tour state. **No state or ACK proves physical stop.** Presence/configuration exceptions are documented in ADR-0073's dated update. |
 | POST | `/api/staff/manage/tours/{id}/retry-leg` | `{requestId, expectedRowVersion}`; only the Operator, while NEEDS_ASSISTANCE with the current GoTo FAILED (`NavigationFailed`) or REJECTED (`CommandRejected`), else 409 `TOUR_RETRY_NOT_ALLOWED`. Movement checks (with `executionIdle`, `mapContextMatches`), then a new GoTo with a new leg to the same target and `NORMAL`. |
 | POST | `/api/staff/manage/tours/{id}/commands/{commandId}/reconcile` | `{requestId, reason}`; only the Operator, for an UNKNOWN GoTo of this Tour (else 409 `COMMAND_STATE_INVALID`). RECONCILED with `Resolved*`, `NeedsInspection = 1`; the Tour stays NEEDS_ASSISTANCE and only End Early remains. Works on an ended Tour too, because its UNKNOWN command blocks release. |
 | POST | `/api/technical/physical-robots/{id}/release-inspection` | `{requestId, expectedRowVersion, reason}`; Technical Staff. The Tour holding the robot has ended (`ROBOT_TOUR_ACTIVE`), no open command (`ROBOT_COMMAND_OPEN`), robot held or needing inspection (`ROBOT_NOT_HELD`). Clears `CurrentTourId` and `NeedsInspection`, audit `ROBOT_INSPECTION_RELEASED`. |
@@ -187,7 +190,7 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.14; the current snapshot
+The current empty-database persistence snapshot is `backend/database/smart-campus-tour-schema-v1.26.sql`; its lineage
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
 connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
@@ -199,7 +202,8 @@ and versioned POI narration content/route-stop snapshots in
 `backend/database/smart-campus-tour-schema-v1.10.sql`, POI pose-capture import in
 `backend/database/smart-campus-tour-schema-v1.11.sql`, and robot area and deactivation columns in
 `backend/database/smart-campus-tour-schema-v1.13.sql`, and robot commands with versioned Tour stops in
-`backend/database/smart-campus-tour-schema-v1.14.sql` (ADR-0042, ADR-0043).
+`backend/database/smart-campus-tour-schema-v1.14.sql` (ADR-0042, ADR-0043),
+followed by additive upgrades through v1.26 Operator presence (ADR-0073).
 See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
 [ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
 [ADR-0030](decisions/0030-robot-credential-lifecycle.md), and
@@ -1022,16 +1026,16 @@ only the Start preflight refuses it). With `quick=true` each row also names `hel
 Tour holds the robot over the hold a quick Tour created now would take (display only; create re-checks); create and slots return 409 `ROBOT_NOT_READY_FOR_ROUTE`. Writers
 refuse a deactivated robot with 409 `ROBOT_DEACTIVATED`.
 
-Project POI YAML templates/frame mapping, route revision/test tuple, scheduling/READY,
-robot deployment control, frontend workspaces and physical acceptance remain
-pending/not implemented. v1.1 remains immutable; v1.2 has an additive upgrade
+Project POI YAML templates/frame mapping and physical acceptance remain separate; robot map deployment is manual.
+Versioned route tests, scheduling/READY and Staff/Technical workspaces are implemented.
+v1.1 remains immutable; v1.2 has an additive upgrade
 patch and empty-database snapshot. The runtime grants for these tables are
 separate and least privilege in `backend/database/smart-campus-tour-map-poi-permissions.sql`.
 Do not run the patch on a shared or production database as part of this feature.
 
 ### 3.1 Fleet contract
 
-**M0/B1 telemetry implementation; command/runtime work remains pending:** the
+**Telemetry plus implemented Fleet Commands v1:** the
 backend does not speak ROS. [ADR-0005](decisions/0005-backend-authoritative-poi-per-leg-orchestration.md)
 defines ownership; [ADR-0019](decisions/0019-https-fleet-sync.md) selects
 **HTTPS report-and-reconcile** for robot telemetry. The S2/S2B SignalR harness
@@ -1053,7 +1057,7 @@ Gazebo -> gazebo_preview_bridge -> /api/simulation/pose
 
 | Boundary | Clients and purpose |
 |---|---|
-| `/api/fleet/v1/sync` | HTTPS robot-to-backend telemetry report and empty-command reconciliation response. |
+| `/api/fleet/v1/sync` | Robot-originated HTTPS telemetry report; `commands: []` is deliberately telemetry-only, while movement uses Fleet Commands v1. |
 | `/api/fleet/v1/diagnostics` | Authenticated robot hardware/ROS diagnostics report; separate from sync and does not carry commands. |
 | `/api/admin/infrastructure/health` | Admin-only read of backend-host/runtime, database connectivity, Docker and backup-marker status. |
 | `/api/technical/dashboard`, `/api/technical/robots/{robotCode}/diagnostics` | TechnicalStaff-only fleet overview and per-robot diagnostic view. |
@@ -1071,7 +1075,7 @@ process memory and does not add a persistent pose table.
 Application owns sync validation and the transient state-store boundary. The
 Operations Hub and thin SignalR projection adapter belong in Api, without an
 Infrastructure-to-Api reference. Application stays independent of SignalR and
-ROS types. A future bridge translates telemetry and later commands; it owns no
+ROS types. The implemented bridge posts telemetry, polls Fleet Commands v1 and translates commands to ROS; it owns no
 booking, scheduling, assignment, or tour state machine.
 
 The following GoTo/Cancel and result shapes are reserved for M2. They are not
@@ -1258,7 +1262,7 @@ for history. This invariant does not introduce a MapVersion subsystem.
 
 ### 3.2 Current persistence model and planned tour flow
 
-The current v1.1 SQL relationships include:
+The retained v1.1 relationships below are included in current schema v1.26; branch tables have no V1 runtime:
 
 ```text
 Route --< RouteStop >-- Poi          Tour --> Route
@@ -1278,7 +1282,8 @@ references one roster row; browser sessions reference invitations. A
 registration also references a representative `User` and optionally a reviewing
 `User`. A branch request references a Tour, its selected TourAllowedBranch, its
 branch-point RouteStop and optionally a registration. Since ADR-0065 `BranchRequests`
-and `TourAllowedBranches` are legacy tables with no runtime; nothing reads or writes them.
+and `TourAllowedBranches` are legacy tables with no branch-request runtime. Existing repository usage checks
+still read them to protect retained data; Viewer voting uses the ADR-0065 visit/vote/lock tables.
 `Tour.CreatedByUserId`, `TourEvent.ActorUserId`, and `AuditLog.ActorUserId`
 link their records to users. The diagram omits other optional event links to
 `Robot` and `Poi` for readability.
@@ -1331,7 +1336,7 @@ release. `Tours.CurrentRevisionStopId`/`LastArrivedRevisionStopId` reference
 `RouteRevisionStops` for versioned Tours, and a CHECK keeps legacy Tours on the
 `RouteStop` columns and versioned Tours off them (ADR-0043 D9). Start and Next
 write these rows (M2.2-b); the robot reads them through Fleet Commands v1 (M2.2-d), and
-Fleet Sync v1 still returns `commands: []`.
+Fleet Sync v1 still returns `commands: []` by design; this is not the final command path, which is robot-polled Fleet Commands v1.
 
 **Planned, not implemented:** an Application dispatch use case selects an
 eligible robot for a ready `Tour`, sends one conceptual navigation leg through
@@ -1364,8 +1369,8 @@ shared transport does not erase source or validation boundaries.
 
 #### Remote Tour operational rules (planned Application behavior)
 
-SRS v0.2/ADR-0020 governs target authorization, incidents and End Early. Only the
-assigned Operator may operate. Movement requires telemetry age <=2s, no incident,
+Phiếu v1.12 / Report 3 governs authorization, incidents and End Early. The assigned Operator operates;
+only End Early has the timed backup Staff exception (ADR-0073). Admin has no running-Tour control. Movement requires telemetry age <=2s, no incident,
 no unresolved command, console connection and an attendant. End Early revokes
 live/fallback/Q&A including copied URLs, preserves Result, closes an open next-POI ballot (ADR-0065),
 requests active mission cancellation, prevents later Tour motion, and notifies
@@ -1631,7 +1636,10 @@ identity, pauses capture when not wanted (`/status` state `paused`, `/device` st
 
 **Who may watch the public relay (ADR-0055, proposed 11/11/2026).** The public MediaMTX relay
 uses `authMethod: http`: it asks the backend about every publish and read. The relay URL is
-`QuestRelay:WhepUrl` and is not in the web bundle; a page gets it with a token:
+`QuestRelay:WhepUrl` and is not in the web bundle; a page gets it with a token. Main uses the configured
+robot path `quest`, not the random-per-Tour live path described in Report 4. The Viewer page checks its session
+every 5 seconds RUNNING / 30 seconds waiting; the separate relay reaper enforces existing-connection entitlement.
+The required 10-second revoke/reissue bound still needs real-browser/relay evidence (ADR-0055 update):
 
 | Method | Path | Notes |
 |---|---|---|
@@ -1667,37 +1675,28 @@ migration flow. See `backend/AGENTS.md` for the re-scaffold procedure.
 ADR-0020 supersedes the business-role/row-access portions for the SRS v0.2 target.
 The schema and existing APIs below describe current persistence and implementation.
 
-`backend/database/smart-campus-tour-schema-v1.1.sql` is the current empty-DB
-snapshot for invitation/session/branch storage. It is applied to the local
-SQL Server database `SmartCampusTourV11` on `localhost,1433` and scaffolded to Domain entities and
-Infrastructure `ApplicationDbContext`. It does not migrate existing v1.0 or
-production data. Database setup/scaffolding were exercised locally. The current
-backend also implements Representative submission/pre-approval registration,
-Staff registration review, Auth V1, Admin account management, Staff legacy POI
-catalog management, and development-only SimulationPreview; the relevant HTTP contracts
-are described in Sections 3.0–3.0.2 and 3.2.1–3.2.2. Tour execution/orchestration,
-invitation/session product APIs, branch-request use cases, fleet
-dispatch, and production fleet/operations Hubs remain unimplemented.
+`backend/database/smart-campus-tour-schema-v1.1.sql` is an immutable earlier snapshot for
+invitation/session/branch storage. Current empty-database bootstrap uses v1.26; existing databases use
+the reviewed additive patch chain, followed by reviewed EF Database First scaffolding.
+Auth, Staff preparation/review, invitations/sessions, Tour execution and robot-polled Fleet Commands v1
+are implemented. The Operations Hub projects to browsers; no robot `/hubs/fleet` exists.
+Branch-request/allowed-branch tables remain stored compatibility only, replaced in V1 operation by ADR-0065.
 
 Under ADR-0012 and the original CRUD slice in `docs/decisions/0017-admin-route-management.md`,
 dwell is fixed in RouteStops and Staff can edit unreferenced Route configuration
 through CRUD under current ADR-0020 ownership. Technical staff still verify physical execution; there is no
 per-Tour dwell editor. The old all-Staff/all-Tours rule is superseded: target
-operation requires an explicitly assigned Staff Operator. Current schema has no
-assignment field; CreatedByUserId is attribution only. Staff target invitation
+operation requires `Tours.OperatorUserId`, except the ADR-0073 backup End Early rule.
+CreatedByUserId remains attribution only. Staff target invitation
 support is separate from current Staff/Representative endpoints. All state,
 readiness, time and robot-claim checks still apply. RowVersion must be checked on writes;
 only a committed winning decision may lead to robot dispatch.
 
 In v1.1, CurrentRouteStopId replaces CurrentStopOrder and must belong to the
-active route. Accept maps it to the verified equivalent VariantBranchStopId.
-LastArrivedRouteStopId replaces LastArrivedStopOrder but retains the last actual
-arrival, potentially on the old route, until another arrival is confirmed.
-These are SQL fields, not changes to public navigation DTOs or ROS interfaces.
-BranchRequests stores BranchPointRouteStopId derived from the allowed variant;
-the backend must validate Tour/route/stop consistency and expire old requests
-atomically on visit closure or NEEDS_ASSISTANCE before recovery. No future-visit
-GUID allocation is required; CurrentStopVisitId still correlates execution attempts.
+active route in old records; LastArrivedRouteStopId retains an actual arrival.
+Versioned Tour execution uses immutable revision-stop references and CurrentStopVisitId.
+BranchRequests/VariantBranchStopId constraints describe stored legacy data, not an implemented Accept flow.
+V1 next-POI selection uses ADR-0065 ballots and Operator locks; the branch cutoff question is closed.
 
 Unique keys protect one invitation per roster row, one open session per
 invitation, one accepted branch per Tour and one pending request per
@@ -2132,7 +2131,7 @@ Audit actions `ROSTER_PENDING_EXPIRED`, `REGISTRATION_EXPIRED` and `ROSTER_EXPIR
 
 A short-notice Tour replaces the 72-hour lead, the 48-hour close and the 24-hour review close. Its list closes with READY, the T-24h job skips it, and undecided rows still block READY and Start. Since ADR-0053 every new short-notice Tour is a quick Tour with no shift: Start, and `opensAt`, open when its robot hold opens (creation), `allViewersJoined` is shown before its latest Start (information only, ADR-0057), and every other Start check is the same as for any other Tour. The late limit and automatic cancellation run from its latest Start.
 
-### 3.2.z Viewer vote for the next POI (ADR-0065, schema v1.25, implementation in progress)
+### 3.2.z Viewer vote for the next POI (ADR-0065, introduced in schema v1.25, implemented)
 
 Business rules are in [ADR-0065](decisions/0065-viewer-vote-next-poi.md) and
 `docs/requirements/campus-tour-scope.md` §7. A route revision without
@@ -2194,8 +2193,8 @@ Staff POI, Route and Tour preparation management and registration review,
 invitation support, Student access, authenticated Fleet Sync v1, and the
 Staff-authorized Operations Hub projection. Admin role authorization is
 enforced for Admin APIs; invitation support grants Staff-wide support and owner-Representative access.
-Student access applies invitation/session rules. Runtime branch-request,
-command/result, dispatch, and Tour runtime APIs remain unimplemented. Latest
+Student access applies invitation/session rules. Tour runtime and Fleet Commands v1 command/result/dispatch APIs
+are implemented behind the three independent switches and ADR-0066 readiness. Branch-request runtime is replaced by ADR-0065. Latest
 fleet state is single-process memory; multiple instances need shared-state and
 routing design.
 
@@ -2592,7 +2591,8 @@ and Fleet Commands contracts do not change: `localized`, `motionReady` and
 
 POI narration does not require an LLM. The student browser plays approved,
 pre-generated narration assets. Private student Q&A follows the browser/cloud
-path through STT, LLM and TTS; it is not a robot-to-assistant audio path. V1
+path through transcription and approved-bank/fixed replies under Phiếu v1.12; current provider-backed code is a
+business gap documented in ADR-0016 / change #469. It is not a robot-to-assistant audio path. V1
 uses one project language; multilingual and per-tour language selection are
 out of scope.
 
@@ -2601,22 +2601,23 @@ out of scope.
 | Concern | Owner | Runs on | Responsibility |
 |---|---|---|---|
 | Person perception | WP3, `robot/ros2_ws/src/robot_perception/` | robot miniPC | Timestamped RGB-D person detection; optional, default-off Nav2 SpeedLimit |
-| Student AI Q&A | WP4, browser/cloud path and `ai-assistant/` | browser + server/cloud | private STT, LLM and TTS in one project language |
+| Student AI Q&A | WP4, browser/cloud path and `ai-assistant/` | browser + server/cloud | approved answers/fixed reply; current runtime provider gap is recorded in ADR-0016 |
 
 The robot owns navigation, physical sensors, the fleet bridge and rotating-head
 hardware. It does not own visitor audio playback or AI narration. The assistant
 never publishes `/cmd_vel`, sets Nav2 goals, alters `/speed_limit`, or makes a
 movement/safety decision. Student audio/Q&A and livestream use browser/cloud
-paths; their final media transports remain undecided.
+paths; MediaMTX live/fallback authorization is implemented as described in ADR-0055/0063.
 
 ### 7.1 Student private Q&A contract (implemented; integration verification pending)
 
 Decision record: [ADR-0016](decisions/0016-student-qa-assistant-stack.md).
-ADR-0020 supersedes runtime provider/general-answer generation as a target:
+Phiếu v1.12 / Report 3 BR-18 and ADR-0020 supersede runtime provider/general-answer generation:
 Viewer answers must come from the approved bank; providers assist Staff drafting.
 Current code below remains the provider-backed implementation contract and is a
 gap. StudentQuestionGate is per-session and does not implement the instance-wide
-8 executing/20 total admission queue; target latency includes queue waiting.
+8 executing/20 total admission queue; required latency includes queue waiting. These business gaps are
+[change #469](https://github.com/30Sativa/smart-campus-tour/issues/469), not a claim of approved-bank implementation.
 Target business rules: `docs/requirements/campus-tour-scope.md`, SRS FR-30–34,
 BR-18/19, NFR-PERF-04 and NFR-AI-01. The gap register records how the current
 text-Q&A contract below differs. Voice/transcript/TTS integration remains later work.
@@ -2786,9 +2787,10 @@ only (ADR-0011). The LLM provider is an external processor; see ADR-0016 for
 the data-use condition of the provider tier.
 
 
-### 7.2 Tour talk between the Operator and the Viewers (implemented; device verification pending)
+### 7.2 Tour talk between the Operator and the Viewers (Proposed – out of V1 scope; code implemented)
 
-ADR-0070. The Tour's Operator speaks to every Viewer as text (≤ 500 characters) or a recorded voice clip (≤ 30 s,
+ADR-0070 remains outside the adopted V1 scope; implementation alignment is change #472.
+The implemented Operator channel speaks to every Viewer as text (≤ 500 characters) or a recorded voice clip (≤ 30 s,
 ≤ 1 MB); a Viewer answers in text that only Staff read. Open while the Tour is `RUNNING` and in the waiting room from
 15 minutes before the scheduled start (409 `TALK_OPENS_LATER` / `TALK_CLOSED` otherwise); reading stays possible.
 Kept in memory on the single API instance (newest 300 messages and 40 clips per Tour, forgotten 6 hours after the last
@@ -2805,7 +2807,7 @@ message); a restart starts a new `epoch`. Browsers poll every 2 s.
 
 Student calls use the same exact-origin check as the other Student session calls (§3.2.3).
 
-**Live guide voice (ADR-0072, implemented; device and relay verification pending).** The live console has no clip
+**Live guide voice (ADR-0072, Proposed – out of V1 scope; code implemented).** The live console has no clip
 recorder any more: the Operator holds "Nhấn giữ để nói" and speaks live. Clips already sent still play.
 
 | Endpoint | Caller | Notes |
@@ -2822,7 +2824,7 @@ token's expiry, so the reaper cuts the voice within 5 s when access ends. The re
 Viewer video: the Student player shows the narration line being spoken as a subtitle (toggle "Tắt phụ đề"/"Bật phụ đề",
 on by default; while the page is muted the lines still run, timed from each sentence's length); web only, no API change.
 
-### 7.3 Viewer engagement report (ADR-0071, implemented)
+### 7.3 Viewer engagement report (ADR-0071, Proposed – out of V1 scope; code implemented)
 
 Decision record: [ADR-0071](decisions/0071-viewer-engagement-report.md). Staff-only, read-only, aggregates only:
 no response carries a display name, email, class, roster row id, session, token or question text.
@@ -2974,9 +2976,8 @@ unrelated configurations retain their outcomes. Evidence is human-entered, not
 automatic physical proof; manual PASS is not tour scheduling, reservation,
 READY, or movement authorization. Approved narration/audio duration is not yet
 linked to versioned POI content, so API duration is explicitly incomplete and
-reports the dwell subtotal only. Branch requests are replaced by the Viewer vote (ADR-0065);
-project POI YAML/frame mapping, Tour runtime and command transport remain staged
-or pending. See ADR-0023. ERD, preparation sequence and verification-state
+reports its available duration fields without inventing audio evidence. Branch requests are replaced by the Viewer vote (ADR-0065);
+Tour runtime and robot-polled command transport are implemented; project POI YAML/frame mapping remains separate. See ADR-0023. ERD, preparation sequence and verification-state
 diagrams require member redraw/review and remain pending.
 
 
@@ -3000,4 +3001,6 @@ this advisory rule; legacy null contact can be allowed immediately. `TOUR_ENDED_
 One `TOUR_CANCEL_NOTICE_REQUESTED` audit for registrations with active ACCEPTED rows commits with End Early; the existing
 worker uses a distinct ended-early email, with no technical reason, code or link. No invitation/session mutation is
 added. Disabled email records FAILED/EMAIL_DISABLED. These scoped changes implement the owner-provided Phiếu v1.12
-rule; older Report 3/Admin F-14 wording elsewhere requires group reconciliation and grants no Admin runtime action.
+rule. Report 3 BR-17/21 and Phiếu v1.12 grant no Admin runtime action. The missing-presence/configuration
+exceptions in current code are tracked in change #470; the required minimum remains five minutes.
+The queued notice records `kind: "ENDED_EARLY"`; Cancel/AutoCancel records `"CANCELLED"`, and the worker never infers the template from Tour fields.

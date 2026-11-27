@@ -93,3 +93,40 @@ behavior and are listed as gaps. Frontend must add the exact TechnicalStaff
 value to types, account forms and guards; no frontend file is changed here.
 TechnicalStaff login success is not evidence of a Technical workspace or of
 AC-06/full AC-08 acceptance.
+
+## Update 2026-11-28
+
+### Context
+
+The owner requests documentation alignment to the live Phiếu v1.12 and revised Report 3 read on 2026-11-28,
+while preserving the 27/10/2026 account/adoption decision. Report 4 §1.3 Table 3 reuses this number for another subject.
+
+### Decision
+
+Phiếu v1.12 supplies current business ownership and scope: Staff prepares routes/Tours/content, Technical Staff
+manages robots/maps and technical checks, Admin manages accounts/roles/configuration/audit and has no running-Tour
+control. Viewer answers are approved-bank/fixed replies; Gemini assists Staff drafts, and narration uses four-eyes
+approval. Viewer voting (ADR-0065) replaces Representative branch requests; the cutoff question is closed.
+ADR-0073 defines backup Staff End Early, and ADR-0066 defines map-specific readiness and assignment behavior.
+
+### Status / Notes
+
+This update changes neither the original decision date/decider nor its account-role contract.
+**Repository ADR-0020 exists and is not the modular-backend ADR.** Correct Report 4's technical citation to
+new ADR-0074; ADR-0016 retains the Q&A policy/boundary and this file is not renumbered.
+Main `1b586a70` is implementation evidence, not proof that every adopted business rule is satisfied.
+The Q&A policy/queue gap is [#469](https://github.com/30Sativa/smart-campus-tour/issues/469);
+missing-presence evidence is [#470](https://github.com/30Sativa/smart-campus-tour/issues/470);
+legacy readiness ordering is [#471](https://github.com/30Sativa/smart-campus-tour/issues/471).
+ADR-0070/0071/0072 are Proposed – out of V1 scope per this task; their implemented code is recorded separately
+in [#472](https://github.com/30Sativa/smart-campus-tour/issues/472). F-14 grants no Admin runtime permission.
+
+### Rejected alternatives
+
+- Keeping Admin business ownership or an Admin End Early override: violates the adopted role boundary.
+- Treating a table or a Report 4 diagram as proof of implementation: hides observable API/runtime differences.
+
+### Consequences
+
+The shared business source resolves competing rules, but role separation adds authoring/verification handoffs.
+Keeping the original records and explicit gaps costs reconciliation work; it avoids inventing approvals or test results.

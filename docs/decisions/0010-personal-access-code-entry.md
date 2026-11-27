@@ -59,3 +59,20 @@ Excel là nguồn dữ liệu cá nhân; nhập mã chỉ liên kết lượt v�
 - Người cầm mã bị chia sẻ vẫn có thể vào trước chủ email; một session không chứng minh danh tính thật hoặc attendance. Không hứa chống mạo danh tuyệt đối.
 - Phải thiết kế/kiểm chứng cấp session đồng thời, revoke tức thời, gửi lại không ngắt phiên, gửi sai Tour, hạn quyền, phân quyền hỗ trợ và audit. Tiêu chí ở scope R1-01–05, R1-16–17, R1-21–22; chưa có kết quả PASS chức năng.
 - Backend hiện chưa có mô hình invitation/code/session; frontend mock group-code + tên/lớp không đáp ứng quyết định này. Khi triển khai phải cập nhật contract ở `docs/architecture.md` cùng schema/API/tests.
+
+## Update 2026-11-28
+
+### Decision
+
+Staff owns POI proposals/content, routes, Tour preparation, row review and invitations; a different Staff approves
+narration (Report 3 BR-36). Technical Staff owns robot setup/credentials/map assignments, map packages and
+deployment/POI/route verification. Admin owns accounts, role administration, system configuration and audit;
+Admin emergency credential revoke remains ADR-0030, never running-Tour control.
+The retired `/api/admin/{pois,routes,tours,registrations}` aliases do not grant business ownership.
+Versioned Staff/Technical controllers and ADR-0027 are the code boundary on main `1b586a70`.
+
+### Consequences / Status
+
+This ownership correction follows Phiếu v1.12 §3.2.c and Report 3; it does not rewrite the original decision date,
+deciders, concurrency/history safeguards or SQL snapshots. Separate Staff authoring and Technical verification
+increase handoffs and can block scheduling until matching evidence exists. Code is not changed by this update.

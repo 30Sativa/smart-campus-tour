@@ -34,3 +34,21 @@ backend use cases.
 - The conceptual booking and tour-instance flow in `docs/architecture.md`
   predates this schema and needs a separate contract review before those use
   cases are implemented.
+
+## Update 2026-11-28
+
+### Status
+
+Superseded by ADR-0012 for the v1.0→v1.1 baseline. The current empty-database snapshot on main `1b586a70` is
+`backend/database/smart-campus-tour-schema-v1.26.sql`; v1.25→v1.26 adds durable Operator presence (ADR-0073).
+
+### Decision
+
+SQL scripts under `backend/database/` remain the Database First source of truth. Existing databases use the
+reviewed additive patch chain; old snapshot/hash files stay immutable. EF entities/mapping are scaffolded from
+SQL and reviewed; normal EF migrations are not used. Schema v1.0 is not the current deployment schema.
+
+### Consequences
+
+A fresh snapshot is for an empty database, not an in-place overwrite. Version advancement needs coordinated
+schema structure/grants and deployment gates; retaining old snapshots costs maintenance but preserves provenance.

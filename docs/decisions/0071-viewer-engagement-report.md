@@ -50,3 +50,17 @@ ADR-0011 limits student data to registration, access and Tour statistics, and fo
 - Two exact-sequence SQL tests now expect `STOP_ARRIVED` after each POI arrival's `LEG_TERMINAL`.
 - Numbers are only as precise as heartbeats: a viewer who closes the tab is placed at their last heartbeat.
 - If the group later needs per-person engagement, that needs its own decision under ADR-0011 first.
+
+## Update 2026-11-28
+
+### Status
+
+**Proposed – out of V1 scope (Phiếu v1.12).**
+
+### Notes
+
+This scope classification follows the owner's docs-sync instruction; it does not change the original proposal's
+date, requester or recorded design. Main `1b586a70` contains the implementation described above.
+This docs-only update neither removes nor disables its endpoints, UI or relay behavior; shipped-scope alignment
+is [change #472](https://github.com/30Sativa/smart-campus-tour/issues/472).
+It is not accepted V1 behavior and is not evidence of a successful device/relay/physical test.

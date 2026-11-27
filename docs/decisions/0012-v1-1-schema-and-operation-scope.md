@@ -53,3 +53,25 @@ Theo ADR-0011, lập danh sách xử lý thực tế: RosterRows.DisplayName/Ema
 - EF Scaffold suy ra BranchRequest→Tour một-một từ filtered unique index ACCEPTED, và BrowserSession→Invitation một-một từ index một session mở mỗi Invitation; hai mapping đã được chỉnh về một-nhiều vì nhiều request/session lịch sử được phép. Khi scaffold lại phải giữ và rà các mapping này.
 - Không có bảng TourStopSettings, Operator assignment, Visit hay EmailAttempts mới. Quy tắc cấp session/đổi nhánh/email/locking/khử định danh vẫn cần use case và integration tests khi triển khai API.
 - Bộ test SQL thực thi snapshot, kiểm tra ràng buộc và role log trên database kiểm thử dùng một lần. Không coi test schema là kiểm chứng robot, concurrency nghiệp vụ hoặc quyền HTTP đã triển khai.
+
+## Update 2026-11-28
+
+### Status
+
+Partially **Superseded by ADR-0065 (viewer-choice route by vote)** for branch-request/allowed-branch operation;
+ADR-0020 and Phiếu v1.12 replace the all-Staff/all-Tours and Admin preparation ownership.
+The original 30/09/2026 snapshot/approval record remains intact.
+
+### Decision
+
+Current schema is `backend/database/smart-campus-tour-schema-v1.26.sql`, with the additive patch chain in
+`backend/database/patches/`; SQL is authoritative, not EF migrations. v1.1 remains an immutable earlier snapshot.
+Assigned Staff operates a Tour, with only the ADR-0073 backup End Early exception; Admin has no running-Tour control.
+Staff authors routes/Tours/content; Technical Staff verifies maps/POIs/routes and manages robot setup.
+Voting uses the tested route and one vote per invitation row, not BranchRequests/TourAllowedBranches runtime.
+
+### Consequences
+
+Tour-first locks, durable receipts, append-only audit and row credential isolation remain.
+Keeping unused branch tables avoids destructive data changes but requires readers to distinguish stored compatibility
+from the V1 vote model. This docs change does not apply/scaffold a database or prove physical behavior.

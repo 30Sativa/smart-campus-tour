@@ -204,3 +204,39 @@ Why 15: the reservation ends at `ScheduledStartAt + expected duration + 15 min` 
 - M2.1 can implement READY/Reopen and a Start preflight that always refuses, with no schema change. M2.2 adds `RobotCommands` (schema v1.14), the Start transaction, both robot endpoints and a fake/Gazebo bridge.
 - The single-API-instance limit of ADR-0019 applies to poll stream binding and console tracking.
 - No code, schema, ROS interface or web file is changed by this ADR.
+
+## Update 2026-11-28
+
+### Context
+
+Report 4 §1.3 Table 4 and Phiếu v1.12 §3.2.b describe a robot on campus Wi-Fi behind NAT.
+Telemetry delivery and durable movement commands have different persistence and retry semantics.
+
+### Decision
+
+The bridge originates HTTPS `POST /api/fleet/v1/sync` telemetry reports and separately
+`POST /api/fleet/commands/v1/poll` for committed `GoTo`/`Cancel` commands, then posts command results.
+There is no inbound connection to the robot and no `/hubs/fleet` command transport.
+Fleet Sync v1 remains telemetry-only; its empty `commands: []` is the v1 response contract, not the absence
+of command transport in the completed system. Results use ACCEPTED, REJECTED or TERMINAL.
+At most one movement command is open per robot and the poll binds to the current telemetry stream, age at most
+`FleetCommands:MaxTelemetryAgeSeconds` (default 2 seconds). Three dispatch switches and map readiness follow
+ADR-0049/0066; an acknowledgement never proves a physical stop.
+
+### Rejected alternatives
+
+- A hub/WebSocket pushing into the robot: adds reconnect/replay state and an unnecessary push boundary behind NAT.
+- MQTT: adds a broker and a second authentication/operations surface without removing command persistence needs.
+- Commands inside Fleet Sync v1: couples telemetry loss/restart semantics to durable movement intent.
+
+### Consequences
+
+No robot port needs opening and persisted intents survive an API restart.
+Delivery latency includes the poll cycle and network round trip; deadlines and a sweeper are still needed
+for commands whose acceptance/result is missing. HTTPS telemetry is posted, not fetched from the robot.
+
+### Status / Notes
+
+Transport, handlers and bridge are implemented on main `1b586a70`; the opening implementation-stage wording
+is superseded by this status update. `/hubs/operations` is the browser projection, not the robot command channel.
+This is documentation of implementation, not GATE A or physical acceptance evidence. Cited in Report 4 §1.3 Table 4.

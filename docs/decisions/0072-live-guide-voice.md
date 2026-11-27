@@ -49,3 +49,17 @@ carries WebRTC with backend-checked tokens and a reaper that cuts sessions whose
   bounded load on the relay and the backend auth hook.
 - Latency, echo and autoplay depend on the devices and network; they are not proven by tests.
 - Not done: Viewer voice, talking to one row, recording the guide's voice.
+
+## Update 2026-11-28
+
+### Status
+
+**Proposed – out of V1 scope (Phiếu v1.12).**
+
+### Notes
+
+This scope classification follows the owner's docs-sync instruction; it does not change the original proposal's
+date, requester or recorded design. Main `1b586a70` contains the implementation described above.
+This docs-only update neither removes nor disables its endpoints, UI or relay behavior; shipped-scope alignment
+is [change #472](https://github.com/30Sativa/smart-campus-tour/issues/472).
+It is not accepted V1 behavior and is not evidence of a successful device/relay/physical test.

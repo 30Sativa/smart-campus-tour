@@ -110,3 +110,45 @@ content version and question set as the recorded Gemini baseline): 64/64
 gradable questions passed (baseline 63/64), no regressions. Grading is by
 keywords; reports stay untracked and `evals/recorded/latest.json` remains the
 Gemini baseline.
+
+## Update 2026-11-28
+
+### Context
+
+Phiếu v1.12 and Report 3 BR-18/19 require private Viewer answers from approved entries or a fixed reply,
+with a bounded instance-wide admission queue. The original record chose a provider-backed Student Q&A service.
+
+### Decision
+
+Viewer answers are selected only from the approved answer bank or the fixed refusal. Gemini assists Staff
+content drafting; it does not freely generate Viewer replies. Narration approval is by a Staff member other than
+its last editor (BR-36); that rule alone does not establish a reviewed Q&A bank.
+Q&A admission is instance-wide: at most 8 executing and 20 executing plus waiting (BR-19).
+Backend session/revocation checks, no roster data to AI and no AI robot-control boundary remain.
+
+The separate Python HTTP boundary is retained. The service implementation uses Starlette, pydantic and uvicorn,
+rather than the original FastAPI/tooling selection. HTTP cancellation/timeout is bounded by the configured
+client timeout or 20 seconds, whichever is smaller.
+The system-wide modular ASP.NET Core / separate Python deployment choice is **ADR-0074**; it is not silently
+attributed to the original Q&A decision or to repository ADR-0020.
+
+### Rejected alternatives
+
+- General/free-generated Viewer answers, including "outside the Tour": violate BR-18 and the approved-content rule.
+- Sending roster/session secrets to the provider: violates BR-20 and expands the privacy boundary.
+- Treating per-session throttles as the 8/20 queue: cannot enforce instance-wide admission and waiting behavior.
+
+### Consequences
+
+Reviewed entries make replies auditable, but Staff must maintain and approve the answer bank.
+The Python HTTP hop adds latency and a failure mode; busy/timeout/unavailable replies must be explicit.
+An approved narration pack is not itself an approved Q&A bank.
+
+### Status / Notes
+
+The original Viewer-generation policy is **partially superseded by ADR-0020** and Phiếu v1.12.
+Main `1b586a70` still calls `ai-assistant/src/campus_assistant/service.py` → `provider.generate`;
+sanitization is not approved-bank selection. The Python limiter defaults to 8 in flight and rejects overflow
+without the required waiting queue; `StudentQuestionGate` supplies additional per-session limits.
+These business gaps are [change #469](https://github.com/30Sativa/smart-campus-tour/issues/469).
+Report 4's modular-backend citation is corrected to new ADR-0074, with ADR-0016 retained for Q&A policy/boundaries.
