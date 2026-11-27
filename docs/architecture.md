@@ -813,7 +813,8 @@ robot list, READY, the Start preflight and enabling dispatch all use it:
   check. A null `MapAssignedAt` keeps the earlier rule.
 - Round 5: while `Robots.CurrentTourId` names a RUNNING Tour, changing or clearing
   the map assignment (`PUT`/`DELETE .../map-assignment`; the version held is not a
-  change), deactivating the robot and rotating its key return 409
+  change), deactivating the robot and rotating its key from the web (not the CLI
+  provisioner) return 409
   `ROBOT_IN_RUNNING_TOUR` ("Robot {code} đang chạy Tour {tên}. Kết thúc Tour (hoặc
   kết thúc sớm) rồi mới {đổi bản đồ / ngừng sử dụng / đổi khóa}.") with `blockers`
   `[{ code: "TOUR", message: tên }]`. Stopping dispatch, revoking the key,
