@@ -68,6 +68,20 @@ public sealed class TourOperatorDisconnectSqlTests
     }
 
     [SchemaV11Fact]
+    public async Task CompletedTour_BackupGetsStateInvalid_EvenWithRecentOperatorContact()
+    {
+        await using var w = await World.Create(enabled: true); await Start(w);
+        await using var db = w.H.Context();
+        var tour = await db.Tours.SingleAsync(t => t.Id == w.H.TourId);
+        tour.Complete(w.Clock.Now!.Value);
+        await db.SaveChangesAsync();
+
+        var error = await Assert.ThrowsAsync<ConflictException>(() => End(w, w.H.StaffId));
+        Assert.Equal("TOUR_STATE_INVALID", error.Code);
+        Assert.False(await db.TourEvents.AnyAsync(e => e.EventType == TourLifecycleEvents.EndedEarly));
+    }
+
+    [SchemaV11Fact]
     public async Task OperatorContact_IsThrottled_Durable_AndNeverChangesTheTourVersion_OrAllowsOtherViewersToRefreshIt()
     {
         await using var w = await World.Create(enabled: true); await Start(w);
@@ -110,6 +124,12 @@ public sealed class TourOperatorDisconnectSqlTests
         var expected = await db.GroupRegistrations.Where(r => r.TourId == w.H.TourId).OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync();
         Assert.Equal(2, expected.Length);
         Assert.Equal(expected, TourCancelNoticeAudit.RegistrationIds(audit));
+        using (var data = JsonDocument.Parse(audit.DataJson!))
+            Assert.Equal("ENDED_EARLY", data.RootElement.GetProperty("kind").GetString());
+        // Later metadata changes must not change the queued template or disclose a technical reason.
+        var tour = await db.Tours.SingleAsync(t => t.Id == w.H.TourId);
+        tour.EndReason = null;
+        await db.SaveChangesAsync();
         var emails = await w.H.Send(new ClaimTourCancelNoticeCommand(audit.CorrelationId!.Value, false));
         // Both groups deliberately share the representative address: worker keeps its existing address deduplication.
         var email = Assert.Single(emails); Assert.True(email.EndedEarly); Assert.Empty(email.Reason);

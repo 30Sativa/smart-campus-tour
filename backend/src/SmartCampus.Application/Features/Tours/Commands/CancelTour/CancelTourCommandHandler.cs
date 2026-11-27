@@ -26,7 +26,7 @@ public sealed class CancelTourCommandHandler(ITourManagementRepository repositor
         var notified = await TourCancellation.ApplyAsync(repository, invitations, tour, command.Actor, reason, now, ct);
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId,
             "TOUR_CANCELLED", fingerprint, now, "state", "endedAt", "endReason", "pendingRegistrations", "invitationAccess");
-        TourCancellation.QueueNotice(repository, settings, logger, tour.Id, command.Actor, notified, now);
+        TourCancellation.QueueNotice(repository, settings, logger, tour.Id, command.Actor, notified, now, kind: TourCancelNoticeAudit.Cancelled);
         return new(tour.Id);
     }
 }

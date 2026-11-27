@@ -34,14 +34,14 @@ public sealed class EndTourEarlyCommandHandler(ITourManagementRepository reposit
         if (replay.HasValue) return new(replay.Value);
 
         var tour = await registrations.LockTourAsync(command.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
+        if (tour.State != TourRuntime.Running)
+            throw new ConflictException("Chỉ kết thúc sớm được Tour đang chạy.", "TOUR_STATE_INVALID");
         var now = clock.GetUtcNow();
         var byBackupStaff = tour.OperatorUserId != command.Actor;
         // Read after locking the Tour: the heartbeat writer owns the same root before touching presence.
         var lastSeen = await repository.GetOperatorLastSeenAsync(tour.Id, ct);
         if (byBackupStaff) TourOperatorPresencePolicy.EnsureBackupAllowed(lastSeen, now, settings.OperatorDisconnectEndEarlyMinutes);
         RowVersionToken.EnsureCurrent(tour.RowVersion, command.Request.ExpectedRowVersion);
-        if (tour.State != TourRuntime.Running)
-            throw new ConflictException("Chỉ kết thúc sớm được Tour đang chạy.", "TOUR_STATE_INVALID");
 
         var robotId = tour.AssignedRobotId!.Value;
         var goTo = await repository.LockOpenGoToAsync(tour.Id, ct);
@@ -51,7 +51,7 @@ public sealed class EndTourEarlyCommandHandler(ITourManagementRepository reposit
         await TourVoting.CloseOpenBallotAsync(repository, votes, revisions, tour, decide: false, command.Actor, now, ct);
         tour.EndEarly(reason, now);
         TourCancellation.QueueNotice(repository, invitations, logger, tour.Id, command.Actor,
-            await repository.GetEndedEarlyNoticeRegistrationIdsAsync(tour.Id, ct), now);
+            await repository.GetEndedEarlyNoticeRegistrationIdsAsync(tour.Id, ct), now, kind: TourCancelNoticeAudit.EndedEarly);
         var eventData = JsonNode.Parse(await TourLegDispatch.EndHoldAsync(repository, tour.Id, now, ct) ?? "{}")!.AsObject();
         if (byBackupStaff)
         {

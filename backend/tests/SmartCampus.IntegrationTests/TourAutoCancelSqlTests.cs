@@ -110,11 +110,14 @@ public sealed class TourAutoCancelSqlTests
         await using var db = w.H.Context();
         var request = await db.AuditLogs.AsNoTracking().SingleAsync(a => a.Action == TourCancelNoticeAudit.Requested);
         Assert.Null(request.ActorUserId);
+        using (var data = JsonDocument.Parse(request.DataJson!))
+            Assert.Equal("CANCELLED", data.RootElement.GetProperty("kind").GetString());
         Assert.Equal([approved], TourCancelNoticeAudit.RegistrationIds(request));
         Assert.DoesNotContain(rejected, TourCancelNoticeAudit.RegistrationIds(request));
 
         // The stored reason stays the system one; the representative reads the fixed sentence instead.
         var email = Assert.Single(await w.H.Send(new ClaimTourCancelNoticeCommand(request.CorrelationId!.Value, false)));
+        Assert.False(email.EndedEarly);
         Assert.Equal(TourAutoCancel.EmailReason, email.Reason);
         Assert.Equal(TourAutoCancel.Reason, await db.Tours.AsNoTracking().Where(t => t.Id == w.H.TourId).Select(t => t.EndReason).SingleAsync());
     }

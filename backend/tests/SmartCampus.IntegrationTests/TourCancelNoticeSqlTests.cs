@@ -27,6 +27,9 @@ public sealed class TourCancelNoticeSqlTests
         await h.Cancel(cancel);
         Assert.Empty(h.Sender.Sent);
         Assert.Equal(1, await h.Count(TourCancelNoticeAudit.Requested));
+        var queued = Assert.Single(await h.Notices(TourCancelNoticeAudit.Requested));
+        using (var data = JsonDocument.Parse(queued.DataJson!))
+            Assert.Equal("CANCELLED", data.RootElement.GetProperty("kind").GetString());
 
         await h.Dispatch();
         Assert.Equal(["approved@example.test", "submitted@example.test"], h.Sender.Sent.Select(email => email.Recipient).Order());
@@ -34,6 +37,7 @@ public sealed class TourCancelNoticeSqlTests
         {
             Assert.Equal("Tour thông báo", email.TourName);
             Assert.Equal(Reason, email.Reason);
+            Assert.False(email.EndedEarly);
             Assert.Equal(h.Start, email.ScheduledStartAt);
         });
         var sent = Assert.Single(await h.Notices(TourCancelNoticeAudit.Sent));
@@ -56,6 +60,46 @@ public sealed class TourCancelNoticeSqlTests
         await h.Cancel(await h.Request());
         await h.Dispatch();
         Assert.Equal(2, h.Sender.Sent.Count);
+    }
+
+    [SchemaV11Fact]
+    public async Task CancelNotice_RemainsCancellation_EvenIfTourMetadataLooksEndedEarly()
+    {
+        await using var h = await Harness.Create();
+        await h.Cancel(await h.Request());
+        await h.Database.ExecuteAsync("UPDATE dbo.Tours SET StartedAt = ScheduledStartAt;");
+        await h.Dispatch();
+        Assert.Equal(2, h.Sender.Sent.Count);
+        Assert.All(h.Sender.Sent, email =>
+        {
+            Assert.False(email.EndedEarly);
+            Assert.Equal(Reason, email.Reason);
+        });
+    }
+
+    [SchemaV11Theory]
+    [InlineData(null)]
+    [InlineData("UNSUPPORTED")]
+    public async Task MissingOrUnsupportedKind_RecordsFailure_WithoutGuessingOrSending(string? kind)
+    {
+        await using var h = await Harness.Create();
+        await h.Cancel(await h.Request());
+        await using (var db = h.Context())
+        {
+            var request = await db.AuditLogs.SingleAsync(a => a.Action == TourCancelNoticeAudit.Requested);
+            var registrationIds = TourCancelNoticeAudit.RegistrationIds(request);
+            request.DataJson = kind is null ? JsonSerializer.Serialize(new { registrationIds })
+                : JsonSerializer.Serialize(new { registrationIds, kind });
+            await db.SaveChangesAsync();
+        }
+        await h.Dispatch();
+        await h.Dispatch();
+        Assert.Empty(h.Sender.Sent);
+        Assert.Equal(0, h.Sender.Attempts);
+        var failure = Assert.Single(await h.Notices(TourCancelNoticeAudit.Failed));
+        Assert.Equal("FAILED", failure.ResultCode);
+        Assert.Contains("NOTICE_KIND_INVALID", failure.DataJson);
+        Assert.Equal(0, await h.Count(TourCancelNoticeAudit.Started));
     }
 
     [SchemaV11Fact]

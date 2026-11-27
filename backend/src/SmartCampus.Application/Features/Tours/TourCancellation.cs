@@ -58,12 +58,12 @@ internal static class TourCancellation
 
     /// <summary>Only a queue row commits with the cancel: the worker emails after commit, so email can never undo it.</summary>
     public static void QueueNotice(ITourManagementRepository repository, InvitationSettings settings, ILogger logger,
-        Guid tourId, Guid? actor, IReadOnlyCollection<Guid> notified, DateTimeOffset now)
+        Guid tourId, Guid? actor, IReadOnlyCollection<Guid> notified, DateTimeOffset now, string kind)
     {
         if (notified.Count == 0) return;
         if (settings.Enabled)
         {
-            repository.AddAudit(TourCancelNoticeAudit.Request(tourId, actor, notified, now));
+            repository.AddAudit(TourCancelNoticeAudit.Request(tourId, actor, notified, now, kind));
             return;
         }
         logger.LogWarning("Tour {TourId} ended but email is disabled, so {RecipientCount} representatives were not notified.", tourId, notified.Count);

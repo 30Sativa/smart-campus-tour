@@ -7,6 +7,8 @@ Another Staff may End Early only after the assigned Operator console has not con
 remain Operator-only. This scoped business rule succeeds ADR-0043's Operator-only End Early; older Report 3/F-14
 text is left for the group to reconcile. ADR-0049's safer-action rule and the existing robot-stop semantics stay intact.
 
+Web: no backup End Early button in V1; API only.
+
 SQL Server changes `Tours.RowVersion` on every UPDATE. v1.26 therefore adds `TourOperatorPresence(TourId, LastSeenAt)`
 (one nullable DATETIMEOFFSET(3), FK/PK TourId), instead of a column on Tours. No process-memory fallback is used.
 Start stamps presence in its transaction. The existing detail GET records only the assigned Operator of a RUNNING
@@ -18,7 +20,9 @@ allowedActions.endEarly disambiguates this case. Restart never resets or extends
 
 End Early queues one TOUR_CANCEL_NOTICE_REQUESTED audit containing registration IDs with active APPROVED/ACCEPTED rows,
 in the same transaction as TOUR_ENDED_EARLY and its request receipt. It does not revoke invitations or close sessions.
-The worker selects a separate generic ended-early template from the committed Tour state/end reason. Disabled email
+The request's DataJson records kind = ENDED_EARLY for End Early or CANCELLED for CancelTour/AutoCancel; the worker selects
+the template only from this committed flag. Legacy requests without a kind, or with an unsupported kind, record
+FAILED/NOTICE_KIND_INVALID without sending or inferring from Tour fields. Disabled email
 records FAILED/EMAIL_DISABLED without failing End Early. No technical reason, access code, Tour link or other row's
 data is included. Existing cancellation behavior is unchanged.
 
