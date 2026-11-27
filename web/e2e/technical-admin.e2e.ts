@@ -35,7 +35,7 @@ test('technical: assigning a robot from the POI check opens the robot setup with
   await page.goto('/technical/pois')
   await page.getByRole('button', { name: 'Ghi kết quả' }).first().click()
   await page.getByRole('button', { name: 'Gán robot cho bản đồ này' }).click()
-  const picker = page.getByRole('dialog', { name: /^Triển khai .* cho robot$/ })
+  const picker = page.getByRole('dialog', { name: /^Gán .* cho robot$/ })
   await picker.getByLabel('Robot').selectOption('robot-1')
   await picker.getByRole('button', { name: 'Tiếp tục' }).click()
 
@@ -101,9 +101,9 @@ test('technical: map management splits in-use and retired versions, and retiring
   await expect(page.getByRole('button', { name: 'Đang dùng' })).toHaveAttribute('aria-pressed', 'true')
   await capturePage(page, 'technical', 'maps-in-use', { title: 'Bản đồ', technical: true })
 
-  await page.getByRole('button', { name: 'Xem chi tiết Campus Hồ Chí Minh · campus-hcm · phiên bản 2' }).click()
+  await page.getByRole('button', { name: 'Xem chi tiết Campus Hồ Chí Minh · v2' }).click()
   await page.getByRole('button', { name: 'Ngừng sử dụng phiên bản này' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Ngừng sử dụng Campus Hồ Chí Minh · campus-hcm · phiên bản 2?' })
+  const dialog = page.getByRole('dialog', { name: 'Ngừng sử dụng Campus Hồ Chí Minh · v2?' })
   await expect(dialog.getByRole('link', { name: 'AMR-01' })).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Ngừng sử dụng' })).toBeDisabled()
   await capturePage(page, 'technical', 'map-retire-blocked', { title: 'Bản đồ', technical: true })
