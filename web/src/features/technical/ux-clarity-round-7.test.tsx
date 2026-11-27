@@ -258,6 +258,11 @@ describe('round 7: the Technical area for someone new', () => {
       expect(picker).toHaveTextContent('Tiếp tục để xác nhận gán trong hộp Bản đồ của robot.')
     })
 
+    it('1.9 opens the version a "bản đồ chưa có robot" item links to', async () => {
+      renderAt('/technical/maps?map=map-betea')
+      expect(await screen.findByRole('dialog', { name: 'Betea · v1' })).toBeInTheDocument()
+    })
+
     it('2.8 counts versions never checked, and the usable ones no robot holds', async () => {
       maps = [mapItem(), mapItem({ map: { ...betea, id: 'map-betea-2', versionNumber: 2 }, technicalCheckStatus: 'PENDING', canUseForPoiPreparation: false })]
       renderAt('/technical/maps')

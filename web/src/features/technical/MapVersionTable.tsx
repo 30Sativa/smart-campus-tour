@@ -187,10 +187,17 @@ function MapVersionDetail({ mapVersionLabel, area, itemId, onSelect, onClose, on
 }
 
 /** One line per area, led by its newest version: only what decides the next step. The rest opens from the eye. */
-export function MapVersionTable({ items, onUpload, onRetire }: { items: MapVersionItem[] } & Actions) {
+export function MapVersionTable({ items, initialMapVersionId, onUpload, onRetire }: {
+  items: MapVersionItem[]
+  /** `?map=<version>` (the dashboard's "bản đồ chưa có robot" link): that version's detail opens first. */
+  initialMapVersionId?: string | null
+} & Actions) {
   const [search, setSearch] = useState('')
   const mapVersionLabel = useMapLabel(items)
-  const [viewing, setViewing] = useState<{ areaKey: string; itemId: string } | null>(null)
+  const [viewing, setViewing] = useState<{ areaKey: string; itemId: string } | null>(() => {
+    const linked = initialMapVersionId ? items.find(item => item.map.id === initialMapVersionId) : undefined
+    return linked ? { areaKey: linked.map.areaKey, itemId: linked.map.id } : null
+  })
   const [sort, setSort] = useState<{ field: SortField; descending: boolean } | null>(null)
   const term = search.trim().toLowerCase()
   const areas = groupByArea(items)
