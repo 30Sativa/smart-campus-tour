@@ -52,7 +52,7 @@ public static class RobotMapReadiness
 
     /// <summary>
     /// In this order: not deactivated, connection confirmed, assigned exactly to M, and the robot's newest deployment check
-    /// across every map is a pass on M with M's package checksum.
+    /// across every map is a pass on M, recorded after the current assignment, with M's package checksum.
     /// </summary>
     public static RobotMapReadinessResult Evaluate(Robot robot, MapDeploymentCheck? latestDeployment, MapVersion map)
     {
@@ -71,6 +71,11 @@ public static class RobotMapReadiness
         if (!latestDeployment.LocalizationPassed || !latestDeployment.DisplayPassed)
             return new(DeploymentCheckRequiredCode, NoPassMessage(robot, map),
                 $"Lần kiểm tra triển khai mới nhất của robot {robot.RobotCode} không đạt ({Time(latestDeployment.CheckedAt)}).");
+        // Round 5: a pass recorded before the current assignment proves nothing about the MiniPC after the map changed and
+        // changed back. Legacy rows without an assignment time keep the old rule.
+        if (IsBeforeAssignment(robot, latestDeployment))
+            return new(DeploymentCheckRequiredCode, NoPassMessage(robot, map),
+                $"Lần kiểm tra đạt gần nhất trên {MapLabel(robot, map)} lúc {Time(latestDeployment.CheckedAt)} có trước lần gán lúc {Time(robot.MapAssignedAt!.Value)}, cần kiểm lại.");
         if (!CryptographicOperations.FixedTimeEquals(latestDeployment.PackageSha256, map.PackageSha256))
             return new(DeploymentCheckRequiredCode, NoPassMessage(robot, map));
         return RobotMapReadinessResult.Ready;
@@ -122,7 +127,8 @@ public static class RobotMapReadiness
         var assigned = robot.AssignedMapVersion;
         return new(state, result.Code, result.Message, robot.AssignedMapVersionId,
             assigned is null ? null : ShortLabel(assigned),
-            latestDeployment is not null && latestDeployment.MapVersionId == robot.AssignedMapVersionId ? latestDeployment.CheckedAt : null,
+            latestDeployment is not null && latestDeployment.MapVersionId == robot.AssignedMapVersionId &&
+                !IsBeforeAssignment(robot, latestDeployment) ? latestDeployment.CheckedAt : null,
             reportingOnAssignedMap, NextStep(robot, result, reportingOnAssignedMap), result.Detail);
     }
 
@@ -157,11 +163,18 @@ public static class RobotMapReadiness
     /// The robot's loaded assigned map (with its area name) is preferred, so every path names M the same way.
     private static string NoPassMessage(Robot robot, MapVersion map)
     {
-        var label = Label(robot.AssignedMapVersion is { AreaKeyNavigation: not null } held && held.Id == map.Id ? held : map, map.Id);
+        var label = MapLabel(robot, map);
         return robot.MapAssignedAt is { } assignedAt
             ? $"Robot {robot.RobotCode} chưa kiểm tra triển khai trên {label} (gán lúc {Time(assignedAt)})."
             : $"Robot {robot.RobotCode} chưa kiểm tra triển khai trên {label}.";
     }
+
+    private static string MapLabel(Robot robot, MapVersion map) =>
+        Label(robot.AssignedMapVersion is { AreaKeyNavigation: not null } held && held.Id == map.Id ? held : map, map.Id);
+
+    /// <summary>ADR-0066 round 5: the check was recorded before the robot's current assignment, so it no longer counts.</summary>
+    private static bool IsBeforeAssignment(Robot robot, MapDeploymentCheck check) =>
+        robot.MapAssignedAt is { } assignedAt && check.CheckedAt < assignedAt;
 
     private static string Time(DateTimeOffset at) =>
         at.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM HH:mm", CultureInfo.InvariantCulture);
