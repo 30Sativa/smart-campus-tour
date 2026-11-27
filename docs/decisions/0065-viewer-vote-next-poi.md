@@ -164,3 +164,46 @@ null for the start, `toStopId` null for the end).
 - Four test runs are needed to cover a 4-POI voting route (two for 3 POIs); the web shows the missing legs.
 - Camera head turning on the demo machine needs `FleetHead:Enabled` and `head_enabled` after ADR-0045 is accepted;
   that is configuration, not part of this change.
+
+## Update 2026-11-28
+
+### Context
+
+Phiếu v1.12 §3.2.b/c and Report 3 BR-31–33 replace Representative branch requests (removed BR-14).
+UC-VOTE-01/02 cover the Viewer ballot and Operator lock/unlock; the remaining route must already be tested.
+
+### Decision
+
+A viewer-choice route has at most four POIs, a fixed first POI, dwell at least 30 seconds, and returns to its start.
+Main validates 3–4 POIs as the runnable implementation range.
+Each active invited row has one changeable vote per open ballot; a shared-screen row also has one vote.
+A ballot opens with at least two unvisited/unlocked candidates and closes by the dwell deadline or a permitted
+early departure. Most votes wins; a tie or no votes follows Staff's default StopOrder.
+Only the assigned Operator locks/unlocks a remaining POI with a reason; locking removes it and clears its votes.
+A locked selected POI is reselected by the fixed rule. With only locked POIs the robot waits.
+The Operator cannot choose an arbitrary replacement destination; Viewers cannot skip or add off-route POIs.
+There is no V1 Representative branch-request/allowed-branch runtime.
+
+### Rejected alternatives
+
+- Representative requests and Staff picks a branch: conflicts with the adopted row-vote decision rule.
+- Arbitrary Viewer destinations or skipping: escapes the pretested route and its reservation evidence.
+- One vote per browser session: reissue/reconnect could multiply a row's vote.
+
+### Consequences
+
+The server fixes the result deterministically, but every possible permitted leg needs test coverage and the
+reservation must cover the longest order. Locked remaining POIs can require Operator intervention.
+Legacy branch tables and their SQL constraints remain for stored compatibility; no table deletion is authorized.
+
+### Status / Notes
+
+The Phiếu/Report 3 vote decision is adopted for V1 and implemented on main `1b586a70`; the initial Proposed
+status is superseded by this update without rewriting its date or deciders. Physical Workflow C acceptance is separate.
+**Supersedes the branch-request/allowed-branch decisions in ADR-0009 and the related operation assumptions
+in ADR-0012/0018/0024**, only in that scope. It does not supersede their retained SQL, transaction or history rules.
+Narration approval is ADR-0060/BR-36; short-notice Tour timing is ADR-0053/BR-34, not a branch feature.
+
+The original "nothing reads or writes" wording is too broad: compatibility/usage protections in
+`EfTourManagementRepository`, `EfRouteManagementRepository` and `EfPoiManagementRepository` still query branch
+tables. There is no Representative branch-request runtime; retaining these protective reads is not branch authoring.

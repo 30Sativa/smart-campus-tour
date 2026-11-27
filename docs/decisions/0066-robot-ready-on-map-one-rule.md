@@ -158,3 +158,42 @@ Additive JSON fields, recorded in `docs/architecture.md` §3.4.6:
   own refusal, never in a deadlock (SQL error 1205).
 - Deploy PR 1 together with PR 2 and PR 3: the web before PR 2 still offers the old free-form check, which the backend
   now refuses for an unassigned robot.
+
+## Update 2026-11-28
+
+### Context
+
+Phiếu v1.12 §3.2.b, Report 3 BR-28–30 and Report 4 §1.3 Table 5 need one map-specific readiness rule
+across POI verification, route tests, Tour preparation/Start and dispatch.
+
+### Decision
+
+Ready on map version M means active, current-key connection confirmed, assigned to M, and the newest deployment
+check across the robot's maps is PASS on M, with the matching package checksum and recorded at or after the
+current assignment. A robot holds at most one map version; a map area has at most one assigned robot.
+A deployment check is recorded only against the robot's assigned map. PASS additionally requires live telemetry
+on M since assignment and correct localization/display. POI verification and route tests select that ready robot.
+Changing/clearing the assignment atomically disables audited per-robot dispatch and requires reconfiguration
+and a new check. Dispatch also requires the server switch and on-robot permit (ADR-0049).
+
+### Rejected alternatives
+
+- Last PASS on any previously assigned map: can certify the wrong map or reuse evidence from before reassignment.
+- Manual robot choice for a POI test: allows a result from a robot that is not ready on the POI's exact map.
+- Separate reader/writer readiness rules: makes a selectable robot fail later, or admits an unsafe writer.
+
+### Consequences
+
+Writers/readers share `RobotMapReadiness` and cannot equate online with ready.
+Technical Staff must repeat deployment confirmation after an assignment change; the latest FAIL can remove readiness.
+Three switches increase the number of conditions to explain to an Operator.
+
+### Status / Notes
+
+Accepted; main `1b586a70` implements the shared evaluator and automatic dispatch-off behavior.
+**Partially supersedes ADR-0028, ADR-0032, ADR-0039 and ADR-0049**, within the readiness/assignment/dispatch scope above.
+Cited with ADR-0049 in Report 4 §1.3 Table 5.
+Code deliberately exempts legacy rows whose `MapAssignedAt` is null from the timestamp-ordering check.
+The business rule above follows Phiếu/BR-28; missing evidence is not a proven post-assignment PASS.
+The legacy exception is tracked as [change #471](https://github.com/30Sativa/smart-campus-tour/issues/471).
+No physical test or migration is claimed here.

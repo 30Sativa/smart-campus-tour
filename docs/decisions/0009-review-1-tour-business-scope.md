@@ -88,3 +88,27 @@ Ba mốc lệnh là các bản ghi liên quan cùng lệnh: **đã quyết đị
 - Form POI và thống kê là công việc P1 bắt buộc; hình học tuyến vẫn seed, không coi form nội dung là đã đáp ứng toàn bộ quản lý route/POI trong phiếu. Báo rõ giới hạn này ở Review 2.
 - Cần kiểm chứng quyền, sửa email riêng, khóa POI dùng chung, audio/READY, Start sớm, nhánh đồng thời, video trước/sau Start, máy chiếu và thống kê không đếm lặp khi triển khai. ADR không phải bằng chứng các kiểm thử đã đạt.
 - Dữ liệu địa điểm còn mở: khảo sát **tầng 6 NVH**, Start/End/POI/nhánh thực và vùng được vận hành. Trước diễn tập còn phải cấu hình hạn mã/phiên, dwell và tải thử; không tự coi chỉ khảo sát xong là hệ thống đã hoàn thành.
+
+## Update 2026-11-28
+
+### Status
+
+Partially **Superseded by ADR-0065 (viewer-choice route by vote)** for §4 branch-request/allowed-branch operation.
+The original Review 1 date and approval record stay unchanged. Other ownership/access portions follow ADR-0020;
+End Early follows ADR-0073 and media follows ADR-0055/0063.
+
+### Decision
+
+V1 uses Phiếu v1.12 / Report 3 BR-31–33: first POI fixed, at most four POIs, dwell at least 30 seconds,
+return to start, one vote per invited row, most votes wins and ties/no votes follow default order.
+Only the Operator locks/unlocks remaining POIs with a reason. No Representative branch requests or cutoff exist.
+Staff owns POI content, routes, Tours and registration/invitation support; Technical Staff owns robot/map setup
+and physical verification; Admin owns accounts, roles, configuration and audit, with no running-Tour control.
+Direct Admin email correction is replaced by Representative request plus Staff review.
+After End Early no Viewer live/fallback/Q&A entitlement remains. Normal/short-notice timing follows ADR-0053/0057
+and Report 3 BR-24/34, rather than the original no-early-Start rule.
+
+### Consequences
+
+The vote is reproducible but requires testing all permitted legs and retaining the longest-order reservation.
+The previous branch tables remain for storage compatibility; their presence does not implement branch operation.

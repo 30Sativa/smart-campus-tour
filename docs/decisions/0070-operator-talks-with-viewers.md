@@ -47,3 +47,17 @@ few words more about the POI the robot stands at, and to hear back from them.
   (or SQL) would be the next step if that changes.
 - Voice clips are recorded in the Operator's browser; the microphone permission is asked on the first "Nói".
 - Not done: Viewer voice, private Staff replies to one row, moderation tools, a transcript after the Tour.
+
+## Update 2026-11-28
+
+### Status
+
+**Proposed – out of V1 scope (Phiếu v1.12).**
+
+### Notes
+
+This scope classification follows the owner's docs-sync instruction; it does not change the original proposal's
+date, requester or recorded design. Main `1b586a70` contains the implementation described above.
+This docs-only update neither removes nor disables its endpoints, UI or relay behavior; shipped-scope alignment
+is [change #472](https://github.com/30Sativa/smart-campus-tour/issues/472).
+It is not accepted V1 behavior and is not evidence of a successful device/relay/physical test.

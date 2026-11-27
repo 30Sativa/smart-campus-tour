@@ -57,3 +57,32 @@ server-generated Tour ID even after later edits/cancellation. No-op updates do
 not append an audit row; retrying them may require a fresh version after another
 writer changes the Tour. Updates/cancellation require SQL RowVersion. No
 idempotency table, hidden startup seed or automatic mutation retry is added.
+
+## Update 2026-11-28
+
+### Status
+
+Partially **Superseded by ADR-0065 (viewer-choice route by vote)** for branch-request/allowed-branch assumptions;
+ownership follows ADR-0020/0027. The original pre-execution implementation record is preserved.
+
+### Decision
+
+Staff owns POI proposals/content, routes, Tour preparation, row review and invitations; a different Staff approves
+narration (Report 3 BR-36). Technical Staff owns robot setup/credentials/map assignments, map packages and
+deployment/POI/route verification. Admin owns accounts, role administration, system configuration and audit;
+Admin emergency credential revoke remains ADR-0030, never running-Tour control.
+The retired `/api/admin/{pois,routes,tours,registrations}` aliases do not grant business ownership.
+Versioned Staff/Technical controllers and ADR-0027 are the code boundary on main `1b586a70`.
+
+### Consequences / Status
+
+This ownership correction follows Phiếu v1.12 §3.2.c and Report 3; it does not rewrite the original decision date,
+deciders, concurrency/history safeguards or SQL snapshots. Separate Staff authoring and Technical verification
+increase handoffs and can block scheduling until matching evidence exists. Code is not changed by this update.
+
+### Current implementation notes
+
+Main pins the exact RouteRevision, Operator and robot reservation; READY/Start/Next and End Early have separate
+implemented handlers. Pre-Start Cancel and AutoCancel queue `kind: "CANCELLED"` notices; End Early queues
+`"ENDED_EARLY"` (ADR-0073). The original "no email" statement describes its original slice, not current behavior.
+Legacy branch storage remains readable for compatibility, not a branch-authoring/runtime API.

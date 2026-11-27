@@ -32,3 +32,24 @@ When those dependencies are available, the implementation must use the existing 
 - No target schedule/reservation happy path is claimed or exposed until every required duration source is available.
 - Start, RUNNING, robot dispatch, branch requests, incidents and End Early remain outside this boundary. F-14 and M2 transport stay pending.
 - Diagram changes remain with the assigned member; this ADR does not claim a redraw.
+
+## Update 2026-11-28
+
+### Status
+
+Partially superseded by ADR-0034/0035/0042/0053/0054 for implemented scheduling/READY/Start behavior and
+**Superseded by ADR-0065 (viewer-choice route by vote)** for Representative branch-request assumptions.
+The original fail-closed rule remains an invariant: missing required evidence never becomes an invented PASS.
+
+### Decision
+
+Versioned Tour scheduling and readiness are implemented on main `1b586a70` and require the exact tested route,
+the shared ADR-0066 map readiness, reservation guards and applicable row/content checks.
+Short-notice Tours follow Report 3 BR-34 / ADR-0053; regular Tours retain their lead-time/shift rules.
+Representative branch authoring, branch requests and their old cutoff are not V1 runtime.
+Admin has no running-Tour control; the Operator/backup exception is ADR-0073.
+
+### Consequences
+
+Unknown evidence still blocks the affected operation, at the cost of extra preparation/retest work.
+The original stage's "no scheduling/READY" statements do not describe today's implemented endpoints.

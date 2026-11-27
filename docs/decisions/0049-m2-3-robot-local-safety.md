@@ -393,3 +393,40 @@ software catches a mis-paired key and hash. This is a public contract change, re
    it. SRS §7 needs physical evidence, so A10 records the wheel drive supply on press and release. If it is not cut, A10
    fails and the circuit needs the team member's fix.
 2. **Step 3.4 wiring (the team member who built the circuit).** The auxiliary contact and the STM32 input pin.
+
+## Update 2026-11-28
+
+### Context
+
+Report 4 §1.3 Table 5 combines robot-local safety with ADR-0066 readiness.
+A network connection or accepted command alone cannot establish safe physical movement.
+
+### Decision
+
+A GoTo dispatch requires three independent controls: server `FleetCommands:Enabled`,
+the audited per-robot `Robots.IsDispatchEnabled`, and on-robot `commands_enabled` with the
+ADR-0049 motion-permit/latched gate. The robot bridge originates command polls; no hub connects into the robot.
+Enabling per-robot dispatch uses ADR-0066 readiness on the assigned map.
+Changing or clearing the assignment disables dispatch atomically and records `ROBOT_DISPATCH_CHANGED`;
+saving the same assignment is not a change. Disabling dispatch and choosing End Early remain available safer actions.
+Admin has no running-Tour control; Technical Staff manages robot setup and dispatch.
+A cancelled command, acknowledgement or database state does not establish that the robot stopped.
+
+### Rejected alternatives
+
+- One global switch: cannot isolate an uncommissioned robot or enforce the local stop boundary.
+- Online means ready: misses map identity, current-assignment evidence, localization and inspection state.
+- Treating a cloud Cancel as an E-stop: delivery can fail while the motor-side hazard remains.
+
+### Consequences
+
+Map changes cannot silently preserve dispatch authorization and local inhibition survives a backend outage.
+Three switches make operational diagnosis more involved, and reassignment requires another deployment check.
+Local software gates do not replace the independent hardware stop or measured GATE A evidence.
+
+### Status / Notes
+
+Accepted decision retained; implementation exists on main `1b586a70`.
+ADR-0066 **partially supersedes ADR-0028/0032/0039/0049**, specifically the unified readiness and
+assignment-triggered dispatch rules; the original dates/deciders and robot-local safety decision remain intact.
+Cited with ADR-0066 in Report 4 §1.3 Table 5. No hardware test result is added by this docs change.

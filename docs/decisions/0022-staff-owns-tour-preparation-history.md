@@ -37,3 +37,20 @@ Early exception, F-14).
   and Admin support on `InvitationsController` to `Staff`.
 - Technical Staff (map versions, YAML import, technical confirmation) is a
   separate later change; POI geometry editing stays where it is until then.
+
+## Update 2026-11-28
+
+### Decision
+
+Staff owns POI proposals/content, routes, Tour preparation, row review and invitations; a different Staff approves
+narration (Report 3 BR-36). Technical Staff owns robot setup/credentials/map assignments, map packages and
+deployment/POI/route verification. Admin owns accounts, role administration, system configuration and audit;
+Admin emergency credential revoke remains ADR-0030, never running-Tour control.
+The retired `/api/admin/{pois,routes,tours,registrations}` aliases do not grant business ownership.
+Versioned Staff/Technical controllers and ADR-0027 are the code boundary on main `1b586a70`.
+
+### Consequences / Status
+
+This ownership correction follows Phiếu v1.12 §3.2.c and Report 3; it does not rewrite the original decision date,
+deciders, concurrency/history safeguards or SQL snapshots. Separate Staff authoring and Technical verification
+increase handoffs and can block scheduling until matching evidence exists. Code is not changed by this update.

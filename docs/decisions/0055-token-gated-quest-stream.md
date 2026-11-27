@@ -84,3 +84,45 @@ MediaMTX has one `authMethod` for every action; a server cannot mix internal use
 - Same single-API-instance limit as Fleet Sync and the camera lease (ADR-0019, ADR-0052): leases live in memory.
 - The relay's own LAN mode on the NUC (`robot/quest-stream`, MediaMTX with `user: any` on the LAN) is unchanged; it
   is not reachable from the Internet.
+
+## Update 2026-11-28
+
+### Context
+
+Report 4 §1.3 Table 7 cites ADR-0055 with ADR-0063 for invited media access; repository ADR-0019 is
+HTTPS Fleet Sync, not a video-relay ADR. A public stream URL must not bypass invitation/session revocation.
+
+### Decision
+
+A MediaMTX relay on the cloud instance receives one robot upload and fans it out to browsers.
+Backend session entitlement and the relay's HTTP auth hook gate reads; an unauthenticated public URL is refused.
+The current live implementation uses the configured robot path `QuestRelay:Path` (default `quest`) and
+`QuestRelay:WhepUrl`, not a generated random path per Tour.
+Fallback uses the deterministic per-Tour `fallback-{tourId:N}` path in ADR-0063.
+The invited page rechecks its session every 5 seconds while RUNNING and 30 seconds in the waiting room.
+The relay reaper separately rechecks established WebRTC sessions every 5 seconds and kicks denied sessions.
+Phiếu v1.12 §3.2.d / Report 3 NFR-SEC-02 require active playback to stop within 10 seconds of revoke/reissue,
+including copied URLs.
+
+### Rejected alternatives
+
+- Peer-to-peer WebRTC from the robot: upload bandwidth and connection management grow with the audience.
+- A public unauthenticated stream: copied URLs outlive invitation revocation and bypass the session boundary.
+- Token expiry alone: an established connection is not reauthorized merely because its connect token expires.
+
+### Consequences
+
+The robot uploads once, but relay egress scales with audience and adds a process/failure point on the instance.
+Revocation is bounded by observation/recheck cycles, not instantaneous.
+The current reaper leaves sessions alone on API unavailability, a key error or an absent query; page polling alone
+cannot prove the copied-URL bound for an uncooperative player. A real relay/browser test must establish the 10-second limit.
+
+### Status / Notes
+
+Report 4 records this media decision as Accepted; relay/auth/reaper code exists on main `1b586a70`.
+For technical details, this update selects code over the report's random-per-Tour path statement:
+`StreamEntitlement.Issue`, `StreamRelaySettings` and `robot/quest-stream/relay/install-relay.sh` implement
+a configured live path. The report's path wording and its claim that page polling alone guarantees 10-second
+revocation need correction; this is not evidence of an implemented random-path allocator or measured bound.
+Existing ADR-0055/0063 cover the relay, so no new relay ADR is created.
+Cited in Report 4 §1.3 Table 7; original proposal/approval metadata are preserved.
