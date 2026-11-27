@@ -7,7 +7,7 @@ Another Staff may End Early only after the assigned Operator console has not con
 remain Operator-only. This scoped business rule succeeds ADR-0043's Operator-only End Early; older Report 3/F-14
 text is left for the group to reconcile. ADR-0049's safer-action rule and the existing robot-stop semantics stay intact.
 
-Web: no backup End Early button in V1; API only.
+Web: the existing End Early button follows allowedActions.endEarly; no separate backup button or countdown in V1.
 
 SQL Server changes `Tours.RowVersion` on every UPDATE. v1.26 therefore adds `TourOperatorPresence(TourId, LastSeenAt)`
 (one nullable DATETIMEOFFSET(3), FK/PK TourId), instead of a column on Tours. No process-memory fallback is used.
