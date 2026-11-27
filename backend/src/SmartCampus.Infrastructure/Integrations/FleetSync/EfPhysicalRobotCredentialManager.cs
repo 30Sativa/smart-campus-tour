@@ -70,8 +70,9 @@ public sealed class EfPhysicalRobotCredentialManager(
         if (expected is not null && !robot.RowVersion.AsSpan().SequenceEqual(expected))
             throw ConcurrencyConflict();
         // ADR-0066 round 5: a new key mid-Tour cuts the MiniPC off. Revoke stays always possible (a leaked key, ADR-0049).
-        // The robot deployment lock is the one Start holds while it claims the robot.
-        if (operation == RobotCredentialOperation.Rotate)
+        // The robot deployment lock is the one Start holds while it claims the robot. Only the web's "Cấp lại khóa": the
+        // on-machine CLI provisioner runs under a column-scoped role that cannot read Tours.
+        if (operation == RobotCredentialOperation.Rotate && source == "WEB")
         {
             await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
                 DECLARE @lockResult int;

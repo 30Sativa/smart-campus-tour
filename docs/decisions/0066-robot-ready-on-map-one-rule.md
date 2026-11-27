@@ -149,7 +149,8 @@ Additive JSON fields, recorded in `docs/architecture.md` §3.4.6:
   `ROBOT_IN_RUNNING_TOUR`: "Robot {code} đang chạy Tour {tên}. Kết thúc Tour (hoặc kết thúc sớm) rồi mới {đổi bản đồ /
   ngừng sử dụng / đổi khóa}.", with one `blockers` item `{ code: "TOUR", message: tên }`. It is read behind the
   `map-poi:robot-deployment:{robotId}` lock (and, for deactivation, `tour-robot-reservation:{robotId}` after it), which
-  Start holds while it claims the robot; rotation now takes the deployment lock too. A robot held for inspection after its
+  Start holds while it claims the robot; rotation from the web now takes the deployment lock too. The CLI provisioner
+  (`campus_fleet_provisioner`, column-scoped, no access to `Tours`) is not checked: it is run on the machine on purpose. A robot held for inspection after its
   Tour ended is not running. Stopping dispatch, revoking the key, releasing an inspection and recording a deployment check
   are never refused (ADR-0049: the safer choice is always available).
 - Deploy PR 1 together with PR 2 and PR 3: the web before PR 2 still offers the old free-form check, which the backend
