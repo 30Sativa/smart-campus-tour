@@ -316,3 +316,13 @@ export function routeChangeText(changes: string[], pathChanged: boolean, already
   if (alreadyPassed) return `${what} Bản này đã có lần chạy đạt.`
   return `${what}${pathChanged ? ' Đường đi đã đổi, cần chạy thử lại.' : changes.length ? ' Đường đi không đổi.' : ''}`
 }
+
+/**
+ * The robot field of a new Tour (round 7, 2.4): an option only says it is not ready; the server's whole reason sits
+ * under the field for the robot chosen, or for every robot when none can be chosen.
+ */
+export const tourRobotText = {
+  notReadyOption: ' (chưa sẵn sàng)',
+  noneReady: 'Chưa có robot nào sẵn sàng cho tuyến này.',
+  askTechnical: (mapLabel: string | null) => `Nhờ Kỹ thuật gán và kiểm tra robot trên bản đồ ${mapLabel ?? 'của tuyến'}.`,
+}

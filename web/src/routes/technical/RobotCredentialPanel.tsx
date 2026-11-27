@@ -4,7 +4,7 @@ import { Copy, KeyRound, RotateCcw, ShieldAlert } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { Modal } from '../../components/ui/Drawer'
-import { errorText, runningTourText } from '../../features/technical/technical-format'
+import { credentialText, errorText, runningTourText } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
 import { technicalApi, type RobotCredentialSecret } from '../../features/technical/api/technical'
 import { useRobotCredential } from '../../features/technical/technical-hooks'
@@ -52,7 +52,7 @@ export function RobotCredentialPanel({ robotCode, step, runningTour, onClose }: 
     } finally { setPending(false) }
   }
 
-  return <><Modal open title={`Khóa Fleet Sync · ${robotCode}`} description={`${step ? `${step} trong thiết lập robot. ` : ''}Quản lý khóa của robot. Bí mật chỉ xuất hiện trong phản hồi cấp hoặc cấp lại.`} onClose={clearAndClose}
+  return <><Modal open title={credentialText.title(robotCode)} description={`${step ? `${step} trong thiết lập robot. ` : ''}Quản lý khóa của robot. Bí mật chỉ xuất hiện trong phản hồi cấp hoặc cấp lại.`} onClose={clearAndClose}
     footer={<div className="flex justify-end"><button type="button" className={buttonClass('secondary')} onClick={clearAndClose}>Đóng</button></div>}>
     {credential.isPending ? <p role="status" className="p-4">Đang tải trạng thái khóa…</p> : credential.isError ? <div role="alert" className="p-4 text-sm text-red-700">{errorText(credential.error)} <button className="underline" onClick={() => void credential.refetch()}>Thử lại</button></div> : credential.data && <div className="space-y-4">
       <section className="rounded-lg border border-slate-200 p-3 text-sm">
@@ -69,7 +69,7 @@ export function RobotCredentialPanel({ robotCode, step, runningTour, onClose }: 
       {pending && <p role="status" className="text-sm text-slate-600">Đang cập nhật khóa…</p>}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {oneTimeSecret && <div role="dialog" aria-modal="true" aria-label="Khóa hiển thị một lần" className="rounded-lg border border-amber-300 bg-amber-50 p-3">
-        <p className="font-semibold text-amber-900">Khóa chỉ hiển thị một lần</p><p className="mt-1 text-xs text-amber-900">Lưu khóa vào file credential riêng của MiniPC. Đóng mục này sẽ xóa bí mật khỏi giao diện.</p>
+        <p className="font-semibold text-amber-900">Khóa chỉ hiển thị một lần</p><p className="mt-1 text-xs text-amber-900">{credentialText.saveHint}</p>
         <code className="mt-2 block break-all rounded bg-white p-2 text-sm">{oneTimeSecret.secret}</code>
         <button type="button" className={`${buttonClass('secondary', 'sm')} mt-2`} onClick={() => void navigator.clipboard?.writeText(oneTimeSecret.secret)}><Copy size={14} aria-hidden="true" />Sao chép</button>
         <button type="button" className={`${buttonClass('secondary', 'sm')} ml-2 mt-2`} onClick={() => setOneTimeSecret(null)}>Đã lưu, xóa khỏi màn hình</button>

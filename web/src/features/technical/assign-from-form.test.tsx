@@ -58,7 +58,7 @@ function renderAt(path: string) {
 /** Choose the robot in the picker and press its real submit button, as a person does. */
 async function pickRobotAndContinue() {
   fireEvent.click(await screen.findByRole('button', { name: 'Gán robot cho bản đồ này' }))
-  const pickerDialog = await screen.findByRole('dialog', { name: 'Triển khai Tầng 6 · v1 cho robot' })
+  const pickerDialog = await screen.findByRole('dialog', { name: 'Gán Tầng 6 · v1 cho robot' })
   // Chrome stops a nested form's submit at the outer form, before React's root listener, so the picker's own form
   // must not sit inside the check form. jsdom does not copy that, which is why this checks the DOM itself.
   expect(pickerDialog.querySelector('form')?.parentElement?.closest('form')).toBeNull()

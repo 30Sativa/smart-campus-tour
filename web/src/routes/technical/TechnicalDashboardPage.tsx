@@ -8,10 +8,11 @@ import { Note, TechnicalPage, ToneBadge } from '../../features/technical/Technic
 import { EmptyState } from '../../components/ui/EmptyState'
 import type { TechnicalActionItem, TechnicalKpiSummary, TechnicalRobotSummary } from '../../features/technical/api/diagnostics-api'
 import { connectionStatusView, reading, sensorStatusView, sourceState, sourceStateView } from '../../features/technical/diagnostics-status'
-import { errorText, wrongMapText } from '../../features/technical/technical-format'
+import { errorText, setupText, wrongMapText } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
-import { usePhysicalRobots, useTechnicalDashboard } from '../../features/technical/technical-hooks'
-import { actionItemDescription, hasMapMismatch } from '../../features/technical/robot-readiness'
+import { useMapShortLabel, usePhysicalRobots, useTechnicalDashboard } from '../../features/technical/technical-hooks'
+import { actionItemDescription, readyButNotDriving } from '../../features/technical/robot-readiness'
+import { ReadinessBadge } from '../../features/technical/ReadinessBadge'
 import type { PhysicalRobotOption } from '../../features/technical/api/technical'
 import { technicalInternalLink } from '../../features/technical/technical-nav'
 
@@ -127,7 +128,9 @@ export default function TechnicalDashboardPage() {
   const data = dashboard.data
   const kpis = data?.kpis
   const actionItems = data ? [...data.actionItems].sort((a, b) => rankOf(a) - rankOf(b)) : []
-  const robots = usePhysicalRobots(hasMapMismatch(actionItems) || Boolean(data?.robots.some(robot => robot.contextMismatch)))
+  // Read always: every robot row carries its readiness chip (2.2), and map mismatches take their reason from it.
+  const robots = usePhysicalRobots()
+  const mapLabelOf = useMapShortLabel()
 
   return (
     <TechnicalPage>
@@ -179,11 +182,12 @@ export default function TechnicalDashboardPage() {
                 <tbody className="divide-y divide-[#eef1f4]">
                   {data.robots.map(robot => {
                     const connection = connectionStatusView(robot.connectionStatus)
+                    const readiness = robots.data?.find(physical => physical.id === robot.id)?.readiness
                     return (
                       <tr key={robot.id} className={rowClass}>
                         <td className={tdClass}><p className="font-semibold text-[#0f172a]">{robot.displayName ?? robot.robotCode}</p><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p>
-                          <div className="mt-1"><MapFacts robot={robot} readiness={robots.data?.find(physical => physical.id === robot.id)?.readiness} /></div></td>
-                        <td className={tdClass}><ToneBadge tone={connection.tone}>{connection.label}</ToneBadge>{robot.connectionStatus === 'WRONG_MAP' && robot.lastRejectedReport && <p className="mt-0.5 max-w-xs text-[11.5px] text-amber-800">{wrongMapText(robot.lastRejectedReport, robot.assignedMapKey)}</p>}{robot.lastSeenAt && <p className="mt-0.5 text-[11.5px] text-[#64748b]">Lần nhận cuối: {formatDateTime(robot.lastSeenAt)}</p>}
+                          <div className="mt-1"><MapFacts robot={robot} readiness={readiness} /></div></td>
+                        <td className={tdClass}><span className="flex flex-wrap items-center gap-1.5"><ToneBadge tone={connection.tone}>{connection.label}</ToneBadge>{readiness && <ReadinessBadge readiness={readiness} mapText={mapLabelOf(readiness.mapVersionId)} />}</span>{readyButNotDriving(readiness, robot) && <p className="mt-0.5 max-w-xs text-[11.5px] text-amber-800">{setupText.readyNotDriving}</p>}{robot.connectionStatus === 'WRONG_MAP' && robot.lastRejectedReport && <p className="mt-0.5 max-w-xs text-[11.5px] text-amber-800">{wrongMapText(robot.lastRejectedReport, robot.assignedMapKey)}</p>}{robot.lastSeenAt && <p className="mt-0.5 text-[11.5px] text-[#64748b]">Lần nhận cuối: {formatDateTime(robot.lastSeenAt)}</p>}
                           <p className="mt-0.5 text-[12.5px]">Pin <BatteryCell robot={robot} /></p></td>
                         <td className={tdClass}><MiniPcCell robot={robot} /></td>
                         <td className={`${tdClass} text-right`}><Link to={`/technical/monitoring?robot=${encodeURIComponent(robot.robotCode)}`} aria-label={`Giám sát ${robot.robotCode}`} className={quietLinkClass}>Giám sát<ChevronRight size={14} aria-hidden="true" /></Link></td>

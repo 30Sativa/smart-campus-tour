@@ -15,6 +15,13 @@ export function readinessView(readiness: Pick<RobotReadiness, 'state' | 'mapLabe
 }
 
 /**
+ * READY is the server's setup verdict; the robot's own report may still say it cannot drive (not localized, not
+ * motion-ready, or no Nav2/LiDAR data yet). Display only (2.7): nothing here changes what the server allows.
+ */
+export const readyButNotDriving = (readiness: Pick<RobotReadiness, 'state'> | null | undefined, report: { localized: boolean | null; motionReady: boolean | null }) =>
+  readiness?.state === 'READY' && (report.localized !== true || report.motionReady !== true)
+
+/**
  * Which robot works on a map version: one area holds one robot, so at most one robot is assigned to it, and it is
  * usable only when the server says READY on exactly that version. `assigned` is that robot whatever its state.
  */

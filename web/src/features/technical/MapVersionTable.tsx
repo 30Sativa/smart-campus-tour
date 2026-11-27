@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { Download } from 'lucide-react'
 import { Pagination, SearchField, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import type { StatusTone } from '../../components/ui/status-tone'
@@ -10,6 +11,8 @@ import { DetailFact, ToneBadge, ViewDetailButton } from './TechnicalUi'
 import type { MapAreaOption, MapRunningRobot, MapVersionItem } from './api/technical'
 import { mapCheckLabel } from './poi-labels'
 import { useMapLabel } from './technical-hooks'
+import { technicalApi } from './api/technical'
+import { errorText, mapText } from './technical-format'
 import { DeployToRobotDialog } from './DeployToRobotDialog'
 import { ReadinessBadge } from './ReadinessBadge'
 import { readinessView, robotSetupPath } from './robot-readiness'
@@ -89,6 +92,35 @@ function MapPreview({ mapVersionId, label }: { mapVersionId: string; label: stri
 }
 
 /**
+ * "Tải tệp bản đồ (.zip)": the uploaded package as the server stores it, saved under the name the server sends with
+ * it (its stored package file name), so the file copied to the MiniPC is exactly the one the checksum names.
+ */
+function PackageDownload({ mapVersionId, fileName }: { mapVersionId: string; fileName: string }) {
+  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null })
+  const download = async () => {
+    setState({ busy: true, error: null })
+    try {
+      const blob = await technicalApi.getMapPackage(mapVersionId)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.append(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      setState({ busy: false, error: null })
+    } catch (cause) {
+      setState({ busy: false, error: errorText(cause) })
+    }
+  }
+  return <span className="mt-1.5 block">
+    <button type="button" className={buttonClass('secondary', 'sm')} disabled={state.busy} onClick={() => void download()}><Download size={13} aria-hidden="true" />{state.busy ? mapText.downloading : mapText.download}</button>
+    {state.error && <span role="alert" className="mt-1 block text-xs text-[#b23e31]">{state.error}</span>}
+  </span>
+}
+
+/**
  * What the table leaves out, for one version of the area. The checksum is here so the file on the robot
  * can be compared with the one uploaded; the version list switches which version the dialog shows.
  */
@@ -106,7 +138,7 @@ function MapVersionDetail({ mapVersionLabel, area, itemId, onSelect, onClose, on
       footer={<div className="flex flex-wrap justify-end gap-2">
         <button type="button" className={`${buttonClass('secondary')} sm:mr-auto !text-[#b23e31]`} onClick={() => { onClose(); onRetire(item) }}>Ngừng sử dụng phiên bản này</button>
         <button type="button" className={buttonClass('secondary')} onClick={() => { onClose(); onUpload({ areaKey: map.areaKey, displayName: map.areaName }) }}>Tải phiên bản mới</button>
-        <button type="button" className={buttonClass('primary')} onClick={() => setDeploying(true)}>Triển khai cho robot…</button>
+        <button type="button" className={buttonClass('primary')} onClick={() => setDeploying(true)}>{mapText.assignToRobot}</button>
       </div>}>
       <MapPreview mapVersionId={map.id} label={mapVersionLabel(map)} />
       <dl className="mt-3 divide-y divide-[#f1f5f9]">
@@ -119,14 +151,14 @@ function MapVersionDetail({ mapVersionLabel, area, itemId, onSelect, onClose, on
           {runningRobot && runningRobot.readiness.state !== 'READY' && runningRobot.readiness.reason && <span className="mt-1 block text-xs text-amber-800">{runningRobot.readiness.reason}</span>}
           <span className="mt-1 block text-xs text-[#64748b]">{runningRobot
             ? 'Robot đang gán phiên bản này. Đổi bản đồ và kiểm tra triển khai trong hộp Thiết lập của robot.'
-            : 'Chưa robot nào gán phiên bản này. Bấm Triển khai cho robot… để gán.'}</span>
+            : `Chưa robot nào gán phiên bản này. Bấm ${mapText.assignToRobot} để gán.`}</span>
         </DetailFact>
         <DetailFact label="Đã từng kiểm tra đạt">{passedChecks.length
           ? <span className="flex flex-col">{passedChecks.map(check => <span key={check.id}>{check.robotCode} · {formatDateTime(check.checkedAt)}</span>)}</span>
           : 'Chưa có'}<span className="mt-1 block text-xs text-[#64748b]">Lịch sử, chỉ để tra cứu. Robot dùng được hay không xem ở Robot đang chạy.</span></DetailFact>
-        <DetailFact label="Tệp"><span className="break-all">{map.packageFileName}</span></DetailFact>
+        <DetailFact label="Tệp"><span className="break-all">{map.packageFileName}</span><PackageDownload mapVersionId={map.id} fileName={map.packageFileName} /></DetailFact>
         <DetailFact label="Thông số bản đồ">{map.imageWidth}×{map.imageHeight} · {map.resolution} m/ô</DetailFact>
-        <DetailFact label="Checksum tệp"><span className="font-mono text-xs break-all">{map.packageSha256}</span><span className="mt-1 block text-xs text-[#64748b]">Dùng để đối chiếu tệp ZIP đã nạp lên robot với tệp đã tải lên.</span></DetailFact>
+        <DetailFact label="Checksum tệp"><span className="font-mono text-xs break-all">{map.packageSha256}</span><span className="mt-1 block text-xs text-[#64748b]">{mapText.checksumHint}</span></DetailFact>
       </dl>
       {area.versions.length > 1 && <section className="mt-4" aria-label="Lịch sử phiên bản">
         <h3 className="text-[13px] font-semibold text-[#334155]">Lịch sử phiên bản</h3>
@@ -155,10 +187,17 @@ function MapVersionDetail({ mapVersionLabel, area, itemId, onSelect, onClose, on
 }
 
 /** One line per area, led by its newest version: only what decides the next step. The rest opens from the eye. */
-export function MapVersionTable({ items, onUpload, onRetire }: { items: MapVersionItem[] } & Actions) {
+export function MapVersionTable({ items, initialMapVersionId, onUpload, onRetire }: {
+  items: MapVersionItem[]
+  /** `?map=<version>` (the dashboard's "bản đồ chưa có robot" link): that version's detail opens first. */
+  initialMapVersionId?: string | null
+} & Actions) {
   const [search, setSearch] = useState('')
   const mapVersionLabel = useMapLabel(items)
-  const [viewing, setViewing] = useState<{ areaKey: string; itemId: string } | null>(null)
+  const [viewing, setViewing] = useState<{ areaKey: string; itemId: string } | null>(() => {
+    const linked = initialMapVersionId ? items.find(item => item.map.id === initialMapVersionId) : undefined
+    return linked ? { areaKey: linked.map.areaKey, itemId: linked.map.id } : null
+  })
   const [sort, setSort] = useState<{ field: SortField; descending: boolean } | null>(null)
   const term = search.trim().toLowerCase()
   const areas = groupByArea(items)

@@ -181,6 +181,27 @@ describe('Staff home', () => {
     expect(within(today).queryByText(/sẵn sàng/i)).not.toBeInTheDocument()
   })
 
+  it('leads each robot with its readiness from the robot list, the report second (round 7, 2.3)', async () => {
+    const readiness = (state: 'READY' | 'NOT_READY', mapLabel: string | null) => ({ state, reasonCode: null, reason: state === 'READY' ? null : 'Robot chưa kiểm tra triển khai.', mapVersionId: 'map-1', mapLabel, deploymentCheckedAt: null, reportingOnAssignedMap: true })
+    const fleetApi = vi.mocked(fetch).getMockImplementation()!
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => new URL(String(input), 'http://localhost').pathname === '/api/technical/physical-robots'
+      ? Response.json({ success: true, data: [
+        { robotCode: 'amr_01', displayName: 'AMR 01', readiness: readiness('READY', 'Betea · v1') },
+        { robotCode: 'amr_02', displayName: 'AMR 02', readiness: readiness('NOT_READY', 'Tầng 6 · v1') },
+      ] })
+      : fleetApi(input, init)))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['staff', 'fleet-telemetry'], { receivedAt: Date.now(), robots: [{ id: 'amr_02', name: 'AMR 02', syncFresh: true }] })
+    show(client)
+    const card = within(screen.getByRole('region', { name: 'Robot' }))
+    const first = within((await card.findByText('amr_01')).closest('li')!)
+    expect(first.getByText('Sẵn sàng · Betea · v1')).toBeInTheDocument()
+    const second = within(card.getByText('amr_02').closest('li')!)
+    expect(second.getByText('Chưa sẵn sàng · báo Kỹ thuật')).toBeInTheDocument()
+    expect(second.getByText('Đang báo cáo')).toBeInTheDocument()
+    expect(card.queryByText('Báo cáo gần đây không có nghĩa robot đã sẵn sàng.')).not.toBeInTheDocument()
+  })
+
   it('keeps the dashboard and previews the upcoming route when there is no Tour today', async () => {
     today = []
     const date = addCampusDays(campusDateKey(Date.now()), 1)

@@ -5,8 +5,9 @@ import { DateInput } from '../../../components/ui/DateInput'
 import { formatDate, formatDateTime, formatExpectedDuration, formatMinutesSeconds, formatTime } from '../../../components/ui/date-time'
 import { useAuthStore } from '../../../stores/auth-store'
 import { Notice } from '../AdminUi'
-import { passedAt, scheduleFitLabel } from '../routes/route-messages'
+import { passedAt, scheduleFitLabel, tourRobotText } from '../routes/route-messages'
 import { useMapVersions } from '../../technical/technical-hooks'
+import { duplicateAreaNames, mapLabel } from '../../technical/poi-labels'
 import { SaveBlockedHint } from '../../technical/TechnicalUi'
 import { useTestedRoutes, useTourOperators, useTourRobots, useTourShifts, useTourSlots } from './hooks'
 import { campusDay } from './tour-calendar'
@@ -41,7 +42,7 @@ const robotPickable = (robot: TourRobotOption, quick: boolean) => robot.usable &
  * released before the Tour starts, and only Start refuses it (robotNotNeedsInspection).
  */
 const robotNote = (robot: TourRobotOption, quick: boolean) =>
-  robot.blockReason ? ` (${robot.blockReason})`
+  robot.blockReason ? tourRobotText.notReadyOption
     : quick && robot.heldByTourName ? ` (đang giữ cho Tour ${robot.heldByTourName}${robot.heldUntil ? ` tới ${formatTime(robot.heldUntil)}` : ''})`
     : robot.needsInspection ? ' (chờ kiểm tra tại chỗ, phải trả robot trước khi bắt đầu)' : ''
 
@@ -97,7 +98,10 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const quickPreview = quick ? (robots.data?.find(robot => robot.robotCode === robotCode) ?? robots.data?.[0])?.quick : null
   const maps = useMapVersions()
   const selected = routes.data?.find(route => route.revisionId === routeRevisionId)
-  const selectedArea = maps.data?.find(item => item.map.id === selected?.mapVersionId)?.map.areaName
+  const selectedMap = maps.data?.find(item => item.map.id === selected?.mapVersionId)?.map
+  const selectedArea = selectedMap?.areaName
+  const selectedMapLabel = selectedMap ? mapLabel(selectedMap, duplicateAreaNames((maps.data ?? []).map(item => ({ areaKey: item.map.areaKey, name: item.map.areaName })))) : null
+  const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
   const selectedPassedAt = selected && passedAt(selected)
   const day = slots.data?.days[0]
   // Derived, so a shift that stops being free after a refresh drops out of the review by itself.
@@ -179,7 +183,9 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
       </select>
         {robots.isError ? <span role="alert" className="mt-1 block text-xs tour-create-danger">Không tải được danh sách robot.</span>
           : !routeRevisionId ? <span className="mt-1 block text-xs tour-create-muted">Chọn tuyến trước để biết robot nào chạy được.</span>
-          : robots.data && !robots.data.some(robot => robotPickable(robot, quick)) && <span role="status" className="mt-1 block text-xs tour-create-danger">Chưa có robot nào sẵn sàng cho tuyến này.</span>}</label>
+          : robots.data && !robots.data.some(robot => robotPickable(robot, quick)) ? <span role="status" className="mt-1 block text-xs tour-create-danger">{tourRobotText.noneReady} {tourRobotText.askTechnical(selectedMapLabel)}
+            {robots.data.filter(robot => robot.blockReason).map(robot => <span key={robot.robotCode} className="mt-0.5 block">{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}: {robot.blockReason}</span>)}</span>
+          : selectedRobot?.blockReason && <span role="status" className="mt-1 block text-xs tour-create-danger">{selectedRobot.blockReason}</span>}</label>
       <label className="tour-create-field">Người vận hành<select title="" required aria-label="Người vận hành" className="tour-create-input" value={operatorUserId} disabled={operators.isPending} onChange={e => setPickedOperatorId(e.target.value)}>
         <option value="">Chọn Staff</option>
         {operators.data?.map(person => <option key={person.userId} value={person.userId}>{person.fullName} · {person.username}</option>)}
