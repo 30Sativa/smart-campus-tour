@@ -42,10 +42,15 @@ const isHeld = (robot: PhysicalRobotOption) => robot.needsInspection || (Boolean
 const isBusy = (robot: PhysicalRobotOption) => Boolean(robot.currentTourId) && !isHeld(robot)
 const isReady = (robot: PhysicalRobotOption) => robot.readiness?.state === 'READY'
 /**
+ * The server's condition for refusing a map, activation or key change (round 6): the Tour holding the robot is RUNNING.
+ * Unlike isBusy it stays true for a robot also waiting for inspection, as after a Reconcile until End Early.
+ */
+const runsTour = (robot: PhysicalRobotOption) => robot.currentTourState === 'RUNNING'
+/**
  * Round 5 (W2): the server refuses a map change, deactivation and a new key while the robot runs a Tour; the line under
  * each refused button says so. Null when the robot is not running a Tour.
  */
-const runningTourLine = (robot: PhysicalRobotOption) => isBusy(robot) ? runningTourText.blocked(robot.currentTourName) : null
+const runningTourLine = (robot: PhysicalRobotOption) => runsTour(robot) ? runningTourText.blocked(robot.currentTourName) : null
 
 function RunningTourLine({ text }: { text: string | null }) {
   return text ? <p role="status" className="text-[13px] text-amber-800">{text}</p> : null
@@ -119,7 +124,7 @@ export default function TechnicalRobotsPage() {
       </section>
       <RegisterRobotModal open={registering} onClose={() => setRegistering(false)} />
       {selected && dialog?.view === 'detail' && <RobotDetailModal robot={selected} strip={strip} refreshing={robots.isFetching} onRefresh={() => void robots.refetch()} onAssignMap={() => setDialog({ view: 'map', robotId: selected.id })} onManageKey={() => setDialog({ view: 'credential', robotId: selected.id })} onClose={closeDialog} />}
-      {selected && dialog?.view === 'credential' && <RobotCredentialPanel robotCode={selected.robotCode} step={SETUP_STEP.key} runningTour={isBusy(selected) ? { name: selected.currentTourName } : null} onClose={showDetail} />}
+      {selected && dialog?.view === 'credential' && <RobotCredentialPanel robotCode={selected.robotCode} step={SETUP_STEP.key} runningTour={runsTour(selected) ? { name: selected.currentTourName } : null} onClose={showDetail} />}
       {selected && dialog?.view === 'map' && <RobotMapAssignmentModal robot={selected} strip={strip} otherRobots={robots.data ?? []} initialMapVersionId={dialog.mapVersionId} onClose={showDetail} />}
     </TechnicalPage>
   )
