@@ -18,8 +18,13 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
 {
     public async Task<TourDetails> Handle(GetTourQuery query, CancellationToken ct)
     {
+        if (query.Viewer is { } actor) await repository.RecordOperatorContactAsync(query.Id, actor, clock.GetUtcNow(), ct);
         await using var snapshot = await repository.BeginReadAsync(query.Id, ct);
         var tour = await repository.FindAsync(query.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
+        var lastSeen = tour.State == TourRuntime.Running ? await repository.GetOperatorLastSeenAsync(tour.Id, ct) : null;
+        var disconnected = lastSeen is not null && TourOperatorPresencePolicy.CanEndAsBackup(lastSeen, clock.GetUtcNow(), settings.OperatorDisconnectEndEarlyMinutes)
+            ? lastSeen : null;
+        var endedEarly = await repository.GetEndedEarlyAsync(tour.Id, ct);
         var summary = TourAutoCancel.WithDeadlines(
             await repository.GetSummaryAsync(query.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour."), fleet.StartLateLimit);
         var usage = await repository.GetUsageAsync(query.Id, ct);
@@ -31,7 +36,7 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         };
         var execution = await ExecutionAsync(tour, ct);
         var actions = new TourAllowedActions(await StartAsync(tour, query.Viewer, ct), await NextAsync(tour, query.Viewer, ct),
-            EndEarly(tour, query.Viewer), await RetryAsync(tour, query.Viewer, ct), await ReconcileAsync(tour, query.Viewer, ct),
+            EndEarly(tour, query.Viewer, lastSeen), await RetryAsync(tour, query.Viewer, ct), await ReconcileAsync(tour, query.Viewer, ct),
             await StartAsync(tour, query.Viewer, ct, holdAtStart: true), await PauseAsync(tour, query.Viewer, ct),
             await SkipAsync(tour, query.Viewer, ct));
         if (tour.RouteRevisionId is { } revisionId)
@@ -42,12 +47,14 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
             var viewers = ballot is null ? null : await repository.GetViewerPresenceAsync(tour.Id, clock.GetUtcNow(), ct);
             return new(summary, null, null, tour.FallbackVideoUrl, tour.StartedAt, tour.EndedAt, tour.EndReason,
                 usage, permissions, revision, target.Operator, target.Reservation, execution, actions, ballot, leading, next, progress, retry,
-                viewers);
+                viewers, lastSeen, disconnected, settings.OperatorDisconnectEndEarlyMinutes, endedEarly);
         }
         var route = await ReadRoute(tour.RouteId, ct);
         var active = tour.ActiveRouteId == tour.RouteId ? route : await ReadRoute(tour.ActiveRouteId, ct);
         return new(summary, route, active, tour.FallbackVideoUrl, tour.StartedAt, tour.EndedAt, tour.EndReason,
-            usage, permissions, null, null, null, execution, actions);
+            usage, permissions, null, null, null, execution, actions, OperatorLastSeenAt: lastSeen,
+            OperatorDisconnectedSince: disconnected, OperatorDisconnectEndEarlyMinutes: settings.OperatorDisconnectEndEarlyMinutes,
+            EndedEarlyByBackupStaff: endedEarly);
     }
 
     private async Task<TourExecutionView> ExecutionAsync(Tour tour, CancellationToken ct)
@@ -163,9 +170,11 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         return checks.CanStart ? new(true, null, []) : new(false, "Chưa đủ điều kiện để robot di chuyển.", checks.BlockedBy);
     }
 
-    private static TourActionAvailability EndEarly(Tour tour, Guid? viewer) =>
+    private TourActionAvailability EndEarly(Tour tour, Guid? viewer, DateTimeOffset? lastSeen) =>
         tour.State != TourRuntime.Running ? Refused("Chỉ kết thúc sớm được Tour đang chạy.", "TOUR_STATE_INVALID")
-        : tour.OperatorUserId != viewer ? Refused("Chỉ người vận hành được giao cho Tour mới kết thúc sớm được.", "callerIsOperator")
+        : viewer is null ? Refused("Chỉ nhân viên vận hành được kết thúc sớm Tour.", "callerIsStaff")
+        : tour.OperatorUserId != viewer && !TourOperatorPresencePolicy.CanEndAsBackup(lastSeen, clock.GetUtcNow(), settings.OperatorDisconnectEndEarlyMinutes)
+            ? Refused("Người vận hành vẫn đang kết nối.", TourOperatorPresencePolicy.StillConnected)
         : new(true, null, []);
 
     private async Task<TourActionAvailability> RetryAsync(Tour tour, Guid? viewer, CancellationToken ct)

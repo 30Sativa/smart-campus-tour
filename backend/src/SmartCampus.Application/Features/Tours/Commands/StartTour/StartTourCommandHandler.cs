@@ -57,6 +57,7 @@ public sealed class StartTourCommandHandler(ITourManagementRepository repository
         var early = tour.ScheduledStartAt - now;
         var viewers = early > TimeSpan.Zero ? await repository.GetViewerPresenceAsync(tour.Id, now, ct) : null;
         tour.Start(reservation.RobotId, now);
+        await repository.SetOperatorLastSeenAsync(tour.Id, now, ct);
         repository.AddEvent(new TourEvent
         {
             TourId = tour.Id, EventType = TourLifecycleEvents.Started, OccurredAt = now, RobotId = reservation.RobotId,

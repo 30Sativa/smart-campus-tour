@@ -66,7 +66,7 @@ internal static class TourCancellation
             repository.AddAudit(TourCancelNoticeAudit.Request(tourId, actor, notified, now));
             return;
         }
-        logger.LogWarning("Tour {TourId} was cancelled but email is disabled, so {RecipientCount} representatives were not notified.", tourId, notified.Count);
+        logger.LogWarning("Tour {TourId} ended but email is disabled, so {RecipientCount} representatives were not notified.", tourId, notified.Count);
         repository.AddAudit(TourCancelNoticeAudit.Create(tourId, actor, TourCancelNoticeAudit.Failed, Guid.NewGuid(), now, "FAILED",
             new { code = "EMAIL_DISABLED", recipientCount = notified.Count }));
     }

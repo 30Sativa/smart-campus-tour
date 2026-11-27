@@ -83,6 +83,29 @@ public sealed class InvitationPrimitiveTests
     }
 
     [Fact]
+    public async Task EndedEarlyEmail_UsesSeparateSubject_AndNeverIncludesTheTechnicalReasonOrAccessData()
+    {
+        var config = Configuration();
+        var handler = new CaptureHandler(200, "{\"id\":\"preview\"}");
+        using var http = new HttpClient(handler);
+        await new ResendInvitationEmailSender(http, config, new InvitationCodeService(config)).SendTourCancelledAsync(new(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "rep@example.test", "<b>Tour</b>",
+            new DateTimeOffset(2026, 11, 27, 2, 0, 0, TimeSpan.Zero), "secret technical reason", EndedEarly: true), default);
+        using var json = JsonDocument.Parse(handler.Body!);
+        Assert.Contains("Buổi tham quan đã kết thúc sớm", json.RootElement.GetProperty("subject").GetString());
+        foreach (var key in new[] { "html", "text" })
+        {
+            var body = json.RootElement.GetProperty(key).GetString()!;
+            Assert.Contains("27/11/2026 09:00", body);
+            Assert.Contains("Nhà trường sẽ liên hệ lại về buổi bù (nếu có).", body);
+            Assert.DoesNotContain("bị hủy", body); Assert.DoesNotContain("secret technical reason", body);
+            Assert.DoesNotContain("https://", body); Assert.DoesNotContain("/tour/", body);
+            Assert.DoesNotContain("Mã truy cập", body);
+        }
+        Assert.Contains("&lt;b&gt;Tour&lt;/b&gt;", json.RootElement.GetProperty("html").GetString());
+    }
+
+    [Fact]
     public async Task CancelEmail_CarriesTourTimeReasonAndContact_ButNoLinkOrCode()
     {
         var config = Configuration(); var codec = new InvitationCodeService(config);

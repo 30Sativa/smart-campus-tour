@@ -117,3 +117,5 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
      - chọn database cho backend
      - monorepo vs multi-repo (nếu muốn ghi lại lý do gộp)
 -->
+
+- [ADR-0073: backup Staff End Early and group notices](0073-operator-disconnect-end-early.md) — Phiếu v1.12, durable Operator console contact, timed backup End Early and generic group email.

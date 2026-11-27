@@ -74,6 +74,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<TourEvent> TourEvents { get; set; }
 
+    public virtual DbSet<TourOperatorPresence> TourOperatorPresences { get; set; }
+
     public virtual DbSet<TourRobotReservation> TourRobotReservations { get; set; }
 
     public virtual DbSet<TourScheduleBlock> TourScheduleBlocks { get; set; }
@@ -1130,6 +1132,21 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.VariantRouteId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_RouteVariants_VariantRouteId");
+        });
+
+        modelBuilder.Entity<TourOperatorPresence>(entity =>
+        {
+            entity.HasKey(e => e.TourId);
+
+            entity.ToTable("TourOperatorPresence");
+
+            entity.Property(e => e.TourId).ValueGeneratedNever();
+            entity.Property(e => e.LastSeenAt).HasPrecision(3);
+
+            entity.HasOne(d => d.Tour).WithOne(p => p.TourOperatorPresence)
+                .HasForeignKey<TourOperatorPresence>(d => d.TourId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourOperatorPresence_TourId");
         });
 
         modelBuilder.Entity<TourRobotReservation>(entity =>

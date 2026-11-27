@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Models;
@@ -86,6 +87,50 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         };
         return new(await ordered.ThenBy(t => t.Id).Skip((request.Page - 1) * request.Size).Take(request.Size).Select(Summary).ToArrayAsync(ct),
             request.Page, request.Size, count);
+    }
+
+    public async Task RecordOperatorContactAsync(Guid tourId, Guid actor, DateTimeOffset now, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var tour = await db.Tours.FromSqlInterpolated($"SELECT * FROM dbo.Tours WITH (UPDLOCK, ROWLOCK) WHERE Id = {tourId}")
+            .AsNoTracking().SingleOrDefaultAsync(ct);
+        if (tour is { State: TourRuntime.Running } && tour.OperatorUserId == actor)
+        {
+            var lastSeen = await GetOperatorLastSeenAsync(tourId, ct);
+            if (lastSeen is null || now - lastSeen.Value >= TimeSpan.FromSeconds(10))
+                await SetOperatorLastSeenAsync(tourId, now, ct);
+        }
+        await transaction.CommitAsync(ct);
+    }
+
+    public Task SetOperatorLastSeenAsync(Guid tourId, DateTimeOffset now, CancellationToken ct) =>
+        db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE dbo.TourOperatorPresence SET LastSeenAt = {now} WHERE TourId = {tourId};
+            IF @@ROWCOUNT = 0 INSERT INTO dbo.TourOperatorPresence (TourId, LastSeenAt) VALUES ({tourId}, {now});
+            """, ct);
+
+    public Task<DateTimeOffset?> GetOperatorLastSeenAsync(Guid tourId, CancellationToken ct) =>
+        db.Database.SqlQuery<DateTimeOffset?>($"SELECT LastSeenAt AS Value FROM dbo.TourOperatorPresence WHERE TourId = {tourId}")
+            .SingleOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<Guid>> GetEndedEarlyNoticeRegistrationIdsAsync(Guid tourId, CancellationToken ct) =>
+        await db.GroupRegistrations.AsNoTracking().Where(r => r.TourId == tourId && r.RosterRows.Any(row =>
+            row.IsActive && row.ParticipationState == RosterParticipationStates.Accepted))
+            .OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync(ct);
+
+    public async Task<TourEndedEarlyView?> GetEndedEarlyAsync(Guid tourId, CancellationToken ct)
+    {
+        var ended = await db.TourEvents.AsNoTracking().Where(e => e.TourId == tourId && e.EventType == TourLifecycleEvents.EndedEarly)
+            .Select(e => new { e.ActorUserId, ActorName = e.ActorUser == null ? null : e.ActorUser.FullName, e.DataJson })
+            .SingleOrDefaultAsync(ct);
+        if (ended?.DataJson is null) return null;
+        using var data = JsonDocument.Parse(ended.DataJson);
+        if (!data.RootElement.TryGetProperty("byBackupStaff", out var backup) || !backup.GetBoolean()) return null;
+        var tour = await db.Tours.AsNoTracking().Where(t => t.Id == tourId)
+            .Select(t => new { t.OperatorUserId, OperatorName = t.OperatorUser == null ? null : t.OperatorUser.FullName }).SingleAsync(ct);
+        var lastSeen = data.RootElement.GetProperty("operatorLastSeenAt");
+        return new(ended.ActorUserId!.Value, ended.ActorName!, tour.OperatorUserId, tour.OperatorName,
+            lastSeen.ValueKind == JsonValueKind.Null ? null : lastSeen.GetDateTimeOffset());
     }
 
     public Task<Tour?> FindAsync(Guid id, CancellationToken ct) => db.Tours.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id, ct);

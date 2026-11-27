@@ -2012,7 +2012,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.25.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.26.sql")
         {
             var db = new TestDatabase();
             try

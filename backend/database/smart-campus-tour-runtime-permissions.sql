@@ -14,6 +14,9 @@ GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.RosterEmailChangeRequests TO campus_
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.Routes TO campus_tour_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.RouteStops TO campus_tour_app;
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.Tours TO campus_tour_app;
+-- ADR-0073: presence never updates the Tour's concurrency token; no whole-table UPDATE or DELETE.
+GRANT SELECT, INSERT ON OBJECT::dbo.TourOperatorPresence TO campus_tour_app;
+GRANT UPDATE (LastSeenAt) ON OBJECT::dbo.TourOperatorPresence TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.TourRobotReservations TO campus_tour_app;
 -- ADR-0043 D13 addendum: a Tour that ends shortens its hold to the end time; StartsAt, robot and durations stay as written.
 GRANT UPDATE (EndsAt, ReleasedAt, ReleasedByUserId) ON OBJECT::dbo.TourRobotReservations TO campus_tour_app;

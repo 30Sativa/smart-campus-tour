@@ -1,5 +1,10 @@
 # CampusTour database snapshots
 
+## v1.26 Operator console presence (ADR-0073)
+
+`smart-campus-tour-schema-v1.26.sql` and `patches/upgrade-v1.25-to-v1.26-operator-presence.sql` add durable `TourOperatorPresence(TourId, LastSeenAt)` without touching `Tours.RowVersion`. Legacy timestamps remain absent/null. The controlled upgrade is `upgrade-db.sh --upgrade-to-v1.26`; existing backups and deployment approval rules still apply. Runtime has SELECT/INSERT and UPDATE(LastSeenAt), with no whole-table UPDATE or DELETE. The initializer/check-only gate requires v1.26 structure and grants. Older snapshots remain immutable.
+
+
 ## Runtime grant: a Tour that ends shortens its hold (ADR-0043 D13 addendum, 23/11/2026)
 
 No schema change and no new snapshot. `smart-campus-tour-runtime-permissions.sql` now grants column `UPDATE (EndsAt)` on `TourRobotReservations` next to the release columns, so a COMPLETED or ended-early Tour sets its hold's `EndsAt` to `Tours.EndedAt`. `StartsAt`, `RobotId` and the durations stay write-once; the check-only gate refuses a runtime without the `EndsAt` grant or with `UPDATE (StartsAt)`. A v1.25 database gets the grant from the regrant step of `upgrade-db.sh --upgrade-to-v1.25`, which `upgrade-db-schema-ec2.sh --if-needed` runs when the gate refuses. No row is backfilled: holds of Tours that ended before the deploy run to their old end.

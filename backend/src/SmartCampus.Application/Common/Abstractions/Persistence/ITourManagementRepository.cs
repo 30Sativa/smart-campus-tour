@@ -12,6 +12,13 @@ public interface ITourManagementRepository
     Task<AuditLog?> FindRequestAsync(Guid actor, Guid requestId, CancellationToken ct);
     Task<PagedResult<TourSummary>> ListAsync(TourListRequest request, CancellationToken ct);
     Task<Tour?> FindAsync(Guid id, CancellationToken ct);
+    /// <summary>Explicit short transaction: Tour root first; only the RUNNING Tour's Operator, throttled to 10s.</summary>
+    Task RecordOperatorContactAsync(Guid tourId, Guid actor, DateTimeOffset now, CancellationToken ct);
+    /// <summary>Caller holds the shared Tour root; does not update Tours or its RowVersion.</summary>
+    Task SetOperatorLastSeenAsync(Guid tourId, DateTimeOffset now, CancellationToken ct);
+    Task<DateTimeOffset?> GetOperatorLastSeenAsync(Guid tourId, CancellationToken ct);
+    Task<IReadOnlyList<Guid>> GetEndedEarlyNoticeRegistrationIdsAsync(Guid tourId, CancellationToken ct);
+    Task<TourEndedEarlyView?> GetEndedEarlyAsync(Guid tourId, CancellationToken ct);
     Task<TourSummary?> GetSummaryAsync(Guid id, CancellationToken ct);
     Task<TourUsage> GetUsageAsync(Guid id, CancellationToken ct);
     /// <summary>Tracked registrations without roster history; caller must hold the shared Tour root lock.</summary>
