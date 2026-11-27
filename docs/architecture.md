@@ -1221,7 +1221,14 @@ map version with POIs in the verification queue or routes in the route-test
 queue that no active robot holds: title `Bản đồ {label} chưa có robot`,
 description `{label}: {n} POI/tuyến đang chờ nhưng chưa robot nào gán bản đồ này.`
 (`{label}` = `{area} · {area key} · phiên bản {n}`), `targetId` = map version id,
-`linkUrl` `/technical/maps?map={mapVersionId}`. Both are reads; nothing is
+`linkUrl` `/technical/maps?map={mapVersionId}`. `POI_QUEUE` and `ROUTE_QUEUE` (INFO)
+count only the queued items on maps that do not have a `MAP_WITHOUT_ROBOT` item, so
+one POI or route never reads as two jobs; with a count of 0 the item is left out.
+When some items wait for a robot, the description says so:
+`{n} POI có thể kiểm ngay; {k} POI khác đang chờ robot (xem mục bản đồ chưa có robot).`
+(and `{n} tuyến có thể chạy thử ngay; {k} tuyến khác đang chờ robot (…).` for routes).
+The KPI counts `pendingPoiVerificationsCount` and `pendingRouteTestsCount` keep
+the whole queues. Both are reads; nothing is
 changed. Queue links are `/technical/pois` and `/technical/route-tests`.
 
 `GET /api/admin/infrastructure/health` requires the `Admin` role and reports

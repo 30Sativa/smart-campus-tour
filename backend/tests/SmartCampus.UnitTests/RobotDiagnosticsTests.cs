@@ -336,6 +336,74 @@ public sealed class RobotDiagnosticsTests
     }
 
     [Fact]
+    public async Task GetTechnicalDashboard_PoiOnlyOnMapWithoutRobot_IsNotAlsoAPoiQueueItem()
+    {
+        // Betea has no robot: its one POI is said by MAP_WITHOUT_ROBOT only; the KPI still counts it.
+        var robot = AssignedRobot("amr_01", TestMap);
+        var sender = new TestSender(pois: [PoiItem(Betea.Id)], routes: []);
+
+        var result = await Dashboard(new TestRobotRepository([robot], [PassingCheck(robot, TestMap)]), sender, [TestMap, Betea]);
+
+        Assert.Single(result.ActionItems, item => item.Type == "MAP_WITHOUT_ROBOT");
+        Assert.DoesNotContain(result.ActionItems, item => item.Type == "POI_QUEUE");
+        Assert.Equal(1, result.Kpis.PendingPoiVerificationsCount);
+    }
+
+    [Fact]
+    public async Task GetTechnicalDashboard_PoiQueue_CountsOnlyWhatCanBeCheckedNow_AndPointsAtTheMapItem()
+    {
+        var robot = AssignedRobot("amr_01", TestMap);
+        var sender = new TestSender(pois: [PoiItem(TestMap.Id), PoiItem(TestMap.Id), PoiItem(Betea.Id)], routes: []);
+
+        var result = await Dashboard(new TestRobotRepository([robot], [PassingCheck(robot, TestMap)]), sender, [TestMap, Betea]);
+
+        var item = Assert.Single(result.ActionItems, item => item.Type == "POI_QUEUE");
+        Assert.Equal("2 POI đang chờ kiểm chứng kỹ thuật", item.Title);
+        Assert.Equal("2 POI có thể kiểm ngay; 1 POI khác đang chờ robot (xem mục bản đồ chưa có robot).", item.Description);
+        Assert.Single(result.ActionItems, item => item.Type == "MAP_WITHOUT_ROBOT");
+        Assert.Equal(3, result.Kpis.PendingPoiVerificationsCount);
+    }
+
+    [Fact]
+    public async Task GetTechnicalDashboard_PoiQueue_OnlyCheckableKeepsItsUsualDescription()
+    {
+        var robot = AssignedRobot("amr_01", TestMap);
+        var sender = new TestSender(pois: [PoiItem(TestMap.Id)], routes: []);
+
+        var result = await Dashboard(new TestRobotRepository([robot], [PassingCheck(robot, TestMap)]), sender, [TestMap, Betea]);
+
+        var item = Assert.Single(result.ActionItems, item => item.Type == "POI_QUEUE");
+        Assert.Equal(("1 POI đang chờ kiểm chứng kỹ thuật", "Có đề xuất POI mới từ nhân viên vận hành đang chờ đo đạc và kiểm tra."), (item.Title, item.Description));
+        Assert.DoesNotContain(result.ActionItems, item => item.Type == "MAP_WITHOUT_ROBOT");
+    }
+
+    [Fact]
+    public async Task GetTechnicalDashboard_RouteOnlyOnMapWithoutRobot_IsNotAlsoARouteQueueItem()
+    {
+        var robot = AssignedRobot("amr_01", TestMap);
+        var sender = new TestSender(pois: [], routes: [RouteItem(Betea.Id)]);
+
+        var result = await Dashboard(new TestRobotRepository([robot], [PassingCheck(robot, TestMap)]), sender, [TestMap, Betea]);
+
+        Assert.Single(result.ActionItems, item => item.Type == "MAP_WITHOUT_ROBOT");
+        Assert.DoesNotContain(result.ActionItems, item => item.Type == "ROUTE_QUEUE");
+        Assert.Equal(1, result.Kpis.PendingRouteTestsCount);
+    }
+
+    [Fact]
+    public async Task GetTechnicalDashboard_RouteQueue_CountsOnlyWhatCanBeRunNow()
+    {
+        var robot = AssignedRobot("amr_01", TestMap);
+        var sender = new TestSender(pois: [], routes: [RouteItem(TestMap.Id), RouteItem(Betea.Id), RouteItem(Betea.Id)]);
+
+        var result = await Dashboard(new TestRobotRepository([robot], [PassingCheck(robot, TestMap)]), sender, [TestMap, Betea]);
+
+        var item = Assert.Single(result.ActionItems, item => item.Type == "ROUTE_QUEUE");
+        Assert.Equal(("1 tuyến đang chờ chạy thử", "1 tuyến có thể chạy thử ngay; 2 tuyến khác đang chờ robot (xem mục bản đồ chưa có robot)."), (item.Title, item.Description));
+        Assert.Equal(3, result.Kpis.PendingRouteTestsCount);
+    }
+
+    [Fact]
     public void BackendText_NoLongerSaysGiảiPhóng()
     {
         var src = Path.Combine(FindBackend(), "src");
