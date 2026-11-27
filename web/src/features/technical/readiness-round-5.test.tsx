@@ -150,4 +150,33 @@ describe('round 5: a check before the assignment, and a robot running a Tour', (
 
     await waitFor(() => expect(confirm.getByRole('alert')).toHaveTextContent(runningRefusal))
   })
+
+  // Round 6: after a Reconcile the robot waits for inspection while its Tour is still RUNNING until End Early. The locks
+  // follow the Tour state, as the server does, not the "Chờ kiểm tra tại chỗ" badge.
+  it.each([
+    ['RUNNING', true],
+    ['CANCELLED', false],
+    ['COMPLETED', false],
+  ] as const)('a robot waiting for inspection with its Tour %s: map, deactivation and new key locked = %s', async (state, locked) => {
+    robots = [{ ...running, needsInspection: true, currentTourState: state }]
+    const view = renderAt('/technical/robots?robot=robot-1')
+    const dialog = await setupDialog()
+    const expectLock = (button: HTMLElement) => locked ? expect(button).toBeDisabled() : expect(button).toBeEnabled()
+
+    expectLock(within(dialog.getByRole('region', { name: '1. Chọn bản đồ' })).getByRole('button', { name: 'Đổi bản đồ' }))
+    expectLock(within(dialog.getByRole('region', { name: 'Trạng thái sử dụng' })).getByRole('button', { name: 'Ngừng sử dụng' }))
+    expect(within(dialog.getByRole('region', { name: 'Điều phối Tour' })).getByRole('button', { name: 'Tắt điều phối' })).toBeEnabled()
+    expect(dialog.queryAllByText(runningLine)).toHaveLength(locked ? 2 : 0)
+    fireEvent.click(dialog.getByRole('button', { name: 'Quản lý khóa' }))
+    const panel = within(await screen.findByRole('dialog', { name: 'Khóa Fleet Sync · amr_01' }))
+    expectLock(await panel.findByRole('button', { name: 'Cấp lại' }))
+    expect(panel.getByRole('button', { name: 'Thu hồi' })).toBeEnabled()
+    expect(panel.queryByText(runningLine) !== null).toBe(locked)
+    view.unmount()
+
+    renderAt('/technical/robots?robot=robot-1&map=map-betea')
+    const mapDialog = within(await screen.findByRole('dialog', { name: 'Bản đồ của amr_01' }))
+    expectLock(mapDialog.getByRole('button', { name: 'Gỡ gán bản đồ' }))
+    expectLock(mapDialog.getByRole('button', { name: 'Lưu bản đồ' }))
+  })
 })
