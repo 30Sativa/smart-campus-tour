@@ -13,9 +13,11 @@ public static class TourCancelNoticeAudit
     public const string Started = "TOUR_CANCEL_NOTICE_STARTED";
     public const string Sent = "TOUR_CANCEL_NOTICE_SENT";
     public const string Failed = "TOUR_CANCEL_NOTICE_FAILED";
+    public const string Cancelled = "CANCELLED";
+    public const string EndedEarly = "ENDED_EARLY";
 
-    public static AuditLog Request(Guid tour, Guid? actor, IReadOnlyCollection<Guid> registrationIds, DateTimeOffset now) =>
-        Create(tour, actor, Requested, Guid.NewGuid(), now, "PENDING", new { registrationIds });
+    public static AuditLog Request(Guid tour, Guid? actor, IReadOnlyCollection<Guid> registrationIds, DateTimeOffset now, string kind) =>
+        Create(tour, actor, Requested, Guid.NewGuid(), now, "PENDING", new { registrationIds, kind });
 
     public static AuditLog Create(Guid tour, Guid? actor, string action, Guid attempt, DateTimeOffset now, string result, object? data = null,
         string entityType = "Tour", string? entityId = null) => new()
@@ -26,4 +28,7 @@ public static class TourCancelNoticeAudit
 
     public static Guid[] RegistrationIds(AuditLog request) =>
         JsonSerializer.Deserialize<JsonElement>(request.DataJson!).GetProperty("registrationIds").Deserialize<Guid[]>()!;
+
+    public static string? Kind(AuditLog request) =>
+        JsonSerializer.Deserialize<JsonElement>(request.DataJson!).TryGetProperty("kind", out var kind) ? kind.GetString() : null;
 }

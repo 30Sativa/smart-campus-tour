@@ -52,7 +52,7 @@ public sealed class AutoCancelOverdueTourCommandHandler(ITourManagementRepositor
             })
         });
         if (backlog) return AutoCancelOutcome.CancelledWithoutNotice;
-        TourCancellation.QueueNotice(repository, invitationSettings, logger, tour.Id, null, notified, now);
+        TourCancellation.QueueNotice(repository, invitationSettings, logger, tour.Id, null, notified, now, kind: TourCancelNoticeAudit.Cancelled);
         return AutoCancelOutcome.Cancelled;
     }
 }
