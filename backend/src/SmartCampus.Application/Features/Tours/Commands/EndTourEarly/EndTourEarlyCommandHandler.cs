@@ -51,7 +51,7 @@ public sealed class EndTourEarlyCommandHandler(ITourManagementRepository reposit
         await TourVoting.CloseOpenBallotAsync(repository, votes, revisions, tour, decide: false, command.Actor, now, ct);
         tour.EndEarly(reason, now);
         TourCancellation.QueueNotice(repository, invitations, logger, tour.Id, command.Actor,
-            await repository.GetEndedEarlyNoticeRegistrationIdsAsync(tour.Id, ct), now, kind: TourCancelNoticeAudit.EndedEarly);
+            await repository.GetEndedEarlyNoticeRegistrationIdsAsync(tour.Id, ct), now, kind: TourCancelNoticeKinds.EndedEarly);
         var eventData = JsonNode.Parse(await TourLegDispatch.EndHoldAsync(repository, tour.Id, now, ct) ?? "{}")!.AsObject();
         if (byBackupStaff)
         {

@@ -13,8 +13,6 @@ public static class TourCancelNoticeAudit
     public const string Started = "TOUR_CANCEL_NOTICE_STARTED";
     public const string Sent = "TOUR_CANCEL_NOTICE_SENT";
     public const string Failed = "TOUR_CANCEL_NOTICE_FAILED";
-    public const string Cancelled = "CANCELLED";
-    public const string EndedEarly = "ENDED_EARLY";
 
     public static AuditLog Request(Guid tour, Guid? actor, IReadOnlyCollection<Guid> registrationIds, DateTimeOffset now, string kind) =>
         Create(tour, actor, Requested, Guid.NewGuid(), now, "PENDING", new { registrationIds, kind });
