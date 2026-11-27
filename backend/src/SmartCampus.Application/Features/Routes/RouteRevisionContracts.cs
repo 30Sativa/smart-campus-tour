@@ -44,7 +44,12 @@ public sealed record RouteTestRunView(Guid Id, Guid RouteRevisionId, Guid MapVer
     // Names for the Staff fail banner; null for a deleted account or a view built before the names were read.
     string? CheckedByName = null, string? ParticipatingStaffName = null,
     // ADR-0065: the revision stop ids in the order driven, recorded on a voting route; null on a fixed one.
-    IReadOnlyList<Guid>? TraversedStopIds = null);
+    IReadOnlyList<Guid>? TraversedStopIds = null,
+    // The same steps named from the run's own revision, so a run carried from another revision still reads by POI name.
+    IReadOnlyList<RouteTestRunStopView>? TraversedStops = null);
+/// <summary>One driven step of a voting-route run, from the stops of the revision the run was recorded on; Name and
+/// StopOrder are null only for an id that revision does not have.</summary>
+public sealed record RouteTestRunStopView(Guid StopId, int? StopOrder, string? Name, Guid? PoiRevisionId);
 /// <summary>
 /// Another submitted save of the same route with the same path (map, start, end, stop POIs and order, head steps): the
 /// newest run on any of them is their applied result (ADR-0023 addendum), so recording one changes them all.

@@ -1201,16 +1201,28 @@ or stale telemetry and diagnostics remain independently visible. The dashboard
 includes action items and counts for robot connection state, inspection holds,
 POI verification and route-test queues. Each action item is
 `{type, severity, title, description, targetId, linkUrl}`; `type` is
-`HELD_ROBOT`, `MAP_MISMATCH`, `TOUR_ROBOT_NOT_READY`, `POI_QUEUE`, `ROUTE_QUEUE`
-or `ROUTE_RERUN`. `MAP_MISMATCH` describes the robot with its
+`HELD_ROBOT`, `MAP_MISMATCH`, `TOUR_ROBOT_NOT_READY`, `ROBOT_NOT_READY`,
+`MAP_WITHOUT_ROBOT`, `POI_QUEUE`, `ROUTE_QUEUE` or `ROUTE_RERUN`. `MAP_MISMATCH` describes the robot with its
 `readiness.reason` sentence. `TOUR_ROBOT_NOT_READY` (WARNING, ADR-0066) is one
 item per robot whose SCHEDULED or READY Tours, not yet running and starting
 within seven days, its reserved robot cannot run by `TourTarget.RobotBlockReason`.
 It is titled `Tour {name} {dd/MM HH:mm} chưa chạy được`, or
 `{n} Tour sắp tới của robot {code} chưa chạy được` when there are several, with
 the readiness sentence as description, `targetId` = robot id and `linkUrl`
-`/technical/robots?robot={robotId}`. Queue links are `/technical/pois` and
-`/technical/route-tests`.
+`/technical/robots?robot={robotId}`. `ROBOT_NOT_READY` (WARNING) is one item
+per active robot that holds a map but is not READY on it by
+`RobotMapReadiness.EvaluateOnAssignedMap`: title
+`Robot {code} chưa sẵn sàng trên bản đồ được gán`, description the
+`readiness.reason` sentence, `targetId` = robot id, `linkUrl`
+`/technical/robots?robot={robotId}` (its setup dialog). It is left out for a
+robot that already has a `TOUR_ROBOT_NOT_READY` or `MAP_MISMATCH` item, which say
+the same thing. `MAP_WITHOUT_ROBOT` (INFO) is one item per active (not retired)
+map version with POIs in the verification queue or routes in the route-test
+queue that no active robot holds: title `Bản đồ {label} chưa có robot`,
+description `{label}: {n} POI/tuyến đang chờ nhưng chưa robot nào gán bản đồ này.`
+(`{label}` = `{area} · {area key} · phiên bản {n}`), `targetId` = map version id,
+`linkUrl` `/technical/maps?map={mapVersionId}`. Both are reads; nothing is
+changed. Queue links are `/technical/pois` and `/technical/route-tests`.
 
 `GET /api/admin/infrastructure/health` requires the `Admin` role and reports
 the API process host/runtime, a bounded database connectivity check, Docker
@@ -2125,7 +2137,7 @@ implementation.
 |---|---|
 | `POST /api/staff/routes/...revisions` (save) | Input gains `viewerChoosesNextStop`. Every new save: `EndMode` is `LAST_POI` or `POSE` equal to the start pose, else 409 `ROUTE_END_POSE_NOT_START` (revisions already saved with another end pose stay readable and runnable). With the flag: 409 `ROUTE_VOTE_STOP_COUNT` (POIs outside 3–4), `ROUTE_VOTE_DWELL_TOO_SHORT` (a dwell under `RouteRuleSettings.MinVoteDwellSeconds`, 30 s), `ROUTE_VOTE_END_MUST_RETURN` (end not the start pose), each with a Vietnamese message. `ROUTE_STOP_TOO_CLOSE` compares every pair of POIs. The flag is part of `ConfigurationFingerprint` and the shared-result path key. |
 | `RouteRevisionView` and route summaries | Add `viewerChoosesNextStop` and `legCoverage { requiredCount, coveredCount, missingLegs[{ fromStopId, fromName, toStopId, toName }] }` (`fromStopId` null for the start, `toStopId` null for the end). `VerificationStatus` may be `LEGS_INCOMPLETE`: the newest run is not FAIL but the PASS runs since the newest FAIL do not cover every leg (7 for 3 POIs, 13 for 4). `LEGS_INCOMPLETE` can neither create a Tour nor mark one READY. Estimated duration on a voting route is the longest valid order (first POI fixed). |
-| `POST /api/technical/routes/{routeId}/revisions/{revisionId}/test-runs` | Gains `traversedStopIds` (revision stop ids in the order driven), required on a voting route: starts with the first POI and names every POI exactly once. Stored in `RouteTestRuns.TraversedStopIdsJson` and returned as `testRuns[].traversedStopIds`; missing or invalid is 409 `ROUTE_TEST_ORDER_INVALID`. |
+| `POST /api/technical/routes/{routeId}/revisions/{revisionId}/test-runs` | Gains `traversedStopIds` (revision stop ids in the order driven), required on a voting route: starts with the first POI and names every POI exactly once. Stored in `RouteTestRuns.TraversedStopIdsJson` and returned as `testRuns[].traversedStopIds`; missing or invalid is 409 `ROUTE_TEST_ORDER_INVALID`. Each run also returns `testRuns[].traversedStops` = `[{ stopId, stopOrder, name, poiRevisionId }]`, the same steps named from the stops of the revision the run was recorded on (a run carried from another save of the same path has stop ids the viewed revision does not list); `stopOrder`, `name` and `poiRevisionId` are null for an id that revision lacks, and the list is null on a fixed route. No schema change. |
 | `PUT /api/student/tours/{tourId}/vote` | `{ stopVisitId, stopId }` with the Viewer session cookie (as Q&A). Accepted only while the Tour is RUNNING, observing at a POI, `stopVisitId` is the current visit, its ballot is open and before `DwellDeadlineAt`, for a valid candidate; one vote per active roster row per ballot, changeable until close. 409 `VOTE_CLOSED` or `VOTE_CANDIDATE_INVALID` otherwise. Returns the ballot. |
 | `GET /api/student/tours/{tourId}/view` | Gains `ballot`. Each `StudentTourStop` gains `stopId`, `progress` (`VISITED`, `SKIPPED`, `CURRENT`, `NEXT`, `REMAINING`) and `lockReason`. `ballot` = `{ stopVisitId, open, closesAt, candidates[{ stopId, poiId, name, votes }], myVote, locked[{ stopId, name, reason }], decision{ stopId, name, reason, votes } \| null }`, `decision.reason` one of `VOTE`, `TIE_DEFAULT`, `NO_VOTES`, `LOCKED_FALLBACK`, `SINGLE_CANDIDATE`. A null `ballot` means the route does not vote or no POI is current. |
 | `GET /api/staff/manage/tours/{id}` | Gains the same `ballot`, plus `leadingStopId`, `nextTarget { kind (POI/END), stopId, name }` for the Next button label (also set on routes without the flag while the Tour is at the start or a POI) and `stopProgress[{ stopId, order, progress, lockReason }]`. On a voting route whose current leg has stopped (Retry allowed): `retryTarget { kind (POI/END), stopId, name }`, where Retry/Resume goes; null and `allowedActions.retryLeg` refused with `ALL_REMAINING_STOPS_LOCKED` when only locked POIs remain. |

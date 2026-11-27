@@ -52,6 +52,16 @@ internal static class RouteVerification
         catch (JsonException) { return null; }
     }
 
+    /// <summary>The driven steps named from the run's own revision stops; null on a fixed route.</summary>
+    public static IReadOnlyList<RouteTestRunStopView>? TraversedStops(string? json, IEnumerable<RouteRevisionStop> runStops)
+    {
+        if (ReadTraversed(json) is not { } ids) return null;
+        var byId = runStops.ToDictionary(stop => stop.Id);
+        return ids.Select(id => byId.TryGetValue(id, out var stop)
+            ? new RouteTestRunStopView(id, stop.StopOrder, stop.Name, stop.PoiProposalRevisionId)
+            : new RouteTestRunStopView(id, null, null, null)).ToArray();
+    }
+
     private static IReadOnlyList<int>? OrderOf(Run run)
     {
         if (ReadTraversed(run.Record.TraversedStopIdsJson) is not { } ids) return null;
