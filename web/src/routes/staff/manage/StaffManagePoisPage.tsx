@@ -75,7 +75,8 @@ export default function StaffManagePoisPage() {
   const [selectedMap, setSelectedMap] = useState('')
   const [chosen, setChosen] = useState<string | null>(null)
   const everyProposal = useMemo(() => proposals.data ?? [], [proposals.data])
-  const deployedMaps = new Set(mapVersions.data?.filter(item => item.currentlyDeployedOn.length > 0).map(item => item.map.id))
+  // A map a robot is ready on now (ADR-0066), not one whose last passing check happened to be there.
+  const deployedMaps = new Set(mapVersions.data?.filter(item => item.runningRobot?.readiness.state === 'READY').map(item => item.map.id))
   const all = deployedOnly ? everyProposal.filter(p => deployedMaps.has(p.revision.mapVersionId)) : everyProposal
   const maps = [...new Map(all.map(p => [p.revision.mapVersionId, { id: p.revision.mapVersionId, key: p.revision.mapKey }])).values()]
   const mapVersionId = maps.some(map => map.id === selectedMap) ? selectedMap : maps[0]?.id ?? ''

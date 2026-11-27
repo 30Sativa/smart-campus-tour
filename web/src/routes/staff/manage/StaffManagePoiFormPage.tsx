@@ -98,6 +98,9 @@ export default function StaffManagePoiFormPage() {
   })
   const selectedItem = maps.data?.find(item => item.map.id === draft.mapVersionId)
     ?? (mapDetailsQuery.data?.map.id === draft.mapVersionId ? mapDetailsQuery.data : undefined)
+  // ADR-0066: the robot assigned to this map and whether it is ready there; the last passing check elsewhere says neither.
+  const runningRobot = selectedItem?.runningRobot ?? null
+  const runningReady = runningRobot?.readiness.state === 'READY'
   const eligibleMaps = (maps.data ?? []).filter(item => item.canUseForPoiPreparation)
   const mapLabel = staffMapLabels(maps.data ?? [])
   const selectedMapLabel = selectedItem
@@ -290,7 +293,7 @@ export default function StaffManagePoiFormPage() {
     <section className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-[var(--poi-rule)] p-4 lg:px-5" aria-label="Bản đồ và tiến độ">
       <label htmlFor="poi-map" className="text-sm text-[var(--poi-muted)]">Bản đồ</label>
       <select title={selectedMapLabel} id="poi-map" aria-label="Bản đồ" disabled={Boolean(current) && frozen} className={`h-10 w-full min-w-0 appearance-auto! truncate rounded-xl border border-[var(--poi-control)] bg-[var(--poi-paper)] px-3 text-sm font-semibold text-[var(--poi-text)] sm:w-80 ${focus}`} required value={draft.mapVersionId} onChange={event => { update({ mapVersionId: event.target.value, x: null, y: null, yaw: null }); setPoseMode('position') }}><option value="">Chọn bản đồ</option>{maps.data?.map(item => { const { map } = item; return <option key={map.id} value={map.id} disabled={!item.canUseForPoiPreparation}>{mapLabel(map, item.canUseForPoiPreparation ? null : mapCheckLabel(item.technicalCheckStatus))}</option> })}{selectedItem && !maps.data?.some(item => item.map.id === selectedItem.map.id) && <option value={selectedItem.map.id} disabled={!selectedItem.canUseForPoiPreparation}>{mapLabel(selectedItem.map, mapCheckLabel(selectedItem.technicalCheckStatus))}</option>}</select>
-      {selectedItem && selectedItem.currentlyDeployedOn.length > 0 && <span className="max-w-full rounded-lg bg-[var(--poi-soft)] px-2.5 py-1 text-xs font-medium text-[var(--poi-accent-ink)] [overflow-wrap:anywhere]">Robot đang dùng: {selectedItem.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}
+      {runningRobot && <span className="max-w-full rounded-lg bg-[var(--poi-soft)] px-2.5 py-1 text-xs font-medium text-[var(--poi-accent-ink)] [overflow-wrap:anywhere]">{runningReady ? `Robot đang dùng: ${runningRobot.robotCode}` : `${runningRobot.robotCode} đã gán bản đồ này, chưa sẵn sàng`}</span>}
       <ol aria-label="Tiến độ" className="flex flex-wrap items-center gap-x-3 gap-y-2 xl:ml-auto xl:border-l xl:border-[var(--poi-rule)] xl:pl-4">
         {steps.map(([ok, done, todo], index) => (
           <li key={done} className="flex items-center gap-2 text-[13px]">
@@ -301,7 +304,7 @@ export default function StaffManagePoiFormPage() {
         ))}
       </ol>
     </section>
-    {selectedItem?.technicalCheckStatus === 'PASSED' && selectedItem.currentlyDeployedOn.length === 0 && <div role="status" className="mb-4"><Notice tone="warn">Chưa có robot dùng bản đồ này. Cần kỹ thuật triển khai trước khi kiểm chứng POI.</Notice></div>}
+    {selectedItem?.technicalCheckStatus === 'PASSED' && !runningReady && <div role="status" className="mb-4"><Notice tone="warn">Chưa có robot sẵn sàng trên bản đồ này. POI gửi đi sẽ chờ tới khi Kỹ thuật gán và kiểm tra robot.</Notice></div>}
 
     <div className="grid lg:grid-cols-[minmax(0,1fr)_370px]">
       <div className="min-w-0 bg-[var(--poi-ground)]">

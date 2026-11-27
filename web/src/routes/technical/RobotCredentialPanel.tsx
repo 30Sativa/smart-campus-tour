@@ -4,13 +4,18 @@ import { Copy, KeyRound, RotateCcw, ShieldAlert } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { Modal } from '../../components/ui/Drawer'
-import { errorText } from '../../features/technical/technical-format'
+import { errorText, runningTourText } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
 import { technicalApi, type RobotCredentialSecret } from '../../features/technical/api/technical'
 import { useRobotCredential } from '../../features/technical/technical-hooks'
 
-/** `step` names where this sits in the robot setup (for example "Bước 2/5"), so the dialog does not feel like a detour. */
-export function RobotCredentialPanel({ robotCode, step, onClose }: { robotCode: string; step?: string; onClose: () => void }) {
+/**
+ * `step` names where this sits in the robot setup (for example "Bước 2/5"), so the dialog does not feel like a detour.
+ * `runningTour` is the Tour the robot is running: a new key is refused until it ends, revoking stays possible (round 5).
+ */
+export function RobotCredentialPanel({ robotCode, step, runningTour, onClose }: {
+  robotCode: string; step?: string; runningTour?: { name: string | null } | null; onClose: () => void
+}) {
   const queryClient = useQueryClient()
   const credential = useRobotCredential(robotCode)
   const [pending, setPending] = useState(false)
@@ -56,9 +61,10 @@ export function RobotCredentialPanel({ robotCode, step, onClose }: { robotCode: 
         {credential.data.revokedAt && <p className="mt-1">Thu hồi lúc {formatDateTime(credential.data.revokedAt)} · {credential.data.revokedByName ?? '-'}</p>}
       </section>
       {credential.data.status !== 'ACTIVE' ? <button type="button" disabled={pending} className={buttonClass('primary')} onClick={() => void change('issue')}><KeyRound size={15} aria-hidden="true" />Cấp khóa</button> : <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={pending} className={buttonClass('secondary')} onClick={() => setConfirming('rotate')}><RotateCcw size={15} aria-hidden="true" />Cấp lại</button>
+        <button type="button" disabled={pending || Boolean(runningTour)} className={buttonClass('secondary')} onClick={() => setConfirming('rotate')}><RotateCcw size={15} aria-hidden="true" />Cấp lại</button>
         <button type="button" disabled={pending} className={buttonClass('danger')} onClick={() => setConfirming('revoke')}><ShieldAlert size={15} aria-hidden="true" />Thu hồi</button>
       </div>}
+      {credential.data.status === 'ACTIVE' && runningTour && <p role="status" className="text-[13px] text-amber-800">{runningTourText.blocked(runningTour.name)}</p>}
       {credential.data.status === 'ACTIVE' && <p className="text-xs text-amber-800">Cấp lại hoặc thu hồi sẽ ngắt MiniPC cho tới khi được cấu hình lại.</p>}
       {pending && <p role="status" className="text-sm text-slate-600">Đang cập nhật khóa…</p>}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
@@ -72,7 +78,7 @@ export function RobotCredentialPanel({ robotCode, step, onClose }: { robotCode: 
   </Modal>
   {confirming && <ConfirmationDialog open tone="danger" withReason={confirming === 'revoke'} requireReason reasonLabel="Lý do thu hồi" reasonPlaceholder="Ghi lại vì sao cần thu hồi khóa…"
     title={confirming === 'revoke' ? `Thu hồi khóa của ${robotCode}?` : `Cấp lại khóa của ${robotCode}?`}
-    description="MiniPC sẽ mất kết nối cho tới khi được cấu hình khóa mới."
+    description={`MiniPC sẽ mất kết nối cho tới khi được cấu hình khóa mới.${confirming === 'revoke' && runningTour ? ` ${runningTourText.revokeWarning(runningTour.name)}` : ''}`}
     confirmLabel={confirming === 'revoke' ? 'Thu hồi khóa' : 'Cấp lại khóa'}
     onConfirm={reason => { setConfirming(null); void change(confirming, reason) }} onCancel={() => setConfirming(null)} />}
   </>

@@ -52,6 +52,22 @@ export const returnStripText = {
   },
 }
 
+/**
+ * Step 3 of the robot setup (round 5, W1). A check recorded before the current assignment no longer counts: the robot
+ * moved away and back, so it is said as history to redo, never as done. `at` is null when the server no longer sends
+ * that check's time (it then names both times in `readiness.detail`).
+ */
+export const deploymentStepText = {
+  previous: (passed: boolean, at: string | null) => `Lần trước: ${passed ? 'Đạt' : 'Không đạt'}${at ? ` ${at}` : ''}`,
+  beforeAssignment: (at: string | null, assignedAt: string) => `Lần trước: Đạt${at ? ` ${at}` : ''}, trước lần gán ${assignedAt}. Cần kiểm lại.`,
+}
+
+/** A robot running a Tour keeps its map, its activation and its key until the Tour ends (round 5, W2). */
+export const runningTourText = {
+  blocked: (tourName: string | null) => `Robot đang chạy Tour${tourName ? ` ${tourName}` : ''}. Kết thúc Tour rồi mới đổi.`,
+  revokeWarning: (tourName: string | null) => `Robot đang chạy Tour${tourName ? ` ${tourName}` : ''}; thu hồi khóa làm robot mất kết nối giữa Tour.`,
+}
+
 export function errorText(error: unknown) {
   const detail = apiErrorDetail(error)
   if (detail) return detail

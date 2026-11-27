@@ -16,10 +16,16 @@ vi.mock('./map/versioned-package', () => ({
 vi.mock('./map/load-map-image', () => ({ loadMapImage: vi.fn(async () => ({ pixels: null })) }))
 
 const map = { id: 'map-v1', areaKey: 'library', areaName: 'Library', versionNumber: 1, mapKey: 'library-v1', packageFileName: 'library.zip', packageSha256: 'a'.repeat(64), imageFileName: 'map.pgm', imageWidth: 2, imageHeight: 2, resolution: 0.5, originX: 10, originY: 20, originYaw: 0, negate: false, occupiedThreshold: 0.65, freeThreshold: 0.25, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-27T10:00:00Z' }
-const eligibleMap = { map, latestDeployment: null, technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, preparationBlockReasonCode: null, preparationBlockReason: null, preparationEvidence: { id: 'check-1', mapVersionId: map.id, robotCode: 'amr-01', packageSha256: map.packageSha256, localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Simulated test evidence', checkedAt: '2026-10-27T10:00:00Z' }, currentlyDeployedOn: [{ robotCode: 'amr-01', checkedAt: '2026-10-27T10:00:00Z' }] }
+// ADR-0066: the robot assigned to the map and its readiness there, which the form reads instead of currentlyDeployedOn.
+function running(robotCode: string, state: 'READY' | 'NOT_READY') {
+  return { id: `robot-${robotCode}`, robotCode, displayName: null, readiness: { state, reasonCode: state === 'READY' ? null : 'ROBOT_DEPLOYMENT_CHECK_REQUIRED', reason: null,
+    mapVersionId: 'map-v1', mapLabel: 'Library · v1', deploymentCheckedAt: null, reportingOnAssignedMap: true } }
+}
+const eligibleMap = { map, latestDeployment: null, technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, preparationBlockReasonCode: null, preparationBlockReason: null, preparationEvidence: { id: 'check-1', mapVersionId: map.id, robotCode: 'amr-01', packageSha256: map.packageSha256, localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Simulated test evidence', checkedAt: '2026-10-27T10:00:00Z' }, currentlyDeployedOn: [{ robotCode: 'amr-01', checkedAt: '2026-10-27T10:00:00Z' }], runningRobot: running('amr-01', 'READY') }
 const NativeURL = URL
 const proposal = { id: 'proposal-1', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library entry', purpose: 'Entrance', description: null, x: 10.25, y: 20.75, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_CHECKED', verificationSourceRevisionId: null } }
 const response = (data: unknown, status = 200) => new Response(JSON.stringify({ success: status < 400, message: 'OK', data, errors: null }), { status, headers: { 'Content-Type': 'application/json' } })
+const noReadyRobot = 'Chưa có robot sẵn sàng trên bản đồ này. POI gửi đi sẽ chờ tới khi Kỹ thuật gán và kiểm tra robot.'
 let requests: Array<{ url: URL; init?: RequestInit }> = []
 let mapItem: object = eligibleMap
 let restoreLayout: () => void
@@ -250,7 +256,7 @@ describe('Staff versioned POI workflow', () => {
   })
 
   it('warns when no robot is currently on a passed map but keeps that map selectable', async () => {
-    const passedMapWithoutCurrentRobot = { ...eligibleMap, currentlyDeployedOn: [] }
+    const passedMapWithoutCurrentRobot = { ...eligibleMap, currentlyDeployedOn: [], runningRobot: null }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })
       if (url.pathname === '/api/maps/versions') return response([passedMapWithoutCurrentRobot])
@@ -262,9 +268,29 @@ describe('Staff versioned POI workflow', () => {
     const picker = await screen.findByLabelText('Bản đồ') as HTMLSelectElement
     fireEvent.change(picker, { target: { value: 'map-v1' } })
 
-    expect(await screen.findByText('Chưa có robot dùng bản đồ này. Cần kỹ thuật triển khai trước khi kiểm chứng POI.')).toBeInTheDocument()
+    expect(await screen.findByText(noReadyRobot)).toBeInTheDocument()
     expect(picker.selectedOptions[0].disabled).toBe(false)
     expect(screen.getByRole('button', { name: 'Lưu, chưa gửi kiểm' })).toBeEnabled()
+  })
+
+  // Round 5 (W3): amr-01's newest PASS is on this map, but it has since been assigned another one.
+  it('does not call a robot that moved to another map the one using this map', async () => {
+    mapItem = { ...eligibleMap, runningRobot: null }
+    renderAt('/staff/manage/pois/new')
+    fireEvent.change(await screen.findByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+
+    expect(await screen.findByText(noReadyRobot)).toBeInTheDocument()
+    expect(screen.queryByText(/Robot đang dùng/)).not.toBeInTheDocument()
+  })
+
+  it('names a robot assigned here but not ready yet, and still warns', async () => {
+    mapItem = { ...eligibleMap, runningRobot: running('amr-01', 'NOT_READY') }
+    renderAt('/staff/manage/pois/new')
+    fireEvent.change(await screen.findByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+
+    expect(await screen.findByText('amr-01 đã gán bản đồ này, chưa sẵn sàng')).toBeInTheDocument()
+    expect(screen.getByText(noReadyRobot)).toBeInTheDocument()
+    expect(screen.queryByText(/Robot đang dùng/)).not.toBeInTheDocument()
   })
 
   it('revises with the current revision and rowversion and shows rejection reason/history', async () => {
