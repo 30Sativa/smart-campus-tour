@@ -69,6 +69,18 @@ public sealed class EfPhysicalRobotCredentialManager(
             throw new ConflictException("The robot has no active credential.", "CREDENTIAL_NOT_ACTIVE");
         if (expected is not null && !robot.RowVersion.AsSpan().SequenceEqual(expected))
             throw ConcurrencyConflict();
+        // ADR-0066 round 5: a new key mid-Tour cuts the MiniPC off. Revoke stays always possible (a leaked key, ADR-0049).
+        // The robot deployment lock is the one Start holds while it claims the robot.
+        if (operation == RobotCredentialOperation.Rotate)
+        {
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+                DECLARE @lockResult int;
+                EXEC @lockResult = sys.sp_getapplock @Resource = {"map-poi:robot-deployment:" + robot.Id.ToString("D")},
+                    @LockMode = N'Exclusive', @LockOwner = N'Transaction', @LockTimeout = 10000;
+                IF @lockResult < 0 THROW 51022, 'Could not acquire robot deployment state lock.', 1;
+                """, cancellationToken);
+            await RobotRunningTour.EnsureNoneAsync(dbContext, robot.Id, robot.RobotCode, RobotRunningTour.ChangeKey, cancellationToken);
+        }
 
         var now = timeProvider.GetUtcNow();
         FleetRobotCredential? generated = operation is RobotCredentialOperation.Issue or RobotCredentialOperation.Rotate

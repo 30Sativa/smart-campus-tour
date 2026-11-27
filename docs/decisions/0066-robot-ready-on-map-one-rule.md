@@ -44,8 +44,9 @@ Only dispatch had it right; that rule becomes the shared one.
    1. it is not deactivated (`ROBOT_DEACTIVATED`);
    2. its connection is confirmed, `FirstAcceptedSyncAt` is set (`ROBOT_CONNECTION_UNCONFIRMED`);
    3. `AssignedMapVersionId == M.Id` (`ROBOT_MAP_NOT_ASSIGNED`);
-   4. its newest deployment check on any map has `MapVersionId == M.Id`, localization and display passed, and the
-      package SHA-256 of M (`ROBOT_DEPLOYMENT_CHECK_REQUIRED`).
+   4. its newest deployment check on any map has `MapVersionId == M.Id`, localization and display passed, was
+      recorded at or after the current assignment (`CheckedAt >= MapAssignedAt`; round 5), and has the package SHA-256
+      of M (`ROBOT_DEPLOYMENT_CHECK_REQUIRED`).
 
    `RobotMapReadiness.Evaluate` (`backend/src/SmartCampus.Application/Features/MapPoi/Common/RobotMapReadiness.cs`)
    is the only implementation. Each failure carries a Vietnamese sentence naming the robot and, where relevant, the
@@ -131,5 +132,25 @@ Additive JSON fields, recorded in `docs/architecture.md` §3.4.6:
   robot's newest report refused with `MAP_CONTEXT_MISMATCH`; while it is fresh by `SyncFreshness` and newer than the
   newest accepted report, the connection is `WRONG_MAP` with `lastRejectedReport` instead of `DISCONNECTED`. No schema,
   grant or Fleet Sync wire change (`docs/architecture.md` §3.4.6).
+- **A check counts only for the current assignment (round 5, 27/11/2026).** amr_01 had a PASS on Betea on 23/11, was
+  assigned Tầng 6 · tang-6, then Betea again on 26/11, and showed READY with no check since: the 23/11 PASS was still its
+  newest check on any map, because nobody checked it on tang-6. The same happened for v2 then v1 of one area. Decision 3
+  already required a PASS to rest on data received after the assignment; decision 1.4 now requires the same of the check
+  it reads. A PASS on M recorded before `MapAssignedAt` gives `ROBOT_DEPLOYMENT_CHECK_REQUIRED` with the usual sentence
+  and the detail "Lần kiểm tra đạt gần nhất trên {M} lúc {dd/MM HH:mm} có trước lần gán lúc {dd/MM HH:mm}, cần kiểm
+  lại."; `readiness.deploymentCheckedAt` is null for it. A null `MapAssignedAt` (older rows) keeps the earlier rule.
+  Saving the version already held does not change `MapAssignedAt` (decision 4), so it never undoes readiness. After
+  deploy, amr_01 is "Chưa sẵn sàng" until Technical Staff record a new check on Betea; its dispatch switch stays as it is,
+  as above.
+- **No map, activation or key change while the robot runs a Tour (round 5, 27/11/2026).** Changing or clearing the
+  assignment stops dispatch (decision 4), and `PollRobotCommand` needs dispatch, so a RUNNING Tour stalled with no reason
+  shown; deactivating and rotating the key cut the MiniPC off. When `Robots.CurrentTourId` names a RUNNING Tour, changing
+  or clearing the map (assigning the version already held is not a change), deactivating and rotating the key return 409
+  `ROBOT_IN_RUNNING_TOUR`: "Robot {code} đang chạy Tour {tên}. Kết thúc Tour (hoặc kết thúc sớm) rồi mới {đổi bản đồ /
+  ngừng sử dụng / đổi khóa}.", with one `blockers` item `{ code: "TOUR", message: tên }`. It is read behind the
+  `map-poi:robot-deployment:{robotId}` lock (and, for deactivation, `tour-robot-reservation:{robotId}` after it), which
+  Start holds while it claims the robot; rotation now takes the deployment lock too. A robot held for inspection after its
+  Tour ended is not running. Stopping dispatch, revoking the key, releasing an inspection and recording a deployment check
+  are never refused (ADR-0049: the safer choice is always available).
 - Deploy PR 1 together with PR 2 and PR 3: the web before PR 2 still offers the old free-form check, which the backend
   now refuses for an unassigned robot.

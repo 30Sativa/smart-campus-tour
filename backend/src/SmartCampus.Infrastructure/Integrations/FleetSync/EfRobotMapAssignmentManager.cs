@@ -88,6 +88,8 @@ public sealed class EfRobotMapAssignmentManager(ApplicationDbContext db, TimePro
         var now = clock.GetUtcNow();
         // Assigning the version already held changes nothing: the assignment time, and so the live-data proof, stays.
         var changed = robot.AssignedMapVersionId != target?.Id;
+        // Read behind the robot deployment lock taken above, which Start also takes before it claims the robot.
+        if (changed) await RobotRunningTour.EnsureNoneAsync(db, robot.Id, robot.RobotCode, RobotRunningTour.ChangeMap, cancellationToken);
         if (changed)
         {
             robot.AssignedMapVersionId = target?.Id;
