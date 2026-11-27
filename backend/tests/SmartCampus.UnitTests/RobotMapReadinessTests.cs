@@ -121,6 +121,51 @@ public sealed class RobotMapReadinessTests
             RobotMapReadiness.Evaluate(robot, check, MapA));
     }
 
+    // Round 5, the amr_01 case of 27/11: PASS on Betea 23/11, assigned Tầng 6, then Betea again 26/11 with no check since.
+    [Fact]
+    public void A_pass_from_before_the_assignment_needs_a_new_check_after_reassigning_the_same_map()
+    {
+        var robot = Robot(MapB);
+        var check = Check(robot, MapB);
+        check.CheckedAt = new DateTimeOffset(2026, 11, 23, 6, 25, 0, TimeSpan.Zero);
+        robot.MapAssignedAt = new DateTimeOffset(2026, 11, 26, 7, 31, 0, TimeSpan.Zero);
+
+        var result = RobotMapReadiness.Evaluate(robot, check, MapB);
+
+        Assert.Equal("ROBOT_DEPLOYMENT_CHECK_REQUIRED", result.Code);
+        Assert.Equal("Robot amr_01 chưa kiểm tra triển khai trên Betea · betea · phiên bản 1 (gán lúc 26/11 14:31).", result.Message);
+        Assert.Equal("Lần kiểm tra đạt gần nhất trên Betea · betea · phiên bản 1 lúc 23/11 13:25 có trước lần gán lúc 26/11 14:31, cần kiểm lại.",
+            result.Detail);
+        var view = RobotMapReadiness.ToView(robot, check, true);
+        Assert.Equal(("NOT_READY", "ROBOT_DEPLOYMENT_CHECK_REQUIRED", "DEPLOYMENT_CHECK"), (view.State, view.ReasonCode, view.NextStep));
+        Assert.Null(view.DeploymentCheckedAt);
+    }
+
+    [Fact]
+    public void A_pass_on_v1_from_before_v2_then_v1_again_needs_a_new_check()
+    {
+        var v1 = Map("tang-6", "Tầng 6", 1, 0x41);
+        var robot = Robot(v1);
+        var check = Check(robot, v1);
+        // Assigned v2 after this check, then v1 again: the assignment time is the second v1 assignment.
+        robot.MapAssignedAt = check.CheckedAt.AddMinutes(10);
+
+        Assert.Equal("ROBOT_DEPLOYMENT_CHECK_REQUIRED", RobotMapReadiness.Evaluate(robot, check, v1).Code);
+    }
+
+    [Fact]
+    public void A_pass_at_or_after_the_assignment_counts_and_legacy_rows_without_an_assignment_time_keep_the_old_rule()
+    {
+        var robot = Robot(MapA);
+        var check = Check(robot, MapA);
+        robot.MapAssignedAt = check.CheckedAt;
+        Assert.True(RobotMapReadiness.Evaluate(robot, check, MapA).IsReady);
+        Assert.Equal(check.CheckedAt, RobotMapReadiness.ToView(robot, check, true).DeploymentCheckedAt);
+
+        robot.MapAssignedAt = null;
+        Assert.True(RobotMapReadiness.Evaluate(robot, check, MapA).IsReady);
+    }
+
     [Fact]
     public void A_route_revision_on_another_package_is_refused_by_the_same_rule()
     {

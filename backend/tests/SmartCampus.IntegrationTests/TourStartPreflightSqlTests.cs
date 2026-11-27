@@ -360,9 +360,12 @@ public sealed class TourStartPreflightSqlTests
         public MutableClock Clock => clock;
         public FakeConsole Console => console;
         public Guid OtherTourId { get; private set; }
+        // ADR-0066 round 5: a PASS counts only after the current assignment, so the fixture's check stays after it.
         public string AssignMapSql => $"""
             UPDATE robot SET AssignedMapVersionId = map.Id, AssignedAreaKey = map.AreaKey,
-                MapAssignedAt = SYSDATETIMEOFFSET(), MapAssignedByUserId = '{harness.TechnicalId}'
+                MapAssignedAt = COALESCE(DATEADD(SECOND, -1, (SELECT MIN(c.CheckedAt) FROM dbo.MapDeploymentChecks c WHERE c.RobotId = robot.Id)),
+                    SYSDATETIMEOFFSET()),
+                MapAssignedByUserId = '{harness.TechnicalId}'
             FROM dbo.Robots robot CROSS JOIN dbo.RouteRevisions revision JOIN dbo.MapVersions map ON map.Id = revision.MapVersionId
             WHERE revision.Id = '{harness.Route.RevisionId}';
             """;

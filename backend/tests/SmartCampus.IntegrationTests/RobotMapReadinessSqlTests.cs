@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.MapPoi;
+using SmartCampus.Application.Features.Tours.Commands.SetRobotDispatch;
 
 namespace SmartCampus.IntegrationTests;
 
@@ -131,6 +132,76 @@ public sealed partial class RobotIntegritySqlTests
         Assert.NotEqual(Guid.Empty, await h.CreateTour(tested, First));
     }
 
+    // Round 5, the amr_01 case of 27/11: a PASS on Betea, moved to Tầng 6, moved back to Betea, and READY with no new check.
+    [SchemaV11Fact]
+    public async Task Readiness_APassFromBeforeTheCurrentAssignment_NoLongerCounts_AfterMovingToBAndBack()
+    {
+        await using var h = await Harness.Create();
+        var poiOnA = await SubmittedPoi(h, h.PilotMap, "Cổng A");
+        var passOnA = await h.LatestDeployment(First);
+
+        await h.Assign(First, h.OtherMap.Id);
+        await h.Assign(First, h.PilotMap.Id);
+
+        var robot = await h.Robot(First);
+        Assert.True(passOnA.CheckedAt < robot.MapAssignedAt);
+        // Still the newest check on every map: nobody checked First on Other.
+        Assert.Equal(passOnA.Id, (await h.LatestDeployment(First)).Id);
+        var reason = await RobotReadinessTestSupport.NotCheckedOnAssignedMapAsync(h.Database.ConnectionString, First, "Pilot · pilot · phiên bản 1");
+        var status = (await RobotStatus(h, First)).Readiness;
+        Assert.Equal(("NOT_READY", "ROBOT_DEPLOYMENT_CHECK_REQUIRED", reason), (status.State, status.ReasonCode, status.Reason));
+        Assert.Null(status.DeploymentCheckedAt);
+        Assert.StartsWith("Lần kiểm tra đạt gần nhất trên Pilot · pilot · phiên bản 1 lúc ", status.Detail);
+        Assert.EndsWith(", cần kiểm lại.", status.Detail);
+
+        var verify = await Assert.ThrowsAsync<ConflictException>(() => VerifyPoi(h, poiOnA, First));
+        Assert.Equal(("MAP_NOT_DEPLOYED", reason), (verify.Code, verify.Message));
+        var dispatch = await Assert.ThrowsAsync<ConflictException>(() => EnableDispatch(h, First));
+        Assert.Equal(("ROBOT_DEPLOYMENT_CHECK_REQUIRED", reason), (dispatch.Code, dispatch.Message));
+        Assert.False((await h.Robot(First)).IsDispatchEnabled);
+
+        // A new check after the assignment, on live data, makes it ready again.
+        await RobotReadinessTestSupport.ReportAsync(h.Services, First, h.PilotMap.MapKey, h.PilotMap.FrameId, DateTimeOffset.UtcNow);
+        await Deploy(h, h.PilotMap, First, passed: true);
+        Assert.Equal("READY", (await RobotStatus(h, First)).Readiness.State);
+        Assert.Equal("PASS", (await VerifyPoi(h, poiOnA, First)).ResultCode);
+        Assert.True((await EnableDispatch(h, First)).IsDispatchEnabled);
+    }
+
+    [SchemaV11Fact]
+    public async Task Readiness_APassOnV1_NoLongerCounts_AfterMovingToV2AndBackToV1()
+    {
+        await using var h = await Harness.Create();
+        var tested = await h.TestedRoute();
+
+        await h.Assign(First, h.PilotMapV2.Id);
+        await h.Assign(First, h.PilotMap.Id);
+
+        var reason = await RobotReadinessTestSupport.NotCheckedOnAssignedMapAsync(h.Database.ConnectionString, First, "Pilot · pilot · phiên bản 1");
+        var status = (await RobotStatus(h, First)).Readiness;
+        Assert.Equal(("NOT_READY", "ROBOT_DEPLOYMENT_CHECK_REQUIRED", reason), (status.State, status.ReasonCode, status.Reason));
+        var run = await Assert.ThrowsAsync<ConflictException>(() => h.RecordRouteTest(tested, First));
+        Assert.Equal(("ROBOT_DEPLOYMENT_CHECK_REQUIRED", reason), (run.Code, run.Message));
+        await h.AssertBlocked(tested, First, reason);
+    }
+
+    [SchemaV11Fact]
+    public async Task Readiness_SavingTheSameMapAgainAfterANewCheck_KeepsTheRobotReady()
+    {
+        await using var h = await Harness.Create();
+        await h.Assign(First, h.OtherMap.Id);
+        await h.Assign(First, h.PilotMap.Id);
+        await RobotReadinessTestSupport.ReportAsync(h.Services, First, h.PilotMap.MapKey, h.PilotMap.FrameId, DateTimeOffset.UtcNow);
+        await Deploy(h, h.PilotMap, First, passed: true);
+        var before = await h.Robot(First);
+
+        // "Lưu bản đồ" again on the version held keeps the assignment time (ADR-0066 decision 4), so the new check still counts.
+        await h.Assign(First, h.PilotMap.Id);
+
+        Assert.Equal(before.MapAssignedAt, (await h.Robot(First)).MapAssignedAt);
+        Assert.Equal("READY", (await RobotStatus(h, First)).Readiness.State);
+    }
+
     [SchemaV11Fact]
     public async Task Readiness_ImportOnAMapTheRobotDoesNotHold_QueuesTheFilesForVerification()
     {
@@ -221,6 +292,13 @@ public sealed partial class RobotIntegritySqlTests
 
     private static Task<MapDeploymentCheckView> Deploy(Harness h, MapVersionView map, string robot, bool passed) =>
         h.Send(new RecordMapDeploymentCommand(h.TechnicalId, map.Id, new(Guid.NewGuid(), robot, map.PackageSha256, passed, true, "Kiểm tra triển khai.")));
+
+    private static async Task<SetRobotDispatchResult> EnableDispatch(Harness h, string code)
+    {
+        var robot = await h.Robot(code);
+        return await h.Send(new SetRobotDispatchCommand(robot.Id, h.TechnicalId,
+            new(Guid.NewGuid(), Convert.ToBase64String(robot.RowVersion), true, "Biên bản GATE A", "robot/docs/m2-3-gate-a-evidence.md")));
+    }
 
     private static async Task<PhysicalRobotStatus> RobotStatus(Harness h, string code) =>
         Assert.Single(await h.Send(new ListPhysicalRobotsQuery()), robot => robot.RobotCode == code);
