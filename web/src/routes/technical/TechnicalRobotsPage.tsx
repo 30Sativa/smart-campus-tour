@@ -13,7 +13,7 @@ import { connectionStatusLabel, deploymentStepText, errorText, releaseInspection
 import { returnTarget, technicalReturnPath } from '../../features/technical/technical-nav'
 import { formatDateTime } from '../../components/ui/date-time'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { areaLabel, duplicateAreaNames, exactMapLabel, mapCheckLabel } from '../../features/technical/poi-labels'
+import { areaLabel, duplicateAreaNames, mapCheckLabel, mapShortLabel } from '../../features/technical/poi-labels'
 import { DeploymentCheckForm } from '../../features/technical/DeploymentCheckForm'
 import { ReadinessBadge, ReadinessSummary } from '../../features/technical/ReadinessBadge'
 import { RobotCredentialPanel } from './RobotCredentialPanel'
@@ -145,7 +145,7 @@ function ReturnStrip({ returnTo, robot }: { returnTo: string; robot: PhysicalRob
   const ready = Boolean(found && readyOn && readyOn === found.mapVersionId)
   const targetMap = found && maps.data?.find(item => item.map.id === found.mapVersionId)?.map
   const otherMap = target && found && readyOn && !ready
-    ? returnStripText.otherMap({ kind: target.kind, name: found.name }, robot.robotCode, targetMap ? exactMapLabel(targetMap) : null, mapLabelOf(readyOn) ?? robot.readiness?.mapLabel ?? 'bản đồ khác')
+    ? returnStripText.otherMap({ kind: target.kind, name: found.name }, robot.robotCode, targetMap ? mapLabelOf(targetMap.id) : null, mapLabelOf(readyOn) ?? robot.readiness?.mapLabel ?? 'bản đồ khác')
     : null
   return (
     <div role="note" aria-label="Quay lại" className={`mb-3 flex flex-wrap items-center gap-x-1 gap-y-2 rounded-lg px-3 py-2 text-[13px] ${ready ? 'bg-[#f0fdf4] text-[#166534]' : 'bg-[#eff6ff] text-[#1e293b]'}`}>
@@ -531,7 +531,7 @@ function RobotMapAssignmentModal({ robot, strip, otherRobots, initialMapVersionI
   </Modal>
   {confirming && <ConfirmationDialog open withReason={false} tone={confirming === 'clear' ? 'danger' : 'default'}
     title={confirming === 'clear' ? `Gỡ bản đồ khỏi ${robot.robotCode}?` : `Gán bản đồ cho ${robot.robotCode}?`}
-    description={confirming === 'clear' ? `Fleet Sync sẽ từ chối báo cáo của robot cho đến khi được gán lại bản đồ.${dispatchLine}` : `Gán ${selected?.map.areaName} phiên bản ${selected?.map.versionNumber}. Trên MiniPC nhập MapKey ${selected?.map.mapKey}, FrameId ${selected?.map.frameId}. Sai giá trị thì dữ liệu của robot sẽ bị từ chối. Sau khi gán cần kiểm tra triển khai lại trên bản đồ này.${dispatchLine}`}
+    description={confirming === 'clear' ? `Fleet Sync sẽ từ chối báo cáo của robot cho đến khi được gán lại bản đồ.${dispatchLine}` : `Gán ${selected ? mapShortLabel(selected.map, duplicateAreas) : ''}. Trên MiniPC nhập MapKey ${selected?.map.mapKey}, FrameId ${selected?.map.frameId}. Sai giá trị thì dữ liệu của robot sẽ bị từ chối. Sau khi gán cần kiểm tra triển khai lại trên bản đồ này.${dispatchLine}`}
     confirmLabel={confirming === 'clear' ? 'Gỡ gán' : 'Gán bản đồ'} onConfirm={confirm} onCancel={() => setConfirming(null)}>
     <AffectedTours title="Các Tour sau sẽ không chạy được với bản đồ mới:" tours={tours} />
   </ConfirmationDialog>}

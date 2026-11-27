@@ -29,7 +29,7 @@ function renderPage() {
 
 async function pickEverything() {
   renderPage()
-  await screen.findByRole('option', { name: 'Tầng 6 · floor6 · phiên bản 2' })
+  await screen.findByRole('option', { name: 'Tầng 6 · v2' })
   fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
   await screen.findByRole('option', { name: /amr-01/ })
   fireEvent.change(screen.getByLabelText('Robot đã ghi pose'), { target: { value: 'amr-01' } })
@@ -63,7 +63,7 @@ describe('Technical POI file import', () => {
   // Round 2 W3: a passed check is history (ADR-0028), not proof a robot can use the map now.
   it('reads the chosen map\'s passed check as Từng kiểm tra triển khai đạt', async () => {
     renderPage()
-    await screen.findByRole('option', { name: 'Tầng 6 · floor6 · phiên bản 2' })
+    await screen.findByRole('option', { name: 'Tầng 6 · v2' })
     fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
     expect(await screen.findByText('Từng kiểm tra triển khai đạt')).toBeInTheDocument()
     expect(screen.queryByText('Đã kiểm tra triển khai đạt')).not.toBeInTheDocument()
@@ -71,7 +71,7 @@ describe('Technical POI file import', () => {
 
   it('chooses the robot ready on the chosen version, and warns before import when another robot is chosen', async () => {
     renderPage()
-    await screen.findByRole('option', { name: 'Tầng 6 · floor6 · phiên bản 2' })
+    await screen.findByRole('option', { name: 'Tầng 6 · v2' })
     await waitFor(() => expect(requests.some(item => item.path === '/api/technical/physical-robots')).toBe(true))
     await screen.findByRole('option', { name: /amr-01/ })
     fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
@@ -138,7 +138,7 @@ describe('Technical POI file import', () => {
     const rows = await list.findAllByRole('row')
     expect(rows).toHaveLength(3)
     expect(rows[1]).toHaveTextContent('POI_02')
-    expect(rows[1]).toHaveTextContent('Tầng 6 · floor6 · phiên bản 2')
+    expect(rows[1]).toHaveTextContent('Tầng 6 · v2')
     expect(rows[1]).toHaveTextContent('Chờ kiểm chứng')
     expect(rows[1]).toHaveTextContent('Chưa có')
     expect(rows[2]).toHaveTextContent('Đạt · Ghi pose trực tiếp trên robot')

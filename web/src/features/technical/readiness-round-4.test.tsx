@@ -36,7 +36,7 @@ let robots: PhysicalRobotOption[] = []
 function api(url: URL) {
   switch (url.pathname) {
     case '/api/maps/versions': return ok([mapItem(tang6), mapItem(test123), mapItem(betea)])
-    case '/api/maps/areas': return ok([{ areaKey: 'tang-6', displayName: 'Tầng 6' }, { areaKey: 'test123', displayName: 'Tầng 6' }, { areaKey: 'betea', displayName: 'Betea' }])
+    case '/api/technical/map-areas': return ok([{ areaKey: 'tang-6', displayName: 'Tầng 6' }, { areaKey: 'test123', displayName: 'Tầng 6' }, { areaKey: 'betea', displayName: 'Betea' }])
     case '/api/technical/physical-robots': return ok(robots)
     case '/api/technical/poi-verifications': return ok([{ proposalId: 'proposal-1', currentRevision: 1, rowVersion: 'AAAAAAAAAAA=', revision }])
     case '/api/technical/route-verifications/queue': return ok([route])

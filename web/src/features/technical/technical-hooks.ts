@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { notify, type ToastInput } from '../../components/ui/toast-store'
 import { versionedRoutesApi } from '../administration/routes/versioned-api'
-import { technicalApi, type ReleaseRobotInspectionInput, type RouteTestRunInput, type SetRobotDispatchInput } from './api/technical'
+import { technicalApi, type MapVersionItem, type ReleaseRobotInspectionInput, type RouteTestRunInput, type SetRobotDispatchInput } from './api/technical'
 import { diagnosticsApi } from './api/diagnostics-api'
 import { duplicateAreaNames, mapShortLabel } from './poi-labels'
 
@@ -35,10 +35,23 @@ export function useMapAreas(enabled = true) {
   return useQuery({ queryKey: ['technical', 'map-areas'], queryFn: technicalApi.listMapAreas, enabled })
 }
 
-/** Area names that more than one area uses; only those print their area key beside the name. Empty until the list loads. */
-export function useDuplicateAreaNames() {
+/**
+ * Area names that more than one area uses; only those print their area key beside the name. Every map version names
+ * its area too, so the versions (and any `extra` the caller already holds) count alongside the area list.
+ */
+export function useDuplicateAreaNames(extra?: MapVersionItem[]) {
   const areas = useMapAreas()
-  return useMemo(() => duplicateAreaNames((areas.data ?? []).map(area => ({ areaKey: area.areaKey, name: area.displayName }))), [areas.data])
+  const maps = useAllMapVersions()
+  return useMemo(() => duplicateAreaNames([
+    ...(areas.data ?? []).map(area => ({ areaKey: area.areaKey, name: area.displayName })),
+    ...[...(maps.data ?? []), ...(extra ?? [])].map(item => ({ areaKey: item.map.areaKey, name: item.map.areaName })),
+  ]), [areas.data, maps.data, extra])
+}
+
+/** `mapLabel` with the shared-name check: pass a map version, get "{area} · v{n}" (with the area key when the name is shared). */
+export function useMapLabel(extra?: MapVersionItem[]) {
+  const duplicates = useDuplicateAreaNames(extra)
+  return useMemo(() => (map: { areaName: string; areaKey: string; versionNumber: number }) => mapShortLabel(map, duplicates), [duplicates])
 }
 
 /** "{area} · v{n}" of a map version by id, with the area key when the name is shared; null while the version is unknown. */
@@ -171,21 +184,30 @@ function useTechnicalMutation<T, R>(run: (input: T) => Promise<R>, invalidate: r
   })
 }
 
-export const useUploadMap = () => useTechnicalMutation(technicalApi.uploadMap, keys.maps, (input, map) => ({
-  title: `Đã lưu ${map?.mapKey ?? input.package.name} · v${map?.versionNumber ?? ''}`,
-  detail: 'Upload chỉ lưu phiên bản trên hệ thống; chưa nạp map lên robot.',
-}))
+export function useUploadMap() {
+  const duplicates = useDuplicateAreaNames()
+  return useTechnicalMutation(technicalApi.uploadMap, keys.maps, (input, map) => ({
+    title: `Đã lưu ${map ? mapShortLabel(map, duplicates) : input.package.name}`,
+    detail: 'Upload chỉ lưu phiên bản trên hệ thống; chưa nạp map lên robot.',
+  }))
+}
 
 /** Nothing is deleted: the version leaves every picker and keeps its history (ADR-0041). */
-export const useRetireMap = () => useTechnicalMutation(technicalApi.retireMap, keys.maps, (_input, map) => ({
-  title: `Đã ngừng sử dụng ${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`,
-  detail: 'POI, tuyến và kết quả kiểm tra trên phiên bản này vẫn được giữ.',
-}))
+export function useRetireMap() {
+  const duplicates = useDuplicateAreaNames()
+  return useTechnicalMutation(technicalApi.retireMap, keys.maps, (_input, map) => ({
+    title: `Đã ngừng sử dụng ${mapShortLabel(map, duplicates)}`,
+    detail: 'POI, tuyến và kết quả kiểm tra trên phiên bản này vẫn được giữ.',
+  }))
+}
 
-export const useReopenMap = () => useTechnicalMutation(technicalApi.reopenMap, keys.maps, (_input, map) => ({
-  title: `Đã mở lại ${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`,
-  detail: 'Phiên bản này lại dùng được cho việc mới.',
-}))
+export function useReopenMap() {
+  const duplicates = useDuplicateAreaNames()
+  return useTechnicalMutation(technicalApi.reopenMap, keys.maps, (_input, map) => ({
+    title: `Đã mở lại ${mapShortLabel(map, duplicates)}`,
+    detail: 'Phiên bản này lại dùng được cho việc mới.',
+  }))
+}
 
 /** Staff remove a never-passed POI from the list; its history stays on the server (ADR-0051). */
 export const useDiscardPoiProposal = () => useTechnicalMutation(technicalApi.discardPoiProposal, keys.poiProposals, input => ({
@@ -224,7 +246,7 @@ export const useRegisterPhysicalRobot = () => useTechnicalMutation(technicalApi.
 }))
 
 export const useDeactivateRobot = () => useTechnicalMutation(technicalApi.deactivateRobot, keys.physicalRobots, (_input, result) => ({
-  title: `Đã ngừng sử dụng ${result.robotCode}`,
+    title: `Đã ngừng sử dụng ${result.robotCode}`,
   detail: 'Khóa kết nối đã bị thu hồi và bản đồ đã được gỡ gán.',
 }))
 

@@ -4,9 +4,8 @@ import { Link } from 'react-router'
 import { formatDateTime } from '../../components/ui/date-time'
 import { buttonClass, labelClass } from '../../components/ui/ui-classes'
 import type { MapVersion, PhysicalRobotOption } from './api/technical'
-import { exactMapLabel } from './poi-labels'
 import { robotForMap, robotSetupPath } from './robot-readiness'
-import { useAllMapVersions } from './technical-hooks'
+import { useAllMapVersions, useMapLabel } from './technical-hooks'
 import { errorText, robotFieldText } from './technical-format'
 
 const sameName = (a: string | null | undefined, b: string | null | undefined) =>
@@ -34,13 +33,14 @@ export function ReadyRobotField({ robots, mapVersionId, map, subject, returnTo, 
   onAssignRobot: (mapLabel: string, preselectRobotId?: string) => void
 }) {
   const maps = useAllMapVersions()
+  const labelOf = useMapLabel()
   const { ready, assigned } = robotForMap(robots.data, mapVersionId)
   const refresh = !robots.isPending && !robots.isError && <button type="button" className={buttonClass('secondary', 'sm')} disabled={robots.isFetching} onClick={() => void robots.refetch()}><RefreshCw size={13} aria-hidden="true" />{robots.isFetching ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button>
-  const mapText = map ? exactMapLabel(map) : ready?.readiness.mapLabel ?? 'bản đồ này'
+  const mapText = map ? labelOf(map) : ready?.readiness.mapLabel ?? 'bản đồ này'
   // Two areas may share a name ("Tầng 6"); a robot on the other one is the usual reason none runs this map.
   const elsewhere = map && !assigned ? robots.data?.find(robot => !robot.deactivatedAt && robot.assignedMapVersionId && robot.assignedMapVersionId !== mapVersionId && sameName(robot.assignedAreaName, map.areaName)) : undefined
   const elsewhereMap = elsewhere && maps.data?.find(item => item.map.id === elsewhere.assignedMapVersionId)?.map
-  const elsewhereText = elsewhere && (elsewhereMap ? exactMapLabel(elsewhereMap) : `${elsewhere.assignedAreaName} · ${elsewhere.assignedMapKey} · v${elsewhere.assignedVersionNumber}`)
+  const elsewhereText = elsewhere && (elsewhereMap ? labelOf(elsewhereMap) : `${elsewhere.assignedAreaName} · v${elsewhere.assignedVersionNumber}`)
   return (
     <div>
       <div className="flex items-end justify-between gap-2"><span className={labelClass}>Robot vật lý</span>{refresh}</div>
@@ -52,7 +52,7 @@ export function ReadyRobotField({ robots, mapVersionId, map, subject, returnTo, 
         : assigned ? <NotReadyChecklist robot={assigned} mapKey={map?.mapKey ?? assigned.assignedMapKey ?? ''} returnTo={returnTo} />
         : <div role="status" className="mt-1 space-y-1.5 rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
           <p>{robotFieldText.noRobot}</p>
-          {elsewhere && map && <p>{robotFieldText.otherMap(elsewhere.robotCode, elsewhereText!, subject, exactMapLabel(map))}</p>}
+          {elsewhere && map && <p>{robotFieldText.otherMap(elsewhere.robotCode, elsewhereText!, subject, labelOf(map))}</p>}
           <div className="space-y-1">
             <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => onAssignRobot(mapText, elsewhere?.id)}>Gán robot cho bản đồ này</button>
             <p className="text-xs">{robotFieldText.assignConsequence}</p>

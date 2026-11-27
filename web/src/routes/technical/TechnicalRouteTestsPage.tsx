@@ -15,7 +15,7 @@ import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
 import { CheckRow, ComputedResult, NoneChecked, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { errorText, routeTestErrors } from '../../features/technical/technical-format'
 import { formatDateTime, formatMinutesSeconds } from '../../components/ui/date-time'
-import { useMapVersions, usePhysicalRobots, usePreviousRevision, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
+import { useMapShortLabel, useMapVersions, usePhysicalRobots, usePreviousRevision, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 
 type RouteFilter = 'pending' | 'passed' | 'failed'
 type RouteRow = { route: VersionedRoute; filter: RouteFilter }
@@ -46,6 +46,7 @@ function toRows(queue: VersionedRoute[], routes: VersionedRoute[]): RouteRow[] {
  */
 export default function TechnicalRouteTestsPage() {
   const queue = useRouteTestQueue()
+  const mapLabelOf = useMapShortLabel()
   const routes = useSubmittedRoutes()
   const [filter, setFilter] = useState<RouteFilter>('pending')
   const [dialog, setDialog] = useState<Dialog | null>(null)
@@ -102,7 +103,7 @@ export default function TechnicalRouteTestsPage() {
                   const retired = route.isActive === false
                   return <tr key={route.revisionId} className={`${rowClass}${retired ? ' opacity-60' : ''}`}>
                   <td className={tdClass}><span className="font-semibold text-[#0f172a]">{route.name}</span>{retired && <> <ToneBadge tone="muted">Đã ngừng sử dụng</ToneBadge></>}<p className="text-[11.5px] text-[#64748b]">Phiên bản {route.revisionNumber}</p>{shared && <p className="mt-0.5 max-w-md text-[11.5px] text-[#8a5a06]">{shared}</p>}</td>
-                  <td className={`${tdClass} font-mono text-xs`}>{route.mapKey}</td>
+                  <td className={`${tdClass} text-xs`}>{mapLabelOf(route.mapVersionId) ?? route.mapKey}</td>
                   <td className={`${tdClass} text-xs text-[#64748b]`}>{route.stops.length} điểm · dừng {formatMinutesSeconds(route.dwellDurationSeconds)}</td>
                   <td className={tdClass}><ToneBadge tone={rowFilter === 'passed' ? 'ok' : rowFilter === 'failed' ? 'danger' : 'warn'}>{revisionTone(true, route.verificationStatus).label}</ToneBadge>{source && <p className="mt-1 text-[11.5px] text-[#64748b]">Giữ kết quả từ bản {campusShortStamp(source.createdAt)}</p>}{route.legCoverage && <p className="mt-1 text-[11.5px] text-[#64748b]">{legCoverageText(route.legCoverage)}</p>}</td>
                   <td className={`${tdClass} text-right`}>{rowFilter === 'pending'
@@ -133,6 +134,7 @@ export default function TechnicalRouteTestsPage() {
 
 function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: VersionedRoute; onClose: () => void; onAssignRobot: (mapLabel: string, preselectRobotId?: string) => void }) {
   const record = useRecordRouteTest()
+  const mapLabelOf = useMapShortLabel()
   const robots = usePhysicalRobots()
   const maps = useMapVersions()
   const participants = useRouteTestParticipants()
@@ -190,7 +192,7 @@ function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: Versio
   }
 
   return (
-    <Modal open size="lg" title={`Chạy thử ${route.name}`} description={`Phiên bản ${route.revisionNumber} · bản đồ ${route.mapKey} · ${route.stops.length} điểm dừng. Đạt khi cả ba kiểm tra đều đạt.`} onClose={onClose}
+    <Modal open size="lg" title={`Chạy thử ${route.name}`} description={`Phiên bản ${route.revisionNumber} · bản đồ ${mapLabelOf(route.mapVersionId) ?? route.mapKey} · ${route.stops.length} điểm dừng. Đạt khi cả ba kiểm tra đều đạt.`} onClose={onClose}
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><ComputedResult passed={resultCode === 'PASS'} pending={pending} failed={failedCheckNames({ allStopsReached, safelyStopped, localizationPassed })} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="route-test-form" className="space-y-3.5" onSubmit={submit}>
         <div>
@@ -229,11 +231,12 @@ function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: Versio
 
 function RouteResultModal({ route, onRecord, onClose }: { route: VersionedRoute; onRecord: () => void; onClose: () => void }) {
   const detail = useRouteRevision(route.routeId, route.revisionId)
+  const mapLabelOf = useMapShortLabel()
   const participants = useRouteTestParticipants()
   const runs = [...(detail.data?.testRuns ?? [])].sort((a, b) => b.checkedAt.localeCompare(a.checkedAt))
   const staffName = (id: string) => participants.data?.find(person => person.userId === id)?.fullName ?? 'Staff không còn hoạt động'
   return (
-    <Modal open size="lg" title={`Kết quả ${route.name}`} description={`Phiên bản ${route.revisionNumber} · bản đồ ${route.mapKey}.`} onClose={onClose}
+    <Modal open size="lg" title={`Kết quả ${route.name}`} description={`Phiên bản ${route.revisionNumber} · bản đồ ${mapLabelOf(route.mapVersionId) ?? route.mapKey}.`} onClose={onClose}
       footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="button" className={buttonClass('primary')} onClick={onRecord}>Ghi lần chạy mới</button></div>}>
       <div className="space-y-3">
         {detail.isPending && <p role="status" className="text-sm text-[#64748b]">Đang tải kết quả…</p>}

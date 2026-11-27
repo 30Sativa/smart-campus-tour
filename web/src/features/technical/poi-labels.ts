@@ -67,8 +67,8 @@ export function routeUseLine(proposal: PoiProposal): { usable: boolean; text: st
   return reasons.length ? { usable: false, text: `Chưa, vì ${reasons.join(' và ')}` } : { usable: true, text: 'Có' }
 }
 
-/** Two areas may share a display name, so the area key keeps map choices apart. */
-export const mapVersionLabel = (map: { areaName: string; areaKey: string; versionNumber: number }) => `${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`
+/** Two areas may share a display name; pass `duplicates` (useDuplicateAreaNames) so the area key keeps them apart. */
+export const mapVersionLabel = (map: MapLabelInput, duplicates: Set<string> = new Set()) => mapLabel(map, duplicates)
 
 export const mapCheckLabel = (status: string) => status === 'PASSED' ? 'Từng kiểm tra triển khai đạt' : status === 'FAILED' ? 'Kiểm tra triển khai chưa đạt' : 'Chưa kiểm tra triển khai'
 
@@ -102,9 +102,15 @@ export function duplicateAreaNames(areas: Array<{ areaKey: string; name: string 
 export const areaLabel = (name: string, areaKey: string, duplicates: Set<string>) =>
   duplicates.has(normalizedAreaName(name)) ? `${name.trim()} · ${areaKey}` : name.trim()
 
-/** "{area} · {key} · v{n}": the map named exactly, as the robot line of the POI and route forms prints it. */
-export const exactMapLabel = (map: { areaName: string; areaKey: string; versionNumber: number }) => `${map.areaName} · ${map.areaKey} · v${map.versionNumber}`
+type MapLabelInput = { areaName: string; areaKey: string; versionNumber: number }
 
-/** A map version in running text: "Tầng 6 · v1", or "Tầng 6 · tang-6 · v1" when another area shares the name. */
-export const mapShortLabel = (map: { areaName: string; areaKey: string; versionNumber: number }, duplicates: Set<string>) =>
+/**
+ * The one way a map version is named on every screen (round 7, 2.6): "Tầng 6 · v1", or "Tầng 6 · tang-6 · v1" when
+ * another area shares the name. MapKey and FrameId are printed only where someone types them on the MiniPC.
+ */
+export const mapLabel = (map: MapLabelInput, duplicates: Set<string> = new Set()) =>
   `${areaLabel(map.areaName, map.areaKey, duplicates)} · v${map.versionNumber}`
+
+/** Older names of `mapLabel`, kept so callers read the same. */
+export const exactMapLabel = mapLabel
+export const mapShortLabel = mapLabel
