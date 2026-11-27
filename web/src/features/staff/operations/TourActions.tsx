@@ -231,6 +231,7 @@ export function EndEarlyAction({ detail, backup = false, disabledNote }: { detai
   const end = useEndTourEarly()
   const requestId = useIntentRequestIds()
   return <GatedAction id="end-early" label={backup ? BACKUP_END.button : "Kết thúc sớm Tour"} icon={<CircleStop size={18} aria-hidden="true" />} gate={actionGate(detail, 'endEarly')} variant="danger"
+    frozen={backup && detail.operatorLastSeenAt && !detail.operatorDisconnectedSince ? disabledNote ?? BACKUP_END.reconnected : null}
     hint={backup ? BACKUP_END.hint : "Dừng Tour, không dừng khẩn cấp robot."} disabledNote={disabledNote}
     dialog={{ title: backup ? BACKUP_END.button : 'Kết thúc sớm Tour?', confirmLabel: 'Kết thúc sớm', busyLabel: 'Đang kết thúc…',
       description: <div className="space-y-2">

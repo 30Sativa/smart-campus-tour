@@ -18,7 +18,7 @@ export function OperatorPresencePanel({ detail }: { detail: TourDetails }) {
   const name = detail.operator?.fullName ?? '-'
   const minutes = detail.operatorDisconnectEndEarlyMinutes
   const configured = typeof minutes === 'number' && minutes > 0
-  const allowed = Boolean(detail.allowedActions?.endEarly?.allowed) && configured
+  const allowed = Boolean(detail.allowedActions?.endEarly?.allowed) && configured && (Boolean(since) || !last)
   const remaining = last && configured ? Math.max(0, Math.ceil((Date.parse(last) + minutes * 60_000 - now) / 1000)) : 0
   const countdown = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`
   const status = since ? BACKUP_END.disconnected(name, formatTime(since), Math.max(0, Math.floor((now - Date.parse(since)) / 60_000)))

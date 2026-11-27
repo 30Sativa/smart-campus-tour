@@ -100,6 +100,15 @@ describe('backup Staff End Early', () => {
     expect(screen.getByText(/còn 00:00/)).toBeInTheDocument()
   })
 
+  it('locks connected presence even when a cached action gate still says allowed', async () => {
+    detail.operatorLastSeenAt = '2026-11-27T02:59:00Z'
+    detail.operatorDisconnectedSince = null
+    show()
+    expect(await screen.findByRole('button', { name: BUTTON })).toBeDisabled()
+    expect(screen.getByText('Chỉ dùng được sau 5 phút người vận hành mất kết nối (còn 04:00).')).toBeInTheDocument()
+    expect(calls).toHaveLength(0)
+  })
+
   it('allows legacy null contact through the server gate and explains the missing timestamp', async () => {
     detail.operatorLastSeenAt = null; detail.operatorDisconnectedSince = null; show()
     const action = await screen.findByRole('button', { name: BUTTON }); expect(action).toBeEnabled(); fireEvent.click(action)
