@@ -10,11 +10,11 @@ import { DeployToRobotDialog } from '../../features/technical/DeployToRobotDialo
 import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
 import { poiReturnPath, robotForMap } from '../../features/technical/robot-readiness'
 import { CheckRow, ComputedResult, NoneChecked, DetailFact, Note, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
-import { mapVersionLabel, narrationStatus, poiObservationLabels, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { narrationStatus, poiObservationLabels, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { headPresetLabel } from '../../features/technical/head-camera-preset'
 import { errorText, poiVerifyErrors } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
-import { useMapVersions, usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
+import { useMapLabel, useMapVersions, usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
 import type { PoiNarrationSummary, PoiProposal, PoiRevision, PoiVerificationQueueItem } from '../../features/technical/api/technical'
 
 type PoiFilter = 'pending' | 'retry' | 'passed'
@@ -58,11 +58,12 @@ export default function TechnicalPoisPage() {
   useEffect(() => {
     if (searchParams.has('poi')) setSearchParams(current => { const next = new URLSearchParams(current); next.delete('poi'); return next }, { replace: true })
   }, [searchParams, setSearchParams])
+  const mapLabel = useMapLabel()
   const maps = useMapVersions()
   // People read the area and version; the map key is only a fallback while the list loads.
   const mapName = (mapKey: string) => {
     const map = maps.data?.find(item => item.map.mapKey === mapKey)?.map
-    return map ? mapVersionLabel(map) : mapKey
+    return map ? mapLabel(map) : mapKey
   }
   const [filter, setFilter] = useState<PoiFilter>('pending')
 

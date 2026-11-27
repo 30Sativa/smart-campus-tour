@@ -8,7 +8,8 @@ import { usePagination } from '../../components/ui/use-pagination'
 import { useMapRaster } from '../administration/pois/map/use-map-raster'
 import { DetailFact, ToneBadge, ViewDetailButton } from './TechnicalUi'
 import type { MapAreaOption, MapRunningRobot, MapVersionItem } from './api/technical'
-import { mapCheckLabel, mapVersionLabel } from './poi-labels'
+import { mapCheckLabel } from './poi-labels'
+import { useMapLabel } from './technical-hooks'
 import { DeployToRobotDialog } from './DeployToRobotDialog'
 import { ReadinessBadge } from './ReadinessBadge'
 import { readinessView, robotSetupPath } from './robot-readiness'
@@ -91,7 +92,7 @@ function MapPreview({ mapVersionId, label }: { mapVersionId: string; label: stri
  * What the table leaves out, for one version of the area. The checksum is here so the file on the robot
  * can be compared with the one uploaded; the version list switches which version the dialog shows.
  */
-function MapVersionDetail({ area, itemId, onSelect, onClose, onUpload, onRetire }: { area: AreaRow; itemId: string; onSelect: (id: string) => void; onClose: () => void } & Actions) {
+function MapVersionDetail({ mapVersionLabel, area, itemId, onSelect, onClose, onUpload, onRetire }: { mapVersionLabel: (map: MapVersionItem['map']) => string; area: AreaRow; itemId: string; onSelect: (id: string) => void; onClose: () => void } & Actions) {
   const [deploying, setDeploying] = useState(false)
   const item = area.versions.find(version => version.map.id === itemId) ?? area.latest
   const { map, preparationEvidence: evidence, runningRobot } = item
@@ -156,6 +157,7 @@ function MapVersionDetail({ area, itemId, onSelect, onClose, onUpload, onRetire 
 /** One line per area, led by its newest version: only what decides the next step. The rest opens from the eye. */
 export function MapVersionTable({ items, onUpload, onRetire }: { items: MapVersionItem[] } & Actions) {
   const [search, setSearch] = useState('')
+  const mapVersionLabel = useMapLabel(items)
   const [viewing, setViewing] = useState<{ areaKey: string; itemId: string } | null>(null)
   const [sort, setSort] = useState<{ field: SortField; descending: boolean } | null>(null)
   const term = search.trim().toLowerCase()
@@ -204,7 +206,7 @@ export function MapVersionTable({ items, onUpload, onRetire }: { items: MapVersi
         </div>
         <Pagination page={paged.page} pageCount={paged.pageCount} total={paged.total} pageSize={paged.pageSize} onPage={paged.setPage} label="Phân trang danh sách bản đồ" />
       </>}
-      {viewedArea && viewing && <MapVersionDetail area={viewedArea} itemId={viewing.itemId} onSelect={itemId => setViewing({ ...viewing, itemId })} onClose={() => setViewing(null)} onUpload={onUpload} onRetire={onRetire} />}
+      {viewedArea && viewing && <MapVersionDetail mapVersionLabel={mapVersionLabel} area={viewedArea} itemId={viewing.itemId} onSelect={itemId => setViewing({ ...viewing, itemId })} onClose={() => setViewing(null)} onUpload={onUpload} onRetire={onRetire} />}
     </section>
   )
 }

@@ -6,7 +6,7 @@ import TechnicalMapsPage from '../../routes/technical/TechnicalMapsPage'
 import TechnicalRobotsPage from '../../routes/technical/TechnicalRobotsPage'
 import { useAuthStore } from '../../stores/auth-store'
 import type { PhysicalRobotOption } from './api/technical'
-import { areaLabel, duplicateAreaNames, mapShortLabel, sameAreaName } from './poi-labels'
+import { areaLabel, duplicateAreaNames, mapLabel, mapShortLabel, mapVersionLabel, sameAreaName } from './poi-labels'
 import { ApiError } from '../../api/client'
 import { mapUploadFieldErrors } from './technical-format'
 
@@ -24,6 +24,13 @@ describe('area names', () => {
     expect(mapShortLabel({ areaName: 'Tầng 6', areaKey: 'test123', versionNumber: 1 }, duplicates)).toBe('Tầng 6 · test123 · v1')
     expect(mapShortLabel({ areaName: 'Betea', areaKey: 'betea', versionNumber: 2 }, duplicates)).toBe('Betea · v2')
     expect(areaLabel('Betea', 'betea', duplicates)).toBe('Betea')
+  })
+
+  it('names a map version one way everywhere: "{area} · v{n}", the key only for a shared name (round 7, 2.6)', () => {
+    const duplicates = duplicateAreaNames(TWO_TANG_6.map(area => ({ areaKey: area.areaKey, name: area.displayName })))
+    expect(mapLabel({ areaName: 'Betea', areaKey: 'betea', versionNumber: 1 })).toBe('Betea · v1')
+    expect(mapVersionLabel({ areaName: 'Betea', areaKey: 'betea', versionNumber: 1 }, duplicates)).toBe('Betea · v1')
+    expect(mapLabel({ areaName: 'Tầng 6', areaKey: 'tang-6', versionNumber: 3 }, duplicates)).toBe('Tầng 6 · tang-6 · v3')
   })
 
   it("puts the server's MAP_AREA_NAME_TAKEN sentence beside the area name", () => {
@@ -50,7 +57,9 @@ const robot = (overrides: Partial<PhysicalRobotOption>): PhysicalRobotOption => 
 
 let areas = TWO_TANG_6
 function stubApi(robots: PhysicalRobotOption[] = []) {
+  // A map version belongs to an area of the list, so the versions follow it.
   const maps = [itemOf(mapOf('map-tang-6', 'tang-6', 'Tầng 6')), itemOf(mapOf('map-test123', 'test123', 'Tầng 6 ')), itemOf(mapOf('map-betea', 'betea', 'Betea'))]
+    .filter(item => areas.some(area => area.areaKey === item.map.areaKey))
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), 'http://localhost')
     if (url.pathname === '/api/technical/map-areas') return envelope(areas)

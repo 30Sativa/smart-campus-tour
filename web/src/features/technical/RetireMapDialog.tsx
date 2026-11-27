@@ -4,9 +4,8 @@ import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { formatDateTime } from '../../components/ui/date-time'
 import { ApiError } from '../../api/client'
 import type { MapRetirementImpact, MapVersion } from './api/technical'
-import { mapVersionLabel } from './poi-labels'
 import { errorText } from './technical-format'
-import { useMapRetirementImpact, useRetireMap } from './technical-hooks'
+import { useMapLabel, useMapRetirementImpact, useRetireMap } from './technical-hooks'
 
 const linkClass = 'font-semibold text-[#1d4ed8] underline'
 
@@ -31,6 +30,7 @@ const isRetirementBlocked = (impact: MapRetirementImpact) =>
 export function RetireMapDialog({ map, onClose }: { map: MapVersion; onClose: () => void }) {
   const impact = useMapRetirementImpact(map.id)
   const retire = useRetireMap()
+  const mapVersionLabel = useMapLabel()
   const { refetch } = impact
   const code = refusalCode(retire.error)
   useEffect(() => { if (code && BLOCKED_CODES.has(code)) void refetch() }, [code, refetch])

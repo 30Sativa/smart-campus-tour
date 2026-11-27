@@ -69,33 +69,32 @@ describe('Map version retirement', () => {
     renderPage()
     const active = await screen.findByRole('button', { name: 'Đang dùng' })
     expect(active).toHaveAttribute('aria-pressed', 'true')
-    await screen.findByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · phiên bản 2' })
+    await screen.findByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · v2' })
     expect(requests.some(request => request.url.pathname === '/api/maps/versions' && request.url.searchParams.get('includeRetired') === 'true')).toBe(true)
     expect(screen.queryByText('Thư viện')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Ngừng sử dụng (1)' }))
     const retired = screen.getByRole('region', { name: 'Phiên bản bản đồ ngừng sử dụng' })
     expect(retired).toHaveTextContent('Thư viện')
-    expect(retired).toHaveTextContent('thu-vien')
-    expect(retired).toHaveTextContent('phiên bản 3')
+        expect(retired).toHaveTextContent('Thư viện · v3')
     expect(retired).toHaveTextContent('Kỹ thuật A')
     expect(retired).toHaveTextContent('Lý do: Quét lại')
   })
 
   it('shows both the area name and its key on every row, so two "Tầng 6" areas stay apart', async () => {
     renderPage()
-    await screen.findByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · phiên bản 2' })
+    await screen.findByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · v2' })
     const rows = screen.getAllByRole('row').slice(1)
     expect(rows.map(row => within(row).getAllByRole('cell')[0].textContent)).toEqual([
       expect.stringMatching(/^Tầng 6 tang-6/), expect.stringMatching(/^Tầng 6 test123/),
     ])
     fireEvent.click(screen.getByRole('button', { name: 'Ngừng sử dụng (1)' }))
-    expect(screen.getByRole('region', { name: 'Phiên bản bản đồ ngừng sử dụng' })).toHaveTextContent(/Thư viện thu-vien/)
+    expect(screen.getByRole('region', { name: 'Phiên bản bản đồ ngừng sử dụng' })).toHaveTextContent(/Thư viện · v3/)
   })
 
   it('needs a reason, lists the routes on the version, and posts the reason with the version it saw', async () => {
     renderPage()
-    const dialog = await openRetireDialog('Tầng 6 · tang-6 · phiên bản 2')
+    const dialog = await openRetireDialog('Tầng 6 · tang-6 · v2')
     expect(await within(dialog).findByText('1 tuyến dùng phiên bản này, vẫn giữ nguyên:')).toBeInTheDocument()
     expect(dialog).toHaveTextContent('Tuyến tầng 6')
     const confirm = within(dialog).getByRole('button', { name: 'Ngừng sử dụng' })
@@ -107,7 +106,7 @@ describe('Map version retirement', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     const post = requests.find(request => request.url.pathname === '/api/technical/map-versions/tang-6-2/retire')!
     expect(JSON.parse(String(post.init?.body))).toEqual({ reason: 'Quét lại', expectedRowVersion: 'YWN0aXZl' })
-    expect(useToastStore.getState().toasts[0]?.title).toBe('Đã ngừng sử dụng Tầng 6 · tang-6 · phiên bản 2')
+    expect(useToastStore.getState().toasts[0]?.title).toBe('Đã ngừng sử dụng Tầng 6 · tang-6 · v2')
   })
 
   it('names each blocker with a link to the robot, the waiting item or the Tour, and keeps the reason and confirm disabled', async () => {
@@ -119,7 +118,7 @@ describe('Map version retirement', () => {
       upcomingTours: [{ tourId: 'tour-9', name: 'Tour sáng', scheduledStartAt: '2026-11-20T01:15:00Z', state: 'SCHEDULED' }],
     }
     renderPage()
-    const dialog = await openRetireDialog('Tầng 6 · tang-6 · phiên bản 2')
+    const dialog = await openRetireDialog('Tầng 6 · tang-6 · v2')
     const blocked = await within(dialog).findByRole('alert', { name: 'Chưa ngừng được' })
     expect(within(blocked).getByRole('link', { name: 'amr_07' })).toHaveAttribute('href', '/technical/robots?robot=robot-7')
     expect(within(blocked).getByRole('link', { name: 'Hội trường · phiên bản 2' })).toHaveAttribute('href', '/technical/pois')
@@ -135,7 +134,7 @@ describe('Map version retirement', () => {
       return envelope(null, 409, 'Còn Tour đã lên lịch hoặc sẵn sàng dùng tuyến trên phiên bản này.', { code: 'MAP_VERSION_HAS_UPCOMING_TOURS', blockers: [{ code: 'TOUR', message: 'Tour vừa tạo' }] })
     }
     renderPage()
-    const dialog = await openRetireDialog('Tầng 6 · tang-6 · phiên bản 2')
+    const dialog = await openRetireDialog('Tầng 6 · tang-6 · v2')
     await within(dialog).findByText('Tuyến tầng 6')
     fireEvent.change(within(dialog).getByLabelText('Lý do ngừng sử dụng (bắt buộc)'), { target: { value: 'Quét lại' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ngừng sử dụng' }))
@@ -149,7 +148,7 @@ describe('Map version retirement', () => {
   it('reopens a retired version from the Ngừng sử dụng tab', async () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Ngừng sử dụng (1)' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Mở lại Thư viện · thu-vien · phiên bản 3' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mở lại Thư viện · v3' }))
     await waitFor(() => expect(requests.some(request => request.url.pathname === '/api/technical/map-versions/thu-vien-3/reopen')).toBe(true))
     const post = requests.find(request => request.url.pathname === '/api/technical/map-versions/thu-vien-3/reopen')!
     expect(JSON.parse(String(post.init?.body))).toEqual({ expectedRowVersion: 'cmV0aXJlZA==' })
@@ -158,7 +157,7 @@ describe('Map version retirement', () => {
   it('falls back to the nearest version still in use when the newest one is retired', async () => {
     maps = [item(mapVersion('tang-6', 'Tầng 6', 2, { status: 'RETIRED', retiredAt: '2026-11-10T03:00:00Z', retirementReason: 'Lỗi' })), item(mapVersion('tang-6', 'Tầng 6', 1))]
     renderPage()
-    expect(await screen.findByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · phiên bản 1' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · phiên bản 2' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Xem chi tiết Tầng 6 · v1' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · v2' })).not.toBeInTheDocument()
   })
 })

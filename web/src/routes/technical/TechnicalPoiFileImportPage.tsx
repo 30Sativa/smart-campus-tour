@@ -6,10 +6,10 @@ import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePr
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { mapCheckLabel, mapVersionLabel, narrationStatus, poiImportActionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { mapCheckLabel, narrationStatus, poiImportActionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { errorText } from '../../features/technical/technical-format'
 import { robotForMap } from '../../features/technical/robot-readiness'
-import { useImportPoiFiles, useMapVersions, usePhysicalRobots, usePoiProposals, usePreviewPoiImport } from '../../features/technical/technical-hooks'
+import { useImportPoiFiles, useMapLabel, useMapVersions, usePhysicalRobots, usePoiProposals, usePreviewPoiImport } from '../../features/technical/technical-hooks'
 import type { MapVersionItem, PoiImportResult, PoiProposal } from '../../features/technical/api/technical'
 
 const mapCheckTone = (status: string) => status === 'PASSED' ? 'ok' : status === 'FAILED' ? 'danger' : 'warn'
@@ -21,6 +21,7 @@ const verifiedLabel = (verified: boolean | null) => verified === null ? '-' : ve
  */
 export default function TechnicalPoiFileImportPage() {
   const maps = useMapVersions()
+  const mapLabel = useMapLabel()
   const robots = usePhysicalRobots()
   const preview = usePreviewPoiImport()
   const importFiles = useImportPoiFiles()
@@ -74,7 +75,7 @@ export default function TechnicalPoiFileImportPage() {
             <label className={labelClass} htmlFor="import-map">Phiên bản bản đồ</label>
             <select title="" id="import-map" className={`${inputClass} mt-1`} required value={mapVersionId} disabled={maps.isPending || maps.isError} onChange={event => chooseMap(event.target.value)}>
               <option value="">Chọn phiên bản</option>
-              {maps.data?.map(item => <option key={item.map.id} value={item.map.id}>{mapVersionLabel(item.map)}</option>)}
+              {maps.data?.map(item => <option key={item.map.id} value={item.map.id}>{mapLabel(item.map)}</option>)}
             </select>
             {maps.isError && <p role="alert" className="mt-1 text-sm text-[#b23e18]">{errorText(maps.error)}</p>}
             {selectedMap && <p className="mt-1.5"><ToneBadge tone={mapCheckTone(selectedMap.technicalCheckStatus)}>{mapCheckLabel(selectedMap.technicalCheckStatus)}</ToneBadge></p>}
@@ -176,10 +177,11 @@ const importedStatus = (proposal: PoiProposal): { tone: 'ok' | 'warn' | 'danger'
 /** Every POI that came from a robot pose file, so Technical can see what each import left behind. */
 function ImportedPoiList({ maps }: { maps: MapVersionItem[] }) {
   const proposals = usePoiProposals()
+  const mapLabel = useMapLabel()
   const imported = (proposals.data ?? []).filter(proposal => proposal.sourcePoiId)
   const mapName = (id: string, fallback: string) => {
     const found = maps.find(item => item.map.id === id)?.map
-    return found ? mapVersionLabel(found) : fallback
+    return found ? mapLabel(found) : fallback
   }
   return (
     <section className={`${panelClass} mt-3`} aria-label="POI đã nhập từ file">

@@ -6,10 +6,10 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
 import { MapVersionTable } from '../../features/technical/MapVersionTable'
 import { TechnicalPage } from '../../features/technical/TechnicalUi'
-import { areaLabel, duplicateAreaNames, mapVersionLabel, sameAreaName } from '../../features/technical/poi-labels'
+import { areaLabel, duplicateAreaNames, sameAreaName } from '../../features/technical/poi-labels'
 import { RetireMapDialog } from '../../features/technical/RetireMapDialog'
 import { formatDateTime } from '../../components/ui/date-time'
-import { useAllMapVersions, useMapAreas, useReopenMap, useUploadMap } from '../../features/technical/technical-hooks'
+import { useAllMapVersions, useMapAreas, useMapLabel, useReopenMap, useUploadMap } from '../../features/technical/technical-hooks'
 import { errorText, mapUploadFieldErrors } from '../../features/technical/technical-format'
 import type { MapAreaOption, MapVersionItem } from '../../features/technical/api/technical'
 
@@ -73,6 +73,7 @@ const isRetired = (item: MapVersionItem) => item.map.status === 'RETIRED'
 /** One row per retired version, newest retirement first; history stays readable and "Mở lại" lifts only the stop. */
 function RetiredMapList({ items }: { items: MapVersionItem[] }) {
   const reopen = useReopenMap()
+  const mapVersionLabel = useMapLabel()
   const sorted = [...items].sort((a, b) => (b.map.retiredAt ?? '').localeCompare(a.map.retiredAt ?? ''))
   if (!sorted.length) return <section className={panelClass}><EmptyState variant="empty" title="Không có phiên bản ngừng sử dụng" description="Phiên bản bị ngừng sẽ hiện ở đây, kèm lý do và người ngừng." /></section>
   return (
@@ -81,7 +82,7 @@ function RetiredMapList({ items }: { items: MapVersionItem[] }) {
       <ul className="divide-y divide-[#eef1f4]">
         {sorted.map(({ map }) => <li key={map.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
-            <p className="text-[14px]"><span className="font-semibold text-[#0f172a]">{map.areaName}</span> <span className="font-mono text-[11.5px] text-[#64748b]">{map.areaKey}</span> <span className="text-[#334155]">· phiên bản {map.versionNumber}</span></p>
+            <p className="text-[14px] font-semibold text-[#0f172a]">{mapVersionLabel(map)}</p>
             <p className="text-[12.5px] text-[#64748b]">Ngừng {map.retiredAt ? formatDateTime(map.retiredAt) : ''}{map.retiredByName ? ` · ${map.retiredByName}` : ''}</p>
             {map.retirementReason && <p className="mt-0.5 break-words text-[13px] text-[#334155]">Lý do: {map.retirementReason}</p>}
           </div>
