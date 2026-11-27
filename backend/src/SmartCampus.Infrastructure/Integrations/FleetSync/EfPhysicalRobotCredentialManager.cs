@@ -38,8 +38,23 @@ public sealed class EfPhysicalRobotCredentialManager(
 
         var normalizedReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
         var expected = ParseExpectedRowVersion(expectedRowVersion);
+        // ADR-0066 round 5: the web's "Cấp lại khóa" is refused while the robot runs a Tour, behind the robot deployment
+        // lock Start holds while it claims the robot. Only that path: the on-machine CLI provisioner runs under a
+        // column-scoped role that cannot read Tours. The Id never changes, so it is found before the transaction and the
+        // lock is taken before any Robots read, in Start's order (round 6); the robot row is still read again after it.
+        var lockedRobotId = operation == RobotCredentialOperation.Rotate && source == "WEB"
+            ? await dbContext.Robots.AsNoTracking().Where(candidate => candidate.RobotCode == robotCode && candidate.SourceType == "PHYSICAL")
+                .Select(candidate => (Guid?)candidate.Id).SingleOrDefaultAsync(cancellationToken)
+            : null;
         await using var transaction = await dbContext.Database.BeginTransactionAsync(
             System.Data.IsolationLevel.Serializable, cancellationToken);
+        if (lockedRobotId is { } lockId)
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+                DECLARE @lockResult int;
+                EXEC @lockResult = sys.sp_getapplock @Resource = {"map-poi:robot-deployment:" + lockId.ToString("D")},
+                    @LockMode = N'Exclusive', @LockOwner = N'Transaction', @LockTimeout = 10000;
+                IF @lockResult < 0 THROW 51022, 'Could not acquire robot deployment state lock.', 1;
+                """, cancellationToken);
 
         var robot = await dbContext.Robots.AsNoTracking()
             .Where(candidate => candidate.RobotCode == robotCode && candidate.SourceType == "PHYSICAL")
@@ -67,21 +82,12 @@ public sealed class EfPhysicalRobotCredentialManager(
                 "CREDENTIAL_ALREADY_ACTIVE");
         if (operation is RobotCredentialOperation.Rotate or RobotCredentialOperation.Revoke && !hasActiveCredential)
             throw new ConflictException("The robot has no active credential.", "CREDENTIAL_NOT_ACTIVE");
+        // A new key mid-Tour cuts the MiniPC off; revoke stays always possible (a leaked key, ADR-0049). Before the version
+        // check: a Start that just claimed the robot changed its row, and the Tour is the reason to show.
+        if (lockedRobotId is not null)
+            await RobotRunningTour.EnsureNoneAsync(dbContext, robot.Id, robot.RobotCode, RobotRunningTour.ChangeKey, cancellationToken);
         if (expected is not null && !robot.RowVersion.AsSpan().SequenceEqual(expected))
             throw ConcurrencyConflict();
-        // ADR-0066 round 5: a new key mid-Tour cuts the MiniPC off. Revoke stays always possible (a leaked key, ADR-0049).
-        // The robot deployment lock is the one Start holds while it claims the robot. Only the web's "Cấp lại khóa": the
-        // on-machine CLI provisioner runs under a column-scoped role that cannot read Tours.
-        if (operation == RobotCredentialOperation.Rotate && source == "WEB")
-        {
-            await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
-                DECLARE @lockResult int;
-                EXEC @lockResult = sys.sp_getapplock @Resource = {"map-poi:robot-deployment:" + robot.Id.ToString("D")},
-                    @LockMode = N'Exclusive', @LockOwner = N'Transaction', @LockTimeout = 10000;
-                IF @lockResult < 0 THROW 51022, 'Could not acquire robot deployment state lock.', 1;
-                """, cancellationToken);
-            await RobotRunningTour.EnsureNoneAsync(dbContext, robot.Id, robot.RobotCode, RobotRunningTour.ChangeKey, cancellationToken);
-        }
 
         var now = timeProvider.GetUtcNow();
         FleetRobotCredential? generated = operation is RobotCredentialOperation.Issue or RobotCredentialOperation.Rotate

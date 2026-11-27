@@ -20,16 +20,13 @@ public sealed class EfRobotLifecycleManager(ApplicationDbContext db, TimeProvide
         string expectedRowVersion, string reason, CancellationToken cancellationToken)
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        var robot = await LoadAsync(robotId, actorUserId, requestId, cancellationToken);
+        var robot = await LoadAsync(robotId, actorUserId, requestId, cancellationToken, lockRobot: true);
         if (await ReplayAsync(robot, actorUserId, requestId, Deactivated, cancellationToken) is { } replay) return replay;
         var expected = ParseRowVersion(expectedRowVersion);
+        // Before the version check: a Start that just claimed the robot changed its row, and the Tour is the reason to show.
+        await RobotRunningTour.EnsureNoneAsync(db, robot.Id, robot.RobotCode, RobotRunningTour.Deactivate, cancellationToken);
         if (!robot.RowVersion.AsSpan().SequenceEqual(expected)) throw Stale();
         if (robot.IsDeactivated) throw new ConflictException($"Robot {robot.RobotCode} đã ngừng sử dụng rồi.", "ROBOT_ALREADY_DEACTIVATED");
-
-        // Same order as Tour create, so a Tour either sees this or is listed by it.
-        await LockAsync($"map-poi:robot-deployment:{robot.Id:D}", cancellationToken);
-        await LockAsync($"tour-robot-reservation:{robot.Id:D}", cancellationToken);
-        await RobotRunningTour.EnsureNoneAsync(db, robot.Id, robot.RobotCode, RobotRunningTour.Deactivate, cancellationToken);
 
         var now = clock.GetUtcNow();
         var changed = await db.Robots.Where(r => r.Id == robot.Id && r.RowVersion == expected && r.DeactivatedAt == null)
@@ -93,9 +90,17 @@ public sealed class EfRobotLifecycleManager(ApplicationDbContext db, TimeProvide
     public Task<IReadOnlyList<RobotAffectedTour>> ListAffectedToursAsync(Guid robotId, Guid? mapVersionId, CancellationToken cancellationToken) =>
         RobotTourImpact.ListAsync(db, robotId, mapVersionId, cancellationToken);
 
-    private async Task<Robot> LoadAsync(Guid robotId, Guid actorUserId, Guid requestId, CancellationToken cancellationToken)
+    private async Task<Robot> LoadAsync(Guid robotId, Guid actorUserId, Guid requestId, CancellationToken cancellationToken,
+        bool lockRobot = false)
     {
         await LockAsync($"robot-lifecycle:{actorUserId:D}:{requestId:D}", cancellationToken);
+        if (lockRobot)
+        {
+            // Same order as Tour create and Start, and before any Robots read (round 6): a Tour either sees this or is
+            // listed by it, and a Start claiming the robot never waits on this transaction's read of the row.
+            await LockAsync($"map-poi:robot-deployment:{robotId:D}", cancellationToken);
+            await LockAsync($"tour-robot-reservation:{robotId:D}", cancellationToken);
+        }
         return await db.Robots.AsNoTracking().Include(r => r.AssignedMapVersion)
             .SingleOrDefaultAsync(r => r.Id == robotId && r.SourceType == "PHYSICAL", cancellationToken)
             ?? throw new NotFoundException("Physical robot", robotId);
