@@ -789,6 +789,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.23-to-v1.24-user-avatar.sql");
         await db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql");
         await db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql");
+        await db.ApplyFileAsync("upgrade-v1.25-to-v1.26-operator-presence.sql");
+        await db.ApplyFileAsync("upgrade-v1.25-to-v1.26-operator-presence.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -799,7 +801,7 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.25", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.26", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.RouteRevisions WHERE ViewerChoosesNextStop=1;"));
         Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('TourStopVisits','TourStopVotes','TourStopLocks');"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Users') AND name='AvatarUrl' AND is_nullable=1;"));
@@ -845,7 +847,7 @@ public sealed class SchemaV11Tests
             Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourScheduleBlocks','OBJECT','DELETE');"));
             // Votes, stop visits and locks are inserted, have only their ballot, choice and unlock columns updated,
             // and are never deleted; the new route columns stay insert-only.
-            foreach (var table in new[] { "TourStopVisits", "TourStopVotes", "TourStopLocks" })
+            foreach (var table in new[] { "TourStopVisits", "TourStopVotes", "TourStopLocks", "TourOperatorPresence" })
             {
                 Assert.Equal(1, await ScalarAsync<int>(connection, $"SELECT HAS_PERMS_BY_NAME('dbo.{table}','OBJECT','INSERT');"));
                 Assert.Equal(0, await ScalarAsync<int>(connection, $"SELECT HAS_PERMS_BY_NAME('dbo.{table}','OBJECT','UPDATE');"));
@@ -1302,8 +1304,10 @@ public sealed class SchemaV11Tests
 
         await db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql");
         await db.ApplyFileAsync("upgrade-v1.24-to-v1.25-viewer-vote.sql");
+        await db.ApplyFileAsync("upgrade-v1.25-to-v1.26-operator-presence.sql");
+        await db.ApplyFileAsync("upgrade-v1.25-to-v1.26-operator-presence.sql");
 
-        Assert.Equal("1.25", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.26", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
         await using var snapshot = await TestDatabase.CreateAsync();
         const string tables = "('RouteRevisions','RouteTestRuns','TourStopVisits','TourStopVotes','TourStopLocks')";
@@ -1347,7 +1351,7 @@ public sealed class SchemaV11Tests
     {
         await using var db = await TestDatabase.CreateAsync();
         // Constraint checks only: foreign keys are disabled for these synthetic rows, CHECKs and unique indexes stay on.
-        foreach (var table in new[] { "TourStopVisits", "TourStopVotes", "TourStopLocks" })
+        foreach (var table in new[] { "TourStopVisits", "TourStopVotes", "TourStopLocks", "TourOperatorPresence" })
             await db.ExecuteAsync($"ALTER TABLE dbo.{table} NOCHECK CONSTRAINT ALL; ALTER TABLE dbo.{table} WITH CHECK CHECK CONSTRAINT {(table == "TourStopVisits" ? "CK_TourStopVisits_Outcome, CK_TourStopVisits_ChosenReason, CK_TourStopVisits_Choice_Complete, CK_TourStopVisits_ChosenNotSelf, CK_TourStopVisits_BallotClosed, CK_TourStopVisits_BallotReason, CK_TourStopVisits_SkippedNoBallot" : table == "TourStopVotes" ? "CK_TourStopVotes_UpdatedAfterVoted" : "CK_TourStopLocks_Reason, CK_TourStopLocks_Unlock_Complete")};");
         string tour = Id(1), stopA = Id(2), stopB = Id(3), stopC = Id(4), row = Id(5), user = Id(6);
         string Visit(string id, string stop, string outcome = "ARRIVED", string closesAt = "NULL", string closedAt = "NULL", string chosen = "NULL", string reason = "NULL", string count = "NULL") =>
