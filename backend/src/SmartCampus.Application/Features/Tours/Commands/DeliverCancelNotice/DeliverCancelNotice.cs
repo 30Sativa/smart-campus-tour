@@ -31,7 +31,7 @@ public sealed class ClaimTourCancelNoticeCommandHandler(IInvitationRepository re
         }
         if (started) return [];
         var kind = TourCancelNoticeAudit.Kind(request);
-        if (kind is not (TourCancelNoticeAudit.Cancelled or TourCancelNoticeAudit.EndedEarly))
+        if (kind is not (TourCancelNoticeKinds.Cancelled or TourCancelNoticeKinds.EndedEarly))
         {
             // Legacy requests have no durable template choice. Do not guess and risk emailing a private End Early reason.
             repository.AddAudit(TourCancelNoticeAudit.Create(tour.Id, request.ActorUserId, TourCancelNoticeAudit.Failed,
@@ -39,7 +39,7 @@ public sealed class ClaimTourCancelNoticeCommandHandler(IInvitationRepository re
             return [];
         }
         repository.AddAudit(TourCancelNoticeAudit.Create(tour.Id, request.ActorUserId, TourCancelNoticeAudit.Started, command.AttemptId, now, "PENDING"));
-        var endedEarly = kind == TourCancelNoticeAudit.EndedEarly;
+        var endedEarly = kind == TourCancelNoticeKinds.EndedEarly;
         var reason = endedEarly ? string.Empty : TourAutoCancel.NoticeReason(request.ActorUserId, tour.EndReason);
         // A representative with several groups under one contact address gets one email.
         return (await repository.LoadTourCancelRecipientsAsync(ids, ct))
