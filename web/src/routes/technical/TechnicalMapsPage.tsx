@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router'
 import { Activity, Bot, CircleCheck, FileArchive, Layers, LoaderCircle, Upload } from 'lucide-react'
 import { PageHeader, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
@@ -19,6 +20,7 @@ import type { MapAreaOption, MapVersionItem } from '../../features/technical/api
  */
 export default function TechnicalMapsPage() {
   const maps = useAllMapVersions()
+  const [searchParams] = useSearchParams()
   const [uploading, setUploading] = useState(false)
   const [uploadArea, setUploadArea] = useState<MapAreaOption | null>(null)
   const [retiring, setRetiring] = useState<MapVersionItem | null>(null)
@@ -62,7 +64,7 @@ export default function TechnicalMapsPage() {
       {maps.isPending ? <section className={panelClass}><p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p></section>
         : maps.error ? <section className={panelClass}><p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(maps.error)}</p></section>
         : tab === 'retired' ? <RetiredMapList items={retired} />
-        : items.length ? <MapVersionTable items={items} onUpload={area => { setUploadArea(area); setUploading(true) }} onRetire={setRetiring} />
+        : items.length ? <MapVersionTable items={items} initialMapVersionId={searchParams.get('map')} onUpload={area => { setUploadArea(area); setUploading(true) }} onRetire={setRetiring} />
         : <section className={panelClass}><EmptyState variant="empty" title={retired.length ? 'Không có bản đồ đang dùng' : 'Chưa có bản đồ'} description={retired.length ? 'Mọi phiên bản đã ngừng sử dụng. Mở lại ở tab Ngừng sử dụng hoặc tải phiên bản mới.' : 'Tải tệp bản đồ đầu tiên lên để bắt đầu.'} /></section>}
 
       <UploadModal key={uploadArea?.areaKey ?? 'new-area'} open={uploading} initialArea={uploadArea} onClose={() => { setUploading(false); setUploadArea(null) }} />
