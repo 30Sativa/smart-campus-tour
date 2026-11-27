@@ -10,6 +10,7 @@ import { useAuthStore } from '../../stores/auth-store'
 import type { PhysicalRobotOption, RobotCredentialView } from './api/technical'
 import type { RobotDiagnosticsDetail, TechnicalActionItem, TechnicalDashboard, TechnicalRobotSummary } from './api/diagnostics-api'
 import { TechnicalBell } from './TechnicalBell'
+import { technicalApi } from './api/technical'
 import { connectionStatusLabel, credentialText, dispatchText, mapText, miniPcText, robotNameHint, setupText } from './technical-format'
 
 // Round 7 (27/11): a freshly registered robot walked through the setup by someone new to the Technical area.
@@ -316,8 +317,8 @@ describe('round 7: the Technical area for someone new', () => {
       const warning = panel.getByText('Đạt, trước lần gán 27/11/2026 07:30. Cần kiểm lại.')
       expect(warning).toHaveClass('text-amber-800')
       expect(panel.queryByText('Đạt', { selector: 'span.rounded-full' })).not.toBeInTheDocument()
-      // 2.6: the map by name; MapKey and FrameId stay beside it for the MiniPC.
-      expect(panel.getByText('Betea · v1')).toBeInTheDocument()
+      // 2.6: the map by name; MapKey and FrameId stay beside it for the MiniPC. The deployment check names it too.
+      expect(panel.getAllByText('Betea · v1')).toHaveLength(2)
       expect(panel.getByText('MapKey betea-v1 · FrameId map')).toBeInTheDocument()
     })
 
@@ -329,6 +330,63 @@ describe('round 7: the Technical area for someone new', () => {
       const panel = within(await screen.findByRole('region', { name: 'Kết nối và vận hành' }))
       expect(await panel.findByText('Sẵn sàng · Betea · v1')).toBeInTheDocument()
       expect(panel.getByText(setupText.readyNotDriving)).toBeInTheDocument()
+    })
+  })
+
+  describe('round 7 follow-up (27/11 15:50)', () => {
+    const other = { ...betea, id: 'map-other', areaKey: 'betea-2', mapKey: 'betea-2-v1', frameId: 'map_b', packageFileName: 'betea-2-v1.zip' }
+
+    it('3 names the robot map by area and version on Tổng quan, with the area key when names clash and MapKey kept small', async () => {
+      maps = [mapItem(), mapItem({ map: other })]
+      robots = [ready]
+      dashboard = dashboardOf([summary(), summary({ id: 'robot-2', robotCode: 'amr_10', assignedMapKey: 'betea-2-v1' }), summary({ id: 'robot-3', robotCode: 'amr_11', assignedMapKey: 'unknown-v9' })])
+      renderAt('/technical')
+      const table = within(await screen.findByRole('region', { name: 'Robot và Mini PC' }))
+      const first = within(table.getByText('amr_09').closest('tr')!)
+      const label = await first.findByText('Betea · betea · v1')
+      expect(label).toHaveAttribute('title', 'MapKey betea-v1')
+      expect(first.getByText('betea-v1')).toHaveClass('text-[11px]')
+      expect(await within(table.getByText('amr_10').closest('tr')!).findByText('Betea · betea-2 · v1')).toBeInTheDocument()
+      // A key the map list does not know stays as it is.
+      expect(within(table.getByText('amr_11').closest('tr')!).getByText('unknown-v9')).toBeInTheDocument()
+    })
+
+    it('3 names the last deployment check by its map on Giám sát, and gives the FrameId only when it differs', async () => {
+      maps = [mapItem(), mapItem({ map: other })]
+      robots = [ready]
+      dashboard = dashboardOf([summary()])
+      detail = detailOf({ latestDeployedMapKey: 'betea-2-v1', latestDeployedFrameId: 'map_b', latestDeploymentPassed: false })
+      renderAt('/technical/monitoring?robot=amr_09')
+      const panel = within(await screen.findByRole('region', { name: 'Kết nối và vận hành' }))
+      const check = await panel.findByTitle('MapKey betea-2-v1')
+      await waitFor(() => expect(check).toHaveTextContent('Betea · betea-2 · v1 · FrameId map_b'))
+      expect(panel.queryByText('betea-2-v1 · map_b')).not.toBeInTheDocument()
+    })
+
+    it('3 leaves the FrameId out when the check used the assigned one, and keeps an unknown MapKey', async () => {
+      robots = [ready]
+      dashboard = dashboardOf([summary()])
+      detail = detailOf({ latestDeployedMapKey: 'gone-v3', latestDeployedFrameId: 'map' })
+      renderAt('/technical/monitoring?robot=amr_09')
+      const panel = within(await screen.findByRole('region', { name: 'Kết nối và vận hành' }))
+      const check = await panel.findByTitle('MapKey gone-v3')
+      expect(check).toHaveTextContent(/^gone-v3$/)
+    })
+
+    it('4 downloads the assigned map from the Trên MiniPC step, with the same call as the map detail', async () => {
+      const created: string[] = []
+      URL.createObjectURL = vi.fn(() => 'blob:map')
+      URL.revokeObjectURL = vi.fn()
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { created.push(this.download) })
+      const getMapPackage = vi.spyOn(technicalApi, 'getMapPackage')
+      key = 'ACTIVE'
+      robots = [assigned]
+      renderAt('/technical/robots?robot=robot-1')
+      const block = within((await setupDialog()).getByRole('region', { name: miniPcText.title }))
+      fireEvent.click(await block.findByRole('button', { name: miniPcText.downloadMap('betea-v1.zip') }))
+      await waitFor(() => expect(created).toEqual(['betea-v1.zip']))
+      expect(getMapPackage).toHaveBeenCalledWith('map-betea')
+      click.mockRestore()
     })
   })
 })

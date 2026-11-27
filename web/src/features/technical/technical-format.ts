@@ -97,6 +97,8 @@ export const miniPcText = {
   ].join('\n'),
   envStep: 'Ghi các dòng này vào ~/.config/campustour/fleet-sync.env, giữ nguyên FLEET_SYNC_URL đã có.',
   keyStep: 'Tệp khóa là tệp FLEET_ROBOT_CREDENTIAL_FILE trỏ tới, chỉ chứa khóa kết nối, quyền 0600 (chmod 600 <tệp khóa>).',
+  /** The map download beside the step that names the file (same button as the map detail). */
+  downloadMap: (packageFileName: string) => `Tải ${packageFileName}`,
   mapStep: (packageFileName: string | null) => `Giải nén ${packageFileName ?? 'tệp bản đồ (.zip)'} vào robot_maps, rồi trong ~/.config/sct-robot/runtime.env đặt MAP= là tệp .yaml của bản đồ này.`,
   startStep: 'Chạy robot fleet start (đang chạy thì robot fleet restart), rồi bấm Cập nhật trạng thái.',
   copy: 'Sao chép cấu hình MiniPC',

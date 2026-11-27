@@ -142,6 +142,8 @@ export const poiVerifyText = {
   /** A revision Staff sent again after a FAIL: it is back in the queue for Technical. */
   resentAfterFail: 'Gửi lại sau lần không đạt',
   currentResult: 'Kết quả hiện tại',
+  /** Matches failReasonHint and the server: a new revision may keep the same pose after a FAIL. */
+  recordedResultFinal: 'Kết quả đã ghi không sửa hay thu hồi được. Muốn kiểm tra lại, Staff gửi lại một phiên bản mới: POI đặt sai thì sửa vị trí, hướng, camera hoặc bản đồ; lỗi do robot thì sửa robot rồi gửi lại cùng vị trí. POI sẽ quay về Chờ kiểm chứng.',
   failReasonHint: 'Staff sẽ thấy lý do này, sửa POI và gửi lại phiên bản mới. Nếu lỗi do robot (định vị, dừng), sửa robot rồi nhờ Staff gửi lại cùng vị trí.',
   /** A revision with no submit time: imported from a robot pose file, or recorded before submit times were kept. */
   noSubmitTime: (imported: boolean) => imported ? 'Nhập từ file' : 'Không có thời điểm gửi (dữ liệu cũ)',
