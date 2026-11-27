@@ -10,12 +10,12 @@ import { areaLabel, duplicateAreaNames, sameAreaName } from '../../features/tech
 import { RetireMapDialog } from '../../features/technical/RetireMapDialog'
 import { formatDateTime } from '../../components/ui/date-time'
 import { useAllMapVersions, useMapAreas, useMapLabel, useReopenMap, useUploadMap } from '../../features/technical/technical-hooks'
-import { errorText, mapUploadFieldErrors } from '../../features/technical/technical-format'
+import { errorText, mapText, mapUploadFieldErrors } from '../../features/technical/technical-format'
 import type { MapAreaOption, MapVersionItem } from '../../features/technical/api/technical'
 
 /**
  * Map versions: a figure strip, the version table and the upload dialog, so the table stays the page. Nothing here
- * records a deployment check: that belongs to the robot's setup dialog, which "Triển khai cho robot…" opens.
+ * records a deployment check: that belongs to the robot's setup dialog, which "Gán cho robot…" opens.
  */
 export default function TechnicalMapsPage() {
   const maps = useAllMapVersions()
@@ -26,7 +26,10 @@ export default function TechnicalMapsPage() {
   // An area's row shows its newest version still in use, so retiring the newest one falls back to the one before (ADR-0041).
   const items = (maps.data ?? []).filter(item => !isRetired(item))
   const retired = (maps.data ?? []).filter(isRetired)
-  const passed = items.filter((item) => item.canUseForPoiPreparation).length
+  const usable = items.filter((item) => item.canUseForPoiPreparation)
+  const passed = usable.length
+  // A version POIs can be written on but no robot holds yet: nothing on it can be checked on site (2.8).
+  const usableWithoutRobot = usable.filter(item => !item.runningRobot).length
   // A robot assigned but not ready cannot run anything on the map, so the figure counts only ready ones.
   const ready = items.filter(item => item.runningRobot?.readiness.state === 'READY').length
   const unchecked = items.filter((item) => item.technicalCheckStatus === 'PENDING').length
@@ -36,7 +39,7 @@ export default function TechnicalMapsPage() {
       <PageHeader
         eyebrow="Chuẩn bị"
         title="Bản đồ"
-        description="Tải bản đồ lên rồi triển khai cho robot. Kiểm tra triển khai làm trong hộp Thiết lập của robot."
+        description="Tải bản đồ lên rồi gán cho robot. Gán và kiểm tra triển khai làm trong hộp Thiết lập của robot."
         action={<button type="button" className={buttonClass('primary')} onClick={() => setUploading(true)}><Upload size={15} aria-hidden="true" />Tải lên bản đồ mới</button>}
       />
 
@@ -44,9 +47,9 @@ export default function TechnicalMapsPage() {
         <div className="mb-3">
           <StatStrip label="Tình trạng bản đồ" columns="sm:grid-cols-4">
             <StatTile icon={Layers} label="Phiên bản đã tải lên" value={items.length} />
-            <StatTile icon={CircleCheck} label="Dùng được để soạn POI" value={passed} />
+            <StatTile icon={CircleCheck} label="Dùng được để soạn POI" value={passed} hint={usableWithoutRobot ? mapText.noRobotYet(usableWithoutRobot) : undefined} />
             <StatTile icon={Bot} label="Có robot sẵn sàng" value={ready} />
-            <StatTile icon={Activity} label="Chưa kiểm tra triển khai" value={unchecked} tone="warn" />
+            <StatTile icon={Activity} label="Chưa từng kiểm tra triển khai" value={unchecked} tone="warn" />
           </StatStrip>
         </div>
       )}
@@ -131,7 +134,7 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
   }
   const segment = (active: boolean) => `flex-1 cursor-pointer rounded-md px-3 py-1.5 text-center text-[13px] font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#2563eb] ${active ? 'bg-white text-[#0f172a] shadow-sm' : 'text-[#64748b] hover:text-[#334155]'}`
   return (
-    <Modal open={open} title={initialArea ? `Tải phiên bản mới · ${areaLabel(initialArea.displayName, initialArea.areaKey, duplicateAreaNames((areas.data ?? []).map(area => ({ areaKey: area.areaKey, name: area.displayName }))))}` : 'Tải lên bản đồ mới'} description="Sau khi tải lên, mở chi tiết bản đồ và bấm Triển khai cho robot." onClose={close}
+    <Modal open={open} title={initialArea ? `Tải phiên bản mới · ${areaLabel(initialArea.displayName, initialArea.areaKey, duplicateAreaNames((areas.data ?? []).map(area => ({ areaKey: area.areaKey, name: area.displayName }))))}` : 'Tải lên bản đồ mới'} description="Sau khi tải lên, mở chi tiết bản đồ và bấm Gán cho robot." onClose={close}
       footer={<div className="flex items-center justify-end gap-3">{missing && <p className="mr-auto text-xs text-[#64748b]">{missing}</p>}<button type="button" className={buttonClass('secondary')} onClick={close}>Hủy</button><button type="submit" form="map-upload-form" className={buttonClass('primary')} disabled={!packageFile || !areaReady || upload.isPending}>{upload.isPending ? 'Đang tải…' : 'Tải lên bản đồ'}</button></div>}>
       <form id="map-upload-form" className="space-y-4" onSubmit={submit}>
         <fieldset>

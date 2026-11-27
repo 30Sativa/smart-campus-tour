@@ -9,9 +9,12 @@ import {
   connectionStatusView, flagLabel, formatBytes, middlewareStatusView, nav2StateLabel, nodeStatusView,
   mostRecentRobot, reading, sensorStatusView, sourceState, sourceStateView, type SourceState,
 } from '../../features/technical/diagnostics-status'
-import { errorText } from '../../features/technical/technical-format'
+import { deploymentStepText, errorText, setupText } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
-import { useRobotDiagnostics, useTechnicalDashboard } from '../../features/technical/technical-hooks'
+import { useMapShortLabel, usePhysicalRobots, useRobotDiagnostics, useTechnicalDashboard } from '../../features/technical/technical-hooks'
+import { ReadinessBadge } from '../../features/technical/ReadinessBadge'
+import { readyButNotDriving } from '../../features/technical/robot-readiness'
+import type { PhysicalRobotOption } from '../../features/technical/api/technical'
 
 const REFRESH_MS = 15_000
 
@@ -46,7 +49,36 @@ function SensorFact({ label, sensor }: { label: string; sensor: SensorStatus }) 
   )
 }
 
+/**
+ * "Sẵn sàng" and "Kiểm tra triển khai" read the server's readiness from the robot list (2.1): a passed check from
+ * before the current assignment no longer counts, so it is said as a check to redo, never in green.
+ */
+function ReadinessFacts({ detail, robot }: { detail: RobotDiagnosticsDetail; robot: PhysicalRobotOption | undefined }) {
+  const mapLabelOf = useMapShortLabel()
+  const readiness = robot?.readiness
+  const passedOnAssigned = detail.latestDeploymentPassed === true && detail.latestDeployedMapKey !== null && detail.latestDeployedMapKey === detail.assignedMapKey
+  const beforeAssignment = Boolean(readiness && !readiness.deploymentCheckedAt && passedOnAssigned && robot?.mapAssignedAt)
+  return <>
+    <DetailFact label="Sẵn sàng">{readiness
+      ? <><ReadinessBadge readiness={readiness} mapText={mapLabelOf(readiness.mapVersionId)} />
+        {readiness.state !== 'READY' && readiness.reason && <p className="mt-0.5 text-[12.5px] text-amber-800">{readiness.reason}</p>}
+        {readyButNotDriving(readiness, detail) && <p className="mt-0.5 text-[12.5px] text-amber-800">{setupText.readyNotDriving}</p>}</>
+      : '-'}</DetailFact>
+    <DetailFact label="Bản đồ được gán">{detail.assignedMapKey
+      ? <><span>{mapLabelOf(robot?.assignedMapVersionId) ?? (detail.assignedAreaName ? `${detail.assignedAreaName} · v${detail.assignedVersionNumber}` : detail.assignedMapKey)}</span>
+        <p className="font-mono text-[11.5px] text-[#64748b]">MapKey {detail.assignedMapKey} · FrameId {detail.assignedFrameId}</p></>
+      : 'Chưa gán'}</DetailFact>
+    <DetailFact label="Kiểm tra triển khai">{detail.latestDeployedMapKey
+      ? <span className="flex flex-wrap items-center gap-2"><span className="font-mono text-[12.5px]">{detail.latestDeployedMapKey} · {detail.latestDeployedFrameId}</span>
+        {beforeAssignment ? <span className="text-[12.5px] font-semibold text-amber-800">{deploymentStepText.monitoringBeforeAssignment(formatDateTime(robot!.mapAssignedAt))}</span>
+          : detail.latestDeploymentPassed !== null && <ToneBadge tone={detail.latestDeploymentPassed ? 'ok' : 'danger'}>{detail.latestDeploymentPassed ? 'Đạt' : 'Chưa đạt'}</ToneBadge>}</span>
+      : 'Chưa ghi nhận'}</DetailFact>
+  </>
+}
+
 function RobotDiagnosticsView({ detail }: { detail: RobotDiagnosticsDetail }) {
+  const robots = usePhysicalRobots()
+  const robot = robots.data?.find(item => item.robotCode === detail.robotCode)
   const connection = connectionStatusView(detail.connectionStatus)
   const telemetry = sourceState(detail.lastSeenAt !== null, detail.telemetryFresh)
   const diagnostics = sourceState(detail.lastDiagnosticsReceivedAt !== null, detail.diagnosticsFresh)
@@ -71,8 +103,7 @@ function RobotDiagnosticsView({ detail }: { detail: RobotDiagnosticsDetail }) {
           <DetailFact label="Sẵn sàng di chuyển">{telemetry === 'UNAVAILABLE' ? '-' : flagLabel(detail.motionReady, 'Sẵn sàng', 'Chưa sẵn sàng')}</DetailFact>
           <DetailFact label="Vị trí">{detail.pose ? <span className="font-mono text-[12.5px]">x {detail.pose.x.toFixed(2)} · y {detail.pose.y.toFixed(2)} · yaw {detail.pose.yaw.toFixed(2)} (lúc {formatDateTime(detail.pose.capturedAt)})</span> : '-'}</DetailFact>
           <DetailFact label="Mã lỗi robot">{detail.faultCode ? <span className="font-mono text-[12.5px]">{detail.faultCode}</span> : '-'}</DetailFact>
-          <DetailFact label="Bản đồ được gán">{detail.assignedMapKey ? <span className="font-mono text-[12.5px]">{detail.assignedMapKey} · {detail.assignedFrameId}{detail.assignedAreaName ? ` (${detail.assignedAreaName}, v${detail.assignedVersionNumber})` : ''}</span> : 'Chưa gán'}</DetailFact>
-          <DetailFact label="Kiểm tra triển khai">{detail.latestDeployedMapKey ? <span className="flex flex-wrap items-center gap-2"><span className="font-mono text-[12.5px]">{detail.latestDeployedMapKey} · {detail.latestDeployedFrameId}</span>{detail.latestDeploymentPassed !== null && <ToneBadge tone={detail.latestDeploymentPassed ? 'ok' : 'danger'}>{detail.latestDeploymentPassed ? 'Đạt' : 'Chưa đạt'}</ToneBadge>}</span> : 'Chưa ghi nhận'}</DetailFact>
+          <ReadinessFacts detail={detail} robot={robot} />
           <DetailFact label="Tour hiện tại">{detail.currentTourName ?? '-'}{detail.needsInspection && <span className="ml-2"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></span>}</DetailFact>
         </dl>
       </section>

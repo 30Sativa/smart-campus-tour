@@ -79,7 +79,7 @@ describe('the way back says ready only on the map of the POI or route', () => {
     renderAt('/technical/pois')
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Gán robot cho bản đồ này' }))
-    const picker = within(await screen.findByRole('dialog', { name: 'Triển khai Tầng 6 · tang-6 · v1 cho robot' }))
+    const picker = within(await screen.findByRole('dialog', { name: 'Gán Tầng 6 · tang-6 · v1 cho robot' }))
     await picker.findByRole('option', { name: /amr_01/ })
     fireEvent.change(picker.getByLabelText('Robot'), { target: { value: 'robot-1' } })
     fireEvent.click(picker.getByRole('button', { name: 'Tiếp tục' }))

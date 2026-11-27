@@ -88,7 +88,8 @@ export function NoneChecked({ reasonId, onNone }: { reasonId: string; onNone: ()
   return <button type="button" onClick={choose} className="rounded-md px-1 text-xs font-semibold text-[#b23e31] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">Không đạt mục nào</button>
 }
 
-export type SetupStep ={ label: string; done: boolean; hint: string; action?: ReactNode }
+/** `pending`: not known yet (still loading), so neither done nor the next step; `hint` says what is being checked. */
+export type SetupStep ={ label: string; done: boolean; hint: string; action?: ReactNode; pending?: boolean }
 
 /**
  * A numbered list of steps that can span days and happen partly off the web, so it is a
@@ -96,8 +97,10 @@ export type SetupStep ={ label: string; done: boolean; hint: string; action?: Re
  * what to do next.
  */
 export function SetupSteps({ title, steps }: { title: string; steps: SetupStep[] }) {
-  const current = steps.findIndex(step => !step.done)
-  const doneCount = current === -1 ? steps.length : steps.filter(step => step.done).length
+  const firstOpen = steps.findIndex(step => !step.done)
+  // A step still loading may turn out done; nothing is "next" until it is known, so the highlight never jumps back.
+  const current = firstOpen !== -1 && steps[firstOpen].pending ? -2 : firstOpen
+  const doneCount = steps.filter(step => step.done).length
   return (
     <section aria-label={title} className="rounded-xl border border-[#e2e8f0] p-3.5">
       <div className="flex items-center justify-between gap-2">
@@ -111,8 +114,9 @@ export function SetupSteps({ title, steps }: { title: string; steps: SetupStep[]
             <li key={step.label} aria-current={isCurrent ? 'step' : undefined} className={`flex gap-2.5 rounded-lg px-2.5 py-2 ${isCurrent ? 'bg-[#eff6ff]' : ''}`}>
               <span aria-hidden="true" className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold ${step.done ? 'bg-[#dcfce7] text-[#166534]' : isCurrent ? 'bg-[#2563eb] text-white' : 'bg-[#f1f5f9] text-[#64748b]'}`}>{step.done ? <Check size={13} /> : index + 1}</span>
               <div className="min-w-0 flex-1">
-                <p className={`text-[13px] font-medium ${step.done ? 'text-[#64748b]' : 'text-[#0f172a]'}`}>{step.label}<span className="sr-only">{step.done ? ', đã xong' : isCurrent ? ', bước tiếp theo' : ', chưa làm'}</span></p>
+                <p className={`text-[13px] font-medium ${step.done ? 'text-[#64748b]' : 'text-[#0f172a]'}`}>{step.label}<span className="sr-only">{step.done ? ', đã xong' : isCurrent ? ', bước tiếp theo' : step.pending ? ', đang kiểm tra' : ', chưa làm'}</span></p>
                 {isCurrent && <p className="mt-0.5 text-xs text-[#475569]">{step.hint}</p>}
+                {step.pending && <p role="status" className="mt-0.5 text-xs text-[#64748b]">{step.hint}</p>}
                 {isCurrent && step.action && <div className="mt-1.5">{step.action}</div>}
               </div>
             </li>

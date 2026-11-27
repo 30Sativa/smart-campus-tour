@@ -3,7 +3,7 @@ import type { PhysicalRobotConnectionStatus } from './api/technical'
 
 export const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => ({
   UNCONFIRMED: 'Chưa xác nhận kết nối',
-  CONNECTED: 'Đã xác nhận · Đang kết nối',
+  CONNECTED: 'Trực tuyến',
   DISCONNECTED: 'Đã xác nhận · Mất kết nối',
   AWAITING_DATA: 'Đã xác nhận · Chưa nhận dữ liệu',
   WRONG_MAP: 'Sai bản đồ',
@@ -60,6 +60,8 @@ export const returnStripText = {
 export const deploymentStepText = {
   previous: (passed: boolean, at: string | null) => `Lần trước: ${passed ? 'Đạt' : 'Không đạt'}${at ? ` ${at}` : ''}`,
   beforeAssignment: (at: string | null, assignedAt: string) => `Lần trước: Đạt${at ? ` ${at}` : ''}, trước lần gán ${assignedAt}. Cần kiểm lại.`,
+  /** The monitoring page's "Kiểm tra triển khai" row for the same case (2.1). */
+  monitoringBeforeAssignment: (assignedAt: string) => `Đạt, trước lần gán ${assignedAt}. Cần kiểm lại.`,
 }
 
 /** A robot running a Tour keeps its map, its activation and its key until the Tour ends (round 5, W2). */
@@ -67,6 +69,72 @@ export const runningTourText = {
   blocked: (tourName: string | null) => `Robot đang chạy Tour${tourName ? ` ${tourName}` : ''}. Kết thúc Tour rồi mới đổi.`,
   revokeWarning: (tourName: string | null) => `Robot đang chạy Tour${tourName ? ` ${tourName}` : ''}; thu hồi khóa làm robot mất kết nối giữa Tour.`,
 }
+
+/**
+ * The robot setup in words a new Technical Staff member can follow (round 7). The main line names the step to do
+ * when it is the key or the map; the server's `readiness.reason` stays underneath as the detail.
+ */
+export const setupText = {
+  mainLine: { key: 'Cấp khóa cho MiniPC', map: 'Gán bản đồ cho robot' } as const,
+  keyChecking: 'Đang kiểm tra khóa…',
+  deployHint: 'Nạp đúng tệp bản đồ lên robot, kiểm tra định vị và hiển thị, rồi ghi kết quả ở mục Kiểm tra tại robot bên dưới.',
+  /** READY on the server, but the robot's own report says it cannot drive a Tour yet (2.7). Display only. */
+  readyNotDriving: 'Đã thiết lập xong. Robot đang báo chưa định vị, chưa chạy Tour được.',
+}
+
+/**
+ * "Trên MiniPC" in the setup dialog (1.3), from robot/docs/fleet-bridge.md and fleet-service.md. It never carries the
+ * key itself: the key is shown once, in the key dialog, and lives in its own file.
+ */
+export const miniPcText = {
+  title: 'Trên MiniPC',
+  envFile: '~/.config/campustour/fleet-sync.env',
+  envLines: (robotCode: string, mapKey: string, frameId: string) => [
+    `FLEET_ROBOT_CODE=${robotCode}`,
+    `FLEET_ROBOT_MAP_KEY=${mapKey}`,
+    `FLEET_ROBOT_FRAME_ID=${frameId}`,
+    'FLEET_ROBOT_CREDENTIAL_FILE=<tệp khóa>',
+  ].join('\n'),
+  envStep: 'Ghi các dòng này vào ~/.config/campustour/fleet-sync.env, giữ nguyên FLEET_SYNC_URL đã có.',
+  keyStep: 'Tệp khóa là tệp FLEET_ROBOT_CREDENTIAL_FILE trỏ tới, chỉ chứa khóa kết nối, quyền 0600 (chmod 600 <tệp khóa>).',
+  mapStep: (packageFileName: string | null) => `Giải nén ${packageFileName ?? 'tệp bản đồ (.zip)'} vào robot_maps, rồi trong ~/.config/sct-robot/runtime.env đặt MAP= là tệp .yaml của bản đồ này.`,
+  startStep: 'Chạy robot fleet start (đang chạy thì robot fleet restart), rồi bấm Cập nhật trạng thái.',
+  copy: 'Sao chép cấu hình MiniPC',
+}
+
+/** The MiniPC key dialog (1.4). */
+export const credentialText = {
+  title: (robotCode: string) => `Khóa kết nối MiniPC · ${robotCode}`,
+  saveHint: 'Lưu khóa vào tệp mà FLEET_ROBOT_CREDENTIAL_FILE trỏ tới, quyền 0600 (chmod 600). Đóng mục này sẽ xóa bí mật khỏi giao diện.',
+}
+
+/** "Điều phối Tour" in the setup dialog (1.6, ADR-0049 Decision 8). The server still refuses a robot that is not ready. */
+export const dispatchText = {
+  offHint: 'Bật để Tour trên web gửi được lệnh cho robot. Tắt khi robot cần sửa hoặc không dùng.',
+  evidenceLabel: 'Bằng chứng chạy thử có giám sát',
+  evidenceNote: 'GATE A',
+  notReady: 'Robot chưa sẵn sàng trên bản đồ được gán. Làm xong các bước thiết lập trước.',
+}
+
+/** Map management (1.7, 2.8). */
+export const mapText = {
+  assignToRobot: 'Gán cho robot…',
+  pickerTitle: (label: string) => `Gán ${label} cho robot`,
+  pickerDescription: 'Chọn robot sẽ dùng bản đồ này. Tiếp tục để xác nhận gán trong hộp Bản đồ của robot.',
+  download: 'Tải tệp bản đồ (.zip)',
+  downloading: 'Đang tải…',
+  checksumHint: 'So với sha256sum của tệp ZIP này trên MiniPC.',
+  noRobotYet: (count: number) => `${count} bản đồ chưa có robot`,
+}
+
+/** The Staff overview's Robot card (2.3): the server's readiness, said for someone who asks Technical to fix it. */
+export const staffReadinessText = {
+  ready: (mapLabel: string | null) => mapLabel ? `Sẵn sàng · ${mapLabel}` : 'Sẵn sàng',
+  notReady: 'Chưa sẵn sàng · báo Kỹ thuật',
+}
+
+/** Under "Tên robot" when registering (1.8). The name cannot be changed yet; there is no rename. */
+export const robotNameHint = 'Đặt theo mã hoặc đặc điểm robot, không theo tầng hay bản đồ: robot có thể đổi bản đồ, còn tên chưa sửa được sau khi đăng ký.'
 
 export function errorText(error: unknown) {
   const detail = apiErrorDetail(error)

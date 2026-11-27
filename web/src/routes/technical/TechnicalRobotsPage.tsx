@@ -8,8 +8,8 @@ import { notify } from '../../components/ui/toast-store'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { Note, SetupSteps, TechnicalPage, ToneBadge, type SetupStep } from '../../features/technical/TechnicalUi'
 import { useActivateRobot, useAllMapVersions, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapShortLabel, useMapVersions, usePoiProposals, usePoiVerificationQueue, useRegisterPhysicalRobot, useReleaseRobotInspection, useRobotAffectedTours, useRobotCredential, useRouteTestQueue, useSetRobotDispatch, useSubmittedRoutes } from '../../features/technical/technical-hooks'
-import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour, RobotReadinessNextStep } from '../../features/technical/api/technical'
-import { connectionStatusLabel, deploymentStepText, errorText, releaseInspectionError, returnStripText, runningTourText, wrongMapText } from '../../features/technical/technical-format'
+import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour, RobotCredentialView, RobotReadinessNextStep } from '../../features/technical/api/technical'
+import { connectionStatusLabel, deploymentStepText, dispatchText, errorText, miniPcText, releaseInspectionError, returnStripText, robotNameHint, runningTourText, setupText, wrongMapText } from '../../features/technical/technical-format'
 import { returnTarget, technicalReturnPath } from '../../features/technical/technical-nav'
 import { formatDateTime } from '../../components/ui/date-time'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -110,7 +110,7 @@ export default function TechnicalRobotsPage() {
               {visibleRobots?.map(robot => <tr key={robot.id} className={rowClass}>
                 <td className={tdClass}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p>{isHeld(robot) && <p className="mt-1"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}{robot.isDispatchEnabled && <p className="mt-1">{isReady(robot) ? <ToneBadge tone="info">Đã cho phép điều phối</ToneBadge> : <ToneBadge tone="warn">Cho phép điều phối · chưa sẵn sàng</ToneBadge>}</p>}{isBusy(robot) && <p className="mt-1"><ToneBadge tone="info">{robot.currentTourName ? `Đang chạy Tour ${robot.currentTourName}` : 'Đang chạy Tour'}</ToneBadge></p>}</td>
                 <td className={tdClass}><ConnectionBadge robot={robot} /><WrongMapLine robot={robot} /><p className="mt-0.5 text-[11.5px] text-[#64748b]">Dữ liệu gần nhất: {formatDateTime(robot.lastSyncReceivedAt)}</p></td>
-                <td className={tdClass}>{robot.readiness ? <ReadinessSummary readiness={robot.readiness} mapText={mapLabelOf(robot.readiness.mapVersionId)} /> : <span className="text-[13px] text-[#64748b]">-</span>}</td>
+                <td className={tdClass}>{robot.readiness ? <RobotReadinessCell robot={robot} mapText={mapLabelOf(robot.readiness.mapVersionId)} /> : <span className="text-[13px] text-[#64748b]">-</span>}</td>
                 <td className={tdClass}><div className="flex flex-wrap items-center justify-center gap-2">
                   <Link to={`/technical/monitoring?robot=${encodeURIComponent(robot.robotCode)}`} aria-label={`Giám sát ${robot.robotCode}`} className={buttonClass('secondary', 'sm')}>Giám sát</Link>
                   <button type="button" aria-label={`Thiết lập ${robot.robotCode}`} className={buttonClass('secondary', 'sm')} onClick={() => setDialog({ view: 'detail', robotId: robot.id })}>Thiết lập</button>
@@ -207,16 +207,35 @@ const serverStep: Record<RobotReadinessNextStep, Exclude<NextStep, null>> = {
 }
 
 /**
- * The one thing to do next. The map steps are the server's `readiness.nextStep`; this only puts the key before them
- * (the key status is not part of readiness) and the on-site release after them.
+ * The MiniPC key as the setup reads it. `checking` is the first load: the key step is neither done nor next until it
+ * is known, so the checklist does not jump to it and back (1.5). `unknown` is a failed load.
  */
-function nextStepOf(robot: PhysicalRobotOption, keyActive: boolean | undefined): NextStep {
+type KeyStatus = 'active' | 'missing' | 'checking' | 'unknown'
+const keyStatusOf = (credential: { data?: RobotCredentialView; isPending: boolean }): KeyStatus =>
+  credential.data ? (credential.data.status === 'ACTIVE' ? 'active' : 'missing') : credential.isPending ? 'checking' : 'unknown'
+
+/**
+ * The one thing to do next. The map steps are the server's `readiness.nextStep`; this only puts the key before them
+ * (the key status is not part of readiness) and the on-site release after them. Nothing is next while the key is
+ * still being checked: the key might be the step.
+ */
+function nextStepOf(robot: PhysicalRobotOption, key: KeyStatus): NextStep {
   if (robot.deactivatedAt) return null
-  if (keyActive === false) return 'key'
+  if (key === 'missing') return 'key'
+  if (key === 'checking') return null
   const step = robot.readiness?.nextStep
   if (step && serverStep[step]) return serverStep[step]
   if (isHeld(robot)) return 'release'
   return null
+}
+
+/** "Cấp khóa cho MiniPC" / "Gán bản đồ cho robot" when that is the next step (1.1); null otherwise. */
+const mainLineOf = (next: NextStep) => next === 'key' || next === 'map' ? setupText.mainLine[next] : null
+
+/** The list's "Sẵn sàng" cell: the chip, the step to do when it is the key or the map, the server's reason under it. */
+function RobotReadinessCell({ robot, mapText }: { robot: PhysicalRobotOption; mapText: string | null }) {
+  const credential = useRobotCredential(robot.robotCode, !robot.deactivatedAt)
+  return <ReadinessSummary readiness={robot.readiness} mapText={mapText} mainLine={mainLineOf(nextStepOf(robot, keyStatusOf(credential)))} />
 }
 
 function RobotDetailModal({ robot, strip, refreshing, onRefresh, onAssignMap, onManageKey, onClose }: {
@@ -228,8 +247,9 @@ function RobotDetailModal({ robot, strip, refreshing, onRefresh, onAssignMap, on
   const [releasing, setReleasing] = useState(false)
   const deployStep = useRef<HTMLElement>(null)
   const miniPcStep = useRef<HTMLElement>(null)
-  const keyActive = credential.data ? credential.data.status === 'ACTIVE' : undefined
-  const next = nextStepOf(robot, keyActive)
+  const key = keyStatusOf(credential)
+  const next = nextStepOf(robot, key)
+  const mainLine = mainLineOf(next)
   // Opens the check form where it lives, in the map group, rather than sending anyone to another page.
   const openCheck = () => { setChecking(true); deployStep.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }) }
   const refreshButton = <button type="button" className={buttonClass('secondary', 'sm')} disabled={refreshing} onClick={onRefresh}><RefreshCw size={13} aria-hidden="true" />{refreshing ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button>
@@ -248,9 +268,12 @@ function RobotDetailModal({ robot, strip, refreshing, onRefresh, onAssignMap, on
       <div className="space-y-4">
         {robot.deactivatedAt && <Note tone="warn">Ngừng sử dụng từ {formatDateTime(robot.deactivatedAt)}. Lý do: {robot.deactivationReason}. Sau khi kích hoạt lại cần cấp khóa mới và gán lại bản đồ.</Note>}
         {!robot.deactivatedAt && <section aria-label="Trạng thái sẵn sàng" className="space-y-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3.5">
-          {robot.readiness && <div><ReadinessBadge readiness={robot.readiness} mapText={mapLabelOf(robot.readiness.mapVersionId)} />{robot.readiness.state !== 'READY' && robot.readiness.reason && <p className="mt-1 text-[13px] text-[#334155]">{robot.readiness.reason}</p>}{robot.readiness.state !== 'READY' && robot.readiness.detail && <p className="mt-0.5 text-xs text-[#64748b]">{robot.readiness.detail}</p>}</div>}
+          {robot.readiness && <div><ReadinessBadge readiness={robot.readiness} mapText={mapLabelOf(robot.readiness.mapVersionId)} />
+            {mainLine && <p className="mt-1 text-[14px] font-semibold text-[#0f172a]">{mainLine}</p>}
+            {robot.readiness.state !== 'READY' && robot.readiness.reason && <p className={mainLine ? 'mt-0.5 text-xs text-[#64748b]' : 'mt-1 text-[13px] text-[#334155]'}>{robot.readiness.reason}</p>}
+            {robot.readiness.state !== 'READY' && robot.readiness.detail && <p className="mt-0.5 text-xs text-[#64748b]">{robot.readiness.detail}</p>}</div>}
           {next && <div>{nextAction[next]}</div>}
-          <RobotSetupChecklist robot={robot} keyActive={keyActive} keyError={credential.isError} onAssignMap={onAssignMap} onManageKey={onManageKey} />
+          <RobotSetupChecklist robot={robot} keyStatus={key} onAssignMap={onAssignMap} onManageKey={onManageKey} />
         </section>}
         <DetailGroup title="Kết nối & khóa">
           <DetailSection title="Kết nối">
@@ -301,12 +324,12 @@ function RobotMapSteps({ robot, checking, deployStep, miniPcStep, refreshButton,
     (previous.at ? Date.parse(previous.at) < Date.parse(robot.mapAssignedAt) : true))
   const runningLine = runningTourLine(robot)
   return <>
-    <DetailSection title="1. Chọn bản đồ" subject={assigned ? mapLabelOf(robot.assignedMapVersionId) ?? `${robot.assignedAreaName} · v${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} disabled={Boolean(runningLine)} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Đổi bản đồ' : 'Gán bản đồ'}</button>}>
+    <DetailSection title="Chọn bản đồ" subject={assigned ? mapLabelOf(robot.assignedMapVersionId) ?? `${robot.assignedAreaName} · v${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} disabled={Boolean(runningLine)} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Đổi bản đồ' : 'Gán bản đồ'}</button>}>
       {!assigned ? <p className="text-[13px] text-amber-800">Chưa gán bản đồ.</p>
         : robot.mapAssignedAt ? <p className="text-xs text-[#64748b]">Gán lúc {formatDateTime(robot.mapAssignedAt)}{robot.mapAssignedByName ? ` bởi ${robot.mapAssignedByName}` : ''}.</p> : null}
       <RunningTourLine text={runningLine} />
     </DetailSection>
-    <DetailSection title="2. Cấu hình MiniPC" sectionRef={miniPcStep} action={assigned ? refreshButton : undefined}>
+    <DetailSection title="Cấu hình MiniPC" sectionRef={miniPcStep} action={assigned ? refreshButton : undefined}>
       {assigned ? <div className="space-y-2">
         <Facts items={[
           ['MapKey', <CopyValue key="map" label="MapKey" value={robot.assignedMapKey!} />],
@@ -315,12 +338,13 @@ function RobotMapSteps({ robot, checking, deployStep, miniPcStep, refreshButton,
         <p role="status" className={`text-[13px] ${reporting ? 'text-[#166534]' : 'text-amber-800'}`}>{reporting
           ? 'Robot đã báo về theo bản đồ này.'
           : rejected ? wrongMapText(rejected, robot.assignedMapKey)
-          : 'Chưa nhận dữ liệu theo bản đồ này. Nhập MapKey/FrameId trên MiniPC, bật fleet_bridge rồi bấm Cập nhật trạng thái.'}</p>
+          : 'Chưa nhận dữ liệu theo bản đồ này. Làm theo các bước Trên MiniPC bên dưới rồi bấm Cập nhật trạng thái.'}</p>
+        <MiniPcInstructions robotCode={robot.robotCode} mapKey={robot.assignedMapKey!} frameId={robot.assignedFrameId!} packageFileName={map?.packageFileName ?? null} />
       </div> : <p className="text-[13px] text-[#64748b]">Gán bản đồ trước để biết MapKey và FrameId cần nhập.</p>}
     </DetailSection>
-    <section ref={deployStep} aria-label="3. Kiểm tra tại robot" className="rounded-lg border border-[#e2e8f0] p-3">
+    <section ref={deployStep} aria-label="Kiểm tra tại robot" className="rounded-lg border border-[#e2e8f0] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-[13px] font-semibold text-[#0f172a]">3. Kiểm tra tại robot</h3>
+        <h3 className="text-[13px] font-semibold text-[#0f172a]">Kiểm tra tại robot</h3>
         {assigned && !checking && <button type="button" className={buttonClass('secondary', 'sm')} onClick={onCheck}><ClipboardCheck size={13} aria-hidden="true" />{previous ? 'Kiểm tra lại' : 'Kiểm tra triển khai'}</button>}
       </div>
       <div className="mt-2 space-y-2">
@@ -338,21 +362,51 @@ function RobotMapSteps({ robot, checking, deployStep, miniPcStep, refreshButton,
 }
 
 /**
+ * What to type on the MiniPC for the assigned map (1.3): the Fleet Sync environment file, the key file, the map
+ * profile and the service. The key itself is never here; it is shown once in the key dialog.
+ */
+function MiniPcInstructions({ robotCode, mapKey, frameId, packageFileName }: { robotCode: string; mapKey: string; frameId: string; packageFileName: string | null }) {
+  const env = miniPcText.envLines(robotCode, mapKey, frameId)
+  const copy = async () => {
+    await navigator.clipboard?.writeText(env)
+    notify({ title: 'Đã sao chép cấu hình MiniPC', detail: miniPcText.envFile })
+  }
+  return (
+    <section aria-label={miniPcText.title} className="rounded-lg bg-[#f8fafc] p-3 text-[13px] text-[#334155]">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="font-semibold text-[#0f172a]">{miniPcText.title}</h4>
+        <button type="button" className={buttonClass('secondary', 'sm')} aria-label={miniPcText.copy} onClick={() => void copy()}><Copy size={13} aria-hidden="true" />Sao chép</button>
+      </div>
+      <p className="mt-1.5 font-mono text-xs text-[#64748b]">{miniPcText.envFile}</p>
+      <pre className="mt-1 overflow-x-auto rounded-md border border-[#e2e8f0] bg-white p-2 font-mono text-xs">{env}</pre>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs">
+        <li>{miniPcText.envStep}</li>
+        <li>{miniPcText.keyStep}</li>
+        <li>{miniPcText.mapStep(packageFileName)}</li>
+        <li>{miniPcText.startStep}</li>
+      </ol>
+    </section>
+  )
+}
+
+/**
  * The setup order from ADR-0039 as a checklist. It only reads what the robot list and key status already return;
  * the last step is the server's readiness. It has no button of its own: the next-step button above and step 3 below
  * already open the check form, and a third button with the same words only made people wonder which one to press.
  */
-function RobotSetupChecklist({ robot, keyActive, keyError, onAssignMap, onManageKey }: {
-  robot: PhysicalRobotOption; keyActive: boolean | undefined; keyError: boolean; onAssignMap: () => void; onManageKey: () => void
+function RobotSetupChecklist({ robot, keyStatus, onAssignMap, onManageKey }: {
+  robot: PhysicalRobotOption; keyStatus: KeyStatus; onAssignMap: () => void; onManageKey: () => void
 }) {
   const steps: SetupStep[] = [
     { label: 'Đăng ký robot', done: true, hint: '' },
-    { label: 'Cấp khóa kết nối MiniPC', done: keyActive === true, hint: keyError ? 'Không tải được trạng thái khóa.' : 'Cấp khóa rồi nhập khóa đó trên MiniPC.',
-      action: <button type="button" className={buttonClass('secondary', 'sm')} onClick={onManageKey}><KeyRound size={13} aria-hidden="true" />Cấp khóa</button> },
+    keyStatus === 'checking'
+      ? { label: 'Cấp khóa kết nối MiniPC', done: false, pending: true, hint: setupText.keyChecking }
+      : { label: 'Cấp khóa kết nối MiniPC', done: keyStatus === 'active', hint: keyStatus === 'unknown' ? 'Không tải được trạng thái khóa.' : 'Cấp khóa rồi lưu khóa đó vào tệp khóa trên MiniPC.',
+        action: <button type="button" className={buttonClass('secondary', 'sm')} onClick={onManageKey}><KeyRound size={13} aria-hidden="true" />Cấp khóa</button> },
     { label: 'Gán bản đồ', done: Boolean(robot.assignedMapVersionId), hint: 'Chọn khu vực và phiên bản bản đồ robot sẽ dùng, rồi nhập MapKey và FrameId trên MiniPC.',
       action: <button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />Chọn bản đồ</button> },
     { label: 'Robot kết nối lần đầu', done: Boolean(robot.firstAcceptedSyncAt), hint: 'Bật robot với khóa, MapKey và FrameId ở trên. Khi máy chủ nhận dữ liệu đầu tiên, bấm Cập nhật trạng thái.' },
-    { label: 'Kiểm tra triển khai đạt trên bản đồ được gán', done: isReady(robot), hint: 'Nạp đúng tệp bản đồ lên robot, kiểm tra định vị và hiển thị, rồi ghi kết quả ở bước 3. Kiểm tra tại robot.' },
+    { label: 'Kiểm tra triển khai đạt trên bản đồ được gán', done: isReady(robot), hint: setupText.deployHint },
   ]
   return <SetupSteps title="Thiết lập robot" steps={steps} />
 }
@@ -416,14 +470,15 @@ function RobotDispatchSection({ robot }: { robot: PhysicalRobotOption }) {
     <DetailSection title="Điều phối Tour" subject={enabled ? 'Đang cho phép' : 'Đang tắt'}
       action={enabled
         ? <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setConfirming('off')}>Tắt điều phối</button>
-        : <button type="button" className={buttonClass('primary', 'sm')} onClick={() => setConfirming('on')}>Cho phép điều phối</button>}>
+        : <button type="button" className={buttonClass('primary', 'sm')} disabled={!isReady(robot)} aria-describedby={isReady(robot) ? undefined : `dispatch-not-ready-${robot.id}`} onClick={() => setConfirming('on')}>Cho phép điều phối</button>}>
       <p className="text-[13px] text-[#475569]">{enabled
         ? 'Tour bắt đầu trên web có thể gửi lệnh di chuyển cho robot này, khi máy chủ đã bật gửi lệnh và robot chạy fleet_bridge có nhận lệnh.'
-        : 'Tour trên web chưa gửi được lệnh cho robot này. Bật khi chuẩn bị chạy thử tuyến, tắt khi xong.'}</p>
+        : dispatchText.offHint}</p>
+      {!enabled && !isReady(robot) && <p id={`dispatch-not-ready-${robot.id}`} className="mt-1 text-[13px] text-amber-800">{dispatchText.notReady}</p>}
       {enabled && !isReady(robot) && <p role="status" className="mt-1 text-[13px] text-amber-800">Đang cho phép, nhưng robot chưa sẵn sàng nên Tour chưa bắt đầu được.</p>}
     </DetailSection>
     {confirming && <ConfirmationDialog open requireReason tone={confirming === 'on' ? 'default' : 'danger'}
-      reasonLabel={confirming === 'on' ? 'Ghi chú buổi chạy thử tuyến' : 'Lý do tắt'}
+      reasonLabel={confirming === 'on' ? dispatchText.evidenceLabel : 'Lý do tắt'} reasonNote={confirming === 'on' ? dispatchText.evidenceNote : undefined}
       reasonPlaceholder={confirming === 'on' ? 'Ví dụ: demo đồ án 12/11, khu vực trống, có người đứng ở nút dừng khẩn.' : 'Ví dụ: xong buổi demo.'}
       title={confirming === 'on' ? `Cho phép điều phối ${robot.robotCode}?` : `Tắt điều phối ${robot.robotCode}?`}
       description={confirming === 'on'
@@ -563,7 +618,7 @@ function RegisterRobotModal({ open, onClose }: { open: boolean; onClose: () => v
     footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Hủy</button><button type="submit" form="physical-robot-form" className={buttonClass('primary')} disabled={register.isPending || !robotCode.trim() || !displayName.trim()}>{register.isPending ? 'Đang đăng ký…' : 'Đăng ký robot'}</button></div>}>
     <form id="physical-robot-form" className="space-y-3.5" onSubmit={submit}>
       <div><label className={labelClass} htmlFor="physical-robot-code">Mã robot</label><input id="physical-robot-code" className={`${inputClass} mt-1`} required maxLength={100} pattern={'[A-Za-z0-9][A-Za-z0-9_.\\-]{0,99}'} disabled={register.isPending} value={robotCode} onBlur={() => setRobotCode(value => value.trim())} onChange={event => { setRobotCode(event.target.value); if (!register.isPending) register.reset() }} placeholder="amr-01" /><p className="mt-1 text-xs text-[#64748b]">Tối đa 100 ký tự; bắt đầu bằng chữ hoặc số, chỉ dùng chữ, số, dấu chấm, gạch dưới hoặc gạch nối.</p></div>
-      <div><label className={labelClass} htmlFor="physical-robot-name">Tên robot</label><input id="physical-robot-name" className={`${inputClass} mt-1`} required maxLength={150} disabled={register.isPending} value={displayName} onChange={event => { setDisplayName(event.target.value); if (!register.isPending) register.reset() }} placeholder="AMR 01" /></div>
+      <div><label className={labelClass} htmlFor="physical-robot-name">Tên robot</label><input id="physical-robot-name" className={`${inputClass} mt-1`} required maxLength={150} disabled={register.isPending} value={displayName} onChange={event => { setDisplayName(event.target.value); if (!register.isPending) register.reset() }} placeholder="AMR 01" aria-describedby="physical-robot-name-hint" /><p id="physical-robot-name-hint" className="mt-1 text-xs text-[#64748b]">{robotNameHint}</p></div>
       {register.error && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errorText(register.error)}</p>}
       <p className="text-[12.5px] leading-5 text-[#64748b]">Đăng ký tạo danh tính robot trong hệ thống. Thiết lập kết nối ROS 2 được thực hiện riêng trên robot.</p>
     </form>

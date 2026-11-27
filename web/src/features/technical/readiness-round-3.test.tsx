@@ -114,12 +114,12 @@ describe('preparing a robot from a POI check and coming back', () => {
     renderAt('/technical/pois')
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Gán robot cho bản đồ này' }))
-    const picker = within(await screen.findByRole('dialog', { name: 'Triển khai Tầng 6 · tang-6 · v1 cho robot' }))
+    const picker = within(await screen.findByRole('dialog', { name: 'Gán Tầng 6 · tang-6 · v1 cho robot' }))
     fireEvent.click(picker.getByRole('button', { name: 'Hủy' }))
     expect(await screen.findByRole('dialog', { name: 'Kiểm chứng test' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Gán robot cho bản đồ này' }))
-    const again = within(await screen.findByRole('dialog', { name: 'Triển khai Tầng 6 · tang-6 · v1 cho robot' }))
+    const again = within(await screen.findByRole('dialog', { name: 'Gán Tầng 6 · tang-6 · v1 cho robot' }))
     // The robot on the other "Tầng 6" is the one to move, so it starts chosen.
     await again.findByRole('option', { name: /amr_01/ })
     expect(again.getByLabelText('Robot')).toHaveValue('robot-1')
@@ -140,7 +140,7 @@ describe('preparing a robot from a POI check and coming back', () => {
     expect(status.getByText('Lần kiểm tra triển khai mới nhất của robot amr_01 là trên Betea · betea · phiên bản 1.')).toHaveClass('text-xs')
     expect(status.getByRole('button', { name: 'Cấu hình MiniPC' })).toBeInTheDocument()
     expect(status.queryByRole('button', { name: 'Kiểm tra triển khai' })).not.toBeInTheDocument()
-    expect(within(dialog.getByRole('region', { name: '2. Cấu hình MiniPC' })).getByRole('status')).toHaveTextContent('Robot đang gửi dữ liệu theo test123-v1, bị từ chối vì đang gán tang-6-v1. Đổi MapKey/FrameId trên MiniPC.')
+    expect(within(dialog.getByRole('region', { name: 'Cấu hình MiniPC' })).getByRole('status')).toHaveTextContent('Robot đang gửi dữ liệu theo test123-v1, bị từ chối vì đang gán tang-6-v1. Đổi MapKey/FrameId trên MiniPC.')
     view.unmount()
 
     robots = [readyRobot]

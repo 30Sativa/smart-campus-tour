@@ -116,7 +116,18 @@ it('offers only robots the chosen route can use, and says why the others are off
   fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
 
   expect(await screen.findByRole('option', { name: 'AMR 01 · amr-01' })).toBeEnabled()
-  expect(screen.getByRole('option', { name: 'AMR 02 · amr-02 (Robot chưa xác nhận kết nối.)' })).toBeDisabled()
+  expect(screen.getByRole('option', { name: 'AMR 02 · amr-02 (chưa sẵn sàng)' })).toBeDisabled()
+})
+
+it('names the reason of a robot that is not ready under the field when none is usable, and who to ask (round 7, 2.4)', async () => {
+  robotRows = [{ robotCode: 'amr-02', displayName: 'AMR 02', usable: false, blockReason: 'Robot chưa xác nhận kết nối.' }]
+  api()
+  renderAt('/staff/manage/tours/new?kind=normal')
+  await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })
+  fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
+  expect(await screen.findByRole('option', { name: 'AMR 02 · amr-02 (chưa sẵn sàng)' })).toBeDisabled()
+  const status = await screen.findByText(/^Chưa có robot nào sẵn sàng cho tuyến này\. Nhờ Kỹ thuật gán và kiểm tra robot trên bản đồ/)
+  expect(status).toHaveTextContent('AMR 02 · amr-02: Robot chưa xác nhận kết nối.')
 })
 
 describe('choosing the route of a new Tour', () => {

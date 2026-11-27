@@ -29,7 +29,7 @@ const show = (items: MapVersionItem[]) => {
 const dataRows = () => screen.getAllByRole('row').slice(1)
 
 describe('MapVersionTable', () => {
-  // "Triển khai cho robot…" lists the registered robots.
+  // "Gán cho robot…" lists the registered robots.
   beforeEach(() => { vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ success: true, data: [] }), { status: 200 }))) })
   afterEach(() => { vi.unstubAllGlobals() })
 
@@ -57,8 +57,8 @@ describe('MapVersionTable', () => {
     expect(detail).toHaveTextContent('a'.repeat(64))
     // The deployment check is recorded in the robot's setup now; the detail hands the version over to a robot.
     expect(within(detail).queryByRole('button', { name: 'Ghi kết quả kiểm tra' })).not.toBeInTheDocument()
-    fireEvent.click(within(detail).getByRole('button', { name: 'Triển khai cho robot…' }))
-    expect(await screen.findByRole('dialog', { name: 'Triển khai A · v2 cho robot' })).toBeInTheDocument()
+    fireEvent.click(within(detail).getByRole('button', { name: 'Gán cho robot…' }))
+    expect(await screen.findByRole('dialog', { name: 'Gán A · v2 cho robot' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Hủy' }))
     fireEvent.click(screen.getByRole('button', { name: 'Xem phiên bản 1' }))
     expect(screen.getByRole('dialog', { name: 'A · v1' })).toHaveTextContent('phiên bản cũ, mới nhất là phiên bản 2')
