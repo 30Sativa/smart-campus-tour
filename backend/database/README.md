@@ -2,7 +2,7 @@
 
 ## v1.26 Operator console presence (ADR-0073)
 
-`smart-campus-tour-schema-v1.26.sql` and `patches/upgrade-v1.25-to-v1.26-operator-presence.sql` add durable `TourOperatorPresence(TourId, LastSeenAt)` without touching `Tours.RowVersion`. Legacy timestamps remain absent/null. The controlled upgrade is `upgrade-db.sh --upgrade-to-v1.26`; existing backups and deployment approval rules still apply. Runtime has SELECT/INSERT and UPDATE(LastSeenAt), with no whole-table UPDATE or DELETE. The initializer/check-only gate requires v1.26 structure and grants. Older snapshots remain immutable.
+`backend/database/smart-campus-tour-schema-v1.26.sql` and `backend/database/patches/upgrade-v1.25-to-v1.26-operator-presence.sql` add durable `TourOperatorPresence(TourId, LastSeenAt)` without touching `Tours.RowVersion`. Legacy timestamps remain absent/null. The controlled upgrade uses `backend/deploy/upgrade-db.sh --upgrade-to-v1.26` inside the DB tool; existing backups and deployment approval rules still apply. Runtime has SELECT/INSERT and UPDATE(LastSeenAt), with no whole-table UPDATE or DELETE. The initializer/check-only gate requires v1.26 structure and grants. Older snapshots remain immutable.
 
 
 ## Runtime grant: a Tour that ends shortens its hold (ADR-0043 D13 addendum, 23/11/2026)
