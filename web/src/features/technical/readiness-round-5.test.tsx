@@ -66,7 +66,7 @@ describe('round 5: a check before the assignment, and a robot running a Tour', (
   it('says the pass from before the assignment needs redoing, with its time when the server sends it', async () => {
     robots = [{ ...amr01, readiness: { ...amr01.readiness, deploymentCheckedAt: '2026-11-23T06:25:00Z' } }]
     renderAt('/technical/robots?robot=robot-1')
-    const step = within((await setupDialog()).getByRole('region', { name: '3. Kiểm tra tại robot' }))
+    const step = within((await setupDialog()).getByRole('region', { name: 'Kiểm tra tại robot' }))
 
     expect(step.getByText('Lần trước: Đạt 23/11/2026 13:25, trước lần gán 26/11/2026 14:31. Cần kiểm lại.')).toBeInTheDocument()
     expect(step.queryByText(/^Lần trước: Đạt 23\/11\/2026 13:25$/)).not.toBeInTheDocument()
@@ -77,7 +77,7 @@ describe('round 5: a check before the assignment, and a robot running a Tour', (
     renderAt('/technical/robots?robot=robot-1')
     const dialog = await setupDialog()
 
-    expect(within(dialog.getByRole('region', { name: '3. Kiểm tra tại robot' })).getByText('Lần trước: Đạt, trước lần gán 26/11/2026 14:31. Cần kiểm lại.')).toBeInTheDocument()
+    expect(within(dialog.getByRole('region', { name: 'Kiểm tra tại robot' })).getByText('Lần trước: Đạt, trước lần gán 26/11/2026 14:31. Cần kiểm lại.')).toBeInTheDocument()
     const checklist = within(dialog.getByRole('region', { name: 'Thiết lập robot' }))
     expect(checklist.getByText('Kiểm tra triển khai đạt trên bản đồ được gán')).toHaveTextContent('bước tiếp theo')
     expect(checklist.getByText('4/5 bước')).toBeInTheDocument()
@@ -86,7 +86,7 @@ describe('round 5: a check before the assignment, and a robot running a Tour', (
   it('keeps the plain line for a check after the assignment', async () => {
     robots = [readyAmr01]
     renderAt('/technical/robots?robot=robot-1')
-    const step = within((await setupDialog()).getByRole('region', { name: '3. Kiểm tra tại robot' }))
+    const step = within((await setupDialog()).getByRole('region', { name: 'Kiểm tra tại robot' }))
 
     expect(step.getByText('Lần trước: Đạt 27/11/2026 08:00')).toBeInTheDocument()
     expect(step.queryByText(/Cần kiểm lại/)).not.toBeInTheDocument()
@@ -107,7 +107,7 @@ describe('round 5: a check before the assignment, and a robot running a Tour', (
     renderAt('/technical/robots?robot=robot-1')
     const dialog = await setupDialog()
 
-    const mapStep = within(dialog.getByRole('region', { name: '1. Chọn bản đồ' }))
+    const mapStep = within(dialog.getByRole('region', { name: 'Chọn bản đồ' }))
     expect(mapStep.getByRole('button', { name: 'Đổi bản đồ' })).toBeDisabled()
     expect(mapStep.getByText(runningLine)).toBeInTheDocument()
     const lifecycle = within(dialog.getByRole('region', { name: 'Trạng thái sử dụng' }))
@@ -130,7 +130,7 @@ describe('round 5: a check before the assignment, and a robot running a Tour', (
     robots = [running]
     renderAt('/technical/robots?robot=robot-1')
     fireEvent.click((await setupDialog()).getByRole('button', { name: 'Quản lý khóa' }))
-    const panel = within(await screen.findByRole('dialog', { name: 'Khóa Fleet Sync · amr_01' }))
+    const panel = within(await screen.findByRole('dialog', { name: 'Khóa kết nối MiniPC · amr_01' }))
 
     expect(await panel.findByRole('button', { name: 'Cấp lại' })).toBeDisabled()
     expect(panel.getByText(runningLine)).toBeInTheDocument()
@@ -163,12 +163,12 @@ describe('round 5: a check before the assignment, and a robot running a Tour', (
     const dialog = await setupDialog()
     const expectLock = (button: HTMLElement) => locked ? expect(button).toBeDisabled() : expect(button).toBeEnabled()
 
-    expectLock(within(dialog.getByRole('region', { name: '1. Chọn bản đồ' })).getByRole('button', { name: 'Đổi bản đồ' }))
+    expectLock(within(dialog.getByRole('region', { name: 'Chọn bản đồ' })).getByRole('button', { name: 'Đổi bản đồ' }))
     expectLock(within(dialog.getByRole('region', { name: 'Trạng thái sử dụng' })).getByRole('button', { name: 'Ngừng sử dụng' }))
     expect(within(dialog.getByRole('region', { name: 'Điều phối Tour' })).getByRole('button', { name: 'Tắt điều phối' })).toBeEnabled()
     expect(dialog.queryAllByText(runningLine)).toHaveLength(locked ? 2 : 0)
     fireEvent.click(dialog.getByRole('button', { name: 'Quản lý khóa' }))
-    const panel = within(await screen.findByRole('dialog', { name: 'Khóa Fleet Sync · amr_01' }))
+    const panel = within(await screen.findByRole('dialog', { name: 'Khóa kết nối MiniPC · amr_01' }))
     expectLock(await panel.findByRole('button', { name: 'Cấp lại' }))
     expect(panel.getByRole('button', { name: 'Thu hồi' })).toBeEnabled()
     expect(panel.queryByText(runningLine) !== null).toBe(locked)

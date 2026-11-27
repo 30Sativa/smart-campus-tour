@@ -20,6 +20,8 @@ import { STEP_LABEL, assistanceInfo, commandStateInfo } from '../../features/sta
 import { ToneBadge } from '../../features/staff/operations/OperationParts'
 import { noTourToday, operatorLabel, useMineFilter } from '../../features/staff/operations/mine'
 import type { TourSummary } from '../../features/administration/tours/types'
+import { usePhysicalRobots } from '../../features/technical/technical-hooks'
+import { staffReadinessText } from '../../features/technical/technical-format'
 
 const CONNECTION_TEXT = { connecting: 'Đang kết nối cập nhật trực tiếp…', connected: 'Đã kết nối cập nhật trực tiếp.', reconnecting: 'Đang kết nối lại cập nhật trực tiếp…', disconnected: 'Mất kết nối cập nhật trực tiếp, đang thử lại.' } as const
 
@@ -203,17 +205,26 @@ function PlannedTour({ tour, now, loading, failed }: { tour?: TourSummary; now: 
   </section>
 }
 
-/** What each robot itself reported over the robot channel. A recent report is not readiness for a Tour. */
+/**
+ * Each robot with the server's readiness first (2.3, `GET /api/technical/physical-robots`), and what it reported over
+ * the robot channel second: a recent report alone is not readiness for a Tour. Until the list loads, the reports.
+ */
 function RobotReports() {
   const fleet = useFleetTelemetry()
+  const physical = usePhysicalRobots()
+  const rows = physical.data?.length
+    ? physical.data.map(robot => ({ code: robot.robotCode, name: robot.displayName || robot.robotCode, readiness: robot.readiness, report: fleet?.robots.find(item => item.id === robot.robotCode) }))
+    : (fleet?.robots ?? []).map(robot => ({ code: robot.id, name: robot.name, readiness: undefined, report: robot }))
   return <section className={panelClass} aria-label="Robot">
-    <PanelHead title="Robot" description="Báo cáo gần đây không có nghĩa robot đã sẵn sàng." action={<Link to="/staff/robot" className={buttonClass('ghost', 'sm')}>Robot & thiết bị</Link>} />
+    <PanelHead title="Robot" action={<Link to="/staff/robot" className={buttonClass('ghost', 'sm')}>Robot & thiết bị</Link>} />
     <div className="space-y-2 p-4">
-      {!fleet ? <p className="text-sm text-[#64748b]">Chưa nhận được báo cáo nào.</p>
-        : fleet.robots.length === 0 ? <p className="text-sm text-[#64748b]">Chưa có robot nào gửi báo cáo tới máy chủ.</p>
-        : <ul className="divide-y divide-[#f1f5f9]">{fleet.robots.map(robot => <li key={robot.id} className="flex items-center justify-between gap-3 py-2 text-[13px]">
-          <span className="min-w-0"><span className="block font-semibold text-[#0f172a]">{robot.name}</span><span className="block font-mono text-[11px] text-[#64748b]">{robot.id}</span></span>
-          <ToneBadge tone={robot.syncFresh ? 'ok' : 'warn'}>{robot.syncFresh ? 'Đang báo cáo' : 'Báo cáo cũ'}</ToneBadge>
+      {!rows.length ? <p className="text-sm text-[#64748b]">{!fleet ? 'Chưa nhận được báo cáo nào.' : 'Chưa có robot nào gửi báo cáo tới máy chủ.'}</p>
+        : <ul className="divide-y divide-[#f1f5f9]">{rows.map(robot => <li key={robot.code} className="flex items-center justify-between gap-3 py-2 text-[13px]">
+          <span className="min-w-0"><span className="block font-semibold text-[#0f172a]">{robot.name}</span><span className="block font-mono text-[11px] text-[#64748b]">{robot.code}</span></span>
+          <span className="flex flex-wrap justify-end gap-1.5">
+            {robot.readiness && <ToneBadge tone={robot.readiness.state === 'READY' ? 'ok' : 'warn'}>{robot.readiness.state === 'READY' ? staffReadinessText.ready(robot.readiness.mapLabel) : staffReadinessText.notReady}</ToneBadge>}
+            {robot.report && <ToneBadge tone={robot.report.syncFresh ? 'ok' : 'warn'}>{robot.report.syncFresh ? 'Đang báo cáo' : 'Báo cáo cũ'}</ToneBadge>}
+          </span>
         </li>)}</ul>}
     </div>
   </section>

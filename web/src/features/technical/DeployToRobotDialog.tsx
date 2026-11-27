@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router'
 import { Modal } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
 import { useMapShortLabel, usePhysicalRobots } from './technical-hooks'
-import { errorText } from './technical-format'
+import { errorText, mapText } from './technical-format'
 import { robotSetupPath } from './robot-readiness'
 
 /**
- * "Triển khai cho robot…": choose the robot, then continue in that robot's setup dialog with this version chosen.
+ * "Gán cho robot…": choose the robot, then continue in that robot's setup dialog with this version chosen.
  * Assigning and the deployment check happen there, so the robot keeps one place where its map is changed.
  */
 export function DeployToRobotDialog({ mapVersionId, mapLabel, preselectRobotId, returnTo, onClose }: {
@@ -28,7 +28,7 @@ export function DeployToRobotDialog({ mapVersionId, mapLabel, preselectRobotId, 
     if (robotId) navigate(robotSetupPath(robotId, mapVersionId, returnTo))
   }
   return (
-    <Modal open title={`Triển khai ${mapLabel} cho robot`} description="Chọn robot, rồi gán bản đồ và kiểm tra triển khai trong hộp Thiết lập của robot đó." onClose={onClose}
+    <Modal open title={mapText.pickerTitle(mapLabel)} description={mapText.pickerDescription} onClose={onClose}
       footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Hủy</button><button type="submit" form="deploy-to-robot-form" className={buttonClass('primary')} disabled={!robotId}>Tiếp tục</button></div>}>
       <form id="deploy-to-robot-form" onSubmit={submit}>
         <label className={labelClass} htmlFor="deploy-robot">Robot</label>

@@ -19,7 +19,8 @@ export type TechnicalKpiSummary = {
 }
 
 export type TechnicalActionItem = {
-  type: 'HELD_ROBOT' | 'MAP_MISMATCH' | 'POI_QUEUE' | 'ROUTE_QUEUE' | string
+  /** Any other kind (a newer server's) is listed like these, from its own title, description and severity. */
+  type: 'HELD_ROBOT' | 'MAP_MISMATCH' | 'POI_QUEUE' | 'ROUTE_QUEUE' | 'ROBOT_NOT_READY' | 'MAP_WITHOUT_ROBOT' | string
   severity: 'DANGER' | 'WARNING' | 'INFO' | string
   title: string
   description: string

@@ -44,6 +44,7 @@ export function ConfirmationDialog({
   tone = 'default',
   requireReason = false,
   reasonLabel = 'Lý do / ghi chú',
+  reasonNote,
   withReason = true,
   reasonPlaceholder = 'Ghi lại để đồng nghiệp và nhật ký vận hành hiểu vì sao…',
   busyLabel = 'Đang gửi…',
@@ -62,6 +63,8 @@ export function ConfirmationDialog({
   tone?: 'default' | 'danger'
   requireReason?: boolean
   reasonLabel?: string
+  /** Put before "bắt buộc"/"tùy chọn" in the label's brackets, e.g. "GATE A" gives "… (GATE A, bắt buộc)". */
+  reasonNote?: string
   /** False for a decision that needs no note (e.g. approving a group). */
   withReason?: boolean
   reasonPlaceholder?: string
@@ -114,7 +117,7 @@ export function ConfirmationDialog({
         {withReason && (
           <>
             <label htmlFor={reasonId} className="mt-5 block text-[13px] font-medium text-[#334155]">
-              {reasonLabel}{requireReason ? ' (bắt buộc)' : ' (tùy chọn)'}
+              {reasonLabel} ({reasonNote ? `${reasonNote}, ` : ''}{requireReason ? 'bắt buộc' : 'tùy chọn'})
             </label>
             <textarea
               id={reasonId}
