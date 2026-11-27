@@ -10,7 +10,7 @@ import type { TechnicalActionItem, TechnicalKpiSummary, TechnicalRobotSummary } 
 import { connectionStatusView, reading, sensorStatusView, sourceState, sourceStateView } from '../../features/technical/diagnostics-status'
 import { errorText, setupText, wrongMapText } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
-import { useMapShortLabel, usePhysicalRobots, useTechnicalDashboard } from '../../features/technical/technical-hooks'
+import { useMapLabelByKey, useMapShortLabel, usePhysicalRobots, useTechnicalDashboard } from '../../features/technical/technical-hooks'
 import { actionItemDescription, readyButNotDriving } from '../../features/technical/robot-readiness'
 import { ReadinessBadge } from '../../features/technical/ReadinessBadge'
 import type { PhysicalRobotOption } from '../../features/technical/api/technical'
@@ -116,8 +116,12 @@ function BatteryCell({ robot }: { robot: TechnicalRobotSummary }) {
 
 /** `readiness` is the robot's server readiness from the robot list, which says what is wrong with its map in words. */
 function MapFacts({ robot, readiness }: { robot: TechnicalRobotSummary; readiness: PhysicalRobotOption['readiness'] | undefined }) {
+  const labelOf = useMapLabelByKey()
+  const label = labelOf(robot.assignedMapKey)
   return <>
-    <span className="font-mono text-[12.5px] text-[#334155]">{robot.assignedMapKey ?? 'Chưa gán bản đồ'}</span>
+    {!robot.assignedMapKey ? <span className="text-[12.5px] text-[#334155]">Chưa gán bản đồ</span>
+      : label ? <><span className="text-[12.5px] text-[#334155]" title={`MapKey ${robot.assignedMapKey}`}>{label}</span><p className="font-mono text-[11px] text-[#94a3b8]">{robot.assignedMapKey}</p></>
+        : <span className="font-mono text-[12.5px] text-[#334155]">{robot.assignedMapKey}</span>}
     {robot.contextMismatch && <p className="mt-0.5 text-[11.5px] text-amber-800">{readiness?.reason ?? 'Khác bản đồ kiểm tra triển khai gần nhất'}</p>}
     {robot.needsInspection && <p className="mt-0.5"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}
   </>

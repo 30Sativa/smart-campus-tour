@@ -34,6 +34,12 @@ type Props = {
   /** Points already on the route, drawn numbered, each with `landmarkRadiusMeters` around it. */
   landmarks?: Array<{ x: number; y: number; label: string; name: string }>
   landmarkRadiusMeters?: number
+  /**
+   * Read-only display (Technical POI detail and check): no mode toolbar, no placing hints, no cell warnings, and the
+   * coordinates, yaw in radians and resolution folded into "Chi tiết kỹ thuật", since the page prints the pose above.
+   * Zoom, fit, centre on the POI and the cell legend stay. Implies `editable={false}`.
+   */
+  viewOnly?: boolean
 }
 
 type Viewport = { u: number; v: number; width: number; height: number }
@@ -64,8 +70,11 @@ function zoomView(map: OccupancyMap, current: Viewport, factor: number, focus?: 
   return { u: focus.u - (focus.u - current.u) * width / current.width, v: focus.v - (focus.v - current.v) * height / current.height, width, height }
 }
 
-export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseChange, clearanceMeters, placing, landmarks = [], landmarkRadiusMeters, layout = 'default' }: Props) {
+export function PoiPosePicker({ map, pose, mode, onModeChange, onPoseChange, clearanceMeters, placing, landmarks = [], landmarkRadiusMeters, layout = 'default', viewOnly = false, editable: editableProp }: Props) {
+  const editable = editableProp && !viewOnly
   const staff = placing != null
+  /** Coordinates and radians go into the folded details: Staff route screens and the read-only view. */
+  const folded = staff || viewOnly
   const canvasHeight = layout === 'workbench' ? 'h-[280px] sm:h-[440px] xl:h-[460px]' : 'h-[380px] sm:h-[460px]'
   const loadingHeight = layout === 'workbench' ? canvasHeight : 'h-[460px]'
   const helpId = useId()
@@ -200,7 +209,7 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
 
   return (
     <div className={`${poiThemeClass} min-w-0`}>
-      <div role="group" aria-label="Chế độ thao tác bản đồ" className="flex flex-wrap gap-2 rounded-xl border border-[var(--poi-rule)] p-1.5">
+      {!viewOnly && <div role="group" aria-label="Chế độ thao tác bản đồ" className="flex flex-wrap gap-2 rounded-xl border border-[var(--poi-rule)] p-1.5">
         {MODES.map(({ key, label, shortcut, icon: Icon }) => {
           const disabled = key === 'pan' ? !ready : !editable || !ready || (key === 'heading' && !inside)
           const pressed = actualMode === key
@@ -217,12 +226,12 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
             </button>
           )
         })}
-      </div>
+      </div>}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-[13px]">
+      {viewOnly ? <div className="pt-1" /> : <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-[13px]">
         <p aria-hidden="true" className="flex items-center gap-2 text-[var(--poi-muted)]"><Info size={15} className="shrink-0 text-[var(--poi-muted)]" />{coach?.text ?? (editable ? 'Kéo để di chuyển bản đồ; phím 1 đặt vị trí, phím 2 chọn hướng.' : 'Vị trí đã khóa, chỉ xem và di chuyển bản đồ.')}</p>
         {!staff && <p className="text-xs text-[var(--poi-muted)]">Độ phân giải bản đồ: <span className="font-mono">{map.resolution} m/ô</span></p>}
-      </div>
+      </div>}
 
       <div className="relative overflow-hidden rounded-xl border border-[var(--poi-rule)] bg-[var(--poi-paper)] bg-[linear-gradient(var(--poi-grid)_1px,transparent_1px),linear-gradient(90deg,var(--poi-grid)_1px,transparent_1px)] bg-[length:24px_24px]">
         {rasterState.status === 'loading' && <div className={`flex ${loadingHeight} items-center justify-center text-sm text-[var(--poi-muted)]`} role="status">Đang tải bản đồ…</div>}
@@ -244,7 +253,7 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
               if (event.key === '2' && editable && inside) { event.preventDefault(); chooseMode('heading') }
             }}
           >
-            <title>Chọn vị trí và hướng thân POI trong ROS map frame</title>
+            <title>{viewOnly ? 'Vị trí và hướng thân POI trên bản đồ' : 'Chọn vị trí và hướng thân POI trong ROS map frame'}</title>
             <image href={map.imageUrl} x={0} y={0} width={map.width} height={map.height} style={{ imageRendering: view.height <= 420 ? 'pixelated' : 'auto' }} />
             {landmarks.map(point => {
               const at = rosToImage(map, point)
@@ -278,7 +287,7 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
             <button type="button" aria-label="Đưa POI vào giữa" disabled={!marker} onClick={() => { if (marker) setView((current) => ({ ...current, u: marker.u - current.width / 2, v: marker.v - current.height / 2 })) }} className={zoomButton}><LocateFixed size={16} aria-hidden="true" /></button>
           </div>
 
-          {!staff && <div aria-hidden="true" className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-1.5 font-mono text-[11.5px] text-[var(--poi-muted)]">
+          {!folded && <div aria-hidden="true" className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-1.5 font-mono text-[11.5px] text-[var(--poi-muted)]">
             <span className="rounded-lg border border-[var(--poi-rule)] bg-white/92 px-2 py-1">X {shown ? shown.x.toFixed(4) : '—'} m</span>
             <span className="rounded-lg border border-[var(--poi-rule)] bg-white/92 px-2 py-1">Y {shown ? shown.y.toFixed(4) : '—'} m</span>
             <span className="rounded-lg border border-[var(--poi-rule)] bg-white/92 px-2 py-1">Yaw {yaw == null ? '—' : yaw.toFixed(6)} rad</span>
@@ -287,8 +296,8 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
       </div>
 
       <div className="space-y-2.5 pt-3 text-xs leading-5 text-[var(--poi-muted)]">
-        {!staff && <p className="sr-only">X: {pose.x == null ? 'chưa chọn' : `${pose.x.toFixed(4)} m`}, Y: {pose.y == null ? 'chưa chọn' : `${pose.y.toFixed(4)} m`}, Yaw: {pose.yaw == null ? 'chưa chọn' : `${pose.yaw.toFixed(6)} rad`}</p>}
-        {cellState && <p role="status" className={`flex items-start gap-2 rounded-lg px-3 py-2 font-semibold ${cellState === 'free' && !tooClose ? 'bg-[var(--poi-ground)] text-[var(--poi-muted)]' : 'bg-[var(--poi-warn-soft)] text-[var(--poi-warn)]'}`}>
+        {!folded && <p className="sr-only">X: {pose.x == null ? 'chưa chọn' : `${pose.x.toFixed(4)} m`}, Y: {pose.y == null ? 'chưa chọn' : `${pose.y.toFixed(4)} m`}, Yaw: {pose.yaw == null ? 'chưa chọn' : `${pose.yaw.toFixed(6)} rad`}</p>}
+        {cellState && !viewOnly && <p role="status" className={`flex items-start gap-2 rounded-lg px-3 py-2 font-semibold ${cellState === 'free' && !tooClose ? 'bg-[var(--poi-ground)] text-[var(--poi-muted)]' : 'bg-[var(--poi-warn-soft)] text-[var(--poi-warn)]'}`}>
           {cellState === 'free' && !tooClose ? <CircleCheck size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> : <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />}{tooClose ? clearanceMessage(clearanceMeters!) : CELL_LABELS[cellState]}
         </p>}
         {interactionError && <p role="alert" className="font-semibold text-[var(--poi-danger)]">{interactionError}</p>}
@@ -298,12 +307,12 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
           <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[var(--poi-unknown)]" aria-hidden="true" />Xám: chưa biết</span>
           {clearanceMeters != null && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full border border-dashed border-[var(--poi-focus)] bg-[var(--poi-focus)]/10" aria-hidden="true" />Vòng tròn: khoảng trống quanh robot</span>}
           {landmarks.length > 0 && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full bg-[var(--poi-landmark)]" aria-hidden="true" />Số: điểm dừng{landmarkRadiusMeters != null ? `, vòng nét đứt: cách tối thiểu ${landmarkRadiusMeters.toLocaleString('vi-VN')} m` : ''}</span>}
-          {!staff && <span>Yaw 0 = +X, chiều dương quay về +Y</span>}
+          {!folded && <span>Yaw 0 = +X, chiều dương quay về +Y</span>}
         </div>
-        {staff && <>
-          <p className="flex items-center gap-2 text-sm text-[var(--poi-text)]"><span className="text-[var(--poi-muted)]">Hướng robot:</span>{yaw == null ? 'chưa chọn'
-            : <><ArrowRight size={16} aria-hidden="true" className="shrink-0 text-[var(--poi-focus)]" style={{ transform: `rotate(${-(yaw - map.origin[2]) * 180 / Math.PI}deg)` }} /><span className="font-semibold">{yawDegrees(yaw)}°</span></>}</p>
-          <details className="group rounded-lg border border-[var(--poi-rule)]">
+        {folded && <>
+          {staff && <p className="flex items-center gap-2 text-sm text-[var(--poi-text)]"><span className="text-[var(--poi-muted)]">Hướng robot:</span>{yaw == null ? 'chưa chọn'
+            : <><ArrowRight size={16} aria-hidden="true" className="shrink-0 text-[var(--poi-focus)]" style={{ transform: `rotate(${-(yaw - map.origin[2]) * 180 / Math.PI}deg)` }} /><span className="font-semibold">{yawDegrees(yaw)}°</span></>}</p>}
+          <details data-testid="pose-technical-details" className="group rounded-lg border border-[var(--poi-rule)]">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 font-medium text-[var(--poi-muted)] [&::-webkit-details-marker]:hidden"><ChevronRight size={14} aria-hidden="true" className="transition-transform group-open:rotate-90" />Chi tiết kỹ thuật</summary>
             <dl className="grid gap-x-4 gap-y-1 border-t border-[var(--poi-rule)] px-3 py-2 font-mono sm:grid-cols-3">
               <div><dt className="font-sans">X</dt><dd>{shown ? `${shown.x.toFixed(4)} m` : '-'}</dd></div>

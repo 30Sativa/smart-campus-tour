@@ -11,7 +11,7 @@ import {
 } from '../../features/technical/diagnostics-status'
 import { deploymentStepText, errorText, setupText } from '../../features/technical/technical-format'
 import { formatDateTime } from '../../components/ui/date-time'
-import { useMapShortLabel, usePhysicalRobots, useRobotDiagnostics, useTechnicalDashboard } from '../../features/technical/technical-hooks'
+import { useMapLabelByKey, useMapShortLabel, usePhysicalRobots, useRobotDiagnostics, useTechnicalDashboard } from '../../features/technical/technical-hooks'
 import { ReadinessBadge } from '../../features/technical/ReadinessBadge'
 import { readyButNotDriving } from '../../features/technical/robot-readiness'
 import type { PhysicalRobotOption } from '../../features/technical/api/technical'
@@ -55,7 +55,11 @@ function SensorFact({ label, sensor }: { label: string; sensor: SensorStatus }) 
  */
 function ReadinessFacts({ detail, robot }: { detail: RobotDiagnosticsDetail; robot: PhysicalRobotOption | undefined }) {
   const mapLabelOf = useMapShortLabel()
+  const labelOfKey = useMapLabelByKey()
   const readiness = robot?.readiness
+  // The checked map by its area and version; the key only while it cannot be found. FrameId only when it differs.
+  const deployedLabel = labelOfKey(detail.latestDeployedMapKey)
+  const deployedFrameDiffers = detail.latestDeployedFrameId !== null && detail.latestDeployedFrameId !== detail.assignedFrameId
   const passedOnAssigned = detail.latestDeploymentPassed === true && detail.latestDeployedMapKey !== null && detail.latestDeployedMapKey === detail.assignedMapKey
   const beforeAssignment = Boolean(readiness && !readiness.deploymentCheckedAt && passedOnAssigned && robot?.mapAssignedAt)
   return <>
@@ -69,7 +73,7 @@ function ReadinessFacts({ detail, robot }: { detail: RobotDiagnosticsDetail; rob
         <p className="font-mono text-[11.5px] text-[#64748b]">MapKey {detail.assignedMapKey} · FrameId {detail.assignedFrameId}</p></>
       : 'Chưa gán'}</DetailFact>
     <DetailFact label="Kiểm tra triển khai">{detail.latestDeployedMapKey
-      ? <span className="flex flex-wrap items-center gap-2"><span className="font-mono text-[12.5px]">{detail.latestDeployedMapKey} · {detail.latestDeployedFrameId}</span>
+      ? <span className="flex flex-wrap items-center gap-2"><span className="text-[12.5px]" title={`MapKey ${detail.latestDeployedMapKey}`}>{deployedLabel ?? <span className="font-mono">{detail.latestDeployedMapKey}</span>}{deployedFrameDiffers && <span className="font-mono"> · FrameId {detail.latestDeployedFrameId}</span>}</span>
         {beforeAssignment ? <span className="text-[12.5px] font-semibold text-amber-800">{deploymentStepText.monitoringBeforeAssignment(formatDateTime(robot!.mapAssignedAt))}</span>
           : detail.latestDeploymentPassed !== null && <ToneBadge tone={detail.latestDeploymentPassed ? 'ok' : 'danger'}>{detail.latestDeploymentPassed ? 'Đạt' : 'Chưa đạt'}</ToneBadge>}</span>
       : 'Chưa ghi nhận'}</DetailFact>

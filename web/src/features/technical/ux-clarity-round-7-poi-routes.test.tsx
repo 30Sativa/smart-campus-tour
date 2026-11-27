@@ -8,6 +8,8 @@ import { buttonClass } from '../../components/ui/ui-classes'
 import { useAuthStore } from '../../stores/auth-store'
 import { useToastStore } from '../../components/ui/toast-store'
 import { DEFAULT_POI_MAP } from '../administration/pois/map/catalog'
+import { PoiPosePicker } from '../administration/pois/map/PoiPosePicker'
+import { poiVerifyText } from './poi-labels'
 
 // The POI dialogs draw a read-only map; jsdom cannot decode the package, so the raster is given.
 vi.mock('../administration/pois/map/use-map-raster', () => ({
@@ -53,6 +55,7 @@ beforeEach(() => {
     if (url.pathname === '/api/technical/physical-robots') return response(robots)
     if (url.pathname === '/api/technical/poi-verifications') return response(poiQueue)
     if (url.pathname === '/api/staff/poi-proposals') return response(proposals)
+    if (url.pathname === '/api/staff/poi-proposals/proposal-1/history') return response({ proposalId: 'proposal-1', revisions: [], verificationRecords: [] })
     if (url.pathname === '/api/technical/route-verifications/queue') return response(routeQueue)
     if (url.pathname === '/api/technical/route-verifications/participants') return response([{ userId: 'staff-1', fullName: 'Lan Staff', username: 'lan' }])
     if (url.pathname === '/api/routes') return response(routeCatalog)
@@ -74,7 +77,8 @@ describe('POI verification for a newcomer (round 7)', () => {
     fireEvent.click(detail.getByRole('button', { name: 'Sao chép pose' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('10.25 -8.73 -1.2043'))
     expect(await detail.findByRole('group', { name: 'Bản đồ occupancy ROS' })).toBeInTheDocument()
-    expect(detail.getByText('Vị trí đã khóa, chỉ xem và di chuyển bản đồ.')).toBeInTheDocument()
+    // Round 7 follow-up: the map is view-only; it no longer explains how to place a pose.
+    expect(detail.queryByText('Vị trí đã khóa, chỉ xem và di chuyển bản đồ.')).not.toBeInTheDocument()
     // The check dialog carries the same help.
     fireEvent.click(detail.getByRole('button', { name: 'Ghi kết quả' }))
     const check = within(await screen.findByRole('dialog', { name: 'Kiểm chứng Cổng thư viện' }))
@@ -203,5 +207,55 @@ describe('route tests for a newcomer (round 7)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả Tuyến thư viện' }))
     expect(await screen.findByText(/Lần chạy mới nhất trên đường đi này là kết quả hiện tại, cho mọi phiên bản có cùng đường đi\./)).toBeInTheDocument()
     expect(screen.queryByText(/đang áp dụng|bản lưu/)).not.toBeInTheDocument()
+  })
+})
+
+describe('Technical POI, round 7 follow-up (27/11 15:50)', () => {
+  /** Everything a view-only map prints outside its folded "Chi tiết kỹ thuật". */
+  const outsideDetails = (root: HTMLElement) => {
+    const copy = root.cloneNode(true) as HTMLElement
+    copy.querySelectorAll('[data-testid="pose-technical-details"]').forEach(node => node.remove())
+    return copy.textContent ?? ''
+  }
+
+  it('1 says one thing about a Không đạt result: fix the POI or fix the robot and resend the same pose', async () => {
+    poiQueue = []
+    proposals = [{ id: 'proposal-1', currentRevision: 1, rowVersion: 'AAAAAAAAAAA=', revision: { ...revision, navigationStatus: 'FAIL' }, narration: null, sourcePoiId: null }]
+    renderPage(<TechnicalPoisPage />)
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(poiVerifyText.failWaitingStaff) }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem kết quả' }))
+    const result = within(await screen.findByRole('dialog', { name: 'Kết quả Cổng thư viện' }))
+    expect(result.getByText(poiVerifyText.recordedResultFinal)).toBeInTheDocument()
+    expect(poiVerifyText.recordedResultFinal).toContain('lỗi do robot thì sửa robot rồi gửi lại cùng vị trí')
+    expect(document.body.textContent).not.toContain('đổi vị trí, hướng, camera hoặc bản đồ rồi gửi lại')
+  })
+
+  it('2 draws the POI detail and the check map view-only: no placing tools, no radians outside the details', async () => {
+    renderPage(<TechnicalPoisPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết Cổng thư viện' }))
+    const detailDialog = await screen.findByRole('dialog')
+    const figure = (await within(detailDialog).findByRole('group', { name: 'Bản đồ occupancy ROS' })).closest('figure')!
+    const map = within(figure)
+    expect(map.queryByRole('button', { name: 'Chọn vị trí' })).not.toBeInTheDocument()
+    expect(map.queryByRole('button', { name: 'Chọn hướng' })).not.toBeInTheDocument()
+    expect(map.queryByRole('group', { name: 'Chế độ thao tác bản đồ' })).not.toBeInTheDocument()
+    for (const name of ['Phóng to', 'Thu nhỏ', 'Vừa bản đồ', 'Đưa POI vào giữa']) expect(map.getByRole('button', { name })).toBeInTheDocument()
+    expect(map.getByText('Đen: vật cản')).toBeInTheDocument()
+    expect(outsideDetails(figure)).not.toMatch(/\brad\b/)
+    expect(within(map.getByTestId('pose-technical-details')).getByText('-1.204300 rad')).toBeInTheDocument()
+
+    fireEvent.click(within(detailDialog).getByRole('button', { name: 'Ghi kết quả' }))
+    const check = await screen.findByRole('dialog', { name: 'Kiểm chứng Cổng thư viện' })
+    const checkFigure = (await within(check).findByRole('group', { name: 'Bản đồ occupancy ROS' })).closest('figure')!
+    expect(within(checkFigure).queryByRole('button', { name: 'Chọn vị trí' })).not.toBeInTheDocument()
+    expect(outsideDetails(checkFigure)).not.toMatch(/\brad\b/)
+  })
+
+  it('2 keeps every tool on the Staff POI form picker', () => {
+    const map = { ...DEFAULT_POI_MAP, width: 40, height: 30, origin: [-1, -1, 0] as [number, number, number] }
+    render(<PoiPosePicker map={map} pose={{ x: 0, y: 0, yaw: 0 }} editable mode="pan" onModeChange={() => {}} onPoseChange={() => {}} />)
+    expect(screen.getByRole('group', { name: 'Chế độ thao tác bản đồ' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Chọn vị trí' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Chọn hướng' })).toBeInTheDocument()
   })
 })

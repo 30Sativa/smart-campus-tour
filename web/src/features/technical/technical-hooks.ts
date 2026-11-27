@@ -54,6 +54,22 @@ export function useMapLabel(extra?: MapVersionItem[]) {
   return useMemo(() => (map: { areaName: string; areaKey: string; versionNumber: number }) => mapShortLabel(map, duplicates), [duplicates])
 }
 
+/**
+ * "{area} · v{n}" of a map version by its MapKey, for summaries that carry only the key (dashboard robots, the last
+ * deployment check); null while the version is unknown, so the caller falls back to the key.
+ */
+export function useMapLabelByKey() {
+  const maps = useAllMapVersions()
+  const duplicates = useDuplicateAreaNames()
+  return useMemo(() => {
+    const byKey = new Map((maps.data ?? []).map(item => [item.map.mapKey, item.map]))
+    return (mapKey: string | null | undefined) => {
+      const map = mapKey ? byKey.get(mapKey) : undefined
+      return map ? mapShortLabel(map, duplicates) : null
+    }
+  }, [maps.data, duplicates])
+}
+
 /** "{area} · v{n}" of a map version by id, with the area key when the name is shared; null while the version is unknown. */
 export function useMapShortLabel() {
   const maps = useAllMapVersions()

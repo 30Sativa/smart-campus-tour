@@ -10,6 +10,7 @@ import { Note, SetupSteps, TechnicalPage, ToneBadge, type SetupStep } from '../.
 import { useActivateRobot, useAllMapVersions, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapShortLabel, useMapVersions, usePoiProposals, usePoiVerificationQueue, useRegisterPhysicalRobot, useReleaseRobotInspection, useRobotAffectedTours, useRobotCredential, useRouteTestQueue, useSetRobotDispatch, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour, RobotCredentialView, RobotReadinessNextStep } from '../../features/technical/api/technical'
 import { connectionStatusLabel, deploymentStepText, dispatchText, errorText, miniPcText, releaseInspectionError, returnStripText, robotNameHint, runningTourText, setupText, wrongMapText } from '../../features/technical/technical-format'
+import { MapPackageDownloadButton } from '../../features/technical/MapPackageDownloadButton'
 import { returnTarget, technicalReturnPath } from '../../features/technical/technical-nav'
 import { formatDateTime } from '../../components/ui/date-time'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -339,7 +340,7 @@ function RobotMapSteps({ robot, checking, deployStep, miniPcStep, refreshButton,
           ? 'Robot đã báo về theo bản đồ này.'
           : rejected ? wrongMapText(rejected, robot.assignedMapKey)
           : 'Chưa nhận dữ liệu theo bản đồ này. Làm theo các bước Trên MiniPC bên dưới rồi bấm Cập nhật trạng thái.'}</p>
-        <MiniPcInstructions robotCode={robot.robotCode} mapKey={robot.assignedMapKey!} frameId={robot.assignedFrameId!} packageFileName={map?.packageFileName ?? null} />
+        <MiniPcInstructions robotCode={robot.robotCode} mapKey={robot.assignedMapKey!} frameId={robot.assignedFrameId!} mapVersionId={robot.assignedMapVersionId!} packageFileName={map?.packageFileName ?? null} />
       </div> : <p className="text-[13px] text-[#64748b]">Gán bản đồ trước để biết MapKey và FrameId cần nhập.</p>}
     </DetailSection>
     <section ref={deployStep} aria-label="Kiểm tra tại robot" className="rounded-lg border border-[#e2e8f0] p-3">
@@ -365,7 +366,7 @@ function RobotMapSteps({ robot, checking, deployStep, miniPcStep, refreshButton,
  * What to type on the MiniPC for the assigned map (1.3): the Fleet Sync environment file, the key file, the map
  * profile and the service. The key itself is never here; it is shown once in the key dialog.
  */
-function MiniPcInstructions({ robotCode, mapKey, frameId, packageFileName }: { robotCode: string; mapKey: string; frameId: string; packageFileName: string | null }) {
+function MiniPcInstructions({ robotCode, mapKey, frameId, mapVersionId, packageFileName }: { robotCode: string; mapKey: string; frameId: string; mapVersionId: string; packageFileName: string | null }) {
   const env = miniPcText.envLines(robotCode, mapKey, frameId)
   const copy = async () => {
     await navigator.clipboard?.writeText(env)
@@ -382,7 +383,7 @@ function MiniPcInstructions({ robotCode, mapKey, frameId, packageFileName }: { r
       <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs">
         <li>{miniPcText.envStep}</li>
         <li>{miniPcText.keyStep}</li>
-        <li>{miniPcText.mapStep(packageFileName)}</li>
+        <li>{miniPcText.mapStep(packageFileName)}{packageFileName && <MapPackageDownloadButton mapVersionId={mapVersionId} fileName={packageFileName} label={miniPcText.downloadMap(packageFileName)} />}</li>
         <li>{miniPcText.startStep}</li>
       </ol>
     </section>

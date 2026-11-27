@@ -281,7 +281,7 @@ function PoiResultModal({ proposalId, revision, mapName, onClose }: { proposalId
           )
         })}
         {revision.verificationSourceRevisionId && revision.verificationSourceRevisionId !== revision.id && <Note>Phiên bản {revision.revisionNumber} chỉ đổi nội dung nên giữ kết quả của phiên bản đã kiểm chứng.</Note>}
-        <Note>Kết quả đã ghi không sửa hay thu hồi được. Muốn kiểm tra lại, Staff tạo phiên bản mới đổi vị trí, hướng, camera hoặc bản đồ rồi gửi lại, POI sẽ quay về Chờ kiểm chứng.</Note>
+        <Note>{poiVerifyText.recordedResultFinal}</Note>
       </div>
     </Modal>
   )
@@ -304,7 +304,7 @@ function PoiPoseMap({ revision }: { revision: Pick<PoiRevision, 'mapVersionId' |
   const { map } = useMapRaster(revision.mapVersionId)
   if (!map) return null
   return <figure className="mt-3">
-    <PoiPosePicker map={map} pose={{ x: revision.x, y: revision.y, yaw: revision.yaw }} editable={false} mode="pan" onModeChange={() => {}} onPoseChange={() => {}} />
+    <PoiPosePicker map={map} pose={{ x: revision.x, y: revision.y, yaw: revision.yaw }} viewOnly editable={false} mode="pan" onModeChange={() => {}} onPoseChange={() => {}} />
     <figcaption className="mt-1 text-xs text-[#64748b]">{poiVerifyText.mapCaption}</figcaption>
   </figure>
 }

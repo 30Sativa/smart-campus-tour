@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Download } from 'lucide-react'
 import { Pagination, SearchField, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import type { StatusTone } from '../../components/ui/status-tone'
@@ -11,9 +10,9 @@ import { DetailFact, ToneBadge, ViewDetailButton } from './TechnicalUi'
 import type { MapAreaOption, MapRunningRobot, MapVersionItem } from './api/technical'
 import { mapCheckLabel } from './poi-labels'
 import { useMapLabel } from './technical-hooks'
-import { technicalApi } from './api/technical'
-import { errorText, mapText } from './technical-format'
+import { mapText } from './technical-format'
 import { DeployToRobotDialog } from './DeployToRobotDialog'
+import { MapPackageDownloadButton } from './MapPackageDownloadButton'
 import { ReadinessBadge } from './ReadinessBadge'
 import { readinessView, robotSetupPath } from './robot-readiness'
 import { formatDateTime } from '../../components/ui/date-time'
@@ -92,35 +91,6 @@ function MapPreview({ mapVersionId, label }: { mapVersionId: string; label: stri
 }
 
 /**
- * "Tải tệp bản đồ (.zip)": the uploaded package as the server stores it, saved under the name the server sends with
- * it (its stored package file name), so the file copied to the MiniPC is exactly the one the checksum names.
- */
-function PackageDownload({ mapVersionId, fileName }: { mapVersionId: string; fileName: string }) {
-  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null })
-  const download = async () => {
-    setState({ busy: true, error: null })
-    try {
-      const blob = await technicalApi.getMapPackage(mapVersionId)
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.append(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-      setState({ busy: false, error: null })
-    } catch (cause) {
-      setState({ busy: false, error: errorText(cause) })
-    }
-  }
-  return <span className="mt-1.5 block">
-    <button type="button" className={buttonClass('secondary', 'sm')} disabled={state.busy} onClick={() => void download()}><Download size={13} aria-hidden="true" />{state.busy ? mapText.downloading : mapText.download}</button>
-    {state.error && <span role="alert" className="mt-1 block text-xs text-[#b23e31]">{state.error}</span>}
-  </span>
-}
-
-/**
  * What the table leaves out, for one version of the area. The checksum is here so the file on the robot
  * can be compared with the one uploaded; the version list switches which version the dialog shows.
  */
@@ -156,7 +126,7 @@ function MapVersionDetail({ mapVersionLabel, area, itemId, onSelect, onClose, on
         <DetailFact label="Đã từng kiểm tra đạt">{passedChecks.length
           ? <span className="flex flex-col">{passedChecks.map(check => <span key={check.id}>{check.robotCode} · {formatDateTime(check.checkedAt)}</span>)}</span>
           : 'Chưa có'}<span className="mt-1 block text-xs text-[#64748b]">Lịch sử, chỉ để tra cứu. Robot dùng được hay không xem ở Robot đang chạy.</span></DetailFact>
-        <DetailFact label="Tệp"><span className="break-all">{map.packageFileName}</span><PackageDownload mapVersionId={map.id} fileName={map.packageFileName} /></DetailFact>
+        <DetailFact label="Tệp"><span className="break-all">{map.packageFileName}</span><MapPackageDownloadButton mapVersionId={map.id} fileName={map.packageFileName} /></DetailFact>
         <DetailFact label="Thông số bản đồ">{map.imageWidth}×{map.imageHeight} · {map.resolution} m/ô</DetailFact>
         <DetailFact label="Checksum tệp"><span className="font-mono text-xs break-all">{map.packageSha256}</span><span className="mt-1 block text-xs text-[#64748b]">{mapText.checksumHint}</span></DetailFact>
       </dl>
