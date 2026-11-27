@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { CircleAlert } from 'lucide-react'
 import { campusShortStamp } from '../tours/tour-calendar'
-import { appliedFail, failedCheckNames, resultSource } from './route-messages'
+import { appliedFail, failedCheckNames, resultSource, revisionLabel } from './route-messages'
 import type { VersionedRoute } from './versioned-api'
 
 /**
@@ -26,7 +26,7 @@ export function RouteFailBanner({ route, action, nextStep }: { route: VersionedR
           <ul aria-label="Mục không đạt" className="ml-5 list-disc">{failed.map(item => <li key={item}>{item}</li>)}</ul>
         </div>}
         <p className="text-xs text-[#a4473d]">Robot {run.robotCode}{people && ` · ${people}`} · ghi lúc {campusShortStamp(run.checkedAt)}</p>
-        {source && <p className="text-xs text-[#a4473d]">Lần chạy này ghi trên bản lưu {campusShortStamp(source.createdAt)}, cùng đường đi nên áp dụng cho bản này.</p>}
+        {source && <p className="text-xs text-[#a4473d]">Lần chạy này ghi trên {revisionLabel(source, true)}, cùng đường đi nên áp dụng cho bản này.</p>}
         {nextStep && <p className="font-medium">{nextStep}</p>}
       </div>
       {action}

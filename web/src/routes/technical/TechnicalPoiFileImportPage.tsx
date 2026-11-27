@@ -6,13 +6,21 @@ import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePr
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { mapCheckLabel, narrationStatus, poiImportActionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { mapCheckLabel, narrationStatus, poiImportActionLabel, poiImportText, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { errorText } from '../../features/technical/technical-format'
 import { robotForMap } from '../../features/technical/robot-readiness'
 import { useImportPoiFiles, useMapLabel, useMapVersions, usePhysicalRobots, usePoiProposals, usePreviewPoiImport } from '../../features/technical/technical-hooks'
 import type { MapVersionItem, PoiImportResult, PoiProposal } from '../../features/technical/api/technical'
 
 const mapCheckTone = (status: string) => status === 'PASSED' ? 'ok' : status === 'FAILED' ? 'danger' : 'warn'
+/**
+ * A check that once passed is history: with no robot ready on the version now, nothing imported can be marked Đạt,
+ * so the badge says so and loses its green.
+ */
+function mapCheckBadge(status: string, noReadyRobot: boolean): { tone: 'ok' | 'danger' | 'warn' | 'muted'; label: string } {
+  if (status === 'PASSED' && noReadyRobot) return { tone: 'muted', label: `${mapCheckLabel(status)} · ${poiImportText.noReadyRobotOnMap}` }
+  return { tone: mapCheckTone(status), label: mapCheckLabel(status) }
+}
 const verifiedLabel = (verified: boolean | null) => verified === null ? '-' : verified ? verificationMethodLabel.POSE_CAPTURE : 'Chờ kiểm chứng'
 
 /**
@@ -32,6 +40,11 @@ export default function TechnicalPoiFileImportPage() {
   const [requestId, setRequestId] = useState(() => crypto.randomUUID())
   const [imported, setImported] = useState<PoiImportResult | null>(null)
   const selectedMap = maps.data?.find(item => item.map.id === mapVersionId)
+  // ADR-0066 robotReadiness, said before any file is chosen: the server would import such files to the queue.
+  const readyRobot = robots.isSuccess && selectedMap ? robotForMap(robots.data, selectedMap.map.id).ready : undefined
+  const noReadyRobot = robots.isSuccess && Boolean(selectedMap) && !readyRobot
+  const robotNotReady = Boolean(robotCode && selectedMap && robots.isSuccess && readyRobot?.robotCode !== robotCode)
+  const checkBadge = selectedMap ? mapCheckBadge(selectedMap.technicalCheckStatus, noReadyRobot) : null
 
   // Any change makes this a different import, so it must not reuse a retry key or an old verdict.
   const changed = () => {
@@ -78,10 +91,11 @@ export default function TechnicalPoiFileImportPage() {
               {maps.data?.map(item => <option key={item.map.id} value={item.map.id}>{mapLabel(item.map)}</option>)}
             </select>
             {maps.isError && <p role="alert" className="mt-1 text-sm text-[#b23e18]">{errorText(maps.error)}</p>}
-            {selectedMap && <p className="mt-1.5"><ToneBadge tone={mapCheckTone(selectedMap.technicalCheckStatus)}>{mapCheckLabel(selectedMap.technicalCheckStatus)}</ToneBadge></p>}
+            {checkBadge && <p className="mt-1.5"><ToneBadge tone={checkBadge.tone}>{checkBadge.label}</ToneBadge></p>}
           </div>
           <div>
             <RobotPicker id="import-robot" label="Robot đã ghi pose" mapVersionId={selectedMap?.map.id} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký." />
+            {robotNotReady && <p role="status" className="mt-1.5 text-[12.5px] text-[#8a5a06]">{poiImportText.robotNotReady}</p>}
           </div>
         </div>
 

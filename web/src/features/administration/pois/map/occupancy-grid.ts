@@ -125,6 +125,16 @@ export function clearanceMessage(radius: number) {
   return `Điểm quá sát vật cản (cần trống bán kính ${radius.toFixed(2).replace('.', ',')} m).`
 }
 
+/**
+ * A yaw in radians as degrees to one decimal in (-180, 180], the text of the Staff POI form's heading field; '' when
+ * unset. The Technical POI screens print the same number, so both teams read one heading.
+ */
+export const yawDegreesText = (yaw: number | null) => {
+  if (yaw == null) return ''
+  const degrees = Math.round((yaw * 180 / Math.PI) * 10) / 10
+  return String(degrees <= -180 ? degrees + 360 : degrees)
+}
+
 /** A yaw in radians as whole degrees in (-180, 180], the way Staff reads a heading. */
 export const yawDegrees = (yaw: number) => {
   const degrees = Math.round(yaw * 180 / Math.PI) % 360

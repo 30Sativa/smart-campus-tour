@@ -67,7 +67,7 @@ const show = (entry: string) => render(<QueryClientProvider client={new QueryCli
   <Route path="/staff/manage/routes/:routeId" element={<StaffManageRouteDetailsPage />} />
 </Routes></MemoryRouter></QueryClientProvider>)
 
-describe('Route screens without version numbers', () => {
+describe('Route screens: no version on the catalog card, Phiên bản {n} (date) on the detail page', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), 'http://localhost')
@@ -95,9 +95,10 @@ describe('Route screens without version numbers', () => {
     expect(screen.getByText('Đi qua thư viện.')).toBeInTheDocument()
     const history = screen.getByText('Lịch sử thay đổi').closest('details')!
     expect(history).not.toHaveAttribute('open')
-    expect(within(history).getByText('Bản lưu 05/11 14:20 · Đã chạy thử đạt (đang xem)')).toBeInTheDocument()
-    expect(within(history).getByText('Bản lưu 01/11 09:05 · Chạy thử không đạt').closest('a')).toHaveAttribute('href', '/staff/manage/routes/route-1?revisionId=rev-1')
-    expect(document.body).not.toHaveTextContent(/phiên bản/i)
+    // Round 7 (4.4): a saved copy is "Phiên bản {n} ({dd/MM HH:mm})" here too, the same name the route test page uses.
+    expect(within(history).getByText('Phiên bản 7 (05/11 14:20) · Đã chạy thử đạt (đang xem)')).toBeInTheDocument()
+    expect(within(history).getByText('Phiên bản 6 (01/11 09:05) · Chạy thử không đạt').closest('a')).toHaveAttribute('href', '/staff/manage/routes/route-1?revisionId=rev-1')
+    expect(history).not.toHaveTextContent(/bản lưu/i)
     // The map is named by its area, as on the catalog card, never by its raw key.
     const overview = screen.getByRole('region', { name: 'Tổng quan tuyến' })
     expect(await within(overview).findByText('Tầng 6')).toBeInTheDocument()
@@ -107,9 +108,9 @@ describe('Route screens without version numbers', () => {
     expect(screen.getByRole('button', { name: 'Ngừng sử dụng' })).toBeInTheDocument()
   })
 
-  it('an older saved copy is named by its date', async () => {
+  it('an older saved copy is named by its number and date', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify({ success: true, data: String(input).includes('/api/maps/versions') ? [] : { ...route, revisionId: 'rev-1', revisionNumber: 6, verificationStatus: 'FAIL', effectiveTestRunId: null } }), { status: 200 })))
     show('/staff/manage/routes/route-1?revisionId=rev-1')
-    expect(await screen.findByText('Đây là bản lưu 01/11 09:05, chỉ xem được.')).toBeInTheDocument()
+    expect(await screen.findByText('Đây là phiên bản 6 (01/11 09:05), chỉ xem được.')).toBeInTheDocument()
   })
 })

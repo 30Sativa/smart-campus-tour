@@ -3,7 +3,8 @@ import { RefreshCw } from 'lucide-react'
 import { Link } from 'react-router'
 import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
 import type { PhysicalRobotOption } from './api/technical'
-import { connectionStatusLabel, errorText } from './technical-format'
+import { poiImportText } from './poi-labels'
+import { errorText } from './technical-format'
 
 
 /**
@@ -20,7 +21,7 @@ export function RobotPicker({ id, label, value, onChange, robots, emptyText, map
   return (
     <>
       <div className="flex items-end justify-between gap-2"><label className={labelClass} htmlFor={id}>{label}</label>{!robots.isPending && !robots.isError && <button type="button" className={buttonClass('secondary', 'sm')} disabled={robots.isFetching} onClick={() => void robots.refetch()}><RefreshCw size={13} aria-hidden="true" />{robots.isFetching ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button>}</div>
-      <select title="" id={id} className={`${inputClass} mt-1`} required value={value} disabled={robots.isPending || robots.isError || !robots.data?.length} onChange={event => onChange(event.target.value)}><option value="">Chọn robot vật lý</option>{options?.map(robot => <option key={robot.id} value={robot.robotCode}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode} · {connectionStatusLabel(robot.connectionStatus)}{mapVersionId ? readyHere(robot) ? ' · sẵn sàng trên bản đồ này' : ' · chưa sẵn sàng trên bản đồ này' : ''}</option>)}</select>
+      <select title="" id={id} className={`${inputClass} mt-1`} required value={value} disabled={robots.isPending || robots.isError || !robots.data?.length} onChange={event => onChange(event.target.value)}><option value="">Chọn robot vật lý</option>{options?.map(robot => <option key={robot.id} value={robot.robotCode}>{poiImportText.robotOption(robot, mapVersionId ? readyHere(robot) : null)}</option>)}</select>
       {robots.isPending && <p role="status" className="mt-1 text-sm text-[#64748b]">Đang tải danh sách robot…</p>}
       {robots.isError && <div role="alert" className="mt-1 text-sm text-[#b23e18]"><p>{errorText(robots.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void robots.refetch()}>Tải lại danh sách robot</button></div>}
       {!robots.isPending && !robots.isError && robots.data?.length === 0 && <div role="status" className="mt-1 text-sm text-[#b23e18]"><p>{emptyText}</p><Link className="mt-1 inline-block font-semibold text-[#1d4ed8] underline" to="/technical/robots">Đăng ký robot</Link></div>}

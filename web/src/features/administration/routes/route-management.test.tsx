@@ -784,12 +784,11 @@ describe('Staff versioned Route workflow', () => {
     renderAt('/staff/manage/routes/route-1?revisionId=route-rev-2')
     await screen.findByRole('region', { name: 'Kết quả chạy thử không đạt' })
     const history = within(screen.getByText('Lịch sử thay đổi').closest('details')!)
-    // Same day as the run: the save gives only its time.
-    expect(history.getByText('Bản lưu 16/11 12:23 · Chạy thử không đạt (theo lần chạy 16/11 19:09 trên bản lưu 18:51) (đang xem)')).toBeInTheDocument()
+    // Round 7 (4.4): one name for a revision, "Phiên bản {n} ({dd/MM HH:mm})", also for the save a run came from.
+    expect(history.getByText('Phiên bản 2 (16/11 12:23) · Chạy thử không đạt (theo lần chạy 16/11 19:09 trên phiên bản 1 (16/11 18:51)) (đang xem)')).toBeInTheDocument()
     // The save the run was recorded on reads plainly.
-    expect(history.getByRole('link', { name: 'Bản lưu 16/11 18:51 · Chạy thử không đạt' })).toBeInTheDocument()
-    // Another day: the save gives its date too.
-    expect(history.getByRole('link', { name: 'Bản lưu 17/11 08:00 · Đã chạy thử đạt (theo lần chạy 17/11 09:00 trên bản lưu 16/11 18:51)' })).toBeInTheDocument()
+    expect(history.getByRole('link', { name: 'Phiên bản 1 (16/11 18:51) · Chạy thử không đạt' })).toBeInTheDocument()
+    expect(history.getByRole('link', { name: 'Phiên bản 3 (17/11 08:00) · Đã chạy thử đạt (theo lần chạy 17/11 09:00 trên phiên bản 1 (16/11 18:51))' })).toBeInTheDocument()
   })
 
   it('labels a route too long for one shift in red and one over the recommendation in amber', async () => {
@@ -920,7 +919,7 @@ describe('Staff versioned Route workflow', () => {
     currentRoute = historical
     renderAt('/staff/manage/routes/route-1?revisionId=route-rev-1')
     expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
-    expect(screen.getByText(/^Đây là bản lưu \d\d\/\d\d \d\d:\d\d, chỉ xem được\.$/)).toBeInTheDocument()
+    expect(screen.getByText(/^Đây là phiên bản 1 \(\d\d\/\d\d \d\d:\d\d\), chỉ xem được\.$/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Gửi kiểm chứng tuyến' })).not.toBeInTheDocument()
   })
 })

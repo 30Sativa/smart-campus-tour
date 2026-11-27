@@ -16,7 +16,7 @@ import { headPresetProblem } from '../../../features/technical/head-camera-prese
 import { HeadCameraPresetField } from '../../../features/administration/pois/HeadCameraPresetField'
 import { staffMapLabels } from '../../../features/administration/map-labels'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
-import { clearanceMessage, poseClearance, quantizeMeters, yawFromDegrees } from '../../../features/administration/pois/map/occupancy-grid'
+import { clearanceMessage, poseClearance, quantizeMeters, yawDegreesText, yawFromDegrees } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 import { UnsavedChangesGuard } from '../../../features/administration/UnsavedChangesGuard'
 import { AFTER_SAVE } from '../../../features/administration/after-save'
@@ -423,12 +423,6 @@ function isMapEligibilityConflict(error: unknown) {
 }
 
 /** A heading in degrees, in (−180, 180] to one decimal. */
-const yawDegreesText = (yaw: number | null) => {
-  if (yaw == null) return ''
-  const degrees = Math.round((yaw * 180 / Math.PI) * 10) / 10
-  return String(degrees <= -180 ? degrees + 360 : degrees)
-}
-
 /**
  * The heading keeps what is being typed: the marker follows each parsable value, but the text is put into
  * (−180, 180] and rounded only on blur, or when the map turns the heading.

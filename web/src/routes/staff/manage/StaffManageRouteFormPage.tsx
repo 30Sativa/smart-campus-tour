@@ -264,7 +264,12 @@ export default function StaffManageRouteFormPage() {
 
   const last = step === STEPS.length - 1
   // B1: whether this save keeps the result of the edited one, needs a new run, or starts with none.
-  const draftChange = source.data ? routeChanges(source.data, { ...draft, mapVersionId: draft.mapVersionId, startX: draft.startX ?? NaN, startY: draft.startY ?? NaN, startYaw: draft.startYaw ?? NaN, stops }) : null
+  // Each stop with its POI and navigation, so a newer revision of the same POI is not read as one added and one removed.
+  const pathStops = stops.map(stop => {
+    const poi = stopPoi(stop.poiRevisionId)
+    return poi ? { ...stop, poiProposalId: poi.proposal?.id ?? savedStops.get(stop.poiRevisionId)?.poiProposalId ?? null, name: poi.name, x: poi.x, y: poi.y, yaw: poi.yaw, cameraPreset: poi.cameraPreset } : stop
+  })
+  const draftChange = source.data ? routeChanges(source.data, { ...draft, mapVersionId: draft.mapVersionId, startX: draft.startX ?? NaN, startY: draft.startY ?? NaN, startYaw: draft.startYaw ?? NaN, stops: pathStops }) : null
   // ADR-0060: a save copies each stop's approved narration, so narration approved after the revision in use was saved
   // reaches the route only by saving again. That is a change, though not of the path; the server agrees.
   const savedAt = source.data?.revisionHistory.find(item => item.revisionId === source.data?.revisionId)?.createdAt

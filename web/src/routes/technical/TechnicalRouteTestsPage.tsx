@@ -5,9 +5,9 @@ import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../co
 import { Modal } from '../../components/ui/Drawer'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
-import { expectedDurationText, failedCheckNames, hasScheduledToursOnPath, legCoverageText, missingLegsText, resultSource, revisionTone, routeChanges, sharedResultLine } from '../../features/administration/routes/route-messages'
+import { expectedDurationText, failedCheckNames, hasScheduledToursOnPath, legCoverageText, missingLegsText, resultSource, revisionLabel, revisionTone, routeChangeText, routeChanges, runOnPath, runResultTag, runRuleNote, sharedResultLine } from '../../features/administration/routes/route-messages'
 import { campusShortStamp } from '../../features/administration/tours/tour-calendar'
-import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
+import type { RouteTestRun, VersionedRoute } from '../../features/administration/routes/versioned-api'
 import { DeployToRobotDialog } from '../../features/technical/DeployToRobotDialog'
 import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
 import { robotForMap, routeReturnPath } from '../../features/technical/robot-readiness'
@@ -105,7 +105,7 @@ export default function TechnicalRouteTestsPage() {
                   <td className={tdClass}><span className="font-semibold text-[#0f172a]">{route.name}</span>{retired && <> <ToneBadge tone="muted">Đã ngừng sử dụng</ToneBadge></>}<p className="text-[11.5px] text-[#64748b]">Phiên bản {route.revisionNumber}</p>{shared && <p className="mt-0.5 max-w-md text-[11.5px] text-[#8a5a06]">{shared}</p>}</td>
                   <td className={`${tdClass} text-xs`}>{mapLabelOf(route.mapVersionId) ?? route.mapKey}</td>
                   <td className={`${tdClass} text-xs text-[#64748b]`}>{route.stops.length} điểm · dừng {formatMinutesSeconds(route.dwellDurationSeconds)}</td>
-                  <td className={tdClass}><ToneBadge tone={rowFilter === 'passed' ? 'ok' : rowFilter === 'failed' ? 'danger' : 'warn'}>{revisionTone(true, route.verificationStatus).label}</ToneBadge>{source && <p className="mt-1 text-[11.5px] text-[#64748b]">Giữ kết quả từ bản {campusShortStamp(source.createdAt)}</p>}{route.legCoverage && <p className="mt-1 text-[11.5px] text-[#64748b]">{legCoverageText(route.legCoverage)}</p>}</td>
+                  <td className={tdClass}><ToneBadge tone={rowFilter === 'passed' ? 'ok' : rowFilter === 'failed' ? 'danger' : 'warn'}>{revisionTone(true, route.verificationStatus).label}</ToneBadge>{source && <p className="mt-1 text-[11.5px] text-[#64748b]">Giữ kết quả từ {revisionLabel(source, true)}</p>}{route.legCoverage && <p className="mt-1 text-[11.5px] text-[#64748b]">{legCoverageText(route.legCoverage)}</p>}</td>
                   <td className={`${tdClass} text-right`}>{rowFilter === 'pending'
                     ? <button type="button" className={buttonClass('primary', 'sm')} aria-label={`Ghi kết quả ${route.name}`} onClick={() => setDialog({ view: 'record', route })}>Ghi kết quả</button>
                     : <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Xem kết quả ${route.name}`} onClick={() => setDialog({ view: 'result', route })}>Xem kết quả</button>}</td>
@@ -223,7 +223,7 @@ function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: Versio
         {!pending && resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="route-test-reason">Lý do không đạt</label><p className="mt-0.5 text-xs text-[#64748b]">Staff sẽ thấy lý do này khi sửa tuyến.</p><input id="route-test-reason" className={`${inputClass} mt-1`} required maxLength={1000} value={failureReason} onChange={event => { setFailureReason(event.target.value); changed() }} /></div>}
         <div><label className={labelClass} htmlFor="route-test-evidence">Ghi chú bằng chứng</label><textarea id="route-test-evidence" rows={3} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={event => { setEvidence(event.target.value); changed() }} /></div>
         {errors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errors.form}</p>}
-        <Note>Mỗi lần chạy được ghi thêm, không sửa được. Lần chạy mới nhất của cùng đường đi là kết quả đang áp dụng, cho mọi bản lưu có đường đi này. Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh thì giữ kết quả.</Note>
+        <Note>{runRuleNote(voting)}</Note>
       </form>
     </Modal>
   )
@@ -235,6 +235,8 @@ function RouteResultModal({ route, onRecord, onClose }: { route: VersionedRoute;
   const participants = useRouteTestParticipants()
   const runs = [...(detail.data?.testRuns ?? [])].sort((a, b) => b.checkedAt.localeCompare(a.checkedAt))
   const staffName = (id: string) => participants.data?.find(person => person.userId === id)?.fullName ?? 'Staff không còn hoạt động'
+  const viewed = detail.data ?? route
+  const saveOf = (run: RouteTestRun) => detail.data?.revisionHistory.find(item => item.revisionId === run.routeRevisionId)
   return (
     <Modal open size="lg" title={`Kết quả ${route.name}`} description={`Phiên bản ${route.revisionNumber} · bản đồ ${mapLabelOf(route.mapVersionId) ?? route.mapKey}.`} onClose={onClose}
       footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="button" className={buttonClass('primary')} onClick={onRecord}>Ghi lần chạy mới</button></div>}>
@@ -242,12 +244,12 @@ function RouteResultModal({ route, onRecord, onClose }: { route: VersionedRoute;
         {detail.isPending && <p role="status" className="text-sm text-[#64748b]">Đang tải kết quả…</p>}
         {detail.isError && <div role="alert" className="space-y-2 text-sm text-[#b23e31]"><p>{errorText(detail.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void detail.refetch()}>Tải lại kết quả</button></div>}
         {runs.map(run => <section key={run.id} aria-label={`Lần chạy ${formatDateTime(run.checkedAt)}`} className="rounded-lg border border-[#e2e8f0] p-3 text-[13px] text-[#334155]">
-          <div className="flex flex-wrap items-center gap-2"><ToneBadge tone={run.resultCode === 'PASS' ? 'ok' : 'danger'}>{run.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'}</ToneBadge><span className="text-xs text-[#64748b]">{formatDateTime(run.checkedAt)}</span>{run.id === detail.data?.effectiveTestRunId && <ToneBadge tone="info">Đang áp dụng</ToneBadge>}</div>
+          <div className="flex flex-wrap items-center gap-2"><ToneBadge tone={run.resultCode === 'PASS' ? 'ok' : 'danger'}>{run.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'}</ToneBadge><span className="text-xs text-[#64748b]">{formatDateTime(run.checkedAt)}</span>{detail.data && runResultTag(detail.data, run) && <ToneBadge tone="info">{runResultTag(detail.data, run)}</ToneBadge>}</div>
           <p className="mt-1.5 text-xs text-[#64748b]">Robot <span className="font-mono">{run.robotCode}</span> · Staff đi cùng: {staffName(run.participatingStaffUserId)}</p>
           <ul className="mt-2 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-3">{[['Đi đủ các điểm dừng', run.allStopsReached], ['Dừng an toàn', run.safelyStopped], ['Định vị', run.localizationPassed]].map(([label, passed]) => <li key={String(label)}>{passed ? 'Đạt' : 'Không đạt'}: {label}</li>)}</ul>
           {run.resultCode === 'FAIL' && failedCheckNames(run).length > 0 && <p className="mt-1 text-xs text-[#b23e31]">Không đạt ở: {failedCheckNames(run).join(', ')}</p>}
-          {run.routeRevisionId !== route.revisionId && <p className="mt-1 text-xs text-[#64748b]">Ghi trên một bản lưu khác có cùng đường đi.</p>}
-          {run.traversedStopIds?.length ? <p className="mt-1 text-xs text-[#334155]">Thứ tự đã đi: {drivenText(detail.data ?? route, run.traversedStopIds)}</p> : null}
+          {run.routeRevisionId !== route.revisionId && <OtherRevisionLine save={saveOf(run)} samePath={runOnPath(viewed, run)} />}
+          {run.traversedStopIds?.length ? <RunDrivenOrder route={viewed} run={run} /> : null}
           {run.failureReason && <p className="mt-2"><span className="font-medium">Lý do:</span> {run.failureReason}</p>}
           <p className="mt-2 whitespace-pre-wrap"><span className="font-medium">Bằng chứng:</span> {run.evidenceNote}</p>
         </section>)}
@@ -258,9 +260,28 @@ function RouteResultModal({ route, onRecord, onClose }: { route: VersionedRoute;
 }
 
 /** "Bắt đầu → A → C → B → Kết thúc" for a recorded or chosen order of revision stop ids. */
-function drivenText(route: VersionedRoute, ids: string[]) {
+function drivenText(route: Pick<VersionedRoute, 'stops'>, ids: string[]) {
   const name = (id: string) => route.stops.find(stop => stop.id === id)?.name ?? 'POI'
   return ['Bắt đầu', ...ids.map(name), 'Kết thúc'].join(' → ')
+}
+
+/**
+ * A run names the stops of the revision it was recorded on (4.2): the server's traversedStops when sent, else that
+ * revision's stops; until it loads, or if it cannot, the viewed revision's names are used where ids match.
+ */
+function RunDrivenOrder({ route, run }: { route: VersionedRoute; run: RouteTestRun }) {
+  const own = run.routeRevisionId === route.revisionId
+  // The server names the steps itself (traversedStops); an older server needs the run's revision read.
+  const named = run.traversedStops?.length ? run.traversedStops : null
+  const recordedOn = usePreviousRevision(route.routeId, own || named ? undefined : run.routeRevisionId)
+  if (named) return <p className="mt-1 text-xs text-[#334155]">Thứ tự đã đi: {['Bắt đầu', ...named.map(step => step.name), 'Kết thúc'].join(' → ')}</p>
+  return <p className="mt-1 text-xs text-[#334155]">Thứ tự đã đi: {drivenText(own ? route : recordedOn.data ?? route, run.traversedStopIds ?? [])}</p>
+}
+
+/** A run recorded on another revision: which one, and whether its path is this one's (the read lists every run). */
+function OtherRevisionLine({ save, samePath }: { save?: { revisionNumber: number; createdAt: string }; samePath: boolean }) {
+  const where = save ? `Ghi trên ${revisionLabel(save, true)}` : 'Ghi trên một phiên bản khác'
+  return <p className="mt-1 text-xs text-[#64748b]">{samePath ? `${where}, cùng đường đi nên tính cho bản này.` : `${where}, đường đi khác nên không tính cho bản này.`}</p>
 }
 
 /**
@@ -296,9 +317,9 @@ function RouteChangeSummary({ route }: { route: VersionedRoute }) {
     .sort((a, b) => b.revisionNumber - a.revisionNumber)[0]
   const previous = usePreviousRevision(route.routeId, before?.revisionId)
   if (!before) return null
-  if (!previous.data) return previous.isError ? <p className="text-xs text-[#64748b]">Không tải được bản lưu trước để so sánh.</p> : null
-  const { changes, pathChanged } = routeChanges(previous.data, route)
-  return <p className="text-xs text-[#334155]"><span className="font-medium">So với bản lưu {campusShortStamp(before.createdAt)}:</span>{' '}
-    {changes.length ? `${changes.join(', ')}.` : 'không đổi đường đi hay thời gian dừng.'}
-    {pathChanged ? ' Đường đi đã đổi, cần chạy thử lại.' : changes.length ? ' Đường đi không đổi.' : ''}</p>
+  if (!previous.data) return previous.isError ? <p className="text-xs text-[#64748b]">Không tải được phiên bản trước để so sánh.</p> : null
+  const current = detail.data ?? route
+  const { changes, pathChanged } = routeChanges(previous.data, current)
+  return <p className="text-xs text-[#334155]"><span className="font-medium">So với {revisionLabel(before, true)}:</span>{' '}
+    {routeChangeText(changes, pathChanged, current.verificationStatus === 'PASS')}</p>
 }

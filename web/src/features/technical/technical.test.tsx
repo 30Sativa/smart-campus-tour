@@ -969,7 +969,7 @@ describe('Technical Staff API integration', () => {
     // Narration is Staff content (ADR-0060): Technical sees its state only, never its text or an edit control.
     expect(detail.getByText('Chưa có')).toBeInTheDocument()
     expect(detail.getByText('Staff viết và duyệt; không ảnh hưởng kết quả kiểm chứng.')).toBeInTheDocument()
-    expect(detail.getByText('x 1, y 2, yaw 0')).toBeInTheDocument()
+    expect(detail.getByText('x 1 m · y 2 m · hướng 0°')).toBeInTheDocument()
     expect(detail.getByText('Nhìn phía trước')).toBeInTheDocument()
     fireEvent.click(detail.getByRole('button', { name: 'Ghi kết quả' }))
     expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
@@ -1193,15 +1193,16 @@ describe('Technical Staff API integration', () => {
     const dialog = within(screen.getByRole('dialog'))
     expect(await dialog.findByText(/Lần hai đạt/)).toBeInTheDocument()
     expect(dialog.getByText(/Lần đầu/)).toBeInTheDocument()
-    expect(dialog.getByText('Đang áp dụng')).toBeInTheDocument()
+    expect(dialog.getByText('Kết quả hiện tại')).toBeInTheDocument()
     expect(dialog.getByText(/chỉ đổi nội dung/)).toBeInTheDocument()
     expect(dialog.queryByRole('button', { name: 'Lưu kết quả' })).not.toBeInTheDocument()
   })
 
-  it('counts a rejected revision outside the queue as needing a recheck, without offering a second result', async () => {
+  it('files a rejected revision outside the queue under Không đạt · chờ Staff, without offering a second result', async () => {
     poiProposals = [{ id: 'proposal-3', currentRevision: 1, rowVersion: 'CCCCCCCCCCC=', revision: { ...proposal.revision, id: 'revision-3', name: 'POI không đạt', navigationStatus: 'FAIL', verificationSourceRevisionId: 'revision-3' } }]
     renderPage(<TechnicalPoisPage />)
-    fireEvent.click(await screen.findByRole('button', { name: /Cần kiểm tra lại: 1/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Không đạt · chờ Staff: 1/ }))
+    expect(await screen.findByText('Kỹ thuật không cần làm gì cho tới khi Staff gửi lại.')).toBeInTheDocument()
     expect(await screen.findByText('POI không đạt')).toBeInTheDocument()
     expect(screen.getByText('Chờ Staff sửa và gửi lại')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ghi kết quả' })).not.toBeInTheDocument()
@@ -1399,10 +1400,10 @@ describe('Technical Staff API integration', () => {
     routeQueue = [{ ...routeFixture, sharedResultRevisions: [{ revisionId: 'rev-0', revisionNumber: 1, createdAt: '2026-11-16T05:23:00Z',
       scheduledTours: [{ id: 't1', name: 'TEST WF-A Tour thường', scheduledStartAt: '2026-11-20T04:15:00Z', state: 'SCHEDULED' }] }] }]
     renderPage(<TechnicalRouteTestsPage />)
-    expect(await screen.findByText('Kết quả này áp dụng cho cả: bản lưu 16/11 12:23 (1 Tour đã lên lịch: TEST WF-A Tour thường · 20/11 11:15)')).toBeInTheDocument()
+    expect(await screen.findByText('Kết quả này áp dụng cho cả: phiên bản 1 (16/11 12:23) · 1 Tour đã lên lịch: TEST WF-A Tour thường · 20/11 11:15')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Ghi kết quả Tuyến thư viện' }))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Kết quả này áp dụng cho cả: bản lưu 16/11 12:23 (1 Tour đã lên lịch: TEST WF-A Tour thường · 20/11 11:15).')).toBeInTheDocument()
+    expect(within(dialog).getByText('Kết quả này áp dụng cho cả: phiên bản 1 (16/11 12:23) · 1 Tour đã lên lịch: TEST WF-A Tour thường · 20/11 11:15.')).toBeInTheDocument()
     expect(within(dialog).queryByText(/sẽ không chốt và không bắt đầu được/)).not.toBeInTheDocument()
     // Each check is named by its text, not by the checkbox value "on".
     fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Robot dừng an toàn' }))
@@ -1425,7 +1426,7 @@ describe('Technical Staff API integration', () => {
     renderPage(<TechnicalRouteTestsPage />)
     expect(await screen.findByText('Chưa có tuyến chờ chạy thử')).toBeInTheDocument()
     fireEvent.click(await screen.findByRole('button', { name: /Đã đạt: 1/ }))
-    expect(await screen.findByText('Giữ kết quả từ bản 16/11 12:23')).toBeInTheDocument()
+    expect(await screen.findByText('Giữ kết quả từ phiên bản 1 (16/11 12:23)')).toBeInTheDocument()
     expect(screen.getByText('Chạy thử đạt')).toBeInTheDocument()
   })
 
@@ -1588,7 +1589,7 @@ describe('Technical Staff API integration', () => {
     expect(await dialog.findByText(/Lần một/)).toBeInTheDocument()
     expect(dialog.queryByText(/đo được/)).not.toBeInTheDocument()
     expect(dialog.getByText(/Lệch điểm 2/)).toBeInTheDocument()
-    expect(dialog.getByText('Đang áp dụng')).toBeInTheDocument()
+    expect(dialog.getByText('Kết quả hiện tại')).toBeInTheDocument()
     expect(await dialog.findByText(/Lan Staff/)).toBeInTheDocument()
     fireEvent.click(dialog.getByRole('button', { name: 'Ghi lần chạy mới' }))
     expect(await screen.findByLabelText('Staff đi cùng')).toBeInTheDocument()
