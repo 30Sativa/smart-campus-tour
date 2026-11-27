@@ -237,26 +237,39 @@ public sealed class GetTechnicalDashboardQueryHandler(
 
         actionItems.AddRange(tourItems);
         actionItems.AddRange(robotNotReadyItems);
-        actionItems.AddRange(MapsWithoutRobot(activeMaps, robots, poiQueue, routeQueue));
+        var mapsWithoutRobot = MapsWithoutRobot(activeMaps, robots, poiQueue, routeQueue).ToArray();
+        actionItems.AddRange(mapsWithoutRobot);
 
-        if (poiQueue.Count > 0)
+        // An item on a map that already has its MAP_WITHOUT_ROBOT entry is said there, not again as a queue entry, so one
+        // POI never reads as two jobs. The KPI counts below keep the whole queue.
+        var waitingForRobot = mapsWithoutRobot.Select(item => Guid.Parse(item.TargetId!)).ToHashSet();
+        var poiNow = poiQueue.Count(item => !waitingForRobot.Contains(item.Revision.MapVersionId));
+        var poiWaiting = poiQueue.Count - poiNow;
+        var routeNow = routeQueue.Count(item => !waitingForRobot.Contains(item.MapVersionId));
+        var routeWaiting = routeQueue.Count - routeNow;
+
+        if (poiNow > 0)
         {
             actionItems.Add(new TechnicalActionItem(
                 "POI_QUEUE",
                 "INFO",
-                $"{poiQueue.Count} POI đang chờ kiểm chứng kỹ thuật",
-                "Có đề xuất POI mới từ nhân viên vận hành đang chờ đo đạc và kiểm tra.",
+                $"{poiNow} POI đang chờ kiểm chứng kỹ thuật",
+                poiWaiting > 0
+                    ? $"{poiNow} POI có thể kiểm ngay; {poiWaiting} POI khác đang chờ robot (xem mục bản đồ chưa có robot)."
+                    : "Có đề xuất POI mới từ nhân viên vận hành đang chờ đo đạc và kiểm tra.",
                 null,
                 "/technical/pois"));
         }
 
-        if (routeQueue.Count > 0)
+        if (routeNow > 0)
         {
             actionItems.Add(new TechnicalActionItem(
                 "ROUTE_QUEUE",
                 "INFO",
-                $"{routeQueue.Count} tuyến đang chờ chạy thử",
-                "Có bản sửa đổi tuyến đang chờ xác nhận kỹ thuật và chạy thử trên thực tế.",
+                $"{routeNow} tuyến đang chờ chạy thử",
+                routeWaiting > 0
+                    ? $"{routeNow} tuyến có thể chạy thử ngay; {routeWaiting} tuyến khác đang chờ robot (xem mục bản đồ chưa có robot)."
+                    : "Có bản sửa đổi tuyến đang chờ xác nhận kỹ thuật và chạy thử trên thực tế.",
                 null,
                 "/technical/route-tests"));
         }
