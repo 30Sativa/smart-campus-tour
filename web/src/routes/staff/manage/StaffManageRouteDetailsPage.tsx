@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
-import { expectedDurationText, failedCheckNames, historyResultSource, legCoverageText, missingLegsText, passedAt, routeAvailabilityError, saveResultText, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
+import { expectedDurationText, failedCheckNames, historyResultSource, legCoverageText, missingLegsText, passedAt, revisionLabel, routeAvailabilityError, saveResultText, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
 import { RouteFailBanner } from '../../../features/administration/routes/RouteFailBanner'
 import { campusShortDate, campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
@@ -104,13 +104,13 @@ export default function StaffManageRouteDetailsPage() {
   const end = value.endMode === 'POSE' && value.endX != null && value.endY != null ? { x: value.endX, y: value.endY } : null
   const canSubmit = isCurrentRevision && !value.isSubmitted && !hasUnverifiedPoi && !submitMutation.isPending
   const reload = async () => { submitMutation.reset(); await route.refetch() }
-  const viewedAt = value.revisionHistory.find(revision => revision.revisionId === value.revisionId)?.createdAt
+  const viewedSave = value.revisionHistory.find(revision => revision.revisionId === value.revisionId)
   const status = staffRouteStatus(value)
   return <AdminPage>
     <Link to="/staff/manage/routes" className="mb-3 inline-flex text-sm text-[#2d719e]">← Danh sách tuyến</Link>
     <PageHeader eyebrow="Tuyến" title={value.name} description={statusLine(value, retiredPoi)} action={<div className="flex max-w-sm flex-col items-end gap-1.5"><div className="flex flex-wrap justify-end gap-2"><Link className={buttonClass('secondary')} to={`/staff/manage/routes/${value.routeId}/edit`}>Sửa tuyến</Link>{value.isActive && isCurrentRevision && <button type="button" className={buttonClass('secondary')} onClick={() => { availability.reset(); setDeactivating(value) }}>Ngừng sử dụng</button>}{!value.isSubmitted && isCurrentRevision && <button className={buttonClass('primary')} disabled={!canSubmit} onClick={() => void submitMutation.mutateAsync(value).catch(() => undefined)}>{submitMutation.isPending ? 'Đang gửi…' : 'Gửi kiểm chứng tuyến'}</button>}</div><p className="text-right text-xs text-[#64748b]">Lưu sẽ tạo bản mới. Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh thì bản mới giữ kết quả chạy thử. Đổi bản đồ, điểm dừng, thứ tự, góc nhìn camera, điểm đầu hoặc điểm cuối thì cần chạy thử lại. Tour đã tạo vẫn dùng bản cũ.</p></div>} />
     <div className="mb-4 space-y-2">
-      {!isCurrentRevision && <Notice tone="warn">{viewedAt ? `Đây là bản lưu ${campusShortStamp(viewedAt)}, chỉ xem được.` : 'Đây là bản lưu cũ, chỉ xem được.'}</Notice>}
+      {!isCurrentRevision && <Notice tone="warn">{viewedSave ? `Đây là ${revisionLabel(viewedSave, true)}, chỉ xem được.` : `Đây là phiên bản ${value.revisionNumber}, chỉ xem được.`}</Notice>}
       {/* One "Sửa tuyến" button, in the header: the banner and the notice below only say what to do. */}
       <RouteFailBanner route={value} nextStep={isCurrentRevision ? 'Bấm Sửa tuyến ở đầu trang để sửa chỗ không đạt, rồi gửi chạy thử lại.' : undefined} />
       {isCurrentRevision && <NewerPoiRevisionNotice route={value} />}
@@ -159,12 +159,12 @@ export default function StaffManageRouteDetailsPage() {
         const viewing = revision.revisionId === value.revisionId
         // A result recorded on another save with the same path names that run, so the row does not read as its own run.
         const from = historyResultSource(viewing ? value : revision, value.testRuns, value.revisionHistory)
-        const text = `Bản lưu ${campusShortStamp(revision.createdAt)} · ${staffRouteStatus(viewing ? value : revision).label}${from ? ` (${from})` : ''}`
+        const text = `${revisionLabel(revision)} · ${staffRouteStatus(viewing ? value : revision).label}${from ? ` (${from})` : ''}`
         // With the history, testRuns holds every run of the route; each is listed under the save it was recorded on.
         const runs = value.testRuns.filter(run => run.routeRevisionId === revision.revisionId).sort((a, b) => a.checkedAt.localeCompare(b.checkedAt))
         return <li key={revision.revisionId} className="text-sm">
           {viewing ? <span className="font-medium">{text} (đang xem)</span> : <Link className="text-[#2d719e]" to={`/staff/manage/routes/${value.routeId}?revisionId=${revision.revisionId}`}>{text}</Link>}
-          {runs.length > 0 && <ul aria-label={`Lần chạy thử bản lưu ${campusShortStamp(revision.createdAt)}`} className="mt-1 ml-4 space-y-0.5 text-xs text-[#475569]">{runs.map(run => {
+          {runs.length > 0 && <ul aria-label={`Lần chạy thử ${revisionLabel(revision, true)}`} className="mt-1 ml-4 space-y-0.5 text-xs text-[#475569]">{runs.map(run => {
             const failed = failedCheckNames(run)
             return <li key={run.id}>Chạy thử {campusShortStamp(run.checkedAt)} · {run.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'} · robot {run.robotCode}
               {run.resultCode === 'FAIL' && `${failed.length ? ` · không đạt ở: ${failed.join(', ')}` : ''} · lý do: ${run.failureReason?.trim() || 'không ghi'}`}</li>

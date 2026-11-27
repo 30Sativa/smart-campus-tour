@@ -1,4 +1,5 @@
 import type { StatusTone } from '../../components/ui/status-tone'
+import { yawDegreesText } from '../administration/pois/map/occupancy-grid'
 import { headPresetLabel } from './head-camera-preset'
 import type { PoiNarrationSummary, PoiProposal } from './api/technical'
 
@@ -114,3 +115,42 @@ export const mapLabel = (map: MapLabelInput, duplicates: Set<string> = new Set()
 /** Older names of `mapLabel`, kept so callers read the same. */
 export const exactMapLabel = mapLabel
 export const mapShortLabel = mapLabel
+
+/** A signed number as printed: the typographic minus reads better than a hyphen beside "m" and "°". */
+const signed = (value: number | string) => String(value).replace('-', '−')
+
+/** "x 10.25 m · y −8.73 m · hướng −69.3°": a POI pose with the heading in degrees, as Staff set it on their form. */
+export const poiPoseText = (pose: { x: number; y: number; yaw: number }) =>
+  `x ${signed(pose.x)} m · y ${signed(pose.y)} m · hướng ${signed(yawDegreesText(pose.yaw))}°`
+
+/** "10.25 -8.73 -1.2043": x, y and yaw in radians, separated by spaces, to paste into RViz or a robot tool. */
+export const poiPoseCopyText = (pose: { x: number; y: number; yaw: number }) => `${pose.x} ${pose.y} ${pose.yaw}`
+
+/** The Technical POI verification page (round 7: words a newcomer reads without asking). */
+export const poiVerifyText = {
+  yawRadians: (yaw: number) => `yaw ${yaw} rad`,
+  copyPose: 'Sao chép pose',
+  copiedPose: 'Đã sao chép pose',
+  copyPoseDetail: 'x y yaw (rad), dán được vào RViz hoặc công cụ trên robot.',
+  mapCaption: 'Vị trí và hướng robot cần dừng tại POI này.',
+  noReadyRobot: 'Chưa có robot sẵn sàng trên bản đồ này',
+  /** A rejected revision Technical has nothing to do with until Staff sends a new one. */
+  failWaitingStaff: 'Không đạt · chờ Staff',
+  failWaitingStaffTitle: 'POI không đạt, chờ Staff gửi lại',
+  failWaitingStaffEmpty: 'Chưa có POI không đạt đang chờ Staff',
+  failWaitingStaffIntro: 'Kỹ thuật không cần làm gì cho tới khi Staff gửi lại.',
+  /** A revision Staff sent again after a FAIL: it is back in the queue for Technical. */
+  resentAfterFail: 'Gửi lại sau lần không đạt',
+  currentResult: 'Kết quả hiện tại',
+  failReasonHint: 'Staff sẽ thấy lý do này, sửa POI và gửi lại phiên bản mới. Nếu lỗi do robot (định vị, dừng), sửa robot rồi nhờ Staff gửi lại cùng vị trí.',
+  /** A revision with no submit time: imported from a robot pose file, or recorded before submit times were kept. */
+  noSubmitTime: (imported: boolean) => imported ? 'Nhập từ file' : 'Không có thời điểm gửi (dữ liệu cũ)',
+}
+
+/** The file import page's map and robot lines (round 7). */
+export const poiImportText = {
+  noReadyRobotOnMap: 'chưa có robot sẵn sàng',
+  robotOption: (robot: { displayName?: string | null; robotCode: string }, readyHere: boolean | null) =>
+    [robot.displayName, robot.robotCode, readyHere === null ? null : readyHere ? 'sẵn sàng trên bản đồ này' : 'chưa sẵn sàng trên bản đồ này'].filter(Boolean).join(' · '),
+  robotNotReady: 'Robot chưa sẵn sàng trên bản đồ này: POI vẫn nhập được nhưng không được ghi Đạt, sẽ vào hàng chờ kiểm chứng.',
+}

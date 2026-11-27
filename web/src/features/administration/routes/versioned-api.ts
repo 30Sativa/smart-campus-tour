@@ -12,6 +12,8 @@ export type RouteTestRun = {
   checkedByName?: string | null; participatingStaffName?: string | null
   /** ADR-0065: the revision stop ids in the order driven, on a route where Viewers choose the next stop. */
   traversedStopIds?: string[] | null
+  /** The driven steps named from the run's own revision; an older server omits it. */
+  traversedStops?: Array<{ stopId: string; stopOrder: number; name: string; poiRevisionId: string }> | null
 }
 /** ADR-0065: one directed leg a voting route still has to drive in a PASS run. Null ids are the start and the end. */
 export type RouteMissingLeg = { fromStopId: string | null; fromName: string; toStopId: string | null; toName: string }

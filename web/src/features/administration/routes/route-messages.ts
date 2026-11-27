@@ -3,7 +3,7 @@ import { formatExpectedDuration } from '../../../components/ui/date-time'
 import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
 import type { RouteLegCoverage, RouteMissingLeg, RouteScheduledTour, RouteSharedResultRevision, RouteTestRun, VersionedRoute } from './versioned-api'
-import { campusShortDate, campusShortStamp, campusTime } from '../tours/tour-calendar'
+import { campusShortStamp } from '../tours/tour-calendar'
 
 const fitMinutes = formatExpectedDuration
 
@@ -57,6 +57,13 @@ export const passedAt = (route: AppliedRunRoute & Pick<VersionedRoute, 'verifica
 export const appliedFail = (route: AppliedRunRoute & Pick<VersionedRoute, 'verificationStatus'>) =>
   route.verificationStatus === 'FAIL' ? appliedRun(route) : undefined
 
+/**
+ * "Phiên bản 4 (17/11 12:21)": the one name for a route revision on the route test and Staff route pages; the number
+ * and the save time are the same thing. `lower` for the middle of a sentence.
+ */
+export const revisionLabel = (revision: { revisionNumber: number; createdAt: string }, lower = false) =>
+  `${lower ? 'phiên bản' : 'Phiên bản'} ${revision.revisionNumber} (${campusShortStamp(revision.createdAt)})`
+
 /** The other save whose run this revision carries, when the result was recorded there (ADR-0023 addendum). */
 export function resultSource(route: AppliedRunRoute & Pick<VersionedRoute, 'revisionId' | 'sharedResultRevisions'>): RouteSharedResultRevision | undefined {
   const run = appliedRun(route)
@@ -65,23 +72,57 @@ export function resultSource(route: AppliedRunRoute & Pick<VersionedRoute, 'revi
 }
 
 /**
- * "theo lần chạy 16/11 19:09 trên bản lưu 18:51" for a history row whose Đạt/Không đạt comes from a run recorded on
- * another save with the same path (ADR-0023 addendum). The save shows only its time when it is the same day as the run.
+ * "theo lần chạy 16/11 19:09 trên phiên bản 2 (16/11 18:51)" for a history row whose Đạt/Không đạt comes from a run
+ * recorded on another save with the same path (ADR-0023 addendum).
  * Null when the row has no applied result, the run was recorded on this save, or the data does not name the run's save.
  */
 export function historyResultSource(
   revision: { revisionId: string; verificationStatus: string; effectiveTestRunId: string | null },
   testRuns: Pick<RouteTestRun, 'id' | 'routeRevisionId' | 'checkedAt'>[],
-  history: { revisionId: string; createdAt: string }[],
+  history: { revisionId: string; revisionNumber: number; createdAt: string }[],
 ): string | null {
   if (!['PASS', 'FAIL'].includes(revision.verificationStatus) || !revision.effectiveTestRunId) return null
   const run = testRuns.find(item => item.id === revision.effectiveTestRunId)
   if (!run || run.routeRevisionId === revision.revisionId) return null
   const save = history.find(item => item.revisionId === run.routeRevisionId)
   if (!save) return null
-  const saveStamp = campusShortDate(save.createdAt) === campusShortDate(run.checkedAt) ? campusTime(save.createdAt) : campusShortStamp(save.createdAt)
-  return `theo lần chạy ${campusShortStamp(run.checkedAt)} trên bản lưu ${saveStamp}`
+  return `theo lần chạy ${campusShortStamp(run.checkedAt)} trên ${revisionLabel(save, true)}`
 }
+
+type RunRoute = Pick<VersionedRoute, 'revisionId' | 'configurationFingerprint' | 'verificationStatus' | 'effectiveTestRunId' | 'viewerChoosesNextStop' | 'legCoverage' | 'testRuns' | 'revisionHistory'>
+
+/**
+ * Whether a run was recorded on this revision's path. The revision read returns every run of the route, so a run on
+ * a save with another path is listed too; its save's fingerprint says which. A save the history does not list counts
+ * as the same path only when it is this one.
+ */
+export function runOnPath(route: Pick<RunRoute, 'revisionId' | 'configurationFingerprint' | 'revisionHistory'>, run: Pick<RouteTestRun, 'routeRevisionId'>) {
+  if (run.routeRevisionId === route.revisionId) return true
+  const save = route.revisionHistory?.find(item => item.revisionId === run.routeRevisionId)
+  return Boolean(save && save.configurationFingerprint === route.configurationFingerprint)
+}
+
+/**
+ * What one recorded run is to this revision's result, by the server's rule (RouteVerification, RouteLegCoverage):
+ * - a fixed route takes the newest run on its path: that run is "Kết quả hiện tại";
+ * - a voting route (ADR-0065) adds up the legs its PASS runs drove since the newest FAIL: each of those runs is
+ *   "Tính vào n/m chặng" (no single run is the whole-route result), and a newest FAIL is "Kết quả hiện tại".
+ * Null for a run that does not decide the result now.
+ */
+export function runResultTag(route: RunRoute, run: RouteTestRun): string | null {
+  if (!route.viewerChoosesNextStop || !route.legCoverage) return run.id === route.effectiveTestRunId ? 'Kết quả hiện tại' : null
+  if (route.verificationStatus === 'FAIL') return run.id === route.effectiveTestRunId ? 'Kết quả hiện tại' : null
+  const onPath = (route.testRuns ?? []).filter(item => runOnPath(route, item))
+    .sort((a, b) => a.checkedAt.localeCompare(b.checkedAt) || a.id.localeCompare(b.id))
+  const lastFail = onPath.map(item => item.resultCode).lastIndexOf('FAIL')
+  const counted = onPath.slice(lastFail + 1).some(item => item.id === run.id && item.resultCode === 'PASS' && item.traversedStopIds?.length)
+  return counted ? `Tính vào ${legCoverageText(route.legCoverage).replace('Đã đi ', '')}` : null
+}
+
+/** The note under the run form: how the server turns runs into this revision's result. */
+export const runRuleNote = (voting: boolean) => voting
+  ? 'Mỗi lần chạy được ghi thêm, không sửa được. Tuyến cho Viewer chọn điểm tiếp theo: các lần chạy đạt từ sau lần không đạt gần nhất cộng dồn các chặng đã đi, tuyến đạt khi đủ mọi chặng; một lần chạy không đạt là kết quả hiện tại và tính lại từ đầu. Áp dụng cho mọi phiên bản có cùng đường đi. Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh thì giữ kết quả.'
+  : 'Mỗi lần chạy được ghi thêm, không sửa được. Lần chạy mới nhất trên đường đi này là kết quả hiện tại, cho mọi phiên bản có cùng đường đi. Chỉ đổi tên, mô tả, thời gian dừng hoặc thuyết minh thì giữ kết quả.'
 
 /** The checks a run did not pass, in the words of the record form. */
 export const failedCheckNames = (run: Pick<RouteTestRun, 'allStopsReached' | 'safelyStopped' | 'localizationPassed'>) =>
@@ -107,14 +148,14 @@ export const legCoverageText = (coverage: RouteLegCoverage) => `Đã đi ${cover
 const tourLine = (tour: RouteScheduledTour) => `${tour.name} · ${campusShortStamp(tour.scheduledStartAt)}`
 
 /**
- * "Kết quả này áp dụng cho cả: bản lưu 16/11 12:23 (1 Tour đã lên lịch: …)". Null when no other save shares the path.
- * A result is recorded per path, not per save, so Technical sees which Tours it also decides.
+ * "Kết quả này áp dụng cho cả: phiên bản 3 (16/11 12:23) · 1 Tour đã lên lịch: …". Null when no other save shares the
+ * path. A result is recorded per path, not per save, so Technical sees which Tours it also decides.
  */
 export function sharedResultLine(route: Pick<VersionedRoute, 'sharedResultRevisions'>): string | null {
   const saves = route.sharedResultRevisions ?? []
   if (!saves.length) return null
-  return `Kết quả này áp dụng cho cả: ${saves.map(save => `bản lưu ${campusShortStamp(save.createdAt)}${save.scheduledTours.length
-    ? ` (${save.scheduledTours.length} Tour đã lên lịch: ${save.scheduledTours.map(tourLine).join('; ')})` : ''}`).join(', ')}`
+  return `Kết quả này áp dụng cho cả: ${saves.map(save => `${revisionLabel(save, true)}${save.scheduledTours.length
+    ? ` · ${save.scheduledTours.length} Tour đã lên lịch: ${save.scheduledTours.map(tourLine).join('; ')}` : ''}`).join(', ')}`
 }
 
 /** Whether a FAIL here stops Tours: those on this save or on a save sharing its path. */
@@ -197,39 +238,81 @@ export function stopIssue(stop: StopDraft): string | null {
 export type RoutePathShape = Pick<VersionedRoute, 'mapVersionId' | 'startX' | 'startY' | 'startYaw' | 'endMode' | 'endX' | 'endY' | 'endYaw' | 'viewerChoosesNextStop'> & {
   /** Not part of the path: a rename or a new description keeps the result. Compared trimmed, as saved. */
   name?: string; description?: string | null
-  stops: Array<{ poiRevisionId: string; dwellSeconds: number; headSteps: Array<{ preset: string; holdSeconds: number }> }>
+  /** A saved revision's path fingerprint; when both sides have one it decides `pathChanged`, as on the server. */
+  configurationFingerprint?: string
+  stops: Array<{
+    poiRevisionId: string; dwellSeconds: number; headSteps: Array<{ preset: string; holdSeconds: number }>
+    /**
+     * The POI the revision belongs to, its name and its navigation (the server's POI fingerprint: x, y, yaw, camera).
+     * With them a newer revision of the same POI is told apart from a real add and remove; without them a stop is
+     * known only by its POI revision.
+     */
+    poiProposalId?: string | null; name?: string; x?: number; y?: number; yaw?: number; cameraPreset?: string
+  }>
 }
 
+type PathStop = RoutePathShape['stops'][number]
+/** The server's PoiNavigationFingerprint fields at its precision; unknown navigation compares as changed. */
+const navigationKey = (stop: PathStop) => stop.x == null || stop.y == null || stop.yaw == null ? null
+  : [stop.x.toFixed(4), stop.y.toFixed(4), stop.yaw.toFixed(6), (stop.cameraPreset ?? '').trim().toUpperCase()].join('|')
+const sameNavigation = (a: PathStop, b: PathStop) => a.poiRevisionId === b.poiRevisionId ||
+  (navigationKey(a) != null && navigationKey(a) === navigationKey(b))
+
 /**
- * How `current` differs from `previous`, in Staff's words, and whether the path changed. The server decides by the POI
- * position, not the POI save, so a stop moved to a newer POI save with the same position still keeps the result there;
- * this compares POI saves and may say "cần chạy lại" where the server keeps it.
+ * How `current` differs from `previous`, in Staff's words, and whether the path changed. A stop is matched by its POI
+ * revision, else by its POI, so a stop moved to a newer revision of the same POI is "1 POI có phiên bản mới (tên)",
+ * not one added and one removed. Like the server (RouteNavigationConfigurationFactory.SameNavigation) that changes
+ * the path only when the POI's position, heading or camera changed; with both fingerprints known, they decide.
  */
 export function routeChanges(previous: RoutePathShape, current: RoutePathShape): { changes: string[]; pathChanged: boolean } {
-  const before = previous.stops.map(stop => stop.poiRevisionId)
-  const after = current.stops.map(stop => stop.poiRevisionId)
+  const matched = new Set<PathStop>()
+  const pairs = current.stops.map(stop => {
+    const before = previous.stops.find(item => !matched.has(item) && item.poiRevisionId === stop.poiRevisionId)
+      ?? (stop.poiProposalId ? previous.stops.find(item => !matched.has(item) && item.poiProposalId === stop.poiProposalId) : undefined)
+    if (before) matched.add(before)
+    return { stop, before }
+  })
+  const kept = pairs.filter((pair): pair is { stop: PathStop; before: PathStop } => Boolean(pair.before))
   const path: string[] = []
   if (previous.mapVersionId !== current.mapVersionId) path.push('đổi bản đồ')
-  const added = after.filter(id => !before.includes(id)).length
-  const removed = before.filter(id => !after.includes(id)).length
+  const added = pairs.length - kept.length
+  const removed = previous.stops.length - kept.length
   if (added) path.push(`thêm ${added} điểm dừng`)
   if (removed) path.push(`bớt ${removed} điểm dừng`)
-  const kept = after.filter(id => before.includes(id))
-  if (kept.join() !== before.filter(id => after.includes(id)).join()) path.push('đổi thứ tự điểm dừng')
+  if (kept.map(pair => previous.stops.indexOf(pair.before)).some((index, at, all) => at > 0 && index < all[at - 1])) path.push('đổi thứ tự điểm dừng')
+  const renewed = kept.filter(pair => pair.before.poiRevisionId !== pair.stop.poiRevisionId)
+  const moved = renewed.filter(pair => !sameNavigation(pair.before, pair.stop)).map(pair => pair.stop)
+  const samePosition = renewed.filter(pair => sameNavigation(pair.before, pair.stop)).map(pair => pair.stop)
+  const names = (stops: PathStop[]) => stops.map(stop => stop.name ?? 'POI').join(', ')
+  if (moved.length) path.push(`${moved.length} POI có phiên bản mới, đổi vị trí hoặc hướng (${names(moved)})`)
   if (previous.startX !== current.startX || previous.startY !== current.startY || previous.startYaw !== current.startYaw) path.push('đổi điểm bắt đầu')
   if (previous.endMode !== current.endMode || previous.endX !== current.endX || previous.endY !== current.endY || previous.endYaw !== current.endYaw) path.push('đổi điểm kết thúc')
   // ADR-0065: the flag is part of the path fingerprint, so switching it needs a new run.
   if (Boolean(previous.viewerChoosesNextStop) !== Boolean(current.viewerChoosesNextStop))
     path.push(current.viewerChoosesNextStop ? 'bật cho Viewer chọn điểm tiếp theo' : 'tắt cho Viewer chọn điểm tiếp theo')
-  const byId = new Map(previous.stops.map(stop => [stop.poiRevisionId, stop]))
-  const heads = (steps: RoutePathShape['stops'][number]['headSteps']) => steps.map(step => `${step.preset}:${step.holdSeconds}`).join()
-  if (current.stops.some(stop => byId.has(stop.poiRevisionId) && heads(byId.get(stop.poiRevisionId)!.headSteps) !== heads(stop.headSteps))) path.push('đổi góc nhìn camera')
-  const dwell = current.stops.filter(stop => byId.has(stop.poiRevisionId) && byId.get(stop.poiRevisionId)!.dwellSeconds !== stop.dwellSeconds).length
+  const heads = (steps: PathStop['headSteps']) => steps.map(step => `${step.preset}:${step.holdSeconds}`).join()
+  if (kept.some(pair => heads(pair.before.headSteps) !== heads(pair.stop.headSteps))) path.push('đổi góc nhìn camera')
+  const dwell = kept.filter(pair => pair.before.dwellSeconds !== pair.stop.dwellSeconds).length
   const text = (value: string | null | undefined) => (value ?? '').trim()
   const labels = [
+    samePosition.length > 0 && `${samePosition.length} POI có phiên bản mới (${names(samePosition)})`,
     text(previous.name) !== text(current.name) && 'đổi tên tuyến',
     text(previous.description) !== text(current.description) && 'đổi mô tả',
     dwell > 0 && `đổi thời gian dừng ${dwell} điểm`,
   ].filter((item): item is string => Boolean(item))
-  return { changes: [...path, ...labels], pathChanged: path.length > 0 }
+  const fingerprints = previous.configurationFingerprint && current.configurationFingerprint
+  const pathChanged = fingerprints ? previous.configurationFingerprint !== current.configurationFingerprint : path.length > 0
+  // The fingerprints differ for a reason the fields above do not name (the map package itself, say).
+  if (pathChanged && !path.length) path.push('đổi đường đi')
+  return { changes: [...path, ...labels], pathChanged }
+}
+
+/**
+ * B4 on the route test form: how a revision differs from the one before. A revision that already has a run deciding
+ * its result needs no "cần chạy thử lại", whatever changed: it says so instead (4.1).
+ */
+export function routeChangeText(changes: string[], pathChanged: boolean, alreadyPassed: boolean): string {
+  const what = changes.length ? `${changes.join(', ')}.` : 'không đổi đường đi hay thời gian dừng.'
+  if (alreadyPassed) return `${what} Bản này đã có lần chạy đạt.`
+  return `${what}${pathChanged ? ' Đường đi đã đổi, cần chạy thử lại.' : changes.length ? ' Đường đi không đổi.' : ''}`
 }

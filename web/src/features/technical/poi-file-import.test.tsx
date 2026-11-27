@@ -69,6 +69,21 @@ describe('Technical POI file import', () => {
     expect(screen.queryByText('Đã kiểm tra triển khai đạt')).not.toBeInTheDocument()
   })
 
+  it('says a passed map has no ready robot now, without the green, when no robot is ready on it (3.6)', async () => {
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), 'http://test.local').pathname
+      if (path === '/api/maps/versions') return envelope([{ map, technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, currentlyDeployedOn: [] }])
+      if (path === '/api/technical/physical-robots') return envelope([otherRobot])
+      return envelope(null, 404)
+    })
+    renderPage()
+    await screen.findByRole('option', { name: /amr-02/ })
+    fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
+    const badge = await screen.findByText('Từng kiểm tra triển khai đạt · chưa có robot sẵn sàng')
+    expect(badge.className).toMatch(/f6f9fd/)
+    expect(screen.getByLabelText('Robot đã ghi pose')).toHaveValue('')
+  })
+
   it('chooses the robot ready on the chosen version, and warns before import when another robot is chosen', async () => {
     renderPage()
     await screen.findByRole('option', { name: 'Tầng 6 · v2' })
@@ -76,10 +91,14 @@ describe('Technical POI file import', () => {
     await screen.findByRole('option', { name: /amr-01/ })
     fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
     expect(screen.getByLabelText('Robot đã ghi pose')).toHaveValue('amr-01')
-    expect(screen.getByRole('option', { name: /amr-01 .* · sẵn sàng trên bản đồ này$/ })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: /amr-02 .* · chưa sẵn sàng trên bản đồ này$/ })).toBeInTheDocument()
+    // Round 7 (3.6): the connection status left the option; readiness on the chosen map is what matters here.
+    expect(screen.getByRole('option', { name: 'AMR 01 · amr-01 · sẵn sàng trên bản đồ này' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'AMR 02 · amr-02 · chưa sẵn sàng trên bản đồ này' })).toBeInTheDocument()
+    expect(screen.queryByText(/Robot chưa sẵn sàng trên bản đồ này/)).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Robot đã ghi pose'), { target: { value: 'amr-02' } })
+    // Said at once, before any file is chosen (ADR-0066 robotReadiness).
+    expect(screen.getByText('Robot chưa sẵn sàng trên bản đồ này: POI vẫn nhập được nhưng không được ghi Đạt, sẽ vào hàng chờ kiểm chứng.')).toBeInTheDocument()
     previewReadiness = { ready: false, code: 'ROBOT_MAP_NOT_ASSIGNED', message: 'Robot amr-02 đang gán Betea · betea · phiên bản 1, không phải bản đồ này.' }
     const input = document.getElementById('import-files') as HTMLInputElement
     fireEvent.change(input, { target: { files: [new File(['id: POI_02'], 'poi_02.yaml')] } })
