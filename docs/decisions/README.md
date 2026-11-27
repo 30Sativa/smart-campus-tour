@@ -113,9 +113,9 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0071](0071-viewer-engagement-report.md) | Staff engagement report: aggregates by invitation type and POI (joined, voted, counted questions, departures, actual dwell) with fixed improvement signals; adds `STOP_ARRIVED` and `STUDENT_QUESTION_ASKED` Tour events, no schema change, never question text or a person; partially supersedes ADR-0011 and ADR-0016 | proposed 2026-11-25 by the owner's request, backend and web implemented |
 | [0072](0072-live-guide-voice.md) | The Operator speaks live to the Viewers with push-to-talk over the stream relay path `voice-{tourId}` (WHIP from the Operator, WHEP to every Student session of the Tour, shared rooms included), backend tokens `P`/`L` checked by the relay auth hook and reaper, in the ADR-0070 talk window; replaces the console's recorded clips | proposed 2026-11-25, backend, web and relay config implemented, needs a device and relay test |
 
+- [ADR-0073: backup Staff End Early and group notices](0073-operator-disconnect-end-early.md) — Phiếu v1.12, durable Operator console contact, timed backup End Early and generic group email.
+
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend
      - monorepo vs multi-repo (nếu muốn ghi lại lý do gộp)
 -->
-
-- [ADR-0073: backup Staff End Early and group notices](0073-operator-disconnect-end-early.md) — Phiếu v1.12, durable Operator console contact, timed backup End Early and generic group email.
