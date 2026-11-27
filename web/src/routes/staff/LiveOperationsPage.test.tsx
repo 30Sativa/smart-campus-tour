@@ -141,13 +141,12 @@ describe('live console camera head (ADR-0045)', () => {
     await waitFor(() => expect(sent.find(item => item.path.endsWith('/head-mode'))).toEqual({ method: 'PUT', path: '/api/staff/manage/tours/tour-1/head-mode', body: { mode: 'MANUAL' } }))
   })
 
-  it('locks every head control for a Staff who is not the Operator, naming who can press', async () => {
+  it('hides camera head actions for a Staff who is not the Operator', async () => {
     useAuthStore.getState().setAuth('test-token', { userId: 'staff-2', username: 'minh', role: 'Staff' })
     renderAt('/staff/live/tour-1')
-    const panel = await headPanel()
-    expect(within(panel).getByText('Chỉ Lan Staff mới xoay được đầu camera.')).toBeInTheDocument()
-    for (const button of headButtons(panel)) expect(button).toBeDisabled()
-    expect(within(panel).getByRole('switch')).toBeDisabled()
+    await screen.findByRole('heading', { name: /Tour sáng thứ Hai/ })
+    expect(screen.queryByRole('tab', { name: /Đầu camera/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Đầu camera' })).not.toBeInTheDocument()
     expect(headCommands()).toHaveLength(0)
   })
 
@@ -496,4 +495,14 @@ describe('Viewers choose the next stop (ADR-0065)', () => {
     expect(await screen.findByRole('region', { name: 'Tình hình hiện tại' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Viewer chọn điểm tiếp theo' })).not.toBeInTheDocument()
   })
+})
+
+
+it('explains the audited backup End Early when the assigned Operator returns to the console', async () => {
+  tour.tour.state = 'CANCELLED'
+  tour.endedAt = '2026-11-04T02:10:00Z'
+  tour.endedEarlyByBackupStaff = { actorUserId: 'staff-2', actorName: 'Minh', operatorUserId: 'staff-1', operatorName: 'Lan Staff', operatorLastSeenAt: '2026-11-04T02:00:00Z' }
+  renderAt('/staff/live/tour-1')
+  expect(await screen.findByText('Kết thúc sớm bởi Minh thay người vận hành Lan Staff (mất kết nối từ 09:00)')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Kết thúc sớm Tour' })).not.toBeInTheDocument()
 })

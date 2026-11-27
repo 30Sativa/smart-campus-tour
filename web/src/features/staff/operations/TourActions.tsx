@@ -1,3 +1,4 @@
+import { formatTime } from '../../../components/ui/date-time'
 import { useState, type ReactNode } from 'react'
 import { ArrowRight, CircleStop, FileCheck2, Pause, Play, RotateCcw, SkipForward } from 'lucide-react'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
@@ -5,7 +6,7 @@ import { notify } from '../../../components/ui/toast-store'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import type { StartConfirmation, TourActionAvailability, TourDetails } from '../../administration/tours/types'
 import { useEndTourEarly, useIntentRequestIds, useNextStop, usePauseLeg, useReconcileCommand, useRetryLeg, useSetAutoAdvance, useSkipStop } from './hooks'
-import { checkInfo } from './operation-labels'
+import { BACKUP_END, checkInfo } from './operation-labels'
 import { ALL_REMAINING_LOCKED_TEXT, operationRefusal } from './operation-errors'
 import { CONFIRMATIONS, NO_CONFIRMATION, isConfirmed } from './onsite-confirmations'
 import { actionGate, endEarlyEffect, tourTargets, type ConsoleAction } from './situation'
@@ -27,7 +28,7 @@ type Mutation = { isPending: boolean; error: unknown; isError: boolean; reset: (
  * open, the dialog says so and cannot confirm. Success is said only after the
  * server answered 200.
  */
-function GatedAction({ id, label, icon, gate, frozen, variant = 'primary', hint, dialog, mutation, submit }: {
+function GatedAction({ id, label, icon, gate, frozen, variant = 'primary', hint, disabledNote, dialog, mutation, submit }: {
   id: string
   label: string
   icon: ReactNode
@@ -36,6 +37,7 @@ function GatedAction({ id, label, icon, gate, frozen, variant = 'primary', hint,
   variant?: 'primary' | 'danger' | 'secondary'
   /** Said under an enabled button: what pressing it does. */
   hint: string
+  disabledNote?: string | null
   dialog: { title: string; confirmLabel: string; busyLabel: string; description: ReactNode; reason?: { label: string; placeholder: string } }
   mutation: Mutation
   submit: (reason: string) => Promise<unknown>
@@ -45,7 +47,7 @@ function GatedAction({ id, label, icon, gate, frozen, variant = 'primary', hint,
   // Said inside an open dialog when the server withdrew the operation or the screen stopped updating meanwhile.
   const withdrawn = !gate ? null : !gate.allowed ? `Máy chủ vừa báo thao tác này không còn được phép: ${gateText(gate)}` : frozen ?? null
   const refusal = mutation.isError ? operationRefusal(mutation.error, { operator: true }) : null
-  const note = !gate ? 'Máy chủ chưa trả quyền cho thao tác này.' : !gate.allowed ? `Chưa thực hiện được: ${gateText(gate)}` : frozen ?? hint
+  const note = !gate ? disabledNote ?? 'Máy chủ chưa trả quyền cho thao tác này.' : !gate.allowed ? disabledNote ?? `Chưa thực hiện được: ${gateText(gate)}` : frozen ?? hint
   const button = variant === 'danger'
     ? `${buttonClass('secondary', 'lg')} w-full !border-[#c9534a] !text-[#b23e31] hover:!bg-[#fff1ef]`
     : variant === 'secondary' ? `${buttonClass('secondary', 'md')} w-full`
@@ -224,19 +226,22 @@ export function AutoAdvanceToggle({ detail, disabled }: { detail: TourDetails; d
  * End Early, kept apart from the forward actions and styled as a stop of the
  * Tour, not of the robot: the web page is not an Emergency Stop.
  */
-export function EndEarlyAction({ detail }: { detail: TourDetails }) {
+export function EndEarlyAction({ detail, backup = false, disabledNote }: { detail: TourDetails; backup?: boolean; disabledNote?: string | null }) {
   const { tour } = detail
   const end = useEndTourEarly()
   const requestId = useIntentRequestIds()
-  return <GatedAction id="end-early" label="Kết thúc sớm Tour" icon={<CircleStop size={18} aria-hidden="true" />} gate={actionGate(detail, 'endEarly')} variant="danger"
-    hint="Dừng Tour, không dừng khẩn cấp robot."
-    dialog={{ title: 'Kết thúc sớm Tour?', confirmLabel: 'Kết thúc sớm', busyLabel: 'Đang kết thúc…',
+  return <GatedAction id="end-early" label={backup ? BACKUP_END.button : "Kết thúc sớm Tour"} icon={<CircleStop size={18} aria-hidden="true" />} gate={actionGate(detail, 'endEarly')} variant="danger"
+    hint={backup ? BACKUP_END.hint : "Dừng Tour, không dừng khẩn cấp robot."} disabledNote={disabledNote}
+    dialog={{ title: backup ? BACKUP_END.button : 'Kết thúc sớm Tour?', confirmLabel: 'Kết thúc sớm', busyLabel: 'Đang kết thúc…',
       description: <div className="space-y-2">
         <p>Tour chuyển sang Đã hủy và không chạy lại được. {endEarlyEffect(detail)}</p>
-        <p>Hệ thống chưa tự báo cho các đoàn hay tắt phát trực tiếp: báo cho đoàn theo cách thông thường.</p>
+        {backup && <p>{detail.operatorLastSeenAt
+          ? BACKUP_END.confirmation(detail.operator?.fullName ?? '-', formatTime(detail.operatorLastSeenAt))
+          : BACKUP_END.legacyConfirmation(detail.operator?.fullName ?? '-')}</p>}
+        <p>{BACKUP_END.notice}</p>
         <p className="font-semibold text-[#9d3428]">Đây không phải dừng khẩn cấp. Nếu robot cần dừng ngay, bấm nút dừng khẩn cấp trên robot.</p>
       </div>,
-      reason: { label: 'Lý do kết thúc sớm', placeholder: 'Ví dụ: hành lang tầng 6 bị chặn, không thể tiếp tục.' } }}
+      reason: { label: BACKUP_END.reasonLabel, placeholder: backup ? BACKUP_END.reasonPlaceholder : 'Ví dụ: hành lang tầng 6 bị chặn, không thể tiếp tục.' } }}
     mutation={end}
     submit={reason => end.mutateAsync({ id: tour.id, requestId: requestId(`end:${tour.id}:${tour.rowVersion}:${reason}`), rowVersion: tour.rowVersion, reason })
       .then(() => notify({ title: `Đã kết thúc sớm Tour “${tour.name}”` }))} />

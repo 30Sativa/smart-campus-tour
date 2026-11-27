@@ -65,6 +65,10 @@ export type TourDetails = {
   /** Null when the Tour was scheduled from `routeRevision`. */
   route: RouteDetails | null; activeRoute: RouteDetails | null
   routeRevision: VersionedRoute | null; operator: TourOperator | null; reservation: TourReservation | null
+  operatorLastSeenAt?: string | null
+  operatorDisconnectedSince?: string | null
+  operatorDisconnectEndEarlyMinutes?: number
+  endedEarlyByBackupStaff?: { actorUserId: string; actorName: string; operatorUserId: string | null; operatorName: string | null; operatorLastSeenAt: string | null } | null
   fallbackVideoUrl: string | null; startedAt: string | null; endedAt: string | null; endReason: string | null
   usage: { hasRegistrations: boolean; hasAllowedBranches: boolean; hasOperationalHistory: boolean; hasRobotOwnership: boolean }
   /** `canMarkReady`/`canReopen`/`readyBlockers` come from servers with READY (ADR-0042); an older response omits them. */

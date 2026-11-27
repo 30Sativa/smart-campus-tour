@@ -402,13 +402,14 @@ describe('live console on the real Tour API', () => {
     expect(screen.getByText('Hành lang bị chặn')).toBeInTheDocument()
   })
 
-  it('gives another Staff the same picture without any control, naming who operates', async () => {
+  it('gives another Staff the same picture with a disabled backup action on an older server, naming who operates', async () => {
     useAuthStore.getState().setAuth('test-token', { userId: 'staff-2', username: 'minh', role: 'Staff' })
     tour = running({ currentStep: 'OBSERVING', command: { id: 'cmd-1', kind: 'GoTo', state: 'ARRIVED', outcome: 'ARRIVED', reasonCode: null } },
       { next: refuse('Chỉ người vận hành được giao cho Tour mới đi tiếp được.', 'callerIsOperator') })
     renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
-    expect(await screen.findByText(/Chỉ Lan Staff mới thao tác được/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Đi tiếp|Kết thúc sớm/ })).not.toBeInTheDocument()
+    expect(await screen.findByText(/Chỉ Lan Staff mới điều khiển các bước của Tour/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Đi tiếp|Kết thúc sớm Tour/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Kết thúc sớm thay người vận hành' })).toBeDisabled()
   })
 
   it('keeps the last answer on screen when a poll fails, marks it old and locks the forward step', async () => {

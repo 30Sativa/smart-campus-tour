@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { operatorReconnect } from './operator-presence'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toursApi } from '../../administration/tours/api/tours'
 import { newRequestId, tourKeys } from '../../administration/tours/hooks'
@@ -171,9 +172,21 @@ export function useRetryLeg() {
 
 export function useEndTourEarly() {
   const onSettled = useRefreshTours()
+  const client = useQueryClient()
   return useMutation({
     mutationFn: ({ id, requestId, rowVersion, reason }: TourWrite & { reason: string }) =>
       toursApi.endEarly(id, { requestId, expectedRowVersion: rowVersion, reason }),
+    onError: (error, { id }) => {
+      const reconnect = operatorReconnect(error)
+      if (!reconnect) return
+      // This is the server's locked read, newer than the poll behind the clicked button. Lock again immediately,
+      // even if the following refresh fails; no local timer can override the server's action gate.
+      client.setQueryData<TourDetails>(tourKeys.detail(id), detail => detail ? {
+        ...detail, operatorLastSeenAt: reconnect.lastSeen, operatorDisconnectedSince: null,
+        allowedActions: detail.allowedActions ? { ...detail.allowedActions,
+          endEarly: { allowed: false, reason: null, blockedBy: ['OPERATOR_STILL_CONNECTED'] } } : detail.allowedActions,
+      } : detail)
+    },
     onSettled,
   })
 }

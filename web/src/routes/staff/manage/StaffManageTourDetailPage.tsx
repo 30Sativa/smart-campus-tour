@@ -11,13 +11,15 @@ import { campusShortDate, campusTime } from '../../../features/administration/to
 import { NewerRevisionNotice } from '../../../features/administration/routes/NewerRevisionNotice'
 import { mapAreaName } from '../../../features/administration/map-labels'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { newRequestId, useCancelTour, useTour, useTourNarration } from '../../../features/administration/tours/hooks'
+import { newRequestId, useCancelTour, useTourNarration } from '../../../features/administration/tours/hooks'
 import { overdueStartLabel } from '../../../features/administration/tours/overdue-start'
 import { isRegistrationClosed, openSeatsLabel, tourError, tourStateLabel } from '../../../features/administration/tours/tour-messages'
 import { TourReadyPanel } from '../../../features/administration/tours/TourReadyPanel'
 import { TourSeatsAndOperatorPanel } from '../../../features/administration/tours/TourSeatsAndOperatorPanel'
 import { TourNarrationPanel } from '../../../features/administration/tours/TourNarrationPanel'
 import { QuickTourShare } from '../../../features/administration/tours/QuickTourShare'
+import { useOperationTour } from '../../../features/staff/operations/hooks'
+import { BackupEndEarlyNotice, OperatorPresencePanel } from '../../../features/staff/operations/OperatorPresencePanel'
 import { TourStepper } from '../../../features/staff/operations/TourStepper'
 import { isUploadedFallbackVideo } from '../../../features/administration/tours/api/fallback-video'
 
@@ -31,7 +33,7 @@ const slotText = (value: string) => `${formatDate(value, { weekday: 'short' })} 
  */
 export default function StaffManageTourDetailPage() {
   const { tourId = '' } = useParams()
-  const detail = useTour(tourId)
+  const detail = useOperationTour(tourId)
   const cancel = useCancelTour()
   const maps = useMapVersions()
   const [confirming, setConfirming] = useState(false)
@@ -63,6 +65,8 @@ export default function StaffManageTourDetailPage() {
     <TourStepper detail={data} page="prepare" />
     <PageHeader eyebrow={`Tour · ${tourStateLabel(tour, now)}`} title={tour.name} description={tour.description ?? 'Chưa có mô tả.'}
       action={permissions.canEditMetadata ? <Link to={`/staff/manage/tours/${tour.id}/edit`} className={buttonClass('secondary')}>Sửa</Link> : undefined} />
+    <BackupEndEarlyNotice detail={data} />
+    <OperatorPresencePanel detail={data} />
     <TourReadyPanel detail={data} />
     {/* One line of guidance per state: a new quick Tour's share panel says what to do next, so the registration notice is for a Tour on a shift. */}
     {tour.isShortNotice && tour.state === 'SCHEDULED' && <QuickTourShare tour={tour} onCancel={permissions.canCancel ? () => { cancel.reset(); setConfirming(true) } : undefined} />}

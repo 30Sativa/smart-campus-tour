@@ -1,5 +1,6 @@
 import { ApiError } from '../../../api/client'
 import type { TourBlocker, TourStartCheck } from '../../administration/tours/types'
+import { BACKUP_END } from './operation-labels'
 import { tourError } from '../../administration/tours/tour-messages'
 
 /** A refused READY/Reopen/Start/Next/Retry/End Early/Reconcile, with whatever structured reason the server sent. */
@@ -38,6 +39,7 @@ const MESSAGES: Record<string, string> = {
  * sentence names the robot and what is missing, so it wins; this text is only for an older server that sent none.
  */
 const SERVER_WORDED: Record<string, string> = {
+  OPERATOR_STILL_CONNECTED: BACKUP_END.reconnected,
   ROBOT_NOT_READY_FOR_ROUTE: 'Robot chưa sẵn sàng trên bản đồ của tuyến này. Technical Staff cần kiểm tra triển khai cho robot trên đúng bản đồ.',
 }
 

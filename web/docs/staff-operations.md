@@ -236,3 +236,16 @@ are simulation data. The 3D view follows the screen height and has a full-screen
 button. The page is Staff-only, as `/hubs/operations` is. The six-robot
 workbench (`PatrolDemo`, `OperationalTwin`) is no longer mounted here. See
 `web/docs/physical-digital-twin.md` and [local patrol fleet](patrol-demo.md).
+
+
+## Backup Staff End Early (Phiếu v1.12, ADR-0073)
+
+Both the live console and Tour information poll the existing detail API while RUNNING. They show the assigned
+Operator's last contact and the server's disconnect status. Another Staff gets only the backup End Early action,
+with a required audited reason; its countdown uses `operatorDisconnectEndEarlyMinutes` from the API. Only the
+server's `allowedActions.endEarly` enables it. A legacy null timestamp uses that server gate. Older servers lacking
+configuration cannot enable a backup action. A 409 OPERATOR_STILL_CONNECTED immediately updates the cache from
+the returned timestamps, disables the action and keeps the server's sentence in the confirmation. Other Operator
+controls remain guarded. Admin has no backup action. Tour history detail and the returning Operator console
+render `endedEarlyByBackupStaff` with the actor, assigned Operator and disconnect time. End Early now queues a
+generic email to group representatives; the confirmation describes that behavior.

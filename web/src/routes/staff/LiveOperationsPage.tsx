@@ -19,9 +19,12 @@ import { TourTalkPanel } from '../../features/staff/operations/live/TourTalkPane
 import { CommandCard, ExecutionPanel, RobotStatusCard, RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { actionGate, tourSituation, type ConsoleAction, type Situation } from '../../features/staff/operations/situation'
 import { AutoAdvanceToggle, ConsoleActionButton, EndEarlyAction } from '../../features/staff/operations/TourActions'
+import { BackupEndEarlyNotice, OperatorPresencePanel } from '../../features/staff/operations/OperatorPresencePanel'
+import { BACKUP_END } from '../../features/staff/operations/operation-labels'
 import { TourStepper } from '../../features/staff/operations/TourStepper'
 import { VotePanel } from '../../features/staff/operations/VotePanel'
 import { voteOpen } from '../../features/staff/operations/ballot-live'
+import { STAFF_ROLE } from '../../auth/roles'
 import { useAuthStore } from '../../stores/auth-store'
 
 /**
@@ -75,6 +78,7 @@ function TourConsole({ tourId }: { tourId: string }) {
   const tour = useOperationTour(tourId)
   const now = useNow(1000)
   const viewerId = useAuthStore(store => store.user?.userId ?? null)
+  const isStaff = useAuthStore(store => store.user?.role === STAFF_ROLE)
   const started = Boolean(tour.data && (tour.data.tour.state === 'RUNNING' || tour.data.startedAt))
   // The same feed the talk panel polls (one query); its size marks the talk tab when a message arrives unseen.
   const talkCount = useStaffTalkFeed(tourId, started).data?.messages.length
@@ -88,14 +92,14 @@ function TourConsole({ tourId }: { tourId: string }) {
   // Only a Tour that is polled can fall behind; an ended one is read once and stays true.
   const live = running || summary.state === 'READY'
   const stale = live && isTourStale(tour, now)
-  const isOperator = Boolean(operator && viewerId && operator.userId === viewerId)
+  const isOperator = Boolean(isStaff && operator && viewerId && operator.userId === viewerId)
   const refresh = () => void tour.refetch()
 
   // ADR-0065 vote first (it opens on it), the camera head while the robot runs, and ADR-0070 talk with the Viewers.
   const tabs: ControlTab[] = [
     ...(detail.routeRevision?.viewerChoosesNextStop ? [{ id: 'vote', label: 'Bầu chọn', icon: Vote, urgent: voteOpen(detail),
       content: <section aria-label="Viewer chọn điểm tiếp theo"><VotePanel detail={detail} isOperator={isOperator} now={now} /></section> }] : []),
-    ...(running ? [{ id: 'head', label: 'Đầu camera', icon: Camera,
+    ...(running && isOperator ? [{ id: 'head', label: 'Đầu camera', icon: Camera,
       content: <section aria-label="Đầu camera" className="p-4"><HeadControlPanel tourId={summary.id} isOperator={isOperator} operatorName={operator?.fullName} step={detail.execution?.currentStep ?? null} /></section> }] : []),
     { id: 'talk', label: 'Trò chuyện', icon: MessagesSquare, count: talkCount,
       content: <section aria-label="Trò chuyện với người xem">
@@ -117,6 +121,8 @@ function TourConsole({ tourId }: { tourId: string }) {
           <Link to={`/staff/manage/tours/${summary.id}`} className={buttonClass('secondary', 'sm')}>Thông tin Tour</Link>
         </div>
       </header>
+      <BackupEndEarlyNotice detail={detail} />
+      <OperatorPresencePanel detail={detail} />
       {stale && <Freshness stale updatedAt={tour.dataUpdatedAt} now={now} live={live} fetching={tour.isFetching} onRefresh={refresh} />}
 
       {!started ? <div className={`${panelClass} flex flex-wrap items-center justify-between gap-3 p-4`}>
@@ -257,7 +263,7 @@ function SituationCard({ detail, isOperator, stale, now }: { detail: TourDetails
       </div>
       {hasControls && <div className={`w-full min-w-0 space-y-3 ${departing ? 'px-1' : 'sm:max-w-md lg:w-[380px] lg:max-w-none lg:shrink-0'}`}>
         {!isOperator ? <p className="flex gap-2 px-1 text-[13px] leading-5 text-[#475569]"><UserRound size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
-          Bạn đang xem Tour này. Chỉ {detail.operator?.fullName ?? 'người vận hành được giao'} mới thao tác được.</p>
+          {BACKUP_END.readOnly(detail.operator?.fullName ?? 'người vận hành được giao')}</p>
           : <>
             {consoleOffline && <p className="text-[13px] leading-5 font-semibold text-[#7d5310]">Trang điều hành của bạn chưa kết nối với máy chủ, nên máy chủ chặn lệnh di chuyển mới cho tới khi kết nối lại.</p>}
             {actions.length > 0 && <div className="grid gap-3">{actions.map(action => <ConsoleActionButton key={action} action={action} detail={detail} frozen={action === 'reconcile' ? null : frozen} />)}</div>}

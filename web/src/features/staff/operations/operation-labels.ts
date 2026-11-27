@@ -295,3 +295,24 @@ export function robotReasonText(code: string | null | undefined): string | null 
   if (!code) return null
   return ROBOT_REASON[code] ?? ROBOT_FAULT[code] ?? ROBOT_FAULT_FALLBACK
 }
+
+/** Phiếu v1.12: one vocabulary for presence, the backup action and its audit history. */
+export const BACKUP_END = {
+  panel: 'Kết nối người vận hành',
+  button: 'Kết thúc sớm thay người vận hành',
+  readOnly: (name: string) => `Bạn đang xem Tour này. Chỉ ${name} mới điều khiển các bước của Tour.`,
+  hint: 'Kết thúc Tour và gửi email thông báo cho Đại diện các đoàn.',
+  unknown: 'Chưa ghi nhận lần liên lạc của người vận hành.',
+  unavailable: 'Máy chủ chưa trả thông tin cho phép kết thúc thay người vận hành.',
+  reconnected: 'Người vận hành vừa kết nối lại. Hãy chờ đủ thời gian mất kết nối trước khi kết thúc thay.',
+  notice: 'Tour kết thúc sớm, quyền xem hình và hỏi đáp đóng lại. Hệ thống gửi email thông báo cho Đại diện các đoàn.',
+  reasonLabel: 'Lý do kết thúc sớm',
+  reasonPlaceholder: 'Nêu lý do Tour không thể tiếp tục.',
+  connected: (name: string, time: string) => `Người vận hành: ${name} · còn kết nối (lần cuối ${time})`,
+  disconnected: (name: string, time: string, minutes: number) => `Người vận hành: ${name} · mất kết nối từ ${time}, đã ${minutes} phút`,
+  countdown: (minutes: number, remaining: string) => `Chỉ dùng được sau ${minutes} phút người vận hành mất kết nối (còn ${remaining}).`,
+  confirmation: (name: string, time: string) => `Hành động này được ghi lại với tên bạn, thay cho ${name} đã mất kết nối từ ${time}.`,
+  legacyConfirmation: (name: string) => `Hành động này được ghi lại với tên bạn, thay cho ${name}. Tour cũ chưa ghi nhận lần liên lạc của người vận hành.`,
+  history: (actor: string, operator: string, time: string) => `Kết thúc sớm bởi ${actor} thay người vận hành ${operator} (mất kết nối từ ${time})`,
+  legacyHistory: (actor: string, operator: string) => `Kết thúc sớm bởi ${actor} thay người vận hành ${operator} (chưa ghi nhận lần liên lạc)`,
+}
