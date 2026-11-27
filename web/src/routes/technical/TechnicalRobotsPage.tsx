@@ -9,7 +9,7 @@ import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from 
 import { Note, SetupSteps, TechnicalPage, ToneBadge, type SetupStep } from '../../features/technical/TechnicalUi'
 import { useActivateRobot, useAllMapVersions, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapShortLabel, useMapVersions, usePoiProposals, usePoiVerificationQueue, useRegisterPhysicalRobot, useReleaseRobotInspection, useRobotAffectedTours, useRobotCredential, useRouteTestQueue, useSetRobotDispatch, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour, RobotReadinessNextStep } from '../../features/technical/api/technical'
-import { connectionStatusLabel, errorText, releaseInspectionError, returnStripText, wrongMapText } from '../../features/technical/technical-format'
+import { connectionStatusLabel, deploymentStepText, errorText, releaseInspectionError, returnStripText, runningTourText, wrongMapText } from '../../features/technical/technical-format'
 import { returnTarget, technicalReturnPath } from '../../features/technical/technical-nav'
 import { formatDateTime } from '../../components/ui/date-time'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -41,6 +41,15 @@ const holdingTourEnded = (robot: PhysicalRobotOption) => !robot.currentTourId ||
 const isHeld = (robot: PhysicalRobotOption) => robot.needsInspection || (Boolean(robot.currentTourId) && holdingTourEnded(robot))
 const isBusy = (robot: PhysicalRobotOption) => Boolean(robot.currentTourId) && !isHeld(robot)
 const isReady = (robot: PhysicalRobotOption) => robot.readiness?.state === 'READY'
+/**
+ * Round 5 (W2): the server refuses a map change, deactivation and a new key while the robot runs a Tour; the line under
+ * each refused button says so. Null when the robot is not running a Tour.
+ */
+const runningTourLine = (robot: PhysicalRobotOption) => isBusy(robot) ? runningTourText.blocked(robot.currentTourName) : null
+
+function RunningTourLine({ text }: { text: string | null }) {
+  return text ? <p role="status" className="text-[13px] text-amber-800">{text}</p> : null
+}
 
 type Dialog = { view: 'detail' | 'map' | 'credential'; robotId: string; mapVersionId?: string }
 
@@ -110,7 +119,7 @@ export default function TechnicalRobotsPage() {
       </section>
       <RegisterRobotModal open={registering} onClose={() => setRegistering(false)} />
       {selected && dialog?.view === 'detail' && <RobotDetailModal robot={selected} strip={strip} refreshing={robots.isFetching} onRefresh={() => void robots.refetch()} onAssignMap={() => setDialog({ view: 'map', robotId: selected.id })} onManageKey={() => setDialog({ view: 'credential', robotId: selected.id })} onClose={closeDialog} />}
-      {selected && dialog?.view === 'credential' && <RobotCredentialPanel robotCode={selected.robotCode} step={SETUP_STEP.key} onClose={showDetail} />}
+      {selected && dialog?.view === 'credential' && <RobotCredentialPanel robotCode={selected.robotCode} step={SETUP_STEP.key} runningTour={isBusy(selected) ? { name: selected.currentTourName } : null} onClose={showDetail} />}
       {selected && dialog?.view === 'map' && <RobotMapAssignmentModal robot={selected} strip={strip} otherRobots={robots.data ?? []} initialMapVersionId={dialog.mapVersionId} onClose={showDetail} />}
     </TechnicalPage>
   )
@@ -244,7 +253,7 @@ function RobotDetailModal({ robot, strip, refreshing, onRefresh, onAssignMap, on
               ['Trạng thái', <ConnectionBadge key="status" robot={robot} />],
               ['Nhận dữ liệu gần nhất', formatDateTime(robot.lastSyncReceivedAt)],
               ['Xác nhận đầu tiên', formatDateTime(robot.firstAcceptedSyncAt)],
-              ['Map / frame xác nhận', robot.firstAcceptedMapKey && robot.firstAcceptedFrameId ? <span key="first" className="font-mono">{robot.firstAcceptedMapKey} · {robot.firstAcceptedFrameId}</span> : '-'],
+              ['Map / frame lần kết nối đầu', robot.firstAcceptedMapKey && robot.firstAcceptedFrameId ? <span key="first" className="font-mono">{robot.firstAcceptedMapKey} · {robot.firstAcceptedFrameId}</span> : '-'],
             ]} />
             <WrongMapLine robot={robot} className="mt-2 text-xs text-amber-800" />
             {robot.connectionStatus === 'AWAITING_DATA' && <p className="mt-2 text-xs text-[#64748b]">Chưa nhận dữ liệu sau khi hệ thống khởi động.</p>}
@@ -281,10 +290,16 @@ function RobotMapSteps({ robot, checking, deployStep, miniPcStep, refreshButton,
   // The robot's latest check, when it was on the assigned map; a check on another map is explained by the reason above.
   const previous = assigned && robot.latestDeploymentPassed !== null && robot.latestDeployedMapKey === robot.assignedMapKey
     ? { passed: robot.latestDeploymentPassed, at: robot.readiness?.deploymentCheckedAt ?? null } : null
+  // Round 5: a PASS from before the current assignment no longer counts. An older server still sends its time; the new
+  // one sends none for it (deploymentCheckedAt is the counted check only), so a PASS on this map without a time is it.
+  const beforeAssignment = Boolean(previous?.passed && robot.mapAssignedAt && robot.readiness?.state !== 'READY' &&
+    (previous.at ? Date.parse(previous.at) < Date.parse(robot.mapAssignedAt) : true))
+  const runningLine = runningTourLine(robot)
   return <>
-    <DetailSection title="1. Chọn bản đồ" subject={assigned ? mapLabelOf(robot.assignedMapVersionId) ?? `${robot.assignedAreaName} · v${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Đổi bản đồ' : 'Gán bản đồ'}</button>}>
+    <DetailSection title="1. Chọn bản đồ" subject={assigned ? mapLabelOf(robot.assignedMapVersionId) ?? `${robot.assignedAreaName} · v${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} disabled={Boolean(runningLine)} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Đổi bản đồ' : 'Gán bản đồ'}</button>}>
       {!assigned ? <p className="text-[13px] text-amber-800">Chưa gán bản đồ.</p>
         : robot.mapAssignedAt ? <p className="text-xs text-[#64748b]">Gán lúc {formatDateTime(robot.mapAssignedAt)}{robot.mapAssignedByName ? ` bởi ${robot.mapAssignedByName}` : ''}.</p> : null}
+      <RunningTourLine text={runningLine} />
     </DetailSection>
     <DetailSection title="2. Cấu hình MiniPC" sectionRef={miniPcStep} action={assigned ? refreshButton : undefined}>
       {assigned ? <div className="space-y-2">
@@ -305,7 +320,9 @@ function RobotMapSteps({ robot, checking, deployStep, miniPcStep, refreshButton,
       </div>
       <div className="mt-2 space-y-2">
         {!assigned && <p className="text-[13px] text-[#64748b]">Gán bản đồ trước khi kiểm tra.</p>}
-        {previous && <p className="text-[13px] text-[#334155]">Lần trước: {previous.passed ? 'Đạt' : 'Không đạt'}{previous.at ? ` ${formatDateTime(previous.at)}` : ''}</p>}
+        {previous && (beforeAssignment
+          ? <p className="text-[13px] text-amber-800">{deploymentStepText.beforeAssignment(previous.at ? formatDateTime(previous.at) : null, formatDateTime(robot.mapAssignedAt))}</p>
+          : <p className="text-[13px] text-[#334155]">{deploymentStepText.previous(previous.passed, previous.at ? formatDateTime(previous.at) : null)}</p>)}
         {assigned && checking && (map
           ? <DeploymentCheckForm key={map.id} robot={robot} map={map} onDone={onCheckDone} onCancel={onCheckDone} />
           : maps.isError ? <p role="alert" className="text-[13px] text-[#b23e31]">{errorText(maps.error)}</p>
@@ -350,11 +367,13 @@ function RobotLifecycleSection({ robot }: { robot: PhysicalRobotOption }) {
   const [confirming, setConfirming] = useState(false)
   const tours = useRobotAffectedTours(robot.id, undefined, confirming && !robot.deactivatedAt)
   const input = { id: robot.id, requestId: crypto.randomUUID(), expectedRowVersion: robot.rowVersion }
+  const runningLine = robot.deactivatedAt ? null : runningTourLine(robot)
   return <>
     <DetailSection title="Trạng thái sử dụng" subject={robot.deactivatedAt ? 'Ngừng sử dụng' : 'Đang sử dụng'}
       action={robot.deactivatedAt
         ? <button type="button" className={buttonClass('secondary', 'sm')} disabled={activate.isPending} onClick={() => activate.mutate(input)}>Kích hoạt lại</button>
-        : <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setConfirming(true)}>Ngừng sử dụng</button>}>
+        : <button type="button" className={buttonClass('secondary', 'sm')} disabled={Boolean(runningLine)} onClick={() => setConfirming(true)}>Ngừng sử dụng</button>}>
+      <RunningTourLine text={runningLine} />
       {activate.isError && <p role="alert" className="text-sm text-[#b23e31]">{errorText(activate.error)}</p>}
     </DetailSection>
     {confirming && <ConfirmationDialog open tone="danger" requireReason reasonLabel="Lý do ngừng sử dụng" title={`Ngừng sử dụng ${robot.robotCode}?`}
@@ -474,11 +493,13 @@ function RobotMapAssignmentModal({ robot, strip, otherRobots, initialMapVersionI
   // Changing or clearing the assignment turns dispatch off on the server; re-saving the same version changes nothing.
   const dispatchTurnsOff = robot.isDispatchEnabled && (confirming === 'clear' || mapVersionId !== robot.assignedMapVersionId)
   const dispatchLine = dispatchTurnsOff ? ' Điều phối Tour của robot sẽ tự tắt.' : ''
+  // Reached from a link or the checklist too, so the refused changes are locked here as well as on the setup dialog.
+  const runningLine = runningTourLine(robot)
   // Escape reaches both overlays; while the confirmation is up it only closes that.
   const close = () => { if (!assign.isPending && !clear.isPending && !confirming) onClose() }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (selected && !assign.isPending && !clear.isPending) setConfirming('assign')
+    if (selected && !runningLine && !assign.isPending && !clear.isPending) setConfirming('assign')
   }
   const confirm = () => {
     const input = { id: robot.id, requestId: crypto.randomUUID(), expectedRowVersion: robot.rowVersion }
@@ -486,9 +507,10 @@ function RobotMapAssignmentModal({ robot, strip, otherRobots, initialMapVersionI
     else clear.mutate(input, { onSuccess: onClose })
     setConfirming(null)
   }
-  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description={`${SETUP_STEP.map} trong thiết lập robot. Chọn khu vực và phiên bản bản đồ robot sẽ dùng. Có thể gán trước khi bản đồ có kiểm tra triển khai đạt, nhưng robot chỉ sẵn sàng nhận Tour khi đã kiểm tra triển khai đạt trên đúng phiên bản này.`} footer={<div className="flex flex-wrap items-center justify-between gap-2"><div>{robot.assignedMapVersionId && <button type="button" className={buttonClass('danger')} onClick={() => setConfirming('clear')} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}</div><div className="ml-auto flex flex-wrap gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
+  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description={`${SETUP_STEP.map} trong thiết lập robot. Chọn khu vực và phiên bản bản đồ robot sẽ dùng. Có thể gán trước khi bản đồ có kiểm tra triển khai đạt, nhưng robot chỉ sẵn sàng nhận Tour khi đã kiểm tra triển khai đạt trên đúng phiên bản này.`} footer={<div className="flex flex-wrap items-center justify-between gap-2"><div>{robot.assignedMapVersionId && <button type="button" className={buttonClass('danger')} onClick={() => setConfirming('clear')} disabled={Boolean(runningLine) || clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}</div><div className="ml-auto flex flex-wrap gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || Boolean(runningLine) || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
     {strip}
     <form id="robot-map-assignment-form" className="space-y-3.5" onSubmit={submit}>
+      <RunningTourLine text={runningLine} />
       <div><label className={labelClass} htmlFor="robot-map-area">Khu vực</label><select title="" id="robot-map-area" className={`${inputClass} mt-1`} value={areaKey} onChange={event => chooseArea(event.target.value)}><option value="">Chọn khu vực</option>{(areas.data ?? []).map(area => {
         const holder = holderOf(area.areaKey)
         return <option key={area.areaKey} value={area.areaKey} disabled={Boolean(holder)}>{areaLabel(area.displayName, area.areaKey, duplicateAreas)}{holder ? ` (robot ${holder.robotCode} đang dùng)` : ''}</option>

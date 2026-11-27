@@ -29,14 +29,19 @@ const packageZip = (width: number) => zipSync({
   'map.yaml': strToU8('image: map.pgm\nmode: trinary\nresolution: 0.5\norigin: [-1, -2, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.25\n'),
   'map.pgm': strToU8(`P2\n${width} 20\n255\n${Array(width * 20).fill(255).join(' ')}\n`),
 })
-const mapVersion = (id: string, mapKey: string, currentlyDeployedOn: unknown[], areaName = mapKey) => ({ map: { id, mapKey, frameId: 'map', imageFileName: 'map.pgm', packageSha256: 'a'.repeat(64), areaName, areaKey: mapKey.replace(/-v\d+$/, ''), versionNumber: 1 }, currentlyDeployedOn })
+// `running` is the readiness of the robot assigned to the map (ADR-0066 runningRobot), or null when none holds it.
+const mapVersion = (id: string, mapKey: string, running: 'READY' | 'NOT_READY' | null, areaName = mapKey, currentlyDeployedOn: unknown[] = []) => ({
+  map: { id, mapKey, frameId: 'map', imageFileName: 'map.pgm', packageSha256: 'a'.repeat(64), areaName, areaKey: mapKey.replace(/-v\d+$/, ''), versionNumber: 1 }, currentlyDeployedOn,
+  runningRobot: running && { id: 'robot-1', robotCode: 'amr-01', displayName: null, readiness: { state: running, reasonCode: null, reason: null, mapVersionId: id, mapLabel: null, deploymentCheckedAt: null, reportingOnAssignedMap: true } },
+})
 const proposal = (id: string, mapVersionId: string, mapKey: string, name: string): PoiProposal => ({
   id, currentRevision: 1, rowVersion: 'version', revision: { id: `${id}-rev`, revisionNumber: 1, mapVersionId, mapKey, name, purpose: 'Tham quan', description: null,
     x: 0, y: 0, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-30T00:00:00Z', isSubmitted: true, submittedAt: '2026-10-30T00:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: null },
 })
 let proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), proposal('poi-b', 'map-b', 'test123-v2', 'Điểm B')]
 const standardProposals = proposals
-const standardMaps = [mapVersion('map-b', 'test123-v2', [{ robotCode: 'amr-01', checkedAt: '2026-10-30T00:00:00Z' }]), mapVersion('map-a', 'test123-v1', [])]
+// map-a still has amr-02's newest PASS (currentlyDeployedOn), but amr-02 has moved away: it is not running there (round 5, W3).
+const standardMaps = [mapVersion('map-b', 'test123-v2', 'READY'), mapVersion('map-a', 'test123-v1', null, 'test123-v1', [{ robotCode: 'amr-02', checkedAt: '2026-10-30T00:00:00Z' }])]
 let mapVersions = standardMaps
 function respond(data: unknown, total?: number) {
   return new Response(JSON.stringify({ success: true, data, ...(total == null ? {} : { pagination: { page: 1, pageSize: 5, totalItems: total, totalPages: Math.ceil(total / 5) } }) }), { status: 200 })
@@ -76,7 +81,7 @@ beforeEach(() => {
       return respond({ proposalId: item?.id, revisions: item ? [item.revision] : [], verificationRecords: historyRecords })
     }
     if (url.pathname === '/api/maps/versions') return respond(mapVersions)
-    if (url.pathname === '/api/maps/versions/map-old') return respond(mapVersion('map-old', 'retired-v1', []))
+    if (url.pathname === '/api/maps/versions/map-old') return respond(mapVersion('map-old', 'retired-v1', null))
     if (url.pathname.endsWith('/package')) return packageFailure?.clone() ?? new Response(packageZip(url.pathname.includes('map-b') ? 40 : 10))
     if (url.pathname === '/api/staff/manage/tours') return respond([], url.searchParams.get('state') === 'READY' ? 12 : 37)
     if (url.pathname === '/api/staff/manage/registrations') {
@@ -234,7 +239,7 @@ describe('staff preparation UI', () => {
   })
 
   it('distinguishes same-named areas at the same version and keeps their POIs and rasters separate', async () => {
-    mapVersions = [mapVersion('map-a', 'tang-6-v1', [], 'Tầng 6'), mapVersion('map-b', 'test123-v1', [], 'Tầng 6')]
+    mapVersions = [mapVersion('map-a', 'tang-6-v1', null, 'Tầng 6'), mapVersion('map-b', 'test123-v1', null, 'Tầng 6')]
     proposals = [proposal('poi-a', 'map-a', 'tang-6-v1', 'Điểm A'), proposal('poi-b', 'map-b', 'test123-v1', 'Điểm B')]
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     const firstChoice = await screen.findByRole('option', { name: 'Tầng 6 · tang-6-v1' })
