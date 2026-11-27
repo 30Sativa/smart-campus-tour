@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.MapPoi;
+using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Exceptions;
 
 namespace SmartCampus.Api.ExceptionHandling;
@@ -71,6 +72,15 @@ public sealed class GlobalExceptionHandler(
                 {
                     code = conflictException.Code,
                     blockers = conflictException.Blockers.Select(b => new { code = b.Code, message = b.Message })
+                }),
+            ConflictException { Code: TourOperatorPresencePolicy.StillConnected, FieldErrors: not null } conflictException => (
+                StatusCodes.Status409Conflict,
+                conflictException.Message,
+                (object?)new
+                {
+                    code = conflictException.Code,
+                    operatorLastSeenAt = conflictException.FieldErrors["operatorLastSeenAt"],
+                    allowedAt = conflictException.FieldErrors["allowedAt"]
                 }),
             ConflictException conflictException => (
                 StatusCodes.Status409Conflict,

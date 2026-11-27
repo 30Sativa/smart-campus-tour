@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SmartCampus.Api.ExceptionHandling;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.MapPoi;
+using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Exceptions;
 
 namespace SmartCampus.IntegrationTests;
@@ -123,6 +124,27 @@ public sealed class GlobalExceptionHandlerTests
         Assert.Equal("EMAIL_RESERVED", errors.GetProperty("code").GetString());
         Assert.Equal("Email đã được đăng ký trong Tour này.",
             errors.GetProperty("fields").GetProperty("Roster[0].Email")[0].GetString());
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_OperatorReconnect_ReturnsTimestampsDirectlyUnderErrors()
+    {
+        var lastSeen = new DateTimeOffset(2026, 11, 27, 3, 0, 0, TimeSpan.Zero);
+        var refusal = Assert.Throws<ConflictException>(() =>
+            TourOperatorPresencePolicy.EnsureBackupAllowed(lastSeen, lastSeen.AddSeconds(299), 5));
+        var context = CreateHttpContext();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+
+        await handler.TryHandleAsync(context, refusal, CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        using var response = await ReadResponseAsync(context);
+        Assert.Equal(refusal.Message, response.RootElement.GetProperty("message").GetString());
+        var errors = response.RootElement.GetProperty("errors");
+        Assert.Equal("OPERATOR_STILL_CONNECTED", errors.GetProperty("code").GetString());
+        Assert.Equal(lastSeen, errors.GetProperty("operatorLastSeenAt")[0].GetDateTimeOffset());
+        Assert.Equal(lastSeen.AddMinutes(5), errors.GetProperty("allowedAt")[0].GetDateTimeOffset());
+        Assert.False(errors.TryGetProperty("fields", out _));
     }
 
     [Fact]
