@@ -243,7 +243,6 @@ export default function StaffManagePoiFormPage() {
   const missing = [!draft.mapVersionId && 'bản đồ', !placed && 'vị trí', draft.yaw == null && 'hướng robot', !draft.name.trim() && 'tên POI', !draft.purpose.trim() && 'mục đích', headPresetProblem(draft.cameraPreset) && 'hoạt động đầu camera hợp lệ'].filter(Boolean) as string[]
   const field = `${poiInputClass} mt-1.5`
   const label = 'flex items-center gap-1 text-sm font-medium text-[var(--poi-ink)]'
-  const required = <span aria-hidden="true" className="text-[var(--poi-danger)]">*</span>
   return <PoiPage>
     <UnsavedChangesGuard when={changed && !locked} />
     <PageHeader eyebrow="Nội dung tham quan" back={back} title={poiId ? (current?.revision.name ?? 'Điểm tham quan') : 'Tạo điểm tham quan'}
@@ -342,9 +341,9 @@ export default function StaffManagePoiFormPage() {
         <div className="space-y-5">
         <div className="space-y-3.5">
           <h2 className="text-base font-semibold text-[var(--poi-ink)]">Thông tin điểm</h2>
-          <div><span className={label}><label htmlFor="poi-name">Tên POI</label>{required}</span><input id="poi-name" readOnly={frozen} className={field} required maxLength={150} value={draft.name} onChange={e => update({ name: e.target.value })} placeholder="Sảnh thư viện" /></div>
-          <div><span className={label}><label htmlFor="poi-purpose">Mục đích</label>{required}</span><input id="poi-purpose" readOnly={frozen} className={field} required maxLength={500} value={draft.purpose} onChange={e => update({ purpose: e.target.value })} placeholder="Giới thiệu khu tự học" /></div>
-          <div><span className={label}><label htmlFor="poi-description">Ghi chú nội bộ</label><span className="font-normal text-[var(--poi-muted)]">(tùy chọn)</span></span><textarea id="poi-description" readOnly={frozen} className={field} rows={3} maxLength={1000} value={draft.description} onChange={e => update({ description: e.target.value })} placeholder="Lưu ý dành cho Staff…" />
+          <div><span className={label}><label htmlFor="poi-name">Tên POI</label></span><input id="poi-name" readOnly={frozen} className={field} required maxLength={150} value={draft.name} onChange={e => update({ name: e.target.value })} placeholder="Sảnh thư viện" /></div>
+          <div><span className={label}><label htmlFor="poi-purpose">Mục đích</label></span><input id="poi-purpose" readOnly={frozen} className={field} required maxLength={500} value={draft.purpose} onChange={e => update({ purpose: e.target.value })} placeholder="Giới thiệu khu tự học" /></div>
+          <div><span className={label}><label htmlFor="poi-description">Ghi chú nội bộ</label><span className="font-normal text-[var(--poi-muted)]">(không bắt buộc)</span></span><textarea id="poi-description" readOnly={frozen} className={field} rows={3} maxLength={1000} value={draft.description} onChange={e => update({ description: e.target.value })} placeholder="Lưu ý dành cho Staff…" />
             {/* The API field stays `description`; owners took it for the narration students hear. */}
             <p className="mt-1 text-xs text-[var(--poi-muted)]">Chỉ Staff xem. {poiId ? <>Nội dung cho học sinh ở <Link to={{ search: '?tab=thuyet-minh' }} className="font-semibold text-[var(--poi-accent)] underline">tab Thuyết minh</Link>.</> : 'Thêm thuyết minh sau khi tạo POI.'}</p></div>
         </div>

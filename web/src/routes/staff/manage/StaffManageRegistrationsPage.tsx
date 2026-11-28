@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { FilterChips, PageHeader, Pagination, SearchField } from '../../../components/ui/ConsolePrimitives'
 import { DateInput } from '../../../components/ui/DateInput'
 import { EmptyState } from '../../../components/ui/EmptyState'
@@ -16,6 +16,7 @@ import { useNow } from '../../../features/staff/use-now'
 
 export default function StaffManageRegistrationsPage({ mode }: { mode: 'pending' | 'all' }) {
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const { reviewId, open, close } = useReviewParam()
   const now = useNow(30_000)
   const search = params.get('q') ?? ''
@@ -47,10 +48,11 @@ export default function StaffManageRegistrationsPage({ mode }: { mode: 'pending'
   return <AdminPage>
     <PageHeader eyebrow="Tour & đăng ký" title="Đăng ký đoàn"
       description="Mở một đăng ký để xét duyệt từng dòng lời mời." />
-    <nav aria-label="Chế độ xem đăng ký" className="mb-5 flex gap-1 rounded-xl border border-[#e2e8f0] bg-white p-1 sm:w-fit">
-      <Link to={`/staff/manage/registrations/pending${sharedSearch}`} aria-current={mode === 'pending' ? 'page' : undefined} className={buttonClass(mode === 'pending' ? 'primary' : 'ghost')}>Chờ duyệt</Link>
-      <Link to={`/staff/manage/registrations${sharedSearch}`} aria-current={mode === 'all' ? 'page' : undefined} className={buttonClass(mode === 'all' ? 'primary' : 'ghost')}>Tất cả đăng ký</Link>
-    </nav>
+    <div className="mb-5">
+      <FilterChips<'pending' | 'all'> label="Chế độ xem đăng ký" value={mode}
+        onChange={next => navigate(`/staff/manage/registrations${next === 'pending' ? '/pending' : ''}${sharedSearch}`)}
+        options={[{ value: 'pending', label: 'Chờ duyệt' }, { value: 'all', label: 'Tất cả đăng ký' }]} />
+    </div>
     <section className={cardClass} aria-label="Danh sách đăng ký">
       <div className="space-y-2.5 border-b border-[#eef1f4] px-3 py-2.5">
         <div className="flex flex-wrap items-end gap-3">

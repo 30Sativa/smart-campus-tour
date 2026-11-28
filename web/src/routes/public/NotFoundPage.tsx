@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import { AREAS, landingPathAfterLogin } from '../../auth/access'
+import { buttonClass } from '../../components/ui/ui-classes'
 import { usePageTitle } from '../../components/ui/use-page-title'
 import { useAuthStore } from '../../stores/auth-store'
 
@@ -27,14 +28,14 @@ export default function NotFoundPage() {
         <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
           <Link
             to="/"
-            className="inline-flex min-h-11 items-center justify-center rounded-full bg-slate-900 px-6 font-semibold text-white hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 dark:focus-visible:outline-white"
+            className={buttonClass('primary', 'lg')}
           >
             Về trang chủ
           </Link>
           {area && (
             <Link
               to={area.path}
-              className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-300 px-6 font-semibold hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 dark:border-slate-600 dark:hover:bg-slate-800 dark:focus-visible:outline-white"
+              className={buttonClass('secondary', 'lg')}
             >
               Về khu vực {area.label}
             </Link>
