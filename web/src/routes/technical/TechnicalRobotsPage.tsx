@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObje
 import { Link, useSearchParams } from 'react-router'
 import { ArrowLeft, Bot, ClipboardCheck, Copy, KeyRound, LoaderCircle, Map as MapIcon, Plus, RefreshCw, Router, ShieldCheck } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
-import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
+import { FilterChips, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { notify } from '../../components/ui/toast-store'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
@@ -97,9 +97,9 @@ export default function TechnicalRobotsPage() {
     <TechnicalPage>
       <PageHeader eyebrow="Giám sát" title="Robot" description="Đăng ký robot, cấp khóa, gán bản đồ và kiểm tra triển khai. Bấm Giám sát để xem số liệu của robot, Thiết lập để làm các bước còn thiếu."
         action={<button type="button" className={buttonClass('primary')} onClick={() => setRegistering(true)}><Plus size={15} aria-hidden="true" />Đăng ký robot</button>} />
-      <div role="group" aria-label="Lọc robot" className="mb-3 flex gap-2">
-        <button type="button" aria-pressed={!showDeactivated} className={buttonClass(showDeactivated ? 'secondary' : 'primary', 'sm')} onClick={() => setShowDeactivated(false)}>Đang sử dụng</button>
-        <button type="button" aria-pressed={showDeactivated} className={buttonClass(showDeactivated ? 'primary' : 'secondary', 'sm')} onClick={() => setShowDeactivated(true)}>Ngừng sử dụng ({deactivatedCount})</button>
+      <div className="mb-3">
+        <FilterChips<'active' | 'deactivated'> label="Lọc robot" value={showDeactivated ? 'deactivated' : 'active'} onChange={value => setShowDeactivated(value === 'deactivated')}
+          options={[{ value: 'active', label: 'Đang sử dụng' }, { value: 'deactivated', label: `Ngừng sử dụng (${deactivatedCount})` }]} />
       </div>
       {heldCount > 0 && !showDeactivated && <div className="mb-3"><Note tone="warn">{heldCount} robot đang chờ kiểm tra tại chỗ sau khi Tour kết thúc sớm hoặc lệnh được đối soát. Đến bên robot, kiểm tra, rồi bấm Thiết lập để trả robot.</Note></div>}
       <section className={panelClass} aria-label="Danh sách robot vật lý">
