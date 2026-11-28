@@ -596,6 +596,12 @@ describe('the vote for the next POI (ADR-0065)', () => {
     myVote: 'sc', locked: [], decision: null, ...patch,
   })
   type Init = RequestInit & { method?: string }
+  afterEach(() => useStudentStore.getState().setActiveTab('stream'))
+  // The ballot is a card in the guide conversation, so it is read from the "Hướng dẫn viên" tab.
+  const openGuide = async () => {
+    fireEvent.click(await screen.findByRole('tab', { name: /^Hướng dẫn viên/ }))
+    return within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+  }
   const serve = (current: unknown, vote: (body: unknown) => Response) => vi.stubGlobal('fetch', vi.fn(async (url: string, init?: Init) =>
     url.endsWith('/vote') && init?.method === 'PUT' ? vote(JSON.parse(String(init.body)))
       : url.endsWith('/view') ? response({ stops, progress, ballot: current }) : response(running)))
@@ -603,7 +609,9 @@ describe('the vote for the next POI (ADR-0065)', () => {
   it('shows the candidates, live counts, the time left and the vote kept from before a reload, and changes it', async () => {
     serve(ballot(), () => response(ballot({ myVote: 'sb', candidates: [{ stopId: 'sb', poiId: 'pb', name: 'Phòng B', votes: 2 }, { stopId: 'sc', poiId: 'pc', name: 'Phòng C', votes: 1 }] })))
     mount()
-    const box = within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+    expect(await screen.findByRole('tab', { name: 'Hướng dẫn viên, đang mở bầu chọn' })).toBeInTheDocument()
+    const box = await openGuide()
+    expect(within(screen.getByRole('tabpanel', { name: 'Hướng dẫn viên' })).getByLabelText('Tin nhắn với hướng dẫn viên')).toContainElement(screen.getByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
     expect(box.getByRole('timer')).toHaveTextContent(/Còn 0:2\d để bầu/)
     const c = box.getByRole('button', { name: /Phòng C/ })
     expect(c).toHaveAttribute('aria-pressed', 'true')
@@ -625,7 +633,7 @@ describe('the vote for the next POI (ADR-0065)', () => {
   ])('says why a vote was refused (%s)', async (code, text) => {
     serve(ballot(), () => new Response(JSON.stringify({ success: false, data: null, errors: { code } }), { status: 409 }))
     mount()
-    const box = within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+    const box = await openGuide()
     fireEvent.click(box.getByRole('button', { name: /Phòng B/ }))
     expect(await box.findByText(text)).toBeInTheDocument()
   })
@@ -637,7 +645,7 @@ describe('the vote for the next POI (ADR-0065)', () => {
   ])('says the decision once the ballot closed', async (decision, title, note) => {
     serve(ballot({ open: false, decision }), () => response(null))
     mount()
-    const box = within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+    const box = await openGuide()
     expect(box.getByText(title)).toBeInTheDocument()
     if (note) expect(box.getByText(note)).toBeInTheDocument()
     expect(box.queryByRole('button')).not.toBeInTheDocument()
@@ -646,7 +654,7 @@ describe('the vote for the next POI (ADR-0065)', () => {
   it('names a locked POI and its reason, in the ballot and on the route', async () => {
     serve(ballot({ candidates: [{ stopId: 'sb', poiId: 'pb', name: 'Phòng B', votes: 0 }], locked: [{ stopId: 'sc', name: 'Phòng C', reason: 'Đang có lớp học' }] }), () => response(null))
     mount()
-    const box = within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+    const box = await openGuide()
     expect(box.getByText('Tạm khóa Phòng C. Lý do: Đang có lớp học')).toBeInTheDocument()
     expect(box.queryByRole('button', { name: /Phòng C/ })).not.toBeInTheDocument()
   })
@@ -657,7 +665,7 @@ describe('the vote for the next POI (ADR-0065)', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view')
       ? response({ stops: leg, progress: { ...progress, step: 'NAVIGATING', currentPoiId: 'pc', lastArrivedPoiId: 'pa' }, ballot: null }) : response(running)))
     mount()
-    const box = within(await screen.findByRole('region', { name: 'Bầu chọn điểm tiếp theo' }))
+    const box = await openGuide()
     expect(box.getByText('Tạm khóa Phòng C. Lý do: Đang có lớp học')).toBeInTheDocument()
     expect(screen.getByText('Tiếp theo:').closest('span')).toHaveTextContent('Tiếp theo: Phòng B')
   })
@@ -666,6 +674,8 @@ describe('the vote for the next POI (ADR-0065)', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response({ ...view, progress: { ...progress, currentPoiId: 'p1', lastArrivedPoiId: 'p1' } }) : response(running)))
     mount()
     expect(await screen.findByText('Đang giới thiệu Thư viện trung tâm')).toBeVisible()
+    expect(screen.queryByRole('tab', { name: /đang mở bầu chọn/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: /^Hướng dẫn viên/ }))
     expect(screen.queryByRole('region', { name: 'Bầu chọn điểm tiếp theo' })).not.toBeInTheDocument()
   })
 })

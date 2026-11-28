@@ -1,5 +1,5 @@
 import { AlertCircle, Headset, Send, Users } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { TalkAudioButton } from '../../tour-talk/TalkAudioButton'
 import { TALK_MAX_TEXT, talkErrorText } from '../../tour-talk/talk-types'
 import { loadStudentTalkAudio, type StudentTalk } from '../talk/student-talk'
@@ -14,6 +14,10 @@ type Props = {
   shared?: boolean
   /** In the waiting room: the guide may greet the group before the start. */
   waiting?: boolean
+  /** ADR-0065: the ballot for the next POI, kept as the last card of the conversation while there is one. */
+  vote?: ReactNode
+  /** Changes when the ballot opens, closes or is decided, so the conversation scrolls it into view. */
+  voteKey?: string
 }
 
 /**
@@ -21,17 +25,40 @@ type Props = {
  * replies. A reply reaches only the Staff, never the other Viewers. New voice clips play by themselves when the
  * browser allows it.
  */
-export function StudentTalkPanel({ tourId, talk, shared = false, waiting = false }: Props) {
+export function StudentTalkPanel({ tourId, talk, shared = false, waiting = false, vote, voteKey }: Props) {
   const [text, setText] = useState('')
   const end = useRef<HTMLDivElement>(null)
+  const ballot = useRef<HTMLDivElement>(null)
   const { feed, messages, send } = talk
   const open = feed.data?.open ?? false
   const last = messages.at(-1)?.seq ?? 0
 
+  // Show the newest message, or the top of the ballot card when it is taller than what is left below it; the
+  // browser clamps the target, so a short card simply leaves the conversation at its end.
+  const reveal = useCallback(() => {
+    const viewport = end.current?.parentElement
+    if (!viewport?.scrollTo) return
+    const card = ballot.current?.firstElementChild
+    const top = card ? card.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop - 8
+      : viewport.scrollHeight
+    viewport.scrollTo({ top })
+  }, [])
+
+  useEffect(reveal, [reveal, last, voteKey])
+
+  // The panel sits in a tab that stays mounted while hidden; scroll again the moment it is shown.
   useEffect(() => {
     const viewport = end.current?.parentElement
-    viewport?.scrollTo?.({ top: viewport.scrollHeight })
-  }, [last])
+    if (!viewport || typeof ResizeObserver === 'undefined') return
+    let shown = viewport.clientHeight > 0
+    const observer = new ResizeObserver(() => {
+      const now = viewport.clientHeight > 0
+      if (now && !shown) reveal()
+      shown = now
+    })
+    observer.observe(viewport)
+    return () => observer.disconnect()
+  }, [reveal])
 
   const submit = (value: string) => {
     const trimmed = value.trim()
@@ -72,6 +99,7 @@ export function StudentTalkPanel({ tourId, talk, shared = false, waiting = false
             </div>
           </div>
         ))}
+        {vote && <div className="st-talk__ballot" ref={ballot}>{vote}</div>}
         <div ref={end} />
       </div>
 

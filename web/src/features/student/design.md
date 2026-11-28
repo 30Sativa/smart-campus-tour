@@ -11,11 +11,19 @@ The live screen leads with a full-width journey above the video and its controls
 then the current stop summary. Current, completed and future stops have labelled
 states. A single sibling panel contains narration, AI and route tabs.
 Tabs stay mounted to preserve questions and conversations. At small widths the
-panels stack and controls remain reachable. The journey is a compact strip,
-roughly 80–100px high on desktop and no more than about 120px on phones.
-Stop numbers and names share one line; the stop list scrolls horizontally.
-Full names and status text remain in the DOM for assistive technology, with
-the current stop marked by `aria-current`. Map capability gates stay unchanged.
+panels stack and controls remain reachable. The journey is a compact rail,
+about 66px high on desktop and about 90px on phones: one line names the stop
+count, the stop being viewed (or headed to) and the next one, with the progress
+figure and minutes left; a segmented bar below has one segment per stop plus the
+way back, so it never scrolls horizontally. On phones the next stop wraps to its
+own line and the minutes are dropped. Full names and status text of every stop
+remain in the DOM for assistive technology, with the current stop marked by
+`aria-current`. Map capability gates stay unchanged.
+
+The ADR-0065 ballot is a card at the end of the guide conversation, not a block
+of its own. The conversation scrolls to it when it opens, closes or is decided
+and when the tab is shown; while another tab is shown, the guide tab carries a
+vote mark. Its options are full-width rows at least 48px high.
 
 The follow-up revision adds restrained detail: a forest rule on the journey,
 an active-stop marker, a labelled progress figure and a current-stop status tag.

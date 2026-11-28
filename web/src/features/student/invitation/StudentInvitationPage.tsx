@@ -248,7 +248,6 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         fallback={fallback}
         showMap={false}
         idleTitle="Buổi tham quan đang diễn ra"
-        notice={<StudentBallotBox tourId={tourId} ballot={ballot} locked={locked} shared={shared} />}
         narrationIdleText={snapshot.step === 'in_progress'
           ? 'Thuyết minh sẽ hiện khi robot tới từng điểm dừng. Trong lúc chờ, bạn xem thẻ Lộ trình hoặc hỏi Trợ lý AI nhé.'
           : undefined}
@@ -256,9 +255,12 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
           emptyMessage: 'Livestream chưa được kết nối cho buổi này. Bạn vẫn có thể theo dõi lộ trình và hỏi Trợ lý AI.',
         }}
         ai={<LiveStudentAiAssistant tourId={tourId} shared={shared} poiName={snapshot.currentPoi?.title} chat={aiChat} />}
-        talk={<StudentTalkPanel tourId={tourId} talk={talk} shared={shared} />}
+        talk={<StudentTalkPanel tourId={tourId} talk={talk} shared={shared}
+          vote={<StudentBallotBox tourId={tourId} ballot={ballot} locked={locked} shared={shared} />}
+          voteKey={ballot ? `${ballot.stopVisitId}:${ballot.open}:${ballot.decision?.stopId ?? ''}` : String(locked.length)} />}
         talkUnread={talk.unread}
         guideVoice={<div className="st-video__guide"><StudentGuideVoice voice={guideVoice} /></div>}
+        talkVoteOpen={!!ballot?.open && !ballot.decision}
       />
       <div className="st-ctn st-invitation-status">{status}</div>
     </>
