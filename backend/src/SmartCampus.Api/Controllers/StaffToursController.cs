@@ -32,6 +32,7 @@ using SmartCampus.Application.Features.Tours.Commands.RefreshTourNarration;
 using SmartCampus.Application.Features.Tours.Commands.AutoAdvanceTour;
 using SmartCampus.Application.Features.Tours.Commands.PauseTourLeg;
 using SmartCampus.Application.Features.Tours.Commands.SkipTourStop;
+using SmartCampus.Application.Features.Tours.Commands.SetTourVideoMode;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
@@ -194,6 +195,13 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
             Success = true, Message = "Auto advance set.",
             Data = await sender.Send(new SetTourAutoAdvanceCommand(id, User.GetRequiredUserId(), request.Enabled), ct)
         });
+
+    /// <summary>ADR-0075: the Operator switches Viewers to the fallback video or back to the live picture.</summary>
+    [HttpPut("{id:guid}/video-mode")]
+    [RequestSizeLimit(4096)]
+    public async Task<IActionResult> SetVideoMode(Guid id, [FromBody] SetTourVideoModeRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new SetTourVideoModeCommand(id, User.GetRequiredUserId(), request.Mode, request.Reason), ct),
+            "Video mode set.");
 
     [HttpPost("{id:guid}/commands/{commandId:guid}/reconcile")]
     public async Task<IActionResult> Reconcile(Guid id, Guid commandId, [FromBody] ReconcileRobotCommandRequest request, CancellationToken ct) =>

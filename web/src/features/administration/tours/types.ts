@@ -1,10 +1,13 @@
 import type { RouteDetails } from '../routes/types'
 import type { VersionedRoute } from '../routes/versioned-api'
+import type { FallbackVideoMark } from './fallback-video-marks'
 
 export type TourState = 'SCHEDULED' | 'READY' | 'RUNNING' | 'COMPLETED' | 'CANCELLED'
 export type TourInput = {
   name: string; description: string | null; routeId: string
   scheduledStartAt: string; fallbackVideoUrl: string | null
+  /** ADR-0075 stage 2: omitted keeps the current video's marks; a list replaces them. */
+  fallbackVideoMarks?: FallbackVideoMark[] | null
 }
 export type CreateTourInput = {
   name: string; description: string | null; routeRevisionId: string; robotCode: string
@@ -12,6 +15,7 @@ export type CreateTourInput = {
   operatorUserId: string; scheduledStartAt: string | null; fallbackVideoUrl: string | null; capacity: number
   /** Set only for a quick Tour, and then required. */
   shortNoticeReason?: string | null
+  fallbackVideoMarks?: FallbackVideoMark[] | null
 }
 export type TourOperator = { userId: string; fullName: string; username: string }
 export type TourRobotOption = {
@@ -66,6 +70,8 @@ export type TourDetails = {
   route: RouteDetails | null; activeRoute: RouteDetails | null
   routeRevision: VersionedRoute | null; operator: TourOperator | null; reservation: TourReservation | null
   fallbackVideoUrl: string | null; startedAt: string | null; endedAt: string | null; endReason: string | null
+  /** ADR-0075 stage 2: where each stop starts in the current fallback video, in recording order. Absent on older servers. */
+  fallbackVideoMarks?: FallbackVideoMark[] | null
   usage: { hasRegistrations: boolean; hasAllowedBranches: boolean; hasOperationalHistory: boolean; hasRobotOwnership: boolean }
   /** `canMarkReady`/`canReopen`/`readyBlockers` come from servers with READY (ADR-0042); an older response omits them. */
   permissions: {
@@ -95,6 +101,12 @@ export type TourDetails = {
   retryTarget?: unknown
   /** Each route stop's place in a voting Tour, with the lock reason; `order` is the visit order of a passed stop. */
   stopProgress?: TourStopProgress[] | null
+  /** ADR-0075, a RUNNING Tour only: what the Operator set Viewers to watch, with the newest switch. Absent: live. */
+  video?: TourVideoMode | null
+}
+/** ADR-0075: LIVE until the Operator switches to the fallback recording; every switch names who and why. */
+export type TourVideoMode = {
+  mode: 'LIVE' | 'FALLBACK'; since: string | null; actorName: string | null; reason: string | null; hasFallbackVideo: boolean
 }
 export type TourStopProgress = { stopId: string; progress: string; order?: number | null; lockReason?: string | null }
 /** One failing READY condition, in the backend's words. */

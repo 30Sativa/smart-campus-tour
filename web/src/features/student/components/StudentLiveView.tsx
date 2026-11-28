@@ -34,7 +34,7 @@ interface StudentLiveViewProps {
   video?: { badge?: string; emptyMessage?: string }
   /** The live relay URL and token (ADR-0055). Omitted = the dev-only LAN URL; null = no live stream. */
   quest?: QuestSource | null
-  /** ADR-0063: the Tour's fallback video on the relay, played while the live picture is lost. */
+  /** ADR-0075: the Tour's fallback video on the relay, present only while the Operator has switched to it. */
   fallback?: QuestSource | null
   /** The guide's live voice status, shown over the picture. */
   guideVoice?: ReactNode

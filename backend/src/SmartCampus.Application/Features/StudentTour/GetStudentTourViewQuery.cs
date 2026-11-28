@@ -16,10 +16,11 @@ public sealed record StudentTourStop(int Order, Guid PoiId, string Name, string?
 
 /// <summary>
 /// Progress of a RUNNING Tour, copied from its progress columns. <c>Step</c> is the Tour's CurrentStep and is null
-/// until the first dispatch writes it.
+/// until the first dispatch writes it. <c>VideoMode</c> (ADR-0075) is LIVE or FALLBACK, as the Operator set it;
+/// <c>VideoModeSince</c> is the time of that switch, null while the Tour never switched.
 /// </summary>
 public sealed record StudentTourProgress(string? Step, Guid? CurrentPoiId, Guid? LastArrivedPoiId, bool NeedsAssistance,
-    bool IsHeld);
+    bool IsHeld, string VideoMode = TourVideoModes.Live, DateTimeOffset? VideoModeSince = null);
 
 /// <summary><see cref="Ballot"/> is null when the route does not vote or no POI is current (ADR-0065).</summary>
 public sealed record StudentTourView(IReadOnlyList<StudentTourStop> Stops, StudentTourProgress? Progress, TourBallotView? Ballot = null);
@@ -48,7 +49,7 @@ public sealed class GetStudentTourViewQueryHandler(IStudentAccessRepository acce
             .ToList();
         var progress = data.State == "RUNNING"
             ? new StudentTourProgress(data.CurrentStep, data.CurrentPoiId, data.LastArrivedPoiId,
-                data.OperationalStatus == "NEEDS_ASSISTANCE", data.IsHeld)
+                data.OperationalStatus == "NEEDS_ASSISTANCE", data.IsHeld, TourVideoModes.Of(data.VideoEvent), data.VideoEventAt)
             : null;
         if (await votes.FindVotingRouteAsync(query.TourId, ct) is not { } route) return new StudentTourView(stops, progress);
 

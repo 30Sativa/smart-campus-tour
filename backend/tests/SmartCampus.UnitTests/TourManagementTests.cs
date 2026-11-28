@@ -75,6 +75,43 @@ public sealed class TourManagementTests
         Assert.False(new CancelTourCommandValidator().Validate(new CancelTourCommand(Guid.NewGuid(), actor, new(Guid.NewGuid(), "bad", " "))).IsValid);
     }
 
+    // ADR-0075 stage 2: one mark per stop, inside a day of video, and only with a fallback video.
+    [Fact]
+    public void FallbackVideoMarks_NeedAVideo_OneMarkPerStop_AndASecondInsideTheVideo()
+    {
+        var input = new TourInput("Tour", null, Guid.NewGuid(), DateTimeOffset.FromUnixTimeMilliseconds(2_000_000_000_000),
+            "https://example.test/video.mp4");
+        var validator = new TourInputValidator();
+        var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+        Assert.True(validator.Validate(input with { FallbackVideoMarks = [new(a, 0), new(b, 95)] }).IsValid);
+        Assert.True(validator.Validate(input with { FallbackVideoMarks = [] }).IsValid);
+        Assert.False(validator.Validate(input with { FallbackVideoMarks = [new(a, 0), new(a, 95)] }).IsValid);
+        Assert.False(validator.Validate(input with { FallbackVideoMarks = [new(a, -1)] }).IsValid);
+        Assert.False(validator.Validate(input with { FallbackVideoMarks = [new(a, TourFallbackVideoMarks.MaxSeconds + 1)] }).IsValid);
+        Assert.False(validator.Validate(input with { FallbackVideoMarks = [new(Guid.Empty, 5)] }).IsValid);
+        Assert.False(validator.Validate(input with { FallbackVideoUrl = null, FallbackVideoMarks = [new(a, 5)] }).IsValid);
+        Assert.True(validator.Validate(input with { FallbackVideoUrl = null, FallbackVideoMarks = [] }).IsValid);
+        var create = new CreateTourInputValidator(TourShiftsFixture.Settings);
+        var created = new CreateTourInput("Tour", null, Guid.NewGuid(), "robot", Guid.NewGuid(), input.ScheduledStartAt, null, 10,
+            FallbackVideoMarks: [new(a, 5)]);
+        Assert.False(create.Validate(created).IsValid);
+        Assert.True(create.Validate(created with { FallbackVideoUrl = input.FallbackVideoUrl }).IsValid);
+    }
+
+    [Fact]
+    public void FallbackVideoMarks_CountOnlyForTheVideoTheyWereSetFor_InRecordingOrder()
+    {
+        var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+        var marks = TourFallbackVideoMarks.Normalize([new(b, 120), new(a, 10)])!;
+        Assert.Equal([new FallbackVideoMark(a, 10), new FallbackVideoMark(b, 120)], marks);
+        var stored = TourFallbackVideoMarks.Parse(TourFallbackVideoMarks.Event(Guid.NewGuid(), "https://v/1.mp4", marks, Guid.NewGuid(),
+            DateTimeOffset.UnixEpoch).DataJson);
+        Assert.Equal(marks, TourFallbackVideoMarks.For(stored, "https://v/1.mp4"));
+        Assert.Empty(TourFallbackVideoMarks.For(stored, "https://v/2.mp4"));
+        Assert.Empty(TourFallbackVideoMarks.For(stored, null));
+        Assert.Empty(TourFallbackVideoMarks.For(null, "https://v/1.mp4"));
+    }
+
     [Theory]
     [InlineData("SCHEDULED", false)]
     [InlineData("READY", true)]

@@ -21,5 +21,7 @@ public interface IStudentTourViewReader
 public sealed record StudentTourStopData(int Order, Guid PoiId, string Name, string? Description, string? NarrationText,
     string? AudioUrl, int? NarrationSeconds, int DwellSeconds);
 
+/// <param name="VideoEvent">ADR-0075: the Tour's newest video switch event type and time; null while it never switched.</param>
 public sealed record StudentTourViewData(string State, string? CurrentStep, string? OperationalStatus, bool IsHeld,
-    Guid? CurrentPoiId, Guid? LastArrivedPoiId, IReadOnlyList<StudentTourStopData> Stops);
+    Guid? CurrentPoiId, Guid? LastArrivedPoiId, IReadOnlyList<StudentTourStopData> Stops,
+    string? VideoEvent = null, DateTimeOffset? VideoEventAt = null);

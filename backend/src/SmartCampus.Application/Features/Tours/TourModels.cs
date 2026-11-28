@@ -4,13 +4,16 @@ using SmartCampus.Application.Features.Routes;
 namespace SmartCampus.Application.Features.Tours;
 
 public sealed record TourInput(string Name, string? Description, Guid RouteId,
-    DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl);
+    DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl,
+    // ADR-0075 stage 2: null keeps the marks of the current video; a list replaces them.
+    IReadOnlyList<FallbackVideoMark>? FallbackVideoMarks = null);
 /// <summary>
 /// A Tour on a shift names its <see cref="ScheduledStartAt"/>. A quick Tour (ADR-0053) names a
 /// <see cref="ShortNoticeReason"/> and no start: the server sets its latest Start.
 /// </summary>
 public sealed record CreateTourInput(string Name, string? Description, Guid RouteRevisionId, string RobotCode,
-    Guid OperatorUserId, DateTimeOffset? ScheduledStartAt, string? FallbackVideoUrl, int Capacity, string? ShortNoticeReason = null);
+    Guid OperatorUserId, DateTimeOffset? ScheduledStartAt, string? FallbackVideoUrl, int Capacity, string? ShortNoticeReason = null,
+    IReadOnlyList<FallbackVideoMark>? FallbackVideoMarks = null);
 /// <summary>
 /// <see cref="OperatorUserId"/> keeps the Tours that account operates; <see cref="NeedsReconcile"/> keeps the Tours with an
 /// UNKNOWN GoTo, in any state. <see cref="IncludeReadyBlockers"/> evaluates READY for each SCHEDULED row of the page, the
@@ -101,7 +104,11 @@ public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDet
     // ADR-0065 addendum: while a ballot shows, how many Viewers are accepted and in the room, for the vote turnout.
     TourViewerPresence? Viewers = null, DateTimeOffset? OperatorLastSeenAt = null,
     DateTimeOffset? OperatorDisconnectedSince = null, int OperatorDisconnectEndEarlyMinutes = 5,
-    TourEndedEarlyView? EndedEarlyByBackupStaff = null);
+    TourEndedEarlyView? EndedEarlyByBackupStaff = null,
+    // ADR-0075: what Viewers of a RUNNING Tour watch and the newest switch; null outside RUNNING.
+    TourVideoModeView? Video = null,
+    // ADR-0075 stage 2: where each POI starts in the current fallback video, in recording order; empty without marks.
+    IReadOnlyList<FallbackVideoMark>? FallbackVideoMarks = null);
 public sealed record TourEndedEarlyView(Guid ActorUserId, string ActorName, Guid? OperatorUserId, string? OperatorName,
     DateTimeOffset? OperatorLastSeenAt);
 /// <summary>The running state of a Tour: null fields until Start; <see cref="DwellDeadlineAt"/> is display only (ADR-0043 D12).</summary>
@@ -167,4 +174,10 @@ public static class TourLifecycleEvents
     public const string NextStopChosen = "NEXT_STOP_CHOSEN";
     public const string StopLocked = "STOP_LOCKED";
     public const string StopUnlocked = "STOP_UNLOCKED";
+    /// <summary>ADR-0075: the Operator switched Viewers to the fallback video. ActorUserId and ReasonNote say who and why.</summary>
+    public const string VideoFallbackStarted = "VIDEO_FALLBACK_STARTED";
+    /// <summary>ADR-0075: the Operator switched Viewers back to the live picture.</summary>
+    public const string VideoLiveRestored = "VIDEO_LIVE_RESTORED";
+    /// <summary>ADR-0075 stage 2: Staff set the second each POI starts in the fallback video; DataJson names the video and the marks.</summary>
+    public const string FallbackVideoMarksSet = "FALLBACK_VIDEO_MARKS_SET";
 }

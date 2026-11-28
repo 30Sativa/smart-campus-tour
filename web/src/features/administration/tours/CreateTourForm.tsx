@@ -16,6 +16,7 @@ import type { VersionedRoute } from '../routes/versioned-api'
 import { QUICK_TOUR_RULES, tourKindOf, type TourKind } from './quick-tour'
 import type { CreateTourInput, TourRobotOption, TourSlot } from './types'
 import { FallbackVideoField } from './FallbackVideoField'
+import { emptyMarkDraft, marksOf, type MarkStop } from './fallback-video-marks'
 import { CoverImageField } from './CoverImageField'
 import './create-tour.css'
 
@@ -74,6 +75,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const [date, setDate] = useState(() => DATE_PARAM.test(params.get('date') ?? '') ? params.get('date')! : '')
   const [shiftCode, setShiftCode] = useState(() => params.get('shift') ?? '')
   const [video, setVideo] = useState('')
+  const [markDraft, setMarkDraft] = useState(emptyMarkDraft)
   const [cover, setCover] = useState<File | null>(null)
   const [capacity, setCapacity] = useState('20')
   const [quickReason, setQuickReason] = useState('')
@@ -98,6 +100,9 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const quickPreview = quick ? (robots.data?.find(robot => robot.robotCode === robotCode) ?? robots.data?.[0])?.quick : null
   const maps = useMapVersions()
   const selected = routes.data?.find(route => route.revisionId === routeRevisionId)
+  // ADR-0075 stage 2: the chosen route's stops, each taking the second the fallback recording reaches it.
+  const markStops: MarkStop[] = selected?.stops.flatMap(stop => stop.id ? [{ id: stop.id, order: stop.stopOrder, name: stop.name }] : []) ?? []
+  const marked = video.trim() && markStops.length > 0 ? marksOf(markDraft, markStops) : null
   const selectedMap = maps.data?.find(item => item.map.id === selected?.mapVersionId)?.map
   const selectedArea = selectedMap?.areaName
   const selectedMapLabel = selectedMap ? mapLabel(selectedMap, duplicateAreaNames((maps.data ?? []).map(item => ({ areaKey: item.map.areaKey, name: item.map.areaName })))) : null
@@ -122,6 +127,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
     !quick && !date && 'chọn ngày',
     !quick && !usable && (picked ? 'chọn ca còn trống' : 'chọn ca'),
     capacityProblem,
+    marked?.problem,
   ].filter((item): item is string => Boolean(item))
   const ready = missing.length === 0
   const expected = slots.data?.expectedDurationSeconds
@@ -130,7 +136,8 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (busy || !ready) return
-    const common = { name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, fallbackVideoUrl: video.trim() || null, capacity: Number(capacity) }
+    const common = { name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, fallbackVideoUrl: video.trim() || null, capacity: Number(capacity),
+      ...(marked && marked.marks.length > 0 ? { fallbackVideoMarks: marked.marks } : {}) }
     if (quick) onSubmit({ ...common, scheduledStartAt: null, shortNoticeReason: quickReason.trim() }, cover)
     else if (usable) onSubmit({ ...common, scheduledStartAt: usable.startsAt }, cover)
   }
@@ -218,7 +225,7 @@ export function CreateTourForm({ busy, error, onSubmit }: CreateTourFormProps) {
       <section className="tour-create-section tour-create-media" aria-labelledby="create-tour-media-title">
       <div className="tour-create-section-heading"><ImageIcon size={18} aria-hidden="true" /><h2 id="create-tour-media-title">Ảnh &amp; video</h2><span>Không bắt buộc</span></div>
       <CoverImageField file={cover} onChange={setCover} disabled={busy} />
-      <FallbackVideoField value={video} onChange={setVideo} disabled={busy} />
+      <FallbackVideoField value={video} onChange={setVideo} disabled={busy} stops={markStops} marks={markDraft} onMarksChange={setMarkDraft} />
       </section>
     </fieldset>
 

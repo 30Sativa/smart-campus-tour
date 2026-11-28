@@ -290,17 +290,22 @@ it('stops live playback within 10 s after the invitation is revoked or reissued'
   try {
     let revoked = false
     const running = { ...info, tourState: 'RUNNING', hasFallbackVideo: true }
-    // No live picture for this Tour; its fallback video plays through the relay with its own token (ADR-0063).
+    // No live picture for this Tour; the Operator switched it to the fallback video, which plays through the relay
+    // with its own token (ADR-0063/0075).
     const fallbackAccess = { whepUrl: `https://relay.test:8889/fallback-${tourId.replaceAll('-', '')}/whep`, token: 'f',
       expiresAt: new Date(Date.now() + 120_000).toISOString() }
+    const switched = { ...view, progress: { step: 'OBSERVING', currentPoiId: 'p1', lastArrivedPoiId: 'p1', needsAssistance: false,
+      isHeld: false, videoMode: 'FALLBACK', videoModeSince: new Date().toISOString() } }
     vi.stubGlobal('fetch', vi.fn(async (url: string) =>
-      url.endsWith('/view') ? response(view)
+      url.endsWith('/view') ? response(switched)
         : url.endsWith('/stream-access') ? response(null, 409)
           : url.endsWith('/fallback-access') ? (revoked ? response(null, 401) : response(fallbackAccess))
             : revoked ? response(null, 401) : response(running)))
     const { container } = mount()
-    await screen.findByText('Video dự phòng · chế độ suy giảm')
-    expect(screen.getByLabelText('Video dự phòng')).not.toHaveAttribute('src')
+    await screen.findByText('Hình trực tiếp tạm gián đoạn. Đang chuyển sang bản ghi hành trình…')
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
+    await screen.findByText('Bản ghi hành trình – không phải trực tiếp')
+    expect(screen.getByLabelText('Bản ghi hành trình')).not.toHaveAttribute('src')
     expect(container.querySelector('video')).not.toBeNull()
 
     revoked = true
@@ -316,7 +321,19 @@ it('offers no fallback video in the waiting room (fallback is a running-Tour deg
   vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response({ ...info, hasFallbackVideo: true })))
   mount()
   expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
-  expect(screen.queryByLabelText('Video dự phòng')).toBeNull()
+  expect(screen.queryByLabelText('Bản ghi hành trình')).toBeNull()
+  expect(fetchCalls().some(url => url.includes('/fallback-access'))).toBe(false)
+})
+
+// ADR-0075: a fallback video alone is not a switch; only the Operator's FALLBACK mode asks for its token.
+it('asks for no fallback token while the Operator keeps a running Tour on the live picture', async () => {
+  const live = { ...view, progress: { step: 'OBSERVING', currentPoiId: 'p1', lastArrivedPoiId: 'p1', needsAssistance: false,
+    isHeld: false, videoMode: 'LIVE', videoModeSince: null } }
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(live)
+    : url.endsWith('-access') ? response(null, 409) : response({ ...info, tourState: 'RUNNING', hasFallbackVideo: true })))
+  mount()
+  expect(await screen.findByRole('heading', { name: 'Buổi tham quan đang diễn ra' })).toBeVisible()
+  await waitFor(() => expect(fetchCalls().some(url => url.includes('/stream-access'))).toBe(true))
   expect(fetchCalls().some(url => url.includes('/fallback-access'))).toBe(false)
 })
 

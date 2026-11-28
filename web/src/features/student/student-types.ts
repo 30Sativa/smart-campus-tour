@@ -66,6 +66,8 @@ export interface StudentTourSnapshot {
   robotPose: StudentRobotPose
   step: StudentOperationalStep
   videoStreamUrl: string
+  /** ADR-0075: LIVE unless the Operator switched Viewers to the fallback recording. */
+  videoMode?: 'LIVE' | 'FALLBACK'
   narration?: {
     poiId: string
     title: string

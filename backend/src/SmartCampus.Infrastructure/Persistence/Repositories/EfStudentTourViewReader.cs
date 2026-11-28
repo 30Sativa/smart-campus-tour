@@ -41,8 +41,10 @@ public sealed class EfStudentTourViewReader(ApplicationDbContext context) : IStu
                 .Select(s => new StudentTourStopData(s.StopOrder, s.PoiId, s.Poi.Name, s.Poi.Description, s.Poi.NarrationText,
                     s.Poi.AudioUrl, s.Poi.NarrationSeconds, s.DwellSeconds))
                 .ToListAsync(ct);
+        var video = await TourVideoModeReads.Switches(context, tourId).AsNoTracking().OrderByDescending(e => e.Id)
+            .Select(e => new { e.EventType, e.OccurredAt }).FirstOrDefaultAsync(ct);
         return new StudentTourViewData(tour.State, tour.CurrentStep, tour.OperationalStatus, tour.IsHeld,
-            tour.CurrentPoiId, tour.LastArrivedPoiId, stops);
+            tour.CurrentPoiId, tour.LastArrivedPoiId, stops, video?.EventType, video?.OccurredAt);
     }
 
     /// <summary>

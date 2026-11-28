@@ -11,6 +11,7 @@ import { useMapVersions } from '../../technical/technical-hooks'
 import { SaveBlockedHint } from '../../technical/TechnicalUi'
 import type { TourInput } from './types'
 import { FallbackVideoField } from './FallbackVideoField'
+import { draftOf, marksOf, type MarkStop } from './fallback-video-marks'
 import { CoverImageField } from './CoverImageField'
 
 const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
@@ -26,7 +27,7 @@ export function TourForm({ initial, currentCoverUrl = null, currentRoute, fixedS
   currentCoverUrl?: string | null
   currentRoute?: { id: string; name: string }
   /** A Tour on a route revision: its route cannot change and has no legacy Route detail to load. */
-  fixedStops?: { order: number; name: string; dwellSeconds: number }[]
+  fixedStops?: { id?: string; order: number; name: string; dwellSeconds: number }[]
   scheduleLocked?: boolean
   submitLabel: string
   busy: boolean
@@ -41,26 +42,34 @@ export function TourForm({ initial, currentCoverUrl = null, currentRoute, fixedS
   const [routeId, setRouteId] = useState(initial?.routeId ?? '')
   const [video, setVideo] = useState(initial?.fallbackVideoUrl ?? '')
   const [cover, setCover] = useState<File | null>(null)
+  // ADR-0075 stage 2: only a Tour on a route revision has the stop ids marks point at; an older server sends none.
+  const markStops: MarkStop[] = fixedStops?.flatMap(stop => stop.id ? [{ id: stop.id, order: stop.order, name: stop.name }] : []) ?? []
+  const [markDraft, setMarkDraft] = useState(() => draftOf(initial?.fallbackVideoMarks))
+  const marked = video.trim() && markStops.length > 0 ? marksOf(markDraft, markStops) : null
   const [clientError, setClientError] = useState('')
   const routes = useRoutes({ isActive: true, page: 1, size: 100 })
   const route = useRoute(fixedStops ? undefined : routeId || undefined)
   const maps = useMapVersions()
   const routeReady = Boolean(fixedStops || route.data)
   // Why "Lưu" is off: the Route detail supplies the revision the API checks, so the button waits for it.
-  const routeMissing = routeReady ? [] : [!routeId ? 'chọn tuyến' : route.isError ? 'tải lại cấu hình tuyến' : 'chờ tải xong tuyến']
+  const routeMissing = [
+    ...(routeReady ? [] : [!routeId ? 'chọn tuyến' : route.isError ? 'tải lại cấu hình tuyến' : 'chờ tải xong tuyến']),
+    ...(marked?.problem ? [marked.problem] : []),
+  ]
   const options = routes.data?.data.map(r => ({ id: r.id, name: `${r.name} · ${r.stopCount} điểm dừng` })) ?? []
   if (currentRoute && !options.some(o => o.id === currentRoute.id)) options.unshift({ id: currentRoute.id, name: `${currentRoute.name} (đang dùng)` })
   const scheduleChanged = schedule !== toLocalInput(initial?.scheduledStartAt)
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (busy || !routeReady) return
+    if (busy || !routeReady || marked?.problem) return
     const at = fromLocalInput(schedule)
     if (!name.trim()) return setClientError('Nhập tên Tour.')
     if (!at) return setClientError('Chọn ngày và giờ dự kiến.')
     if ((!initial || scheduleChanged) && new Date(at).getTime() <= Date.now()) return setClientError('Giờ dự kiến phải ở tương lai.')
     setClientError('')
-    onSubmit({ name: name.trim(), description: description.trim() || null, routeId, scheduledStartAt: at, fallbackVideoUrl: video.trim() || null }, route.data?.version ?? '', cover)
+    const marks = marked ? { fallbackVideoMarks: marked.marks } : {}
+    onSubmit({ name: name.trim(), description: description.trim() || null, routeId, scheduledStartAt: at, fallbackVideoUrl: video.trim() || null, ...marks }, route.data?.version ?? '', cover)
   }
 
   return <form onSubmit={submit} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -83,13 +92,13 @@ export function TourForm({ initial, currentCoverUrl = null, currentRoute, fixedS
       </select>
         <span className="mt-1 block text-xs text-[#64748b]">{routes.isError ? 'Không tải được danh mục tuyến.' : 'Danh sách này chỉ có tuyến kiểu cũ.'}</span></label>}
       <CoverImageField file={cover} onChange={setCover} currentUrl={currentCoverUrl} disabled={busy} />
-      <FallbackVideoField value={video} onChange={setVideo} disabled={busy} />
+      <FallbackVideoField value={video} onChange={setVideo} disabled={busy} stops={markStops} marks={markDraft} onMarksChange={setMarkDraft} />
       {fixedStops ? <Notice tone="info">Muốn đổi lịch, tuyến hoặc robot, hãy hủy Tour rồi tạo lại; ở đây chỉ sửa được tên, mô tả, ảnh và video.</Notice>
         : scheduleLocked && <Notice tone="info">Tour đã có đăng ký hoặc lịch sử nên lịch và tuyến bị khóa; chỉ sửa được tên, mô tả, ảnh và video.</Notice>}
       <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:items-center sm:justify-end">
         <SaveBlockedHint id="tour-form-missing" tone="neutral" lead="Cần" missing={busy ? [] : routeMissing} />
         <Link to={cancelTo} className={buttonClass('secondary')}>Hủy bỏ</Link>
-        <button type="submit" disabled={busy || !routeReady} aria-describedby={!busy && !routeReady ? 'tour-form-missing' : undefined} className={buttonClass('primary')}>{busy ? 'Đang lưu…' : submitLabel}</button>
+        <button type="submit" disabled={busy || routeMissing.length > 0} aria-describedby={!busy && routeMissing.length > 0 ? 'tour-form-missing' : undefined} className={buttonClass('primary')}>{busy ? 'Đang lưu…' : submitLabel}</button>
       </div>
     </fieldset>
 

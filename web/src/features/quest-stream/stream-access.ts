@@ -68,10 +68,10 @@ export function useStudentStreamAccess(tourId: string, enabled: boolean): QuestS
 }
 
 /**
- * ADR-0063: the Tour's fallback video on the same relay (`fallback-{tourId}`), with its own token from
- * `GET /api/student/tours/{id}/fallback-access`. The page holds it while the Tour runs so the player can switch the
- * moment the live picture is lost; a refused renewal (End Early, revoked session) gives null and closes the video,
- * and the relay's reaper cuts an open one within about 5 s. There is no dev fallback.
+ * ADR-0063/0075: the Tour's fallback video on the same relay (`fallback-{tourId}`), with its own token from
+ * `GET /api/student/tours/{id}/fallback-access`. The page asks for it only while the Operator has switched the Tour
+ * to the fallback video; a refused renewal (switched back, End Early, revoked session) gives null and closes the
+ * video, and the relay's reaper cuts an open one within about 5 s. There is no dev fallback.
  */
 export function useStudentFallbackAccess(tourId: string, enabled: boolean): QuestSource | null {
   return useStudentRelayAccess(tourId, 'fallback-access', enabled)

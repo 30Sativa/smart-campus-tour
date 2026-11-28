@@ -1083,6 +1083,9 @@ public sealed class InvitationEndpointTests
         Assert.True(session.Body.GetProperty("data").GetProperty("hasFallbackVideo").GetBoolean());
         Assert.False(session.Body.GetProperty("data").TryGetProperty("fallbackVideoUrl", out _));
 
+        // ADR-0075: a fallback video alone hands out nothing; the Operator must switch the Tour to FALLBACK first.
+        Assert.Equal(HttpStatusCode.Conflict, (await FallbackAccessAsync(host.Client, f.TourId, cookie)).Status);
+        await f.Database.ExecuteAsync($"INSERT INTO dbo.TourEvents (TourId, EventType, OccurredAt, ReasonNote) VALUES ('{f.TourId}', 'VIDEO_FALLBACK_STARTED', SYSDATETIMEOFFSET(), N'Kính mất hình');");
         var running = await FallbackAccessAsync(host.Client, f.TourId, cookie);
         Assert.Equal(HttpStatusCode.OK, running.Status);
         var data = running.Body.GetProperty("data");
@@ -1104,6 +1107,13 @@ public sealed class InvitationEndpointTests
         Assert.StartsWith("https://res.cloudinary.com/demo-cloud/video/authenticated/s--", source.Body);
         Assert.EndsWith($"/{publicId}.mp4", source.Body);
         Assert.Equal(HttpStatusCode.Unauthorized, (await FallbackSourceAsync(host.Client, path, "wrong-key")).Status);
+
+        // Back to live: no new token, and the reaper cuts the open fallback at its next recheck.
+        await f.Database.ExecuteAsync($"INSERT INTO dbo.TourEvents (TourId, EventType, OccurredAt, ReasonNote) VALUES ('{f.TourId}', 'VIDEO_LIVE_RESTORED', SYSDATETIMEOFFSET(), N'Kính có hình lại');");
+        Assert.Equal(HttpStatusCode.Conflict, (await FallbackAccessAsync(host.Client, f.TourId, cookie)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, await RelayAsync(host.Client, "recheck", new { path, query = "token=" + token }));
+        await f.Database.ExecuteAsync($"INSERT INTO dbo.TourEvents (TourId, EventType, OccurredAt, ReasonNote) VALUES ('{f.TourId}', 'VIDEO_FALLBACK_STARTED', SYSDATETIMEOFFSET(), N'Kính mất hình lần nữa');");
+        Assert.Equal(HttpStatusCode.NoContent, await RelayAsync(host.Client, "recheck", new { path, query = "token=" + token }));
 
         // End Early: no new token, the relay refuses the old one, the reaper is told to kick, and there is nothing to play.
         await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='CANCELLED',EndedAt=SYSDATETIMEOFFSET();");

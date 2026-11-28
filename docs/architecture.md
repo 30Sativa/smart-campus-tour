@@ -1522,6 +1522,22 @@ make one attempt per visit to leave a POI whose dwell ended, with every movement
 the robot. A quick Tour needs no accepted row for READY or Start. GET Tour adds `allowedActions.open/pause/skip`,
 `execution.command.cancelRequested` and `execution.autoAdvance {enabled, blockedReason}`.
 
+**Staff-switched fallback video (ADR-0075, since 28/11/2026).** `PUT /api/staff/manage/tours/{id}/video-mode {mode, reason}`
+(`mode` `LIVE`|`FALLBACK`, reason 1-500 characters, required) lets the Tour's Operator only (403 otherwise) switch a RUNNING Tour's
+Viewers to the fallback recording or back to live; `FALLBACK` needs a fallback video. Each switch is a `VIDEO_FALLBACK_STARTED` or
+`VIDEO_LIVE_RESTORED` TourEvent with actor and reason; asking for the current mode is 409 `VIDEO_MODE_INVALID`. The newest of
+those events is the mode; a Tour with neither is `LIVE`. Nothing switches by itself. GET Tour adds
+`video {mode, since, actorName, reason, hasFallbackVideo}` for a RUNNING Tour (null otherwise); the Student view adds
+`progress.videoMode`/`progress.videoModeSince`. `GET /api/student/tours/{id}/fallback-access` (and the relay's recheck) now also
+requires mode `FALLBACK`, so switching back cuts the recording within the reaper's ~5 s. Viewers see a notice, then the muted
+recording labelled "Bản ghi hành trình – không phải trực tiếp"; the approved narration keeps playing. Per-POI seek and "stay on the
+recording to the end" are stage 2 and not implemented.
+Stage 2 marks (since 28/11/2026): the create and update `configuration` take optional `fallbackVideoMarks
+[{revisionStopId, startSeconds}]` (needs `fallbackVideoUrl`; one per stop of the Tour's route revision, else 400; 0-86400 s; at most
+100; omitted on update keeps the current marks, a list replaces them) and GET Tour adds `fallbackVideoMarks` in recording order,
+empty when none. They are a `FALLBACK_VIDEO_MARKS_SET` TourEvent naming the video, so a new video starts without marks. The relay
+does not seek with them yet.
+
 **Tour runtime (M2.2-b, ADR-0043).** `ReportCommandResultCommand` is the Application
 use case the robot results endpoint will call; it locks the Tour, then the command.
 A result is valid only from `DeliveredStreamId` with the command's `legId` and an

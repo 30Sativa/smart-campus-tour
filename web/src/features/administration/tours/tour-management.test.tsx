@@ -266,6 +266,23 @@ describe('live Tour management', () => {
     expect(writes[0].body).toMatchObject({ expectedRouteVersion: null, configuration: { name: 'Tên mới', routeId: 'route-1' } })
   })
 
+  // ADR-0075 stage 2: the edit form shows the marks of the current video and saves the changed ones.
+  it('saves where each stop starts in the fallback video of a Tour on a route revision', async () => {
+    const video = 'https://res.cloudinary.com/demo-cloud/video/authenticated/smartcampus/tours/fallback/0123456789abcdef0123456789abcdef.mp4'
+    const writes = api(tour({ ...versionedTour, fallbackVideoUrl: video,
+      routeRevision: { ...TESTED, stops: [{ ...STOP, id: 'stop-9' }] } as unknown as TourDetails['routeRevision'],
+      fallbackVideoMarks: [{ revisionStopId: 'stop-9', startSeconds: 5 }] }))
+    renderAt('/staff/manage/tours/tour-1/edit')
+    const mark = await screen.findByLabelText('1. Thư viện')
+    expect(mark).toHaveValue('0:05')
+    fireEvent.change(mark, { target: { value: '1:x' } })
+    expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled()
+    fireEvent.change(mark, { target: { value: '1:35' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0].body).toMatchObject({ configuration: { fallbackVideoUrl: video, fallbackVideoMarks: [{ revisionStopId: 'stop-9', startSeconds: 95 }] } })
+  })
+
   it('says when the route of a Tour still to run has a newer revision, which the Tour does not follow', async () => {
     api(versionedTour)
     const view = renderAt('/staff/manage/tours/tour-1')

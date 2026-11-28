@@ -29,6 +29,8 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         }
         var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, input.RouteRevisionId, lockTarget: true, ct);
         await TourTarget.RequireOperatorAsync(revisions, input.OperatorUserId, ct);
+        IReadOnlyList<FallbackVideoMark> marks = input.FallbackVideoUrl is null ? [] : input.FallbackVideoMarks ?? [];
+        await TourFallbackVideoMarks.RequireStopsAsync(revisions, revision.Id, marks, ct);
         var found = await revisions.FindPhysicalRobotAsync(input.RobotCode, ct)
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
         // Deactivation takes these two locks in this order, so the robot is read again behind them.
@@ -85,6 +87,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
                 TourId = tour.Id, EventType = TourLifecycleEvents.CreatedShortNotice, OccurredAt = now, ActorUserId = command.Actor,
                 ReasonNote = input.ShortNoticeReason
             });
+        if (marks.Count > 0) repository.AddEvent(TourFallbackVideoMarks.Event(tour.Id, input.FallbackVideoUrl!, marks, command.Actor, now));
         repository.Add(new TourRobotReservation
         {
             Id = Guid.NewGuid(), TourId = tour.Id, RobotId = robot.Id, RouteTestRunId = run.Id,
@@ -92,8 +95,9 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
             StartsAt = startsAt, EndsAt = endsAt,
             ReservedByUserId = command.Actor, ReservedAt = now
         });
-        TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId, "TOUR_CREATED", fingerprint, now,
-            "name", "description", "routeRevisionId", "operatorUserId", "robotReservation", "scheduledStartAt", "fallbackVideoUrl", "state", "capacity", "isShortNotice");
+        string[] fields = ["name", "description", "routeRevisionId", "operatorUserId", "robotReservation", "scheduledStartAt",
+            "fallbackVideoUrl", "state", "capacity", "isShortNotice", .. marks.Count > 0 ? ["fallbackVideoMarks"] : Array.Empty<string>()];
+        TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId, "TOUR_CREATED", fingerprint, now, fields);
         return new(tour.Id);
     }
 }

@@ -183,8 +183,10 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   // ADR-0072: the guide's live voice, heard on every invited page (shared rooms too) while the talk channel is open.
   const muted = useStudentStore(store => store.audioMuted)
   const guideVoice = useGuideVoice(tourId, talking, muted)
-  // ADR-0063: the fallback video's token, held while the Tour runs so the player switches as soon as the live picture is lost.
-  const fallback = useStudentFallbackAccess(tourId, snapshot?.tourState === 'Running' && !!info?.hasFallbackVideo && !leave.isPending)
+  // ADR-0075: the fallback video's token, held only while the Operator has switched the Tour to it; the player
+  // never switches by itself when the live picture is lost.
+  const fallback = useStudentFallbackAccess(tourId, snapshot?.tourState === 'Running' && snapshot.videoMode === 'FALLBACK'
+    && !!info?.hasFallbackVideo && !leave.isPending)
   const offline = !!info && session.isError && !finished
   const retry = () => void session.refetch()
   // Shown above the page, not under it: on a phone the bottom of a live Tour is far below the video.
