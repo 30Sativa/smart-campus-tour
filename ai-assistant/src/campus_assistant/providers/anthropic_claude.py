@@ -17,6 +17,10 @@ import anthropic
 from .base import ProviderBadResponse, ProviderTimeout, ProviderUnavailable
 
 DEFAULT_MODEL = "claude-haiku-5-5"
+# Ceiling on billed output per question. The service keeps at most AI_ANSWER_MAX_CHARS (1200) characters,
+# roughly 600 tokens with the JSON around it; the rest leaves room for any thinking the model does under
+# `effort`. A prompt that talks the model into writing more is cut here (stop_reason max_tokens -> fallback).
+DEFAULT_MAX_TOKENS = 2048
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
 
 # Same shape as prompting.RESPONSE_SCHEMA, in JSON Schema form for structured outputs.
@@ -47,7 +51,7 @@ class AnthropicProvider:
         api_key: str,
         model: str = DEFAULT_MODEL,
         effort: str = "low",
-        max_tokens: int = 4096,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
         client: Any | None = None,
     ) -> None:
         self.model = model.strip() or DEFAULT_MODEL
