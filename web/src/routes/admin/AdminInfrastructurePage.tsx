@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Activity,
   Layers,
   RefreshCw,
   ShieldAlert,
@@ -15,6 +14,7 @@ import {
   getInfrastructureHealth,
   type InfrastructureHealth,
 } from '../../features/administration/infrastructure/infrastructure-api'
+import { dotClass } from '../../components/ui/status-tone'
 import { ToneBadge } from '../../features/technical/TechnicalUi'
 import { stamp } from '../../features/technical/technical-format'
 
@@ -50,11 +50,12 @@ export default function AdminInfrastructurePage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className={buttonClass(autoRefresh ? 'primary' : 'secondary', 'sm')}
+              aria-pressed={autoRefresh}
+              className={buttonClass('secondary', 'sm')}
               onClick={() => setAutoRefresh((v) => !v)}
               title={autoRefresh ? 'Tự động làm mới mỗi 15 giây' : 'Tự động làm mới đang tắt'}
             >
-              <Activity size={14} aria-hidden="true" />
+              <span aria-hidden="true" className={`size-1.5 rounded-full ${autoRefresh ? dotClass.ok : dotClass.muted}`} />
               {autoRefresh ? 'Tự làm mới (15s)' : 'Tự làm mới: Tắt'}
             </button>
             <button

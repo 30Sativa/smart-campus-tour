@@ -249,10 +249,10 @@ describe('Staff versioned POI workflow', () => {
     expect(await screen.findByText('Chưa thể tạo điểm tham quan')).toBeInTheDocument()
     expect(screen.getByText('Library · library-v1')).toBeInTheDocument()
     expect(screen.getByText('Chưa kiểm tra triển khai')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toHaveAccessibleDescription('Chưa có bản đồ nào đạt kiểm tra kỹ thuật')
+    expect(screen.getByRole('button', { name: 'Tạo điểm tham quan' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Tạo điểm tham quan' })).toHaveAccessibleDescription('Chưa có bản đồ nào đạt kiểm tra kỹ thuật')
     expect(screen.getByText('Chưa có bản đồ nào đạt kiểm tra kỹ thuật')).toBeVisible()
-    expect(screen.queryByRole('link', { name: 'Tạo điểm mới' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Tạo điểm tham quan' })).not.toBeInTheDocument()
   })
 
   it('warns when no robot is currently on a passed map but keeps that map selectable', async () => {

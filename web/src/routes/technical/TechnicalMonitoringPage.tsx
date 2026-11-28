@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
-import { Activity, LoaderCircle, RefreshCw } from 'lucide-react'
+import { LoaderCircle, RefreshCw } from 'lucide-react'
+import { dotClass } from '../../components/ui/status-tone'
 import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { DetailFact, Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
@@ -172,8 +173,8 @@ export default function TechnicalMonitoringPage() {
     <TechnicalPage>
       <PageHeader eyebrow="Giám sát" title="Giám sát robot và Mini PC" description="Chọn robot để xem kết nối, tài nguyên Mini PC, cảm biến và ROS 2."
         action={<>
-          <button type="button" aria-pressed={autoRefresh} className={buttonClass(autoRefresh ? 'primary' : 'secondary', 'sm')} onClick={() => setAutoRefresh(value => !value)}>
-            <Activity size={14} aria-hidden="true" />{autoRefresh ? 'Tự làm mới (15s)' : 'Tự làm mới: Tắt'}
+          <button type="button" aria-pressed={autoRefresh} className={buttonClass('secondary', 'sm')} onClick={() => setAutoRefresh(value => !value)}>
+            <span aria-hidden="true" className={`size-1.5 rounded-full ${autoRefresh ? dotClass.ok : dotClass.muted}`} />{autoRefresh ? 'Tự làm mới (15s)' : 'Tự làm mới: Tắt'}
           </button>
           <button type="button" className={buttonClass('secondary', 'sm')} disabled={!robotCode || detail.isFetching} onClick={() => void detail.refetch()}>
             <RefreshCw size={14} className={detail.isFetching ? 'animate-spin' : ''} aria-hidden="true" />{detail.isFetching ? 'Đang tải…' : 'Làm mới ngay'}

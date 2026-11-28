@@ -113,8 +113,8 @@ export default function StaffManagePoisPage() {
         <Link to="/staff/manage/pois/thu-thuyet-minh" className={buttonClass('secondary')}><Volume2 size={16} aria-hidden="true" />Chạy thử thuyết minh</Link>
         {blocked
           // The reason is printed, not a hover tooltip, so it reaches touch screens and screen readers too.
-          ? <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1"><span id="poi-create-blocked" className="text-xs text-[#b7791f]">Chưa có bản đồ nào đạt kiểm tra kỹ thuật</span><button type="button" disabled aria-describedby="poi-create-blocked" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</button></span>
-          : <Link to="/staff/manage/pois/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</Link>}
+          ? <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1"><span id="poi-create-blocked" className="text-xs text-[#b7791f]">Chưa có bản đồ nào đạt kiểm tra kỹ thuật</span><button type="button" disabled aria-describedby="poi-create-blocked" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm tham quan</button></span>
+          : <Link to="/staff/manage/pois/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm tham quan</Link>}
       </>} />
 
     {/* One toolbar for everything that narrows the view: map, robot filter, search and status. */}
