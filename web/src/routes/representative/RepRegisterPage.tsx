@@ -145,7 +145,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
       }}>
         <fieldset key={step} className="rep-form-fieldset rep-stack rep-tab-enter" disabled={locked}>
           {step === 0 && <Panel title="Thông tin trường và đoàn"><div className="rep-fields">{fields.map(field => <label key={field.key} className="rep-field" htmlFor={`registration-${field.key}`}>
-            <span>{field.label}<span aria-hidden="true"> *</span></span>
+            <span>{field.label}</span>
             <input id={`registration-${field.key}`} name={field.key} required type={field.type ?? 'text'} maxLength={field.max} className="rep-input" value={values[field.key]} aria-invalid={Boolean(fieldErrors[field.key])} aria-describedby={fieldErrors[field.key] ? `registration-${field.key}-error` : undefined} onChange={event => { setValues(previous => ({ ...previous, [field.key]: event.target.value })); setConfirmed(false) }} />
             {fieldErrors[field.key] && <span id={`registration-${field.key}-error`} className="rep-error-message">{fieldErrors[field.key]}</span>}
           </label>)}</div><p className="rep-hint">Email liên hệ của đoàn không thay thế email riêng của từng dòng lời mời.</p></Panel>}

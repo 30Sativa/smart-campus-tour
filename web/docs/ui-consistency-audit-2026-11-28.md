@@ -1,6 +1,6 @@
 # Rà soát đồng bộ giao diện, 28/11/2026
 
-Trạng thái: **chờ duyệt**. Chưa sửa dòng mã nào.
+Trạng thái: **đã sửa cả 4 đợt** trên nhánh `feature/claude/fe-ui-consistency` (28/11/2026). Xem mục "Kết quả" ở cuối.
 
 ## Cách rà
 
@@ -132,3 +132,32 @@ Có thể gộp vào đợt 3 nếu bạn muốn ít PR hơn.
 ## Ngoài phạm vi đợt này
 
 Dời 2791 mã màu hex sang token (`web/docs/design-tokens.md`) là việc lớn, đụng gần như mọi file. Nên tách riêng sau khi bốn đợt trên xong.
+
+## Kết quả
+
+Cả bốn đợt gộp vào một PR, mỗi đợt một commit.
+
+- **Đợt 1.**
+  - H1 đến H5 dùng `PageHeader`. `PageHeader` có thêm `back` và `badge`, bỏ `scale`.
+  - Năm link quay lại tự dựng (Tạo Tour, form POI, chạy thử thuyết minh, chi tiết/form tuyến, tương tác một Tour) về chung một kiểu.
+  - Mọi dòng nhóm là tên nhóm trên sidebar. Riêng trang của một Tour vẫn ghi tên hoặc trạng thái Tour đó.
+  - `nav-page-titles.test.ts` giờ kiểm cả Lịch Tour và Quản lý POI.
+  - H6 giữ cỡ gọn như đề xuất.
+- **Đợt 2.**
+  - Nguyên nhân thật của A1 đến A3 không nằm ở từng trang. Lớp `softConsoleMain` ghi đè mọi nút `primary` thành nền nhạt, ở cả Vận hành, Quản trị và Kỹ thuật. Đã bỏ lớp ghi đè đó, nên nút chính có nền đặc ở mọi console.
+  - Nút bật/tắt "Tự làm mới" ở Hạ tầng và Giám sát trước đây đổi sang kiểu nút chính khi bật. Giờ nó dùng kiểu phụ kèm chấm trạng thái, như trang Tổng quan Kỹ thuật.
+  - "Tạo điểm mới" đổi thành "Tạo điểm tham quan", khớp với tiêu đề form.
+- **Đợt 3.**
+  - `TechnicalPage` dùng 1440px và `py-4 lg:py-6`.
+  - Thẻ POI dùng `cardClass`.
+  - Khu Đại diện:
+    - thẻ bo 15px với bóng của console;
+    - nút chính nền xanh đặc (`--rep-primary`);
+    - tab đang chọn chữ xanh nhấn, đậm 600.
+  - Sửa lại một ý trong bản rà: thẻ console thực ra **không viền**, vì `softConsoleMain` làm viền trong suốt. Nên R1 khớp theo cái đang hiển thị (không viền), không thêm viền `#e2e8f0`.
+  - Thẻ Học sinh đọc cùng biến bo góc và bóng nên đổi theo. Nút Học sinh vẫn đọc `--rep-accent` nên không đổi.
+  - R2: cỡ h1 Đại diện vốn đã là 28px, và 24px trên màn hẹp, đúng như console. Chỉ tiêu đề trong khung chi tiết đăng ký nhỏ hơn (23px), vì nó là tiêu đề trong thẻ, nên giữ.
+- **Đợt 4.**
+  - Trang 404 dùng `buttonClass`.
+  - Nút chuyển "Chờ duyệt / Tất cả đăng ký" dùng `FilterChips`.
+  - Bỏ dấu `*`, chỉ ghi "(không bắt buộc)" cho trường tùy chọn. Đã áp cho form POI và bước 1 đăng ký của Đại diện. Form tuyến (`RouteStopsEditor`) vốn không có dấu `*`, nên L3 ở đó không cần sửa.
