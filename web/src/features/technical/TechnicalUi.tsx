@@ -2,7 +2,7 @@ import { useId, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { Check, CircleCheck, CircleX, Eye } from 'lucide-react'
 import { toneClass, type StatusTone } from '../../components/ui/status-tone'
-import { labelClass } from '../../components/ui/ui-classes'
+import { buttonClass, labelClass } from '../../components/ui/ui-classes'
 
 export function TechnicalPage({ children }: { children: ReactNode }) {
   return <div className="min-h-full bg-transparent px-4 py-5 sm:px-6 lg:px-8 lg:py-6"><div className="mx-auto w-full max-w-[1360px]">{children}</div></div>
@@ -86,6 +86,22 @@ export function NoneChecked({ reasonId, onNone }: { reasonId: string; onNone: ()
     document.getElementById(reasonId)?.focus()
   }
   return <button type="button" onClick={choose} className="rounded-md px-1 text-xs font-semibold text-[#b23e31] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">Không đạt mục nào</button>
+}
+
+/**
+ * The line above a result's boxes: how ticking decides the result, and one button that ticks every box at once (or
+ * clears them all once every box is ticked). `onChange` marks the form touched, as a click on a box would.
+ */
+export function CheckListHead({ checks, onChange }: { checks: { checked: boolean; set: (value: boolean) => void }[]; onChange: () => void }) {
+  const all = checks.every(check => check.checked)
+  const toggle = () => {
+    for (const check of checks) check.set(!all)
+    onChange()
+  }
+  return <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+    <p className="text-xs text-[#64748b]">Tick mục đã đạt. Còn mục chưa tick thì kết quả là Không đạt.</p>
+    <button type="button" className={buttonClass('ghost', 'sm')} onClick={toggle}>{all ? 'Bỏ tích tất cả' : 'Tích tất cả'}</button>
+  </div>
 }
 
 /** `pending`: not known yet (still loading), so neither done nor the next step; `hint` says what is being checked. */

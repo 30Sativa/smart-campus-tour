@@ -167,6 +167,7 @@ function DepartAction({ detail, gate, frozen }: { detail: TourDetails; gate: Tou
   const [confirmation, setConfirmation] = useState<StartConfirmation>(NO_CONFIRMATION)
   const targets = tourTargets(detail)
   const confirmed = isConfirmed(confirmation)
+  const tickAll = () => setConfirmation(confirmed ? NO_CONFIRMATION : { robotPlaced: true, areaClear: true, attendantPresent: true, previewChecked: true })
   const refusal = next.isError ? operationRefusal(next.error, { operator: true }) : null
   // The server's gate is evaluated without the ticks (they live in this browser), so only their absence is added here.
   const allowed = Boolean(gate?.allowed) && !frozen && confirmed
@@ -179,8 +180,12 @@ function DepartAction({ detail, gate, frozen }: { detail: TourDetails; gate: Tou
   }
   // Laid out across the situation band: the four ticks in one row on a wide screen, the button and its note under them.
   return <div className="space-y-2.5">
-    <fieldset>
-      <legend className="mb-1.5 text-[13px] font-semibold text-[#0f172a]">Xác nhận tại chỗ</legend>
+    {/* Named by its heading rather than a legend, so the tick-all button beside it stays out of the group's name. */}
+    <fieldset aria-labelledby="depart-checks-title">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <span id="depart-checks-title" className="text-[13px] font-semibold text-[#0f172a]">Xác nhận tại chỗ</span>
+        <button type="button" className={buttonClass('ghost', 'sm')} onClick={tickAll}>{confirmed ? 'Bỏ tích tất cả' : 'Tích tất cả'}</button>
+      </div>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{CONFIRMATIONS.map(({ key, label, hint }) => (
         <label key={key} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors duration-150 motion-reduce:transition-none ${confirmation[key] ? 'border-[#bfdbfe] bg-[#eff6ff]' : 'border-[#e2e8f0] hover:border-[#bfdbfe]'}`}>
           <input type="checkbox" checked={confirmation[key]} onChange={event => setConfirmation(value => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#2563eb]" />

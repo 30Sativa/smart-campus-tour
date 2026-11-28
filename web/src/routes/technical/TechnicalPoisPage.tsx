@@ -10,7 +10,7 @@ import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from 
 import { DeployToRobotDialog } from '../../features/technical/DeployToRobotDialog'
 import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
 import { poiReturnPath, robotForMap } from '../../features/technical/robot-readiness'
-import { CheckRow, ComputedResult, NoneChecked, DetailFact, Note, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
+import { CheckListHead, CheckRow, ComputedResult, NoneChecked, DetailFact, Note, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
 import { narrationStatus, poiObservationLabels, poiPoseCopyText, poiPoseText, poiVerifyText, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { PoiPosePicker } from '../../features/administration/pois/map/PoiPosePicker'
 import { useMapRaster } from '../../features/administration/pois/map/use-map-raster'
@@ -237,7 +237,7 @@ function VerifyModal({ proposal, mapName, onClose, onAssignRobot }: { proposal: 
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
         </div>
         <div className="space-y-2">
-          <p className="text-xs text-[#64748b]">Tick mục đã đạt. Còn mục chưa tick thì kết quả là Không đạt.</p>
+          <CheckListHead checks={checks} onChange={() => { setTouched(true); changed() }} />
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); setTouched(true); changed() }}>{check.label}</CheckRow>)}
           {pending && <NoneChecked reasonId="verify-reason" onNone={() => { setTouched(true); changed() }} />}
         </div>

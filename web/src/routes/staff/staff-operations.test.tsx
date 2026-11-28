@@ -475,6 +475,23 @@ describe('demo flow on the live console', () => {
       body: { expectedRowVersion: 'AAAAAAAAB9E=', confirmation: { robotPlaced: true, areaClear: true, attendantPresent: true, previewChecked: true } } })
   })
 
+  it('ticks the four on-site confirmations with Tích tất cả, and clears them again with Bỏ tích tất cả', async () => {
+    tour = demo({ currentStep: 'INITIALIZING', currentLegId: null, currentLegKind: null, currentRevisionStopId: null, command: null }, { next: allow })
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    const group = await screen.findByRole('group', { name: 'Xác nhận tại chỗ' })
+    const boxes = within(group).getAllByRole('checkbox')
+    const depart = screen.getByRole('button', { name: 'Khởi hành tới Thư viện' })
+    fireEvent.click(boxes[1])
+    fireEvent.click(within(group).getByRole('button', { name: 'Tích tất cả' }))
+    for (const box of boxes) expect(box).toBeChecked()
+    await waitFor(() => expect(depart).toBeEnabled())
+    fireEvent.click(within(group).getByRole('button', { name: 'Bỏ tích tất cả' }))
+    for (const box of boxes) expect(box).not.toBeChecked()
+    expect(depart).toBeDisabled()
+    expect(within(group).getByRole('button', { name: 'Tích tất cả' })).toBeInTheDocument()
+    expect(writes).toHaveLength(0)
+  })
+
   it('pauses a running leg behind one confirmation, then says it waits for the robot to stop', async () => {
     tour = demo({}, { pause: allow })
     renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
