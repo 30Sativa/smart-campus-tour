@@ -5,8 +5,21 @@
     <link rel="icon" type="image/png" href="/images/logo.png" />
     <!-- Pinch zoom stays available: capping the scale locks out low-vision users. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#060d11" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f5f7f8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#09282b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7faf6" media="(prefers-color-scheme: light)" />
+    <!--
+      The saved theme is applied before the first paint, so a dark-theme visitor does not
+      see a white page while the app loads (ThemeProvider keeps it in sync afterwards).
+      Until the app's stylesheet arrives the body takes the public home's ground (.lp3 --lp-bg);
+      :where() keeps these rules weaker than index.css, which then decides as before.
+    -->
+    <style>body { background: #f7faf6; } :where(html.dark) body { background: #09282b; } :where(html.dark) { color-scheme: dark; }</style>
+    <script>
+      try {
+        var saved = JSON.parse(localStorage.getItem('campus-tour-theme') || 'null')
+        if (saved && saved.state && saved.state.theme === 'dark') document.documentElement.classList.add('dark')
+      } catch (error) { /* private mode or no storage: stay light */ }
+    </script>
     <meta name="description" content="Tham quan khuôn viên đại học cùng robot tự hành AMR, trợ lý AI đa ngôn ngữ và bản sao kỹ thuật số theo thời gian thực." />
     <title>CampusTour</title>
 

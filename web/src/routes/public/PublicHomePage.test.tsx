@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PublicHomePage from './PublicHomePage'
@@ -68,6 +68,27 @@ describe('PublicHomePage', () => {
 
     expect(screen.getByRole('link', { name: /Vào trang quản trị/i })).toHaveAttribute('href', '/admin')
     expect(screen.queryByRole('link', { name: /^Điều hành$/ })).toBeNull()
+  })
+
+  it('gives every signed-in role the same name, area button and sign-out in the navigation', () => {
+    const roles = [
+      { role: 'Staff', label: 'Điều hành', href: '/staff' },
+      { role: 'Admin', label: 'Quản trị', href: '/admin' },
+      { role: 'TechnicalStaff', label: 'Kỹ thuật', href: '/technical' },
+      { role: 'Representative', label: 'Đăng ký đoàn', href: '/dai-dien' },
+    ]
+    for (const { role, label, href } of roles) {
+      useAuthStore.setState({ accessToken: 'mock-token', isAuthenticated: true, user: { userId: `u-${role}`, username: `acc-${role}`, role } })
+      const { unmount } = renderPage()
+      const nav = document.getElementById('nav')!
+      const area = within(nav).getByRole('link', { name: label })
+      expect(area).toHaveAttribute('href', href)
+      expect(area).toHaveClass('lp-btn', 'lp-btn--solid')
+      // The name is text, not a second way to the same place.
+      expect(within(nav).getByText(`acc-${role}`).tagName).toBe('SPAN')
+      expect(within(nav).getByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
+      unmount()
+    }
   })
 
   it('keeps the section anchors the navigation points at', () => {
