@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Trash2, Upload } from 'lucide-react'
+import { Timer, Trash2, Upload } from 'lucide-react'
 import { ApiError } from '../../../api/client'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { FallbackVideoUploadError, isUploadedFallbackVideo, uploadFallbackVideo } from './api/fallback-video'
@@ -104,35 +104,60 @@ function FallbackVideoMarks({ stops, draft, onChange, preview, disabled }: {
   const setText = (stopId: string, text: string) => onChange(current => ({ ...current, texts: { ...current.texts, [stopId]: text } }))
   const limit = draft.duration != null && Number.isFinite(draft.duration) ? Math.floor(draft.duration) : null
 
+  // Placed marks on the video's length, so Staff see the order and spacing at a glance and can jump back to one.
+  const placed = limit ? stops.flatMap(stop => {
+    const seconds = parseMark(draft.texts[stop.id] ?? '')
+    return seconds != null && seconds <= limit ? [{ stop, seconds }] : []
+  }) : []
+
   return <fieldset className="mt-3 rounded-xl border border-[#e2e8f0] p-3">
     <legend className="px-1 text-[13px] font-medium text-[#334155]">Mốc thời gian của từng điểm trong video</legend>
     <p className="text-xs text-[#64748b]">
-      Giây video mà bản ghi tới mỗi điểm, dạng phút:giây. Bỏ trống điểm không có trong bản ghi.
-      {preview ? ' Phát video bên dưới, dừng ở đầu một điểm rồi bấm "Lấy thời điểm này".' : ''}
+      Dạng phút:giây; bỏ trống điểm không có trong bản ghi.
+      {preview ? ' Dừng video ở đầu một điểm rồi bấm nút đồng hồ của điểm đó.' : ''}
     </p>
-    {preview && <video ref={player} src={preview} controls muted preload="metadata" aria-label="Xem lại video dự phòng"
-      className="mt-2 max-h-64 w-full rounded-lg bg-black"
-      onLoadedMetadata={event => { const duration = event.currentTarget.duration; onChange(current => ({ ...current, duration })) }} />}
-    {limit != null && <p className="mt-1 text-xs text-[#64748b]">Độ dài video: {formatMark(limit)}</p>}
-    <ul className="mt-2 grid gap-2">
-      {stops.map(stop => {
-        const text = draft.texts[stop.id] ?? ''
-        const seconds = parseMark(text)
-        const problem = seconds === undefined ? 'Nhập dạng phút:giây, ví dụ 1:35.'
-          : seconds != null && limit != null && seconds > limit ? 'Mốc này nằm sau cuối video.' : null
-        const inputId = `fallback-mark-${stop.id}`
-        return <li key={stop.id} className="flex flex-wrap items-center gap-2">
-          <label htmlFor={inputId} className="min-w-0 flex-1 text-[13px] text-[#334155]">{stop.order}. {stop.name}</label>
-          <input id={inputId} className={`${inputClass} w-28`} inputMode="numeric"
-            placeholder="phút:giây" value={text} disabled={disabled} aria-invalid={problem ? true : undefined}
-            aria-describedby={problem ? `${inputId}-problem` : undefined}
-            onChange={event => setText(stop.id, event.target.value)} />
-          {preview && <button type="button" className={buttonClass('ghost', 'sm')} disabled={disabled}
-            aria-label={`Lấy thời điểm này cho ${stop.name}`}
-            onClick={() => setText(stop.id, formatMark(player.current?.currentTime ?? 0))}>Lấy thời điểm này</button>}
-          {problem && <span id={`${inputId}-problem`} className="basis-full text-xs text-[#b23e31]">{problem}</span>}
-        </li>
-      })}
-    </ul>
+    <div className={`mt-2 grid gap-3 ${preview ? 'md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]' : ''}`}>
+      {preview && <div className="min-w-0">
+        <video ref={player} src={preview} controls muted preload="metadata" aria-label="Xem lại video dự phòng"
+          className="aspect-video w-full rounded-lg bg-black"
+          onLoadedMetadata={event => { const duration = event.currentTarget.duration; onChange(current => ({ ...current, duration })) }} />
+        {limit != null && <>
+          <div className="relative mt-3 h-1.5 rounded-full bg-[#e2e8f0]" aria-hidden={placed.length === 0}>
+            {placed.map(({ stop, seconds }) => <button key={stop.id} type="button"
+              className="absolute top-1/2 grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[#2563eb] text-[10px] font-semibold text-white ring-2 ring-white transition-transform duration-150 hover:scale-110 motion-reduce:transition-none"
+              style={{ left: `${limit > 0 ? (seconds / limit) * 100 : 0}%` }}
+              title={`${stop.name} · ${formatMark(seconds)}`} aria-label={`Tua tới ${stop.name}`}
+              onClick={() => { if (player.current) player.current.currentTime = seconds }}>{stop.order}</button>)}
+          </div>
+          <p className="mt-2 flex justify-between text-xs text-[#64748b]"><span>0:00</span><span>Độ dài video: {formatMark(limit)}</span></p>
+        </>}
+      </div>}
+      <ul className="min-w-0 divide-y divide-[#f1f5f9] self-start rounded-lg border border-[#f1f5f9]">
+        {stops.map(stop => {
+          const text = draft.texts[stop.id] ?? ''
+          const seconds = parseMark(text)
+          const problem = seconds === undefined ? 'Nhập dạng phút:giây, ví dụ 1:35.'
+            : seconds != null && limit != null && seconds > limit ? 'Mốc này nằm sau cuối video.' : null
+          const inputId = `fallback-mark-${stop.id}`
+          return <li key={stop.id} className="px-2 py-1.5">
+            <div className="flex items-center gap-2">
+              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#eff6ff] text-xs font-semibold text-[#2563eb]" aria-hidden>{stop.order}</span>
+              <label htmlFor={inputId} className="min-w-0 flex-1 truncate text-[13px] text-[#334155]" title={stop.name}>
+                <span className="sr-only">{stop.order}. </span>{stop.name}</label>
+              <div className="w-24 shrink-0">
+                <input id={inputId} className={`${inputClass} text-center tabular-nums`} inputMode="numeric"
+                  placeholder="m:ss" value={text} disabled={disabled} aria-invalid={problem ? true : undefined}
+                  aria-describedby={problem ? `${inputId}-problem` : undefined}
+                  onChange={event => setText(stop.id, event.target.value)} />
+              </div>
+              {preview && <button type="button" className={`${buttonClass('ghost', 'sm')} shrink-0 px-2`} disabled={disabled}
+                aria-label={`Lấy thời điểm này cho ${stop.name}`} title="Lấy thời điểm đang phát"
+                onClick={() => setText(stop.id, formatMark(player.current?.currentTime ?? 0))}><Timer aria-hidden className="size-4" /></button>}
+            </div>
+            {problem && <p id={`${inputId}-problem`} className="mt-1 pl-8 text-xs text-[#b23e31]">{problem}</p>}
+          </li>
+        })}
+      </ul>
+    </div>
   </fieldset>
 }
