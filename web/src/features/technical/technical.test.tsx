@@ -1049,6 +1049,18 @@ describe('Technical Staff API integration', () => {
     expect(JSON.parse(String(verificationCalls()[0].init?.body))).toMatchObject({ resultCode: 'FAIL', reached: false, stopped: false, localizationPassed: false, cameraPresetConfirmed: false, reason: 'Robot không tới được.', evidenceNote: 'Đã kiểm tra.' })
   })
 
+  it('ticks every POI box with Tích tất cả, then clears them all again', async () => {
+    await openPoiCheck()
+    fireEvent.click(screen.getByLabelText('Robot tới đúng POI'))
+    fireEvent.click(screen.getByRole('button', { name: 'Tích tất cả' }))
+    for (const label of POI_CHECKS) expect(screen.getByLabelText(label)).toBeChecked()
+    expect(computedResult()).toHaveTextContent('Kết quả: Đạt')
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ tích tất cả' }))
+    for (const label of POI_CHECKS) expect(screen.getByLabelText(label)).not.toBeChecked()
+    expect(computedResult()).toHaveTextContent('Kết quả: Không đạt')
+    expect(screen.getByRole('button', { name: 'Tích tất cả' })).toBeInTheDocument()
+  })
+
   it('hides Không đạt mục nào once a POI box is ticked', async () => {
     await openPoiCheck()
     fireEvent.click(screen.getByLabelText('Robot tới đúng POI'))
@@ -1485,6 +1497,18 @@ describe('Technical Staff API integration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
     await waitFor(() => expect(testRunCalls()).toHaveLength(1))
     expect(JSON.parse(String(testRunCalls()[0].init?.body))).toMatchObject({ resultCode: 'FAIL', allStopsReached: false, safelyStopped: false, localizationPassed: false, failureReason: 'Mất định vị ngay từ đầu.', evidenceNote: 'Đã chạy thử.' })
+  })
+
+  it('ticks every route box with Tích tất cả and saves PASS without a reason', async () => {
+    await openRouteTest()
+    fireEvent.click(screen.getByRole('button', { name: 'Tích tất cả' }))
+    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Định vị đạt']) expect(screen.getByLabelText(label)).toBeChecked()
+    expect(computedResult()).toHaveTextContent('Kết quả: Đạt')
+    expect(screen.queryByLabelText('Lý do không đạt')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bỏ tích tất cả' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
+    await waitFor(() => expect(testRunCalls()).toHaveLength(1))
+    expect(JSON.parse(String(testRunCalls()[0].init?.body))).toMatchObject({ resultCode: 'PASS', allStopsReached: true, safelyStopped: true, localizationPassed: true })
   })
 
   it('hides Không đạt mục nào once a route box is ticked', async () => {

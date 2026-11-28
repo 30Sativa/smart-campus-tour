@@ -12,7 +12,7 @@ import { DeployToRobotDialog } from '../../features/technical/DeployToRobotDialo
 import { ReadyRobotField } from '../../features/technical/ReadyRobotField'
 import { robotForMap, routeReturnPath } from '../../features/technical/robot-readiness'
 import { RouteRerunSection } from '../../features/technical/RouteRerunSection'
-import { CheckRow, ComputedResult, NoneChecked, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
+import { CheckListHead, CheckRow, ComputedResult, NoneChecked, Note, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { errorText, routeTestErrors } from '../../features/technical/technical-format'
 import { formatDateTime, formatMinutesSeconds } from '../../components/ui/date-time'
 import { useMapShortLabel, useMapVersions, usePhysicalRobots, usePreviousRevision, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
@@ -216,7 +216,7 @@ function RecordRouteTestModal({ route, onClose, onAssignRobot }: { route: Versio
           {failStopsTours && <p className="mt-1 font-semibold text-[#b23e31]">Các Tour này sẽ không chốt và không bắt đầu được cho tới khi có lần chạy đạt.</p>}
         </div> : null}
         <div className="space-y-2">
-          <p className="text-xs text-[#64748b]">Tick mục đã đạt. Còn mục chưa tick thì kết quả là Không đạt.</p>
+          <CheckListHead checks={checks} onChange={() => { setTouched(true); changed() }} />
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); setTouched(true); changed() }}>{check.label}</CheckRow>)}
           {pending && <NoneChecked reasonId="route-test-reason" onNone={() => { setTouched(true); changed() }} />}
         </div>
