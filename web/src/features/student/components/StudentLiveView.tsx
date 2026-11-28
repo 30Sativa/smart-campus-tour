@@ -1,5 +1,5 @@
 import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { Bot, Captions, Check, Clock3, Compass, Flag, Headset, ListOrdered, MapPin, MessageSquare, Route } from 'lucide-react'
+import { ArrowRight, Captions, Check, Clock3, Compass, Flag, Headset, ListOrdered, MapPin, MessageSquare, Route, Vote } from 'lucide-react'
 import type { PoiDetail, StudentSession, StudentTourSnapshot } from '../student-types'
 import { getStudentStatusDisplay } from '../student-status'
 import { poiMinutes, poiProgress, poiStatusText, stopPosition } from '../student-route'
@@ -22,6 +22,8 @@ interface StudentLiveViewProps {
   talk?: ReactNode
   /** Guide messages not yet looked at, shown on the tab. */
   talkUnread?: number
+  /** ADR-0065: a ballot is open; it lives in the guide chat, so its tab says so while another tab is shown. */
+  talkVoteOpen?: boolean
   /** False hides the 2D map tab, for Tours without a robot pose feed. */
   showMap?: boolean
   /** Caption title while no stop is known (default: the Tour name). */
@@ -30,8 +32,6 @@ interface StudentLiveViewProps {
   narrationIdleText?: string
   /** Badge and empty-state message of the video player. */
   video?: { badge?: string; emptyMessage?: string }
-  /** Extra content under the journey rail, e.g. a fallback video link. */
-  notice?: ReactNode
   /** The live relay URL and token (ADR-0055). Omitted = the dev-only LAN URL; null = no live stream. */
   quest?: QuestSource | null
   /** ADR-0063: the Tour's fallback video on the relay, played while the live picture is lost. */
@@ -53,7 +53,7 @@ const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
  * On phones those panels stack in the same reading order.
  * Every tab stays mounted so the AI conversation survives a tab switch.
  */
-export function StudentLiveView({ snapshot, ai, talk, talkUnread = 0, showMap = true, idleTitle, narrationIdleText, video, notice, quest, fallback, guideVoice }: StudentLiveViewProps) {
+export function StudentLiveView({ snapshot, ai, talk, talkUnread = 0, talkVoteOpen = false, showMap = true, idleTitle, narrationIdleText, video, quest, fallback, guideVoice }: StudentLiveViewProps) {
   const tabs = TABS.filter((t) => (showMap || t.key !== 'map') && (talk !== undefined || t.key !== 'talk'))
   const storedTab = useStudentStore((s) => s.activeTab)
   const tab = tabs.some((t) => t.key === storedTab) ? storedTab : tabs[0].key
@@ -102,7 +102,6 @@ export function StudentLiveView({ snapshot, ai, talk, talkUnread = 0, showMap = 
               {statusDisplay.description && <p>{statusDisplay.description}</p>}
             </div>
           </div>
-          {notice}
         </div>
 
         <section className="st-e-panel" aria-label="Thông tin buổi tham quan">
@@ -123,6 +122,9 @@ export function StudentLiveView({ snapshot, ai, talk, talkUnread = 0, showMap = 
               >
                 <Icon size={19} aria-hidden="true" />
                 <span>{label}</span>
+                {key === 'talk' && talkVoteOpen && tab !== 'talk' && <span className="st-talk__vote">
+                  <Vote size={12} aria-hidden="true" /><span className="sr-only">, đang mở bầu chọn</span>
+                </span>}
                 {key === 'talk' && talkUnread > 0 && tab !== 'talk' && <span className="st-talk__dot">
                   {talkUnread > 9 ? '9+' : talkUnread}<span className="sr-only"> tin mới</span>
                 </span>}
@@ -211,35 +213,49 @@ function StopThumb({ poi }: { poi: PoiDetail }) {
 }
 
 /**
- * The route as one bar: a pin per stop plus the finish, a lime fill and a
- * robot dot that glide forward as stops are seen, and the stop names under it.
+ * The route in two short lines: where the robot is and where it goes next, then one segment per stop plus the
+ * finish. Full stop names and states stay in the segments for assistive technology; the "Lộ trình" tab lists them.
  */
 function JourneyRail({ pois, snapshot }: { pois: PoiDetail[]; snapshot: StudentTourSnapshot }) {
   const legs = pois.length + 1
   const states = pois.map((poi) => poiProgress(poi, snapshot))
   const done = states.filter((state) => state === 'done').length
-  const share = snapshot.step === 'returning' ? (legs - 0.5) / legs : (done + (states.includes('now') ? 0.5 : 0)) / legs
+  const returning = snapshot.step === 'returning'
+  const share = returning ? (legs - 0.5) / legs : (done + (states.includes('now') ? 0.5 : 0)) / legs
   const percent = Math.round(Math.min(1, share) * 100)
   const minutes = pois.filter((_, index) => states[index] !== 'done').reduce((sum, poi) => sum + (poiMinutes(poi) ?? 0), 0)
+  const { currentPoi, nextPoi } = snapshot
+  // On a voting Tour the next POI is unknown until the ballot closes; "the finish" is only said when nothing is left.
+  const finishNext = !states.includes('later')
+  const voting = pois.some((poi) => poi.progress)
+  const at = returning ? { label: 'Đang về', name: 'Điểm kết thúc' }
+    : currentPoi ? { label: 'Đang xem', name: currentPoi.title }
+      : nextPoi ? { label: snapshot.step === 'navigating' ? 'Đang tới' : 'Điểm đầu', name: nextPoi.title }
+        : { label: 'Lộ trình', name: `${pois.length} điểm dừng` }
+  const then = returning || !currentPoi ? null
+    : nextPoi ? nextPoi.title : finishNext ? 'Về điểm kết thúc' : voting ? 'Chưa chốt, theo bầu chọn' : null
+  const position = returning ? pois.length : currentPoi ?? nextPoi ? stopPosition((currentPoi ?? nextPoi)!, pois) : 0
+  const segment = (poi: PoiDetail, index: number) => states[index] === 'later' && !currentPoi && nextPoi?.id === poi.id ? 'next' : states[index]
   return (
     <section className="st-x-rail" aria-label="Hành trình">
-      <p className="st-x-rail__head"><span><Route size={20} aria-hidden="true" />Hành trình</span><span className="st-x-rail__meta"><b>{percent}%</b>{minutes ? <span><Clock3 size={14} aria-hidden="true" />còn khoảng {minutes} phút dừng</span> : null}</span></p>
-      <div className="st-x-rail__track" role="progressbar" aria-label="Tiến độ hành trình" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-        <span className="st-x-rail__fill" style={{ width: `${percent}%` }} />
-        {pois.map((poi, index) => (
-          <span key={poi.id} className={`st-x-rail__pin is-${states[index]}`} style={{ left: `${((index + 1) / legs) * 100}%` }} />
-        ))}
-        <span className="st-x-rail__bot" style={{ left: `${percent}%` }} aria-hidden="true"><Bot size={11} /></span>
+      <div className="st-x-rail__row">
+        <span className="st-x-rail__count" title="Điểm dừng"><Route size={16} aria-hidden="true" /><b>{position}</b>/{pois.length}</span>
+        <p className="st-x-rail__at"><small>{at.label}</small><b>{at.name}</b></p>
+        {then && <p className="st-x-rail__then"><ArrowRight size={14} aria-hidden="true" /><small>Kế tiếp</small><b>{then}</b></p>}
+        <span className="st-x-rail__meta">
+          <b role="progressbar" aria-label="Tiến độ hành trình" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>{percent}%</b>
+          {minutes ? <span><Clock3 size={13} aria-hidden="true" />còn {minutes} phút</span> : null}
+        </span>
       </div>
-      <ol className="st-x-rail__stops" style={{ gridTemplateColumns: `repeat(${legs}, minmax(0, 1fr))` }}>
+      <ol className="st-x-rail__stops">
         {pois.map((poi, index) => (
-          <li key={poi.id} className={`is-${states[index]}`} aria-current={states[index] === 'now' ? 'step' : undefined}>
-            <b>{states[index] === 'done' ? <Check size={14} aria-hidden="true" /> : states[index] === 'now' ? <MapPin size={14} aria-hidden="true" /> : null}{String(poi.order).padStart(2, '0')}</b>
-            <span>{poi.title.split(' & ')[0]}</span>
-            <small>{poiStatusText(poi, states[index], true)}</small>
+          <li key={poi.id} className={`is-${segment(poi, index)}`} title={poi.title} aria-current={states[index] === 'now' ? 'step' : undefined}>
+            <span className="sr-only">{poi.order}. {poi.title}: {poiStatusText(poi, states[index], true)}</span>
           </li>
         ))}
-        <li className={snapshot.step === 'returning' ? 'is-now' : 'is-later'}><b><Flag size={12} aria-hidden="true" /> Đích</b><span>Về điểm cuối</span></li>
+        <li className={returning ? 'is-now' : 'is-later'} title="Về điểm cuối" aria-current={returning ? 'step' : undefined}>
+          <span className="sr-only">Về điểm cuối</span><Flag size={10} aria-hidden="true" />
+        </li>
       </ol>
     </section>
   )

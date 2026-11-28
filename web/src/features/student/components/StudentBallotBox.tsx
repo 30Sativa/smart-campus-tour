@@ -39,7 +39,8 @@ export function StudentBallotBox({ tourId, ballot, locked, shared }: {
   const mineName = ballot?.candidates.find(candidate => candidate.stopId === mine)?.name
   const decision = ballot?.decision ? decisionText(ballot.decision) : null
 
-  return <section className="st-vote" aria-label="Bầu chọn điểm tiếp theo">
+  // It sits inside the chat's polite live region; counts move every few seconds, so only its status lines speak.
+  return <section className="st-vote" aria-label="Bầu chọn điểm tiếp theo" aria-live="off">
     {ballot && (decision
       ? <div className="st-vote__decision" role="status"><b>{decision.title}</b>{decision.note && <span>{decision.note}</span>}</div>
       : <>

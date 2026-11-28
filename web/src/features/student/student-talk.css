@@ -6,6 +6,13 @@
 .st span.st-talk__audio[data-state='gone'] { min-height: 0; padding: 0; background: none; color: var(--st-muted); font-weight: 400; }
 .st .st-e-tabs button .st-talk__dot { position: absolute; top: 8px; right: calc(50% - 18px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--st-danger); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; }
 .st .st-e-tabs button { position: relative; }
+/* A ballot is open in the guide chat while another tab is shown. */
+.st .st-e-tabs button .st-talk__vote { position: absolute; top: 8px; left: calc(50% - 30px); display: grid; place-items: center; width: 18px; height: 18px; border-radius: 9px; background: var(--st-green); color: #fff; }
 .st .st-x-wait .st-talk { margin-top: var(--st-gap); padding: 24px; border: 1px solid var(--st-line); border-radius: var(--st-card-radius); background: var(--st-paper); box-shadow: var(--st-shadow); }
 .st .st-x-wait .st-talk .st-ai__msgs { max-height: 320px; }
 @media (max-width: 959px) { .st .st-e-body--talk { height: 580px; flex: none; } }
+.st .st-talk__ballot:empty { display: none; }
+/* One scrolling row of quick replies leaves the conversation, and a ballot card in it, the height. */
+.st .st-talk .st-ai__sugg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+.st .st-talk .st-ai__sugg > span { flex: none; width: auto; }
+.st .st-talk .st-ai__sugg button { flex: none; }

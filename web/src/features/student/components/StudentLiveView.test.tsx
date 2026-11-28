@@ -21,9 +21,36 @@ describe('Student live workspace navigation', () => {
     const journey = screen.getByRole('region', { name: 'Hành trình' })
     const video = screen.getByText('Hình ảnh buổi tham quan')
     expect(journey.compareDocumentPosition(video) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    const current = within(journey).getByText('Đang xem').closest('li')
-    expect(current).toHaveAttribute('aria-current', 'step')
-    expect(current).toHaveTextContent('Thư viện')
+    expect(within(journey).getByText('Đang xem').closest('p')).toHaveTextContent('Đang xemThư viện')
+    const current = journey.querySelector('li[aria-current="step"]')
+    expect(current).toHaveTextContent('1. Thư viện: Đang xem')
+  })
+
+  it('keeps the journey to one line of where the tour is and what comes next', () => {
+    const twoStops = buildLiveSnapshot({ tourId: 'tour', tourName: 'Buổi tham quan', tourState: 'RUNNING',
+      scheduledStartAt: '2026-11-05T08:00:00Z', invitationExpiresAt: '2026-11-06T08:00:00Z', rowType: 'INDIVIDUAL', hasFallbackVideo: false }, {
+      stops: [
+        { order: 1, poiId: 'library', name: 'Thư viện', description: null, narrationText: null, audioUrl: null, narrationSeconds: null, dwellSeconds: 120 },
+        { order: 2, poiId: 'lab', name: 'Phòng thí nghiệm', description: null, narrationText: null, audioUrl: null, narrationSeconds: null, dwellSeconds: 180 },
+      ],
+      progress: { step: 'OBSERVING', currentPoiId: 'library', lastArrivedPoiId: 'library', needsAssistance: false, isHeld: false },
+    })
+    render(<StudentLiveView snapshot={twoStops} showMap={false} />)
+    const journey = screen.getByRole('region', { name: 'Hành trình' })
+    expect(journey).toHaveTextContent('1/2')
+    expect(within(journey).getByText('Kế tiếp').closest('p')).toHaveTextContent('Kế tiếpPhòng thí nghiệm')
+    // Half of the first of three legs (two stops and the way back): one sixth of the way.
+    expect(within(journey).getByRole('progressbar', { name: 'Tiến độ hành trình' })).toHaveAttribute('aria-valuenow', '17')
+    // Every stop is one segment of the bar plus the way back, named for screen readers only.
+    expect(journey.querySelectorAll('ol > li')).toHaveLength(3)
+    expect(journey.querySelector('ol > li:nth-child(2)')).toHaveTextContent('2. Phòng thí nghiệm: Sắp tới')
+  })
+
+  it('marks the guide tab while a ballot is open there and another tab is shown', () => {
+    render(<StudentLiveView snapshot={snapshot} showMap={false} talk={<p>Kênh hướng dẫn viên</p>} talkVoteOpen />)
+    expect(screen.getByRole('tab', { name: 'Hướng dẫn viên, đang mở bầu chọn' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: /Hướng dẫn viên/ }))
+    expect(screen.getByRole('tab', { name: 'Hướng dẫn viên', selected: true })).toBeInTheDocument()
   })
 
   it('moves keyboard focus between available tabs and keeps the right panel associated', () => {
