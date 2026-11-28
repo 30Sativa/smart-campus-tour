@@ -59,9 +59,9 @@ export default function StaffManageTourEditPage() {
       </div>
       : <TourForm key={data.tour.rowVersion}
         currentCoverUrl={tourCoverUrl(tourId, { width: 480, height: 270 })}
-        initial={{ name: data.tour.name, description: data.tour.description, routeId: data.tour.routeId, scheduledStartAt: data.tour.scheduledStartAt, fallbackVideoUrl: data.fallbackVideoUrl }}
+        initial={{ name: data.tour.name, description: data.tour.description, routeId: data.tour.routeId, scheduledStartAt: data.tour.scheduledStartAt, fallbackVideoUrl: data.fallbackVideoUrl, fallbackVideoMarks: data.fallbackVideoMarks }}
         currentRoute={{ id: data.tour.routeId, name: data.tour.routeName }}
-        fixedStops={data.routeRevision?.stops.map(stop => ({ order: stop.stopOrder, name: stop.name, dwellSeconds: stop.dwellSeconds }))}
+        fixedStops={data.routeRevision?.stops.map(stop => ({ id: stop.id, order: stop.stopOrder, name: stop.name, dwellSeconds: stop.dwellSeconds }))}
         scheduleLocked={!data.permissions.canChangeScheduleAndRoute}
         submitLabel="Lưu thay đổi" busy={update.isPending || uploadingCover} error={coverError ?? (update.isError ? tourError(update.error) : null)} cancelTo={back} onSubmit={submit} />}
     {data && <TourSeatsAndOperatorPanel key={data.tour.rowVersion} detail={data} />}

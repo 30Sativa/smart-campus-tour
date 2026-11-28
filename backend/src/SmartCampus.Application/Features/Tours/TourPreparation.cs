@@ -12,14 +12,15 @@ internal static class TourPreparation
     public static TourInput Normalize(TourInput input) => input with
     {
         Name = input.Name.Trim(), Description = Optional(input.Description),
-        FallbackVideoUrl = Optional(input.FallbackVideoUrl), ScheduledStartAt = input.ScheduledStartAt.ToUniversalTime()
+        FallbackVideoUrl = Optional(input.FallbackVideoUrl), ScheduledStartAt = input.ScheduledStartAt.ToUniversalTime(),
+        FallbackVideoMarks = TourFallbackVideoMarks.Normalize(input.FallbackVideoMarks)
     };
 
     public static CreateTourInput Normalize(CreateTourInput input) => input with
     {
         Name = input.Name.Trim(), Description = Optional(input.Description), RobotCode = input.RobotCode.Trim(),
         FallbackVideoUrl = Optional(input.FallbackVideoUrl), ScheduledStartAt = input.ScheduledStartAt?.ToUniversalTime(),
-        ShortNoticeReason = Optional(input.ShortNoticeReason)
+        ShortNoticeReason = Optional(input.ShortNoticeReason), FallbackVideoMarks = TourFallbackVideoMarks.Normalize(input.FallbackVideoMarks)
     };
 
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

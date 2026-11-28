@@ -1,4 +1,4 @@
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
@@ -132,6 +132,20 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         return new(ended.ActorUserId!.Value, ended.ActorName!, tour.OperatorUserId, tour.OperatorName,
             lastSeen.ValueKind == JsonValueKind.Null ? null : lastSeen.GetDateTimeOffset());
     }
+
+    public async Task<TourVideoModeView> GetVideoModeAsync(Guid tourId, CancellationToken ct)
+    {
+        var last = await TourVideoModeReads.Switches(db, tourId).OrderByDescending(e => e.Id)
+            .Select(e => new { e.EventType, e.OccurredAt, ActorName = e.ActorUser == null ? null : e.ActorUser.FullName, e.ReasonNote })
+            .FirstOrDefaultAsync(ct);
+        var hasVideo = await db.Tours.AsNoTracking().AnyAsync(t => t.Id == tourId && t.FallbackVideoUrl != null, ct);
+        return new(TourVideoModes.Of(last?.EventType), last?.OccurredAt, last?.ActorName, last?.ReasonNote, hasVideo);
+    }
+
+    public async Task<FallbackVideoMarksData?> GetFallbackVideoMarksAsync(Guid tourId, CancellationToken ct) =>
+        TourFallbackVideoMarks.Parse(await db.TourEvents.AsNoTracking()
+            .Where(e => e.TourId == tourId && e.EventType == TourLifecycleEvents.FallbackVideoMarksSet)
+            .OrderByDescending(e => e.Id).Select(e => e.DataJson).FirstOrDefaultAsync(ct));
 
     public Task<Tour?> FindAsync(Guid id, CancellationToken ct) => db.Tours.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id, ct);
     public Task<TourSummary?> GetSummaryAsync(Guid id, CancellationToken ct) =>

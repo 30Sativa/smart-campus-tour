@@ -21,6 +21,9 @@ public sealed class CreateTourInputValidator : AbstractValidator<CreateTourInput
             .Must(t => t is null || t.Value.UtcTicks % TimeSpan.TicksPerMillisecond == 0).WithMessage("Lịch Tour hỗ trợ độ chính xác tới millisecond.");
         RuleFor(t => t.FallbackVideoUrl).MaximumLength(1000).Must(url => string.IsNullOrWhiteSpace(url) ||
             Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && string.IsNullOrEmpty(uri.UserInfo));
+        RuleFor(t => t.FallbackVideoMarks!).SetValidator(new FallbackVideoMarksValidator()).When(t => t.FallbackVideoMarks is not null);
+        RuleFor(t => t.FallbackVideoMarks).Must(marks => marks is null || marks.Count == 0).When(t => string.IsNullOrWhiteSpace(t.FallbackVideoUrl))
+            .WithMessage("Cần tải video dự phòng lên trước khi chọn mốc thời gian.");
     }
 }
 
@@ -35,5 +38,8 @@ public sealed class TourInputValidator : AbstractValidator<TourInput>
             .Must(t => t.UtcTicks % TimeSpan.TicksPerMillisecond == 0).WithMessage("Lịch Tour hỗ trợ độ chính xác tới millisecond.");
         RuleFor(t => t.FallbackVideoUrl).MaximumLength(1000).Must(url => string.IsNullOrWhiteSpace(url) ||
             Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && string.IsNullOrEmpty(uri.UserInfo));
+        RuleFor(t => t.FallbackVideoMarks!).SetValidator(new FallbackVideoMarksValidator()).When(t => t.FallbackVideoMarks is not null);
+        RuleFor(t => t.FallbackVideoMarks).Must(marks => marks is null || marks.Count == 0).When(t => string.IsNullOrWhiteSpace(t.FallbackVideoUrl))
+            .WithMessage("Cần tải video dự phòng lên trước khi chọn mốc thời gian.");
     }
 }

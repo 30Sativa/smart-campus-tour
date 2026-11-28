@@ -151,6 +151,15 @@ export function useSetAutoAdvance() {
   })
 }
 
+/** ADR-0075: switch a running Tour's Viewers to the fallback recording or back to live. */
+export function useSetVideoMode() {
+  const onSettled = useRefreshTours()
+  return useMutation({
+    mutationFn: ({ id, mode, reason }: { id: string; mode: 'LIVE' | 'FALLBACK'; reason: string }) => toursApi.setVideoMode(id, mode, reason),
+    onSettled,
+  })
+}
+
 /** ADR-0065: lock (`locked: true`) or unlock a POI of a voting Tour. */
 export function useStopLock() {
   const onSettled = useRefreshTours()

@@ -2,6 +2,8 @@
 
 - **Status:** Proposed 17/11/2026; implemented in code. The relay path is checked only on the real relay host (MediaMTX
   `runOnDemand` with ffmpeg) and with a real Cloudinary account. Needs the repository owner's acceptance.
+- **Partially superseded by:** ADR-0075 (decision 2: the Operator switches Viewers to the fallback video; the
+  browser no longer switches by itself, and the recording plays muted).
 - **Follows:** ADR-0055 (token-gated relay), ADR-0034 (fallback video stays editable on a Tour).
 - **Supersedes:** ADR-0009 §6 on watching the fallback video after End Early (SRS v0.2 FR-48: after End Early only
   Ended/Result remains).

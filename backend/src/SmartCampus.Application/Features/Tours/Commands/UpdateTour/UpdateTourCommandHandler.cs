@@ -7,7 +7,7 @@ using SmartCampus.Application.Features.Routes;
 namespace SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 
 public sealed class UpdateTourCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteManagementRepository routes, TimeProvider clock) : IRequestHandler<UpdateTourCommand, TourMutationResult>
+    IRouteManagementRepository routes, IRouteRevisionRepository revisions, TimeProvider clock) : IRequestHandler<UpdateTourCommand, TourMutationResult>
 {
     public async Task<TourMutationResult> Handle(UpdateTourCommand command, CancellationToken ct)
     {
@@ -44,6 +44,14 @@ public sealed class UpdateTourCommandHandler(ITourManagementRepository repositor
         if (tour.Description != input.Description) { tour.Description = input.Description; changed.Add("description"); }
         if (scheduleChanged) { tour.ScheduledStartAt = input.ScheduledStartAt; changed.Add("scheduledStartAt"); }
         if (tour.FallbackVideoUrl != input.FallbackVideoUrl) { tour.FallbackVideoUrl = input.FallbackVideoUrl; changed.Add("fallbackVideoUrl"); }
+        // ADR-0075 stage 2: marks belong to one video, so a new video starts without them unless the request sets them.
+        if (input.FallbackVideoUrl is { } video && input.FallbackVideoMarks is { } marks &&
+            !TourFallbackVideoMarks.Same(marks, TourFallbackVideoMarks.For(await repository.GetFallbackVideoMarksAsync(tour.Id, ct), video)))
+        {
+            await TourFallbackVideoMarks.RequireStopsAsync(revisions, tour.RouteRevisionId, marks, ct);
+            repository.AddEvent(TourFallbackVideoMarks.Event(tour.Id, video, marks, command.Actor, now));
+            changed.Add("fallbackVideoMarks");
+        }
         if (changed.Count == 0) return new(tour.Id);
         tour.UpdatedAt = now;
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId, "TOUR_UPDATED", fingerprint, now, changed.ToArray());

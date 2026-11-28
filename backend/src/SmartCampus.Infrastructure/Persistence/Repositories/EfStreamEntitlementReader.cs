@@ -1,10 +1,11 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Infrastructure.Persistence.Repositories;
 
-/// <summary>Unlocked reads for ADR-0055, ADR-0063 and ADR-0072, asked on every token issue and every relay connection.</summary>
+/// <summary>Unlocked reads for ADR-0055, ADR-0063 (with ADR-0075) and ADR-0072, asked on every token issue and every relay connection.</summary>
 public sealed class EfStreamEntitlementReader(ApplicationDbContext db) : IStreamEntitlementReader
 {
     private const string Scheduled = "SCHEDULED";
@@ -21,7 +22,11 @@ public sealed class EfStreamEntitlementReader(ApplicationDbContext db) : IStream
 
     public Task<bool> StudentSessionMayWatchFallbackAsync(Guid sessionId, Guid tourId, DateTimeOffset now, CancellationToken ct) =>
         SessionTour(sessionId, now)
-            .AnyAsync(tour => tour.Id == tourId && tour.State == TourRuntime.Running && tour.FallbackVideoUrl != null, ct);
+            .AnyAsync(tour => tour.Id == tourId && tour.State == TourRuntime.Running && tour.FallbackVideoUrl != null &&
+                // ADR-0075: only while the Operator has switched the Tour to its fallback video.
+                db.TourEvents.Where(e => e.TourId == tour.Id &&
+                        (e.EventType == TourLifecycleEvents.VideoFallbackStarted || e.EventType == TourLifecycleEvents.VideoLiveRestored))
+                    .OrderByDescending(e => e.Id).Select(e => e.EventType).FirstOrDefault() == TourLifecycleEvents.VideoFallbackStarted, ct);
 
     public Task<bool> StudentSessionIsInTourAsync(Guid sessionId, Guid tourId, DateTimeOffset now, CancellationToken ct) =>
         SessionTour(sessionId, now).AnyAsync(tour => tour.Id == tourId, ct);

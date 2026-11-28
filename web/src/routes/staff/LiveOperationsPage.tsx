@@ -18,7 +18,7 @@ import { useStaffTalkFeed } from '../../features/staff/operations/live/tour-talk
 import { TourTalkPanel } from '../../features/staff/operations/live/TourTalkPanel'
 import { CommandCard, ExecutionPanel, RobotStatusCard, RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { actionGate, tourSituation, type ConsoleAction, type Situation } from '../../features/staff/operations/situation'
-import { AutoAdvanceToggle, ConsoleActionButton, EndEarlyAction } from '../../features/staff/operations/TourActions'
+import { AutoAdvanceToggle, ConsoleActionButton, EndEarlyAction, VideoModePanel } from '../../features/staff/operations/TourActions'
 import { TourStepper } from '../../features/staff/operations/TourStepper'
 import { VotePanel } from '../../features/staff/operations/VotePanel'
 import { voteOpen } from '../../features/staff/operations/ballot-live'
@@ -130,6 +130,7 @@ function TourConsole({ tourId }: { tourId: string }) {
         <div data-testid="live-layout" className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(340px,1fr)] lg:grid-rows-[auto_auto_1fr]">
           {running && <section className={`${panelClass} min-w-0 p-3 lg:col-start-1`} aria-label="Camera">
             <LiveCamera robotCode={reservation?.robotCode} />
+            <div className="mt-3"><VideoModePanel detail={detail} isOperator={isOperator} disabled={stale} /></div>
           </section>}
           <div className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-span-3 lg:row-start-1">
             <ControlTabs label="Bảng điều khiển trong Tour" tabs={tabs} />

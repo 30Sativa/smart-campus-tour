@@ -60,6 +60,9 @@ export const toursApi = {
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/skip`, { method: 'POST', json: body }).then(() => id),
   setAutoAdvance: (id: string, enabled: boolean) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/auto-advance`, { method: 'PUT', json: { enabled } }).then(() => id),
+  /** ADR-0075: the Tour's Operator switches Viewers to the fallback recording or back to live, always with a reason. */
+  setVideoMode: (id: string, mode: 'LIVE' | 'FALLBACK', reason: string) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/video-mode`, { method: 'PUT', json: { mode, reason } }).then(() => id),
   endEarly: (id: string, body: { requestId: string; expectedRowVersion: string; reason: string }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/end-early`, { method: 'POST', json: body }).then(() => id),
   retryLeg: (id: string, body: { requestId: string; expectedRowVersion: string }) =>

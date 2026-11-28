@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from 'react'
-import { ArrowRight, CircleStop, FileCheck2, Pause, Play, RotateCcw, SkipForward } from 'lucide-react'
+import { ArrowRight, CircleStop, Film, FileCheck2, Pause, Play, Radio, RotateCcw, SkipForward } from 'lucide-react'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { notify } from '../../../components/ui/toast-store'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import type { StartConfirmation, TourActionAvailability, TourDetails } from '../../administration/tours/types'
-import { useEndTourEarly, useIntentRequestIds, useNextStop, usePauseLeg, useReconcileCommand, useRetryLeg, useSetAutoAdvance, useSkipStop } from './hooks'
+import { useEndTourEarly, useIntentRequestIds, useNextStop, usePauseLeg, useReconcileCommand, useRetryLeg, useSetAutoAdvance, useSetVideoMode, useSkipStop } from './hooks'
 import { checkInfo } from './operation-labels'
 import { ALL_REMAINING_LOCKED_TEXT, operationRefusal } from './operation-errors'
 import { CONFIRMATIONS, NO_CONFIRMATION, isConfirmed } from './onsite-confirmations'
@@ -222,6 +222,51 @@ export function AutoAdvanceToggle({ detail, disabled }: { detail: TourDetails; d
     </label>
     {auto.blockedReason && <p className="mt-1.5 text-[12.5px] leading-5 text-[#7d5310]">Lần tự đi tại điểm này không thực hiện được: {blocked || 'robot chưa sẵn sàng'}.</p>}
     {set.isError && <p role="alert" className="mt-1.5 text-[12.5px] font-semibold text-[#9d3428]">{operationRefusal(set.error).message}</p>}
+  </div>
+}
+
+/**
+ * ADR-0075: what Viewers watch. The Operator switches to the fallback recording when the headset loses its picture
+ * and back to live when it works again; nothing switches by itself. Others see the mode without the button.
+ */
+export function VideoModePanel({ detail, isOperator, disabled }: { detail: TourDetails; isOperator: boolean; disabled: boolean }) {
+  const set = useSetVideoMode()
+  const [open, setOpen] = useState(false)
+  const video = detail.video
+  if (!video) return null
+  const fallback = video.mode === 'FALLBACK'
+  const target = fallback ? 'LIVE' : 'FALLBACK'
+  const noVideo = !fallback && !video.hasFallbackVideo
+  const since = video.since ? new Date(video.since).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : null
+  const close = () => { setOpen(false); set.reset() }
+  return <div className="rounded-xl border border-[#e2e8f0] px-3 py-2.5" aria-label="Video cho Viewer" role="group">
+    <p className="text-[13px] font-semibold text-[#0f172a]">
+      Viewer đang xem: {fallback ? 'Bản ghi hành trình (không phải trực tiếp)' : 'Hình trực tiếp'}
+    </p>
+    {video.actorName && <p className="mt-0.5 text-[11.5px] text-muted">
+      {fallback ? 'Chuyển sang bản ghi' : 'Chuyển về trực tiếp'} bởi {video.actorName}{since ? ` lúc ${since}` : ''}{video.reason ? `: ${video.reason}` : ''}
+    </p>}
+    {isOperator && <>
+      <button type="button" className={`${buttonClass(fallback ? 'primary' : 'secondary', 'sm')} mt-2`} disabled={disabled || noVideo || set.isPending}
+        onClick={() => setOpen(true)}>
+        {fallback ? <Radio size={15} aria-hidden="true" /> : <Film size={15} aria-hidden="true" />}
+        {fallback ? 'Chuyển về trực tiếp' : 'Chuyển sang video dự phòng'}
+      </button>
+      <p className="mt-1.5 text-[11.5px] leading-5 text-muted">{noVideo ? 'Tour này chưa có video dự phòng.'
+        : fallback ? 'Nên chuyển về khi robot đang dừng tại một điểm, sau khi kính đã có hình lại.'
+          : 'Chỉ dùng khi kính mất hình. Viewer thấy thông báo rồi bản ghi không tiếng; thuyết minh vẫn phát.'}</p>
+    </>}
+    <ConfirmationDialog open={open}
+      title={fallback ? 'Chuyển về hình trực tiếp?' : 'Chuyển sang video dự phòng?'}
+      description={fallback ? 'Viewer rời bản ghi và xem lại hình trực tiếp từ kính.'
+        : 'Viewer thấy thông báo, sau đó là bản ghi hành trình được ghi rõ “không phải trực tiếp”. Hệ thống không tự chuyển lại.'}
+      confirmLabel={fallback ? 'Chuyển về trực tiếp' : 'Chuyển sang video dự phòng'} busyLabel="Đang chuyển…" busy={set.isPending}
+      requireReason reasonLabel="Lý do" reasonPlaceholder={fallback ? 'Ví dụ: kính đã có hình lại.' : 'Ví dụ: kính mất hình ở hành lang tầng 3.'}
+      error={set.isError ? operationRefusal(set.error).message : undefined}
+      onCancel={close}
+      onConfirm={reason => set.mutate({ id: detail.tour.id, mode: target, reason }, {
+        onSuccess: () => { close(); notify({ title: fallback ? 'Đã chuyển về hình trực tiếp' : 'Đã chuyển sang video dự phòng' }) },
+      })} />
   </div>
 }
 

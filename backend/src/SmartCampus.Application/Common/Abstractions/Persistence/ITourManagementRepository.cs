@@ -1,4 +1,4 @@
-using SmartCampus.Application.Common.Models;
+﻿using SmartCampus.Application.Common.Models;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Entities;
 
@@ -19,6 +19,10 @@ public interface ITourManagementRepository
     Task<DateTimeOffset?> GetOperatorLastSeenAsync(Guid tourId, CancellationToken ct);
     Task<IReadOnlyList<Guid>> GetEndedEarlyNoticeRegistrationIdsAsync(Guid tourId, CancellationToken ct);
     Task<TourEndedEarlyView?> GetEndedEarlyAsync(Guid tourId, CancellationToken ct);
+    /// <summary>ADR-0075: the Tour's video mode from its newest video switch event; LIVE when it never switched.</summary>
+    Task<TourVideoModeView> GetVideoModeAsync(Guid tourId, CancellationToken ct);
+    /// <summary>ADR-0075 stage 2: the newest fallback video marks of the Tour, with the video they were set for; null for none.</summary>
+    Task<FallbackVideoMarksData?> GetFallbackVideoMarksAsync(Guid tourId, CancellationToken ct);
     Task<TourSummary?> GetSummaryAsync(Guid id, CancellationToken ct);
     Task<TourUsage> GetUsageAsync(Guid id, CancellationToken ct);
     /// <summary>Tracked registrations without roster history; caller must hold the shared Tour root lock.</summary>

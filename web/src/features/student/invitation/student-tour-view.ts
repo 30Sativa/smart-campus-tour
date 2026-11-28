@@ -41,6 +41,9 @@ export type StudentTourProgress = {
   lastArrivedPoiId: string | null
   needsAssistance: boolean
   isHeld: boolean
+  /** ADR-0075: what the Operator set Viewers to watch; absent from an older API = LIVE. */
+  videoMode?: 'LIVE' | 'FALLBACK'
+  videoModeSince?: string | null
 }
 
 /** `ballot` is read with `readBallot`: null for a route that does not vote or while no POI is current (ADR-0065). */
@@ -161,6 +164,7 @@ export function buildLiveSnapshot(info: StudentTourInfo, view: StudentTourView |
     step,
     // ADR-0063: the fallback video plays through the relay (useStudentFallbackAccess), never from a stored URL.
     videoStreamUrl: '',
+    videoMode: progress?.videoMode === 'FALLBACK' ? 'FALLBACK' : 'LIVE',
     narration: atStop
       ? {
         poiId: atStop.poiId,

@@ -64,7 +64,7 @@ beforeEach(() => {
   useAuthStore.getState().setAuth('test-token', { userId: 'staff-1', username: 'lan', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://localhost')
-    if (init?.method === 'POST') {
+    if (init?.method === 'POST' || init?.method === 'PUT') {
       writes.push({ path: url.pathname, body: JSON.parse(String(init.body)) })
       return json(writeReply.body, writeReply.status)
     }
@@ -535,6 +535,47 @@ describe('demo flow on the live console', () => {
       command: { id: 'cmd-1', kind: 'GoTo', state: 'ARRIVED', outcome: 'ARRIVED', reasonCode: null } }, { next: allow })
     renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
     expect(await screen.findByText(/Lần tự đi tại điểm này không thực hiện được: Robot đã định vị/)).toBeInTheDocument()
+  })
+
+  // ADR-0075: only the Operator switches Viewers to the fallback recording, with a reason; nothing switches by itself.
+  it('lets the Operator switch Viewers to the fallback recording with a reason', async () => {
+    tour = { ...demo({}, {}), video: { mode: 'LIVE', since: null, actorName: null, reason: null, hasFallbackVideo: true } }
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    const panel = await screen.findByRole('group', { name: 'Video cho Viewer' })
+    expect(within(panel).getByText('Viewer đang xem: Hình trực tiếp')).toBeInTheDocument()
+    fireEvent.click(within(panel).getByRole('button', { name: 'Chuyển sang video dự phòng' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: 'Chuyển sang video dự phòng' })).toBeDisabled()
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Kính mất hình ở tầng 3' } })
+    confirm('Chuyển sang video dự phòng')
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0]).toEqual({ path: '/api/staff/manage/tours/tour-1/video-mode', body: { mode: 'FALLBACK', reason: 'Kính mất hình ở tầng 3' } })
+  })
+
+  it('shows who switched to the recording and offers the way back to live', async () => {
+    tour = { ...demo({}, {}), video: { mode: 'FALLBACK', since: '2026-11-04T02:10:00Z', actorName: 'Lan Staff', reason: 'Kính mất hình', hasFallbackVideo: true } }
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    const panel = await screen.findByRole('group', { name: 'Video cho Viewer' })
+    expect(within(panel).getByText(/Bản ghi hành trình \(không phải trực tiếp\)/)).toBeInTheDocument()
+    expect(within(panel).getByText(/bởi Lan Staff .*: Kính mất hình/)).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: 'Chuyển về trực tiếp' })).toBeEnabled()
+  })
+
+  it('keeps the switch off while the Tour has no fallback video', async () => {
+    tour = { ...demo({}, {}), video: { mode: 'LIVE', since: null, actorName: null, reason: null, hasFallbackVideo: false } }
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    const panel = await screen.findByRole('group', { name: 'Video cho Viewer' })
+    expect(within(panel).getByRole('button', { name: 'Chuyển sang video dự phòng' })).toBeDisabled()
+    expect(within(panel).getByText('Tour này chưa có video dự phòng.')).toBeInTheDocument()
+  })
+
+  it('shows the mode without the switch to a Staff member who is not the Operator', async () => {
+    useAuthStore.getState().setAuth('test-token', { userId: 'staff-2', username: 'minh', role: 'Staff' })
+    tour = { ...demo({}, {}), video: { mode: 'LIVE', since: null, actorName: null, reason: null, hasFallbackVideo: true } }
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    const panel = await screen.findByRole('group', { name: 'Video cho Viewer' })
+    expect(within(panel).getByText('Viewer đang xem: Hình trực tiếp')).toBeInTheDocument()
+    expect(within(panel).queryByRole('button')).toBeNull()
   })
 })
 

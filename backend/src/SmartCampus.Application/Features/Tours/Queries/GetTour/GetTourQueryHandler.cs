@@ -25,6 +25,8 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         var disconnected = lastSeen is not null && TourOperatorPresencePolicy.CanEndAsBackup(lastSeen, clock.GetUtcNow(), settings.OperatorDisconnectEndEarlyMinutes)
             ? lastSeen : null;
         var endedEarly = await repository.GetEndedEarlyAsync(tour.Id, ct);
+        var video = tour.State == TourRuntime.Running ? await repository.GetVideoModeAsync(tour.Id, ct) : null;
+        var marks = TourFallbackVideoMarks.For(await repository.GetFallbackVideoMarksAsync(tour.Id, ct), tour.FallbackVideoUrl);
         var summary = TourAutoCancel.WithDeadlines(
             await repository.GetSummaryAsync(query.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour."), fleet.StartLateLimit);
         var usage = await repository.GetUsageAsync(query.Id, ct);
@@ -47,14 +49,14 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
             var viewers = ballot is null ? null : await repository.GetViewerPresenceAsync(tour.Id, clock.GetUtcNow(), ct);
             return new(summary, null, null, tour.FallbackVideoUrl, tour.StartedAt, tour.EndedAt, tour.EndReason,
                 usage, permissions, revision, target.Operator, target.Reservation, execution, actions, ballot, leading, next, progress, retry,
-                viewers, lastSeen, disconnected, settings.OperatorDisconnectEndEarlyMinutes, endedEarly);
+                viewers, lastSeen, disconnected, settings.OperatorDisconnectEndEarlyMinutes, endedEarly, video, marks);
         }
         var route = await ReadRoute(tour.RouteId, ct);
         var active = tour.ActiveRouteId == tour.RouteId ? route : await ReadRoute(tour.ActiveRouteId, ct);
         return new(summary, route, active, tour.FallbackVideoUrl, tour.StartedAt, tour.EndedAt, tour.EndReason,
             usage, permissions, null, null, null, execution, actions, OperatorLastSeenAt: lastSeen,
             OperatorDisconnectedSince: disconnected, OperatorDisconnectEndEarlyMinutes: settings.OperatorDisconnectEndEarlyMinutes,
-            EndedEarlyByBackupStaff: endedEarly);
+            EndedEarlyByBackupStaff: endedEarly, Video: video, FallbackVideoMarks: marks);
     }
 
     private async Task<TourExecutionView> ExecutionAsync(Tour tour, CancellationToken ct)
