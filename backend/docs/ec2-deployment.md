@@ -181,6 +181,8 @@ Do not publish rendered Compose/inspect environments.
 Swagger UI stays off in Production unless api.env enables it with its own
 credential; see `backend/docs/api-documentation.md`. api.env is read only when
 the API container is created.
+Student AI Q&A runs as a separate container on this host; its api.env
+settings and own workflow are in `ai-assistant/deploy/README.md`.
 
 Install a browser-trusted matching certificate pair valid for >14 days:
 

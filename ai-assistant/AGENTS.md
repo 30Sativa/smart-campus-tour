@@ -2,9 +2,11 @@
 # AGENTS.md — `ai-assistant/`
 
 > **STATUS: text Q&A implemented.** `/v1/answer` service, backend endpoint
-> (`docs/architecture.md` §7.1) and the live web panel exist. Not yet done: nothing
-> writes Tour progress yet, so the POI snapshot stays `null` in practice;
-> STT/TTS, load test and container image.
+> (`docs/architecture.md` §7.1) and the live web panel exist. The backend sends the
+> POI snapshot once the robot reports arrival at a stop (Fleet Commands results,
+> ADR-0042); physical dispatch stays off until M2.3, so on the real robot it is
+> still `null`. Container image and EC2 deploy: `deploy/README.md`. Not yet done:
+> STT/TTS and load test.
 
 Student private Q&A service for CampusTour DT-AMR (Work Package 4). V1 uses one
 project language; multilingual and per-tour language selection are out of scope.
@@ -27,7 +29,7 @@ Each student's Q&A stays private. A “Điểm xem chung” uses one shared
 screen/session, so any answer shown there is shared with that room; it is not a
 count or identity for the students watching. The assistant must never control
 robot movement. Text Q&A meets this target; the backend snapshots the POI from
-the Tour's progress columns, which nothing writes yet.
+the Tour's progress columns, written when the robot reports arrival at a stop.
 
 It does not own person detection, obstacle avoidance, navigation goals, speed
 limits or any other movement decision. Those belong to `robot/`. In
@@ -46,11 +48,16 @@ the HTTP contract is `docs/architecture.md` §7.1.
   **uvicorn** (ADR-0016 addendum). Outbound HTTP uses the standard library.
 - LLM provider: **Google Gemini API** (Flash-tier model) behind a provider
   adapter interface. Model ID and key come from configuration only. One
-  provider in V1, no secondary provider.
+  provider active at a time (`AI_PROVIDER`); the alternatives are an
+  OpenAI-compatible gateway and Anthropic Claude (`AI_PROVIDER=anthropic`,
+  `ANTHROPIC_API_KEY`, default model `claude-haiku-5-5`, official `anthropic`
+  SDK — the one outbound call not made with the standard library; see the
+  ADR-0016 implementation update of 2026-11-26).
 - Tests and checks: standard-library **unittest**, **ruff**; an offline
   replay of the last live evaluation run (`evals/recorded/latest.json`). Tests
   never call the real provider.
-- Packaging: container image on server/cloud, private network only.
+- Packaging: container image (`Dockerfile`) on the backend EC2 host, private
+  Docker network only; deploy steps in `deploy/README.md`.
 
 Layout:
 
@@ -69,6 +76,8 @@ ai-assistant/
 │   ├── config.py       settings from environment
 │   ├── models.py       request/response schemas
 │   └── providers/      provider protocol, Gemini adapter, fake providers
+├── Dockerfile          production image (content pack baked in)
+├── deploy/             EC2 Compose project, host/SSH deploy scripts, env template
 ├── content/            approved Markdown content pack (campus/, pois/); rules in content/README.md
 ├── evals/              questions.json; recorded/latest.json (last live run); reports/ (untracked)
 ├── tests/

@@ -22,6 +22,7 @@ class ConfigTest(unittest.TestCase):
             {"AI_SERVICE_KEY": SERVICE_KEY},  # gemini without key/model
             {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "openai"},
             {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "openai_compat", "OPENAI_API_KEY": "k", "OPENAI_MODEL": "m"},
+            {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "anthropic"},  # no key
             {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "fake", "AI_PORT": "abc"},
             {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "fake", "AI_LLM_ATTEMPT_TIMEOUT_SECONDS": "30"},
             {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "fake", "AI_CONTENT_DIR": "/khong/ton/tai"},
@@ -37,6 +38,14 @@ class ConfigTest(unittest.TestCase):
         s = Settings.from_env(env).validate()
         self.assertEqual((s.openai_model, s.openai_base_url), ("ag/m", "https://gateway.example.test/v1"))
         self.assertNotIn("sk-hidden", repr(s))
+
+    def test_anthropic_settings(self) -> None:
+        env = {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "sk-ant-hidden"}
+        s = Settings.from_env(env).validate()
+        self.assertEqual((s.anthropic_model, s.anthropic_effort), ("claude-haiku-5-5", "low"))
+        self.assertNotIn("sk-ant-hidden", repr(s))
+        s = Settings.from_env({**env, "ANTHROPIC_MODEL": "claude-sonnet-5-5", "ANTHROPIC_EFFORT": ""})
+        self.assertEqual((s.anthropic_model, s.anthropic_effort), ("claude-sonnet-5-5", ""))
 
     def test_repr_hides_secrets(self) -> None:
         s = Settings.from_env({"AI_SERVICE_KEY": SERVICE_KEY, "GEMINI_API_KEY": "AIza-hidden", "GEMINI_MODEL": "m"})
