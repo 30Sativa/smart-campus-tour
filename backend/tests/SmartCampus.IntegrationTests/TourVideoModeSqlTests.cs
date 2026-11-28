@@ -60,39 +60,37 @@ public sealed class TourVideoModeSqlTests
     [SchemaV11Fact]
     public async Task FallbackVideoMarks_AreSetWithTheVideo_OnTheRouteStops_AndANewVideoStartsWithout()
     {
-        await using var w = await World.Create(enabled: true);
-        await w.H.Database.ExecuteAsync($"UPDATE dbo.Tours SET State = 'SCHEDULED' WHERE Id = '{w.H.TourId}';");
+        // A Tour still in preparation: no registration or operational use, so Staff may edit it (TOUR_LOCKED otherwise).
+        await using var h = await TourReadySqlTests.Harness.Create();
         Guid[] stops;
         Tour tour;
-        await using (var db = w.H.Context())
+        await using (var db = h.Context())
         {
-            stops = await db.RouteRevisionStops.AsNoTracking().Where(s => s.RouteRevisionId == w.H.Route.RevisionId)
+            stops = await db.RouteRevisionStops.AsNoTracking().Where(s => s.RouteRevisionId == h.Route.RevisionId)
                 .OrderBy(s => s.StopOrder).Select(s => s.Id).ToArrayAsync();
-            tour = await db.Tours.AsNoTracking().SingleAsync(t => t.Id == w.H.TourId);
+            tour = await db.Tours.AsNoTracking().SingleAsync(t => t.Id == h.TourId);
         }
         TourInput Input(string? video, IReadOnlyList<FallbackVideoMark>? marks) =>
             new(tour.Name, tour.Description, tour.RouteId, tour.ScheduledStartAt, video, marks);
-        async Task Update(TourInput input)
-        {
-            var detail = await Detail(w);
-            await w.H.Send(new UpdateTourCommand(w.H.TourId, w.H.StaffId, new(Guid.NewGuid(), detail.Tour.RowVersion, null, input)));
-        }
+        async Task Update(TourInput input) =>
+            await h.Send(new UpdateTourCommand(h.TourId, h.StaffId, new(Guid.NewGuid(), (await h.Detail()).Tour.RowVersion, null, input)));
 
         await Update(Input(Video, [new(stops[1], 95), new(stops[0], 4)]));
-        Assert.Equal([new FallbackVideoMark(stops[0], 4), new FallbackVideoMark(stops[1], 95)], (await Detail(w)).FallbackVideoMarks);
-        // Null keeps them; the same marks again write nothing.
+        Assert.Equal([new FallbackVideoMark(stops[0], 4), new FallbackVideoMark(stops[1], 95)], (await h.Detail()).FallbackVideoMarks);
+        // The marks are preparation: the Tour stays editable. Null keeps them; the same marks again write nothing.
+        Assert.True((await h.Detail()).Permissions.CanEditMetadata);
         await Update(Input(Video, null));
         await Update(Input(Video, [new(stops[0], 4), new(stops[1], 95)]));
-        Assert.Equal(2, (await Detail(w)).FallbackVideoMarks!.Count);
-        await using (var db = w.H.Context())
+        Assert.Equal(2, (await h.Detail()).FallbackVideoMarks!.Count);
+        await using (var db = h.Context())
         {
-            var set = await db.TourEvents.AsNoTracking().Where(e => e.TourId == w.H.TourId && e.EventType == TourLifecycleEvents.FallbackVideoMarksSet).ToListAsync();
-            Assert.Equal(w.H.StaffId, Assert.Single(set).ActorUserId);
+            var set = await db.TourEvents.AsNoTracking().Where(e => e.TourId == h.TourId && e.EventType == TourLifecycleEvents.FallbackVideoMarksSet).ToListAsync();
+            Assert.Equal(h.StaffId, Assert.Single(set).ActorUserId);
         }
 
         await Assert.ThrowsAsync<ValidationException>(() => Update(Input(Video, [new(Guid.NewGuid(), 10)])));
         await Update(Input(Video.Replace("0123", "4567"), null));
-        Assert.Empty((await Detail(w)).FallbackVideoMarks!);
+        Assert.Empty((await h.Detail()).FallbackVideoMarks!);
     }
 
     private static Task<TourDetails> Detail(World w) => w.H.Send(new GetTourQuery(w.H.TourId, w.H.OperatorId));

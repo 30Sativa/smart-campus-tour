@@ -158,7 +158,9 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         await db.TourEvents.AnyAsync(e => e.TourId == id && e.EventType != "TOUR_ROUTE_CHANGED" && e.EventType != TourLifecycleEvents.CreatedShortNotice &&
             e.EventType != TourLifecycleEvents.Ready && e.EventType != TourLifecycleEvents.Reopened &&
             // ADR-0071: a question counted in the waiting room is not operational use of the Tour.
-            e.EventType != TourEngagementEvents.QuestionAsked, ct) ||
+            e.EventType != TourEngagementEvents.QuestionAsked &&
+            // ADR-0075 stage 2: setting the fallback video marks is preparation, not use; it must not lock the Tour.
+            e.EventType != TourLifecycleEvents.FallbackVideoMarksSet, ct) ||
             await db.BranchRequests.AnyAsync(b => b.TourId == id, ct),
         await db.Robots.AnyAsync(r => r.CurrentTourId == id, ct));
 
