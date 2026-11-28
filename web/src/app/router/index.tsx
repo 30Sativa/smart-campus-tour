@@ -4,6 +4,7 @@ import { Navigate, createBrowserRouter, useLocation } from 'react-router'
 import LoginPage from '../../auth/LoginPage'
 import { AuthLayout } from '../../auth/AuthLayout'
 import { useAuthStore } from '../../stores/auth-store'
+import { useThemeStore } from '../../stores/theme-store'
 import { areaById, type AreaId } from '../../auth/access'
 import { homePathForRole } from '../../auth/roles'
 import RouteErrorPage from './RouteErrorPage'
@@ -90,8 +91,16 @@ const TechnicalPoisPage = lazy(() => import('../../routes/technical/TechnicalPoi
 const TechnicalPoiFileImportPage = lazy(() => import('../../routes/technical/TechnicalPoiFileImportPage'))
 const TechnicalRouteTestsPage = lazy(() => import('../../routes/technical/TechnicalRouteTestsPage'))
 
-function ShellFallback({ background }: { background: string }) {
-  return <div className="min-h-[100dvh]" style={{ background }} aria-busy="true" aria-label="Đang tải" />
+/** The colour shown while a page's code loads: its own ground, per theme when the page has a dark one too. */
+type FallbackGround = string | { light: string; dark: string }
+
+/** The public home's ground (`--lp-bg` of `.lp3`), so loading it never flashes another colour. */
+const HOME_GROUND: FallbackGround = { light: '#f7faf6', dark: '#09282b' }
+
+function ShellFallback({ background }: { background: FallbackGround }) {
+  const theme = useThemeStore(state => state.theme)
+  const color = typeof background === 'string' ? background : background[theme]
+  return <div className="min-h-[100dvh]" style={{ background: color }} aria-busy="true" aria-label="Đang tải" />
 }
 
 function AuthSessionFallback() {
@@ -196,7 +205,7 @@ export const routes = [
   {
     path: '/',
     element: (
-      <Suspense fallback={<ShellFallback background="#060d11" />}>
+      <Suspense fallback={<ShellFallback background={HOME_GROUND} />}>
         <PublicHomePage />
       </Suspense>
     ),

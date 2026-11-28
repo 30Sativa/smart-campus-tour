@@ -4,8 +4,16 @@ import { Menu, Moon, Sun, X } from 'lucide-react'
 import { useAuthStore } from '../../../stores/auth-store'
 import { useThemeStore } from '../../../stores/theme-store'
 import { useLogout } from '../../../auth/use-logout'
-import { homePathForRole, isAdminRole, isRepresentativeRole, isStaffRole } from '../../../auth/roles'
+import { ADMIN_ROLE, REPRESENTATIVE_ROLE, STAFF_ROLE, TECHNICAL_ROLE, homePathForRole, normalizeRole, type AppRole } from '../../../auth/roles'
 import { navLinks } from '../landing-content'
+
+/** The button back to each role's own area: the same lime button for every role, only its words differ. */
+const AREA_LABEL: Record<AppRole, string> = {
+  [STAFF_ROLE]: 'Điều hành',
+  [ADMIN_ROLE]: 'Quản trị',
+  [TECHNICAL_ROLE]: 'Kỹ thuật',
+  [REPRESENTATIVE_ROLE]: 'Đăng ký đoàn',
+}
 
 type Props = {
   /** Pauses smooth scrolling while the mobile sheet is open. */
@@ -34,10 +42,9 @@ export function SiteNav({ onLockScroll, base = '' }: Props) {
   const theme = useThemeStore((state) => state.theme)
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
   const logout = useLogout()
-  const isStaff = isStaffRole(user?.role)
-  // Every signed-in account with its own area gets a way back to it from the home page.
-  const hasArea = isStaff || isRepresentativeRole(user?.role)
-  const areaLabel = isAdminRole(user?.role) ? 'Quản trị' : isStaff ? 'Điều hành' : 'đại diện'
+  // Every signed-in role gets the same way back to its area: name, one lime button, sign-out.
+  const role = normalizeRole(user?.role)
+  const areaLabel = role ? AREA_LABEL[role] : null
 
   useEffect(() => {
     const node = sentinelRef.current
@@ -143,12 +150,8 @@ export function SiteNav({ onLockScroll, base = '' }: Props) {
 
             {isAuthenticated ? (
               <>
-                {hasArea ? (
-                  <Link to={homePathForRole(user?.role)} className="lp-user lp-user--link" title={`Về khu vực ${areaLabel.toLowerCase()}`}>{user?.username}</Link>
-                ) : (
-                  <span className="lp-user">{user?.username}</span>
-                )}
-                {isStaff && (
+                <span className="lp-user">{user?.username}</span>
+                {areaLabel && (
                   <Link to={homePathForRole(user?.role)} className="lp-btn lp-btn--solid lp-btn--sm">
                     {areaLabel}
                   </Link>
@@ -188,7 +191,7 @@ export function SiteNav({ onLockScroll, base = '' }: Props) {
           ))}
           {isAuthenticated ? (
             <>
-              {isStaff && (
+              {areaLabel && (
                 <Link to={homePathForRole(user?.role)} className="lp-sheet__cta" onClick={closeMenu}>
                   {areaLabel}
                 </Link>
