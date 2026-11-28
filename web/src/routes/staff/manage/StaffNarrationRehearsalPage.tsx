@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router'
 import { useQueries } from '@tanstack/react-query'
 import { technicalApi } from '../../../features/technical/api/technical'
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
-import { ArrowLeft, Navigation, RotateCcw, SkipForward } from 'lucide-react'
+import { Navigation, RotateCcw, SkipForward } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
@@ -77,8 +76,7 @@ export default function StaffNarrationRehearsalPage() {
   const toggle = (id: string) => setPicked(chosen.includes(id) ? chosen.filter(x => x !== id) : [...chosen, id])
 
   return <AdminPage>
-    <PageHeader eyebrow="Quản lý POI" title="Chạy thử thuyết minh" description="Giả lập robot đi qua các POI để nghe lời thuyết minh đúng như trang học sinh, không cần robot."
-      action={<Link to="/staff/manage/pois" className={buttonClass('secondary', 'sm')}><ArrowLeft size={14} aria-hidden="true" />Quay lại</Link>} />
+    <PageHeader eyebrow="Nội dung tham quan" back={{ to: '/staff/manage/pois', label: 'Quản lý POI' }} title="Chạy thử thuyết minh" description="Giả lập robot đi qua các POI để nghe lời thuyết minh đúng như trang học sinh, không cần robot." />
 
     {proposals.isPending ? <SkeletonRows /> : proposals.isError ? <AdminErrorPanel title="Không tải được danh sách POI" description={errorText(proposals.error)} onRetry={() => void proposals.refetch()} /> : <>
       <section className="mb-4 rounded-[15px] border border-[#e2e8f0] bg-white p-4">

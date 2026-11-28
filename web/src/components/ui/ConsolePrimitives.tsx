@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ChevronLeft, ChevronRight, LoaderCircle, Search, X } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, LoaderCircle, Search, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { buttonClass, inputClass } from './ui-classes'
 import { usePageTitle } from './use-page-title'
@@ -16,30 +16,44 @@ export const panelClass =
 /**
  * The page's own heading, kept to a few lines so the work starts high on the
  * screen: a short context line, the title, one supporting sentence, and the
- * page's actions on the right. `scale` is kept for callers; both read the same.
- * The title also names the browser tab and the shell header (`usePageTitle`).
+ * page's actions on the right. Every console page opens with it, so the title
+ * sits at the same size and place wherever an operator goes.
+ *
+ * `eyebrow` names the sidebar group the page belongs to (the breadcrumb's
+ * first crumb); a page of one Tour may name that Tour instead. `back` is the
+ * one way back to the list a page was opened from, drawn above the eyebrow,
+ * the same link the Tour pages' stepper draws.
  */
 export function PageHeader({
   eyebrow,
   title,
   description,
   action,
+  back,
+  badge,
 }: {
   eyebrow: string
   title: string
-  description: string
+  description?: ReactNode
   action?: ReactNode
-  scale?: 'default' | 'console'
+  back?: { to: string; label: string }
+  /** A status pill printed beside the title. */
+  badge?: ReactNode
 }) {
   usePageTitle(title)
   return (
-    <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-      <div className="min-w-0">
-        <p className="truncate text-xs font-semibold text-[#2d719e]">{eyebrow}</p>
-        <h1 className="mt-1 text-2xl leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-[28px]">{title}</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#64748b]">{description}</p>
+    <header className="mb-6">
+      {back && <Link to={back.to} className={`${buttonClass('ghost', 'sm')} mb-2 -ml-2`}><ArrowLeft size={15} aria-hidden="true" />{back.label}</Link>}
+      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold text-[#2d719e]">{eyebrow}</p>
+          <h1 className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xl leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-[28px]">
+            {badge ? <><span className="min-w-0 break-words">{title}</span>{badge}</> : title}
+          </h1>
+          {description && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#64748b]">{description}</p>}
+        </div>
+        {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
       </div>
-      {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
     </header>
   )
 }

@@ -1,6 +1,6 @@
 import { CalendarDays, LifeBuoy, MonitorPlay, Plus, Route, UserRound } from 'lucide-react'
 import { Link } from 'react-router'
-import { LoadingPanel, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
+import { LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { usePageTitle } from '../../components/ui/use-page-title'
 import { campusDateKey, formatDate, formatDateTime, formatTime } from '../../components/ui/date-time'
@@ -97,16 +97,11 @@ export default function OverviewPage() {
   ]
   return (
     <StaffPage>
-      <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="break-words text-2xl font-bold tracking-tight text-slate-900 sm:text-[28px]">Tổng quan</h1>
-          <p className="mt-1 text-sm text-slate-600">Theo dõi lịch Tour và công việc trong ngày.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader eyebrow="Vận hành" title="Tổng quan" description="Theo dõi lịch Tour và công việc trong ngày."
+        action={<>
           <Link to="/staff/schedule" className={buttonClass('secondary')}><CalendarDays size={15} aria-hidden="true" />Xem lịch</Link>
           <Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>
-        </div>
-      </header>
+        </>} />
 
       <section aria-label="Bây giờ" className="mb-4 grid min-w-0 gap-3">
         {assistance.map(detail => {

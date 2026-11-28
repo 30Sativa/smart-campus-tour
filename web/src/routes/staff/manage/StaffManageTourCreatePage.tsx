@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
-import { usePageTitle } from '../../../components/ui/use-page-title'
+import { useNavigate, useSearchParams } from 'react-router'
+import { PageHeader } from '../../../components/ui/ConsolePrimitives'
 import { AdminPage } from '../../../features/administration/AdminUi'
 import { newRequestId, useCreateTour } from '../../../features/administration/tours/hooks'
 import { tourError } from '../../../features/administration/tours/tour-messages'
@@ -18,7 +17,6 @@ import { coverUploadError, uploadTourCover } from '../../../features/administrat
  * if that upload fails the Tour stays created and Staff can add the image from "Sửa Tour".
  */
 export default function StaffManageTourCreatePage() {
-  usePageTitle('Tạo Tour')
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const quick = tourKindOf(params.get('kind')) === 'quick'
@@ -46,13 +44,10 @@ export default function StaffManageTourCreatePage() {
   }
   return <AdminPage>
     <div className="tour-create-page">
-    <header className="tour-create-page-heading" aria-label="Chuẩn bị Tour">
-    <Link to="/staff/schedule" className="tour-create-back"><ArrowLeft size={14} aria-hidden="true" />Lịch Tour</Link>
-    <h1>Tạo Tour</h1>
-    <p>{quick
-      ? QUICK_TOUR_RULES.pageDescription
-      : 'Tour mới ở trạng thái Đang nhận đăng ký: giữ chỗ robot nhưng không tự chạy khi tới giờ. Sau khi tạo, đại diện trường thấy Tour và có thể đăng ký đoàn.'}</p>
-    </header>
+    <PageHeader eyebrow="Tour & đăng ký" title="Tạo Tour" back={{ to: '/staff/schedule', label: 'Lịch Tour' }}
+      description={quick
+        ? QUICK_TOUR_RULES.pageDescription
+        : 'Tour mới ở trạng thái Đang nhận đăng ký: giữ chỗ robot nhưng không tự chạy khi tới giờ. Sau khi tạo, đại diện trường thấy Tour và có thể đăng ký đoàn.'} />
     <CreateTourForm busy={create.isPending || uploadingCover} error={create.isError ? tourError(create.error, { quick }) : null} onSubmit={submit} />
     </div>
   </AdminPage>

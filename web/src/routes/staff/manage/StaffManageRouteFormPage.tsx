@@ -287,8 +287,7 @@ export default function StaffManageRouteFormPage() {
   const missingHere = missingByStep[step]
   return <AdminPage>
     <UnsavedChangesGuard when={changed && !busy} />
-    <Link to="/staff/manage/routes" className="mb-3 inline-flex text-sm text-[#2d719e]">← Danh sách tuyến</Link>
-    <PageHeader eyebrow="Tuyến" title={routeId ? 'Sửa tuyến' : 'Tạo tuyến'} description="Tuyến gắn với đúng một bản đồ và chỉ gồm các POI đã đạt kiểm chứng, có thuyết minh đã duyệt, trên bản đồ đó." />
+    <PageHeader eyebrow="Nội dung tham quan" back={{ to: '/staff/manage/routes', label: 'Danh mục tuyến' }} title={routeId ? 'Sửa tuyến' : 'Tạo tuyến'} description="Tuyến gắn với đúng một bản đồ và chỉ gồm các POI đã đạt kiểm chứng, có thuyết minh đã duyệt, trên bản đồ đó." />
     {source.data && <div className="mb-4"><RouteFailBanner route={source.data} /></div>}
     <div className="mb-4"><Notice>Lưu xong, gửi kiểm chứng để Kỹ thuật chạy thử toàn tuyến. Chỉ tuyến chạy thử đạt mới dùng được để tạo Tour.</Notice></div>
     {scheduledTours.data && scheduledTours.data.length > 0 && <div className="mb-4"><Notice tone="warn">

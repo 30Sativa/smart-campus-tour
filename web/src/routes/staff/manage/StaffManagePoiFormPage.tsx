@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, CircleAlert, Info, MapPinned, MapPinOff } from 'lucide-react'
+import { Check, CircleAlert, Info, MapPinned, MapPinOff } from 'lucide-react'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
@@ -193,10 +193,9 @@ export default function StaffManagePoiFormPage() {
   if ((proposalQuery.isPending && poiId) || maps.isPending || (mapMissingFromList && mapDetailsQuery.isPending)) return <PoiPage><p className="p-8 text-sm text-[var(--poi-muted)]">Đang tải…</p></PoiPage>
   if (proposalQuery.isError || maps.error || (mapMissingFromList && mapDetailsQuery.isError)) return <PoiPage><p role="alert" className="p-4 text-sm text-red-700">Không tải được điểm tham quan hoặc bản đồ. Hãy thử tải lại trang.</p></PoiPage>
 
-  const back = <Link to="/staff/manage/pois" className="mb-2 inline-flex items-center gap-1.5 rounded-md text-sm font-semibold text-[var(--poi-muted)] hover:text-[var(--poi-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--poi-focus)]"><ArrowLeft size={15} aria-hidden="true" />Danh sách POI</Link>
+  const back = { to: '/staff/manage/pois', label: 'Danh sách POI' }
   if (!poiId && eligibleMaps.length === 0) return <PoiPage>
-    {back}
-    <PageHeader eyebrow="Chuẩn bị Tour · POI" title="Tạo điểm tham quan" description="Điểm tham quan được đặt trên một bản đồ đã kiểm tra đạt." />
+    <PageHeader eyebrow="Nội dung tham quan" back={back} title="Tạo điểm tham quan" description="Điểm tham quan được đặt trên một bản đồ đã kiểm tra đạt." />
     <section className={`${panelClass} px-6 py-10 text-center`} role="status">
       <MapPinOff size={28} className="mx-auto text-[var(--poi-warn)]" aria-hidden="true" />
       <h2 className="mt-3 text-[15px] font-semibold text-[var(--poi-ink)]">Chưa có bản đồ được kỹ thuật xác nhận đạt</h2>
@@ -247,11 +246,8 @@ export default function StaffManagePoiFormPage() {
   const required = <span aria-hidden="true" className="text-[var(--poi-danger)]">*</span>
   return <PoiPage>
     <UnsavedChangesGuard when={changed && !locked} />
-    {back}
-    <header className="mb-5">
-      <h1 className="text-2xl leading-tight font-bold text-[var(--poi-ink)]">{poiId ? (current?.revision.name ?? 'Điểm tham quan') : 'Tạo điểm tham quan'}</h1>
-      <p className="mt-1 text-sm text-[var(--poi-muted)]">Đặt vị trí và hướng robot, sau đó hoàn thiện nội dung.</p>
-    </header>
+    <PageHeader eyebrow="Nội dung tham quan" back={back} title={poiId ? (current?.revision.name ?? 'Điểm tham quan') : 'Tạo điểm tham quan'}
+      description="Đặt vị trí và hướng robot, sau đó hoàn thiện nội dung." />
     {current && retired && <div className="mb-4"><Notice tone="warn">
       <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="min-w-0 flex-1">POI này đã ngưng dùng. Tuyến và Tour đã lưu vẫn giữ điểm này, nhưng tuyến mới không chọn được. Trang chỉ để xem; dùng lại POI để sửa, gửi kiểm hoặc đổi thuyết minh.</span>
