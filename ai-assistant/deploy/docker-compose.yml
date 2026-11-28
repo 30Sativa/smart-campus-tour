@@ -1,0 +1,39 @@
+# Private Student Q&A service on the backend EC2 host (ai-assistant/deploy/README.md).
+# Its own Compose project ("campustour-ai"): the backend release scripts never touch it.
+# No host port: it joins the backend's existing "campustour_outbound" network, where only
+# the API container resolves it as http://ai-assistant:8090. That network also gives it
+# outbound internet for the LLM provider.
+name: campustour-ai
+
+services:
+  ai-assistant:
+    image: ${AI_ASSISTANT_IMAGE:?Set AI_ASSISTANT_IMAGE to the release's immutable image digest}
+    platform: linux/amd64
+    env_file:
+      - ${AI_ASSISTANT_ENV_FILE:-/etc/campustour/ai-assistant.env}
+    environment:
+      AI_HOST: 0.0.0.0
+      AI_PORT: "8090"
+    networks:
+      backend:
+        aliases: [ai-assistant]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # Small on purpose: the 4 GiB host also runs SQL Server and two API containers during a backend deploy.
+    mem_limit: ${AI_ASSISTANT_MEMORY_LIMIT:-256m}
+    cpus: ${AI_ASSISTANT_CPUS:-0.5}
+    init: true
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+networks:
+  backend:
+    name: campustour_outbound
+    external: true

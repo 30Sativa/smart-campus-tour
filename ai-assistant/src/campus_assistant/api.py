@@ -22,6 +22,7 @@ from .cache import AnswerCache
 from .config import Settings
 from .content import ContentPack
 from .models import AnswerRequest
+from .providers.anthropic_claude import AnthropicProvider
 from .providers.fake import ContentEchoProvider
 from .providers.gemini import GeminiProvider
 from .providers.openai_compat import OpenAICompatProvider
@@ -44,6 +45,10 @@ def build_service(settings: Settings) -> AnswerService:
         )
     elif settings.provider == "openai_compat":
         provider = OpenAICompatProvider(settings.openai_api_key, settings.openai_model, settings.openai_base_url)
+    elif settings.provider == "anthropic":
+        provider = AnthropicProvider(
+            settings.anthropic_api_key, settings.anthropic_model, effort=settings.anthropic_effort
+        )
     else:
         provider = ContentEchoProvider()
     return AnswerService(

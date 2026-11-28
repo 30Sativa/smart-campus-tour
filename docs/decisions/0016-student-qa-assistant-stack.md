@@ -15,6 +15,15 @@ access checks and offline/fake-service tests. The original planning status above
 is historical; it does not claim live provider quality, voice integration,
 production readiness or advisor approval. STT/TTS remain separate work.
 
+Implementation update, 2026-11-26 (owner request): an Anthropic Claude adapter
+(`AI_PROVIDER=anthropic`) was added beside Gemini and the OpenAI-compatible
+gateway, because the configured gateway rejected every call. One provider is
+active at a time; the service's budget, retries and circuit breaker are
+unchanged, and the adapter receives the same prompt and no roster data. It uses
+the official `anthropic` Python SDK (with its own retries off) — a new runtime
+dependency, chosen over hand-written HTTP so request shape and error types
+follow the vendor SDK. This changes no contract in §7.1 and no ADR-0020 target.
+
 ## Context
 
 `ai-assistant/` was a skeleton with no runtime, provider or contract. The

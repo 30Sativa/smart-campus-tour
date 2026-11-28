@@ -2687,11 +2687,12 @@ Processing order:
 
 1. Validate the request and the session; check invitation not revoked or
    expired and Tour `RUNNING`.
-2. Snapshot the current POI from authoritative Tour progress (§3.2): the POI
-   of `Tours.CurrentRouteStopId` while the Tour is `RUNNING` and `CurrentStep`
-   is `PREPARING_VIEW` or `OBSERVING` (the robot is at the stop); otherwise
-   `null` (general context), including while navigating and until the dispatch
-   use cases write progress. The snapshot includes the POI's approved `Name`,
+2. Snapshot the current POI from authoritative Tour progress (§3.2) while the
+   Tour is `RUNNING` and `CurrentStep` is `PREPARING_VIEW` or `OBSERVING` (the
+   robot is at the stop): on a route-revision Tour the stop in
+   `Tours.LastArrivedRevisionStopId`, written when the robot reports arrival;
+   on a legacy Tour the POI of `Tours.CurrentRouteStopId`. Otherwise `null`
+   (general context), including while navigating and before the first arrival. The snapshot includes the POI's approved `Name`,
    `Description` and `NarrationText` only.
 3. Call `ai-assistant` with the backend budget (below).
 4. Re-check session, invitation and Tour state. If access ended while the
@@ -2854,7 +2855,7 @@ null, `DataJson {"phase","rowType","outOfScope"}`). The §7.1 rule stands: quest
 | `robot/` firmware | GitHub Actions (compile only) | manual ST-Link flash | STM32G431 |
 | `digital-twin/` | <!-- TODO(WP4) --> | service/container | simulation workstation/server |
 | `backend/` | .NET 10 API (`backend/Dockerfile`); separately versioned DB bootstrap/upgrade tool (`backend/Dockerfile.db-init`) | `backend/docker-compose.yml`: HTTPS API + pinned SQL Server and persistent volume; `backend/docker-compose.db-init.yml` is explicit opt-in only | one x86_64 AWS EC2 |
-| `ai-assistant/` | Python 3.11+ / Starlette (ADR-0016); `ai-assistant/scripts/verify` in CI; image TODO(WP4) | container image, private network only | server/cloud, not robot miniPC |
+| `ai-assistant/` | Python 3.11+ / Starlette (ADR-0016); `ai-assistant/scripts/verify` in CI; `ai-assistant/Dockerfile` built and deployed by `.github/workflows/ai-assistant-deploy.yml` after a successful main verify | `ai-assistant/deploy/docker-compose.yml`: own Compose project on the backend EC2, no host port, joins `campustour_outbound` as `http://ai-assistant:8090` (`ai-assistant/deploy/README.md`) | backend EC2 host, not robot miniPC |
 | `web/` | Vercel (git integration) | auto-deploy on push | Vercel, one project |
 
 CI never flashes the STM32 and the miniPC never auto-flashes it; see
