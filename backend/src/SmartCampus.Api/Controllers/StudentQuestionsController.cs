@@ -2,10 +2,17 @@ using MediatR;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Features.StudentQuestions;
 
 namespace SmartCampus.Api.Controllers;
+
+public static class StudentQuestionsRateLimit
+{
+    /// <summary>Per-IP budget of Student questions; configured by <c>StudentQuestions:RateLimit:*</c> in Program.cs.</summary>
+    public const string Policy = "StudentQuestions";
+}
 
 /// <summary>Private Student Q&amp;A (docs/architecture.md §7.1). Authenticated by the per-Tour Student session cookie.</summary>
 [ApiController]
@@ -16,6 +23,7 @@ public sealed class StudentQuestionsController(ISender sender, IConfiguration co
     public sealed record AskRequest(Guid QuestionId, string Text, IReadOnlyList<TurnRequest>? RecentTurns);
 
     [HttpPost("questions")]
+    [EnableRateLimiting(StudentQuestionsRateLimit.Policy)]
     public async Task<ActionResult<BaseResponse<StudentAnswer>>> Ask(Guid tourId, AskRequest request, CancellationToken ct)
     {
         StudentSessionCookie.EnsureAllowedOrigin(Request, configuration);

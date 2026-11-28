@@ -2660,7 +2660,10 @@ Backend configuration (opt-in, validated at startup; secrets outside Git):
   - `recentTurns`: at most 3 items `{ question, answer }` (each question ≤ 500,
     each answer ≤ 1200 characters), taken only from the same browser session's
     in-memory chat. They are untrusted user text: used only to resolve
-    follow-up wording, never as facts, never stored by the server.
+    follow-up wording, never as facts, never stored by the server. The backend
+    forwards only turns it answered itself for this session within the last
+    10 minutes (same normalized question and answer); any other turn is dropped
+    silently, without an error (since 2026-11-28).
 - The request has no POI field. The browser cannot choose the context.
 - `200` returns `BaseResponse` with
   `{ questionId, answer, outOfScope, poi: { id, name } | null, answeredAt }`.
@@ -2679,7 +2682,7 @@ Backend configuration (opt-in, validated at startup; secrets outside Git):
 | 409 | `AI_OPENS_LATER` | Tour is `SCHEDULED`/`READY` and more than 15 minutes before its scheduled start (the waiting room asks from 15 minutes before; since 2026-11-25) |
 | 409 | `TOUR_NOT_RUNNING` | Tour is neither `RUNNING` nor in its waiting-room window (ended or cancelled) at acceptance or at answer time |
 | 409 | `QUESTION_ID_REUSED` | Same `questionId` with different text |
-| 429 | `RATE_LIMITED` | More than 6 questions/minute or a second in-flight question for this session |
+| 429 | `RATE_LIMITED` | More than 6 questions/minute or a second in-flight question for this session; or the per-IP `StudentQuestions` limit (below), checked before the session cookie |
 | 503 | `AI_UNAVAILABLE` | Assistant unreachable, overloaded or its circuit is open |
 | 504 | `AI_TIMEOUT` | No assistant answer within the backend budget |
 
@@ -2749,6 +2752,8 @@ route).
 | Recent turns | 3 |
 | Answer length | ≤ 1200 characters (truncated at a sentence boundary) |
 | Per session | 6 questions/minute, 1 in flight |
+| Per client IP, before the session lookup | `StudentQuestions:RateLimit:PermitLimit` per `WindowSeconds`, default 300 per 60 s (a class may share one school IP) |
+| Claude output per answer | `max_tokens` 2048 (`AI_PROVIDER=anthropic`) |
 | Assistant concurrent LLM calls | configurable, default 8 |
 
 Values are current implementation settings to evaluate against SRS NFR-PERF-04

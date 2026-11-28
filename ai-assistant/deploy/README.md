@@ -53,16 +53,36 @@ a push to `main`, or manually (Actions → AI Assistant Deploy → Run workflow 
 3. Run **AI Assistant Deploy** (manually the first time). It fails early if the
    env file is missing, not mode 0600, or the backend network does not exist yet.
 
-4. The API reads `api.env` only when its container is created: run **Backend
-   Deploy** manually with the current `main` SHA as `release_sha`, so the API
-   container is recreated with the two new settings.
+4. The API reads `api.env` only when its container is created. Backend Deploy
+   refuses to redeploy the release that is already active ("Selected application
+   release is already active"), and skips commits that did not change the backend,
+   so recreate only the API container of the active release on the host. Same
+   image, database untouched, a few seconds of API downtime. `/opt/campustour` is
+   root-only, so use absolute paths instead of `cd`:
+
+   ```bash
+   sudo docker compose --project-name campustour \
+     --env-file /etc/campustour/backend.env \
+     --env-file /opt/campustour/current/release.env \
+     -f /opt/campustour/current/docker-compose.yml \
+     up -d --no-deps --force-recreate --wait api
+   ```
+
+   Any later Backend Deploy also creates a fresh API container that reads `api.env`.
 
 ## Check
 
 ```bash
 sudo docker ps --filter label=com.docker.compose.project=campustour-ai
 sudo docker logs --tail 50 campustour-ai-ai-assistant-1      # JSON lines; no question text
+
+# API side: prints http://ai-assistant:8090, then 200 (does not print the key)
+api=$(sudo docker ps -q --filter label=com.docker.compose.project=campustour --filter label=com.docker.compose.service=api | head -n1)
+sudo docker exec "$api" printenv AiAssistant__BaseUrl
+sudo docker exec "$api" curl -s -o /dev/null -w '%{http_code}\n' http://ai-assistant:8090/health
 ```
+
+An empty `printenv` line means the API container was not recreated after editing `api.env` (step 4).
 
 Then open an **individual** invitation link on the real site and ask in **Hỏi AI**.
 A 503 "AI bận" means: assistant down, keys differ between the two files, the API

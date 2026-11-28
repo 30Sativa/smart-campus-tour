@@ -87,6 +87,26 @@ public sealed class StudentQuestionGate(TimeProvider clock)
         }
     }
 
+    /// <summary>
+    /// The browser's recent turns that this backend itself answered for the same session in the last
+    /// <see cref="AnswerLifetime"/>, in their original order. A turn with an invented question or answer is dropped,
+    /// so a client cannot put words in the assistant's mouth through the conversation history.
+    /// </summary>
+    public IReadOnlyList<StudentQuestionTurn> VerifiedTurns(Guid sessionId, IReadOnlyList<StudentQuestionTurn> turns)
+    {
+        if (turns.Count == 0) return [];
+        lock (sync)
+        {
+            Prune(clock.GetUtcNow());
+            var answered = answers.Where(entry => entry.Key.SessionId == sessionId)
+                .Select(entry => (entry.Value.Text, StudentQuestionText.Normalize(entry.Value.Answer.Answer)))
+                .ToHashSet();
+            return turns.Where(turn => answered.Contains(
+                    (StudentQuestionText.Normalize(turn.Question), StudentQuestionText.Normalize(turn.Answer))))
+                .ToList();
+        }
+    }
+
     private void Prune(DateTimeOffset now)
     {
         foreach (var key in answers.Where(entry => now - entry.Value.At > AnswerLifetime).Select(entry => entry.Key).ToList())

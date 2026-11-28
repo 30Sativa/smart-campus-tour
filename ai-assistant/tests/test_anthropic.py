@@ -61,6 +61,7 @@ class AnthropicProviderTest(unittest.TestCase):
         self.assertEqual((req["betas"], req["fallbacks"]), (["server-side-fallback-2026-07-01"], "default"))
         self.assertNotIn("thinking", req)  # effort is the control
         self.assertNotIn("temperature", req)
+        self.assertEqual(req["max_tokens"], 2048)  # caps billed output when a prompt asks for a long answer
         self.assertEqual(c.timeouts, [5])
         self.assertNotIn(KEY, repr(p))
 

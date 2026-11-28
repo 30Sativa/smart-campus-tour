@@ -88,7 +88,8 @@ public sealed class AskStudentQuestionCommandHandler(IStudentAccessRepository re
             // POI snapshot from the Tour's progress columns: the current stop while the robot is at it, otherwise
             // null and the assistant answers from general campus content (§7.1).
             var poi = await tour.FindCurrentPoiAsync(command.TourId, ct);
-            var turns = command.RecentTurns
+            // Only turns this backend answered for the session reach the assistant; invented history is dropped.
+            var turns = gate.VerifiedTurns(access.SessionId, command.RecentTurns)
                 .Select(t => new AssistantTurn(StudentQuestionText.Normalize(t.Question), StudentQuestionText.Normalize(t.Answer)))
                 .ToList();
             var result = await assistant.AnswerAsync(new AssistantQuestion(Guid.NewGuid(), text, turns, poi), ct);

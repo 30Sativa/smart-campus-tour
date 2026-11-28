@@ -89,5 +89,38 @@ public sealed class AuthHardeningEndpointTests
         Assert.Empty(assistant.Requests);
     }
 
+    [SchemaV11Fact]
+    public async Task StudentQuestions_ApplyPerIpRateLimitBeforeSessionLookup()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await using var assistant = new FakeAssistantServer();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString,
+            new Dictionary<string, string>
+            {
+                ["AiAssistant__BaseUrl"] = assistant.BaseUrl, ["AiAssistant__ServiceKey"] = "test-only-service-key",
+                ["StudentQuestions:RateLimit:PermitLimit"] = "2", ["StudentQuestions:RateLimit:WindowSeconds"] = "60"
+            });
+        var tourId = Guid.NewGuid();
+        HttpRequestMessage Ask()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/student/tours/{tourId}/questions")
+            {
+                Content = JsonContent.Create(new { questionId = Guid.NewGuid(), text = "test", recentTurns = Array.Empty<object>() })
+            };
+            // A made-up session under the real cookie name: without the limit each one costs a session lookup.
+            request.Headers.Add("Cookie", $"campus_tour_{tourId:N}=made-up-session-token");
+            return request;
+        }
+        using var first = await host.Client.SendAsync(Ask());
+        using var second = await host.Client.SendAsync(Ask());
+        using var limited = await host.Client.SendAsync(Ask());
+        Assert.Equal(HttpStatusCode.Unauthorized, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, second.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+        using var body = JsonDocument.Parse(await limited.Content.ReadAsStringAsync());
+        Assert.Equal("RATE_LIMITED", body.RootElement.GetProperty("errors").GetProperty("code").GetString());
+        Assert.Empty(assistant.Requests);
+    }
+
     private static ApplicationDbContext Context(string cs) => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(cs).Options);
 }

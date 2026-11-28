@@ -160,6 +160,16 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(SmartCampus.Api.Controllers.StreamRelayRateLimit.Policy, context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
         { PermitLimit = 1200, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // Student AI questions, before the session cookie is looked up: a flood with made-up cookies would otherwise cost a
+    // database read each. Per IP and generous, because a whole class can share one school IP (30 Viewers x 6 a minute);
+    // the per-session limit of StudentQuestionGate stays the real Viewer limit.
+    var studentQuestionsPermitLimit = builder.Configuration.GetValue<int?>("StudentQuestions:RateLimit:PermitLimit") ?? 300;
+    var studentQuestionsWindowSeconds = builder.Configuration.GetValue<int?>("StudentQuestions:RateLimit:WindowSeconds") ?? 60;
+    if (studentQuestionsPermitLimit <= 0 || studentQuestionsWindowSeconds <= 0)
+        throw new InvalidOperationException("StudentQuestions rate-limit permit limit and window must be positive.");
+    options.AddPolicy(SmartCampus.Api.Controllers.StudentQuestionsRateLimit.Policy, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = studentQuestionsPermitLimit, Window = TimeSpan.FromSeconds(studentQuestionsWindowSeconds), QueueLimit = 0 }));
 });
 builder.Services.AddCors(options => options.AddPolicy("WebClient", policy =>
 {
