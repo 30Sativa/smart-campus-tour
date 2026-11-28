@@ -32,8 +32,8 @@
 .rep-btn:hover { background: #f1f8fe; border-color: var(--rep-line-hover); }
 .rep-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--rep-ring); }
 .rep-btn:disabled:hover, .rep-btn[aria-disabled='true']:hover { background: var(--rep-surface); border-color: var(--rep-line-2); }
-.rep-btn--primary, .rep-btn--dark { background: var(--rep-accent); border-color: transparent; color: var(--rep-accent-ink) !important; }
-.rep-btn--primary:hover, .rep-btn--dark:hover { background: var(--rep-accent-hover); border-color: transparent; }
+.rep-btn--primary, .rep-btn--dark { background: var(--rep-primary); border-color: transparent; color: var(--rep-primary-ink) !important; }
+.rep-btn--primary:hover, .rep-btn--dark:hover { background: var(--rep-primary-hover); border-color: transparent; }
 .rep-btn--primary:disabled, .rep-btn--dark:disabled { background: #f1f5f9; color: var(--rep-ink-3) !important; opacity: 1; }
 .rep-btn--danger { background: var(--rep-bad-bg); border-color: var(--rep-bad-line); color: var(--rep-bad) !important; }
 .rep-btn--danger:hover { background: #fde4e0; border-color: var(--rep-bad-line); }

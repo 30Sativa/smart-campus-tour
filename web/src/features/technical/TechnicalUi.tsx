@@ -5,7 +5,7 @@ import { toneClass, type StatusTone } from '../../components/ui/status-tone'
 import { buttonClass, labelClass } from '../../components/ui/ui-classes'
 
 export function TechnicalPage({ children }: { children: ReactNode }) {
-  return <div className="min-h-full bg-transparent px-4 py-5 sm:px-6 lg:px-8 lg:py-6"><div className="mx-auto w-full max-w-[1360px]">{children}</div></div>
+  return <div className="min-h-full bg-transparent px-4 py-4 sm:px-6 lg:px-8 lg:py-6"><div className="mx-auto w-full max-w-[1440px]">{children}</div></div>
 }
 
 export function ToneBadge({ tone, children }: { tone: StatusTone; children: ReactNode }) {

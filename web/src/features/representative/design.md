@@ -5,7 +5,7 @@ User approved the complete standalone reference on 2026-11-05. Implement the rea
 ## Locked visual system
 
 **Approved interactive layout (user request, 2026-11-17) supersedes earlier layout revisions below.**
-Apply the standalone Representative preview to the API-backed routes. Keep blue/slate and Be Vietnam Pro, a capped 1408px content area, flat top navigation, 16px surfaces and 12px controls. The overview has a three-part summary strip, an illustrated next visit and balanced recent-registration/open-Tour columns. The catalog offers cards and a list. Tour detail puts the cover, schedule and stops beside registration actions. Registration forms use a three-step context column and the form beside it; phones use a horizontal stepper. Owned registrations retain their chooser/document workspace and four detail tabs. Profile contact, account and security are URL-backed tabs.
+Apply the standalone Representative preview to the API-backed routes. Keep blue/slate and Be Vietnam Pro, a capped 1408px content area, flat top navigation, 15px surfaces and 12px controls. The overview has a three-part summary strip, an illustrated next visit and balanced recent-registration/open-Tour columns. The catalog offers cards and a list. Tour detail puts the cover, schedule and stops beside registration actions. Registration forms use a three-step context column and the form beside it; phones use a horizontal stepper. Owned registrations retain their chooser/document workspace and four detail tabs. Profile contact, account and security are URL-backed tabs.
 
 `approved-layout.css` composes existing classes after the original stylesheet. Keep real data, guards, permissions, version snapshots, explicit import acceptance and retry semantics. Never bring preview fixture data or simulated mutations into the application.
 
@@ -28,6 +28,10 @@ The Tour API has no image: `tour-image.ts` picks an illustrative photo from `pub
 `components/ui/ui-classes.ts`: blue accent (#2d719e), slate ink (#0f172a / #64748b),
 borderless 15px cards with a soft lift, 12px buttons/inputs (`buttonClass`, `inputClass`),
 tone pills with borders (`toneClass`), Be Vietnam Pro at a 14px base. Light only, like Staff.
+Since 28/11/2026 the card radius and shadow are the console's own values and the primary button is
+the console's filled blue (`--rep-primary`); `--rep-accent` stays as the tint for the current tab, the
+chosen record and the stepper. The current top tab is printed in the accent blue at weight 600, like
+the current sidebar item in the consoles.
 Page layouts (overview grid, catalog, registration workspace, forms) are unchanged.
 The base styles are scoped to `<main class="rep-app">` so they never reach the Tailwind chrome.
 

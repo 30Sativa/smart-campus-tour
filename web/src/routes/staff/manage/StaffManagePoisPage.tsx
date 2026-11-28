@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Archive, ArrowUpDown, FileText, Maximize2, MapPinOff, Pencil, Plus, RotateCcw, Send, Trash2, Volume2 } from 'lucide-react'
 import { PageHeader, SearchField } from '../../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
-import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
+import { cardClass, buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { useDiscardPoiProposal, useMapVersions, usePoiProposals, useReactivatePoiProposal, useRetirePoiProposal } from '../../../features/technical/technical-hooks'
@@ -56,7 +56,7 @@ const FAIL_PIN = '#e05a4f'
 const SELECTED_PIN = '#3b82f6'
 const PIN: Record<Status, string> = { DRAFT: NEUTRAL_PIN, WAIT: NEUTRAL_PIN, PASS: NEUTRAL_PIN, FAIL: FAIL_PIN }
 const ORDER: Status[] = ['DRAFT', 'WAIT', 'PASS', 'FAIL']
-const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
+const card = `${cardClass} min-w-0`
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
 
 /**
