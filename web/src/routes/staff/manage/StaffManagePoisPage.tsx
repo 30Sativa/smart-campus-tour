@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Archive, ArrowUpDown, FileText, Maximize2, MapPinOff, Pencil, Plus, RotateCcw, Send, Trash2, Volume2 } from 'lucide-react'
-import { SearchField } from '../../../components/ui/ConsolePrimitives'
+import { PageHeader, SearchField } from '../../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
@@ -107,19 +107,15 @@ export default function StaffManagePoisPage() {
   const currentKey = maps.find(map => map.id === mapVersionId)?.key
 
   return <AdminPage>
-    <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Quản lý POI</h1>
-        <p className="mt-1 text-sm text-[#718096]">Chọn điểm trên bản đồ hoặc trong danh sách. Chỉ điểm đã đạt và có thuyết minh đã duyệt mới dùng được khi tạo tuyến.</p>
-      </div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-      <Link to="/staff/manage/pois/thu-thuyet-minh" className={buttonClass('secondary')}><Volume2 size={16} aria-hidden="true" />Chạy thử thuyết minh</Link>
-      {blocked
-        // The reason is printed, not a hover tooltip, so it reaches touch screens and screen readers too.
-        ? <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1"><span id="poi-create-blocked" className="text-xs text-[#b7791f]">Chưa có bản đồ nào đạt kiểm tra kỹ thuật</span><button type="button" disabled aria-describedby="poi-create-blocked" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</button></span>
-        : <Link to="/staff/manage/pois/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</Link>}
-      </div>
-    </header>
+    <PageHeader eyebrow="Nội dung tham quan" title="Quản lý POI"
+      description="Chọn điểm trên bản đồ hoặc trong danh sách. Chỉ điểm đã đạt và có thuyết minh đã duyệt mới dùng được khi tạo tuyến."
+      action={<>
+        <Link to="/staff/manage/pois/thu-thuyet-minh" className={buttonClass('secondary')}><Volume2 size={16} aria-hidden="true" />Chạy thử thuyết minh</Link>
+        {blocked
+          // The reason is printed, not a hover tooltip, so it reaches touch screens and screen readers too.
+          ? <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1"><span id="poi-create-blocked" className="text-xs text-[#b7791f]">Chưa có bản đồ nào đạt kiểm tra kỹ thuật</span><button type="button" disabled aria-describedby="poi-create-blocked" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</button></span>
+          : <Link to="/staff/manage/pois/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</Link>}
+      </>} />
 
     {/* One toolbar for everything that narrows the view: map, robot filter, search and status. */}
     <div className={`${card} mb-4 px-4 py-3`}>

@@ -1,9 +1,9 @@
 export type ButtonKind = 'primary' | 'secondary' | 'danger' | 'ghost'
 
 const BUTTON_KIND: Record<ButtonKind, string> = {
-  // `ct-btn-primary` is a hook: the Staff shell softens it to a light-blue button.
+  // A filled button in every console: the one action a page or dialog is for must read stronger than the white secondary beside it.
   primary:
-    'ct-btn-primary bg-[#2d719e] text-white shadow-xs hover:bg-[#245e84] active:scale-[0.98] disabled:bg-[#e3edf4] disabled:text-[#8fa8bb] disabled:shadow-none',
+    'bg-[#2d719e] text-white shadow-xs hover:bg-[#245e84] active:scale-[0.98] disabled:bg-[#e3edf4] disabled:text-[#8fa8bb] disabled:shadow-none',
   secondary:
     'border border-[#d9e9f5] bg-white text-[#285c7d] hover:bg-[#f1f8fe] hover:border-[#a8cde6] active:scale-[0.98] disabled:text-[#94a3b8] disabled:hover:bg-white',
   danger:
@@ -67,11 +67,11 @@ export const softConsoleGround =
 
 /**
  * The scroll area of a soft console: every panel (`ct-panel`) becomes a borderless
- * 15px card with a light lift, and every primary button (`ct-btn-primary`) a
- * light-blue button with muted blue text.
+ * 15px card with a light lift. Primary buttons keep their fill: a light-blue
+ * primary on this ground read weaker than the white secondary next to it.
  */
 export const softConsoleMain =
-  '[&_.ct-panel]:rounded-[15px] [&_.ct-panel]:border-transparent [&_.ct-panel]:shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)] [&_.ct-btn-primary]:bg-[#edf3fb] [&_.ct-btn-primary]:text-[#4a6fa5] [&_.ct-btn-primary]:shadow-none [&_.ct-btn-primary:hover]:bg-[#e3ecf8] [&_.ct-btn-primary:disabled]:bg-[#f1f5f9] [&_.ct-btn-primary:disabled]:text-[#94a3b8]'
+  '[&_.ct-panel]:rounded-[15px] [&_.ct-panel]:border-transparent [&_.ct-panel]:shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
 
 /** The floating, frosted header card of a soft console. */
 export const softConsoleHeader =

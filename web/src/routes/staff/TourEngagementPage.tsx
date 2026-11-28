@@ -15,7 +15,7 @@ import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 export default function TourEngagementPage() {
   const { tourId = '' } = useParams()
   const report = useTourEngagement(tourId)
-  const back = <Link to="/staff/engagement" className={buttonClass('secondary', 'sm')}><ArrowLeft size={14} aria-hidden="true" /> Phân tích tương tác</Link>
+  const back = <Link to="/staff/engagement" className={`${buttonClass('ghost', 'sm')} -ml-2`}><ArrowLeft size={15} aria-hidden="true" />Phân tích tương tác</Link>
 
   if (report.isPending) return <StaffPage><LoadingPanel label="Đang tổng hợp tương tác…" /></StaffPage>
   if (report.isError) return <StaffPage><div className="mb-4">{back}</div><ErrorPanel error={report.error} onRetry={() => void report.refetch()} /></StaffPage>
@@ -27,9 +27,9 @@ export default function TourEngagementPage() {
 
   return (
     <StaffPage>
-      <PageHeader eyebrow="Phân tích tương tác" title={data.name}
+      <PageHeader eyebrow="Lịch sử" back={{ to: '/staff/engagement', label: 'Phân tích tương tác' }} title={data.name}
         description={`${state}${data.routeName ? ` · ${data.routeName}` : ''} · bắt đầu ${formatDateTime(data.startedAt ?? data.scheduledStartAt)}`}
-        action={<>{back}<Link to={`/staff/manage/tours/${data.tourId}`} className={buttonClass('ghost', 'sm')}>Chi tiết Tour</Link></>} />
+        action={<Link to={`/staff/manage/tours/${data.tourId}`} className={buttonClass('secondary', 'sm')}>Chi tiết Tour</Link>} />
       <p className="mb-4 text-xs text-muted">{PRIVACY_NOTE}{data.state === 'RUNNING' ? ' Buổi đang chạy: số liệu cập nhật mỗi 30 giây.' : ''}</p>
 
       <KpiRow label="Tổng hợp buổi">

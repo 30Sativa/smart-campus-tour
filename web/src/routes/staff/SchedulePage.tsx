@@ -1,7 +1,7 @@
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, FileText, Info, Lock, Map as MapIcon, Plus, Search, SlidersHorizontal, Timer, Bot, Users, Zap } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
-import { LoadingPanel } from '../../components/ui/ConsolePrimitives'
+import { LoadingPanel, PageHeader } from '../../components/ui/ConsolePrimitives'
 import { Drawer } from '../../components/ui/Drawer'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { useTour, useTourCalendar, useTourShifts } from '../../features/administration/tours/hooks'
@@ -149,12 +149,8 @@ export default function SchedulePage() {
   const robotCount = new Set(filtered.map(tour => tour.reservation?.robotCode).filter(Boolean)).size
   const failed = tours.isError ? tours.error : shifts.isError ? shifts.error : null
 
-  const header = <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
-    <div className="min-w-0">
-      <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch Tour</h1>
-    </div>
-    <Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>
-  </header>
+  const header = <PageHeader eyebrow="Tour & đăng ký" title="Lịch Tour" description="Xem Tour theo tuần, theo ngày hoặc cả danh sách, lọc theo robot và trạng thái."
+    action={<Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>} />
   const viewToggle = <div role="group" aria-label="Chế độ xem lịch" className="ml-auto flex rounded-xl border border-[#e2e8f0] bg-white p-1">
     {([['week', 'Tuần'], ['day', 'Ngày'], ['list', 'Danh sách']] as const).map(([value, label]) => (
       <button key={value} type="button" aria-pressed={view === value} onClick={() => set({ view: value === 'week' ? null : value, tour: null })}

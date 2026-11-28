@@ -50,7 +50,7 @@ export default function StaffManageTourEditPage() {
 
   return <AdminPage>
     <Link to={back} className="mb-4 inline-block text-sm text-[#2d719e]">← Về chi tiết Tour</Link>
-    <PageHeader eyebrow="Chuẩn bị Tour" title={data ? `Sửa ${data.tour.name}` : 'Sửa Tour'} description="Chỉ sửa được khi Tour đang nhận đăng ký và chưa vận hành." />
+    <PageHeader eyebrow="Tour & đăng ký" title={data ? `Sửa ${data.tour.name}` : 'Sửa Tour'} description="Chỉ sửa được khi Tour đang nhận đăng ký và chưa vận hành." />
     {detail.isError ? <AdminErrorPanel title={tourError(detail.error)} onRetry={() => void detail.refetch()} />
       : !data ? <SkeletonRows rows={5} label="Đang tải biểu mẫu" />
       : !data.permissions.canEditMetadata ? <div className={`${panelClass} space-y-4 p-4`}>
