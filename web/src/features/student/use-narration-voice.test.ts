@@ -51,6 +51,14 @@ describe('pickVietnameseVoice', () => {
     ] as unknown as SpeechSynthesisVoice[]
     expect(pickVietnameseVoice(voices)?.name).toBe('local')
   })
+  it('prefers a Natural Vietnamese voice over the installed one', () => {
+    const voices = [
+      { lang: 'en-US', localService: false, name: 'Microsoft Aria Online (Natural) - English (United States)' },
+      { lang: 'vi-VN', localService: true, name: 'Microsoft An - Vietnamese (Vietnam)' },
+      { lang: 'vi-VN', localService: false, name: 'Microsoft HoaiMy Online (Natural) - Vietnamese (Vietnam)' },
+    ] as unknown as SpeechSynthesisVoice[]
+    expect(pickVietnameseVoice(voices)?.name).toContain('HoaiMy')
+  })
 })
 
 describe('captionAt', () => {

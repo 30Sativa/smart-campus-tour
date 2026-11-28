@@ -69,10 +69,13 @@ export function splitForSpeech(text: string, max = MAX_CHUNK): string[] {
   return chunks
 }
 
-/** A Vietnamese voice, preferring the installed (offline) one. */
+/**
+ * A Vietnamese voice: a neural "Natural" one first (Edge's HoaiMy / NamMinh read far less robotically), then the
+ * installed (offline) one, then any.
+ */
 export function pickVietnameseVoice(voices: readonly SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
   const vi = voices.filter((v) => v.lang?.toLowerCase().replace('_', '-').startsWith('vi'))
-  return vi.find((v) => v.localService) ?? vi[0]
+  return vi.find((v) => /natural/i.test(v.name ?? '')) ?? vi.find((v) => v.localService) ?? vi[0]
 }
 
 function speechApi(): SpeechSynthesis | undefined {
