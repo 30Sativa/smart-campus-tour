@@ -94,6 +94,10 @@ describe('FallbackVideoField marks', () => {
     player.currentTime = 42.7
     fireEvent.click(screen.getByRole('button', { name: 'Lấy thời điểm này cho Thư viện' }))
     expect(screen.getByLabelText('2. Thư viện')).toHaveValue('0:42')
+    // The mark sits on the video's timeline; clicking it seeks back there.
+    player.currentTime = 0
+    fireEvent.click(screen.getByRole('button', { name: 'Tua tới Thư viện' }))
+    expect(player.currentTime).toBe(42)
 
     fireEvent.change(screen.getByLabelText('1. Cổng chính'), { target: { value: '2:30' } })
     expect(screen.getByText('Mốc này nằm sau cuối video.')).toBeInTheDocument()
