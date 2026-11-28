@@ -91,9 +91,21 @@ describe('FallbackVideoField marks', () => {
     Object.defineProperty(player, 'duration', { value: 120, configurable: true })
     fireEvent(player, new Event('loadedmetadata'))
     expect(screen.getByText('Độ dài video: 2:00')).toBeInTheDocument()
+    // One capture button fills the stops in order and moves on to the next stop without a mark.
+    expect(screen.getByText('Đã đặt 0/2 điểm')).toBeInTheDocument()
+    player.currentTime = 3.2
+    fireEvent.click(screen.getByRole('button', { name: 'Lấy thời điểm này cho Cổng chính' }))
+    expect(screen.getByLabelText('1. Cổng chính')).toHaveValue('0:03')
     player.currentTime = 42.7
     fireEvent.click(screen.getByRole('button', { name: 'Lấy thời điểm này cho Thư viện' }))
     expect(screen.getByLabelText('2. Thư viện')).toHaveValue('0:42')
+    expect(screen.getByRole('button', { name: 'Mọi điểm đã có mốc' })).toBeDisabled()
+    // Focusing a stop picks it again, to redo its mark.
+    fireEvent.focus(screen.getByLabelText('1. Cổng chính'))
+    player.currentTime = 5
+    fireEvent.click(screen.getByRole('button', { name: 'Lấy thời điểm này cho Cổng chính' }))
+    expect(screen.getByLabelText('1. Cổng chính')).toHaveValue('0:05')
+    expect(screen.getByText('Đã đặt 2/2 điểm')).toBeInTheDocument()
     // The mark sits on the video's timeline; clicking it seeks back there.
     player.currentTime = 0
     fireEvent.click(screen.getByRole('button', { name: 'Tua tới Thư viện' }))

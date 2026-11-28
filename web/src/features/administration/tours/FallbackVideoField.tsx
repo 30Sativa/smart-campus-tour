@@ -101,8 +101,24 @@ function FallbackVideoMarks({ stops, draft, onChange, preview, disabled }: {
   disabled: boolean
 }) {
   const player = useRef<HTMLVideoElement>(null)
+  const rows = useRef(new Map<string, HTMLLIElement>())
+  // The stop the capture button fills: the one Staff picked, else the first without a mark, so watching the
+  // recording through and pressing one button at each POI fills the route in order.
+  const [chosen, setChosen] = useState<string | null>(null)
   const setText = (stopId: string, text: string) => onChange(current => ({ ...current, texts: { ...current.texts, [stopId]: text } }))
   const limit = draft.duration != null && Number.isFinite(draft.duration) ? Math.floor(draft.duration) : null
+  const isEmpty = (stop: MarkStop) => !(draft.texts[stop.id] ?? '').trim()
+  const target = stops.find(stop => stop.id === chosen) ?? stops.find(isEmpty) ?? null
+  const filled = stops.filter(stop => !isEmpty(stop)).length
+
+  function capture() {
+    if (!target) return
+    setText(target.id, formatMark(player.current?.currentTime ?? 0))
+    const at = stops.indexOf(target)
+    const next = [...stops.slice(at + 1), ...stops.slice(0, at)].find(isEmpty) ?? null
+    setChosen(next?.id ?? null)
+    if (next) requestAnimationFrame(() => rows.current.get(next.id)?.scrollIntoView?.({ block: 'nearest' }))
+  }
 
   // Placed marks on the video's length, so Staff see the order and spacing at a glance and can jump back to one.
   const placed = limit ? stops.flatMap(stop => {
@@ -113,16 +129,16 @@ function FallbackVideoMarks({ stops, draft, onChange, preview, disabled }: {
   return <fieldset className="mt-3 rounded-xl border border-[#e2e8f0] p-3">
     <legend className="px-1 text-[13px] font-medium text-[#334155]">Mốc thời gian của từng điểm trong video</legend>
     <p className="text-xs text-[#64748b]">
-      Dạng phút:giây; bỏ trống điểm không có trong bản ghi.
-      {preview ? ' Dừng video ở đầu một điểm rồi bấm nút đồng hồ của điểm đó.' : ''}
+      {preview ? 'Phát video, tới đầu mỗi điểm thì bấm "Lấy mốc"; ô tự chuyển sang điểm kế tiếp. ' : ''}
+      Có thể gõ phút:giây; bỏ trống điểm không có trong bản ghi.
     </p>
     <div className={`mt-2 grid gap-3 ${preview ? 'md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]' : ''}`}>
-      {preview && <div className="min-w-0">
+      {preview && <div className="min-w-0 md:sticky md:top-4 md:self-start">
         <video ref={player} src={preview} controls muted preload="metadata" aria-label="Xem lại video dự phòng"
           className="aspect-video w-full rounded-lg bg-black"
           onLoadedMetadata={event => { const duration = event.currentTarget.duration; onChange(current => ({ ...current, duration })) }} />
         {limit != null && <>
-          <div className="relative mt-3 h-1.5 rounded-full bg-[#e2e8f0]" aria-hidden={placed.length === 0}>
+          <div className="relative mt-3 h-1.5 rounded-full bg-[#e2e8f0]">
             {placed.map(({ stop, seconds }) => <button key={stop.id} type="button"
               className="absolute top-1/2 grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[#2563eb] text-[10px] font-semibold text-white ring-2 ring-white transition-transform duration-150 hover:scale-110 motion-reduce:transition-none"
               style={{ left: `${limit > 0 ? (seconds / limit) * 100 : 0}%` }}
@@ -131,33 +147,40 @@ function FallbackVideoMarks({ stops, draft, onChange, preview, disabled }: {
           </div>
           <p className="mt-2 flex justify-between text-xs text-[#64748b]"><span>0:00</span><span>Độ dài video: {formatMark(limit)}</span></p>
         </>}
+        <button type="button" className={`${buttonClass('primary', 'sm')} mt-2 w-full`} disabled={disabled || !target} onClick={capture}
+          aria-label={target ? `Lấy thời điểm này cho ${target.name}` : undefined}>
+          <Timer aria-hidden className="size-4" />
+          <span className="truncate">{target ? `Lấy mốc cho ${target.order}. ${target.name}` : 'Mọi điểm đã có mốc'}</span>
+        </button>
       </div>}
-      <ul className="min-w-0 divide-y divide-[#f1f5f9] self-start rounded-lg border border-[#f1f5f9]">
-        {stops.map(stop => {
-          const text = draft.texts[stop.id] ?? ''
-          const seconds = parseMark(text)
-          const problem = seconds === undefined ? 'Nhập dạng phút:giây, ví dụ 1:35.'
-            : seconds != null && limit != null && seconds > limit ? 'Mốc này nằm sau cuối video.' : null
-          const inputId = `fallback-mark-${stop.id}`
-          return <li key={stop.id} className="px-2 py-1.5">
-            <div className="flex items-center gap-2">
-              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#eff6ff] text-xs font-semibold text-[#2563eb]" aria-hidden>{stop.order}</span>
-              <label htmlFor={inputId} className="min-w-0 flex-1 truncate text-[13px] text-[#334155]" title={stop.name}>
-                <span className="sr-only">{stop.order}. </span>{stop.name}</label>
-              <div className="w-24 shrink-0">
-                <input id={inputId} className={`${inputClass} text-center tabular-nums`} inputMode="numeric"
-                  placeholder="m:ss" value={text} disabled={disabled} aria-invalid={problem ? true : undefined}
-                  aria-describedby={problem ? `${inputId}-problem` : undefined}
-                  onChange={event => setText(stop.id, event.target.value)} />
+      <div className="min-w-0">
+        <p className="mb-1 text-xs text-[#64748b]">Đã đặt {filled}/{stops.length} điểm</p>
+        <ul className="max-h-80 divide-y divide-[#f1f5f9] overflow-y-auto overscroll-contain rounded-lg border border-[#f1f5f9]">
+          {stops.map(stop => {
+            const text = draft.texts[stop.id] ?? ''
+            const seconds = parseMark(text)
+            const problem = seconds === undefined ? 'Nhập dạng phút:giây, ví dụ 1:35.'
+              : seconds != null && limit != null && seconds > limit ? 'Mốc này nằm sau cuối video.' : null
+            const inputId = `fallback-mark-${stop.id}`
+            const active = preview != null && stop.id === target?.id
+            return <li key={stop.id} ref={row => { if (row) rows.current.set(stop.id, row); else rows.current.delete(stop.id) }}
+              className={`px-2 py-1 transition-colors duration-150 motion-reduce:transition-none ${active ? 'bg-[#eff6ff]' : ''}`}>
+              <div className="flex items-center gap-2">
+                <span className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold ${active ? 'bg-[#2563eb] text-white' : 'bg-[#eff6ff] text-[#2563eb]'}`} aria-hidden>{stop.order}</span>
+                <label htmlFor={inputId} className="min-w-0 flex-1 cursor-pointer truncate text-[13px] text-[#334155]" title={stop.name}>
+                  <span className="sr-only">{stop.order}. </span>{stop.name}</label>
+                <div className="w-24 shrink-0">
+                  <input id={inputId} className={`${inputClass} text-center tabular-nums`} inputMode="numeric"
+                    placeholder="m:ss" value={text} disabled={disabled} aria-invalid={problem ? true : undefined}
+                    aria-describedby={problem ? `${inputId}-problem` : undefined}
+                    onFocus={() => setChosen(stop.id)} onChange={event => setText(stop.id, event.target.value)} />
+                </div>
               </div>
-              {preview && <button type="button" className={`${buttonClass('ghost', 'sm')} shrink-0 px-2`} disabled={disabled}
-                aria-label={`Lấy thời điểm này cho ${stop.name}`} title="Lấy thời điểm đang phát"
-                onClick={() => setText(stop.id, formatMark(player.current?.currentTime ?? 0))}><Timer aria-hidden className="size-4" /></button>}
-            </div>
-            {problem && <p id={`${inputId}-problem`} className="mt-1 pl-8 text-xs text-[#b23e31]">{problem}</p>}
-          </li>
-        })}
-      </ul>
+              {problem && <p id={`${inputId}-problem`} className="mt-1 pl-8 text-xs text-[#b23e31]">{problem}</p>}
+            </li>
+          })}
+        </ul>
+      </div>
     </div>
   </fieldset>
 }
